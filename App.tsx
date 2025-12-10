@@ -10,6 +10,7 @@ import Plots from './pages/Plots';
 import PlotDetails from './pages/PlotDetails';
 import Projects from './pages/Projects';
 import Users from './pages/Users';
+import Tasks from './pages/Tasks';
 import Login from './pages/Login';
 
 // Componente para proteger rutas
@@ -38,6 +39,11 @@ export default function App() {
             <Route path="/projects" element={
               <ProtectedRoute>
                 <Projects />
+              </ProtectedRoute>
+            } />
+            <Route path="/tasks" element={
+              <ProtectedRoute>
+                <Tasks />
               </ProtectedRoute>
             } />
             <Route path="/varieties" element={

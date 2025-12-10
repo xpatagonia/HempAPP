@@ -1,5 +1,6 @@
+
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Variety, Location, Plot, FieldLog, TrialRecord, User, Project } from '../types';
+import { Variety, Location, Plot, FieldLog, TrialRecord, User, Project, Task } from '../types';
 
 interface AppContextType {
   projects: Project[];
@@ -8,6 +9,7 @@ interface AppContextType {
   plots: Plot[];
   trialRecords: TrialRecord[]; // Historico de registros
   logs: FieldLog[]; // Bitacora informal
+  tasks: Task[];
   
   // Auth
   currentUser: User | null;
@@ -41,6 +43,11 @@ interface AppContextType {
   addUser: (u: User) => void;
   updateUser: (u: User) => void;
   deleteUser: (id: string) => void;
+
+  // Task Management
+  addTask: (t: Task) => void;
+  updateTask: (t: Task) => void;
+  deleteTask: (id: string) => void;
   
   // Helpers
   getPlotHistory: (plotId: string) => TrialRecord[];
@@ -181,6 +188,29 @@ const initialLogsData: FieldLog[] = [
   }
 ];
 
+const initialTasksData: Task[] = [
+    {
+        id: 't1',
+        title: 'Riego Inicial',
+        description: 'Verificar sistema de goteo en bloque 1',
+        dueDate: '2023-10-20',
+        status: 'Completada',
+        priority: 'Alta',
+        assignedToIds: ['u2'],
+        createdBy: 'u1'
+    },
+    {
+        id: 't2',
+        title: 'Monitoreo de Plagas',
+        description: 'Recorrida semanal para detectar orugas.',
+        dueDate: new Date().toISOString().split('T')[0],
+        status: 'Pendiente',
+        priority: 'Media',
+        assignedToIds: ['u2'],
+        createdBy: 'u1'
+    }
+];
+
 // Helper to safe parse JSON
 const safeParse = (key: string, fallback: any) => {
   const stored = localStorage.getItem(key);
@@ -202,6 +232,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [plots, setPlots] = useState<Plot[]>(() => safeParse('ht_plots_v3', initialPlotsData));
   const [trialRecords, setTrialRecords] = useState<TrialRecord[]>(() => safeParse('ht_records_v3', initialTrialRecordsData));
   const [logs, setLogs] = useState<FieldLog[]>(() => safeParse('ht_logs_v3', initialLogsData));
+  const [tasks, setTasks] = useState<Task[]>(() => safeParse('ht_tasks_v3', initialTasksData));
   
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
       const savedUser = localStorage.getItem('ht_currentUser_v3');
@@ -216,6 +247,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   useEffect(() => localStorage.setItem('ht_plots_v3', JSON.stringify(plots)), [plots]);
   useEffect(() => localStorage.setItem('ht_records_v3', JSON.stringify(trialRecords)), [trialRecords]);
   useEffect(() => localStorage.setItem('ht_logs_v3', JSON.stringify(logs)), [logs]);
+  useEffect(() => localStorage.setItem('ht_tasks_v3', JSON.stringify(tasks)), [tasks]);
   
   useEffect(() => {
     if (currentUser) {
@@ -272,6 +304,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const updateUser = (u: User) => setUsersList(prev => prev.map(item => item.id === u.id ? u : item));
   const deleteUser = (id: string) => setUsersList(prev => prev.filter(item => item.id !== id));
 
+  // Task Management
+  const addTask = (t: Task) => setTasks([t, ...tasks]);
+  const updateTask = (t: Task) => setTasks(prev => prev.map(item => item.id === t.id ? t : item));
+  const deleteTask = (id: string) => setTasks(prev => prev.filter(item => item.id !== id));
+
   // Helpers
   const getPlotHistory = (plotId: string) => {
     // Sort descending by date
@@ -287,7 +324,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   return (
     <AppContext.Provider value={{
-      projects, varieties, locations, plots, trialRecords, logs,
+      projects, varieties, locations, plots, trialRecords, logs, tasks,
       currentUser, usersList, login, logout,
       addProject, updateProject,
       addVariety, updateVariety, deleteVariety,
@@ -296,6 +333,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       addTrialRecord, updateTrialRecord, deleteTrialRecord,
       addLog,
       addUser, updateUser, deleteUser,
+      addTask, updateTask, deleteTask,
       getPlotHistory, getLatestRecord
     }}>
       {children}

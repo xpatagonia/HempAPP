@@ -121,6 +121,20 @@ export interface FieldLog {
   photoUrl?: string;
 }
 
+// Task Management
+export interface Task {
+  id: string;
+  plotId?: string; // Optional, can be general
+  projectId?: string;
+  title: string;
+  description: string;
+  dueDate: string;
+  status: 'Pendiente' | 'En Progreso' | 'Completada';
+  priority: 'Alta' | 'Media' | 'Baja';
+  assignedToIds: string[]; // User IDs
+  createdBy: string;
+}
+
 // Stats Interface
 export interface DashboardStats {
   totalVarieties: number;
