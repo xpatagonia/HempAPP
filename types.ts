@@ -5,12 +5,13 @@ export type SoilType = 'Franco' | 'Arcilloso' | 'Arenoso' | 'Limoso';
 export type RoleType = 'Productor' | 'Cooperativa' | 'Institución';
 
 // Auth Types
-export type UserRole = 'admin' | 'technician' | 'viewer';
+export type UserRole = 'super_admin' | 'admin' | 'technician' | 'viewer';
 
 export interface User {
   id: string;
   name: string;
   email: string;
+  password?: string; // Optional for listing, required for login/creation
   role: UserRole;
   avatar?: string;
 }

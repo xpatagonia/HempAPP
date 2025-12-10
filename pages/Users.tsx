@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { User, UserRole } from '../types';
-import { Plus, Trash2, Edit2, Shield, Wrench, Eye, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, Edit2, Shield, Wrench, Eye, AlertCircle, Lock, Key } from 'lucide-react';
 
 export default function Users() {
   const { usersList, addUser, updateUser, deleteUser, currentUser } = useAppContext();
@@ -10,10 +10,13 @@ export default function Users() {
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const [formData, setFormData] = useState<Partial<User>>({
-    name: '', email: '', role: 'technician'
+    name: '', email: '', role: 'technician', password: ''
   });
 
-  if (currentUser?.role !== 'admin') {
+  const isSuperAdmin = currentUser?.role === 'super_admin';
+  const isAdmin = currentUser?.role === 'admin';
+
+  if (!isSuperAdmin && !isAdmin) {
     return (
       <div className="flex flex-col items-center justify-center h-64 text-gray-500">
         <AlertCircle size={48} className="mb-4 text-red-500" />
@@ -24,14 +27,25 @@ export default function Users() {
   }
 
   const handleEdit = (user: User) => {
-    setFormData(user);
+    // Permission Check: Admin cannot edit Super Admin or other Admins
+    if (!isSuperAdmin && (user.role === 'super_admin' || user.role === 'admin')) {
+        alert("No tienes permisos para modificar a este usuario.");
+        return;
+    }
+
+    setFormData({ ...user, password: '' }); // Don't show password, just allow reset
     setEditingId(user.id);
     setIsModalOpen(true);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = (user: User) => {
+    // Permission Check
+    if (!isSuperAdmin && (user.role === 'super_admin' || user.role === 'admin')) {
+        alert("No tienes permisos para eliminar a este usuario.");
+        return;
+    }
     if (window.confirm('¿Estás seguro de eliminar este usuario?')) {
-      deleteUser(id);
+      deleteUser(user.id);
     }
   };
 
@@ -39,20 +53,43 @@ export default function Users() {
     e.preventDefault();
     if (!formData.name || !formData.email) return;
     
+    // Validate role assignment permission
+    if (!isSuperAdmin && (formData.role === 'super_admin' || formData.role === 'admin')) {
+        alert("No tienes permisos para crear o asignar este rol.");
+        return;
+    }
+
     if (editingId) {
-      updateUser({ ...formData, id: editingId } as User);
+      // If password field is empty, keep old password. We need to find the old user to keep it.
+      const oldUser = usersList.find(u => u.id === editingId);
+      const finalPassword = formData.password ? formData.password : oldUser?.password;
+
+      updateUser({ 
+          ...formData, 
+          id: editingId,
+          password: finalPassword
+      } as User);
     } else {
+      if (!formData.password) {
+          alert("Debes asignar una contraseña inicial");
+          return;
+      }
       addUser({
         id: Date.now().toString(),
         name: formData.name!,
         email: formData.email!,
-        role: formData.role as UserRole
+        role: formData.role as UserRole,
+        password: formData.password
       });
     }
     
-    setIsModalOpen(false);
-    setFormData({ name: '', email: '', role: 'technician' });
-    setEditingId(null);
+    closeModal();
+  };
+
+  const closeModal = () => {
+      setIsModalOpen(false);
+      setFormData({ name: '', email: '', role: 'technician', password: '' });
+      setEditingId(null);
   };
 
   const inputClass = "w-full border border-gray-300 bg-white text-gray-900 p-2 rounded focus:ring-2 focus:ring-hemp-500 focus:border-transparent outline-none transition-colors";
@@ -64,7 +101,7 @@ export default function Users() {
         <button 
           onClick={() => {
             setEditingId(null);
-            setFormData({ name: '', email: '', role: 'technician' });
+            setFormData({ name: '', email: '', role: 'technician', password: '' });
             setIsModalOpen(true);
           }} 
           className="bg-hemp-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-hemp-700 transition"
@@ -89,7 +126,9 @@ export default function Users() {
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
                     <div className="flex-shrink-0 h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-500">
-                      {user.role === 'admin' ? <Shield size={20} /> : user.role === 'technician' ? <Wrench size={20} /> : <Eye size={20} />}
+                      {user.role === 'super_admin' ? <Lock size={20} className="text-red-500"/> : 
+                       user.role === 'admin' ? <Shield size={20} /> : 
+                       user.role === 'technician' ? <Wrench size={20} /> : <Eye size={20} />}
                     </div>
                     <div className="ml-4">
                       <div className="text-sm font-medium text-gray-900">{user.name}</div>
@@ -101,19 +140,29 @@ export default function Users() {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                    ${user.role === 'admin' ? 'bg-purple-100 text-purple-800' : 
+                    ${user.role === 'super_admin' ? 'bg-red-100 text-red-800' :
+                      user.role === 'admin' ? 'bg-purple-100 text-purple-800' : 
                       user.role === 'technician' ? 'bg-blue-100 text-blue-800' : 
                       'bg-amber-100 text-amber-800'}`}>
-                    {user.role === 'technician' ? 'Técnico' : user.role === 'viewer' ? 'Productor/Visita' : 'Administrador'}
+                    {user.role === 'super_admin' ? 'Super Admin' : 
+                     user.role === 'technician' ? 'Técnico' : 
+                     user.role === 'viewer' ? 'Productor/Visita' : 'Administrador'}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  <button onClick={() => handleEdit(user)} className="text-indigo-600 hover:text-indigo-900 mr-4">
-                    <Edit2 size={18} />
-                  </button>
-                  <button onClick={() => handleDelete(user.id)} className="text-red-600 hover:text-red-900">
-                    <Trash2 size={18} />
-                  </button>
+                    {/* Visual check for permissions to gray out buttons */}
+                    {(!isSuperAdmin && (user.role === 'super_admin' || user.role === 'admin')) ? (
+                        <span className="text-gray-300 italic text-xs">Protegido</span>
+                    ) : (
+                        <>
+                            <button onClick={() => handleEdit(user)} className="text-indigo-600 hover:text-indigo-900 mr-4">
+                                <Edit2 size={18} />
+                            </button>
+                            <button onClick={() => handleDelete(user)} className="text-red-600 hover:text-red-900">
+                                <Trash2 size={18} />
+                            </button>
+                        </>
+                    )}
                 </td>
               </tr>
             ))}
@@ -135,16 +184,40 @@ export default function Users() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                 <input required type="email" className={inputClass} value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
               </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
+                    <Key size={14} className="mr-1" />
+                    {editingId ? 'Nueva Contraseña (Opcional)' : 'Contraseña'}
+                </label>
+                <input 
+                    type="text" 
+                    placeholder={editingId ? "Dejar vacío para mantener actual" : "Asignar clave..."}
+                    className={inputClass} 
+                    value={formData.password} 
+                    onChange={e => setFormData({...formData, password: e.target.value})} 
+                />
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Rol / Permisos</label>
                 <select className={inputClass} value={formData.role} onChange={e => setFormData({...formData, role: e.target.value as UserRole})}>
-                  <option value="technician">Técnico de Campo</option>
+                  <option value="technician">Técnico de Campo (Operativo)</option>
                   <option value="viewer">Productor / Visita (Solo lectura)</option>
-                  <option value="admin">Administrador</option>
+                  {/* Only Super Admin can create other admins or super admins */}
+                  {(isSuperAdmin || isAdmin) && <option value="admin">Administrador (Gestión)</option>}
+                  {isSuperAdmin && <option value="super_admin">Super Admin (Root)</option>}
                 </select>
+                <p className="text-xs text-gray-500 mt-1">
+                    {formData.role === 'technician' && "Puede cargar datos en parcelas asignadas."}
+                    {formData.role === 'viewer' && "Solo puede ver reportes y dashboard."}
+                    {formData.role === 'admin' && "Gestión completa de proyectos y usuarios básicos."}
+                    {formData.role === 'super_admin' && "Control total del sistema."}
+                </p>
               </div>
+
               <div className="flex justify-end space-x-2 pt-4">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancelar</button>
+                <button type="button" onClick={closeModal} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancelar</button>
                 <button type="submit" className="px-4 py-2 bg-hemp-600 text-white rounded hover:bg-hemp-700 shadow-sm">Guardar</button>
               </div>
             </form>

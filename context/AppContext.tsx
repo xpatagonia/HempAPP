@@ -13,7 +13,7 @@ interface AppContextType {
   // Auth
   currentUser: User | null;
   usersList: User[];
-  login: (role: 'admin' | 'technician' | 'viewer') => void;
+  login: (email: string, password: string) => boolean;
   logout: () => void;
 
   // Actions
@@ -52,10 +52,11 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 // --- MOCK INITIAL DATA (Used only if localStorage is empty) ---
 const initialUsersData: User[] = [
-  { id: 'u1', name: 'Carlos Director', email: 'director@hemptrack.com', role: 'admin' },
-  { id: 'u2', name: 'Ana Técnica', email: 'ana@campo.com', role: 'technician' },
-  { id: 'u3', name: 'Pedro Productor', email: 'pedro@finca.com', role: 'viewer' },
-  { id: 'u4', name: 'Juan Agrónomo', email: 'juan@inta.com', role: 'technician' },
+  { id: 'u0', name: 'Super Admin', email: 'root@hemptrack.com', password: 'admin', role: 'super_admin' },
+  { id: 'u1', name: 'Carlos Director', email: 'admin@hemptrack.com', password: '123', role: 'admin' },
+  { id: 'u2', name: 'Ana Técnica', email: 'ana@campo.com', password: '123', role: 'technician' },
+  { id: 'u3', name: 'Pedro Productor', email: 'pedro@finca.com', password: '123', role: 'viewer' },
+  { id: 'u4', name: 'Juan Agrónomo', email: 'juan@inta.com', password: '123', role: 'technician' },
 ];
 
 const initialProjectsData: Project[] = [
@@ -223,9 +224,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   }, [currentUser]);
 
-  const login = (role: 'admin' | 'technician' | 'viewer') => {
-    const user = usersList.find(u => u.role === role);
-    if (user) setCurrentUser(user);
+  const login = (email: string, password: string): boolean => {
+    const user = usersList.find(u => u.email === email && u.password === password);
+    if (user) {
+      setCurrentUser(user);
+      return true;
+    }
+    return false;
   };
 
   const logout = () => {
