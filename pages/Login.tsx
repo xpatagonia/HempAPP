@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
@@ -38,7 +37,7 @@ export default function Login() {
                 <Leaf className="w-10 h-10 text-hemp-600" />
             </div>
         </div>
-        <h1 className="text-center text-3xl font-bold text-gray-800 mb-2">HempTrack</h1>
+        <h1 className="text-center text-3xl font-bold text-gray-800 mb-2">HempAPP</h1>
         <p className="text-center text-gray-500 mb-8">Sistema de Gestión de Ensayos</p>
 
         <div className="bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
@@ -94,23 +93,23 @@ export default function Login() {
             </form>
 
             <div className="mt-8 pt-6 border-t border-gray-100">
-                <p className="text-xs text-center text-gray-400 font-semibold uppercase mb-3">Accesos Demo (Email / Clave)</p>
+                <p className="text-xs text-center text-gray-400 font-semibold uppercase mb-3">Accesos Demo</p>
                 <div className="grid grid-cols-2 gap-2 text-xs text-gray-500">
                     <div className="bg-gray-50 p-2 rounded text-center">
                         <span className="font-bold block text-gray-700">Root</span>
-                        root@hemptrack.com<br/>admin
+                        root@hempc.com.ar<br/>admin
                     </div>
                     <div className="bg-gray-50 p-2 rounded text-center">
                         <span className="font-bold block text-gray-700">Admin</span>
-                        admin@hemptrack.com<br/>123
+                        admin@hempc.com.ar<br/>123
                     </div>
                     <div className="bg-gray-50 p-2 rounded text-center">
                         <span className="font-bold block text-gray-700">Técnico</span>
-                        ana@campo.com<br/>123
+                        ana@hempc.com.ar<br/>123
                     </div>
                     <div className="bg-gray-50 p-2 rounded text-center">
                         <span className="font-bold block text-gray-700">Productor</span>
-                        pedro@finca.com<br/>123
+                        pedro@hempc.com.ar<br/>123
                     </div>
                 </div>
             </div>

@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useAppContext } from '../context/AppContext';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, AreaChart, Area } from 'recharts';
@@ -75,7 +74,7 @@ export default function Dashboard() {
   const exportPDF = () => {
     const doc = new jsPDF();
     doc.setFontSize(18);
-    doc.text('HempTrack - Reporte de Estado', 14, 22);
+    doc.text('HempAPP - Reporte de Estado', 14, 22);
     doc.setFontSize(11);
     doc.text(`Fecha: ${new Date().toLocaleDateString()}`, 14, 30);
     
@@ -99,7 +98,7 @@ export default function Dashboard() {
         startY: 40,
     });
 
-    doc.save('reporte_hemptrack.pdf');
+    doc.save('reporte_hempapp.pdf');
   };
 
   const exportExcel = () => {

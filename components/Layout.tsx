@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
@@ -61,7 +60,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       <div className="lg:hidden fixed top-0 w-full bg-white z-50 border-b px-4 py-3 flex justify-between items-center shadow-sm">
         <div className="flex items-center space-x-2 text-hemp-800">
           <Leaf className="w-6 h-6" />
-          <span className="font-bold text-lg">HempTrack</span>
+          <span className="font-bold text-lg">HempAPP</span>
         </div>
         <button onClick={toggleMobile} className="p-2 text-gray-600">
           {isMobileOpen ? <X size={24} /> : <Menu size={24} />}
@@ -85,7 +84,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         <div className="h-full flex flex-col">
           <div className="h-16 flex items-center px-6 border-b">
             <Leaf className="w-8 h-8 text-hemp-600 mr-2" />
-            <span className="text-xl font-bold text-gray-800">HempTrack</span>
+            <span className="text-xl font-bold text-gray-800">HempAPP</span>
           </div>
 
           <nav className="flex-1 p-4 space-y-2 overflow-y-auto">

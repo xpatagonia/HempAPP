@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Variety, Location, Plot, FieldLog, TrialRecord, User, Project } from '../types';
 
@@ -51,12 +50,13 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 // --- MOCK INITIAL DATA (Used only if localStorage is empty) ---
+// UPDATED DOMAINS TO @hempc.com.ar
 const initialUsersData: User[] = [
-  { id: 'u0', name: 'Super Admin', email: 'root@hemptrack.com', password: 'admin', role: 'super_admin' },
-  { id: 'u1', name: 'Carlos Director', email: 'admin@hemptrack.com', password: '123', role: 'admin' },
-  { id: 'u2', name: 'Ana Técnica', email: 'ana@campo.com', password: '123', role: 'technician' },
-  { id: 'u3', name: 'Pedro Productor', email: 'pedro@finca.com', password: '123', role: 'viewer' },
-  { id: 'u4', name: 'Juan Agrónomo', email: 'juan@inta.com', password: '123', role: 'technician' },
+  { id: 'u0', name: 'Super Admin', email: 'root@hempc.com.ar', password: 'admin', role: 'super_admin' },
+  { id: 'u1', name: 'Carlos Director', email: 'admin@hempc.com.ar', password: '123', role: 'admin' },
+  { id: 'u2', name: 'Ana Técnica', email: 'ana@hempc.com.ar', password: '123', role: 'technician' },
+  { id: 'u3', name: 'Pedro Productor', email: 'pedro@hempc.com.ar', password: '123', role: 'viewer' },
+  { id: 'u4', name: 'Juan Agrónomo', email: 'juan@hempc.com.ar', password: '123', role: 'technician' },
 ];
 
 const initialProjectsData: Project[] = [
@@ -192,40 +192,42 @@ const safeParse = (key: string, fallback: any) => {
   }
 };
 
+// NOTE: CHANGED KEYS TO _v2 TO FORCE DATA REFRESH ON CLIENTS
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // Initialize state from LocalStorage or Fallback to Mock Data
-  const [usersList, setUsersList] = useState<User[]>(() => safeParse('ht_users', initialUsersData));
-  const [projects, setProjects] = useState<Project[]>(() => safeParse('ht_projects', initialProjectsData));
-  const [varieties, setVarieties] = useState<Variety[]>(() => safeParse('ht_varieties', initialVarietiesData));
-  const [locations, setLocations] = useState<Location[]>(() => safeParse('ht_locations', initialLocationsData));
-  const [plots, setPlots] = useState<Plot[]>(() => safeParse('ht_plots', initialPlotsData));
-  const [trialRecords, setTrialRecords] = useState<TrialRecord[]>(() => safeParse('ht_records', initialTrialRecordsData));
-  const [logs, setLogs] = useState<FieldLog[]>(() => safeParse('ht_logs', initialLogsData));
+  const [usersList, setUsersList] = useState<User[]>(() => safeParse('ht_users_v2', initialUsersData));
+  const [projects, setProjects] = useState<Project[]>(() => safeParse('ht_projects_v2', initialProjectsData));
+  const [varieties, setVarieties] = useState<Variety[]>(() => safeParse('ht_varieties_v2', initialVarietiesData));
+  const [locations, setLocations] = useState<Location[]>(() => safeParse('ht_locations_v2', initialLocationsData));
+  const [plots, setPlots] = useState<Plot[]>(() => safeParse('ht_plots_v2', initialPlotsData));
+  const [trialRecords, setTrialRecords] = useState<TrialRecord[]>(() => safeParse('ht_records_v2', initialTrialRecordsData));
+  const [logs, setLogs] = useState<FieldLog[]>(() => safeParse('ht_logs_v2', initialLogsData));
   
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
-      const savedUser = localStorage.getItem('ht_currentUser');
+      const savedUser = localStorage.getItem('ht_currentUser_v2');
       return savedUser ? JSON.parse(savedUser) : null;
   });
 
-  // PERSISTENCE EFFECTS
-  useEffect(() => localStorage.setItem('ht_users', JSON.stringify(usersList)), [usersList]);
-  useEffect(() => localStorage.setItem('ht_projects', JSON.stringify(projects)), [projects]);
-  useEffect(() => localStorage.setItem('ht_varieties', JSON.stringify(varieties)), [varieties]);
-  useEffect(() => localStorage.setItem('ht_locations', JSON.stringify(locations)), [locations]);
-  useEffect(() => localStorage.setItem('ht_plots', JSON.stringify(plots)), [plots]);
-  useEffect(() => localStorage.setItem('ht_records', JSON.stringify(trialRecords)), [trialRecords]);
-  useEffect(() => localStorage.setItem('ht_logs', JSON.stringify(logs)), [logs]);
+  // PERSISTENCE EFFECTS (Using v2 keys)
+  useEffect(() => localStorage.setItem('ht_users_v2', JSON.stringify(usersList)), [usersList]);
+  useEffect(() => localStorage.setItem('ht_projects_v2', JSON.stringify(projects)), [projects]);
+  useEffect(() => localStorage.setItem('ht_varieties_v2', JSON.stringify(varieties)), [varieties]);
+  useEffect(() => localStorage.setItem('ht_locations_v2', JSON.stringify(locations)), [locations]);
+  useEffect(() => localStorage.setItem('ht_plots_v2', JSON.stringify(plots)), [plots]);
+  useEffect(() => localStorage.setItem('ht_records_v2', JSON.stringify(trialRecords)), [trialRecords]);
+  useEffect(() => localStorage.setItem('ht_logs_v2', JSON.stringify(logs)), [logs]);
   
   useEffect(() => {
     if (currentUser) {
-        localStorage.setItem('ht_currentUser', JSON.stringify(currentUser));
+        localStorage.setItem('ht_currentUser_v2', JSON.stringify(currentUser));
     } else {
-        localStorage.removeItem('ht_currentUser');
+        localStorage.removeItem('ht_currentUser_v2');
     }
   }, [currentUser]);
 
   const login = (email: string, password: string): boolean => {
-    const user = usersList.find(u => u.email === email && u.password === password);
+    // Basic auth check
+    const user = usersList.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
     if (user) {
       setCurrentUser(user);
       return true;
