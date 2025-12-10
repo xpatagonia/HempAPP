@@ -82,7 +82,8 @@ export default function PlotDetails() {
       if (existing) {
           setEditingRecordId(existing.id);
           setRecordForm(existing);
-          setShowHarvestSection(existing.stage === 'Cosecha' || !!existing.yield);
+          // Auto show harvest section if data exists or stage is harvest
+          setShowHarvestSection(existing.stage === 'Cosecha' || !!existing.yield || !!existing.stemWeight);
       } else {
           setEditingRecordId(null);
           setRecordForm({
@@ -113,7 +114,8 @@ export default function PlotDetails() {
       setIsRecordModalOpen(false);
   };
 
-  const handleDeleteRecord = (recordId: string) => {
+  const handleDeleteRecord = (recordId: string, e: React.MouseEvent) => {
+      e.stopPropagation();
       if (window.confirm("¿Estás seguro de eliminar este registro técnico?")) {
           deleteTrialRecord(recordId);
       }
@@ -366,7 +368,7 @@ export default function PlotDetails() {
                             </tr>
                         ) : (
                             history.map(r => (
-                                <tr key={r.id} className="hover:bg-gray-50">
+                                <tr key={r.id} className="hover:bg-gray-50 cursor-pointer group" onClick={() => handleOpenRecordModal(r, true)}>
                                     <td className="px-4 py-3 text-gray-900 font-medium">{r.date}</td>
                                     <td className="px-4 py-3">
                                         <span className={`px-2 py-1 rounded-full text-xs border ${getStageStyle(r.stage)}`}>
@@ -379,17 +381,21 @@ export default function PlotDetails() {
                                         {[r.pests, r.diseases].filter(Boolean).join(', ') || '-'}
                                     </td>
                                     <td className="px-4 py-3 text-right flex justify-end space-x-2">
-                                        {/* VIEW DETAIL (READ ONLY) BUTTON */}
-                                        <button onClick={() => handleOpenRecordModal(r, true)} className="text-gray-500 hover:bg-gray-100 p-1 rounded" title="Ver Detalle Completo">
+                                        {/* VIEW DETAIL (READ ONLY) BUTTON - Always Visible */}
+                                        <button 
+                                          onClick={(e) => { e.stopPropagation(); handleOpenRecordModal(r, true); }} 
+                                          className="text-blue-500 hover:bg-blue-50 p-1 rounded transition-colors" 
+                                          title="Ver Detalle Completo"
+                                        >
                                             <Eye size={16} />
                                         </button>
 
                                         {canEdit && (
                                             <>
-                                                <button onClick={() => handleOpenRecordModal(r, false)} className="text-blue-600 hover:bg-blue-50 p-1 rounded" title="Editar">
+                                                <button onClick={(e) => { e.stopPropagation(); handleOpenRecordModal(r, false); }} className="text-gray-500 hover:text-hemp-600 hover:bg-gray-100 p-1 rounded transition-colors" title="Editar">
                                                     <Edit2 size={16} />
                                                 </button>
-                                                <button onClick={() => handleDeleteRecord(r.id)} className="text-red-600 hover:bg-red-50 p-1 rounded" title="Eliminar">
+                                                <button onClick={(e) => handleDeleteRecord(r.id, e)} className="text-gray-400 hover:text-red-600 hover:bg-red-50 p-1 rounded transition-colors" title="Eliminar">
                                                     <Trash2 size={16} />
                                                 </button>
                                             </>
@@ -527,7 +533,7 @@ export default function PlotDetails() {
                    <div className="p-6">
                        <h2 className="text-xl font-bold text-gray-900 mb-4 border-b pb-2 flex justify-between items-center">
                            {isViewMode ? 'Detalle de Registro' : (editingRecordId ? 'Editar Registro' : 'Nuevo Registro Técnico')}
-                           {isViewMode && <span className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded">Solo Lectura</span>}
+                           {isViewMode && <span className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded border">Solo Lectura</span>}
                        </h2>
                        
                        <form onSubmit={handleSaveRecord} className="space-y-6">
