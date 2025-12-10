@@ -192,36 +192,36 @@ const safeParse = (key: string, fallback: any) => {
   }
 };
 
-// NOTE: CHANGED KEYS TO _v2 TO FORCE DATA REFRESH ON CLIENTS
+// NOTE: CHANGED KEYS TO _v3 TO FORCE DATA REFRESH ON CLIENTS
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // Initialize state from LocalStorage or Fallback to Mock Data
-  const [usersList, setUsersList] = useState<User[]>(() => safeParse('ht_users_v2', initialUsersData));
-  const [projects, setProjects] = useState<Project[]>(() => safeParse('ht_projects_v2', initialProjectsData));
-  const [varieties, setVarieties] = useState<Variety[]>(() => safeParse('ht_varieties_v2', initialVarietiesData));
-  const [locations, setLocations] = useState<Location[]>(() => safeParse('ht_locations_v2', initialLocationsData));
-  const [plots, setPlots] = useState<Plot[]>(() => safeParse('ht_plots_v2', initialPlotsData));
-  const [trialRecords, setTrialRecords] = useState<TrialRecord[]>(() => safeParse('ht_records_v2', initialTrialRecordsData));
-  const [logs, setLogs] = useState<FieldLog[]>(() => safeParse('ht_logs_v2', initialLogsData));
+  const [usersList, setUsersList] = useState<User[]>(() => safeParse('ht_users_v3', initialUsersData));
+  const [projects, setProjects] = useState<Project[]>(() => safeParse('ht_projects_v3', initialProjectsData));
+  const [varieties, setVarieties] = useState<Variety[]>(() => safeParse('ht_varieties_v3', initialVarietiesData));
+  const [locations, setLocations] = useState<Location[]>(() => safeParse('ht_locations_v3', initialLocationsData));
+  const [plots, setPlots] = useState<Plot[]>(() => safeParse('ht_plots_v3', initialPlotsData));
+  const [trialRecords, setTrialRecords] = useState<TrialRecord[]>(() => safeParse('ht_records_v3', initialTrialRecordsData));
+  const [logs, setLogs] = useState<FieldLog[]>(() => safeParse('ht_logs_v3', initialLogsData));
   
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
-      const savedUser = localStorage.getItem('ht_currentUser_v2');
+      const savedUser = localStorage.getItem('ht_currentUser_v3');
       return savedUser ? JSON.parse(savedUser) : null;
   });
 
-  // PERSISTENCE EFFECTS (Using v2 keys)
-  useEffect(() => localStorage.setItem('ht_users_v2', JSON.stringify(usersList)), [usersList]);
-  useEffect(() => localStorage.setItem('ht_projects_v2', JSON.stringify(projects)), [projects]);
-  useEffect(() => localStorage.setItem('ht_varieties_v2', JSON.stringify(varieties)), [varieties]);
-  useEffect(() => localStorage.setItem('ht_locations_v2', JSON.stringify(locations)), [locations]);
-  useEffect(() => localStorage.setItem('ht_plots_v2', JSON.stringify(plots)), [plots]);
-  useEffect(() => localStorage.setItem('ht_records_v2', JSON.stringify(trialRecords)), [trialRecords]);
-  useEffect(() => localStorage.setItem('ht_logs_v2', JSON.stringify(logs)), [logs]);
+  // PERSISTENCE EFFECTS (Using v3 keys)
+  useEffect(() => localStorage.setItem('ht_users_v3', JSON.stringify(usersList)), [usersList]);
+  useEffect(() => localStorage.setItem('ht_projects_v3', JSON.stringify(projects)), [projects]);
+  useEffect(() => localStorage.setItem('ht_varieties_v3', JSON.stringify(varieties)), [varieties]);
+  useEffect(() => localStorage.setItem('ht_locations_v3', JSON.stringify(locations)), [locations]);
+  useEffect(() => localStorage.setItem('ht_plots_v3', JSON.stringify(plots)), [plots]);
+  useEffect(() => localStorage.setItem('ht_records_v3', JSON.stringify(trialRecords)), [trialRecords]);
+  useEffect(() => localStorage.setItem('ht_logs_v3', JSON.stringify(logs)), [logs]);
   
   useEffect(() => {
     if (currentUser) {
-        localStorage.setItem('ht_currentUser_v2', JSON.stringify(currentUser));
+        localStorage.setItem('ht_currentUser_v3', JSON.stringify(currentUser));
     } else {
-        localStorage.removeItem('ht_currentUser_v2');
+        localStorage.removeItem('ht_currentUser_v3');
     }
   }, [currentUser]);
 
