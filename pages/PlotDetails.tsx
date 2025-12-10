@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { TrialRecord } from '../types';
-import { ArrowLeft, Save, Activity, Scale, Clipboard, AlertTriangle, Camera, FileText, Calendar, MapPin, Globe, Plus, Edit2, Trash2, Download, Cloud, Droplets, Wind, QrCode, Printer, CheckSquare, Sun } from 'lucide-react';
+import { ArrowLeft, Activity, Scale, AlertTriangle, Camera, FileText, Calendar, MapPin, Globe, Plus, Edit2, Trash2, Download, Droplets, Wind, QrCode, Printer, CheckSquare, Sun, Eye, Loader2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 export default function PlotDetails() {
@@ -28,10 +28,11 @@ export default function PlotDetails() {
   // Modal State for Trial Record
   const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
+  const [isViewMode, setIsViewMode] = useState(false); // New: Read-only mode
+
   const [recordForm, setRecordForm] = useState<Partial<TrialRecord>>({
       date: new Date().toISOString().split('T')[0],
       stage: 'Vegetativo',
-      // Init other fields
       plantHeight: 0, vigor: 3, uniformity: 3
   });
   const [showHarvestSection, setShowHarvestSection] = useState(false);
@@ -42,13 +43,13 @@ export default function PlotDetails() {
   const [newLogImage, setNewLogImage] = useState<string | undefined>(undefined);
   
   // PERMISSIONS CHECK
-  // Admin has full access. Technicians have access ONLY if they are assigned to this plot.
   const isAssigned = plot?.responsibleIds?.includes(currentUser?.id || '');
-  const canEdit = currentUser?.role === 'admin' || (currentUser?.role === 'technician' && isAssigned);
+  const canEdit = currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || (currentUser?.role === 'technician' && isAssigned);
 
   // Filter logs for this plot
   const plotLogs = logs.filter(l => l.plotId === id).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   
+  // Coordinate Logic: Prefer Plot specific, then Location, then null
   const displayCoordinates = plot?.coordinates || location?.coordinates;
   const isSpecificCoordinates = !!plot?.coordinates;
 
@@ -67,6 +68,8 @@ export default function PlotDetails() {
                 console.error("Weather fetch error", err);
                 setWeatherLoading(false);
             });
+    } else {
+        setWeather(null);
     }
   }, [displayCoordinates]);
 
@@ -74,11 +77,12 @@ export default function PlotDetails() {
 
   // --- RECORD MANAGEMENT ---
 
-  const handleOpenRecordModal = (existing?: TrialRecord) => {
+  const handleOpenRecordModal = (existing?: TrialRecord, viewOnly: boolean = false) => {
+      setIsViewMode(viewOnly);
       if (existing) {
           setEditingRecordId(existing.id);
           setRecordForm(existing);
-          setShowHarvestSection(existing.stage === 'Cosecha');
+          setShowHarvestSection(existing.stage === 'Cosecha' || !!existing.yield);
       } else {
           setEditingRecordId(null);
           setRecordForm({
@@ -93,6 +97,7 @@ export default function PlotDetails() {
 
   const handleSaveRecord = (e: React.FormEvent) => {
       e.preventDefault();
+      if (isViewMode) return; // Guard
       
       const payload: any = {
           ...recordForm,
@@ -177,8 +182,13 @@ export default function PlotDetails() {
     }
   };
 
-  const inputClass = `w-full border border-gray-300 rounded p-2 text-gray-900 focus:ring-2 focus:ring-hemp-500 focus:border-transparent outline-none transition-colors bg-white`;
-  const smallInputClass = `w-full border border-gray-300 rounded p-2 text-sm text-gray-900 focus:ring-2 focus:ring-hemp-500 outline-none bg-white h-10`;
+  // Dynamic input styling based on view mode
+  const getInputClass = (isSmall = false) => {
+      const base = "w-full border rounded text-gray-900 focus:ring-2 focus:ring-hemp-500 focus:border-transparent outline-none transition-colors";
+      const size = isSmall ? "p-2 text-sm h-10" : "p-2";
+      const state = isViewMode ? "bg-gray-100 border-gray-200 text-gray-600 cursor-not-allowed" : "bg-white border-gray-300";
+      return `${base} ${size} ${state}`;
+  };
 
   return (
     <div className="space-y-6 pb-20">
@@ -203,22 +213,34 @@ export default function PlotDetails() {
                     <h1 className="text-2xl font-bold text-gray-900">{plot.name}</h1>
                     <p className="text-sm text-gray-500">{variety?.name} • {location?.name}</p>
                  </div>
-                 {weather && (
-                    <div className="flex space-x-4 bg-blue-50 p-2 rounded-lg border border-blue-100">
-                        <div className="text-center px-2 border-r border-blue-200">
-                            <div className="flex items-center justify-center text-blue-600 mb-1"><Sun size={18}/></div>
-                            <span className="block text-sm font-bold text-gray-800">{weather.temperature_2m}°C</span>
+                 
+                 {/* WEATHER WIDGET */}
+                 <div className="bg-blue-50 p-2 rounded-lg border border-blue-100 min-w-[200px]">
+                    {weatherLoading ? (
+                        <div className="flex items-center justify-center py-2 text-blue-400">
+                            <Loader2 className="animate-spin mr-2" size={18} /> <span className="text-xs">Cargando clima...</span>
                         </div>
-                        <div className="text-center px-2 border-r border-blue-200">
-                            <div className="flex items-center justify-center text-blue-600 mb-1"><Droplets size={18}/></div>
-                            <span className="block text-sm font-bold text-gray-800">{weather.relative_humidity_2m}%</span>
+                    ) : weather ? (
+                        <div className="flex space-x-4">
+                            <div className="text-center px-2 border-r border-blue-200">
+                                <div className="flex items-center justify-center text-blue-600 mb-1"><Sun size={18}/></div>
+                                <span className="block text-sm font-bold text-gray-800">{weather.temperature_2m}°C</span>
+                            </div>
+                            <div className="text-center px-2 border-r border-blue-200">
+                                <div className="flex items-center justify-center text-blue-600 mb-1"><Droplets size={18}/></div>
+                                <span className="block text-sm font-bold text-gray-800">{weather.relative_humidity_2m}%</span>
+                            </div>
+                            <div className="text-center px-2">
+                                <div className="flex items-center justify-center text-blue-600 mb-1"><Wind size={18}/></div>
+                                <span className="block text-sm font-bold text-gray-800">{weather.wind_speed_10m} km/h</span>
+                            </div>
                         </div>
-                        <div className="text-center px-2">
-                            <div className="flex items-center justify-center text-blue-600 mb-1"><Wind size={18}/></div>
-                            <span className="block text-sm font-bold text-gray-800">{weather.wind_speed_10m} km/h</span>
+                    ) : (
+                        <div className="text-center py-2 text-blue-400 text-xs">
+                           {displayCoordinates ? 'No disponible' : 'Sin Coordenadas'}
                         </div>
-                    </div>
-                 )}
+                    )}
+                 </div>
              </div>
 
              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-2">
@@ -239,7 +261,7 @@ export default function PlotDetails() {
                      {displayCoordinates ? (
                         <p className="text-gray-800 text-sm flex items-center mt-1">
                             <MapPin size={14} className={`mr-1 ${isSpecificCoordinates ? 'text-blue-600' : 'text-gray-400'}`} />
-                            {displayCoordinates.lat.toFixed(6)}, {displayCoordinates.lng.toFixed(6)}
+                            {displayCoordinates.lat.toFixed(5)}, {displayCoordinates.lng.toFixed(5)}
                         </p>
                      ) : (
                          <p className="text-gray-400 text-sm italic">Sin datos</p>
@@ -280,7 +302,8 @@ export default function PlotDetails() {
               ) : (
                 <div className="flex items-center justify-center h-full text-gray-400 flex-col">
                   <Globe size={32} className="mb-2 opacity-50" />
-                  <span className="text-sm">Sin mapa</span>
+                  <span className="text-sm">Sin mapa disponible</span>
+                  <span className="text-xs text-gray-400">(Faltan coordenadas)</span>
                 </div>
               )}
           </div>
@@ -288,15 +311,15 @@ export default function PlotDetails() {
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200">
+      <div className="border-b border-gray-200 overflow-x-auto">
           <nav className="-mb-px flex space-x-8">
-              <button onClick={() => setActiveTab('records')} className={`${activeTab === 'records' ? 'border-hemp-600 text-hemp-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}>
+              <button onClick={() => setActiveTab('records')} className={`${activeTab === 'records' ? 'border-hemp-600 text-hemp-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex-shrink-0`}>
                   Registros Técnicos
               </button>
-              <button onClick={() => setActiveTab('logs')} className={`${activeTab === 'logs' ? 'border-hemp-600 text-hemp-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}>
+              <button onClick={() => setActiveTab('logs')} className={`${activeTab === 'logs' ? 'border-hemp-600 text-hemp-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex-shrink-0`}>
                   Bitácora y Fotos
               </button>
-              <button onClick={() => setActiveTab('qr')} className={`${activeTab === 'qr' ? 'border-hemp-600 text-hemp-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}>
+              <button onClick={() => setActiveTab('qr')} className={`${activeTab === 'qr' ? 'border-hemp-600 text-hemp-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center flex-shrink-0`}>
                   <QrCode size={16} className="mr-1"/> Identificación QR
               </button>
           </nav>
@@ -314,7 +337,7 @@ export default function PlotDetails() {
                 </div>
                 <div className="flex space-x-2">
                     <button onClick={handleExportHistory} className="text-gray-600 hover:text-hemp-600 px-3 py-1 rounded border border-gray-300 hover:bg-white transition flex items-center text-sm">
-                    <Download size={14} className="mr-1" /> Excel
+                        <Download size={14} className="mr-1" /> Excel
                     </button>
                     {canEdit && (
                         <button onClick={() => handleOpenRecordModal()} className="bg-hemp-600 text-white px-3 py-1 rounded hover:bg-hemp-700 transition flex items-center text-sm font-medium shadow-sm">
@@ -356,12 +379,17 @@ export default function PlotDetails() {
                                         {[r.pests, r.diseases].filter(Boolean).join(', ') || '-'}
                                     </td>
                                     <td className="px-4 py-3 text-right flex justify-end space-x-2">
+                                        {/* VIEW DETAIL (READ ONLY) BUTTON */}
+                                        <button onClick={() => handleOpenRecordModal(r, true)} className="text-gray-500 hover:bg-gray-100 p-1 rounded" title="Ver Detalle Completo">
+                                            <Eye size={16} />
+                                        </button>
+
                                         {canEdit && (
                                             <>
-                                                <button onClick={() => handleOpenRecordModal(r)} className="text-blue-600 hover:bg-blue-50 p-1 rounded">
+                                                <button onClick={() => handleOpenRecordModal(r, false)} className="text-blue-600 hover:bg-blue-50 p-1 rounded" title="Editar">
                                                     <Edit2 size={16} />
                                                 </button>
-                                                <button onClick={() => handleDeleteRecord(r.id)} className="text-red-600 hover:bg-red-50 p-1 rounded">
+                                                <button onClick={() => handleDeleteRecord(r.id)} className="text-red-600 hover:bg-red-50 p-1 rounded" title="Eliminar">
                                                     <Trash2 size={16} />
                                                 </button>
                                             </>
@@ -399,7 +427,7 @@ export default function PlotDetails() {
                                     <input 
                                     type="date" 
                                     required 
-                                    className={`${smallInputClass} cursor-pointer`} 
+                                    className={`${getInputClass(true)} cursor-pointer`} 
                                     value={newLogDate} 
                                     onChange={e => setNewLogDate(e.target.value)} 
                                     onClick={(e) => {
@@ -478,7 +506,7 @@ export default function PlotDetails() {
               <div className="bg-white p-4 border-2 border-gray-900 rounded-xl shadow-lg mb-6">
                   {/* Using QR Server API for easy generation without extra libraries */}
                   <img 
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${window.location.href}`} 
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(window.location.href)}`} 
                     alt="QR Parcela" 
                     className="w-48 h-48"
                   />
@@ -492,13 +520,14 @@ export default function PlotDetails() {
           </div>
       )}
 
-       {/* --- MODAL FOR TRIAL RECORD (FORM) --- */}
+       {/* --- MODAL FOR TRIAL RECORD (FORM & VIEW) --- */}
        {isRecordModalOpen && (
            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
                <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
                    <div className="p-6">
-                       <h2 className="text-xl font-bold text-gray-900 mb-4 border-b pb-2">
-                           {editingRecordId ? 'Editar Registro' : 'Nuevo Registro Técnico'}
+                       <h2 className="text-xl font-bold text-gray-900 mb-4 border-b pb-2 flex justify-between items-center">
+                           {isViewMode ? 'Detalle de Registro' : (editingRecordId ? 'Editar Registro' : 'Nuevo Registro Técnico')}
+                           {isViewMode && <span className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded">Solo Lectura</span>}
                        </h2>
                        
                        <form onSubmit={handleSaveRecord} className="space-y-6">
@@ -513,15 +542,16 @@ export default function PlotDetails() {
                                    <input 
                                      type="date" 
                                      required 
-                                     className={`${inputClass} cursor-pointer`} 
+                                     disabled={isViewMode}
+                                     className={`${getInputClass()} cursor-pointer`} 
                                      value={recordForm.date} 
                                      onChange={e => setRecordForm({...recordForm, date: e.target.value})} 
-                                     onClick={(e) => { try { e.currentTarget.showPicker() } catch(e){} }}
+                                     onClick={(e) => { !isViewMode && e.currentTarget.showPicker() }}
                                     />
                                </div>
                                <div>
                                    <label className="block text-sm font-medium text-gray-700 mb-1">Etapa Fenológica</label>
-                                   <select className={inputClass} value={recordForm.stage} onChange={e => setRecordForm({...recordForm, stage: e.target.value as any})}>
+                                   <select disabled={isViewMode} className={getInputClass()} value={recordForm.stage} onChange={e => setRecordForm({...recordForm, stage: e.target.value as any})}>
                                        <option value="Emergencia">Emergencia</option>
                                        <option value="Vegetativo">Vegetativo</option>
                                        <option value="Floración">Floración</option>
@@ -530,8 +560,8 @@ export default function PlotDetails() {
                                    </select>
                                </div>
                                <div className="flex items-end">
-                                    <label className="flex items-center space-x-2 bg-gray-100 p-2 rounded cursor-pointer w-full">
-                                        <input type="checkbox" className="h-4 w-4 text-hemp-600 rounded" checked={showHarvestSection} onChange={e => setShowHarvestSection(e.target.checked)} />
+                                    <label className={`flex items-center space-x-2 bg-gray-100 p-2 rounded w-full ${!isViewMode && 'cursor-pointer'}`}>
+                                        <input disabled={isViewMode} type="checkbox" className="h-4 w-4 text-hemp-600 rounded" checked={showHarvestSection} onChange={e => setShowHarvestSection(e.target.checked)} />
                                         <span className="text-sm font-medium text-gray-700">Incluir Datos Cosecha/Lab</span>
                                     </label>
                                </div>
@@ -543,19 +573,19 @@ export default function PlotDetails() {
                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                    <div>
                                        <label className="block text-xs font-medium text-gray-500 mb-1">Altura Planta (cm)</label>
-                                       <input type="number" className={smallInputClass} value={recordForm.plantHeight || ''} onChange={e => setRecordForm({...recordForm, plantHeight: Number(e.target.value)})} />
+                                       <input disabled={isViewMode} type="number" className={getInputClass(true)} value={recordForm.plantHeight || ''} onChange={e => setRecordForm({...recordForm, plantHeight: Number(e.target.value)})} />
                                    </div>
                                    <div>
                                        <label className="block text-xs font-medium text-gray-500 mb-1">N° Plantas/m</label>
-                                       <input type="number" className={smallInputClass} value={recordForm.plantsPerMeterInit || ''} onChange={e => setRecordForm({...recordForm, plantsPerMeterInit: Number(e.target.value)})} />
+                                       <input disabled={isViewMode} type="number" className={getInputClass(true)} value={recordForm.plantsPerMeterInit || ''} onChange={e => setRecordForm({...recordForm, plantsPerMeterInit: Number(e.target.value)})} />
                                    </div>
                                    <div>
                                        <label className="block text-xs font-medium text-gray-500 mb-1">Vigor (1-5)</label>
-                                       <input type="number" max="5" min="1" className={smallInputClass} value={recordForm.vigor || ''} onChange={e => setRecordForm({...recordForm, vigor: Number(e.target.value)})} />
+                                       <input disabled={isViewMode} type="number" max="5" min="1" className={getInputClass(true)} value={recordForm.vigor || ''} onChange={e => setRecordForm({...recordForm, vigor: Number(e.target.value)})} />
                                    </div>
                                    <div>
                                        <label className="block text-xs font-medium text-gray-500 mb-1">Uniformidad (1-5)</label>
-                                       <input type="number" max="5" min="1" className={smallInputClass} value={recordForm.uniformity || ''} onChange={e => setRecordForm({...recordForm, uniformity: Number(e.target.value)})} />
+                                       <input disabled={isViewMode} type="number" max="5" min="1" className={getInputClass(true)} value={recordForm.uniformity || ''} onChange={e => setRecordForm({...recordForm, uniformity: Number(e.target.value)})} />
                                    </div>
                                </div>
                                
@@ -567,10 +597,11 @@ export default function PlotDetails() {
                                        </label>
                                        <input 
                                          type="date" 
-                                         className={`${smallInputClass} cursor-pointer`} 
+                                         disabled={isViewMode}
+                                         className={`${getInputClass(true)} cursor-pointer`} 
                                          value={recordForm.emergenceDate || ''} 
                                          onChange={e => setRecordForm({...recordForm, emergenceDate: e.target.value})} 
-                                         onClick={(e) => { try { e.currentTarget.showPicker() } catch(e){} }}
+                                         onClick={(e) => { !isViewMode && e.currentTarget.showPicker() }}
                                         />
                                    </div>
                                    <div>
@@ -580,10 +611,11 @@ export default function PlotDetails() {
                                        </label>
                                        <input 
                                           type="date" 
-                                          className={`${smallInputClass} cursor-pointer`} 
+                                          disabled={isViewMode}
+                                          className={`${getInputClass(true)} cursor-pointer`} 
                                           value={recordForm.floweringDate || ''} 
                                           onChange={e => setRecordForm({...recordForm, floweringDate: e.target.value})}
-                                          onClick={(e) => { try { e.currentTarget.showPicker() } catch(e){} }}
+                                          onClick={(e) => { !isViewMode && e.currentTarget.showPicker() }}
                                         />
                                    </div>
                                </div>
@@ -591,11 +623,11 @@ export default function PlotDetails() {
                                <div className="mt-4 pt-2 border-t border-blue-200 grid grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-xs font-medium text-gray-500 mb-1">Plagas</label>
-                                        <input type="text" className={smallInputClass} value={recordForm.pests || ''} onChange={e => setRecordForm({...recordForm, pests: e.target.value})} />
+                                        <input disabled={isViewMode} type="text" className={getInputClass(true)} value={recordForm.pests || ''} onChange={e => setRecordForm({...recordForm, pests: e.target.value})} />
                                     </div>
                                     <div>
                                         <label className="block text-xs font-medium text-gray-500 mb-1">Enfermedades</label>
-                                        <input type="text" className={smallInputClass} value={recordForm.diseases || ''} onChange={e => setRecordForm({...recordForm, diseases: e.target.value})} />
+                                        <input disabled={isViewMode} type="text" className={getInputClass(true)} value={recordForm.diseases || ''} onChange={e => setRecordForm({...recordForm, diseases: e.target.value})} />
                                     </div>
                                </div>
                            </div>
@@ -612,33 +644,38 @@ export default function PlotDetails() {
                                            </label>
                                            <input 
                                               type="date" 
-                                              className={`${smallInputClass} cursor-pointer`} 
+                                              disabled={isViewMode}
+                                              className={`${getInputClass(true)} cursor-pointer`} 
                                               value={recordForm.harvestDate || ''} 
                                               onChange={e => setRecordForm({...recordForm, harvestDate: e.target.value})}
-                                              onClick={(e) => { try { e.currentTarget.showPicker() } catch(e){} }}
+                                              onClick={(e) => { !isViewMode && e.currentTarget.showPicker() }}
                                             />
                                        </div>
                                        <div>
                                             <label className="block text-xs font-medium text-gray-500 mb-1">Rendimiento (kg/ha)</label>
-                                            <input type="number" className="w-full border border-green-300 rounded p-1 text-sm bg-white font-bold text-gray-900 h-10" value={recordForm.yield || ''} onChange={e => setRecordForm({...recordForm, yield: Number(e.target.value)})} />
+                                            <input disabled={isViewMode} type="number" className={getInputClass(true)} value={recordForm.yield || ''} onChange={e => setRecordForm({...recordForm, yield: Number(e.target.value)})} />
                                        </div>
                                        <div>
                                            <label className="block text-xs font-medium text-gray-500 mb-1">Peso Tallo (g)</label>
-                                           <input type="number" step="0.1" className={smallInputClass} value={recordForm.stemWeight || ''} onChange={e => setRecordForm({...recordForm, stemWeight: Number(e.target.value)})} />
+                                           <input disabled={isViewMode} type="number" step="0.1" className={getInputClass(true)} value={recordForm.stemWeight || ''} onChange={e => setRecordForm({...recordForm, stemWeight: Number(e.target.value)})} />
                                        </div>
                                        <div>
                                            <label className="block text-xs font-medium text-gray-500 mb-1">Peso Hoja (g)</label>
-                                           <input type="number" step="0.1" className={smallInputClass} value={recordForm.leafWeight || ''} onChange={e => setRecordForm({...recordForm, leafWeight: Number(e.target.value)})} />
+                                           <input disabled={isViewMode} type="number" step="0.1" className={getInputClass(true)} value={recordForm.leafWeight || ''} onChange={e => setRecordForm({...recordForm, leafWeight: Number(e.target.value)})} />
                                        </div>
                                    </div>
                                </div>
                            )}
 
                            <div className="flex justify-end space-x-3 pt-4 border-t">
-                               <button type="button" onClick={() => setIsRecordModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancelar</button>
-                               <button type="submit" className="px-4 py-2 bg-hemp-600 text-white rounded hover:bg-hemp-700 shadow-sm font-medium">
-                                   {editingRecordId ? 'Guardar Cambios' : 'Registrar Datos'}
+                               <button type="button" onClick={() => setIsRecordModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">
+                                   {isViewMode ? 'Cerrar' : 'Cancelar'}
                                </button>
+                               {!isViewMode && (
+                                   <button type="submit" className="px-4 py-2 bg-hemp-600 text-white rounded hover:bg-hemp-700 shadow-sm font-medium">
+                                       {editingRecordId ? 'Guardar Cambios' : 'Registrar Datos'}
+                                   </button>
+                               )}
                            </div>
                        </form>
                    </div>
