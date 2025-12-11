@@ -2,39 +2,95 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Location, SoilType, RoleType } from '../types';
-import { Plus, MapPin, User, Globe, Edit2, Trash2 } from 'lucide-react';
+import { Plus, MapPin, User, Globe, Edit2, Trash2, Keyboard, List } from 'lucide-react';
 
-// Simplified Argentina Database
+// Expanded Argentina Database with Rural Hubs
 const ARG_GEO: Record<string, string[]> = {
-    "Buenos Aires": ["La Plata", "Mar del Plata", "Bahía Blanca", "Tandil", "Pergamino", "Junín", "Olavarría", "San Nicolás", "Balcarce", "Castelar", "CABA", "San Pedro"],
-    "Catamarca": ["San Fernando del Valle de Catamarca", "Andalgalá", "Tinogasta"],
-    "Chaco": ["Resistencia", "Sáenz Peña", "Villa Ángela", "Charata"],
-    "Chubut": ["Rawson", "Comodoro Rivadavia", "Trelew", "Puerto Madryn", "Esquel"],
-    "Córdoba": ["Córdoba Capital", "Río Cuarto", "Villa María", "San Francisco", "Carlos Paz", "Alta Gracia"],
-    "Corrientes": ["Corrientes Capital", "Goya", "Paso de los Libres", "Curuzú Cuatiá"],
-    "Entre Ríos": ["Paraná", "Concordia", "Gualeguaychú", "Concepción del Uruguay", "Villaguay"],
-    "Formosa": ["Formosa Capital", "Clorinda", "Pirané"],
-    "Jujuy": ["San Salvador de Jujuy", "Perico", "San Pedro", "Ledesma"],
-    "La Pampa": ["Santa Rosa", "General Pico", "General Acha"],
-    "La Rioja": ["La Rioja Capital", "Chilecito", "Aimogasta"],
-    "Mendoza": ["Mendoza Capital", "San Rafael", "Godoy Cruz", "Maipú", "Luján de Cuyo", "San Martín"],
-    "Misiones": ["Posadas", "Eldorado", "Oberá", "Puerto Iguazú"],
-    "Neuquén": ["Neuquén Capital", "San Martín de los Andes", "Zapala", "Cutral Có"],
-    "Río Negro": ["Viedma", "General Roca", "Bariloche", "Cipolletti"],
-    "Salta": ["Salta Capital", "Orán", "Tartagal", "General Güemes", "Cafayate"],
-    "San Juan": ["San Juan Capital", "Caucete", "Jáchal"],
-    "San Luis": ["San Luis Capital", "Villa Mercedes", "Merlo"],
-    "Santa Cruz": ["Río Gallegos", "Caleta Olivia", "El Calafate"],
-    "Santa Fe": ["Santa Fe Capital", "Rosario", "Rafaela", "Venado Tuerto", "Reconquista"],
-    "Santiago del Estero": ["Santiago del Estero Capital", "La Banda", "Termas de Río Hondo"],
-    "Tierra del Fuego": ["Ushuaia", "Río Grande"],
-    "Tucumán": ["San Miguel de Tucumán", "Tafí Viejo", "Concepción", "Yerba Buena"]
+    "Buenos Aires": [
+        "La Plata", "Mar del Plata", "Bahía Blanca", "Tandil", "Pergamino", "Junín", "Olavarría", "San Nicolás", "Balcarce", "Castelar", "CABA", "San Pedro",
+        "Trenque Lauquen", "Pehuajó", "9 de Julio", "Bolívar", "Saladillo", "Lobos", "Chascomús", "Necochea", "Tres Arroyos", 
+        "General Villegas", "Lincoln", "Chivilcoy", "Chacabuco", "Bragado", "25 de Mayo", "Azul", "Coronel Suárez", "Pigüé", "Carhué",
+        "San Antonio de Areco", "Arrecifes", "Salto", "Rojas", "Mercedes", "Luján", "Cañuelas", "Las Flores"
+    ],
+    "Catamarca": [
+        "San Fernando del Valle de Catamarca", "Andalgalá", "Tinogasta", "Belén", "Santa María", "Recreo", "Fiambalá"
+    ],
+    "Chaco": [
+        "Resistencia", "Sáenz Peña", "Villa Ángela", "Charata", "Castelli", "San Martín", "Las Breñas", "Quitilipi", "Machagai", "Pampa del Infierno"
+    ],
+    "Chubut": [
+        "Rawson", "Comodoro Rivadavia", "Trelew", "Puerto Madryn", "Esquel", "Trevelin", "Sarmiento", "Gaiman", "Dolavon", "Lago Puelo"
+    ],
+    "Córdoba": [
+        "Córdoba Capital", "Río Cuarto", "Villa María", "San Francisco", "Carlos Paz", "Alta Gracia", "Jesús María", 
+        "Río Tercero", "Bell Ville", "Marcos Juárez", "Laboulaye", "La Carlota", "Vicuña Mackenna", "Huinca Renancó", 
+        "Villa Dolores", "Cruz del Eje", "Deán Funes", "Morteros", "Las Varillas", "Oncativo", "Oliva"
+    ],
+    "Corrientes": [
+        "Corrientes Capital", "Goya", "Paso de los Libres", "Curuzú Cuatiá", "Mercedes", "Bella Vista", "Santo Tomé", "Esquina", "Monte Caseros", "Virasoro"
+    ],
+    "Entre Ríos": [
+        "Paraná", "Concordia", "Gualeguaychú", "Concepción del Uruguay", "Villaguay", "Victoria", "La Paz", "Nogoyá", "Diamante", "Crespo", 
+        "Chajarí", "Federación", "San Salvador", "Rosario del Tala", "Gualeguay"
+    ],
+    "Formosa": [
+        "Formosa Capital", "Clorinda", "Pirané", "El Colorado", "Las Lomitas", "Ibarreta"
+    ],
+    "Jujuy": [
+        "San Salvador de Jujuy", "Perico", "San Pedro", "Ledesma", "Libertador Gral. San Martín", "Palpalá", "Humahuaca", "Tilcara", "La Quiaca"
+    ],
+    "La Pampa": [
+        "Santa Rosa", "General Pico", "General Acha", "Eduardo Castex", "Realicó", "Intendente Alvear", "Victorica", "Macachín", "Guatraché"
+    ],
+    "La Rioja": [
+        "La Rioja Capital", "Chilecito", "Aimogasta", "Chamical", "Villa Unión", "Chepes"
+    ],
+    "Mendoza": [
+        "Mendoza Capital", "San Rafael", "Godoy Cruz", "Maipú", "Luján de Cuyo", "San Martín", "General Alvear", "Malargüe", "Tunuyán", "Tupungato", "Rivadavia", "Junín"
+    ],
+    "Misiones": [
+        "Posadas", "Eldorado", "Oberá", "Puerto Iguazú", "Apóstoles", "Leandro N. Alem", "San Vicente", "Montecarlo", "Puerto Rico"
+    ],
+    "Neuquén": [
+        "Neuquén Capital", "San Martín de los Andes", "Zapala", "Cutral Có", "Plaza Huincul", "Centenario", "Villa La Angostura", "Junín de los Andes", "Chos Malal"
+    ],
+    "Río Negro": [
+        "Viedma", "General Roca", "Bariloche", "Cipolletti", "Villa Regina", "Allen", "Cinco Saltos", "Choele Choel", "Río Colorado", "El Bolsón", "San Antonio Oeste"
+    ],
+    "Salta": [
+        "Salta Capital", "Orán", "Tartagal", "General Güemes", "Cafayate", "Metán", "Rosario de la Frontera", "Joaquín V. González", "Las Lajitas", "Embarcación"
+    ],
+    "San Juan": [
+        "San Juan Capital", "Caucete", "Jáchal", "Pocito", "Rawson", "Rivadavia", "Santa Lucía", "Albardón"
+    ],
+    "San Luis": [
+        "San Luis Capital", "Villa Mercedes", "Merlo", "Justo Daract", "La Punta", "Quines", "Santa Rosa del Conlara"
+    ],
+    "Santa Cruz": [
+        "Río Gallegos", "Caleta Olivia", "El Calafate", "Pico Truncado", "Las Heras", "Puerto Deseado", "Río Turbio"
+    ],
+    "Santa Fe": [
+        "Santa Fe Capital", "Rosario", "Rafaela", "Venado Tuerto", "Reconquista", "Santo Tomé", "Villa Constitución", "San Lorenzo", "Esperanza", 
+        "Casilda", "Cañada de Gómez", "Firmat", "Rufino", "Sunchales", "Gálvez", "San Jorge", "Vera", "San Justo"
+    ],
+    "Santiago del Estero": [
+        "Santiago del Estero Capital", "La Banda", "Termas de Río Hondo", "Frías", "Añatuya", "Fernández", "Quimilí", "Loreto"
+    ],
+    "Tierra del Fuego": [
+        "Ushuaia", "Río Grande", "Tolhuin"
+    ],
+    "Tucumán": [
+        "San Miguel de Tucumán", "Tafí Viejo", "Concepción", "Yerba Buena", "Banda del Río Salí", "Aguilares", "Monteros", "Famaillá"
+    ]
 };
 
 export default function Locations() {
   const { locations, addLocation, updateLocation, deleteLocation, currentUser, usersList } = useAppContext();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Toggle for manual city entry
+  const [isManualCity, setIsManualCity] = useState(false);
 
   const [formData, setFormData] = useState<Partial<Location> & { lat: string, lng: string }>({
     name: '', province: '', city: '', address: '', soilType: 'Franco', climate: '', 
@@ -83,9 +139,14 @@ export default function Locations() {
         ownerName: '', ownerType: 'Institución', responsibleIds: []
     });
     setEditingId(null);
+    setIsManualCity(false);
   };
 
   const handleEdit = (loc: Location) => {
+      // Check if the city is in the standard list
+      const provinceCities = loc.province && ARG_GEO[loc.province] ? ARG_GEO[loc.province] : [];
+      const isStandardCity = loc.city && provinceCities.includes(loc.city);
+      
       setFormData({
           ...loc,
           lat: loc.coordinates?.lat.toString() || '',
@@ -94,6 +155,7 @@ export default function Locations() {
           city: loc.city || '',
       });
       setEditingId(loc.id);
+      setIsManualCity(!isStandardCity && !!loc.city); // If city exists but not in list, enable manual mode
       setIsModalOpen(true);
   };
 
@@ -235,13 +297,36 @@ export default function Locations() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Ciudad / Localidad</label>
-                    <select className={inputClass} value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})} disabled={!formData.province}>
-                        <option value="">Seleccionar...</option>
-                        {formData.province && ARG_GEO[formData.province]?.map(c => (
-                            <option key={c} value={c}>{c}</option>
-                        ))}
-                    </select>
+                    <label className="block text-sm font-medium text-gray-700 mb-1 flex justify-between">
+                        Ciudad / Paraje
+                        <button 
+                            type="button" 
+                            tabIndex={-1}
+                            onClick={() => setIsManualCity(!isManualCity)} 
+                            className="text-hemp-600 text-xs font-semibold hover:underline flex items-center"
+                            title={isManualCity ? "Volver a lista" : "Ingresar manualmente"}
+                        >
+                            {isManualCity ? <List size={12} className="mr-1"/> : <Keyboard size={12} className="mr-1"/>}
+                            {isManualCity ? "Lista" : "Manual"}
+                        </button>
+                    </label>
+                    
+                    {isManualCity ? (
+                         <input 
+                            type="text" 
+                            className={inputClass} 
+                            placeholder="Ej: Paraje La Niña, Colonia Menonita..." 
+                            value={formData.city} 
+                            onChange={e => setFormData({...formData, city: e.target.value})}
+                         />
+                    ) : (
+                        <select className={inputClass} value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})} disabled={!formData.province}>
+                            <option value="">Seleccionar...</option>
+                            {formData.province && ARG_GEO[formData.province]?.map(c => (
+                                <option key={c} value={c}>{c}</option>
+                            ))}
+                        </select>
+                    )}
                   </div>
               </div>
 
