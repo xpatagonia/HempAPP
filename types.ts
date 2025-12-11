@@ -70,6 +70,8 @@ export interface Plot {
   
   // Setup
   sowingDate: string;
+  surfaceArea?: number; // Nueva Superficie
+  surfaceUnit?: 'm2' | 'ha'; // Unidad de medida
   rowDistance: number; // cm
   density: number; // plants/m2 target
   status: 'Activa' | 'Cosechada' | 'Cancelada';

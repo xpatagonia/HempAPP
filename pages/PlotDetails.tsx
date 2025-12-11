@@ -254,6 +254,12 @@ export default function PlotDetails() {
                     <span className="text-xs text-gray-500 uppercase font-semibold">Fecha Siembra</span>
                     <p className="text-gray-800">{plot.sowingDate}</p>
                 </div>
+                <div>
+                    <span className="text-xs text-gray-500 uppercase font-semibold">Superficie</span>
+                    <p className="text-gray-800 font-medium">
+                        {plot.surfaceArea ? `${plot.surfaceArea} ${plot.surfaceUnit}` : '-'}
+                    </p>
+                </div>
                  <div>
                     <span className="text-xs text-gray-500 uppercase font-semibold">Tipo de Riego</span>
                     <p className="text-gray-800 font-medium">{plot.irrigationType || 'No especificado'}</p>

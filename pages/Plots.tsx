@@ -23,6 +23,7 @@ export default function Plots() {
     block: '1', replicate: 1,
     ownerName: '', responsibleIds: [],
     sowingDate: '', rowDistance: 0, density: 0, 
+    surfaceArea: 0, surfaceUnit: 'm2',
     status: 'Activa',
     observations: '',
     irrigationType: '',
@@ -57,6 +58,8 @@ export default function Plots() {
       sowingDate: formData.sowingDate!,
       rowDistance: Number(formData.rowDistance),
       density: Number(formData.density),
+      surfaceArea: Number(formData.surfaceArea || 0),
+      surfaceUnit: formData.surfaceUnit || 'm2',
       status: formData.status || 'Activa',
       observations: formData.observations,
       irrigationType: formData.irrigationType,
@@ -82,6 +85,7 @@ export default function Plots() {
     setFormData({
         projectId: '', locationId: '', varietyId: '', block: '1', replicate: 1,
         ownerName: '', responsibleIds: [], sowingDate: '', rowDistance: 0, density: 0, 
+        surfaceArea: 0, surfaceUnit: 'm2',
         status: 'Activa', observations: '', irrigationType: '',
         lat: '', lng: ''
     });
@@ -97,7 +101,9 @@ export default function Plots() {
       setFormData({
         ...p,
         lat: p.coordinates?.lat.toString() || '',
-        lng: p.coordinates?.lng.toString() || ''
+        lng: p.coordinates?.lng.toString() || '',
+        surfaceArea: p.surfaceArea || 0,
+        surfaceUnit: p.surfaceUnit || 'm2'
       });
       setEditingId(p.id);
       setIsModalOpen(true);
@@ -121,6 +127,7 @@ export default function Plots() {
             'Repetición': p.replicate,
             'Latitud': p.coordinates?.lat || l?.coordinates?.lat || '-',
             'Longitud': p.coordinates?.lng || l?.coordinates?.lng || '-',
+            'Sup. Siembra': p.surfaceArea ? `${p.surfaceArea} ${p.surfaceUnit}` : '-',
             'Fecha Siembra': p.sowingDate,
             'Último Reg': d?.date || '-',
             'Etapa': d?.stage || '-',
@@ -168,7 +175,7 @@ export default function Plots() {
       const matchProj = filterProj === 'all' || p.projectId === filterProj;
       
       // Admin sees everything. Others see only if their ID is in responsibleIds
-      const isAssigned = isAdmin || (currentUser && p.responsibleIds.includes(currentUser.id));
+      const isAssigned = isAdmin || (currentUser && p.responsibleIds?.includes(currentUser.id));
 
       return matchLoc && matchProj && isAssigned;
   });
@@ -354,7 +361,7 @@ export default function Plots() {
                  </div>
               </div>
               
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
                 <div className="lg:col-span-1">
                     <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
                       <Calendar size={14} className="mr-1 text-hemp-600" /> Fecha Siembra
@@ -370,6 +377,17 @@ export default function Plots() {
                         } catch (error) {}
                       }}
                     />
+                </div>
+                {/* Surface Area Inputs */}
+                <div className="lg:col-span-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Superficie</label>
+                    <div className="flex">
+                        <input type="number" step="any" placeholder="0" className={`${inputClass} rounded-r-none border-r-0`} value={formData.surfaceArea || ''} onChange={e => setFormData({...formData, surfaceArea: Number(e.target.value)})} />
+                        <select className="bg-gray-50 border border-gray-300 text-gray-700 text-sm rounded-r px-1 focus:outline-none" value={formData.surfaceUnit} onChange={e => setFormData({...formData, surfaceUnit: e.target.value as any})}>
+                            <option value="m2">m²</option>
+                            <option value="ha">ha</option>
+                        </select>
+                    </div>
                 </div>
                 <div className="lg:col-span-1">
                     <label className="block text-sm font-medium text-gray-700 mb-1">Densidad (pl/m2)</label>
