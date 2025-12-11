@@ -29,7 +29,8 @@ export default function Plots() {
     lat: '', lng: ''
   });
 
-  const isAdmin = currentUser?.role === 'admin';
+  const isSuperAdmin = currentUser?.role === 'super_admin';
+  const isAdmin = currentUser?.role === 'admin' || isSuperAdmin;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -161,11 +162,12 @@ export default function Plots() {
 
   // Filter Logic:
   // 1. Dropdown Filters (Location, Project)
-  // 2. Role Restriction: Admin sees all, Technician sees only assigned
+  // 2. Role Restriction: Admin/SuperAdmin sees all, Technician/Viewer sees only assigned
   const filteredPlots = plots.filter(p => {
       const matchLoc = filterLoc === 'all' || p.locationId === filterLoc;
       const matchProj = filterProj === 'all' || p.projectId === filterProj;
       
+      // Admin sees everything. Others see only if their ID is in responsibleIds
       const isAssigned = isAdmin || (currentUser && p.responsibleIds.includes(currentUser.id));
 
       return matchLoc && matchProj && isAssigned;
@@ -173,8 +175,9 @@ export default function Plots() {
 
   const inputClass = "w-full border border-gray-300 bg-white text-gray-900 p-2 rounded focus:ring-2 focus:ring-hemp-500 focus:border-transparent outline-none transition-colors";
 
-  // Filter users to only show potential technicians (Admin or Technician role)
-  const assignableUsers = usersList.filter(u => u.role === 'admin' || u.role === 'technician');
+  // Filter users to show in the Assignment Modal
+  // IMPORTANT: Now including 'viewer' so Producers can be assigned to plots
+  const assignableUsers = usersList.filter(u => u.role === 'admin' || u.role === 'technician' || u.role === 'viewer');
 
   return (
     <div>
@@ -223,7 +226,10 @@ export default function Plots() {
             {filteredPlots.length === 0 ? (
                 <tr>
                     <td colSpan={8} className="px-4 py-8 text-center text-gray-500 italic">
-                        No se encontraron parcelas asignadas a tu perfil o con los filtros actuales.
+                        {isAdmin 
+                          ? "No se encontraron parcelas con los filtros actuales."
+                          : "No tienes parcelas asignadas a tu usuario."
+                        }
                     </td>
                 </tr>
             ) : filteredPlots.map(p => {
@@ -306,7 +312,7 @@ export default function Plots() {
                 </div>
                 <div>
                    <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
-                     <UserCheck size={14} className="mr-1" /> Responsables Técnicos
+                     <UserCheck size={14} className="mr-1" /> Responsables / Productores
                    </label>
                    <div className="border border-gray-300 bg-white rounded p-2 h-20 overflow-y-auto text-xs">
                      {assignableUsers.map(u => (
@@ -319,12 +325,15 @@ export default function Plots() {
                              />
                              <div className="flex flex-col">
                                 <span className="text-gray-900 font-medium">{u.name}</span>
-                                <span className="text-[10px] text-gray-400 capitalize">{u.role === 'admin' ? 'Administrador' : 'Técnico'}</span>
+                                <span className="text-[10px] text-gray-400 capitalize">
+                                    {u.role === 'admin' ? 'Administrador' : 
+                                     u.role === 'technician' ? 'Técnico' : 'Productor/Visita'}
+                                </span>
                              </div>
                          </label>
                      ))}
                      {assignableUsers.length === 0 && (
-                        <div className="text-gray-400 text-center py-2">No hay técnicos registrados</div>
+                        <div className="text-gray-400 text-center py-2">No hay usuarios disponibles</div>
                      )}
                   </div>
                 </div>
