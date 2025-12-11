@@ -11,6 +11,7 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
 }
 
 // Inicializamos el cliente con valores fallback para evitar que la app se rompa al inicio (White Screen)
+// Esto permite que la UI cargue y muestre errores en la consola en lugar de una pantalla blanca vacía.
 export const supabase = createClient(
   SUPABASE_URL || 'https://placeholder-url.supabase.co', 
   SUPABASE_ANON_KEY || 'placeholder-key'
