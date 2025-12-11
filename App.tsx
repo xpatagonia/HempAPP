@@ -12,6 +12,8 @@ import Projects from './pages/Projects';
 import Users from './pages/Users';
 import Tasks from './pages/Tasks';
 import Login from './pages/Login';
+import Tools from './pages/Tools';
+import Analytics from './pages/Analytics';
 
 // Componente para proteger rutas
 const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
@@ -44,6 +46,16 @@ export default function App() {
             <Route path="/tasks" element={
               <ProtectedRoute>
                 <Tasks />
+              </ProtectedRoute>
+            } />
+            <Route path="/tools" element={
+              <ProtectedRoute>
+                <Tools />
+              </ProtectedRoute>
+            } />
+            <Route path="/analytics" element={
+              <ProtectedRoute>
+                <Analytics />
               </ProtectedRoute>
             } />
             <Route path="/varieties" element={
