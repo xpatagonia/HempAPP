@@ -1,23 +1,22 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Variety, Location, Plot, FieldLog, TrialRecord, User, Project, Task } from '../types';
+import { supabase } from '../supabaseClient'; // Importamos el cliente real
 
 interface AppContextType {
   projects: Project[];
   varieties: Variety[];
   locations: Location[];
   plots: Plot[];
-  trialRecords: TrialRecord[]; // Historico de registros
-  logs: FieldLog[]; // Bitacora informal
+  trialRecords: TrialRecord[];
+  logs: FieldLog[];
   tasks: Task[];
   
-  // Auth
   currentUser: User | null;
   usersList: User[];
-  login: (email: string, password: string) => boolean;
+  login: (email: string, password: string) => Promise<boolean>; // Ahora es async
   logout: () => void;
 
-  // Actions
   addProject: (p: Project) => void;
   updateProject: (p: Project) => void;
   
@@ -32,244 +31,106 @@ interface AppContextType {
   addPlot: (p: Plot) => void;
   updatePlot: (p: Plot) => void;
   
-  // Trial Record Management (Historical)
   addTrialRecord: (r: TrialRecord) => void;
   updateTrialRecord: (r: TrialRecord) => void;
   deleteTrialRecord: (id: string) => void;
   
   addLog: (l: FieldLog) => void;
   
-  // User Management
   addUser: (u: User) => void;
   updateUser: (u: User) => void;
   deleteUser: (id: string) => void;
 
-  // Task Management
   addTask: (t: Task) => void;
   updateTask: (t: Task) => void;
   deleteTask: (id: string) => void;
   
-  // Helpers
   getPlotHistory: (plotId: string) => TrialRecord[];
   getLatestRecord: (plotId: string) => TrialRecord | undefined;
+  
+  loading: boolean;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// --- MOCK INITIAL DATA (Used only if localStorage is empty) ---
-// UPDATED DOMAINS TO @hempc.com.ar
-const initialUsersData: User[] = [
-  { id: 'u0', name: 'Super Admin', email: 'root@hempc.com.ar', password: 'admin', role: 'super_admin' },
-  { id: 'u1', name: 'Carlos Director', email: 'admin@hempc.com.ar', password: '123', role: 'admin' },
-  { id: 'u2', name: 'Ana Técnica', email: 'ana@hempc.com.ar', password: '123', role: 'technician' },
-  { id: 'u3', name: 'Pedro Productor', email: 'pedro@hempc.com.ar', password: '123', role: 'viewer' },
-  { id: 'u4', name: 'Juan Agrónomo', email: 'juan@hempc.com.ar', password: '123', role: 'technician' },
-];
+// Helper para generar IDs si no vienen de la DB (aunque lo ideal es que vengan)
+const generateId = () => crypto.randomUUID();
 
-const initialProjectsData: Project[] = [
-  { 
-    id: '1', 
-    name: 'Campaña Fibra 2023-2024', 
-    description: 'Evaluación regional de variedades textiles.', 
-    startDate: '2023-09-01', 
-    status: 'En Curso',
-    responsibleIds: ['u1', 'u4']
-  },
-];
-
-const initialVarietiesData: Variety[] = [
-  { id: '1', name: 'Finola', usage: 'Grano', genetics: 'Finlandia', cycleDays: 110, expectedThc: 0.1 },
-  { id: '2', name: 'Kompolti', usage: 'Fibra', genetics: 'Hungría', cycleDays: 140, expectedThc: 0.15 },
-];
-
-const initialLocationsData: Location[] = [
-  { 
-    id: '1', 
-    name: 'Campo Experimental INTA', 
-    province: 'Buenos Aires',
-    city: 'Castelar',
-    address: 'Ruta 5, Km 100', 
-    coordinates: { lat: -34.6037, lng: -58.3816 }, 
-    soilType: 'Franco', 
-    climate: 'Templado', 
-    responsiblePerson: 'Ing. López',
-    ownerName: 'INTA',
-    ownerType: 'Institución',
-    responsibleIds: ['u4']
-  },
-];
-
-const initialPlotsData: Plot[] = [
-  { 
-    id: '1', 
-    name: 'FIN-B1-R1', 
-    projectId: '1',
-    locationId: '1', 
-    varietyId: '1', 
-    block: '1',
-    replicate: 1,
-    ownerName: 'INTA',
-    responsibleIds: ['u2'],
-    sowingDate: '2023-10-15',
-    surfaceArea: 50,
-    surfaceUnit: 'm2',
-    rowDistance: 40, 
-    density: 150, 
-    status: 'Activa',
-    observations: 'Suelo con buen drenaje inicial.',
-    irrigationType: 'Goteo'
-  },
-  { 
-    id: '2', 
-    name: 'KOM-B1-R1', 
-    projectId: '1',
-    locationId: '1', 
-    varietyId: '2', 
-    block: '1',
-    replicate: 1,
-    ownerName: 'INTA',
-    responsibleIds: ['u2'],
-    sowingDate: '2023-10-15',
-    surfaceArea: 0.5,
-    surfaceUnit: 'ha',
-    rowDistance: 40, 
-    density: 150, 
-    status: 'Activa',
-    irrigationType: 'Goteo'
-  },
-    { 
-    id: '3', 
-    name: 'FIN-B1-R2', 
-    projectId: '1',
-    locationId: '1', 
-    varietyId: '1', 
-    block: '1',
-    replicate: 2,
-    ownerName: 'INTA',
-    responsibleIds: ['u2'],
-    sowingDate: '2023-10-15',
-    surfaceArea: 50,
-    surfaceUnit: 'm2',
-    rowDistance: 40, 
-    density: 150, 
-    status: 'Activa',
-    irrigationType: 'Goteo'
-  },
-];
-
-const initialTrialRecordsData: TrialRecord[] = [
-  {
-    id: 'tr1',
-    plotId: '1',
-    date: '2023-11-01',
-    stage: 'Emergencia',
-    emergenceDate: '2023-10-25',
-    plantsPerMeterInit: 12,
-    vigor: 4,
-    uniformity: 5,
-    plantHeight: 5
-  },
-  {
-    id: 'tr2',
-    plotId: '1',
-    date: '2023-11-15',
-    stage: 'Vegetativo',
-    plantHeight: 35,
-    vigor: 5,
-    uniformity: 5
-  }
-];
-
-const initialLogsData: FieldLog[] = [
-  {
-    id: 'l1',
-    plotId: '1',
-    date: '2023-11-10',
-    note: 'Se observa presencia leve de orugas en hojas basales. Monitorear.',
-    photoUrl: 'https://images.unsplash.com/photo-1550989460-0adf9ea622e2?q=80&w=300&auto=format&fit=crop'
-  },
-  {
-    id: 'l2',
-    plotId: '1',
-    date: '2023-11-20',
-    note: 'Aplicación de riego suplementario por sequía.',
-  }
-];
-
-const initialTasksData: Task[] = [
-    {
-        id: 't1',
-        title: 'Riego Inicial',
-        description: 'Verificar sistema de goteo en bloque 1',
-        dueDate: '2023-10-20',
-        status: 'Completada',
-        priority: 'Alta',
-        assignedToIds: ['u2'],
-        createdBy: 'u1'
-    },
-    {
-        id: 't2',
-        title: 'Monitoreo de Plagas',
-        description: 'Recorrida semanal para detectar orugas.',
-        dueDate: new Date().toISOString().split('T')[0],
-        status: 'Pendiente',
-        priority: 'Media',
-        assignedToIds: ['u2'],
-        createdBy: 'u1'
-    }
-];
-
-// Helper to safe parse JSON
-const safeParse = (key: string, fallback: any) => {
-  const stored = localStorage.getItem(key);
-  if (!stored) return fallback;
-  try {
-    return JSON.parse(stored);
-  } catch (e) {
-    return fallback;
-  }
-};
-
-// NOTE: CHANGED KEYS TO _v3 TO FORCE DATA REFRESH ON CLIENTS
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // Initialize state from LocalStorage or Fallback to Mock Data
-  const [usersList, setUsersList] = useState<User[]>(() => safeParse('ht_users_v3', initialUsersData));
-  const [projects, setProjects] = useState<Project[]>(() => safeParse('ht_projects_v3', initialProjectsData));
-  const [varieties, setVarieties] = useState<Variety[]>(() => safeParse('ht_varieties_v3', initialVarietiesData));
-  const [locations, setLocations] = useState<Location[]>(() => safeParse('ht_locations_v3', initialLocationsData));
-  const [plots, setPlots] = useState<Plot[]>(() => safeParse('ht_plots_v3', initialPlotsData));
-  const [trialRecords, setTrialRecords] = useState<TrialRecord[]>(() => safeParse('ht_records_v3', initialTrialRecordsData));
-  const [logs, setLogs] = useState<FieldLog[]>(() => safeParse('ht_logs_v3', initialLogsData));
-  const [tasks, setTasks] = useState<Task[]>(() => safeParse('ht_tasks_v3', initialTasksData));
+  // State
+  const [usersList, setUsersList] = useState<User[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [varieties, setVarieties] = useState<Variety[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [plots, setPlots] = useState<Plot[]>([]);
+  const [trialRecords, setTrialRecords] = useState<TrialRecord[]>([]);
+  const [logs, setLogs] = useState<FieldLog[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
   
-  const [currentUser, setCurrentUser] = useState<User | null>(() => {
-      const savedUser = localStorage.getItem('ht_currentUser_v3');
-      return savedUser ? JSON.parse(savedUser) : null;
-  });
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  // PERSISTENCE EFFECTS (Using v3 keys)
-  useEffect(() => localStorage.setItem('ht_users_v3', JSON.stringify(usersList)), [usersList]);
-  useEffect(() => localStorage.setItem('ht_projects_v3', JSON.stringify(projects)), [projects]);
-  useEffect(() => localStorage.setItem('ht_varieties_v3', JSON.stringify(varieties)), [varieties]);
-  useEffect(() => localStorage.setItem('ht_locations_v3', JSON.stringify(locations)), [locations]);
-  useEffect(() => localStorage.setItem('ht_plots_v3', JSON.stringify(plots)), [plots]);
-  useEffect(() => localStorage.setItem('ht_records_v3', JSON.stringify(trialRecords)), [trialRecords]);
-  useEffect(() => localStorage.setItem('ht_logs_v3', JSON.stringify(logs)), [logs]);
-  useEffect(() => localStorage.setItem('ht_tasks_v3', JSON.stringify(tasks)), [tasks]);
-  
+  // --- 1. CARGA INICIAL DESDE SUPABASE ---
   useEffect(() => {
-    if (currentUser) {
-        localStorage.setItem('ht_currentUser_v3', JSON.stringify(currentUser));
-    } else {
-        localStorage.removeItem('ht_currentUser_v3');
-    }
-  }, [currentUser]);
+    const fetchAllData = async () => {
+        setLoading(true);
+        try {
+            // Promise.all para cargar todo en paralelo
+            const [
+                { data: users },
+                { data: projs },
+                { data: vars },
+                { data: locs },
+                { data: plts },
+                { data: recs },
+                { data: lgs },
+                { data: tsks }
+            ] = await Promise.all([
+                supabase.from('users').select('*'),
+                supabase.from('projects').select('*'),
+                supabase.from('varieties').select('*'),
+                supabase.from('locations').select('*'),
+                supabase.from('plots').select('*'),
+                supabase.from('trial_records').select('*'),
+                supabase.from('field_logs').select('*'),
+                supabase.from('tasks').select('*')
+            ]);
 
-  const login = (email: string, password: string): boolean => {
-    // Basic auth check
+            if (users) setUsersList(users as User[]);
+            if (projs) setProjects(projs as Project[]);
+            if (vars) setVarieties(vars as Variety[]);
+            if (locs) setLocations(locs as Location[]);
+            if (plts) setPlots(plts as Plot[]);
+            if (recs) setTrialRecords(recs as TrialRecord[]);
+            if (lgs) setLogs(lgs as FieldLog[]);
+            if (tsks) setTasks(tsks as Task[]);
+
+            // Restaurar sesión si existe en localStorage (persistencia de login simple)
+            const savedUser = localStorage.getItem('ht_session_user');
+            if (savedUser) {
+                setCurrentUser(JSON.parse(savedUser));
+            }
+
+        } catch (error) {
+            console.error("Error cargando datos de Supabase:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    fetchAllData();
+  }, []);
+
+  // --- AUTH ---
+  const login = async (email: string, password: string): Promise<boolean> => {
+    // Validamos contra la lista de usuarios cargada desde la DB
+    // NOTA: Para producción real, lo ideal es usar supabase.auth.signInWithPassword
+    // pero mantenemos tu tabla 'users' para no romper la lógica actual de roles custom.
     const user = usersList.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
+    
     if (user) {
       setCurrentUser(user);
+      localStorage.setItem('ht_session_user', JSON.stringify(user));
       return true;
     }
     return false;
@@ -277,49 +138,110 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const logout = () => {
     setCurrentUser(null);
+    localStorage.removeItem('ht_session_user');
   };
 
-  // --- CRUD ---
-
-  const addProject = (p: Project) => setProjects([...projects, p]);
-  const updateProject = (p: Project) => setProjects(prev => prev.map(item => item.id === p.id ? p : item));
-
-  const addVariety = (v: Variety) => setVarieties([...varieties, v]);
-  const updateVariety = (v: Variety) => setVarieties(prev => prev.map(item => item.id === v.id ? v : item));
-  const deleteVariety = (id: string) => setVarieties(prev => prev.filter(item => item.id !== id));
-
-  const addLocation = (l: Location) => setLocations([...locations, l]);
-  const updateLocation = (l: Location) => setLocations(prev => prev.map(item => item.id === l.id ? l : item));
-  const deleteLocation = (id: string) => setLocations(prev => prev.filter(item => item.id !== id));
+  // --- CRUD WRAPPERS (DB + STATE) ---
   
-  const addPlot = (p: Plot) => setPlots([...plots, p]);
-  const updatePlot = (p: Plot) => setPlots(prev => prev.map(item => item.id === p.id ? p : item));
-  
-  // Gestion de Registros Tecnicos (Timeline)
-  const addTrialRecord = (r: TrialRecord) => setTrialRecords(prev => [...prev, r]);
-  
-  const updateTrialRecord = (r: TrialRecord) => {
-    setTrialRecords(prev => prev.map(item => item.id === r.id ? r : item));
+  // Projects
+  const addProject = async (p: Project) => {
+      const { error } = await supabase.from('projects').insert([p]);
+      if (!error) setProjects([...projects, p]);
   };
-  
-  const deleteTrialRecord = (id: string) => {
-    setTrialRecords(prev => prev.filter(item => item.id !== id));
+  const updateProject = async (p: Project) => {
+      const { error } = await supabase.from('projects').update(p).eq('id', p.id);
+      if (!error) setProjects(prev => prev.map(item => item.id === p.id ? p : item));
   };
 
-  const addLog = (l: FieldLog) => setLogs(prev => [l, ...prev]);
+  // Varieties
+  const addVariety = async (v: Variety) => {
+      const { error } = await supabase.from('varieties').insert([v]);
+      if (!error) setVarieties([...varieties, v]);
+  };
+  const updateVariety = async (v: Variety) => {
+      const { error } = await supabase.from('varieties').update(v).eq('id', v.id);
+      if (!error) setVarieties(prev => prev.map(item => item.id === v.id ? v : item));
+  };
+  const deleteVariety = async (id: string) => {
+      const { error } = await supabase.from('varieties').delete().eq('id', id);
+      if (!error) setVarieties(prev => prev.filter(item => item.id !== id));
+  };
 
-  const addUser = (u: User) => setUsersList([...usersList, u]);
-  const updateUser = (u: User) => setUsersList(prev => prev.map(item => item.id === u.id ? u : item));
-  const deleteUser = (id: string) => setUsersList(prev => prev.filter(item => item.id !== id));
+  // Locations
+  const addLocation = async (l: Location) => {
+      const { error } = await supabase.from('locations').insert([l]);
+      if (!error) setLocations([...locations, l]);
+  };
+  const updateLocation = async (l: Location) => {
+      const { error } = await supabase.from('locations').update(l).eq('id', l.id);
+      if (!error) setLocations(prev => prev.map(item => item.id === l.id ? l : item));
+  };
+  const deleteLocation = async (id: string) => {
+      const { error } = await supabase.from('locations').delete().eq('id', id);
+      if (!error) setLocations(prev => prev.filter(item => item.id !== id));
+  };
 
-  // Task Management
-  const addTask = (t: Task) => setTasks([t, ...tasks]);
-  const updateTask = (t: Task) => setTasks(prev => prev.map(item => item.id === t.id ? t : item));
-  const deleteTask = (id: string) => setTasks(prev => prev.filter(item => item.id !== id));
+  // Plots
+  const addPlot = async (p: Plot) => {
+      const { error } = await supabase.from('plots').insert([p]);
+      if (!error) setPlots([...plots, p]);
+      else console.error(error);
+  };
+  const updatePlot = async (p: Plot) => {
+      const { error } = await supabase.from('plots').update(p).eq('id', p.id);
+      if (!error) setPlots(prev => prev.map(item => item.id === p.id ? p : item));
+  };
 
-  // Helpers
+  // Trial Records (Note: DB table is 'trial_records')
+  const addTrialRecord = async (r: TrialRecord) => {
+      const { error } = await supabase.from('trial_records').insert([r]);
+      if (!error) setTrialRecords(prev => [...prev, r]);
+  };
+  const updateTrialRecord = async (r: TrialRecord) => {
+      const { error } = await supabase.from('trial_records').update(r).eq('id', r.id);
+      if (!error) setTrialRecords(prev => prev.map(item => item.id === r.id ? r : item));
+  };
+  const deleteTrialRecord = async (id: string) => {
+      const { error } = await supabase.from('trial_records').delete().eq('id', id);
+      if (!error) setTrialRecords(prev => prev.filter(item => item.id !== id));
+  };
+
+  // Logs
+  const addLog = async (l: FieldLog) => {
+      const { error } = await supabase.from('field_logs').insert([l]);
+      if (!error) setLogs(prev => [l, ...prev]);
+  };
+
+  // Users
+  const addUser = async (u: User) => {
+      const { error } = await supabase.from('users').insert([u]);
+      if (!error) setUsersList([...usersList, u]);
+  };
+  const updateUser = async (u: User) => {
+      const { error } = await supabase.from('users').update(u).eq('id', u.id);
+      if (!error) setUsersList(prev => prev.map(item => item.id === u.id ? u : item));
+  };
+  const deleteUser = async (id: string) => {
+      const { error } = await supabase.from('users').delete().eq('id', id);
+      if (!error) setUsersList(prev => prev.filter(item => item.id !== id));
+  };
+
+  // Tasks
+  const addTask = async (t: Task) => {
+      const { error } = await supabase.from('tasks').insert([t]);
+      if (!error) setTasks([t, ...tasks]);
+  };
+  const updateTask = async (t: Task) => {
+      const { error } = await supabase.from('tasks').update(t).eq('id', t.id);
+      if (!error) setTasks(prev => prev.map(item => item.id === t.id ? t : item));
+  };
+  const deleteTask = async (id: string) => {
+      const { error } = await supabase.from('tasks').delete().eq('id', id);
+      if (!error) setTasks(prev => prev.filter(item => item.id !== id));
+  };
+
+  // Helpers (Logic remains same, data source changed)
   const getPlotHistory = (plotId: string) => {
-    // Sort descending by date
     return trialRecords
         .filter(r => r.plotId === plotId)
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -342,7 +264,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       addLog,
       addUser, updateUser, deleteUser,
       addTask, updateTask, deleteTask,
-      getPlotHistory, getLatestRecord
+      getPlotHistory, getLatestRecord,
+      loading
     }}>
       {children}
     </AppContext.Provider>
