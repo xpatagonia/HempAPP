@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { BarChart2, ArrowRightArrowLeft, Scale, Ruler, Sprout } from 'lucide-react';
+import { BarChart2, ArrowLeftRight, Scale, Ruler, Sprout } from 'lucide-react';
 
 export default function Analytics() {
   const { varieties, plots, getLatestRecord } = useAppContext();
@@ -83,7 +83,7 @@ export default function Analytics() {
               </select>
           </div>
           <div className="flex justify-center pb-2 text-gray-400">
-              <ArrowRightArrowLeft size={24} />
+              <ArrowLeftRight size={24} />
           </div>
           <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Variedad B (Desafiante)</label>
@@ -231,3 +231,4 @@ export default function Analytics() {
     </div>
   );
 }
+    
