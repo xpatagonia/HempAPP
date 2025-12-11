@@ -40,6 +40,8 @@ export interface Variety {
 export interface Location {
   id: string;
   name: string;
+  province?: string; // Nueva: Provincia
+  city?: string;     // Nueva: Ciudad/Localidad
   address: string;
   coordinates?: {
     lat: number;

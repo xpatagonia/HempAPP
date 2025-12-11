@@ -86,6 +86,8 @@ const initialLocationsData: Location[] = [
   { 
     id: '1', 
     name: 'Campo Experimental INTA', 
+    province: 'Buenos Aires',
+    city: 'Castelar',
     address: 'Ruta 5, Km 100', 
     coordinates: { lat: -34.6037, lng: -58.3816 }, 
     soilType: 'Franco', 
