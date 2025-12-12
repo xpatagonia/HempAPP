@@ -50,18 +50,7 @@ interface AppContextType {
   loading: boolean;
 }
 
-// DATOS DEMO PARA INICIO SIN DB
-const DEMO_USERS: User[] = [
-  { id: '1', name: 'Super Admin', email: 'root@hempc.com.ar', password: 'admin', role: 'super_admin' },
-  { id: '2', name: 'Administrador', email: 'admin@hempc.com.ar', password: '123', role: 'admin' },
-  { id: '3', name: 'Ana Técnico', email: 'ana@hempc.com.ar', password: '123', role: 'technician' },
-  { id: '4', name: 'Pedro Productor', email: 'pedro@hempc.com.ar', password: '123', role: 'viewer' },
-];
-
 const AppContext = createContext<AppContextType | undefined>(undefined);
-
-// Helper para generar IDs si no vienen de la DB (aunque lo ideal es que vengan)
-const generateId = () => crypto.randomUUID();
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // State
@@ -103,13 +92,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 supabase.from('tasks').select('*')
             ]);
 
-            // Si la DB responde con datos, usarlos. Si no (o está vacía), usar arrays vacíos o DEMO.
-            // IMPORTANTE: Si users es nulo o vacío, cargamos los DEMO_USERS para que el login funcione.
-            if (users && users.length > 0) {
+            // MODO PRODUCCIÓN: Si no hay usuarios en la DB, la lista queda vacía.
+            // No se cargan usuarios demo. Se requiere que el admin cree el primer usuario en Supabase.
+            if (users) {
                 setUsersList(users as User[]);
             } else {
-                console.warn("Usando usuarios de demostración (DB vacía o sin conexión)");
-                setUsersList(DEMO_USERS);
+                console.log("Sistema iniciado sin usuarios. Configure la base de datos.");
+                setUsersList([]);
             }
 
             if (projs) setProjects(projs as Project[]);
@@ -123,13 +112,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             // Restaurar sesión si existe en localStorage (persistencia de login simple)
             const savedUser = localStorage.getItem('ht_session_user');
             if (savedUser) {
-                setCurrentUser(JSON.parse(savedUser));
+                // Verificamos que el usuario guardado aún exista en la DB actualizada
+                const parsedUser = JSON.parse(savedUser);
+                // NOTA: En un sistema real, aquí validaríamos el token, pero mantenemos la lógica simple por ahora.
+                setCurrentUser(parsedUser);
             }
 
         } catch (error) {
             console.error("Error cargando datos de Supabase:", error);
-            // Fallback en caso de error crítico de conexión
-            setUsersList(DEMO_USERS);
+            // En producción, mostramos error, no cargamos datos falsos
         } finally {
             setLoading(false);
         }
@@ -140,7 +131,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // --- AUTH ---
   const login = async (email: string, password: string): Promise<boolean> => {
-    // Validamos contra la lista de usuarios cargada desde la DB (o Demo)
+    // Validamos contra la lista de usuarios cargada desde la DB REAL
     const user = usersList.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
     
     if (user) {

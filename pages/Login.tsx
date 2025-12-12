@@ -18,7 +18,6 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-        // Esperamos la respuesta real del login (es una promesa)
         const success = await login(email, password);
         
         if (success) {
@@ -28,14 +27,14 @@ export default function Login() {
             setIsLoading(false);
         }
     } catch (err) {
-        setError('Ocurrió un error al intentar ingresar.');
+        setError('Ocurrió un error al intentar ingresar. Verifica tu conexión.');
         setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-hemp-50 to-blue-50 flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen bg-gradient-to-br from-hemp-50 to-blue-50 flex flex-col items-center justify-center p-4 relative">
+      <div className="w-full max-w-md z-10">
         <div className="flex justify-center mb-6">
             <div className="bg-white p-3 rounded-full shadow-lg">
                 <Leaf className="w-10 h-10 text-hemp-600" />
@@ -88,36 +87,18 @@ export default function Login() {
                     disabled={isLoading}
                     className="w-full bg-hemp-600 text-white py-3 rounded-lg font-semibold shadow-md hover:bg-hemp-700 transition flex items-center justify-center disabled:opacity-70 disabled:cursor-not-allowed"
                 >
-                    {isLoading ? 'Ingresando...' : (
+                    {isLoading ? 'Verificando...' : (
                         <>
                             Iniciar Sesión <ArrowRight size={18} className="ml-2" />
                         </>
                     )}
                 </button>
             </form>
-
-            <div className="mt-8 pt-6 border-t border-gray-100">
-                <p className="text-xs text-center text-gray-400 font-semibold uppercase mb-3">Accesos Demo</p>
-                <div className="grid grid-cols-2 gap-2 text-xs text-gray-500">
-                    <div className="bg-gray-50 p-2 rounded text-center cursor-pointer hover:bg-gray-100 transition" onClick={() => { setEmail('root@hempc.com.ar'); setPassword('admin'); }}>
-                        <span className="font-bold block text-gray-700">Root</span>
-                        root@hempc.com.ar<br/>admin
-                    </div>
-                    <div className="bg-gray-50 p-2 rounded text-center cursor-pointer hover:bg-gray-100 transition" onClick={() => { setEmail('admin@hempc.com.ar'); setPassword('123'); }}>
-                        <span className="font-bold block text-gray-700">Admin</span>
-                        admin@hempc.com.ar<br/>123
-                    </div>
-                    <div className="bg-gray-50 p-2 rounded text-center cursor-pointer hover:bg-gray-100 transition" onClick={() => { setEmail('ana@hempc.com.ar'); setPassword('123'); }}>
-                        <span className="font-bold block text-gray-700">Técnico</span>
-                        ana@hempc.com.ar<br/>123
-                    </div>
-                    <div className="bg-gray-50 p-2 rounded text-center cursor-pointer hover:bg-gray-100 transition" onClick={() => { setEmail('pedro@hempc.com.ar'); setPassword('123'); }}>
-                        <span className="font-bold block text-gray-700">Productor</span>
-                        pedro@hempc.com.ar<br/>123
-                    </div>
-                </div>
-            </div>
         </div>
+      </div>
+
+      <div className="mt-8 text-center text-xs text-gray-400 font-mono">
+        Dev gaston.barea.moreno@gmail.com
       </div>
     </div>
   );

@@ -117,24 +117,30 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             )}
           </nav>
 
-          {/* User Profile Section */}
-          <div className="p-4 border-t bg-gray-50">
-             <div className="flex items-center space-x-3 mb-3">
-               <div className="bg-hemp-100 p-2 rounded-full text-hemp-700">
-                 <UserCircle size={24} />
-               </div>
-               <div className="flex-1 min-w-0">
-                 <p className="text-sm font-bold text-gray-900 truncate">{currentUser.name}</p>
-                 <p className="text-xs text-gray-500 truncate capitalize">{getRoleLabel(currentUser.role)}</p>
-               </div>
+          {/* User Profile Section & Footer */}
+          <div className="border-t bg-gray-50">
+             <div className="p-4">
+                <div className="flex items-center space-x-3 mb-3">
+                    <div className="bg-hemp-100 p-2 rounded-full text-hemp-700">
+                        <UserCircle size={24} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-gray-900 truncate">{currentUser.name}</p>
+                        <p className="text-xs text-gray-500 truncate capitalize">{getRoleLabel(currentUser.role)}</p>
+                    </div>
+                </div>
+                <button 
+                    onClick={logout}
+                    className="w-full flex items-center justify-center space-x-2 text-sm text-red-600 hover:bg-red-50 p-2 rounded transition"
+                >
+                    <LogOut size={16} />
+                    <span>Cerrar Sesión</span>
+                </button>
              </div>
-             <button 
-                onClick={logout}
-                className="w-full flex items-center justify-center space-x-2 text-sm text-red-600 hover:bg-red-50 p-2 rounded transition"
-             >
-               <LogOut size={16} />
-               <span>Cerrar Sesión</span>
-             </button>
+             {/* Developer Footer */}
+             <div className="bg-gray-100 py-2 text-center border-t border-gray-200">
+                 <p className="text-[10px] text-gray-400 font-mono">Dev gaston.barea.moreno@gmail.com</p>
+             </div>
           </div>
         </div>
       </aside>
