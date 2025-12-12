@@ -12,7 +12,7 @@ export default defineConfig({
         manualChunks: {
           vendor: ['react', 'react-dom', 'react-router-dom'],
           charts: ['recharts'],
-          utils: ['xlsx', 'jspdf', 'jspdf-autotable', '@supabase/supabase-js'],
+          utils: ['xlsx', 'jspdf', 'jspdf-autotable', '@supabase/supabase-js', '@google/genai'],
           icons: ['lucide-react']
         }
       }
