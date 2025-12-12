@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider, useAppContext } from './context/AppContext';
@@ -14,6 +13,7 @@ import Tasks from './pages/Tasks';
 import Login from './pages/Login';
 import Tools from './pages/Tools';
 import Analytics from './pages/Analytics';
+import Settings from './pages/Settings';
 
 // Componente para proteger rutas
 const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
@@ -81,6 +81,11 @@ export default function App() {
             <Route path="/users" element={
               <ProtectedRoute>
                 <Users />
+              </ProtectedRoute>
+            } />
+            <Route path="/settings" element={
+              <ProtectedRoute>
+                <Settings />
               </ProtectedRoute>
             } />
             <Route path="*" element={<Navigate to="/" replace />} />

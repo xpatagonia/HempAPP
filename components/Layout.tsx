@@ -15,7 +15,9 @@ import {
   Users,
   CheckSquare,
   Calculator,
-  BarChart2
+  BarChart2,
+  Settings,
+  Database
 } from 'lucide-react';
 
 const NavItem = ({ to, icon: Icon, label, onClick }: any) => {
@@ -39,7 +41,7 @@ const NavItem = ({ to, icon: Icon, label, onClick }: any) => {
 };
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { currentUser, logout } = useAppContext();
+  const { currentUser, logout, isEmergencyMode } = useAppContext();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   const toggleMobile = () => setIsMobileOpen(!isMobileOpen);
@@ -84,63 +86,65 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}
         lg:translate-x-0
       `}>
-        <div className="h-full flex flex-col">
-          <div className="h-16 flex items-center px-6 border-b">
-            <Leaf className="w-8 h-8 text-hemp-600 mr-2" />
-            <span className="text-xl font-bold text-gray-800">HempAPP</span>
+        <div className="h-16 flex items-center px-6 border-b">
+          <Leaf className="w-8 h-8 text-hemp-600 mr-2" />
+          <span className="text-xl font-bold text-gray-800">HempAPP</span>
+        </div>
+
+        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+          <NavItem to="/" icon={LayoutDashboard} label="Dashboard" onClick={() => setIsMobileOpen(false)} />
+          <NavItem to="/projects" icon={FolderOpen} label="Proyectos" onClick={() => setIsMobileOpen(false)} />
+          <NavItem to="/tasks" icon={CheckSquare} label="Tareas" onClick={() => setIsMobileOpen(false)} />
+          <NavItem to="/plots" icon={ClipboardList} label="Parcelas / Ensayos" onClick={() => setIsMobileOpen(false)} />
+          
+          <div className="pt-2 pb-2">
+              <p className="px-4 text-xs font-semibold text-gray-400 uppercase mb-2">Inteligencia</p>
+              <NavItem to="/analytics" icon={BarChart2} label="Análisis Comparativo" onClick={() => setIsMobileOpen(false)} />
+              <NavItem to="/tools" icon={Calculator} label="Herramientas" onClick={() => setIsMobileOpen(false)} />
           </div>
 
-          <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-            <NavItem to="/" icon={LayoutDashboard} label="Dashboard" onClick={() => setIsMobileOpen(false)} />
-            <NavItem to="/projects" icon={FolderOpen} label="Proyectos" onClick={() => setIsMobileOpen(false)} />
-            <NavItem to="/tasks" icon={CheckSquare} label="Tareas" onClick={() => setIsMobileOpen(false)} />
-            <NavItem to="/plots" icon={ClipboardList} label="Parcelas / Ensayos" onClick={() => setIsMobileOpen(false)} />
-            
-            <div className="pt-2 pb-2">
-                <p className="px-4 text-xs font-semibold text-gray-400 uppercase mb-2">Inteligencia</p>
-                <NavItem to="/analytics" icon={BarChart2} label="Análisis Comparativo" onClick={() => setIsMobileOpen(false)} />
-                <NavItem to="/tools" icon={Calculator} label="Herramientas" onClick={() => setIsMobileOpen(false)} />
-            </div>
-
-            <div className="pt-2">
-                 <p className="px-4 text-xs font-semibold text-gray-400 uppercase mb-2">Base de Datos</p>
-                 <NavItem to="/varieties" icon={Sprout} label="Variedades" onClick={() => setIsMobileOpen(false)} />
-                 <NavItem to="/locations" icon={MapPin} label="Locaciones" onClick={() => setIsMobileOpen(false)} />
-            </div>
-            
-            {isAdminOrSuper && (
-               <div className="pt-4 mt-4 border-t border-gray-100">
-                  <p className="px-4 text-xs font-semibold text-gray-400 uppercase mb-2">Administración</p>
-                  <NavItem to="/users" icon={Users} label="Gestión Usuarios" onClick={() => setIsMobileOpen(false)} />
-               </div>
-            )}
-          </nav>
-
-          {/* User Profile Section & Footer */}
-          <div className="border-t bg-gray-50">
-             <div className="p-4">
-                <div className="flex items-center space-x-3 mb-3">
-                    <div className="bg-hemp-100 p-2 rounded-full text-hemp-700">
-                        <UserCircle size={24} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-gray-900 truncate">{currentUser.name}</p>
-                        <p className="text-xs text-gray-500 truncate capitalize">{getRoleLabel(currentUser.role)}</p>
-                    </div>
-                </div>
-                <button 
-                    onClick={logout}
-                    className="w-full flex items-center justify-center space-x-2 text-sm text-red-600 hover:bg-red-50 p-2 rounded transition"
-                >
-                    <LogOut size={16} />
-                    <span>Cerrar Sesión</span>
-                </button>
-             </div>
-             {/* Developer Footer */}
-             <div className="bg-gray-100 py-2 text-center border-t border-gray-200">
-                 <p className="text-[10px] text-gray-400 font-mono">Dev gaston.barea.moreno@gmail.com</p>
-             </div>
+          <div className="pt-2">
+               <p className="px-4 text-xs font-semibold text-gray-400 uppercase mb-2">Base de Datos</p>
+               <NavItem to="/varieties" icon={Sprout} label="Variedades" onClick={() => setIsMobileOpen(false)} />
+               <NavItem to="/locations" icon={MapPin} label="Locaciones" onClick={() => setIsMobileOpen(false)} />
           </div>
+          
+          <div className="pt-4 mt-4 border-t border-gray-100">
+                <p className="px-4 text-xs font-semibold text-gray-400 uppercase mb-2">Sistema</p>
+                {isAdminOrSuper && (
+                    <NavItem to="/users" icon={Users} label="Gestión Usuarios" onClick={() => setIsMobileOpen(false)} />
+                )}
+                {/* Botón de configuración siempre visible para admins O si estamos en modo emergencia */}
+                {(isAdminOrSuper || isEmergencyMode) && (
+                    <NavItem to="/settings" icon={Database} label="Configuración DB" onClick={() => setIsMobileOpen(false)} />
+                )}
+            </div>
+        </nav>
+
+        {/* User Profile Section & Footer */}
+        <div className="border-t bg-gray-50">
+           <div className="p-4">
+              <div className="flex items-center space-x-3 mb-3">
+                  <div className={`p-2 rounded-full ${isEmergencyMode ? 'bg-amber-100 text-amber-700' : 'bg-hemp-100 text-hemp-700'}`}>
+                      <UserCircle size={24} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-gray-900 truncate">{currentUser.name}</p>
+                      <p className="text-xs text-gray-500 truncate capitalize">{getRoleLabel(currentUser.role)}</p>
+                  </div>
+              </div>
+              <button 
+                  onClick={logout}
+                  className="w-full flex items-center justify-center space-x-2 text-sm text-red-600 hover:bg-red-50 p-2 rounded transition"
+              >
+                  <LogOut size={16} />
+                  <span>Cerrar Sesión</span>
+              </button>
+           </div>
+           {/* Developer Footer */}
+           <div className="bg-gray-100 py-2 text-center border-t border-gray-200">
+               <p className="text-[10px] text-gray-400 font-mono">Dev gaston.barea.moreno@gmail.com</p>
+           </div>
         </div>
       </aside>
 
