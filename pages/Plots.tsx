@@ -7,17 +7,6 @@ import * as XLSX from 'xlsx';
 
 export default function Plots() {
   const { plots, locations, varieties, projects, usersList, addPlot, updatePlot, deletePlot, currentUser, getLatestRecord } = useAppContext();
-  // NOTE: Assuming deletePlot exists in context based on pattern, if not I will use the crud wrapper logic implicitly or should be added to Context.
-  // Since Context definition wasn't requested to change for deletePlot but it follows the pattern, 
-  // I'll assume standard CRUD. If deletePlot isn't in context export, I'll define a local handler or assume user added it. 
-  // *Self-correction*: The context provided in the prompt DOES NOT export deletePlot explicitly in the interface, 
-  // but let's look at AppContext. It has 'addPlot', 'updatePlot'. It misses 'deletePlot'.
-  // I will implement a soft delete or just omit if not critical, BUT the user asked for "Administrator can create edit and DELETE".
-  // I will add the delete logic via supabase direct call if needed or assume context update. 
-  // Since I can't modify AppContext without xml, I will assume I need to modify AppContext OR just hide the button if function missing.
-  // Wait, I CAN modify AppContext. I will focus on the UI here and assume the Context supports it or I'd update Context too.
-  // Actually, I'll update AppContext in a separate block if strictly needed, but let's try to stick to UI files if possible. 
-  // EDIT: I WILL ADD deletePlot to AppContext in a separate change block to ensure functionality.
   
   const [searchParams] = useSearchParams();
   const initialProjectFilter = searchParams.get('project') || 'all';
@@ -120,19 +109,11 @@ export default function Plots() {
       setIsModalOpen(true);
   };
 
-  // Logic to handle delete if context doesn't provide it directly (Temporary fix)
-  // Ideally this should be in context. Assuming context will be updated in next block.
-  // For now I'll use a placeholder logic or if I update context, I use it.
-  const handleDelete = async () => {
-      if (editingId && window.confirm("¡ATENCIÓN! ¿Estás seguro de eliminar esta parcela y TODOS sus registros históricos? Esta acción no se puede deshacer.")) {
-        // @ts-ignore - Assuming deletePlot is added to context in this batch update
-        if (typeof deletePlot === 'function') {
-            // @ts-ignore
-            await deletePlot(editingId);
-            setIsModalOpen(false);
-        } else {
-            alert("Función de eliminar no disponible en este momento.");
-        }
+  const handleDelete = async (id?: string) => {
+      const targetId = id || editingId;
+      if (targetId && window.confirm("¡ATENCIÓN! ¿Estás seguro de eliminar esta parcela y TODOS sus registros históricos? Esta acción no se puede deshacer.")) {
+        await deletePlot(targetId);
+        setIsModalOpen(false);
       }
   };
 
@@ -263,7 +244,7 @@ export default function Plots() {
               const loc = locations.find(l => l.id === p.locationId);
               const vari = varieties.find(v => v.id === p.varietyId);
               return (
-                <tr key={p.id} className="hover:bg-gray-50">
+                <tr key={p.id} className="hover:bg-gray-50 group">
                   <td className="px-4 py-3 font-medium text-gray-900">{p.name}</td>
                   <td className="px-4 py-3 text-hemp-800 font-semibold">{vari?.name}</td>
                   <td className="px-4 py-3 text-center">{p.block}</td>
@@ -280,11 +261,16 @@ export default function Plots() {
                   </td>
                   <td className="px-4 py-3 text-right space-x-2">
                     {isAdmin && (
-                        <button onClick={() => handleEdit(p)} className="text-gray-400 hover:text-hemp-600 inline-block align-middle">
-                            <Edit2 size={16} />
-                        </button>
+                        <>
+                            <button onClick={() => handleEdit(p)} className="text-gray-400 hover:text-hemp-600 inline-block align-middle p-1" title="Editar">
+                                <Edit2 size={16} />
+                            </button>
+                            <button onClick={() => handleDelete(p.id)} className="text-gray-400 hover:text-red-600 inline-block align-middle p-1" title="Eliminar">
+                                <Trash2 size={16} />
+                            </button>
+                        </>
                     )}
-                    <Link to={`/plots/${p.id}`} className="text-hemp-600 hover:text-hemp-900 font-medium inline-block align-middle">
+                    <Link to={`/plots/${p.id}`} className="text-hemp-600 hover:text-hemp-900 font-medium inline-block align-middle p-1" title="Ver Detalle">
                       <ChevronRight size={20} />
                     </Link>
                   </td>
@@ -433,7 +419,7 @@ export default function Plots() {
 
               <div className="flex justify-between items-center pt-4 border-t border-gray-100">
                 {editingId && isAdmin ? (
-                     <button type="button" onClick={handleDelete} className="text-red-500 hover:text-red-700 text-sm flex items-center px-2 py-1 hover:bg-red-50 rounded transition">
+                     <button type="button" onClick={() => handleDelete()} className="text-red-500 hover:text-red-700 text-sm flex items-center px-2 py-1 hover:bg-red-50 rounded transition">
                          <Trash2 size={16} className="mr-1"/> Eliminar Parcela
                      </button>
                 ) : <div></div>}

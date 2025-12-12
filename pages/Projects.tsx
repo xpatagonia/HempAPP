@@ -1,18 +1,19 @@
-
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Project } from '../types';
-import { Plus, Folder, Calendar, Edit2, Users } from 'lucide-react';
+import { Plus, Folder, Calendar, Edit2, Users, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export default function Projects() {
-  const { projects, addProject, updateProject, plots, currentUser, usersList } = useAppContext();
+  const { projects, addProject, updateProject, deleteProject, plots, currentUser, usersList } = useAppContext();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const [formData, setFormData] = useState<Partial<Project>>({
     name: '', description: '', startDate: '', status: 'Planificación', responsibleIds: []
   });
+
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,6 +47,12 @@ export default function Projects() {
       setIsModalOpen(true);
   };
 
+  const handleDelete = (id: string) => {
+      if(window.confirm("¿Estás seguro de eliminar este proyecto? Esto NO elimina las parcelas asociadas, pero quedarán sin proyecto asignado.")) {
+          deleteProject(id);
+      }
+  };
+
   const openNew = () => {
       resetForm();
       setIsModalOpen(true);
@@ -68,7 +75,7 @@ export default function Projects() {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-800">Proyectos y Campañas</h1>
-        {currentUser?.role === 'admin' && (
+        {isAdmin && (
           <button onClick={openNew} className="bg-hemp-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-hemp-700 transition">
             <Plus size={20} className="mr-2" /> Nuevo Proyecto
           </button>
@@ -80,13 +87,18 @@ export default function Projects() {
           const responsibles = usersList.filter(u => project.responsibleIds?.includes(u.id));
           return (
             <div key={project.id} className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition relative group">
-              {currentUser?.role === 'admin' && (
-                  <button onClick={() => handleEdit(project)} className="absolute top-4 right-4 text-gray-400 hover:text-hemp-600">
-                      <Edit2 size={18} />
-                  </button>
+              {isAdmin && (
+                  <div className="absolute top-4 right-4 flex space-x-1">
+                      <button onClick={() => handleEdit(project)} className="text-gray-400 hover:text-hemp-600 p-1">
+                          <Edit2 size={18} />
+                      </button>
+                      <button onClick={() => handleDelete(project.id)} className="text-gray-400 hover:text-red-600 p-1">
+                          <Trash2 size={18} />
+                      </button>
+                  </div>
               )}
 
-              <div className="flex justify-between items-start mb-4">
+              <div className="flex justify-between items-start mb-4 pr-16">
                 <div className="flex items-center space-x-3">
                   <div className="bg-blue-100 p-3 rounded-lg text-blue-700">
                     <Folder size={24} />

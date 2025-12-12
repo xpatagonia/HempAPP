@@ -18,6 +18,7 @@ interface AppContextType {
 
   addProject: (p: Project) => Promise<boolean>;
   updateProject: (p: Project) => void;
+  deleteProject: (id: string) => void; // Added deleteProject
   
   addVariety: (v: Variety) => void;
   updateVariety: (v: Variety) => void;
@@ -29,7 +30,7 @@ interface AppContextType {
   
   addPlot: (p: Plot) => Promise<void>;
   updatePlot: (p: Plot) => void;
-  deletePlot: (id: string) => Promise<void>; // Added deletePlot
+  deletePlot: (id: string) => Promise<void>;
   
   addTrialRecord: (r: TrialRecord) => void;
   updateTrialRecord: (r: TrialRecord) => void;
@@ -280,6 +281,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       await supabase.from('projects').update(p).eq('id', p.id);
       setProjects(prev => { const n = prev.map(item => item.id === p.id ? p : item); saveToLocal('projects', n); return n; });
   };
+  const deleteProject = async (id: string) => {
+      await supabase.from('projects').delete().eq('id', id);
+      setProjects(prev => { const n = prev.filter(item => item.id !== id); saveToLocal('projects', n); return n; });
+  };
 
   const addVariety = async (v: Variety) => { 
       await supabase.from('varieties').insert([v]); 
@@ -315,7 +320,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       await supabase.from('plots').update(p).eq('id', p.id); 
       setPlots(prev => { const n = prev.map(item => item.id === p.id ? p : item); saveToLocal('plots', n); return n; }); 
   };
-  // NEW: Delete Plot Implementation
   const deletePlot = async (id: string) => {
       await supabase.from('plots').delete().eq('id', id);
       setPlots(prev => { const n = prev.filter(item => item.id !== id); saveToLocal('plots', n); return n; });
@@ -338,10 +342,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     <AppContext.Provider value={{
       projects, varieties, locations, plots, trialRecords, logs, tasks,
       currentUser, usersList, login, logout,
-      addProject, updateProject,
+      addProject, updateProject, deleteProject,
       addVariety, updateVariety, deleteVariety,
       addLocation, updateLocation, deleteLocation,
-      addPlot, updatePlot, deletePlot, // Exposed
+      addPlot, updatePlot, deletePlot,
       addTrialRecord, updateTrialRecord, deleteTrialRecord,
       addLog,
       addUser, updateUser, deleteUser,
