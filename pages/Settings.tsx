@@ -147,6 +147,9 @@ CREATE TABLE IF NOT EXISTS public.trial_records (
     yield NUMERIC,
     "stemWeight" NUMERIC,
     "leafWeight" NUMERIC,
+    "applicationType" TEXT,
+    "applicationProduct" TEXT,
+    "applicationDose" TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 

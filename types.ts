@@ -114,6 +114,11 @@ export interface TrialRecord {
   diseases?: string;          // Enfermedades (Texto/Tipo)
   pests?: string;             // Plagas (Texto/Tipo)
   
+  // Aplicaciones (Fertilizantes / Fitosanitarios)
+  applicationType?: 'Fertilizante' | 'Insecticida' | 'Fungicida' | 'Herbicida' | 'Otro';
+  applicationProduct?: string;
+  applicationDose?: string;
+
   // Resultados de Cosecha
   harvestDate?: string;       // Fecha cosecha
   harvestHeight?: number;     // altura (cm) a cosecha

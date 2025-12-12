@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { TrialRecord } from '../types';
-import { ArrowLeft, Activity, Scale, AlertTriangle, Camera, FileText, Calendar, MapPin, Globe, Plus, Edit2, Trash2, Download, Droplets, Wind, QrCode, Printer, CheckSquare, Sun, Eye, Loader2, Ruler, Bug } from 'lucide-react';
+import { ArrowLeft, Activity, Scale, AlertTriangle, Camera, FileText, Calendar, MapPin, Globe, Plus, Edit2, Trash2, Download, Droplets, Wind, QrCode, Printer, CheckSquare, Sun, Eye, Loader2, Ruler, Bug, SprayCan } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 export default function PlotDetails() {
@@ -35,6 +35,7 @@ export default function PlotDetails() {
       plantHeight: 0, vigor: 3, uniformity: 3
   });
   const [showHarvestSection, setShowHarvestSection] = useState(false);
+  const [showAppSection, setShowAppSection] = useState(false);
 
   // Log States
   const [newLogNote, setNewLogNote] = useState('');
@@ -81,8 +82,9 @@ export default function PlotDetails() {
       if (existing) {
           setEditingRecordId(existing.id);
           setRecordForm(existing);
-          // Auto show harvest section if data exists or stage is harvest
+          // Auto show sections if data exists
           setShowHarvestSection(existing.stage === 'Cosecha' || !!existing.yield || !!existing.stemWeight || !!existing.freshWeight);
+          setShowAppSection(!!existing.applicationType || !!existing.applicationProduct);
       } else {
           setEditingRecordId(null);
           setRecordForm({
@@ -92,6 +94,7 @@ export default function PlotDetails() {
               stemDiameter: 0, nodesCount: 0
           });
           setShowHarvestSection(false);
+          setShowAppSection(false);
       }
       setIsRecordModalOpen(true);
   };
@@ -105,6 +108,12 @@ export default function PlotDetails() {
           plotId: plot.id,
           stage: showHarvestSection ? 'Cosecha' : recordForm.stage
       };
+
+      if (!showAppSection) {
+          payload.applicationType = null;
+          payload.applicationProduct = null;
+          payload.applicationDose = null;
+      }
 
       if (editingRecordId) {
           updateTrialRecord({ ...payload, id: editingRecordId });
@@ -126,14 +135,11 @@ export default function PlotDetails() {
         Fecha: h.date,
         Etapa: h.stage,
         'Altura (cm)': h.plantHeight || '-',
-        'Diametro (mm)': h.stemDiameter || '-',
+        'Aplicación': h.applicationProduct ? `${h.applicationType}: ${h.applicationProduct} (${h.applicationDose})` : '-',
         Vigor: h.vigor || '-',
-        'Floración': h.floweringState || '-',
         Plagas: h.pests || '-',
         Enfermedades: h.diseases || '-',
-        'Fecha Cosecha': h.harvestDate || '-',
         'Peso Fresco Total': h.freshWeight || '-',
-        'Peso Seco Total': h.dryWeight || '-',
         'Rendimiento Calc': h.yield || '-'
     }));
 
@@ -361,7 +367,7 @@ export default function PlotDetails() {
                             <th className="px-4 py-3 text-left font-medium text-gray-500">Fecha</th>
                             <th className="px-4 py-3 text-left font-medium text-gray-500">Etapa</th>
                             <th className="px-4 py-3 text-left font-medium text-gray-500">Altura</th>
-                            <th className="px-4 py-3 text-left font-medium text-gray-500">Floración</th>
+                            <th className="px-4 py-3 text-left font-medium text-gray-500">Aplicaciones</th>
                             <th className="px-4 py-3 text-left font-medium text-gray-500">Observaciones</th>
                             <th className="px-4 py-3 text-right font-medium text-gray-500">Acciones</th>
                         </tr>
@@ -381,7 +387,13 @@ export default function PlotDetails() {
                                         </span>
                                     </td>
                                     <td className="px-4 py-3 text-gray-700">{r.plantHeight ? `${r.plantHeight} cm` : '-'}</td>
-                                    <td className="px-4 py-3 text-gray-700">{r.floweringState || '-'}</td>
+                                    <td className="px-4 py-3 text-gray-700">
+                                        {r.applicationProduct ? (
+                                            <span className="flex items-center text-indigo-700 bg-indigo-50 px-2 py-1 rounded-full text-xs border border-indigo-100 w-fit">
+                                                <SprayCan size={10} className="mr-1" /> {r.applicationType}: {r.applicationProduct}
+                                            </span>
+                                        ) : '-'}
+                                    </td>
                                     <td className="px-4 py-3 text-gray-600 max-w-xs truncate">
                                         {[r.pests, r.diseases].filter(Boolean).join(', ') || '-'}
                                     </td>
@@ -577,6 +589,47 @@ export default function PlotDetails() {
                                     </label>
                                </div>
                            </div>
+                           
+                           {/* Toggle Application Section */}
+                           <div className="flex items-center">
+                                <label className={`flex items-center space-x-2 bg-indigo-50 p-2 rounded w-full md:w-auto border ${showAppSection ? 'border-indigo-300' : 'border-indigo-100'} ${!isViewMode && 'cursor-pointer'}`}>
+                                    <input disabled={isViewMode} type="checkbox" className="h-4 w-4 text-indigo-600 rounded" checked={showAppSection} onChange={e => setShowAppSection(e.target.checked)} />
+                                    <span className="text-sm font-bold text-indigo-800 flex items-center">
+                                        <SprayCan size={14} className="mr-2"/>
+                                        Registrar Aplicación (Insumos)
+                                    </span>
+                                </label>
+                           </div>
+
+                           {/* Section 0: Applications (Conditional) */}
+                           {showAppSection && (
+                                <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-200 animate-in fade-in slide-in-from-top-2">
+                                    <h3 className="text-sm font-bold text-indigo-800 mb-3 flex items-center">
+                                        <SprayCan size={16} className="mr-1"/> Detalle de Aplicación
+                                    </h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div>
+                                            <label className="block text-xs font-medium text-gray-500 mb-1">Tipo de Insumo</label>
+                                            <select disabled={isViewMode} className={getInputClass(true)} value={recordForm.applicationType || ''} onChange={e => setRecordForm({...recordForm, applicationType: e.target.value as any})}>
+                                                <option value="">Seleccionar...</option>
+                                                <option value="Fertilizante">Fertilizante</option>
+                                                <option value="Insecticida">Insecticida</option>
+                                                <option value="Fungicida">Fungicida</option>
+                                                <option value="Herbicida">Herbicida</option>
+                                                <option value="Otro">Otro</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-medium text-gray-500 mb-1">Producto Comercial</label>
+                                            <input disabled={isViewMode} type="text" placeholder="Ej: Urea, Abamectina..." className={getInputClass(true)} value={recordForm.applicationProduct || ''} onChange={e => setRecordForm({...recordForm, applicationProduct: e.target.value})} />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-medium text-gray-500 mb-1">Dosis Aplicada</label>
+                                            <input disabled={isViewMode} type="text" placeholder="Ej: 5 l/ha, 200 cc/100l" className={getInputClass(true)} value={recordForm.applicationDose || ''} onChange={e => setRecordForm({...recordForm, applicationDose: e.target.value})} />
+                                        </div>
+                                    </div>
+                                </div>
+                           )}
 
                            {/* Section 1: Biometry & Development */}
                            <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
