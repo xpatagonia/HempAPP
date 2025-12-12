@@ -5,8 +5,8 @@ import { createClient } from '@supabase/supabase-js';
 // ------------------------------------------------------------------
 // Para evitar el mensaje "Sin Conexión Cloud" en otros PCs, pega tus claves aquí.
 // Al ponerlas aquí, cualquier dispositivo que abra la app se conectará automáticamente.
-const HARDCODED_URL = ''; // <-- PEGA TU URL DE SUPABASE AQUÍ (ej: https://xyz.supabase.co)
-const HARDCODED_KEY = ''; // <-- PEGA TU ANON KEY AQUÍ (ej: eyJhbGciOiJIUzI1NiIsInR...)
+const HARDCODED_URL = 'https://llvtobsqerfmpobsruys.supabase.co'; // <-- PEGA TU URL DE SUPABASE AQUÍ (ej: https://xyz.supabase.co)
+const HARDCODED_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxsdnRvYnNxZXJmbXBvYnNydXlzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU0NzIzMzEsImV4cCI6MjA4MTA0ODMzMX0.86c7PzALVTIrC2GgaeBoxu-P6vOS0pAk3x1yZI5fZKc'; // <-- PEGA TU ANON KEY AQUÍ (ej: eyJhbGciOiJIUzI1NiIsInR...)
 // ------------------------------------------------------------------
 
 // 1. Prioridad: Credenciales Hardcodeadas (Para producción rápida)
