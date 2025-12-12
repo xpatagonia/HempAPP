@@ -48,6 +48,7 @@ interface AppContextType {
   getLatestRecord: (plotId: string) => TrialRecord | undefined;
   
   loading: boolean;
+  isEmergencyMode: boolean; // Nuevo flag para UI
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -65,6 +66,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isEmergencyMode, setIsEmergencyMode] = useState(false);
 
   // --- 1. CARGA INICIAL DESDE SUPABASE ---
   useEffect(() => {
@@ -92,11 +94,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 supabase.from('tasks').select('*')
             ]);
 
-            // MODO PRODUCCIÓN: Usar estrictamente la base de datos.
-            if (users) {
+            // LÓGICA DE EMERGENCIA:
+            // Si Supabase devuelve lista vacía de usuarios, inyectamos un admin temporal
+            // para que el dueño pueda entrar y crear los usuarios reales.
+            if (users && users.length > 0) {
                 setUsersList(users as User[]);
+                setIsEmergencyMode(false);
             } else {
-                setUsersList([]);
+                console.warn("Base de datos de usuarios vacía. Activando usuario de emergencia.");
+                setIsEmergencyMode(true);
+                setUsersList([{
+                    id: 'emergency-admin',
+                    name: 'Admin Temporal',
+                    email: 'admin@demo.com',
+                    password: 'admin',
+                    role: 'super_admin'
+                }]);
             }
 
             if (projs) setProjects(projs as Project[]);
@@ -107,11 +120,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             if (lgs) setLogs(lgs as FieldLog[]);
             if (tsks) setTasks(tsks as Task[]);
 
-            // Restaurar sesión si existe en localStorage (persistencia de login simple)
+            // Restaurar sesión si existe en localStorage
             const savedUser = localStorage.getItem('ht_session_user');
             if (savedUser) {
                 const parsedUser = JSON.parse(savedUser);
-                setCurrentUser(parsedUser);
+                // Permitir login si es el usuario de emergencia o un usuario real
+                const isValid = (users && users.some((u: any) => u.id === parsedUser.id)) || 
+                                (parsedUser.id === 'emergency-admin');
+                
+                if (isValid) {
+                   setCurrentUser(parsedUser);
+                } else {
+                   localStorage.removeItem('ht_session_user');
+                }
             }
 
         } catch (error) {
@@ -126,7 +147,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // --- AUTH ---
   const login = async (email: string, password: string): Promise<boolean> => {
-    // Validamos contra la lista de usuarios cargada desde la DB REAL
+    // Validamos contra la lista de usuarios (que puede contener el de emergencia)
     const user = usersList.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
     
     if (user) {
@@ -266,7 +287,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       addUser, updateUser, deleteUser,
       addTask, updateTask, deleteTask,
       getPlotHistory, getLatestRecord,
-      loading
+      loading, isEmergencyMode
     }}>
       {children}
     </AppContext.Provider>

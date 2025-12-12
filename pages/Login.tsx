@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
-import { Leaf, Lock, Mail, ArrowRight, AlertCircle } from 'lucide-react';
+import { Leaf, Lock, Mail, ArrowRight, AlertCircle, ShieldAlert } from 'lucide-react';
 
 export default function Login() {
-  const { login } = useAppContext();
+  const { login, isEmergencyMode, loading } = useAppContext();
   const navigate = useNavigate();
   
   const [email, setEmail] = useState('');
@@ -40,8 +40,28 @@ export default function Login() {
                 <Leaf className="w-10 h-10 text-hemp-600" />
             </div>
         </div>
-        <h1 className="text-center text-3xl font-bold text-gray-800 mb-2">HempAPP</h1>
-        <p className="text-center text-gray-500 mb-8">Sistema de Gestión de Ensayos</p>
+        <h1 className="text-center text-3xl font-bold text-gray-800 mb-1">HempAPP</h1>
+        <p className="text-center text-gray-500 mb-2">Sistema de Gestión de Ensayos</p>
+        
+        {/* Version Badge: Changed to make it obvious the update worked */}
+        <p className="text-center text-xs font-bold text-white bg-hemp-600 inline-block px-3 py-1 rounded-full mx-auto mb-6 flex items-center justify-center shadow-md">
+            v1.1 (Acceso Recuperado)
+        </p>
+
+        {/* EMERGENCY MODE ALERT */}
+        {isEmergencyMode && (
+            <div className="mb-6 bg-yellow-50 border border-yellow-200 p-4 rounded-xl shadow-sm text-sm text-yellow-800 animate-pulse">
+                <div className="flex items-center font-bold mb-2">
+                    <ShieldAlert size={18} className="mr-2" />
+                    Modo de Recuperación Activo
+                </div>
+                <p className="mb-2 text-xs">La base de datos de usuarios está vacía. Se ha habilitado un usuario temporal para que puedas ingresar y configurar el sistema.</p>
+                <div className="bg-white p-2 rounded border border-yellow-200 font-mono text-xs mt-2">
+                    <p>User: <strong>admin@demo.com</strong></p>
+                    <p>Pass: <strong>admin</strong></p>
+                </div>
+            </div>
+        )}
 
         <div className="bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
             <form onSubmit={handleSubmit} className="space-y-5">
@@ -84,8 +104,8 @@ export default function Login() {
 
                 <button 
                     type="submit" 
-                    disabled={isLoading}
-                    className="w-full bg-hemp-600 text-white py-3 rounded-lg font-semibold shadow-md hover:bg-hemp-700 transition flex items-center justify-center disabled:opacity-70 disabled:cursor-not-allowed"
+                    disabled={isLoading || loading}
+                    className="w-full bg-hemp-600 text-white py-3 rounded-lg font-semibold shadow-md hover:bg-hemp-700 transition flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     {isLoading ? 'Verificando...' : (
                         <>
