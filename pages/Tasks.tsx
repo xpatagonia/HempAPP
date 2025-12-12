@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Task } from '../types';
-import { Plus, CheckSquare, Clock, User, CheckCircle, Circle, AlertCircle, Calendar, Mail } from 'lucide-react';
+import { Plus, CheckSquare, Clock, User, CheckCircle, Circle, AlertCircle, Calendar, Mail, Send } from 'lucide-react';
+import emailjs from '@emailjs/browser';
 
 export default function Tasks() {
   const { tasks, addTask, updateTask, deleteTask, currentUser, usersList, plots, projects } = useAppContext();
@@ -10,6 +11,7 @@ export default function Tasks() {
   
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'completed'>('pending');
   const [notifyEmail, setNotifyEmail] = useState(false);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
 
   const [formData, setFormData] = useState<Partial<Task>>({
     title: '', description: '', status: 'Pendiente', priority: 'Media', assignedToIds: [], 
@@ -18,7 +20,45 @@ export default function Tasks() {
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const sendEmailNotification = async (task: Partial<Task>, recipients: any[]) => {
+      const serviceId = localStorage.getItem('hemp_email_service');
+      const templateId = localStorage.getItem('hemp_email_template');
+      const publicKey = localStorage.getItem('hemp_email_key');
+
+      if (!serviceId || !templateId || !publicKey) {
+          alert("⚠️ Configuración de correo incompleta. Ve a Configuración y agrega tus credenciales de EmailJS.");
+          return;
+      }
+
+      setIsSendingEmail(true);
+      
+      // Enviamos un mail por cada destinatario
+      const promises = recipients.map(user => {
+          const templateParams = {
+              to_name: user.name,
+              to_email: user.email,
+              task_title: task.title,
+              task_desc: task.description,
+              due_date: task.dueDate,
+              priority: task.priority,
+              assigned_by: currentUser?.name || 'Sistema HempAPP'
+          };
+
+          return emailjs.send(serviceId, templateId, templateParams, publicKey);
+      });
+
+      try {
+          await Promise.all(promises);
+          alert(`✅ Notificaciones enviadas a: ${recipients.map(u => u.email).join(', ')}`);
+      } catch (error) {
+          console.error('Error enviando email:', error);
+          alert("❌ Error al enviar correos. Verifica tus credenciales de EmailJS en la consola.");
+      } finally {
+          setIsSendingEmail(false);
+      }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.title) return;
 
@@ -37,8 +77,10 @@ export default function Tasks() {
             createdBy: currentUser?.id || 'unknown'
         });
         
+        // EMAIL LOGIC
         if (notifyEmail && formData.assignedToIds && formData.assignedToIds.length > 0) {
-            alert(`📨 Simulación: Se ha enviado un correo de notificación a ${formData.assignedToIds.length} usuario(s).`);
+            const recipientUsers = usersList.filter(u => formData.assignedToIds?.includes(u.id));
+            await sendEmailNotification(formData, recipientUsers);
         }
     }
     
@@ -50,6 +92,7 @@ export default function Tasks() {
     setFormData({ title: '', description: '', status: 'Pendiente', priority: 'Media', assignedToIds: [], dueDate: new Date().toISOString().split('T')[0], plotId: '' });
     setEditingId(null);
     setNotifyEmail(false);
+    setIsSendingEmail(false);
   };
 
   const handleDelete = (id: string) => {
@@ -214,17 +257,30 @@ export default function Tasks() {
               </div>
               
               {!editingId && (
-                  <label className="flex items-center space-x-2 p-3 bg-blue-50 border border-blue-100 rounded-lg cursor-pointer">
+                  <label className={`flex items-center space-x-2 p-3 border rounded-lg cursor-pointer transition ${notifyEmail ? 'bg-blue-50 border-blue-300' : 'bg-gray-50 border-gray-200'}`}>
                       <input type="checkbox" checked={notifyEmail} onChange={e => setNotifyEmail(e.target.checked)} className="rounded text-blue-600 focus:ring-blue-500" />
-                      <span className="text-sm text-blue-800 font-medium flex items-center">
-                          <Mail size={16} className="mr-2"/> Notificar a los usuarios por email
-                      </span>
+                      <div className="flex-1">
+                          <span className="text-sm font-bold text-gray-800 flex items-center">
+                              <Mail size={16} className="mr-2 text-blue-600"/> Enviar correo real
+                          </span>
+                          <span className="text-xs text-gray-500 block">Requiere configurar EmailJS en ajustes.</span>
+                      </div>
                   </label>
               )}
 
               <div className="flex justify-end space-x-2 pt-4">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancelar</button>
-                <button type="submit" className="px-4 py-2 bg-hemp-600 text-white rounded hover:bg-hemp-700 shadow-sm">Guardar</button>
+                <button 
+                    type="submit" 
+                    disabled={isSendingEmail}
+                    className="px-4 py-2 bg-hemp-600 text-white rounded hover:bg-hemp-700 shadow-sm flex items-center"
+                >
+                    {isSendingEmail ? (
+                        <>Enviando... <Send className="ml-2 animate-pulse" size={16}/></>
+                    ) : (
+                        "Guardar Tarea"
+                    )}
+                </button>
               </div>
             </form>
           </div>

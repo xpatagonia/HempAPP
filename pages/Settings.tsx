@@ -1,20 +1,35 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { checkConnection } from '../supabaseClient';
-import { Save, CheckCircle, XCircle, Database, Copy, RefreshCw, AlertTriangle, ShieldAlert, Lock } from 'lucide-react';
+import { Save, Database, Copy, RefreshCw, AlertTriangle, ShieldAlert, Lock, Mail, Key } from 'lucide-react';
 
 export default function Settings() {
   const { currentUser } = useAppContext();
+  
+  // Supabase State
   const [url, setUrl] = useState('');
   const [key, setKey] = useState('');
+  
+  // EmailJS State
+  const [emailServiceId, setEmailServiceId] = useState('');
+  const [emailTemplateId, setEmailTemplateId] = useState('');
+  const [emailPublicKey, setEmailPublicKey] = useState('');
+
   const [status, setStatus] = useState<'idle' | 'checking' | 'success' | 'error'>('idle');
-  const [msg, setMsg] = useState('');
 
   useEffect(() => {
+      // Cargar configuración existente
       const storedUrl = localStorage.getItem('hemp_sb_url');
       const storedKey = localStorage.getItem('hemp_sb_key');
       if (storedUrl) setUrl(storedUrl);
       if (storedKey) setKey(storedKey);
+
+      // Cargar Email config
+      const sId = localStorage.getItem('hemp_email_service');
+      const tId = localStorage.getItem('hemp_email_template');
+      const pKey = localStorage.getItem('hemp_email_key');
+      if (sId) setEmailServiceId(sId);
+      if (tId) setEmailTemplateId(tId);
+      if (pKey) setEmailPublicKey(pKey);
   }, []);
 
   // PERMISSION GUARD: Solo Super Admin puede ver esto
@@ -26,7 +41,7 @@ export default function Settings() {
               </div>
               <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Acceso Restringido</h2>
               <p className="text-gray-500 max-w-md">
-                  La configuración de la base de datos es una zona sensible reservada únicamente para el Super Administrador.
+                  La configuración del sistema es una zona sensible reservada únicamente para el Super Administrador.
               </p>
           </div>
       );
@@ -34,12 +49,17 @@ export default function Settings() {
 
   const handleSave = async () => {
       setStatus('checking');
-      // Save temporarily
-      localStorage.setItem('hemp_sb_url', url);
-      localStorage.setItem('hemp_sb_key', key);
       
-      // Force reload to apply changes in supabaseClient.ts singleton
-      // In a real app we might use a context for the client, but reload is safest here
+      // Save Supabase Config
+      localStorage.setItem('hemp_sb_url', url.trim());
+      localStorage.setItem('hemp_sb_key', key.trim());
+
+      // Save Email Config
+      localStorage.setItem('hemp_email_service', emailServiceId.trim());
+      localStorage.setItem('hemp_email_template', emailTemplateId.trim());
+      localStorage.setItem('hemp_email_key', emailPublicKey.trim());
+      
+      // Force reload to apply changes
       setTimeout(() => {
           window.location.reload();
       }, 1000);
@@ -61,7 +81,7 @@ CREATE TABLE IF NOT EXISTS public.users (
     avatar TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
-
+-- ... (Resto de las tablas existentes)
 -- TABLA DE PROYECTOS
 CREATE TABLE IF NOT EXISTS public.projects (
     id TEXT PRIMARY KEY,
@@ -72,7 +92,6 @@ CREATE TABLE IF NOT EXISTS public.projects (
     "responsibleIds" JSONB DEFAULT '[]'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
-
 -- TABLA DE VARIEDADES
 CREATE TABLE IF NOT EXISTS public.varieties (
     id TEXT PRIMARY KEY,
@@ -84,7 +103,6 @@ CREATE TABLE IF NOT EXISTS public.varieties (
     notes TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
-
 -- TABLA DE LOCACIONES
 CREATE TABLE IF NOT EXISTS public.locations (
     id TEXT PRIMARY KEY,
@@ -101,7 +119,6 @@ CREATE TABLE IF NOT EXISTS public.locations (
     "responsibleIds" JSONB DEFAULT '[]'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
-
 -- TABLA DE PARCELAS
 CREATE TABLE IF NOT EXISTS public.plots (
     id TEXT PRIMARY KEY,
@@ -124,8 +141,7 @@ CREATE TABLE IF NOT EXISTS public.plots (
     coordinates JSONB,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
-
--- TABLA DE REGISTROS TÉCNICOS (Bitácora de datos duros)
+-- TABLA DE REGISTROS TÉCNICOS
 CREATE TABLE IF NOT EXISTS public.trial_records (
     id TEXT PRIMARY KEY,
     "plotId" TEXT REFERENCES public.plots(id) ON DELETE CASCADE,
@@ -152,8 +168,7 @@ CREATE TABLE IF NOT EXISTS public.trial_records (
     "applicationDose" TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
-
--- TABLA DE BITÁCORA (Fotos y notas libres)
+-- TABLA DE BITÁCORA
 CREATE TABLE IF NOT EXISTS public.field_logs (
     id TEXT PRIMARY KEY,
     "plotId" TEXT REFERENCES public.plots(id) ON DELETE CASCADE,
@@ -162,7 +177,6 @@ CREATE TABLE IF NOT EXISTS public.field_logs (
     "photoUrl" TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
-
 -- TABLA DE TAREAS
 CREATE TABLE IF NOT EXISTS public.tasks (
     id TEXT PRIMARY KEY,
@@ -184,8 +198,8 @@ CREATE TABLE IF NOT EXISTS public.tasks (
       <div className="flex items-center mb-6">
         <Database className="text-hemp-600 mr-3" size={32} />
         <div>
-            <h1 className="text-2xl font-bold text-gray-800">Configuración de Base de Datos</h1>
-            <p className="text-gray-500">Conecta HempAPP a tu propia nube Supabase.</p>
+            <h1 className="text-2xl font-bold text-gray-800">Configuración del Sistema</h1>
+            <p className="text-gray-500">Conexiones a servicios externos (Base de Datos y Correo).</p>
         </div>
       </div>
 
@@ -193,21 +207,20 @@ CREATE TABLE IF NOT EXISTS public.tasks (
       <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6 flex items-start">
           <AlertTriangle className="text-amber-600 mr-3 flex-shrink-0 mt-0.5" />
           <div className="text-sm text-amber-800">
-              <strong>Importante:</strong> Esta configuración guarda tus claves en el navegador actual. 
-              Para un despliegue en producción real (Vercel, Netlify), debes configurar estas mismas claves en las 
-              <strong> Variables de Entorno</strong> de tu proveedor de hosting (`VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`).
+              <strong>Importante:</strong> Esta configuración guarda tus claves localmente en este navegador. 
+              Para un entorno de producción, utiliza variables de entorno del servidor.
           </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="space-y-8">
           
-          {/* 1. Connection Form */}
+          {/* 1. Supabase Connection */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
               <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
                   <ShieldAlert size={20} className="mr-2 text-gray-400" />
-                  Credenciales de Conexión
+                  Base de Datos (Supabase)
               </h2>
-              <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Project URL</label>
                       <input 
@@ -219,7 +232,7 @@ CREATE TABLE IF NOT EXISTS public.tasks (
                       />
                   </div>
                   <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">API Key (anon / public)</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Anon API Key</label>
                       <input 
                         type="password" 
                         placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." 
@@ -228,40 +241,80 @@ CREATE TABLE IF NOT EXISTS public.tasks (
                         onChange={e => setKey(e.target.value)}
                       />
                   </div>
-                  
-                  <button 
-                    onClick={handleSave}
-                    disabled={status === 'checking'}
-                    className={`w-full py-3 rounded-lg font-bold text-white flex items-center justify-center transition-all ${
-                        status === 'checking' ? 'bg-gray-400' : 'bg-hemp-600 hover:bg-hemp-700'
-                    }`}
-                  >
-                      {status === 'checking' ? (
-                          <><RefreshCw className="animate-spin mr-2"/> Reiniciando...</>
-                      ) : (
-                          <><Save className="mr-2"/> Guardar y Reconectar</>
-                      )}
-                  </button>
               </div>
           </div>
 
-          {/* 2. SQL Setup */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex flex-col h-full">
-              <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-lg font-bold text-gray-800">Inicializar Tablas</h2>
-                  <button onClick={copySQL} className="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded flex items-center transition">
-                      <Copy size={14} className="mr-1" /> Copiar SQL
-                  </button>
-              </div>
-              <p className="text-sm text-gray-500 mb-3">
-                  Si tu base de datos está vacía, copia este código y ejecútalo en el <strong>SQL Editor</strong> de tu panel de Supabase.
+          {/* 2. EmailJS Connection */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <h2 className="text-lg font-bold text-gray-800 mb-2 flex items-center">
+                  <Mail size={20} className="mr-2 text-gray-400" />
+                  Configuración de Correo (EmailJS)
+              </h2>
+              <p className="text-sm text-gray-500 mb-4">
+                  Crea una cuenta gratuita en <a href="https://www.emailjs.com/" target="_blank" className="text-hemp-600 hover:underline">EmailJS.com</a> para enviar notificaciones reales.
               </p>
               
-              <div className="flex-1 bg-slate-900 rounded-lg p-4 overflow-auto max-h-[400px]">
-                  <pre className="text-xs text-green-400 font-mono whitespace-pre-wrap">
-                      {SQL_SCRIPT}
-                  </pre>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Service ID</label>
+                      <input 
+                        type="text" 
+                        placeholder="service_xxxxx" 
+                        className="w-full border border-gray-300 rounded p-2 focus:ring-2 focus:ring-hemp-500 outline-none font-mono text-sm"
+                        value={emailServiceId}
+                        onChange={e => setEmailServiceId(e.target.value)}
+                      />
+                  </div>
+                  <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Template ID</label>
+                      <input 
+                        type="text" 
+                        placeholder="template_xxxxx" 
+                        className="w-full border border-gray-300 rounded p-2 focus:ring-2 focus:ring-hemp-500 outline-none font-mono text-sm"
+                        value={emailTemplateId}
+                        onChange={e => setEmailTemplateId(e.target.value)}
+                      />
+                  </div>
+                  <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
+                          Public Key <Key size={12} className="ml-1 text-gray-400"/>
+                      </label>
+                      <input 
+                        type="password" 
+                        placeholder="user_xxxxx / public key" 
+                        className="w-full border border-gray-300 rounded p-2 focus:ring-2 focus:ring-hemp-500 outline-none font-mono text-sm"
+                        value={emailPublicKey}
+                        onChange={e => setEmailPublicKey(e.target.value)}
+                      />
+                  </div>
               </div>
+          </div>
+
+          <button 
+            onClick={handleSave}
+            disabled={status === 'checking'}
+            className={`w-full py-4 rounded-xl font-bold text-white flex items-center justify-center transition-all shadow-lg ${
+                status === 'checking' ? 'bg-gray-400' : 'bg-hemp-600 hover:bg-hemp-700'
+            }`}
+          >
+              {status === 'checking' ? (
+                  <><RefreshCw className="animate-spin mr-2"/> Guardando cambios...</>
+              ) : (
+                  <><Save className="mr-2"/> Guardar Configuración</>
+              )}
+          </button>
+
+          {/* 3. SQL Setup (Optional) */}
+          <div className="bg-gray-50 rounded-xl border border-gray-200 p-6">
+              <div className="flex justify-between items-center mb-2">
+                  <h2 className="text-sm font-bold text-gray-600">Script SQL de Inicialización</h2>
+                  <button onClick={copySQL} className="text-xs bg-white hover:bg-gray-100 text-gray-700 px-3 py-1.5 rounded border flex items-center transition">
+                      <Copy size={12} className="mr-1" /> Copiar SQL
+                  </button>
+              </div>
+              <p className="text-xs text-gray-400 mb-3">
+                  Útil solo si estás creando el proyecto Supabase desde cero.
+              </p>
           </div>
 
       </div>
