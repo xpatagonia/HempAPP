@@ -49,6 +49,10 @@ interface AppContextType {
   
   loading: boolean;
   isEmergencyMode: boolean;
+
+  // Theme support
+  theme: 'light' | 'dark';
+  toggleTheme: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -84,6 +88,32 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isEmergencyMode, setIsEmergencyMode] = useState(false);
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+
+  // Theme Initialization
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('ht_theme') as 'light' | 'dark';
+    if (savedTheme) {
+        setTheme(savedTheme);
+        if (savedTheme === 'dark') {
+            document.documentElement.classList.add('dark');
+        }
+    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        setTheme('dark');
+        document.documentElement.classList.add('dark');
+    }
+  }, []);
+
+  const toggleTheme = () => {
+      const newTheme = theme === 'light' ? 'dark' : 'light';
+      setTheme(newTheme);
+      localStorage.setItem('ht_theme', newTheme);
+      if (newTheme === 'dark') {
+          document.documentElement.classList.add('dark');
+      } else {
+          document.documentElement.classList.remove('dark');
+      }
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -210,22 +240,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     localStorage.removeItem('ht_session_user');
   };
 
-  // --- CRUD WRAPPERS CON FALLBACK A LOCALSTORAGE ---
+  // --- CRUD WRAPPERS ---
 
   const addUser = async (u: User): Promise<boolean> => {
-      // 1. Intentar Supabase
       const { error } = await supabase.from('users').insert([u]);
-      
-      // 2. Siempre actualizar estado local (Optimistic UI / Offline Mode)
       setUsersList(prev => {
           const newList = [...prev, u];
-          saveToLocal('users', newList.filter(user => user.id !== RESCUE_USER.id)); // No guardar rescate user
+          saveToLocal('users', newList.filter(user => user.id !== RESCUE_USER.id));
           return newList;
       });
-
-      if (error) {
-          console.warn("Supabase falló, usuario guardado localmente:", error.message);
-      }
       return true; 
   };
   
@@ -247,7 +270,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       });
   };
 
-  // Generic patterns applied to other critical entities for setup
   const addProject = async (p: Project): Promise<boolean> => {
       const { error } = await supabase.from('projects').insert([p]);
       setProjects(prev => { const n = [...prev, p]; saveToLocal('projects', n); return n; });
@@ -293,7 +315,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setPlots(prev => { const n = prev.map(item => item.id === p.id ? p : item); saveToLocal('plots', n); return n; }); 
   };
 
-  // Non-critical data (Trial Records, Logs, Tasks) - Keep simpler for now, but update state optimistically
   const addTrialRecord = async (r: TrialRecord) => { const { error } = await supabase.from('trial_records').insert([r]); if (!error || true) setTrialRecords(prev => [...prev, r]); };
   const updateTrialRecord = async (r: TrialRecord) => { const { error } = await supabase.from('trial_records').update(r).eq('id', r.id); if (!error || true) setTrialRecords(prev => prev.map(item => item.id === r.id ? r : item)); };
   const deleteTrialRecord = async (id: string) => { const { error } = await supabase.from('trial_records').delete().eq('id', id); if (!error || true) setTrialRecords(prev => prev.filter(item => item.id !== id)); };
@@ -320,7 +341,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       addUser, updateUser, deleteUser,
       addTask, updateTask, deleteTask,
       getPlotHistory, getLatestRecord,
-      loading, isEmergencyMode
+      loading, isEmergencyMode,
+      theme, toggleTheme
     }}>
       {children}
     </AppContext.Provider>

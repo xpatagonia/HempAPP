@@ -7,6 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
+        darkMode: 'class', // Habilitar modo oscuro manual
         theme: {
           extend: {
             colors: {
@@ -18,6 +19,11 @@
                 700: '#15803d',
                 800: '#166534',
                 900: '#14532d',
+              },
+              dark: {
+                bg: '#0f172a', // Slate 900
+                card: '#1e293b', // Slate 800
+                border: '#334155' // Slate 700
               }
             }
           }
@@ -43,7 +49,7 @@
 }
 </script>
 </head>
-  <body class="bg-slate-900 text-gray-900">
+  <body class="bg-slate-50 text-gray-900 dark:bg-dark-bg dark:text-gray-100 transition-colors duration-300">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>
