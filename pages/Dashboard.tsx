@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, AreaChart, Area } from 'recharts';
-import { Sprout, MapPin, Activity, CheckCircle, FileText, Download, ArrowRight, Users, FolderOpen, AlertCircle, TrendingUp, Calendar, FileCheck, CheckSquare } from 'lucide-react';
+import { Sprout, MapPin, Activity, CheckCircle, FileText, Download, ArrowRight, Users, FolderOpen, AlertCircle, TrendingUp, Calendar, FileCheck, CheckSquare, Printer, X, Filter } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -28,7 +28,16 @@ const StatCard = ({ title, value, icon: Icon, colorClass, trend }: any) => (
 
 export default function Dashboard() {
   const { varieties, locations, plots, projects, usersList, getLatestRecord, currentUser, theme } = useAppContext();
+  
+  // Report Modal State
+  const [showReportModal, setShowReportModal] = useState(false);
   const [reportGenerating, setReportGenerating] = useState(false);
+  const [reportConfig, setReportConfig] = useState({
+      projectId: 'all',
+      includeFinancials: false,
+      includeLogs: true,
+      includeCharts: false // Placeholder for future chart integration
+  });
 
   // --- ONBOARDING LOGIC ---
   const isSetupMode = varieties.length === 0 && locations.length === 0 && projects.length === 0;
@@ -86,48 +95,55 @@ export default function Dashboard() {
     setReportGenerating(true);
     const doc = new jsPDF();
     const today = new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    const selectedProjectName = reportConfig.projectId === 'all' ? 'Consolidado General' : projects.find(p => p.id === reportConfig.projectId)?.name;
+
+    // Filter Data
+    const filteredPlots = reportConfig.projectId === 'all' 
+        ? plots 
+        : plots.filter(p => p.projectId === reportConfig.projectId);
 
     // --- Header ---
     doc.setFillColor(22, 163, 74); // Hemp Green
-    doc.rect(0, 0, 210, 20, 'F');
+    doc.rect(0, 0, 210, 25, 'F');
     
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(22);
     doc.setFont('helvetica', 'bold');
-    doc.text('HempAPP', 14, 13);
+    doc.text('HempAPP', 14, 16);
     
     doc.setFontSize(10);
-    doc.text('REPORTE EJECUTIVO', 195, 13, { align: 'right' });
+    doc.text('REPORTE TÉCNICO', 195, 16, { align: 'right' });
 
     // --- Metadata ---
     doc.setTextColor(50, 50, 50);
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     
-    doc.text(`Generado por: ${currentUser?.name || 'Usuario'}`, 14, 30);
-    doc.text(`Fecha: ${today}`, 14, 35);
-    doc.text(`Proyecto Activo: ${projects.length > 0 ? projects[0].name : 'General'}`, 14, 40);
+    doc.text(`Generado por: ${currentUser?.name || 'Usuario'}`, 14, 35);
+    doc.text(`Fecha: ${today}`, 14, 40);
+    doc.text(`Alcance: ${selectedProjectName}`, 14, 45);
 
-    // --- Stats Summary ---
-    doc.setFillColor(240, 253, 244); // light green bg
-    doc.rect(14, 45, 182, 25, 'F');
-    doc.setDrawColor(22, 163, 74);
-    doc.rect(14, 45, 182, 25, 'S');
+    // --- Stats Summary Block ---
+    doc.setFillColor(248, 250, 252); 
+    doc.rect(14, 50, 182, 25, 'F');
+    doc.setDrawColor(226, 232, 240);
+    doc.rect(14, 50, 182, 25, 'S');
 
     doc.setFontSize(12);
     doc.setTextColor(22, 163, 74);
     doc.setFont('helvetica', 'bold');
-    doc.text('Resumen de Estado', 20, 55);
+    doc.text('Resumen Ejecutivo', 18, 60);
 
     doc.setFontSize(10);
     doc.setTextColor(0, 0, 0);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Total Variedades: ${varieties.length}`, 20, 63);
-    doc.text(`Sitios Activos: ${locations.length}`, 80, 63);
-    doc.text(`Ensayos en Curso: ${activePlots}`, 140, 63);
+    doc.text(`Parcelas Reportadas: ${filteredPlots.length}`, 18, 68);
+    const harvestCount = filteredPlots.filter(p => p.status === 'Cosechada').length;
+    doc.text(`Cosechadas: ${harvestCount}`, 80, 68);
+    doc.text(`Activas: ${filteredPlots.length - harvestCount}`, 140, 68);
 
     // --- Main Table ---
-    const tableData = plots.map(p => {
+    const tableData = filteredPlots.map(p => {
         const v = varieties.find(val => val.id === p.varietyId);
         const l = locations.find(loc => loc.id === p.locationId);
         const latest = getLatestRecord(p.id);
@@ -143,7 +159,7 @@ export default function Dashboard() {
     });
 
     autoTable(doc, {
-        startY: 80,
+        startY: 85,
         head: [['Parcela', 'Variedad', 'Locación', 'Siembra', 'Altura', 'Etapa', 'Estado']],
         body: tableData,
         theme: 'grid',
@@ -163,6 +179,7 @@ export default function Dashboard() {
 
     doc.save(`HempAPP_Reporte_${new Date().toISOString().split('T')[0]}.pdf`);
     setReportGenerating(false);
+    setShowReportModal(false);
   };
 
   const exportExcel = () => {
@@ -213,7 +230,6 @@ export default function Dashboard() {
                                   Ir a Usuarios <ArrowRight size={16} className="ml-2"/>
                               </Link>
                           </div>
-                          {/* More setup steps... (Keeping simple for brevity in this update) */}
                       </div>
                   </div>
               </div>
@@ -235,12 +251,11 @@ export default function Dashboard() {
         {/* Report Actions */}
         <div className="flex space-x-2 bg-white dark:bg-dark-card p-1 rounded-lg border border-gray-200 dark:border-dark-border shadow-sm">
             <button 
-                onClick={generateProfessionalPDF} 
-                disabled={reportGenerating}
-                className="text-gray-700 dark:text-gray-300 px-3 py-1.5 rounded-md text-sm hover:bg-gray-100 dark:hover:bg-dark-border transition flex items-center"
+                onClick={() => setShowReportModal(true)} 
+                className="text-gray-700 dark:text-gray-300 px-3 py-1.5 rounded-md text-sm hover:bg-gray-100 dark:hover:bg-dark-border transition flex items-center font-medium"
             >
-                {reportGenerating ? <FileText size={16} className="mr-2 animate-pulse" /> : <FileText size={16} className="mr-2 text-red-500" />}
-                {reportGenerating ? 'Generando...' : 'Reporte PDF'}
+                <Printer size={16} className="mr-2 text-hemp-600" />
+                Centro de Reportes
             </button>
             <div className="w-px bg-gray-200 dark:bg-dark-border my-1"></div>
             <button 
@@ -416,6 +431,84 @@ export default function Dashboard() {
             </div>
         </div>
       </div>
+
+      {/* REPORT CONFIG MODAL */}
+      {showReportModal && (
+          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+              <div className="bg-white dark:bg-dark-card rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden flex flex-col">
+                  <div className="px-6 py-4 border-b dark:border-dark-border bg-gray-50 dark:bg-slate-900 flex justify-between items-center">
+                      <h3 className="font-bold text-gray-800 dark:text-white flex items-center">
+                          <Printer className="mr-2 text-hemp-600" size={20} /> Centro de Reportes
+                      </h3>
+                      <button onClick={() => setShowReportModal(false)} className="text-gray-400 hover:text-gray-600">
+                          <X size={20} />
+                      </button>
+                  </div>
+                  
+                  <div className="p-6 space-y-6">
+                      <div>
+                          <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Filtrar por Proyecto</label>
+                          <select 
+                              className="w-full border border-gray-300 dark:border-dark-border bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 p-2.5 rounded-lg focus:ring-2 focus:ring-hemp-500 outline-none"
+                              value={reportConfig.projectId}
+                              onChange={(e) => setReportConfig({...reportConfig, projectId: e.target.value})}
+                          >
+                              <option value="all">Todos los Proyectos (Consolidado)</option>
+                              {projects.map(p => (
+                                  <option key={p.id} value={p.id}>{p.name}</option>
+                              ))}
+                          </select>
+                      </div>
+
+                      <div className="space-y-3">
+                          <label className="block text-sm font-bold text-gray-700 dark:text-gray-300">Contenido Opcional</label>
+                          <label className="flex items-center space-x-3 p-3 border border-gray-200 dark:border-dark-border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800 transition">
+                              <input 
+                                type="checkbox" 
+                                className="w-4 h-4 text-hemp-600 rounded" 
+                                checked={reportConfig.includeLogs}
+                                onChange={e => setReportConfig({...reportConfig, includeLogs: e.target.checked})}
+                              />
+                              <div className="flex-1">
+                                  <span className="block text-sm font-medium text-gray-900 dark:text-white">Incluir Bitácora</span>
+                                  <span className="block text-xs text-gray-500">Agrega resumen de notas de campo al final.</span>
+                              </div>
+                          </label>
+                          
+                          <label className="flex items-center space-x-3 p-3 border border-gray-200 dark:border-dark-border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800 transition">
+                              <input 
+                                type="checkbox" 
+                                className="w-4 h-4 text-hemp-600 rounded" 
+                                checked={reportConfig.includeFinancials}
+                                onChange={e => setReportConfig({...reportConfig, includeFinancials: e.target.checked})}
+                              />
+                              <div className="flex-1">
+                                  <span className="block text-sm font-medium text-gray-900 dark:text-white">Incluir Estimaciones</span>
+                                  <span className="block text-xs text-gray-500">Calcula rendimiento teórico vs real.</span>
+                              </div>
+                          </label>
+                      </div>
+                  </div>
+
+                  <div className="px-6 py-4 bg-gray-50 dark:bg-slate-900 border-t dark:border-dark-border flex justify-end space-x-3">
+                      <button 
+                        onClick={() => setShowReportModal(false)}
+                        className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-800 rounded-lg transition"
+                      >
+                          Cancelar
+                      </button>
+                      <button 
+                        onClick={generateProfessionalPDF}
+                        disabled={reportGenerating}
+                        className="px-6 py-2 bg-hemp-600 hover:bg-hemp-700 text-white font-bold rounded-lg shadow-lg flex items-center transition disabled:opacity-70"
+                      >
+                          {reportGenerating ? <span className="animate-spin mr-2">C</span> : <FileText size={18} className="mr-2" />}
+                          Generar PDF
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
     </div>
   );
 }

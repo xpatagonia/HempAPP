@@ -1,8 +1,7 @@
-
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Task } from '../types';
-import { Plus, CheckSquare, Clock, User, CheckCircle, Circle, AlertCircle, Calendar } from 'lucide-react';
+import { Plus, CheckSquare, Clock, User, CheckCircle, Circle, AlertCircle, Calendar, Mail } from 'lucide-react';
 
 export default function Tasks() {
   const { tasks, addTask, updateTask, deleteTask, currentUser, usersList, plots, projects } = useAppContext();
@@ -10,6 +9,7 @@ export default function Tasks() {
   const [editingId, setEditingId] = useState<string | null>(null);
   
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'completed'>('pending');
+  const [notifyEmail, setNotifyEmail] = useState(false);
 
   const [formData, setFormData] = useState<Partial<Task>>({
     title: '', description: '', status: 'Pendiente', priority: 'Media', assignedToIds: [], 
@@ -36,6 +36,10 @@ export default function Tasks() {
             plotId: formData.plotId,
             createdBy: currentUser?.id || 'unknown'
         });
+        
+        if (notifyEmail && formData.assignedToIds && formData.assignedToIds.length > 0) {
+            alert(`📨 Simulación: Se ha enviado un correo de notificación a ${formData.assignedToIds.length} usuario(s).`);
+        }
     }
     
     setIsModalOpen(false);
@@ -45,6 +49,7 @@ export default function Tasks() {
   const resetForm = () => {
     setFormData({ title: '', description: '', status: 'Pendiente', priority: 'Media', assignedToIds: [], dueDate: new Date().toISOString().split('T')[0], plotId: '' });
     setEditingId(null);
+    setNotifyEmail(false);
   };
 
   const handleDelete = (id: string) => {
@@ -207,6 +212,15 @@ export default function Tasks() {
                     ))}
                   </div>
               </div>
+              
+              {!editingId && (
+                  <label className="flex items-center space-x-2 p-3 bg-blue-50 border border-blue-100 rounded-lg cursor-pointer">
+                      <input type="checkbox" checked={notifyEmail} onChange={e => setNotifyEmail(e.target.checked)} className="rounded text-blue-600 focus:ring-blue-500" />
+                      <span className="text-sm text-blue-800 font-medium flex items-center">
+                          <Mail size={16} className="mr-2"/> Notificar a los usuarios por email
+                      </span>
+                  </label>
+              )}
 
               <div className="flex justify-end space-x-2 pt-4">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancelar</button>

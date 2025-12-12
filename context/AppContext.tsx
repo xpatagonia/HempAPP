@@ -1,6 +1,15 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
 import { Variety, Location, Plot, FieldLog, TrialRecord, User, Project, Task } from '../types';
 import { supabase } from '../supabaseClient';
+
+export interface AppNotification {
+    id: string;
+    type: 'alert' | 'info' | 'warning';
+    title: string;
+    message: string;
+    link?: string;
+    date: string;
+}
 
 interface AppContextType {
   projects: Project[];
@@ -10,6 +19,7 @@ interface AppContextType {
   trialRecords: TrialRecord[];
   logs: FieldLog[];
   tasks: Task[];
+  notifications: AppNotification[]; // Nueva propiedad
   
   currentUser: User | null;
   usersList: User[];
@@ -18,7 +28,7 @@ interface AppContextType {
 
   addProject: (p: Project) => Promise<boolean>;
   updateProject: (p: Project) => void;
-  deleteProject: (id: string) => void; // Added deleteProject
+  deleteProject: (id: string) => void; 
   
   addVariety: (v: Variety) => void;
   updateVariety: (v: Variety) => void;
@@ -116,6 +126,71 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           document.documentElement.classList.remove('dark');
       }
   };
+
+  // --- CALCULO DE NOTIFICACIONES ---
+  const notifications = useMemo(() => {
+    if (!currentUser) return [];
+    const notifs: AppNotification[] = [];
+    const today = new Date();
+
+    // 1. Tareas Vencidas o Próximas (Solo asignadas o si es admin todas)
+    tasks.forEach(t => {
+        if (t.status === 'Completada') return;
+        
+        const isAssigned = t.assignedToIds.includes(currentUser.id) || currentUser.role === 'admin' || currentUser.role === 'super_admin';
+        if (!isAssigned) return;
+
+        const dueDate = new Date(t.dueDate);
+        const diffDays = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+        if (diffDays < 0) {
+            notifs.push({
+                id: `task-overdue-${t.id}`,
+                type: 'alert',
+                title: 'Tarea Vencida',
+                message: `"${t.title}" venció hace ${Math.abs(diffDays)} días.`,
+                link: '/tasks',
+                date: t.dueDate
+            });
+        } else if (diffDays <= 2) {
+            notifs.push({
+                id: `task-soon-${t.id}`,
+                type: 'warning',
+                title: 'Tarea Próxima',
+                message: `"${t.title}" vence pronto.`,
+                link: '/tasks',
+                date: t.dueDate
+            });
+        }
+    });
+
+    // 2. Parcelas sin datos recientes (>15 días)
+    if (currentUser.role !== 'viewer') {
+        plots.filter(p => p.status === 'Activa').forEach(p => {
+             const isAssigned = p.responsibleIds?.includes(currentUser.id) || currentUser.role === 'admin' || currentUser.role === 'super_admin';
+             if (!isAssigned) return;
+
+             const history = trialRecords.filter(r => r.plotId === p.id).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+             const lastDate = history.length > 0 ? new Date(history[0].date) : new Date(p.sowingDate);
+             
+             const daysSinceUpdate = Math.floor((today.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+             
+             if (daysSinceUpdate > 15) {
+                 notifs.push({
+                     id: `plot-stale-${p.id}`,
+                     type: 'info',
+                     title: 'Datos Desactualizados',
+                     message: `Parcela ${p.name} sin registros hace ${daysSinceUpdate} días.`,
+                     link: `/plots/${p.id}`,
+                     date: new Date().toISOString().split('T')[0]
+                 });
+             }
+        });
+    }
+
+    return notifs.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [tasks, plots, trialRecords, currentUser]);
+
 
   useEffect(() => {
     let isMounted = true;
@@ -340,7 +415,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   return (
     <AppContext.Provider value={{
-      projects, varieties, locations, plots, trialRecords, logs, tasks,
+      projects, varieties, locations, plots, trialRecords, logs, tasks, notifications,
       currentUser, usersList, login, logout,
       addProject, updateProject, deleteProject,
       addVariety, updateVariety, deleteVariety,

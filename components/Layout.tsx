@@ -21,7 +21,9 @@ import {
   Calendar as CalendarIcon,
   Sparkles,
   Sun,
-  Moon
+  Moon,
+  Bell,
+  Info
 } from 'lucide-react';
 
 const NavItem = ({ to, icon: Icon, label, onClick }: any) => {
@@ -45,8 +47,9 @@ const NavItem = ({ to, icon: Icon, label, onClick }: any) => {
 };
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { currentUser, logout, isEmergencyMode, theme, toggleTheme } = useAppContext();
+  const { currentUser, logout, isEmergencyMode, theme, toggleTheme, notifications } = useAppContext();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
 
   const toggleMobile = () => setIsMobileOpen(!isMobileOpen);
 
@@ -63,6 +66,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
   const isAdminOrSuper = currentUser.role === 'admin' || currentUser.role === 'super_admin';
   const isSuperAdmin = currentUser.role === 'super_admin';
+  const unreadCount = notifications.length;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-dark-bg flex transition-colors duration-300">
@@ -72,9 +76,18 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           <Leaf className="w-6 h-6" />
           <span className="font-bold text-lg">HempAPP</span>
         </div>
-        <button onClick={toggleMobile} className="p-2 text-gray-600 dark:text-gray-300">
-          {isMobileOpen ? <X size={24} /> : <Menu size={24} />}
-        </button>
+        <div className="flex items-center space-x-2">
+            {/* Bell Mobile */}
+            <button onClick={() => setIsNotifOpen(!isNotifOpen)} className="p-2 relative text-gray-600 dark:text-gray-300">
+                <Bell size={24} />
+                {unreadCount > 0 && (
+                    <span className="absolute top-1 right-1 h-3 w-3 bg-red-500 rounded-full border-2 border-white dark:border-dark-card"></span>
+                )}
+            </button>
+            <button onClick={toggleMobile} className="p-2 text-gray-600 dark:text-gray-300">
+              {isMobileOpen ? <X size={24} /> : <Menu size={24} />}
+            </button>
+        </div>
       </div>
 
       {/* Sidebar Overlay for Mobile */}
@@ -83,6 +96,45 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           className="fixed inset-0 bg-black/50 z-40 lg:hidden"
           onClick={() => setIsMobileOpen(false)}
         />
+      )}
+
+      {/* Notifications Dropdown (Absolute to Layout) */}
+      {isNotifOpen && (
+        <div className="fixed top-16 right-4 lg:right-10 z-50 w-80 bg-white dark:bg-dark-card rounded-xl shadow-2xl border border-gray-100 dark:border-dark-border overflow-hidden animate-in fade-in slide-in-from-top-2">
+            <div className="px-4 py-3 border-b dark:border-dark-border bg-gray-50 dark:bg-slate-900/50 flex justify-between items-center">
+                <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm">Notificaciones ({unreadCount})</h3>
+                <button onClick={() => setIsNotifOpen(false)}><X size={16} className="text-gray-400"/></button>
+            </div>
+            <div className="max-h-80 overflow-y-auto">
+                {unreadCount === 0 ? (
+                    <div className="p-8 text-center text-gray-400 flex flex-col items-center">
+                        <Bell size={32} className="mb-2 opacity-30" />
+                        <p className="text-sm">Todo al día. ¡Buen trabajo!</p>
+                    </div>
+                ) : (
+                    notifications.map(n => (
+                        <Link 
+                            key={n.id} 
+                            to={n.link || '#'} 
+                            onClick={() => setIsNotifOpen(false)}
+                            className="block px-4 py-3 border-b border-gray-50 dark:border-dark-border hover:bg-gray-50 dark:hover:bg-slate-800 transition"
+                        >
+                            <div className="flex items-start">
+                                <div className={`w-2 h-2 mt-1.5 rounded-full mr-3 flex-shrink-0 ${
+                                    n.type === 'alert' ? 'bg-red-500' : 
+                                    n.type === 'warning' ? 'bg-amber-500' : 'bg-blue-500'
+                                }`}></div>
+                                <div>
+                                    <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">{n.title}</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{n.message}</p>
+                                    <span className="text-[10px] text-gray-400 mt-1 block">{n.date}</span>
+                                </div>
+                            </div>
+                        </Link>
+                    ))
+                )}
+            </div>
+        </div>
       )}
 
       {/* Sidebar */}
@@ -97,14 +149,27 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
              <span className="text-xl font-bold text-gray-800 dark:text-gray-100">HempAPP</span>
           </div>
           
-          {/* Theme Toggle in Header (Desktop) */}
-          <button 
-            onClick={toggleTheme} 
-            className="p-2 rounded-full text-gray-400 hover:text-hemp-600 hover:bg-gray-100 dark:hover:bg-dark-border transition-colors"
-            title={theme === 'dark' ? 'Modo Claro' : 'Modo Oscuro'}
-          >
-              {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-          </button>
+          <div className="flex items-center space-x-1">
+              {/* Notification Bell (Desktop) */}
+              <button 
+                onClick={() => setIsNotifOpen(!isNotifOpen)} 
+                className="hidden lg:block p-2 rounded-full text-gray-400 hover:text-hemp-600 hover:bg-gray-100 dark:hover:bg-dark-border transition-colors relative"
+              >
+                  <Bell size={18} />
+                  {unreadCount > 0 && (
+                     <span className="absolute top-1.5 right-1.5 h-2 w-2 bg-red-500 rounded-full"></span>
+                  )}
+              </button>
+
+              {/* Theme Toggle in Header (Desktop) */}
+              <button 
+                onClick={toggleTheme} 
+                className="p-2 rounded-full text-gray-400 hover:text-hemp-600 hover:bg-gray-100 dark:hover:bg-dark-border transition-colors"
+                title={theme === 'dark' ? 'Modo Claro' : 'Modo Oscuro'}
+              >
+                  {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+              </button>
+          </div>
         </div>
 
         <nav className="flex-1 p-4 space-y-2 overflow-y-auto custom-scrollbar">
