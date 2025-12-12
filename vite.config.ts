@@ -7,6 +7,9 @@ export default defineConfig({
   build: {
     chunkSizeWarningLimit: 1000,
     rollupOptions: {
+      // ESTO SOLUCIONA EL ERROR DE BUILD:
+      // Le decimos a Vite que NO intente incluir esta librería en el bundle.
+      external: ['@google/genai'],
       output: {
         manualChunks: {
           vendor: ['react', 'react-dom', 'react-router-dom'],
