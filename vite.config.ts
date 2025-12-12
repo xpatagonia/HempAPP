@@ -7,9 +7,10 @@ export default defineConfig({
   build: {
     chunkSizeWarningLimit: 1000,
     rollupOptions: {
+      // Externalizamos @google/genai para que no se incluya en el bundle
+      // y se cargue desde el importmap en index.html
+      external: ['@google/genai'],
       output: {
-        // Dividimos las librerías grandes en archivos separados para optimizar carga
-        // Quitamos @google/genai de aquí para evitar el error de resolución
         manualChunks: {
           vendor: ['react', 'react-dom', 'react-router-dom'],
           charts: ['recharts'],
