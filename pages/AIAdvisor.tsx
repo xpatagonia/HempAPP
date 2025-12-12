@@ -80,10 +80,10 @@ export default function AIAdvisor() {
         setError(null);
 
         try {
-            // SOLUCIÓN DEFINITIVA PARA ERROR DE BUILD EN VERCEL:
-            // Usamos 'new Function' para crear el import dinámicamente.
-            // Esto oculta completamente la sentencia import del analizador estático de Vite/Rollup.
-            // El navegador ejecutará esto en tiempo de ejecución descargando la librería desde el CDN.
+            // SOLUCIÓN CRÍTICA PARA BUILD:
+            // Usamos 'new Function' para construir el import dinámicamente.
+            // Esto hace que Vite/Rollup NO detecten la dependencia durante el build,
+            // evitando el error "failed to resolve import".
             const loadGenAI = new Function('return import("https://esm.sh/@google/genai@0.2.1")');
             const { GoogleGenAI } = await loadGenAI();
             
