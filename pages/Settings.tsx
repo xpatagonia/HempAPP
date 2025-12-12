@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Save, Database, Copy, RefreshCw, AlertTriangle, ShieldAlert, Lock, Mail, Key } from 'lucide-react';
+import { Save, Database, Copy, RefreshCw, AlertTriangle, ShieldAlert, Lock, Mail, Key, Server } from 'lucide-react';
 
 export default function Settings() {
   const { currentUser } = useAppContext();
@@ -248,15 +248,22 @@ CREATE TABLE IF NOT EXISTS public.tasks (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
               <h2 className="text-lg font-bold text-gray-800 mb-2 flex items-center">
                   <Mail size={20} className="mr-2 text-gray-400" />
-                  Configuración de Correo (EmailJS)
+                  Configuración de Correo
               </h2>
-              <p className="text-sm text-gray-500 mb-4">
-                  Para usar tu correo corporativo (SMTP/IMAP) o Gmail, crea una cuenta gratuita en <a href="https://www.emailjs.com/" target="_blank" className="text-hemp-600 hover:underline font-bold">EmailJS.com</a>.
-                  <br/>
-                  <span className="text-xs bg-blue-50 text-blue-800 px-2 py-1 rounded inline-block mt-1">
-                     En EmailJS: Dashboard → Email Services → Add New Service → Personal (SMTP)
-                  </span>
-              </p>
+              
+              <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 mb-5 text-sm text-blue-800">
+                  <div className="font-bold mb-1 flex items-center"><Server size={16} className="mr-2"/> Uso de SMTP Corporativo</div>
+                  <p className="mb-2">
+                    Esta aplicación utiliza <strong>EmailJS</strong> como puente de seguridad. No conectamos el frontend directamente a tu servidor SMTP para no exponer contraseñas.
+                  </p>
+                  <ol className="list-decimal ml-5 space-y-1 text-xs">
+                      <li>Crea una cuenta gratuita en <a href="https://www.emailjs.com/" target="_blank" className="underline font-bold">EmailJS.com</a>.</li>
+                      <li>Ve a <strong>Email Services</strong> → <strong>Add New Service</strong>.</li>
+                      <li>Selecciona <strong>SMTP</strong> (u otro proveedor como Gmail/Outlook).</li>
+                      <li>Ingresa allí los datos de tu servidor (Host, Port, User, Pass).</li>
+                      <li>Copia el <strong>Service ID</strong> generado y pégalo abajo.</li>
+                  </ol>
+              </div>
               
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
