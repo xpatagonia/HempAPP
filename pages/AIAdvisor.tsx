@@ -3,8 +3,9 @@ import { useAppContext } from '../context/AppContext';
 import { Send, Bot, User, Image as ImageIcon, Loader2, Sparkles, AlertTriangle, X } from 'lucide-react';
 
 // ------------------------------------------------------------------
-// CONFIGURACIÓN DE GEMINI API
+// CONFIGURACIÓN DE GEMINI API (REST)
 // ------------------------------------------------------------------
+// Usamos la API REST directa para evitar problemas de dependencias en Vercel
 const HARDCODED_GEMINI_KEY = 'AIzaSyA5Gmha-l3vOJRkI7RfZjVeTefjzbjZisQ'; 
 // ------------------------------------------------------------------
 
@@ -21,7 +22,7 @@ export default function AIAdvisor() {
         {
             id: '1',
             role: 'model',
-            text: 'Hola. Soy tu asistente agronómico especializado en cáñamo industrial. Tengo acceso a los datos de tus parcelas y variedades cargadas. ¿En qué puedo ayudarte hoy?'
+            text: 'Hola. Soy tu asistente agronómico virtual. Tengo acceso a los datos de tus parcelas y variedades cargadas. ¿En qué puedo ayudarte hoy?'
         }
     ]);
     const [input, setInput] = useState('');
@@ -91,17 +92,15 @@ export default function AIAdvisor() {
             2. Si te preguntan por una parcela específica, usa los datos provistos.
             3. Si analizas una imagen, busca plagas, deficiencias nutricionales o estados fenológicos.`;
 
-            // Construir payload para la REST API
+            // Construcción del cuerpo para la API REST (Sin SDK)
             const parts: any[] = [];
             
-            // Si hay texto
             if (userMsg.text) {
                 parts.push({ text: userMsg.text });
             } else if (selectedImage) {
                  parts.push({ text: "¿Qué observas en esta imagen?" });
             }
 
-            // Si hay imagen (Base64)
             if (userMsg.image) {
                 const base64Data = userMsg.image.split(',')[1];
                 parts.push({
@@ -122,7 +121,7 @@ export default function AIAdvisor() {
                 }
             };
 
-            // LLAMADA DIRECTA REST API (Elimina dependencia de @google/genai)
+            // FETCH NATIVO: Reemplaza la librería @google/genai
             const response = await fetch(
                 `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
                 {
@@ -134,7 +133,7 @@ export default function AIAdvisor() {
 
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.error?.message || 'Error en la API de Gemini');
+                throw new Error(errorData.error?.message || 'Error en la respuesta de Gemini');
             }
 
             const data = await response.json();
@@ -150,11 +149,11 @@ export default function AIAdvisor() {
 
         } catch (err: any) {
             console.error("Gemini API Error:", err);
-            setError("Error al conectar con la IA. " + (err.message || "Verifica tu conexión."));
+            setError("Error de conexión con la IA. Intenta nuevamente.");
             setMessages(prev => [...prev, {
                 id: Date.now().toString(),
                 role: 'model',
-                text: 'Lo siento, ocurrió un error técnico al procesar tu solicitud.'
+                text: 'Lo siento, hubo un problema técnico. Por favor intenta de nuevo.'
             }]);
         } finally {
             setIsLoading(false);
@@ -166,7 +165,7 @@ export default function AIAdvisor() {
             <div className="flex items-center mb-4">
                 <Sparkles className="text-purple-600 mr-3" size={32} />
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-800">Asistente Agronómico IA</h1>
+                    <h1 className="text-2xl font-bold text-gray-800">Asistente Virtual IA</h1>
                     <p className="text-gray-500 text-sm">Potenciado por Google Gemini 2.0</p>
                 </div>
             </div>
