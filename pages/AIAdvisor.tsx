@@ -5,8 +5,8 @@ import { Send, Bot, User, Image as ImageIcon, Loader2, Sparkles, AlertTriangle, 
 // ------------------------------------------------------------------
 // CONFIGURACIÓN DE GEMINI API (REST)
 // ------------------------------------------------------------------
-// IMPORTANTE: Usamos la API REST directa (fetch) en lugar de importar la librería SDK.
-// Esto soluciona el error "Rollup failed to resolve import @google/genai".
+// FIX: Uso de API REST directa para eliminar dependencia @google/genai que causaba error en Vercel.
+// Timestamp: Fix aplicado para forzar detección de cambios en git.
 const HARDCODED_GEMINI_KEY = 'AIzaSyA5Gmha-l3vOJRkI7RfZjVeTefjzbjZisQ'; 
 // ------------------------------------------------------------------
 
@@ -32,7 +32,6 @@ export default function AIAdvisor() {
     const [error, setError] = useState<string | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
-    // Prioriza la clave hardcodeada para asegurar funcionalidad inmediata, luego busca en env
     const apiKey = HARDCODED_GEMINI_KEY || (import.meta as any).env.VITE_GEMINI_API_KEY;
 
     useEffect(() => {
@@ -124,8 +123,8 @@ export default function AIAdvisor() {
                 }
             };
 
-            // SOLUCIÓN FINAL: Usamos fetch directamente.
-            // No hay importación de @google/genai, por lo que el build no fallará.
+            // FETCH NATIVO: Reemplaza la librería @google/genai
+            // Esto evita errores de 'Rollup failed to resolve import'
             const response = await fetch(
                 `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
                 {
@@ -157,7 +156,7 @@ export default function AIAdvisor() {
             setMessages(prev => [...prev, {
                 id: Date.now().toString(),
                 role: 'model',
-                text: 'Lo siento, hubo un problema técnico con la conexión. Por favor intenta de nuevo.'
+                text: 'Lo siento, hubo un problema técnico. Por favor intenta de nuevo.'
             }]);
         } finally {
             setIsLoading(false);
@@ -169,8 +168,8 @@ export default function AIAdvisor() {
             <div className="flex items-center mb-4">
                 <Sparkles className="text-purple-600 mr-3" size={32} />
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-800">Asistente IA (v2.1)</h1>
-                    <p className="text-gray-500 text-sm">Potenciado por Google Gemini (REST API)</p>
+                    <h1 className="text-2xl font-bold text-gray-800">Asistente IA (v2.2)</h1>
+                    <p className="text-gray-500 text-sm">Potenciado por Google Gemini</p>
                 </div>
             </div>
 
