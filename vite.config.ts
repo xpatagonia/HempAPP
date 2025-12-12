@@ -7,6 +7,9 @@ export default defineConfig({
   build: {
     chunkSizeWarningLimit: 1000,
     rollupOptions: {
+      // Externalizamos emailjs para que use la versión CDN definida en el index.html
+      // Esto soluciona el error "Rollup failed to resolve import" en Vercel
+      external: ['@emailjs/browser'],
       output: {
         manualChunks: {
           vendor: ['react', 'react-dom', 'react-router-dom'],
