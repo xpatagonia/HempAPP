@@ -17,7 +17,8 @@
     "xlsx": "^0.18.5",
     "jspdf": "^2.5.1",
     "jspdf-autotable": "^3.8.2",
-    "@supabase/supabase-js": "^2.39.8"
+    "@supabase/supabase-js": "^2.39.8",
+    "@emailjs/browser": "^4.3.3"
   },
   "devDependencies": {
     "@types/react": "^18.2.66",
