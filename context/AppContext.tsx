@@ -92,12 +92,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 supabase.from('tasks').select('*')
             ]);
 
-            // MODO PRODUCCIÓN: Si no hay usuarios en la DB, la lista queda vacía.
-            // No se cargan usuarios demo. Se requiere que el admin cree el primer usuario en Supabase.
+            // MODO PRODUCCIÓN: Usar estrictamente la base de datos.
             if (users) {
                 setUsersList(users as User[]);
             } else {
-                console.log("Sistema iniciado sin usuarios. Configure la base de datos.");
                 setUsersList([]);
             }
 
@@ -112,15 +110,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             // Restaurar sesión si existe en localStorage (persistencia de login simple)
             const savedUser = localStorage.getItem('ht_session_user');
             if (savedUser) {
-                // Verificamos que el usuario guardado aún exista en la DB actualizada
                 const parsedUser = JSON.parse(savedUser);
-                // NOTA: En un sistema real, aquí validaríamos el token, pero mantenemos la lógica simple por ahora.
                 setCurrentUser(parsedUser);
             }
 
         } catch (error) {
             console.error("Error cargando datos de Supabase:", error);
-            // En producción, mostramos error, no cargamos datos falsos
         } finally {
             setLoading(false);
         }
