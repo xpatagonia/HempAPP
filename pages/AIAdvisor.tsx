@@ -5,7 +5,8 @@ import { Send, Bot, User, Image as ImageIcon, Loader2, Sparkles, AlertTriangle, 
 // ------------------------------------------------------------------
 // CONFIGURACIÓN DE GEMINI API (REST)
 // ------------------------------------------------------------------
-// FIX: Uso de API REST directa para eliminar dependencia @google/genai que causaba error en Vercel.
+// IMPORTANTE: No importar @google/genai para evitar errores de compilación en Vercel.
+// Usamos fetch nativo.
 const HARDCODED_GEMINI_KEY = 'AIzaSyA5Gmha-l3vOJRkI7RfZjVeTefjzbjZisQ'; 
 // ------------------------------------------------------------------
 
@@ -22,7 +23,7 @@ export default function AIAdvisor() {
         {
             id: '1',
             role: 'model',
-            text: 'Hola. Soy tu asistente agronómico virtual. Tengo acceso a los datos de tus parcelas y variedades cargadas. ¿En qué puedo ayudarte hoy?'
+            text: 'Hola. Soy tu asistente agronómico virtual (v2.4). Tengo acceso a los datos de tus parcelas y variedades cargadas. ¿En qué puedo ayudarte hoy?'
         }
     ]);
     const [input, setInput] = useState('');
@@ -167,8 +168,8 @@ export default function AIAdvisor() {
             <div className="flex items-center mb-4">
                 <Sparkles className="text-purple-600 mr-3" size={32} />
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-800">Asistente IA (v2.3)</h1>
-                    <p className="text-gray-500 text-sm">Potenciado por Google Gemini</p>
+                    <h1 className="text-2xl font-bold text-gray-800">Asistente IA (v2.4)</h1>
+                    <p className="text-gray-500 text-sm">Potenciado por Google Gemini (Fetch Mode)</p>
                 </div>
             </div>
 
