@@ -15,6 +15,7 @@ import Tools from './pages/Tools';
 import Analytics from './pages/Analytics';
 import Settings from './pages/Settings';
 import CalendarPage from './pages/Calendar';
+import AIAdvisor from './pages/AIAdvisor';
 
 // Componente para proteger rutas
 const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
@@ -62,6 +63,11 @@ export default function App() {
             <Route path="/analytics" element={
               <ProtectedRoute>
                 <Analytics />
+              </ProtectedRoute>
+            } />
+            <Route path="/advisor" element={
+              <ProtectedRoute>
+                <AIAdvisor />
               </ProtectedRoute>
             } />
             <Route path="/varieties" element={

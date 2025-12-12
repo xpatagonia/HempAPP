@@ -18,7 +18,8 @@ import {
   BarChart2,
   Settings,
   Database,
-  Calendar as CalendarIcon
+  Calendar as CalendarIcon,
+  Sparkles
 } from 'lucide-react';
 
 const NavItem = ({ to, icon: Icon, label, onClick }: any) => {
@@ -96,11 +97,16 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           <NavItem to="/" icon={LayoutDashboard} label="Dashboard" onClick={() => setIsMobileOpen(false)} />
           <NavItem to="/projects" icon={FolderOpen} label="Proyectos" onClick={() => setIsMobileOpen(false)} />
           <NavItem to="/calendar" icon={CalendarIcon} label="Calendario" onClick={() => setIsMobileOpen(false)} />
-          <NavItem to="/tasks" icon={CheckSquare} label="Tareas" onClick={() => setIsMobileOpen(false)} />
-          <NavItem to="/plots" icon={ClipboardList} label="Parcelas / Ensayos" onClick={() => setIsMobileOpen(false)} />
           
           <div className="pt-2 pb-2">
+              <p className="px-4 text-xs font-semibold text-gray-400 uppercase mb-2">Operativo</p>
+              <NavItem to="/plots" icon={ClipboardList} label="Parcelas / Ensayos" onClick={() => setIsMobileOpen(false)} />
+              <NavItem to="/tasks" icon={CheckSquare} label="Tareas" onClick={() => setIsMobileOpen(false)} />
+          </div>
+
+          <div className="pt-2 pb-2">
               <p className="px-4 text-xs font-semibold text-gray-400 uppercase mb-2">Inteligencia</p>
+              <NavItem to="/advisor" icon={Sparkles} label="Asistente IA" onClick={() => setIsMobileOpen(false)} />
               <NavItem to="/analytics" icon={BarChart2} label="Análisis Comparativo" onClick={() => setIsMobileOpen(false)} />
               <NavItem to="/tools" icon={Calculator} label="Herramientas" onClick={() => setIsMobileOpen(false)} />
           </div>
@@ -158,4 +164,4 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       </main>
     </div>
   );
-};
+}
