@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
-import { Leaf, Lock, Mail, ArrowRight, AlertTriangle, Database, ShieldCheck } from 'lucide-react';
+import { Leaf, Lock, Mail, ArrowRight, AlertTriangle, Database, ShieldCheck, Settings, X, Save, RefreshCw } from 'lucide-react';
 
 export default function Login() {
   const { login, isEmergencyMode, loading } = useAppContext();
@@ -11,6 +11,20 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  // Config Modal State
+  const [showConfig, setShowConfig] = useState(false);
+  const [configUrl, setConfigUrl] = useState('');
+  const [configKey, setConfigKey] = useState('');
+  const [isReloading, setIsReloading] = useState(false);
+
+  useEffect(() => {
+    // Pre-fill if exists
+    const storedUrl = localStorage.getItem('hemp_sb_url');
+    const storedKey = localStorage.getItem('hemp_sb_key');
+    if (storedUrl) setConfigUrl(storedUrl);
+    if (storedKey) setConfigKey(storedKey);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,13 +47,32 @@ export default function Login() {
     }
   };
 
+  const handleSaveConfig = () => {
+      setIsReloading(true);
+      localStorage.setItem('hemp_sb_url', configUrl);
+      localStorage.setItem('hemp_sb_key', configKey);
+      
+      setTimeout(() => {
+          window.location.reload();
+      }, 1000);
+  };
+
   return (
-    <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4">
+    <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 relative">
       {/* Background decoration */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-96 h-96 bg-hemp-600 rounded-full opacity-10 blur-3xl"></div>
         <div className="absolute bottom-0 left-0 w-full h-1/2 bg-gradient-to-t from-black to-transparent opacity-50"></div>
       </div>
+
+      {/* Connection Config Button (Top Right) */}
+      <button 
+        onClick={() => setShowConfig(true)}
+        className="absolute top-4 right-4 text-slate-500 hover:text-white flex items-center space-x-2 text-sm transition-colors z-20"
+      >
+          <Settings size={18} />
+          <span>Configurar Conexión</span>
+      </button>
 
       <div className="w-full max-w-md z-10 relative">
         
@@ -61,18 +94,20 @@ export default function Login() {
                 <div className="flex items-start">
                     <AlertTriangle className="text-amber-500 mr-3 mt-1 flex-shrink-0" size={24} />
                     <div>
-                        <h3 className="font-bold text-amber-500 text-lg uppercase tracking-wide">Modo de Rescate</h3>
+                        <h3 className="font-bold text-amber-500 text-lg uppercase tracking-wide">Modo Desconectado</h3>
                         <p className="text-amber-100 text-sm mt-1 mb-3 leading-relaxed">
-                            No se detectaron usuarios en la base de datos o hubo un error de conexión.
+                            No se detectó conexión a Supabase.
                         </p>
-                        <div className="bg-black/30 p-3 rounded-lg border border-amber-500/30">
-                            <p className="text-xs text-amber-400 font-mono mb-1">USA ESTAS CREDENCIALES:</p>
-                            <div className="flex justify-between items-center text-white font-mono text-sm">
-                                <span>User: <strong>admin@demo.com</strong></span>
-                            </div>
-                            <div className="flex justify-between items-center text-white font-mono text-sm">
-                                <span>Pass: <strong>admin</strong></span>
-                            </div>
+                        <button 
+                            onClick={() => setShowConfig(true)}
+                            className="text-xs bg-amber-500 hover:bg-amber-600 text-black font-bold py-2 px-3 rounded inline-flex items-center transition"
+                        >
+                            <Settings size={14} className="mr-1"/> Reconectar Base de Datos
+                        </button>
+                        
+                        <div className="mt-3 pt-3 border-t border-amber-500/30">
+                            <p className="text-xs text-amber-200 mb-1">O entra con usuario de rescate:</p>
+                            <p className="text-xs font-mono text-white">admin@demo.com / admin</p>
                         </div>
                     </div>
                 </div>
@@ -145,8 +180,56 @@ export default function Login() {
                 </div>
             </div>
         </div>
-
       </div>
+
+      {/* Config Modal */}
+      {showConfig && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
+                <div className="px-6 py-4 bg-slate-900 border-b border-slate-800 flex justify-between items-center">
+                    <h3 className="text-white font-bold flex items-center">
+                        <Database className="mr-2 text-hemp-500" size={18} /> Configurar Base de Datos
+                    </h3>
+                    <button onClick={() => setShowConfig(false)} className="text-slate-400 hover:text-white">
+                        <X size={20} />
+                    </button>
+                </div>
+                <div className="p-6 space-y-4">
+                    <p className="text-sm text-gray-600 bg-blue-50 p-3 rounded border border-blue-100">
+                        Ingresa los datos de tu proyecto Supabase para reconectar.
+                    </p>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Project URL</label>
+                        <input 
+                            type="text" 
+                            className="w-full border border-gray-300 rounded p-2 text-sm font-mono focus:ring-2 focus:ring-hemp-500 outline-none"
+                            placeholder="https://xyz.supabase.co"
+                            value={configUrl}
+                            onChange={e => setConfigUrl(e.target.value)}
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Anon API Key</label>
+                        <input 
+                            type="password" 
+                            className="w-full border border-gray-300 rounded p-2 text-sm font-mono focus:ring-2 focus:ring-hemp-500 outline-none"
+                            placeholder="eyJhbG..."
+                            value={configKey}
+                            onChange={e => setConfigKey(e.target.value)}
+                        />
+                    </div>
+                    <button 
+                        onClick={handleSaveConfig}
+                        disabled={isReloading}
+                        className="w-full bg-hemp-600 text-white py-3 rounded-lg font-bold hover:bg-hemp-700 transition flex justify-center items-center"
+                    >
+                        {isReloading ? <RefreshCw className="animate-spin mr-2" /> : <Save className="mr-2" />}
+                        {isReloading ? 'Guardando y Recargando...' : 'Guardar y Reconectar'}
+                    </button>
+                </div>
+            </div>
+        </div>
+      )}
     </div>
   );
 }
