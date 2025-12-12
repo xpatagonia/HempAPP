@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Variety, Location, Plot, FieldLog, TrialRecord, User, Project, Task } from '../types';
-import { supabase } from '../supabaseClient'; // Importamos el cliente real
+import { supabase } from '../supabaseClient';
 
 interface AppContextType {
   projects: Project[];
@@ -13,7 +13,7 @@ interface AppContextType {
   
   currentUser: User | null;
   usersList: User[];
-  login: (email: string, password: string) => Promise<boolean>; // Ahora es async
+  login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
 
   addProject: (p: Project) => void;
@@ -48,13 +48,21 @@ interface AppContextType {
   getLatestRecord: (plotId: string) => TrialRecord | undefined;
   
   loading: boolean;
-  isEmergencyMode: boolean; // Nuevo flag para UI
+  isEmergencyMode: boolean;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+// Usuario de emergencia hardcodeado para garantizar acceso
+const RESCUE_USER: User = {
+    id: 'rescue-admin-001',
+    name: 'Admin Sistema (Rescate)',
+    email: 'admin@demo.com',
+    password: 'admin',
+    role: 'super_admin'
+};
+
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // State
   const [usersList, setUsersList] = useState<User[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [varieties, setVarieties] = useState<Variety[]>([]);
@@ -68,91 +76,68 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [loading, setLoading] = useState(true);
   const [isEmergencyMode, setIsEmergencyMode] = useState(false);
 
-  // --- 1. CARGA INICIAL DESDE SUPABASE ---
   useEffect(() => {
-    const fetchAllData = async () => {
+    const initSystem = async () => {
         setLoading(true);
         try {
-            // Promise.all para cargar todo en paralelo
-            const [
-                { data: users },
-                { data: projs },
-                { data: vars },
-                { data: locs },
-                { data: plts },
-                { data: recs },
-                { data: lgs },
-                { data: tsks }
-            ] = await Promise.all([
-                supabase.from('users').select('*'),
-                supabase.from('projects').select('*'),
-                supabase.from('varieties').select('*'),
-                supabase.from('locations').select('*'),
-                supabase.from('plots').select('*'),
-                supabase.from('trial_records').select('*'),
-                supabase.from('field_logs').select('*'),
-                supabase.from('tasks').select('*')
-            ]);
-
-            // LÓGICA DE EMERGENCIA:
-            // Si Supabase devuelve lista vacía de usuarios, inyectamos un admin temporal
-            // para que el dueño pueda entrar y crear los usuarios reales.
-            if (users && users.length > 0) {
+            // Intentar cargar usuarios
+            const { data: users, error: userError } = await supabase.from('users').select('*');
+            
+            if (userError || !users || users.length === 0) {
+                console.warn("Modo Rescate Activado: No se encontraron usuarios o falló la conexión.");
+                setUsersList([RESCUE_USER]);
+                setIsEmergencyMode(true);
+            } else {
                 setUsersList(users as User[]);
                 setIsEmergencyMode(false);
-            } else {
-                console.warn("Base de datos de usuarios vacía. Activando usuario de emergencia.");
-                setIsEmergencyMode(true);
-                setUsersList([{
-                    id: 'emergency-admin',
-                    name: 'Admin Temporal',
-                    email: 'admin@demo.com',
-                    password: 'admin',
-                    role: 'super_admin'
-                }]);
             }
 
-            if (projs) setProjects(projs as Project[]);
-            if (vars) setVarieties(vars as Variety[]);
-            if (locs) setLocations(locs as Location[]);
-            if (plts) setPlots(plts as Plot[]);
-            if (recs) setTrialRecords(recs as TrialRecord[]);
-            if (lgs) setLogs(lgs as FieldLog[]);
-            if (tsks) setTasks(tsks as Task[]);
+            // Cargar resto de datos (sin bloquear si fallan)
+            const p1 = supabase.from('projects').select('*').then(res => res.data && setProjects(res.data as Project[]));
+            const p2 = supabase.from('varieties').select('*').then(res => res.data && setVarieties(res.data as Variety[]));
+            const p3 = supabase.from('locations').select('*').then(res => res.data && setLocations(res.data as Location[]));
+            const p4 = supabase.from('plots').select('*').then(res => res.data && setPlots(res.data as Plot[]));
+            const p5 = supabase.from('trial_records').select('*').then(res => res.data && setTrialRecords(res.data as TrialRecord[]));
+            const p6 = supabase.from('field_logs').select('*').then(res => res.data && setLogs(res.data as FieldLog[]));
+            const p7 = supabase.from('tasks').select('*').then(res => res.data && setTasks(res.data as Task[]));
 
-            // Restaurar sesión si existe en localStorage
+            await Promise.allSettled([p1, p2, p3, p4, p5, p6, p7]);
+
+            // Restaurar sesión
             const savedUser = localStorage.getItem('ht_session_user');
             if (savedUser) {
-                const parsedUser = JSON.parse(savedUser);
-                // Permitir login si es el usuario de emergencia o un usuario real
-                const isValid = (users && users.some((u: any) => u.id === parsedUser.id)) || 
-                                (parsedUser.id === 'emergency-admin');
-                
-                if (isValid) {
-                   setCurrentUser(parsedUser);
-                } else {
-                   localStorage.removeItem('ht_session_user');
-                }
+                try {
+                    const parsed = JSON.parse(savedUser);
+                    // Permitir login si es el usuario de rescate o un usuario real
+                    if (parsed.email === RESCUE_USER.email || (users && users.some((u: any) => u.id === parsed.id))) {
+                        setCurrentUser(parsed);
+                    }
+                } catch (e) { localStorage.removeItem('ht_session_user'); }
             }
 
-        } catch (error) {
-            console.error("Error cargando datos de Supabase:", error);
+        } catch (err) {
+            console.error("Error crítico:", err);
+            // Fallback final
+            setUsersList([RESCUE_USER]);
+            setIsEmergencyMode(true);
         } finally {
             setLoading(false);
         }
     };
 
-    fetchAllData();
+    initSystem();
   }, []);
 
-  // --- AUTH ---
   const login = async (email: string, password: string): Promise<boolean> => {
-    // Validamos contra la lista de usuarios (que puede contener el de emergencia)
-    const user = usersList.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
-    
-    if (user) {
-      setCurrentUser(user);
-      localStorage.setItem('ht_session_user', JSON.stringify(user));
+    // Buscar en la lista (que puede tener el usuario de rescate)
+    const validUser = usersList.find(u => 
+        u.email.toLowerCase().trim() === email.toLowerCase().trim() && 
+        u.password === password
+    );
+
+    if (validUser) {
+      setCurrentUser(validUser);
+      localStorage.setItem('ht_session_user', JSON.stringify(validUser));
       return true;
     }
     return false;
@@ -163,22 +148,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     localStorage.removeItem('ht_session_user');
   };
 
-  // --- CRUD WRAPPERS (DB + STATE) ---
-  
-  // Projects
+  // CRUD Functions (simplified wrappers)
   const addProject = async (p: Project) => {
       const { error } = await supabase.from('projects').insert([p]);
-      if (!error) setProjects([...projects, p]);
+      if (!error) setProjects(prev => [...prev, p]);
   };
   const updateProject = async (p: Project) => {
       const { error } = await supabase.from('projects').update(p).eq('id', p.id);
       if (!error) setProjects(prev => prev.map(item => item.id === p.id ? p : item));
   };
-
-  // Varieties
+  
   const addVariety = async (v: Variety) => {
       const { error } = await supabase.from('varieties').insert([v]);
-      if (!error) setVarieties([...varieties, v]);
+      if (!error) setVarieties(prev => [...prev, v]);
   };
   const updateVariety = async (v: Variety) => {
       const { error } = await supabase.from('varieties').update(v).eq('id', v.id);
@@ -189,10 +171,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (!error) setVarieties(prev => prev.filter(item => item.id !== id));
   };
 
-  // Locations
   const addLocation = async (l: Location) => {
       const { error } = await supabase.from('locations').insert([l]);
-      if (!error) setLocations([...locations, l]);
+      if (!error) setLocations(prev => [...prev, l]);
   };
   const updateLocation = async (l: Location) => {
       const { error } = await supabase.from('locations').update(l).eq('id', l.id);
@@ -203,18 +184,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (!error) setLocations(prev => prev.filter(item => item.id !== id));
   };
 
-  // Plots
   const addPlot = async (p: Plot) => {
       const { error } = await supabase.from('plots').insert([p]);
-      if (!error) setPlots([...plots, p]);
-      else console.error(error);
+      if (!error) setPlots(prev => [...prev, p]);
   };
   const updatePlot = async (p: Plot) => {
       const { error } = await supabase.from('plots').update(p).eq('id', p.id);
       if (!error) setPlots(prev => prev.map(item => item.id === p.id ? p : item));
   };
 
-  // Trial Records (Note: DB table is 'trial_records')
   const addTrialRecord = async (r: TrialRecord) => {
       const { error } = await supabase.from('trial_records').insert([r]);
       if (!error) setTrialRecords(prev => [...prev, r]);
@@ -228,16 +206,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (!error) setTrialRecords(prev => prev.filter(item => item.id !== id));
   };
 
-  // Logs
   const addLog = async (l: FieldLog) => {
       const { error } = await supabase.from('field_logs').insert([l]);
       if (!error) setLogs(prev => [l, ...prev]);
   };
 
-  // Users
   const addUser = async (u: User) => {
       const { error } = await supabase.from('users').insert([u]);
-      if (!error) setUsersList([...usersList, u]);
+      if (!error) setUsersList(prev => [...prev, u]);
   };
   const updateUser = async (u: User) => {
       const { error } = await supabase.from('users').update(u).eq('id', u.id);
@@ -248,10 +224,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (!error) setUsersList(prev => prev.filter(item => item.id !== id));
   };
 
-  // Tasks
   const addTask = async (t: Task) => {
       const { error } = await supabase.from('tasks').insert([t]);
-      if (!error) setTasks([t, ...tasks]);
+      if (!error) setTasks(prev => [t, ...prev]);
   };
   const updateTask = async (t: Task) => {
       const { error } = await supabase.from('tasks').update(t).eq('id', t.id);
@@ -262,7 +237,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (!error) setTasks(prev => prev.filter(item => item.id !== id));
   };
 
-  // Helpers (Logic remains same, data source changed)
   const getPlotHistory = (plotId: string) => {
     return trialRecords
         .filter(r => r.plotId === plotId)

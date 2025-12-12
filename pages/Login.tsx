@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
-import { Leaf, Lock, Mail, ArrowRight, AlertCircle, ShieldAlert } from 'lucide-react';
+import { Leaf, Lock, Mail, ArrowRight, AlertCircle, ShieldAlert, CheckCircle2 } from 'lucide-react';
 
 export default function Login() {
   const { login, isEmergencyMode, loading } = useAppContext();
@@ -18,69 +18,71 @@ export default function Login() {
     setIsLoading(true);
 
     try {
+        // Pequeño retardo artificial para UX
+        await new Promise(r => setTimeout(r, 500));
         const success = await login(email, password);
         
         if (success) {
             navigate('/');
         } else {
-            setError('Credenciales inválidas. Verifica tu email y contraseña.');
+            setError('Credenciales incorrectas.');
             setIsLoading(false);
         }
     } catch (err) {
-        setError('Ocurrió un error al intentar ingresar. Verifica tu conexión.');
+        setError('Error de conexión.');
         setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-hemp-50 to-blue-50 flex flex-col items-center justify-center p-4 relative">
-      <div className="w-full max-w-md z-10">
-        <div className="flex justify-center mb-6">
-            <div className="bg-white p-3 rounded-full shadow-lg">
-                <Leaf className="w-10 h-10 text-hemp-600" />
-            </div>
-        </div>
-        <h1 className="text-center text-3xl font-bold text-gray-800 mb-1">HempAPP</h1>
-        <p className="text-center text-gray-500 mb-2">Sistema de Gestión de Ensayos</p>
-        
-        {/* Version Badge: Changed to make it obvious the update worked */}
-        <p className="text-center text-xs font-bold text-white bg-hemp-600 inline-block px-3 py-1 rounded-full mx-auto mb-6 flex items-center justify-center shadow-md">
-            v1.1 (Acceso Recuperado)
-        </p>
+    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4 relative">
+      {/* Barra superior de confirmación de actualización */}
+      <div className="absolute top-0 left-0 w-full bg-hemp-600 h-2"></div>
 
-        {/* EMERGENCY MODE ALERT */}
+      <div className="w-full max-w-md z-10">
+        <div className="text-center mb-8">
+            <div className="inline-block p-4 rounded-full bg-white shadow-md mb-4">
+                <Leaf className="w-12 h-12 text-hemp-600" />
+            </div>
+            <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">HempAPP Sistema</h1>
+            <p className="text-gray-500 mt-2">Gestión Integral de Cultivos</p>
+        </div>
+
+        {/* ALERTA DE MODO RECUPERACIÓN / EMERGENCIA */}
         {isEmergencyMode && (
-            <div className="mb-6 bg-yellow-50 border border-yellow-200 p-4 rounded-xl shadow-sm text-sm text-yellow-800 animate-pulse">
-                <div className="flex items-center font-bold mb-2">
-                    <ShieldAlert size={18} className="mr-2" />
-                    Modo de Recuperación Activo
-                </div>
-                <p className="mb-2 text-xs">La base de datos de usuarios está vacía. Se ha habilitado un usuario temporal para que puedas ingresar y configurar el sistema.</p>
-                <div className="bg-white p-2 rounded border border-yellow-200 font-mono text-xs mt-2">
-                    <p>User: <strong>admin@demo.com</strong></p>
-                    <p>Pass: <strong>admin</strong></p>
+            <div className="mb-6 bg-white border-l-4 border-yellow-400 p-4 rounded shadow-sm">
+                <div className="flex items-start">
+                    <ShieldAlert className="text-yellow-500 mt-0.5 mr-3" size={20} />
+                    <div>
+                        <h3 className="font-bold text-gray-800 text-sm uppercase">Modo de Recuperación</h3>
+                        <p className="text-sm text-gray-600 mt-1">La base de datos está vacía. Usa este acceso temporal para configurar el sistema:</p>
+                        <div className="mt-2 bg-gray-100 p-2 rounded text-xs font-mono border border-gray-200">
+                            Usuario: <span className="font-bold select-all">admin@demo.com</span><br/>
+                            Clave: <span className="font-bold select-all">admin</span>
+                        </div>
+                    </div>
                 </div>
             </div>
         )}
 
-        <div className="bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
-            <form onSubmit={handleSubmit} className="space-y-5">
+        <div className="bg-white p-8 rounded-xl shadow-lg border border-gray-100">
+            <form onSubmit={handleSubmit} className="space-y-6">
                 {error && (
-                    <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm flex items-center">
+                    <div className="bg-red-50 text-red-700 p-3 rounded text-sm flex items-center border border-red-100">
                         <AlertCircle size={16} className="mr-2 flex-shrink-0" />
                         {error}
                     </div>
                 )}
                 
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Correo Electrónico</label>
                     <div className="relative">
                         <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
                         <input 
                             type="email" 
                             required 
-                            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-hemp-500 focus:border-transparent outline-none transition-colors"
-                            placeholder="usuario@empresa.com"
+                            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-hemp-500 focus:border-transparent outline-none transition-all"
+                            placeholder="nombre@empresa.com"
                             value={email}
                             onChange={e => setEmail(e.target.value)}
                         />
@@ -88,13 +90,13 @@ export default function Login() {
                 </div>
 
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Contraseña</label>
                     <div className="relative">
                         <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
                         <input 
                             type="password" 
                             required 
-                            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-hemp-500 focus:border-transparent outline-none transition-colors"
+                            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-hemp-500 focus:border-transparent outline-none transition-all"
                             placeholder="••••••••"
                             value={password}
                             onChange={e => setPassword(e.target.value)}
@@ -105,20 +107,22 @@ export default function Login() {
                 <button 
                     type="submit" 
                     disabled={isLoading || loading}
-                    className="w-full bg-hemp-600 text-white py-3 rounded-lg font-semibold shadow-md hover:bg-hemp-700 transition flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full bg-gray-900 text-white py-3.5 rounded-lg font-bold shadow-md hover:bg-gray-800 transition flex items-center justify-center disabled:opacity-70 disabled:cursor-not-allowed"
                 >
-                    {isLoading ? 'Verificando...' : (
+                    {isLoading ? (
+                        <span className="flex items-center">Accediendo...</span>
+                    ) : (
                         <>
-                            Iniciar Sesión <ArrowRight size={18} className="ml-2" />
+                            Ingresar al Sistema <ArrowRight size={18} className="ml-2" />
                         </>
                     )}
                 </button>
             </form>
         </div>
-      </div>
-
-      <div className="mt-8 text-center text-xs text-gray-400 font-mono">
-        Dev gaston.barea.moreno@gmail.com
+        
+        <div className="mt-8 flex justify-center text-xs text-gray-400">
+            <span className="flex items-center"><CheckCircle2 size={12} className="mr-1 text-green-500"/> Sistema Seguro v2.0</span>
+        </div>
       </div>
     </div>
   );
