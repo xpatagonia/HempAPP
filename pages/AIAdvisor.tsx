@@ -1,15 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { GoogleGenAI } from "@google/genai";
 import { useAppContext } from '../context/AppContext';
 import { Send, Bot, User, Image as ImageIcon, Loader2, Sparkles, AlertTriangle, X } from 'lucide-react';
 
 // ------------------------------------------------------------------
 // CONFIGURACIÓN DE GEMINI API
 // ------------------------------------------------------------------
-// 1. Ve a https://aistudio.google.com/app/apikey
-// 2. Crea una API Key gratuita.
-// 3. Pégala aquí abajo dentro de las comillas.
-const HARDCODED_GEMINI_KEY = 'AIzaSyA5Gmha-l3vOJRkI7RfZjVeTefjzbjZisQ'; // <--- ¡PEGA TU API KEY AQUÍ DENTRO! (Ej: 'AIzaSy...')
+const HARDCODED_GEMINI_KEY = 'AIzaSyA5Gmha-l3vOJRkI7RfZjVeTefjzbjZisQ'; 
 // ------------------------------------------------------------------
 
 interface Message {
@@ -36,7 +32,6 @@ export default function AIAdvisor() {
 
     const apiKey = HARDCODED_GEMINI_KEY || (import.meta as any).env.VITE_GEMINI_API_KEY;
 
-    // Scroll al fondo automático
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
@@ -51,7 +46,6 @@ export default function AIAdvisor() {
     };
 
     const buildContext = () => {
-        // Resumimos los datos del usuario para dárselos a la IA
         const farmSummary = {
             variedades: varieties.map(v => `${v.name} (${v.usage})`),
             locaciones: locations.map(l => `${l.name} (${l.province})`),
@@ -68,7 +62,7 @@ export default function AIAdvisor() {
     const handleSend = async () => {
         if ((!input.trim() && !selectedImage) || isLoading) return;
         if (!apiKey) {
-            setError("Falta la API Key de Gemini. Configúrala en el archivo AIAdvisor.tsx.");
+            setError("Falta la API Key de Gemini.");
             return;
         }
 
@@ -86,9 +80,17 @@ export default function AIAdvisor() {
         setError(null);
 
         try {
+            // TRUCO PARA EVITAR ERROR DE BUILD EN VERCEL:
+            // Usamos una variable para el nombre del módulo. Esto impide que Vite intente analizar
+            // o resolver la dependencia durante la compilación.
+            // La carga se realiza 100% en el navegador del usuario usando esm.sh.
+            const moduleName = "https://esm.sh/@google/genai@0.2.1";
+            
+            // @ts-ignore
+            const { GoogleGenAI } = await import(/* @vite-ignore */ moduleName);
+            
             const ai = new GoogleGenAI({ apiKey });
             
-            // Construimos el System Prompt con el contexto de la granja
             const systemContext = `Eres un ingeniero agrónomo experto en Cannabis Sativa L. (Cáñamo Industrial). 
             Tu objetivo es asistir al usuario en la toma de decisiones técnicas.
             
@@ -98,30 +100,24 @@ export default function AIAdvisor() {
             Reglas:
             1. Responde de forma concisa y técnica pero accesible.
             2. Si te preguntan por una parcela específica, usa los datos provistos.
-            3. Si analizas una imagen, busca plagas, deficiencias nutricionales o estados fenológicos.
-            4. Usa formato Markdown para resaltar datos importantes.`;
+            3. Si analizas una imagen, busca plagas, deficiencias nutricionales o estados fenológicos.`;
 
-            // Preparamos el contenido
             let contentsPayload: any = {
                 model: 'gemini-2.5-flash',
                 config: { systemInstruction: systemContext }
             };
 
-            // Si hay imagen, estructura multimodal
             if (userMsg.image) {
-                // Convertir dataUrl a base64 puro
                 const base64Data = userMsg.image.split(',')[1];
                 const imagePart = {
                     inlineData: {
-                        mimeType: 'image/jpeg', // Asumimos jpeg/png genérico compatible
+                        mimeType: 'image/jpeg',
                         data: base64Data
                     }
                 };
                 const textPart = { text: userMsg.text || "¿Qué observas en esta imagen?" };
-                
                 contentsPayload.contents = { parts: [imagePart, textPart] };
             } else {
-                // Solo texto
                 contentsPayload.contents = userMsg.text;
             }
 
@@ -131,18 +127,18 @@ export default function AIAdvisor() {
             const aiMsg: Message = {
                 id: (Date.now() + 1).toString(),
                 role: 'model',
-                text: textResponse || 'No pude generar una respuesta, intenta de nuevo.'
+                text: textResponse || 'No pude generar una respuesta.'
             };
 
             setMessages(prev => [...prev, aiMsg]);
 
         } catch (err: any) {
             console.error("Gemini Error:", err);
-            setError("Error al conectar con la IA. Verifica tu API Key o tu conexión.");
+            setError("Error al conectar con la IA. Verifica tu conexión.");
             setMessages(prev => [...prev, {
                 id: Date.now().toString(),
                 role: 'model',
-                text: 'Lo siento, ocurrió un error al procesar tu solicitud. Intenta nuevamente.'
+                text: 'Lo siento, ocurrió un error al procesar tu solicitud.'
             }]);
         } finally {
             setIsLoading(false);
@@ -159,17 +155,13 @@ export default function AIAdvisor() {
                 </div>
             </div>
 
-            {/* Main Chat Area */}
             <div className="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
-                
-                {/* Messages List */}
                 <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
                     {!apiKey && (
                         <div className="bg-amber-100 border border-amber-200 text-amber-800 p-4 rounded-lg flex items-start">
                             <AlertTriangle className="mr-2 flex-shrink-0" size={20} />
                             <div>
                                 <p className="font-bold">API Key no configurada</p>
-                                <p className="text-sm">Para usar la IA, edita el archivo <code>pages/AIAdvisor.tsx</code> y pega tu API Key de Google Gemini en la constante <code>HARDCODED_GEMINI_KEY</code>.</p>
                             </div>
                         </div>
                     )}
@@ -210,7 +202,6 @@ export default function AIAdvisor() {
                     <div ref={messagesEndRef} />
                 </div>
 
-                {/* Input Area */}
                 <div className="p-4 bg-white border-t border-gray-200">
                     {selectedImage && (
                         <div className="flex items-center bg-gray-100 p-2 rounded-lg mb-2 w-fit">
