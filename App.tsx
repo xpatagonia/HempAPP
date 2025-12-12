@@ -14,6 +14,7 @@ import Login from './pages/Login';
 import Tools from './pages/Tools';
 import Analytics from './pages/Analytics';
 import Settings from './pages/Settings';
+import CalendarPage from './pages/Calendar';
 
 // Componente para proteger rutas
 const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
@@ -41,6 +42,11 @@ export default function App() {
             <Route path="/projects" element={
               <ProtectedRoute>
                 <Projects />
+              </ProtectedRoute>
+            } />
+            <Route path="/calendar" element={
+              <ProtectedRoute>
+                <CalendarPage />
               </ProtectedRoute>
             } />
             <Route path="/tasks" element={
