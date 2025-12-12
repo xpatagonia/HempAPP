@@ -5,11 +5,14 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   build: {
-    chunkSizeWarningLimit: 1600,
+    chunkSizeWarningLimit: 2000,
     rollupOptions: {
       output: {
-        // Dejamos que Vite maneje los chunks automáticamente para evitar errores de resolución
-        manualChunks: undefined
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+          charts: ['recharts'],
+          utils: ['xlsx', 'jspdf', 'jspdf-autotable', 'lucide-react']
+        }
       }
     }
   }
