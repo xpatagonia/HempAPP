@@ -5,34 +5,45 @@ const env = (import.meta as any).env || {};
 let SUPABASE_URL = env.VITE_SUPABASE_URL;
 let SUPABASE_ANON_KEY = env.VITE_SUPABASE_ANON_KEY;
 
-// 2. Si no hay variables de entorno, buscamos en el almacenamiento local del navegador
-// Esto permite configurar la app desde la pantalla de "Settings" sin tocar código
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY || SUPABASE_URL.includes('placeholder')) {
+// 2. Lógica de Fallback (LocalStorage)
+// Si las variables de entorno faltan o son placeholders, buscamos en el navegador.
+const isPlaceholder = (str: string) => !str || str.includes('placeholder') || str.includes('tu-proyecto');
+
+if (isPlaceholder(SUPABASE_URL) || isPlaceholder(SUPABASE_ANON_KEY)) {
     const storedUrl = localStorage.getItem('hemp_sb_url');
     const storedKey = localStorage.getItem('hemp_sb_key');
     
     if (storedUrl && storedKey) {
-        SUPABASE_URL = storedUrl;
-        SUPABASE_ANON_KEY = storedKey;
-        console.log("🟢 Conectando usando credenciales configuradas manualmente.");
+        // .trim() es vital para evitar errores por espacios al copiar/pegar
+        SUPABASE_URL = storedUrl.trim();
+        SUPABASE_ANON_KEY = storedKey.trim();
+        console.log("🟢 Conectando usando credenciales del navegador.");
     } else {
         console.warn('⚠️ Sin conexión real: Faltan credenciales de Supabase.');
     }
 }
 
-// Inicializamos el cliente. Si fallan las credenciales, funcionará en modo desconectado/error controlado.
+// Inicializamos el cliente con opciones de persistencia mejoradas
 export const supabase = createClient(
   SUPABASE_URL || 'https://placeholder-url.supabase.co', 
-  SUPABASE_ANON_KEY || 'placeholder-key'
+  SUPABASE_ANON_KEY || 'placeholder-key',
+  {
+      auth: {
+          persistSession: true, // Mantiene la sesión activa
+          autoRefreshToken: true,
+      }
+  }
 );
 
 // Helper para verificar conexión real
 export const checkConnection = async () => {
     try {
         const { data, error } = await supabase.from('users').select('count').single();
-        if (error && error.code !== 'PGRST116') throw error; // PGRST116 es "no rows", que es OK.
+        // PGRST116 significa que la tabla existe pero no devolvió filas (o devolvió count), lo cual es Éxito de conexión.
+        if (error && error.code !== 'PGRST116') throw error; 
         return true;
     } catch (e) {
+        console.error("Fallo de conexión:", e);
         return false;
     }
 };

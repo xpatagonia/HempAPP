@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
-import { Leaf, Lock, Mail, ArrowRight, AlertTriangle, Database, ShieldCheck, Settings, X, Save, RefreshCw } from 'lucide-react';
+import { Leaf, Lock, Mail, ArrowRight, AlertTriangle, Database, ShieldCheck, Settings, X, Save, RefreshCw, UserCheck, CloudOff } from 'lucide-react';
 
 export default function Login() {
   const { login, isEmergencyMode, loading } = useAppContext();
@@ -19,12 +19,18 @@ export default function Login() {
   const [isReloading, setIsReloading] = useState(false);
 
   useEffect(() => {
-    // Pre-fill if exists
+    // Cargar config existente
     const storedUrl = localStorage.getItem('hemp_sb_url');
     const storedKey = localStorage.getItem('hemp_sb_key');
+    
     if (storedUrl) setConfigUrl(storedUrl);
     if (storedKey) setConfigKey(storedKey);
-  }, []);
+
+    // Si estamos en modo emergencia PERO hay datos guardados, probablemente están mal
+    if (isEmergencyMode && storedUrl && storedKey) {
+        setError('Tus credenciales guardadas parecen incorrectas o expiraron. Por favor revísalas en Configuración.');
+    }
+  }, [isEmergencyMode]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,13 +54,25 @@ export default function Login() {
   };
 
   const handleSaveConfig = () => {
+      // VALIDACIÓN BÁSICA
+      if (!configUrl.includes('https://') || !configKey) {
+          alert("La URL debe empezar con https:// y la Key no puede estar vacía.");
+          return;
+      }
+
       setIsReloading(true);
-      localStorage.setItem('hemp_sb_url', configUrl);
-      localStorage.setItem('hemp_sb_key', configKey);
+      // IMPORTANTE: .trim() elimina espacios accidentales al copiar y pegar
+      localStorage.setItem('hemp_sb_url', configUrl.trim());
+      localStorage.setItem('hemp_sb_key', configKey.trim());
       
       setTimeout(() => {
           window.location.reload();
       }, 1000);
+  };
+
+  const fillDemoCredentials = () => {
+      setEmail('admin@demo.com');
+      setPassword('admin');
   };
 
   return (
@@ -84,30 +102,34 @@ export default function Login() {
             <h1 className="text-4xl font-black text-white tracking-tight">HempAPP</h1>
             <div className="flex items-center justify-center space-x-2 mt-2">
                 <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-hemp-600 text-white uppercase tracking-wider">Sistema v2.0</span>
-                <span className="text-slate-400 text-sm">Producción</span>
+                <span className="text-slate-400 text-sm">Producción Cloud</span>
             </div>
         </div>
 
         {/* Emergency/Rescue Card */}
         {isEmergencyMode && (
-            <div className="mb-6 bg-amber-500/10 border border-amber-500/50 backdrop-blur-sm p-5 rounded-xl shadow-lg animate-pulse">
+            <div className="mb-6 bg-amber-500/10 border border-amber-500/50 backdrop-blur-sm p-5 rounded-xl shadow-lg">
                 <div className="flex items-start">
-                    <AlertTriangle className="text-amber-500 mr-3 mt-1 flex-shrink-0" size={24} />
+                    <CloudOff className="text-amber-500 mr-3 mt-1 flex-shrink-0" size={24} />
                     <div>
-                        <h3 className="font-bold text-amber-500 text-lg uppercase tracking-wide">Modo Desconectado</h3>
+                        <h3 className="font-bold text-amber-500 text-lg uppercase tracking-wide">Sin Conexión Cloud</h3>
                         <p className="text-amber-100 text-sm mt-1 mb-3 leading-relaxed">
-                            No se detectó conexión a Supabase.
+                            No se pudo conectar a Supabase. Configura tus claves para trabajar en la nube.
                         </p>
-                        <button 
-                            onClick={() => setShowConfig(true)}
-                            className="text-xs bg-amber-500 hover:bg-amber-600 text-black font-bold py-2 px-3 rounded inline-flex items-center transition"
-                        >
-                            <Settings size={14} className="mr-1"/> Reconectar Base de Datos
-                        </button>
                         
-                        <div className="mt-3 pt-3 border-t border-amber-500/30">
-                            <p className="text-xs text-amber-200 mb-1">O entra con usuario de rescate:</p>
-                            <p className="text-xs font-mono text-white">admin@demo.com / admin</p>
+                        <div className="flex flex-col space-y-2">
+                            <button 
+                                onClick={() => setShowConfig(true)}
+                                className="w-full text-xs bg-amber-500 hover:bg-amber-600 text-black font-bold py-2 px-3 rounded inline-flex items-center justify-center transition shadow-md"
+                            >
+                                <Settings size={14} className="mr-1"/> Configurar Ahora (Solución)
+                            </button>
+                             <button 
+                                onClick={fillDemoCredentials}
+                                className="w-full text-xs bg-transparent border border-amber-500/30 text-amber-200 font-bold py-2 px-3 rounded inline-flex items-center justify-center transition hover:bg-amber-500/20"
+                            >
+                                <UserCheck size={14} className="mr-1"/> Entrar Modo Local (Temporal)
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -120,8 +142,8 @@ export default function Login() {
                 <form onSubmit={handleSubmit} className="space-y-5">
                     {error && (
                         <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm font-medium border border-red-100 flex items-center">
-                            <AlertTriangle size={16} className="mr-2"/>
-                            {error}
+                            <AlertTriangle size={16} className="mr-2 flex-shrink-0"/>
+                            <span>{error}</span>
                         </div>
                     )}
                     
@@ -188,7 +210,7 @@ export default function Login() {
             <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
                 <div className="px-6 py-4 bg-slate-900 border-b border-slate-800 flex justify-between items-center">
                     <h3 className="text-white font-bold flex items-center">
-                        <Database className="mr-2 text-hemp-500" size={18} /> Configurar Base de Datos
+                        <Database className="mr-2 text-hemp-500" size={18} /> Configurar Cloud
                     </h3>
                     <button onClick={() => setShowConfig(false)} className="text-slate-400 hover:text-white">
                         <X size={20} />
@@ -196,7 +218,7 @@ export default function Login() {
                 </div>
                 <div className="p-6 space-y-4">
                     <p className="text-sm text-gray-600 bg-blue-50 p-3 rounded border border-blue-100">
-                        Ingresa los datos de tu proyecto Supabase para reconectar.
+                        Ingresa los datos de tu proyecto Supabase. Estos se guardarán en tu navegador para mantener la conexión.
                     </p>
                     <div>
                         <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Project URL</label>
@@ -224,7 +246,7 @@ export default function Login() {
                         className="w-full bg-hemp-600 text-white py-3 rounded-lg font-bold hover:bg-hemp-700 transition flex justify-center items-center"
                     >
                         {isReloading ? <RefreshCw className="animate-spin mr-2" /> : <Save className="mr-2" />}
-                        {isReloading ? 'Guardando y Recargando...' : 'Guardar y Reconectar'}
+                        {isReloading ? 'Guardando...' : 'Guardar y Reconectar'}
                     </button>
                 </div>
             </div>
