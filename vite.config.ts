@@ -7,12 +7,11 @@ export default defineConfig({
   build: {
     chunkSizeWarningLimit: 1000,
     rollupOptions: {
-      // Eliminamos 'external' para que Vite empaquete todas las librerías desde node_modules
       output: {
         manualChunks: {
           vendor: ['react', 'react-dom', 'react-router-dom'],
           charts: ['recharts'],
-          utils: ['xlsx', 'jspdf', 'jspdf-autotable', '@supabase/supabase-js', '@emailjs/browser'],
+          utils: ['xlsx', 'jspdf', 'jspdf-autotable', '@supabase/supabase-js'],
           icons: ['lucide-react']
         }
       }
