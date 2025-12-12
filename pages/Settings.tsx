@@ -251,7 +251,11 @@ CREATE TABLE IF NOT EXISTS public.tasks (
                   Configuración de Correo (EmailJS)
               </h2>
               <p className="text-sm text-gray-500 mb-4">
-                  Crea una cuenta gratuita en <a href="https://www.emailjs.com/" target="_blank" className="text-hemp-600 hover:underline">EmailJS.com</a> para enviar notificaciones reales.
+                  Para usar tu correo corporativo (SMTP/IMAP) o Gmail, crea una cuenta gratuita en <a href="https://www.emailjs.com/" target="_blank" className="text-hemp-600 hover:underline font-bold">EmailJS.com</a>.
+                  <br/>
+                  <span className="text-xs bg-blue-50 text-blue-800 px-2 py-1 rounded inline-block mt-1">
+                     En EmailJS: Dashboard → Email Services → Add New Service → Personal (SMTP)
+                  </span>
               </p>
               
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

@@ -2,9 +2,7 @@ import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Task } from '../types';
 import { Plus, CheckSquare, Clock, User, CheckCircle, Circle, AlertCircle, Calendar, Mail, Send } from 'lucide-react';
-
-// Declaramos emailjs globalmente ya que se carga vía CDN en index.html
-declare const emailjs: any;
+import emailjs from '@emailjs/browser';
 
 export default function Tasks() {
   const { tasks, addTask, updateTask, deleteTask, currentUser, usersList, plots, projects } = useAppContext();
@@ -29,12 +27,6 @@ export default function Tasks() {
 
       if (!serviceId || !templateId || !publicKey) {
           alert("⚠️ Configuración de correo incompleta. Ve a Configuración y agrega tus credenciales de EmailJS.");
-          return;
-      }
-
-      // Verificamos si emailjs está disponible globalmente
-      if (typeof emailjs === 'undefined') {
-          alert("⚠️ La librería de EmailJS no se cargó correctamente.");
           return;
       }
 
