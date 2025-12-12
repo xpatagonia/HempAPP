@@ -164,8 +164,11 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               </button>
            </div>
            {/* Developer Footer */}
-           <div className="bg-gray-100 dark:bg-slate-900 py-2 text-center border-t border-gray-200 dark:border-dark-border">
-               <p className="text-[10px] text-gray-400 font-mono">Dev gaston.barea.moreno@gmail.com</p>
+           <div className="bg-gray-100 dark:bg-slate-900 py-3 text-center border-t border-gray-200 dark:border-dark-border">
+               <p className="text-[10px] text-gray-400 font-mono leading-tight">Dev gaston.barea.moreno@gmail.com</p>
+               <a href="https://xpatagonia.com" target="_blank" rel="noopener noreferrer" className="text-[10px] text-hemp-600 dark:text-hemp-500 font-bold font-mono hover:underline">
+                   xpatagonia.com
+               </a>
            </div>
         </div>
       </aside>

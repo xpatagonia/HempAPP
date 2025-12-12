@@ -191,14 +191,16 @@ export default function Login() {
                 </form>
             </div>
             
-            <div className="bg-slate-50 px-8 py-4 border-t border-slate-100 flex justify-between items-center">
+            <div className="bg-slate-50 px-8 py-4 border-t border-slate-100 flex flex-col md:flex-row justify-between items-center gap-3">
                 <div className="flex items-center text-xs text-slate-400">
                     <Database size={12} className="mr-1" />
                     <span>Conexión Segura</span>
                 </div>
-                <div className="flex items-center text-xs text-hemp-600 font-semibold">
-                    <ShieldCheck size={12} className="mr-1" />
-                    <span>HempAPP Pro</span>
+                <div className="text-right flex flex-col items-end">
+                    <p className="text-[10px] text-slate-400 font-mono leading-none mb-0.5">Dev gaston.barea.moreno@gmail.com</p>
+                    <a href="https://xpatagonia.com" target="_blank" rel="noopener noreferrer" className="text-[10px] text-hemp-600 font-bold font-mono hover:underline">
+                        xpatagonia.com
+                    </a>
                 </div>
             </div>
         </div>
