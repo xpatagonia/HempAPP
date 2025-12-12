@@ -1,12 +1,17 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Usamos import.meta.env para leer las variables de entorno en Vite
-// Fix: Cast import.meta to any to avoid "Property 'env' does not exist on type 'ImportMeta'" error
-const SUPABASE_URL = (import.meta as any).env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = (import.meta as any).env.VITE_SUPABASE_ANON_KEY;
+// Accedemos a env de forma segura
+const env = (import.meta as any).env || {};
+const SUPABASE_URL = env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = env.VITE_SUPABASE_ANON_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  throw new Error('Faltan las variables de entorno de Supabase. Revisa tu archivo .env o la configuración de Vercel.');
+  console.warn('⚠️ ADVERTENCIA: Faltan variables de entorno (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY). La base de datos no conectará correctamente, pero la app iniciará.');
 }
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Inicializamos el cliente con valores fallback para evitar que la app se rompa al inicio (White Screen)
+export const supabase = createClient(
+  SUPABASE_URL || 'https://placeholder-url.supabase.co', 
+  SUPABASE_ANON_KEY || 'placeholder-key'
+);
