@@ -6,7 +6,6 @@ import { Send, Bot, User, Image as ImageIcon, Loader2, Sparkles, AlertTriangle, 
 // CONFIGURACIÓN DE GEMINI API (REST)
 // ------------------------------------------------------------------
 // FIX: Uso de API REST directa para eliminar dependencia @google/genai que causaba error en Vercel.
-// Timestamp: Fix aplicado para forzar detección de cambios en git.
 const HARDCODED_GEMINI_KEY = 'AIzaSyA5Gmha-l3vOJRkI7RfZjVeTefjzbjZisQ'; 
 // ------------------------------------------------------------------
 
@@ -156,7 +155,7 @@ export default function AIAdvisor() {
             setMessages(prev => [...prev, {
                 id: Date.now().toString(),
                 role: 'model',
-                text: 'Lo siento, hubo un problema técnico. Por favor intenta de nuevo.'
+                text: 'Lo siento, hubo un problema técnico de conexión. Por favor intenta de nuevo.'
             }]);
         } finally {
             setIsLoading(false);
@@ -168,7 +167,7 @@ export default function AIAdvisor() {
             <div className="flex items-center mb-4">
                 <Sparkles className="text-purple-600 mr-3" size={32} />
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-800">Asistente IA (v2.2)</h1>
+                    <h1 className="text-2xl font-bold text-gray-800">Asistente IA (v2.3)</h1>
                     <p className="text-gray-500 text-sm">Potenciado por Google Gemini</p>
                 </div>
             </div>
