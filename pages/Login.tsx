@@ -93,15 +93,6 @@ export default function Login() {
       <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none"></div>
       <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'linear-gradient(#22c55e 1px, transparent 1px), linear-gradient(90deg, #22c55e 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
 
-      {/* Connection Config Button (Top Right) */}
-      <button 
-        onClick={() => setShowConfig(true)}
-        className="absolute top-6 right-6 text-slate-500 hover:text-white flex items-center space-x-2 text-sm transition-all z-20 hover:bg-white/5 px-3 py-2 rounded-full border border-transparent hover:border-white/10"
-      >
-          <Settings size={16} />
-          <span>Conexión</span>
-      </button>
-
       <div className="w-full max-w-[420px] z-10 relative animate-in fade-in slide-in-from-bottom-4 duration-700">
         
         {/* BRANDING HEADER */}
