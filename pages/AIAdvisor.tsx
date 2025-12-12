@@ -5,7 +5,8 @@ import { Send, Bot, User, Image as ImageIcon, Loader2, Sparkles, AlertTriangle, 
 // ------------------------------------------------------------------
 // CONFIGURACIÓN DE GEMINI API (REST)
 // ------------------------------------------------------------------
-// Usamos la API REST directa para evitar problemas de dependencias en Vercel
+// FIX: Uso de API REST directa para eliminar dependencia @google/genai que causaba error en Vercel.
+// Timestamp: Fix aplicado para forzar detección de cambios en git.
 const HARDCODED_GEMINI_KEY = 'AIzaSyA5Gmha-l3vOJRkI7RfZjVeTefjzbjZisQ'; 
 // ------------------------------------------------------------------
 
@@ -122,6 +123,7 @@ export default function AIAdvisor() {
             };
 
             // FETCH NATIVO: Reemplaza la librería @google/genai
+            // Esto evita errores de 'Rollup failed to resolve import'
             const response = await fetch(
                 `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
                 {
@@ -165,8 +167,8 @@ export default function AIAdvisor() {
             <div className="flex items-center mb-4">
                 <Sparkles className="text-purple-600 mr-3" size={32} />
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-800">Asistente Virtual IA</h1>
-                    <p className="text-gray-500 text-sm">Potenciado por Google Gemini 2.0</p>
+                    <h1 className="text-2xl font-bold text-gray-800">Asistente IA (v2.0)</h1>
+                    <p className="text-gray-500 text-sm">Potenciado por Google Gemini</p>
                 </div>
             </div>
 
