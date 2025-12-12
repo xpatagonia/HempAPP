@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Variety, Location, Plot, FieldLog, TrialRecord, User, Project, Task } from '../types';
 import { supabase } from '../supabaseClient'; // Importamos el cliente real
@@ -51,6 +50,14 @@ interface AppContextType {
   loading: boolean;
 }
 
+// DATOS DEMO PARA INICIO SIN DB
+const DEMO_USERS: User[] = [
+  { id: '1', name: 'Super Admin', email: 'root@hempc.com.ar', password: 'admin', role: 'super_admin' },
+  { id: '2', name: 'Administrador', email: 'admin@hempc.com.ar', password: '123', role: 'admin' },
+  { id: '3', name: 'Ana Técnico', email: 'ana@hempc.com.ar', password: '123', role: 'technician' },
+  { id: '4', name: 'Pedro Productor', email: 'pedro@hempc.com.ar', password: '123', role: 'viewer' },
+];
+
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 // Helper para generar IDs si no vienen de la DB (aunque lo ideal es que vengan)
@@ -96,7 +103,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 supabase.from('tasks').select('*')
             ]);
 
-            if (users) setUsersList(users as User[]);
+            // Si la DB responde con datos, usarlos. Si no (o está vacía), usar arrays vacíos o DEMO.
+            // IMPORTANTE: Si users es nulo o vacío, cargamos los DEMO_USERS para que el login funcione.
+            if (users && users.length > 0) {
+                setUsersList(users as User[]);
+            } else {
+                console.warn("Usando usuarios de demostración (DB vacía o sin conexión)");
+                setUsersList(DEMO_USERS);
+            }
+
             if (projs) setProjects(projs as Project[]);
             if (vars) setVarieties(vars as Variety[]);
             if (locs) setLocations(locs as Location[]);
@@ -113,6 +128,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
         } catch (error) {
             console.error("Error cargando datos de Supabase:", error);
+            // Fallback en caso de error crítico de conexión
+            setUsersList(DEMO_USERS);
         } finally {
             setLoading(false);
         }
@@ -123,9 +140,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // --- AUTH ---
   const login = async (email: string, password: string): Promise<boolean> => {
-    // Validamos contra la lista de usuarios cargada desde la DB
-    // NOTA: Para producción real, lo ideal es usar supabase.auth.signInWithPassword
-    // pero mantenemos tu tabla 'users' para no romper la lógica actual de roles custom.
+    // Validamos contra la lista de usuarios cargada desde la DB (o Demo)
     const user = usersList.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
     
     if (user) {

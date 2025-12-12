@@ -12,21 +12,25 @@ export default function Login() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
 
-    // Simulate network delay for effect
-    setTimeout(() => {
-        const success = login(email, password);
+    try {
+        // Esperamos la respuesta real del login (es una promesa)
+        const success = await login(email, password);
+        
         if (success) {
             navigate('/');
         } else {
             setError('Credenciales inválidas. Verifica tu email y contraseña.');
             setIsLoading(false);
         }
-    }, 600);
+    } catch (err) {
+        setError('Ocurrió un error al intentar ingresar.');
+        setIsLoading(false);
+    }
   };
 
   return (
@@ -95,19 +99,19 @@ export default function Login() {
             <div className="mt-8 pt-6 border-t border-gray-100">
                 <p className="text-xs text-center text-gray-400 font-semibold uppercase mb-3">Accesos Demo</p>
                 <div className="grid grid-cols-2 gap-2 text-xs text-gray-500">
-                    <div className="bg-gray-50 p-2 rounded text-center">
+                    <div className="bg-gray-50 p-2 rounded text-center cursor-pointer hover:bg-gray-100 transition" onClick={() => { setEmail('root@hempc.com.ar'); setPassword('admin'); }}>
                         <span className="font-bold block text-gray-700">Root</span>
                         root@hempc.com.ar<br/>admin
                     </div>
-                    <div className="bg-gray-50 p-2 rounded text-center">
+                    <div className="bg-gray-50 p-2 rounded text-center cursor-pointer hover:bg-gray-100 transition" onClick={() => { setEmail('admin@hempc.com.ar'); setPassword('123'); }}>
                         <span className="font-bold block text-gray-700">Admin</span>
                         admin@hempc.com.ar<br/>123
                     </div>
-                    <div className="bg-gray-50 p-2 rounded text-center">
+                    <div className="bg-gray-50 p-2 rounded text-center cursor-pointer hover:bg-gray-100 transition" onClick={() => { setEmail('ana@hempc.com.ar'); setPassword('123'); }}>
                         <span className="font-bold block text-gray-700">Técnico</span>
                         ana@hempc.com.ar<br/>123
                     </div>
-                    <div className="bg-gray-50 p-2 rounded text-center">
+                    <div className="bg-gray-50 p-2 rounded text-center cursor-pointer hover:bg-gray-100 transition" onClick={() => { setEmail('pedro@hempc.com.ar'); setPassword('123'); }}>
                         <span className="font-bold block text-gray-700">Productor</span>
                         pedro@hempc.com.ar<br/>123
                     </div>
