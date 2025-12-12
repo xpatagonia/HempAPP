@@ -102,6 +102,13 @@ export interface TrialRecord {
   vigor?: number;             // Vigor (1-5)
   floweringDate?: string;     // Fecha Floración
   plantHeight?: number;       // Altura de planta (cm) - Durante ciclo o max
+  stemDiameter?: number;      // Nuevo: Diámetro tallo (mm)
+  nodesCount?: number;        // Nuevo: Número de nudos
+  
+  // Estado Reproductivo
+  floweringState?: 'Pre-flor' | 'Floración' | 'Senescencia'; // Nuevo
+  trichomeColor?: 'Transparente' | 'Lechoso' | 'Ambar' | 'Mixto'; // Nuevo
+
   lodging?: number;           // Vuelco (%)
   birdDamage?: string;        // Daño por aves (Si/No o Nivel)
   diseases?: string;          // Enfermedades (Texto/Tipo)
@@ -111,9 +118,16 @@ export interface TrialRecord {
   harvestDate?: string;       // Fecha cosecha
   harvestHeight?: number;     // altura (cm) a cosecha
   plantsPerMeterFinal?: number; // N° plantas.m (Final)
+  
+  // Métricas de Rendimiento
+  sampleSize?: number;        // Nuevo: Tamaño de muestra (m2)
+  freshWeight?: number;       // Nuevo: Peso Fresco Total (kg)
+  dryWeight?: number;         // Nuevo: Peso Seco Total (kg) - para calcular humedad
+  
   yield?: number;             // rendimiento (kg/ha o total parcela)
-  stemWeight?: number;        // peso tallo (g)
-  leafWeight?: number;        // peso hoja (g)
+  stemWeight?: number;        // peso tallo (g/planta o kg total)
+  leafWeight?: number;        // peso hoja (g/planta o kg total)
+  flowerWeight?: number;      // Nuevo: peso flor (g/planta o kg total)
 }
 
 // Keep generic logs for photos or extra comments not in the official registry

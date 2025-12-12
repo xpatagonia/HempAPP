@@ -1,9 +1,8 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { TrialRecord } from '../types';
-import { ArrowLeft, Activity, Scale, AlertTriangle, Camera, FileText, Calendar, MapPin, Globe, Plus, Edit2, Trash2, Download, Droplets, Wind, QrCode, Printer, CheckSquare, Sun, Eye, Loader2 } from 'lucide-react';
+import { ArrowLeft, Activity, Scale, AlertTriangle, Camera, FileText, Calendar, MapPin, Globe, Plus, Edit2, Trash2, Download, Droplets, Wind, QrCode, Printer, CheckSquare, Sun, Eye, Loader2, Ruler, Bug } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 export default function PlotDetails() {
@@ -83,13 +82,14 @@ export default function PlotDetails() {
           setEditingRecordId(existing.id);
           setRecordForm(existing);
           // Auto show harvest section if data exists or stage is harvest
-          setShowHarvestSection(existing.stage === 'Cosecha' || !!existing.yield || !!existing.stemWeight);
+          setShowHarvestSection(existing.stage === 'Cosecha' || !!existing.yield || !!existing.stemWeight || !!existing.freshWeight);
       } else {
           setEditingRecordId(null);
           setRecordForm({
               date: new Date().toISOString().split('T')[0],
               stage: 'Vegetativo',
-              plantHeight: 0, vigor: 3, uniformity: 3
+              plantHeight: 0, vigor: 3, uniformity: 3,
+              stemDiameter: 0, nodesCount: 0
           });
           setShowHarvestSection(false);
       }
@@ -125,17 +125,16 @@ export default function PlotDetails() {
     const data = history.map(h => ({
         Fecha: h.date,
         Etapa: h.stage,
-        Emergencia: h.emergenceDate || '-',
         'Altura (cm)': h.plantHeight || '-',
+        'Diametro (mm)': h.stemDiameter || '-',
         Vigor: h.vigor || '-',
-        Uniformidad: h.uniformity || '-',
-        Floración: h.floweringDate || '-',
+        'Floración': h.floweringState || '-',
         Plagas: h.pests || '-',
         Enfermedades: h.diseases || '-',
         'Fecha Cosecha': h.harvestDate || '-',
-        'Rendimiento': h.yield || '-',
-        'Peso Tallo': h.stemWeight || '-',
-        'Peso Hoja': h.leafWeight || '-'
+        'Peso Fresco Total': h.freshWeight || '-',
+        'Peso Seco Total': h.dryWeight || '-',
+        'Rendimiento Calc': h.yield || '-'
     }));
 
     const ws = XLSX.utils.json_to_sheet(data);
@@ -362,7 +361,7 @@ export default function PlotDetails() {
                             <th className="px-4 py-3 text-left font-medium text-gray-500">Fecha</th>
                             <th className="px-4 py-3 text-left font-medium text-gray-500">Etapa</th>
                             <th className="px-4 py-3 text-left font-medium text-gray-500">Altura</th>
-                            <th className="px-4 py-3 text-left font-medium text-gray-500">Vigor</th>
+                            <th className="px-4 py-3 text-left font-medium text-gray-500">Floración</th>
                             <th className="px-4 py-3 text-left font-medium text-gray-500">Observaciones</th>
                             <th className="px-4 py-3 text-right font-medium text-gray-500">Acciones</th>
                         </tr>
@@ -382,7 +381,7 @@ export default function PlotDetails() {
                                         </span>
                                     </td>
                                     <td className="px-4 py-3 text-gray-700">{r.plantHeight ? `${r.plantHeight} cm` : '-'}</td>
-                                    <td className="px-4 py-3 text-gray-700">{r.vigor}/5</td>
+                                    <td className="px-4 py-3 text-gray-700">{r.floweringState || '-'}</td>
                                     <td className="px-4 py-3 text-gray-600 max-w-xs truncate">
                                         {[r.pests, r.diseases].filter(Boolean).join(', ') || '-'}
                                     </td>
@@ -572,26 +571,26 @@ export default function PlotDetails() {
                                    </select>
                                </div>
                                <div className="flex items-end">
-                                    <label className={`flex items-center space-x-2 bg-gray-100 p-2 rounded w-full ${!isViewMode && 'cursor-pointer'}`}>
+                                    <label className={`flex items-center space-x-2 bg-gray-100 p-2 rounded w-full border ${showHarvestSection ? 'border-green-300 bg-green-50' : 'border-gray-200'} ${!isViewMode && 'cursor-pointer'}`}>
                                         <input disabled={isViewMode} type="checkbox" className="h-4 w-4 text-hemp-600 rounded" checked={showHarvestSection} onChange={e => setShowHarvestSection(e.target.checked)} />
-                                        <span className="text-sm font-medium text-gray-700">Incluir Datos Cosecha/Lab</span>
+                                        <span className="text-sm font-medium text-gray-700">Incluir Datos Cosecha</span>
                                     </label>
                                </div>
                            </div>
 
-                           {/* Section 1: Vegetative */}
+                           {/* Section 1: Biometry & Development */}
                            <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                               <h3 className="text-sm font-bold text-blue-800 mb-3 flex items-center"><Activity size={16} className="mr-1"/> Datos de Campo</h3>
+                               <h3 className="text-sm font-bold text-blue-800 mb-3 flex items-center"><Ruler size={16} className="mr-1"/> Biometría y Desarrollo</h3>
                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                    <div>
                                        <label className="block text-xs font-medium text-gray-500 mb-1">Altura Planta (cm)</label>
                                        <input disabled={isViewMode} type="number" className={getInputClass(true)} value={recordForm.plantHeight || ''} onChange={e => setRecordForm({...recordForm, plantHeight: Number(e.target.value)})} />
                                    </div>
                                    <div>
-                                       <label className="block text-xs font-medium text-gray-500 mb-1">N° Plantas/m</label>
-                                       <input disabled={isViewMode} type="number" className={getInputClass(true)} value={recordForm.plantsPerMeterInit || ''} onChange={e => setRecordForm({...recordForm, plantsPerMeterInit: Number(e.target.value)})} />
+                                       <label className="block text-xs font-medium text-gray-500 mb-1">Diámetro Tallo (mm)</label>
+                                       <input disabled={isViewMode} type="number" step="0.1" className={getInputClass(true)} value={recordForm.stemDiameter || ''} onChange={e => setRecordForm({...recordForm, stemDiameter: Number(e.target.value)})} />
                                    </div>
-                                   <div>
+                                    <div>
                                        <label className="block text-xs font-medium text-gray-500 mb-1">Vigor (1-5)</label>
                                        <input disabled={isViewMode} type="number" max="5" min="1" className={getInputClass(true)} value={recordForm.vigor || ''} onChange={e => setRecordForm({...recordForm, vigor: Number(e.target.value)})} />
                                    </div>
@@ -600,59 +599,62 @@ export default function PlotDetails() {
                                        <input disabled={isViewMode} type="number" max="5" min="1" className={getInputClass(true)} value={recordForm.uniformity || ''} onChange={e => setRecordForm({...recordForm, uniformity: Number(e.target.value)})} />
                                    </div>
                                </div>
-                               
-                               <div className="grid grid-cols-2 gap-4 mt-4">
+
+                               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
                                    <div>
-                                       <label className="block text-xs font-medium text-gray-500 mb-1 flex items-center">
-                                         <Calendar size={12} className="mr-1"/>
-                                         Fecha Emergencia
-                                       </label>
-                                       <input 
-                                         type="date" 
-                                         disabled={isViewMode}
-                                         className={`${getInputClass(true)} cursor-pointer`} 
-                                         value={recordForm.emergenceDate || ''} 
-                                         onChange={e => setRecordForm({...recordForm, emergenceDate: e.target.value})} 
-                                         onClick={(e) => { !isViewMode && e.currentTarget.showPicker() }}
-                                        />
+                                       <label className="block text-xs font-medium text-gray-500 mb-1">Estado Floración</label>
+                                        <select disabled={isViewMode} className={getInputClass(true)} value={recordForm.floweringState || ''} onChange={e => setRecordForm({...recordForm, floweringState: e.target.value as any})}>
+                                            <option value="">-</option>
+                                            <option value="Pre-flor">Pre-flor</option>
+                                            <option value="Floración">Floración</option>
+                                            <option value="Senescencia">Senescencia</option>
+                                        </select>
+                                   </div>
+                                    <div>
+                                       <label className="block text-xs font-medium text-gray-500 mb-1">Tricomas (Madurez)</label>
+                                        <select disabled={isViewMode} className={getInputClass(true)} value={recordForm.trichomeColor || ''} onChange={e => setRecordForm({...recordForm, trichomeColor: e.target.value as any})}>
+                                            <option value="">-</option>
+                                            <option value="Transparente">Transparente</option>
+                                            <option value="Lechoso">Lechoso</option>
+                                            <option value="Mixto">Mixto</option>
+                                            <option value="Ambar">Ambar</option>
+                                        </select>
+                                   </div>
+                                    <div>
+                                       <label className="block text-xs font-medium text-gray-500 mb-1">N° Nudos Promedio</label>
+                                       <input disabled={isViewMode} type="number" className={getInputClass(true)} value={recordForm.nodesCount || ''} onChange={e => setRecordForm({...recordForm, nodesCount: Number(e.target.value)})} />
                                    </div>
                                    <div>
-                                       <label className="block text-xs font-medium text-gray-500 mb-1 flex items-center">
-                                          <Calendar size={12} className="mr-1"/>
-                                          Fecha Floración
-                                       </label>
-                                       <input 
-                                          type="date" 
-                                          disabled={isViewMode}
-                                          className={`${getInputClass(true)} cursor-pointer`} 
-                                          value={recordForm.floweringDate || ''} 
-                                          onChange={e => setRecordForm({...recordForm, floweringDate: e.target.value})}
-                                          onClick={(e) => { !isViewMode && e.currentTarget.showPicker() }}
-                                        />
+                                       <label className="block text-xs font-medium text-gray-500 mb-1">N° Plantas/m (Actual)</label>
+                                       <input disabled={isViewMode} type="number" className={getInputClass(true)} value={recordForm.plantsPerMeterInit || ''} onChange={e => setRecordForm({...recordForm, plantsPerMeterInit: Number(e.target.value)})} />
                                    </div>
                                </div>
+                           </div>
 
-                               <div className="mt-4 pt-2 border-t border-blue-200 grid grid-cols-2 gap-4">
+                           {/* Section 2: Health */}
+                           <div className="bg-red-50 p-4 rounded-lg border border-red-100">
+                                <h3 className="text-sm font-bold text-red-800 mb-3 flex items-center"><Bug size={16} className="mr-1"/> Sanidad Vegetal</h3>
+                                <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-xs font-medium text-gray-500 mb-1">Plagas</label>
-                                        <input disabled={isViewMode} type="text" className={getInputClass(true)} value={recordForm.pests || ''} onChange={e => setRecordForm({...recordForm, pests: e.target.value})} />
+                                        <label className="block text-xs font-medium text-gray-500 mb-1">Plagas Detectadas</label>
+                                        <input disabled={isViewMode} type="text" placeholder="Ej: Arañuela, Pulgón..." className={getInputClass(true)} value={recordForm.pests || ''} onChange={e => setRecordForm({...recordForm, pests: e.target.value})} />
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-medium text-gray-500 mb-1">Enfermedades</label>
-                                        <input disabled={isViewMode} type="text" className={getInputClass(true)} value={recordForm.diseases || ''} onChange={e => setRecordForm({...recordForm, diseases: e.target.value})} />
+                                        <label className="block text-xs font-medium text-gray-500 mb-1">Enfermedades / Hongos</label>
+                                        <input disabled={isViewMode} type="text" placeholder="Ej: Fusarium, Oidio..." className={getInputClass(true)} value={recordForm.diseases || ''} onChange={e => setRecordForm({...recordForm, diseases: e.target.value})} />
                                     </div>
                                </div>
                            </div>
 
-                           {/* Section 2: Harvest */}
+                           {/* Section 3: Harvest (Conditional) */}
                            {showHarvestSection && (
                                <div className="bg-green-50 p-4 rounded-lg border border-green-100">
-                                   <h3 className="text-sm font-bold text-green-800 mb-3 flex items-center"><Scale size={16} className="mr-1"/> Cosecha y Rendimiento</h3>
-                                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                   <h3 className="text-sm font-bold text-green-800 mb-3 flex items-center"><Scale size={16} className="mr-1"/> Datos de Cosecha y Rendimiento</h3>
+                                   
+                                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                                        <div>
                                            <label className="block text-xs font-medium text-gray-500 mb-1 flex items-center">
-                                             <Calendar size={12} className="mr-1"/>
-                                             Fecha Cosecha
+                                             <Calendar size={12} className="mr-1"/> Fecha Cosecha
                                            </label>
                                            <input 
                                               type="date" 
@@ -664,17 +666,54 @@ export default function PlotDetails() {
                                             />
                                        </div>
                                        <div>
-                                            <label className="block text-xs font-medium text-gray-500 mb-1">Rendimiento (kg/ha)</label>
-                                            <input disabled={isViewMode} type="number" className={getInputClass(true)} value={recordForm.yield || ''} onChange={e => setRecordForm({...recordForm, yield: Number(e.target.value)})} />
+                                            <label className="block text-xs font-medium text-gray-500 mb-1">Tamaño Muestra (m²)</label>
+                                            <input disabled={isViewMode} type="number" step="0.1" className={getInputClass(true)} value={recordForm.sampleSize || ''} onChange={e => setRecordForm({...recordForm, sampleSize: Number(e.target.value)})} />
+                                       </div>
+                                       <div className="bg-white p-2 rounded border border-green-200">
+                                            <label className="block text-xs font-medium text-gray-500 mb-1">Peso Fresco Total (kg)</label>
+                                            <input disabled={isViewMode} type="number" step="0.01" className={getInputClass(true)} value={recordForm.freshWeight || ''} onChange={e => setRecordForm({...recordForm, freshWeight: Number(e.target.value)})} />
+                                       </div>
+                                       <div className="bg-white p-2 rounded border border-green-200">
+                                            <label className="block text-xs font-medium text-gray-500 mb-1">Peso Seco Total (kg)</label>
+                                            <input disabled={isViewMode} type="number" step="0.01" className={getInputClass(true)} value={recordForm.dryWeight || ''} onChange={e => setRecordForm({...recordForm, dryWeight: Number(e.target.value)})} />
+                                       </div>
+                                   </div>
+
+                                   <div className="grid grid-cols-3 gap-4 border-t border-green-200 pt-4">
+                                        <div>
+                                           <label className="block text-xs font-medium text-gray-500 mb-1">Peso Flor (g/pl)</label>
+                                           <input disabled={isViewMode} type="number" step="0.1" className={getInputClass(true)} value={recordForm.flowerWeight || ''} onChange={e => setRecordForm({...recordForm, flowerWeight: Number(e.target.value)})} />
                                        </div>
                                        <div>
-                                           <label className="block text-xs font-medium text-gray-500 mb-1">Peso Tallo (g)</label>
+                                           <label className="block text-xs font-medium text-gray-500 mb-1">Peso Tallo (g/pl)</label>
                                            <input disabled={isViewMode} type="number" step="0.1" className={getInputClass(true)} value={recordForm.stemWeight || ''} onChange={e => setRecordForm({...recordForm, stemWeight: Number(e.target.value)})} />
                                        </div>
                                        <div>
-                                           <label className="block text-xs font-medium text-gray-500 mb-1">Peso Hoja (g)</label>
+                                           <label className="block text-xs font-medium text-gray-500 mb-1">Peso Hoja (g/pl)</label>
                                            <input disabled={isViewMode} type="number" step="0.1" className={getInputClass(true)} value={recordForm.leafWeight || ''} onChange={e => setRecordForm({...recordForm, leafWeight: Number(e.target.value)})} />
                                        </div>
+                                   </div>
+                                   
+                                   <div className="mt-4 pt-3 border-t border-green-200">
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-xs text-gray-500">Rendimiento Estimado (Calculado si hay Muestra y P.Fresco):</span>
+                                            <span className="text-lg font-bold text-green-700">
+                                                {recordForm.freshWeight && recordForm.sampleSize 
+                                                    ? `${((recordForm.freshWeight / recordForm.sampleSize) * 10000).toFixed(0)} kg/ha` 
+                                                    : recordForm.yield 
+                                                        ? `${recordForm.yield} kg/ha (Manual)` 
+                                                        : '-'}
+                                            </span>
+                                        </div>
+                                        <div className="text-xs text-gray-400 mt-1 italic">
+                                            Si se ingresa P. Fresco y Tamaño Muestra, el cálculo es automático. Sino, ingresar manual abajo.
+                                        </div>
+                                        {!recordForm.sampleSize && (
+                                            <div className="mt-2">
+                                                <label className="block text-xs font-medium text-gray-500 mb-1">Rendimiento Manual (kg/ha)</label>
+                                                <input disabled={isViewMode} type="number" className={getInputClass(true)} value={recordForm.yield || ''} onChange={e => setRecordForm({...recordForm, yield: Number(e.target.value)})} />
+                                            </div>
+                                        )}
                                    </div>
                                </div>
                            )}

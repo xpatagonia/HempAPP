@@ -29,6 +29,7 @@ interface AppContextType {
   
   addPlot: (p: Plot) => Promise<void>;
   updatePlot: (p: Plot) => void;
+  deletePlot: (id: string) => Promise<void>; // Added deletePlot
   
   addTrialRecord: (r: TrialRecord) => void;
   updateTrialRecord: (r: TrialRecord) => void;
@@ -314,6 +315,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       await supabase.from('plots').update(p).eq('id', p.id); 
       setPlots(prev => { const n = prev.map(item => item.id === p.id ? p : item); saveToLocal('plots', n); return n; }); 
   };
+  // NEW: Delete Plot Implementation
+  const deletePlot = async (id: string) => {
+      await supabase.from('plots').delete().eq('id', id);
+      setPlots(prev => { const n = prev.filter(item => item.id !== id); saveToLocal('plots', n); return n; });
+  };
 
   const addTrialRecord = async (r: TrialRecord) => { const { error } = await supabase.from('trial_records').insert([r]); if (!error || true) setTrialRecords(prev => [...prev, r]); };
   const updateTrialRecord = async (r: TrialRecord) => { const { error } = await supabase.from('trial_records').update(r).eq('id', r.id); if (!error || true) setTrialRecords(prev => prev.map(item => item.id === r.id ? r : item)); };
@@ -335,7 +341,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       addProject, updateProject,
       addVariety, updateVariety, deleteVariety,
       addLocation, updateLocation, deleteLocation,
-      addPlot, updatePlot,
+      addPlot, updatePlot, deletePlot, // Exposed
       addTrialRecord, updateTrialRecord, deleteTrialRecord,
       addLog,
       addUser, updateUser, deleteUser,
