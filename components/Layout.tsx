@@ -62,6 +62,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   };
 
   const isAdminOrSuper = currentUser.role === 'admin' || currentUser.role === 'super_admin';
+  const isSuperAdmin = currentUser.role === 'super_admin';
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-dark-bg flex transition-colors duration-300">
@@ -135,8 +136,8 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                 {isAdminOrSuper && (
                     <NavItem to="/users" icon={Users} label="Gestión Usuarios" onClick={() => setIsMobileOpen(false)} />
                 )}
-                {/* Botón de configuración siempre visible para admins O si estamos en modo emergencia */}
-                {(isAdminOrSuper || isEmergencyMode) && (
+                {/* Botón de configuración VISIBLE UNICAMENTE PARA SUPER ADMIN */}
+                {isSuperAdmin && (
                     <NavItem to="/settings" icon={Database} label="Configuración DB" onClick={() => setIsMobileOpen(false)} />
                 )}
             </div>

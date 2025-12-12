@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useAppContext } from '../context/AppContext';
 import { checkConnection } from '../supabaseClient';
-import { Save, CheckCircle, XCircle, Database, Copy, RefreshCw, AlertTriangle, ShieldAlert } from 'lucide-react';
+import { Save, CheckCircle, XCircle, Database, Copy, RefreshCw, AlertTriangle, ShieldAlert, Lock } from 'lucide-react';
 
 export default function Settings() {
+  const { currentUser } = useAppContext();
   const [url, setUrl] = useState('');
   const [key, setKey] = useState('');
   const [status, setStatus] = useState<'idle' | 'checking' | 'success' | 'error'>('idle');
@@ -14,6 +16,21 @@ export default function Settings() {
       if (storedUrl) setUrl(storedUrl);
       if (storedKey) setKey(storedKey);
   }, []);
+
+  // PERMISSION GUARD: Solo Super Admin puede ver esto
+  if (currentUser?.role !== 'super_admin') {
+      return (
+          <div className="flex flex-col items-center justify-center h-[50vh] text-center space-y-4">
+              <div className="bg-red-100 p-4 rounded-full">
+                  <Lock size={48} className="text-red-500" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Acceso Restringido</h2>
+              <p className="text-gray-500 max-w-md">
+                  La configuración de la base de datos es una zona sensible reservada únicamente para el Super Administrador.
+              </p>
+          </div>
+      );
+  }
 
   const handleSave = async () => {
       setStatus('checking');
