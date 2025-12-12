@@ -2,17 +2,20 @@ import React, { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { Plot } from '../types';
-import { Plus, ChevronRight, CheckCircle, FileSpreadsheet, Edit2, Calendar, UserCheck, MapPin, Box, Trash2 } from 'lucide-react';
+import { Plus, ChevronRight, CheckCircle, FileSpreadsheet, Edit2, Calendar, UserCheck, MapPin, Box, Trash2, LayoutGrid, List, Image as ImageIcon, Ruler, Droplets } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 export default function Plots() {
-  const { plots, locations, varieties, projects, usersList, addPlot, updatePlot, deletePlot, currentUser, getLatestRecord } = useAppContext();
+  const { plots, locations, varieties, projects, usersList, addPlot, updatePlot, deletePlot, currentUser, getLatestRecord, logs } = useAppContext();
   
   const [searchParams] = useSearchParams();
   const initialProjectFilter = searchParams.get('project') || 'all';
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  // View Mode State
+  const [viewMode, setViewMode] = useState<'table' | 'gallery'>('table');
 
   const [filterLoc, setFilterLoc] = useState('all');
   const [filterProj, setFilterProj] = useState(initialProjectFilter);
@@ -182,6 +185,12 @@ export default function Plots() {
       return matchLoc && matchProj && isAssigned;
   });
 
+  const getLatestPhoto = (plotId: string) => {
+      // Find latest log with a photo
+      const plotLogs = logs.filter(l => l.plotId === plotId && l.photoUrl).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      return plotLogs.length > 0 ? plotLogs[0].photoUrl : null;
+  };
+
   const inputClass = "w-full border border-gray-300 bg-white text-gray-900 p-2 rounded focus:ring-2 focus:ring-hemp-500 focus:border-transparent outline-none transition-colors";
 
   // Filter users to show in the Assignment Modal
@@ -190,14 +199,35 @@ export default function Plots() {
   return (
     <div>
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-        <h1 className="text-2xl font-bold text-gray-800">Planilla de Ensayos</h1>
+        <div>
+            <h1 className="text-2xl font-bold text-gray-800">Planilla de Ensayos</h1>
+            <p className="text-sm text-gray-500">Gestión operativa y monitoreo de parcelas.</p>
+        </div>
         <div className="flex space-x-2 w-full sm:w-auto">
-          <button onClick={handleExport} className="border border-gray-300 bg-white text-gray-700 px-3 py-2 rounded-lg text-sm hover:bg-gray-50 flex items-center flex-1 sm:flex-none justify-center transition">
-             <FileSpreadsheet size={18} className="mr-2 text-green-600" /> Exportar Resumen
+          {/* View Toggle */}
+          <div className="bg-gray-100 p-1 rounded-lg flex mr-2">
+              <button 
+                onClick={() => setViewMode('table')}
+                className={`p-2 rounded-md transition ${viewMode === 'table' ? 'bg-white shadow text-gray-800' : 'text-gray-400 hover:text-gray-600'}`}
+                title="Vista Lista"
+              >
+                  <List size={18} />
+              </button>
+              <button 
+                onClick={() => setViewMode('gallery')}
+                className={`p-2 rounded-md transition ${viewMode === 'gallery' ? 'bg-white shadow text-gray-800' : 'text-gray-400 hover:text-gray-600'}`}
+                title="Vista Recorrida Visual"
+              >
+                  <LayoutGrid size={18} />
+              </button>
+          </div>
+
+          <button onClick={handleExport} className="border border-gray-300 bg-white text-gray-700 px-3 py-2 rounded-lg text-sm hover:bg-gray-50 flex items-center justify-center transition" title="Exportar Excel">
+             <FileSpreadsheet size={18} />
           </button>
           {isAdmin && (
-            <button onClick={openNew} className="bg-hemp-600 text-white px-4 py-2 rounded-lg flex items-center justify-center hover:bg-hemp-700 transition flex-1 sm:flex-none">
-                <Plus size={20} className="mr-2" /> Nueva Parcela
+            <button onClick={openNew} className="bg-hemp-600 text-white px-4 py-2 rounded-lg flex items-center justify-center hover:bg-hemp-700 transition flex-1 sm:flex-none font-medium">
+                <Plus size={20} className="mr-2" /> Nueva
             </button>
           )}
         </div>
@@ -205,7 +235,7 @@ export default function Plots() {
 
       {/* Filters */}
       <div className="mb-6 space-y-3">
-        <div className="flex items-center space-x-2 overflow-x-auto pb-1">
+        <div className="flex items-center space-x-2 overflow-x-auto pb-1 custom-scrollbar">
              <span className="text-sm font-semibold text-gray-500 mr-2">Proyecto:</span>
              <button onClick={() => setFilterProj('all')} className={`px-3 py-1 rounded-full text-xs whitespace-nowrap border transition ${filterProj === 'all' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>Todos</button>
              {projects.map(pr => (
@@ -216,70 +246,144 @@ export default function Plots() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200 text-sm">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-4 py-3 text-left font-medium text-gray-500 uppercase">ID</th>
-              <th className="px-4 py-3 text-left font-medium text-gray-500 uppercase">Variedad</th>
-              <th className="px-4 py-3 text-center font-medium text-gray-500 uppercase">Bloque</th>
-              <th className="px-4 py-3 text-center font-medium text-gray-500 uppercase">Rep</th>
-              <th className="px-4 py-3 text-left font-medium text-gray-500 uppercase">Locación</th>
-              <th className="px-4 py-3 text-left font-medium text-gray-500 uppercase">Siembra</th>
-              <th className="px-4 py-3 text-left font-medium text-gray-500 uppercase">Estado</th>
-              <th className="px-4 py-3 text-right"></th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {filteredPlots.length === 0 ? (
+      {viewMode === 'table' ? (
+          // --- TABLE VIEW ---
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200 text-sm">
+              <thead className="bg-gray-50">
                 <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-gray-500 italic">
-                        {isAdmin 
-                          ? "No se encontraron parcelas con los filtros actuales."
-                          : "No tienes parcelas asignadas a tu usuario."
-                        }
-                    </td>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500 uppercase">ID</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500 uppercase">Variedad</th>
+                  <th className="px-4 py-3 text-center font-medium text-gray-500 uppercase">Bloque</th>
+                  <th className="px-4 py-3 text-center font-medium text-gray-500 uppercase">Rep</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500 uppercase">Locación</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500 uppercase">Siembra</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500 uppercase">Estado</th>
+                  <th className="px-4 py-3 text-right"></th>
                 </tr>
-            ) : filteredPlots.map(p => {
-              const loc = locations.find(l => l.id === p.locationId);
-              const vari = varieties.find(v => v.id === p.varietyId);
-              return (
-                <tr key={p.id} className="hover:bg-gray-50 group">
-                  <td className="px-4 py-3 font-medium text-gray-900">{p.name}</td>
-                  <td className="px-4 py-3 text-hemp-800 font-semibold">{vari?.name}</td>
-                  <td className="px-4 py-3 text-center">{p.block}</td>
-                  <td className="px-4 py-3 text-center">{p.replicate}</td>
-                  <td className="px-4 py-3 text-gray-600">{loc?.name}</td>
-                  <td className="px-4 py-3 text-gray-600">{p.sowingDate}</td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                      p.status === 'Activa' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                    }`}>
-                      {p.status === 'Activa' && <CheckCircle size={10} className="mr-1"/>}
-                      {p.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-right space-x-2">
-                    {isAdmin && (
-                        <>
-                            <button onClick={() => handleEdit(p)} className="text-gray-400 hover:text-hemp-600 inline-block align-middle p-1" title="Editar">
-                                <Edit2 size={16} />
-                            </button>
-                            <button onClick={() => handleDelete(p.id)} className="text-gray-400 hover:text-red-600 inline-block align-middle p-1" title="Eliminar">
-                                <Trash2 size={16} />
-                            </button>
-                        </>
-                    )}
-                    <Link to={`/plots/${p.id}`} className="text-hemp-600 hover:text-hemp-900 font-medium inline-block align-middle p-1" title="Ver Detalle">
-                      <ChevronRight size={20} />
-                    </Link>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filteredPlots.length === 0 ? (
+                    <tr>
+                        <td colSpan={8} className="px-4 py-8 text-center text-gray-500 italic">
+                            {isAdmin 
+                              ? "No se encontraron parcelas con los filtros actuales."
+                              : "No tienes parcelas asignadas a tu usuario."
+                            }
+                        </td>
+                    </tr>
+                ) : filteredPlots.map(p => {
+                  const loc = locations.find(l => l.id === p.locationId);
+                  const vari = varieties.find(v => v.id === p.varietyId);
+                  return (
+                    <tr key={p.id} className="hover:bg-gray-50 group">
+                      <td className="px-4 py-3 font-medium text-gray-900">{p.name}</td>
+                      <td className="px-4 py-3 text-hemp-800 font-semibold">{vari?.name}</td>
+                      <td className="px-4 py-3 text-center">{p.block}</td>
+                      <td className="px-4 py-3 text-center">{p.replicate}</td>
+                      <td className="px-4 py-3 text-gray-600">{loc?.name}</td>
+                      <td className="px-4 py-3 text-gray-600">{p.sowingDate}</td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                          p.status === 'Activa' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {p.status === 'Activa' && <CheckCircle size={10} className="mr-1"/>}
+                          {p.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right space-x-2">
+                        {isAdmin && (
+                            <>
+                                <button onClick={() => handleEdit(p)} className="text-gray-400 hover:text-hemp-600 inline-block align-middle p-1" title="Editar">
+                                    <Edit2 size={16} />
+                                </button>
+                                <button onClick={() => handleDelete(p.id)} className="text-gray-400 hover:text-red-600 inline-block align-middle p-1" title="Eliminar">
+                                    <Trash2 size={16} />
+                                </button>
+                            </>
+                        )}
+                        <Link to={`/plots/${p.id}`} className="text-hemp-600 hover:text-hemp-900 font-medium inline-block align-middle p-1" title="Ver Detalle">
+                          <ChevronRight size={20} />
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+      ) : (
+          // --- GALLERY VIEW (VISUAL SCOUTING) ---
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {filteredPlots.map(p => {
+                  const loc = locations.find(l => l.id === p.locationId);
+                  const vari = varieties.find(v => v.id === p.varietyId);
+                  const latestPhoto = getLatestPhoto(p.id);
+                  const latestData = getLatestRecord(p.id);
+
+                  return (
+                      <Link to={`/plots/${p.id}`} key={p.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition group flex flex-col h-full">
+                          {/* Card Image Header */}
+                          <div className="h-48 bg-gray-100 relative overflow-hidden">
+                              {latestPhoto ? (
+                                  <img src={latestPhoto} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                              ) : (
+                                  <div className="w-full h-full flex flex-col items-center justify-center text-gray-300 bg-gray-50 pattern-grid-lg">
+                                      <ImageIcon size={32} className="mb-2 opacity-50" />
+                                      <span className="text-xs font-medium">Sin fotos</span>
+                                  </div>
+                              )}
+                              
+                              {/* Overlay Badge Status */}
+                              <div className="absolute top-2 right-2">
+                                  <span className={`px-2 py-1 rounded-full text-[10px] font-bold shadow-sm uppercase ${p.status === 'Activa' ? 'bg-green-500 text-white' : 'bg-gray-500 text-white'}`}>
+                                      {p.status}
+                                  </span>
+                              </div>
+                              
+                              {/* Overlay Bottom Gradient */}
+                              <div className="absolute bottom-0 left-0 w-full h-1/2 bg-gradient-to-t from-black/70 to-transparent flex flex-col justify-end p-4">
+                                  <h3 className="text-white font-bold text-lg leading-tight shadow-black drop-shadow-md">{p.name}</h3>
+                                  <p className="text-gray-200 text-xs">{vari?.name} • {loc?.name}</p>
+                              </div>
+                          </div>
+
+                          {/* Card Body */}
+                          <div className="p-4 flex-1 flex flex-col">
+                              <div className="grid grid-cols-2 gap-2 mb-4">
+                                  <div className="bg-gray-50 p-2 rounded border border-gray-100">
+                                      <span className="text-[10px] text-gray-500 uppercase font-bold block mb-1">Altura</span>
+                                      <div className="text-sm font-bold text-gray-800 flex items-center">
+                                          <Ruler size={14} className="mr-1 text-blue-500"/> 
+                                          {latestData?.plantHeight ? `${latestData.plantHeight} cm` : '-'}
+                                      </div>
+                                  </div>
+                                  <div className="bg-gray-50 p-2 rounded border border-gray-100">
+                                      <span className="text-[10px] text-gray-500 uppercase font-bold block mb-1">Etapa</span>
+                                      <div className="text-sm font-bold text-gray-800 truncate" title={latestData?.stage}>
+                                          {latestData?.stage || 'Inicial'}
+                                      </div>
+                                  </div>
+                              </div>
+                              
+                              <div className="mt-auto pt-3 border-t border-gray-100 flex justify-between items-center text-xs text-gray-500">
+                                  <div className="flex items-center">
+                                      <Calendar size={12} className="mr-1" />
+                                      Siembra: {p.sowingDate}
+                                  </div>
+                                  {p.irrigationType && (
+                                      <div className="flex items-center" title="Riego">
+                                          <Droplets size={12} className="mr-1 text-blue-400" />
+                                          {p.irrigationType}
+                                      </div>
+                                  )}
+                              </div>
+                          </div>
+                      </Link>
+                  );
+              })}
+          </div>
+      )}
 
        {/* Modal */}
        {isModalOpen && (
