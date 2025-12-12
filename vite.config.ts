@@ -7,14 +7,12 @@ export default defineConfig({
   build: {
     chunkSizeWarningLimit: 1000,
     rollupOptions: {
-      // Externalizamos emailjs para que use la versión CDN definida en el index.html
-      // Esto soluciona el error "Rollup failed to resolve import" en Vercel
-      external: ['@emailjs/browser'],
+      // Eliminamos 'external' para que Vite empaquete todas las librerías desde node_modules
       output: {
         manualChunks: {
           vendor: ['react', 'react-dom', 'react-router-dom'],
           charts: ['recharts'],
-          utils: ['xlsx', 'jspdf', 'jspdf-autotable', '@supabase/supabase-js'],
+          utils: ['xlsx', 'jspdf', 'jspdf-autotable', '@supabase/supabase-js', '@emailjs/browser'],
           icons: ['lucide-react']
         }
       }
