@@ -11,7 +11,7 @@ export default defineConfig({
         manualChunks: {
           vendor: ['react', 'react-dom', 'react-router-dom'],
           charts: ['recharts'],
-          utils: ['xlsx', 'jspdf', 'jspdf-autotable', 'lucide-react']
+          utils: ['xlsx', 'jspdf', 'jspdf-autotable']
         }
       }
     }
