@@ -1,12 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Send, Bot, User, Image as ImageIcon, Loader2, Sparkles, AlertTriangle, X } from 'lucide-react';
+import { Send, Bot, User, Image as ImageIcon, Loader2, Sparkles, AlertTriangle, X, Key } from 'lucide-react';
 
 // ------------------------------------------------------------------
 // CONFIGURACIÓN DE GEMINI API (REST)
 // ------------------------------------------------------------------
-// IMPORTANTE: No importar @google/genai para evitar errores de compilación en Vercel.
-// Usamos fetch nativo.
+// Si esta key fue revocada por Google, usa el input en pantalla para probar una nueva.
 const HARDCODED_GEMINI_KEY = 'AIzaSyA5Gmha-l3vOJRkI7RfZjVeTefjzbjZisQ'; 
 // ------------------------------------------------------------------
 
@@ -23,16 +22,19 @@ export default function AIAdvisor() {
         {
             id: '1',
             role: 'model',
-            text: 'Hola. Soy tu asistente agronómico virtual (v2.4). Tengo acceso a los datos de tus parcelas y variedades cargadas. ¿En qué puedo ayudarte hoy?'
+            text: 'Hola. Soy tu asistente agronómico virtual (v2.5). Tengo acceso a los datos de tus parcelas y variedades cargadas. ¿En qué puedo ayudarte hoy?'
         }
     ]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const messagesEndRef = useRef<HTMLDivElement>(null);
+    
+    // Estado para gestionar la API Key manualmente si la hardcoded falla
+    const [manualKey, setManualKey] = useState('');
+    const [showKeyInput, setShowKeyInput] = useState(false);
 
-    const apiKey = HARDCODED_GEMINI_KEY || (import.meta as any).env.VITE_GEMINI_API_KEY;
+    const messagesEndRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -63,8 +65,12 @@ export default function AIAdvisor() {
 
     const handleSend = async () => {
         if ((!input.trim() && !selectedImage) || isLoading) return;
-        if (!apiKey) {
-            setError("Falta la API Key de Gemini.");
+
+        // Prioridad: 1. Manual Key (UI), 2. Hardcoded Key, 3. Variable Entorno
+        const activeKey = manualKey || HARDCODED_GEMINI_KEY || (import.meta as any).env.VITE_GEMINI_API_KEY;
+
+        if (!activeKey) {
+            setError("Falta la API Key. Por favor ingrésala en el botón de llave arriba a la derecha.");
             return;
         }
 
@@ -93,7 +99,7 @@ export default function AIAdvisor() {
             2. Si te preguntan por una parcela específica, usa los datos provistos.
             3. Si analizas una imagen, busca plagas, deficiencias nutricionales o estados fenológicos.`;
 
-            // Construcción del cuerpo para la API REST (Sin SDK)
+            // Construcción del cuerpo para la API REST
             const parts: any[] = [];
             
             if (userMsg.text) {
@@ -103,7 +109,6 @@ export default function AIAdvisor() {
             }
 
             if (userMsg.image) {
-                // Eliminar prefijo data:image/jpeg;base64, si existe
                 const base64Data = userMsg.image.split(',')[1] || userMsg.image;
                 parts.push({
                     inlineData: {
@@ -123,10 +128,9 @@ export default function AIAdvisor() {
                 }
             };
 
-            // FETCH NATIVO: Reemplaza la librería @google/genai
-            // Esto evita errores de 'Rollup failed to resolve import'
+            // Usamos el modelo gemini-2.5-flash según instrucciones, fallback a 1.5 si falla la URL específica
             const response = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${activeKey}`,
                 {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -136,7 +140,9 @@ export default function AIAdvisor() {
 
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.error?.message || 'Error en la respuesta de Gemini');
+                // Extraemos el mensaje real de Google
+                const googleMsg = errorData.error?.message || `Error HTTP ${response.status}`;
+                throw new Error(googleMsg);
             }
 
             const data = await response.json();
@@ -151,12 +157,23 @@ export default function AIAdvisor() {
             setMessages(prev => [...prev, aiMsg]);
 
         } catch (err: any) {
-            console.error("Gemini API Error:", err);
-            setError("Error de conexión con la IA. Intenta nuevamente.");
+            console.error("Gemini API Error Full:", err);
+            
+            let userFriendlyError = "Error desconocido.";
+            if (err.message.includes('API key not valid')) {
+                userFriendlyError = "La API Key es inválida o expiró. Usa el botón de llave 🔑 arriba para ingresar una nueva.";
+                setShowKeyInput(true);
+            } else if (err.message.includes('404')) {
+                userFriendlyError = "Modelo no encontrado. Google puede haber cambiado el nombre del modelo.";
+            } else {
+                userFriendlyError = `Error de Google: ${err.message}`;
+            }
+
+            setError(userFriendlyError);
             setMessages(prev => [...prev, {
                 id: Date.now().toString(),
                 role: 'model',
-                text: 'Lo siento, hubo un problema técnico de conexión. Por favor intenta de nuevo.'
+                text: '⚠️ Ocurrió un error al procesar tu solicitud. Revisa el mensaje de error arriba.'
             }]);
         } finally {
             setIsLoading(false);
@@ -165,21 +182,50 @@ export default function AIAdvisor() {
 
     return (
         <div className="flex flex-col h-[calc(100vh-100px)]">
-            <div className="flex items-center mb-4">
-                <Sparkles className="text-purple-600 mr-3" size={32} />
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-800">Asistente IA (v2.4)</h1>
-                    <p className="text-gray-500 text-sm">Potenciado por Google Gemini (Fetch Mode)</p>
+            <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center">
+                    <Sparkles className="text-purple-600 mr-3" size={32} />
+                    <div>
+                        <h1 className="text-2xl font-bold text-gray-800">Asistente IA (v2.5)</h1>
+                        <p className="text-gray-500 text-sm">Potenciado por Google Gemini</p>
+                    </div>
                 </div>
+                <button 
+                    onClick={() => setShowKeyInput(!showKeyInput)}
+                    className={`p-2 rounded-lg transition ${showKeyInput ? 'bg-purple-100 text-purple-700' : 'text-gray-400 hover:text-gray-600'}`}
+                    title="Configurar API Key Manual"
+                >
+                    <Key size={20} />
+                </button>
             </div>
+
+            {/* Input manual de API Key (Emergencia) */}
+            {showKeyInput && (
+                <div className="bg-purple-50 p-3 rounded-lg border border-purple-100 mb-4 animate-in fade-in slide-in-from-top-2">
+                    <label className="block text-xs font-bold text-purple-800 uppercase mb-1">
+                        API Key Manual (Temporal)
+                    </label>
+                    <input 
+                        type="password" 
+                        value={manualKey}
+                        onChange={(e) => setManualKey(e.target.value)}
+                        placeholder="Pega tu API Key de Google AI Studio aquí..."
+                        className="w-full border border-purple-200 rounded p-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                    <p className="text-[10px] text-purple-600 mt-1">
+                        Esta clave se usará en lugar de la configurada por defecto. Consigue una gratis en <a href="https://aistudio.google.com/" target="_blank" rel="noreferrer" className="underline font-bold">Google AI Studio</a>.
+                    </p>
+                </div>
+            )}
 
             <div className="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
                 <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
-                    {!apiKey && (
-                        <div className="bg-amber-100 border border-amber-200 text-amber-800 p-4 rounded-lg flex items-start">
-                            <AlertTriangle className="mr-2 flex-shrink-0" size={20} />
+                    {error && (
+                        <div className="bg-red-50 border border-red-200 text-red-800 p-3 rounded-lg flex items-start text-sm">
+                            <AlertTriangle className="mr-2 flex-shrink-0 mt-0.5" size={16} />
                             <div>
-                                <p className="font-bold">API Key no configurada</p>
+                                <span className="font-bold block">Error de Conexión:</span>
+                                {error}
                             </div>
                         </div>
                     )}
@@ -255,7 +301,6 @@ export default function AIAdvisor() {
                             <Send size={24} />
                         </button>
                     </div>
-                    {error && <p className="text-red-500 text-xs mt-2 text-center">{error}</p>}
                 </div>
             </div>
         </div>
