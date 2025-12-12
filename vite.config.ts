@@ -5,11 +5,9 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   build: {
-    chunkSizeWarningLimit: 3000, // Aumentado para evitar advertencias irrelevantes
+    chunkSizeWarningLimit: 3000, 
     rollupOptions: {
       output: {
-        // Eliminamos la configuración manual agresiva que causaba conflictos con emailjs
-        // Vite manejará automáticamente la división de código (Code Splitting)
         manualChunks: undefined
       }
     }
