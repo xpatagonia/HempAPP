@@ -80,15 +80,6 @@ export default function AIAdvisor() {
         setError(null);
 
         try {
-            // SOLUCIÓN CRÍTICA PARA BUILD:
-            // Usamos 'new Function' para construir el import dinámicamente.
-            // Esto hace que Vite/Rollup NO detecten la dependencia durante el build,
-            // evitando el error "failed to resolve import".
-            const loadGenAI = new Function('return import("https://esm.sh/@google/genai@0.2.1")');
-            const { GoogleGenAI } = await loadGenAI();
-            
-            const ai = new GoogleGenAI({ apiKey });
-            
             const systemContext = `Eres un ingeniero agrónomo experto en Cannabis Sativa L. (Cáñamo Industrial). 
             Tu objetivo es asistir al usuario en la toma de decisiones técnicas.
             
@@ -100,27 +91,54 @@ export default function AIAdvisor() {
             2. Si te preguntan por una parcela específica, usa los datos provistos.
             3. Si analizas una imagen, busca plagas, deficiencias nutricionales o estados fenológicos.`;
 
-            let contentsPayload: any = {
-                model: 'gemini-2.5-flash',
-                config: { systemInstruction: systemContext }
-            };
+            // Construir payload para la REST API
+            const parts: any[] = [];
+            
+            // Si hay texto
+            if (userMsg.text) {
+                parts.push({ text: userMsg.text });
+            } else if (selectedImage) {
+                 parts.push({ text: "¿Qué observas en esta imagen?" });
+            }
 
+            // Si hay imagen (Base64)
             if (userMsg.image) {
                 const base64Data = userMsg.image.split(',')[1];
-                const imagePart = {
+                parts.push({
                     inlineData: {
                         mimeType: 'image/jpeg',
                         data: base64Data
                     }
-                };
-                const textPart = { text: userMsg.text || "¿Qué observas en esta imagen?" };
-                contentsPayload.contents = { parts: [imagePart, textPart] };
-            } else {
-                contentsPayload.contents = userMsg.text;
+                });
             }
 
-            const response = await ai.models.generateContent(contentsPayload);
-            const textResponse = response.text;
+            const requestBody = {
+                contents: [{
+                    role: "user",
+                    parts: parts
+                }],
+                systemInstruction: {
+                    parts: [{ text: systemContext }]
+                }
+            };
+
+            // LLAMADA DIRECTA REST API (Elimina dependencia de @google/genai)
+            const response = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestBody)
+                }
+            );
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error?.message || 'Error en la API de Gemini');
+            }
+
+            const data = await response.json();
+            const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
             const aiMsg: Message = {
                 id: (Date.now() + 1).toString(),
@@ -131,12 +149,12 @@ export default function AIAdvisor() {
             setMessages(prev => [...prev, aiMsg]);
 
         } catch (err: any) {
-            console.error("Gemini Error:", err);
-            setError("Error al conectar con la IA. Verifica tu conexión.");
+            console.error("Gemini API Error:", err);
+            setError("Error al conectar con la IA. " + (err.message || "Verifica tu conexión."));
             setMessages(prev => [...prev, {
                 id: Date.now().toString(),
                 role: 'model',
-                text: 'Lo siento, ocurrió un error al procesar tu solicitud.'
+                text: 'Lo siento, ocurrió un error técnico al procesar tu solicitud.'
             }]);
         } finally {
             setIsLoading(false);
@@ -149,7 +167,7 @@ export default function AIAdvisor() {
                 <Sparkles className="text-purple-600 mr-3" size={32} />
                 <div>
                     <h1 className="text-2xl font-bold text-gray-800">Asistente Agronómico IA</h1>
-                    <p className="text-gray-500 text-sm">Potenciado por Google Gemini 2.5</p>
+                    <p className="text-gray-500 text-sm">Potenciado por Google Gemini 2.0</p>
                 </div>
             </div>
 
