@@ -1,13 +1,13 @@
-
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { User, UserRole } from '../types';
-import { Plus, Trash2, Edit2, Shield, Wrench, Eye, AlertCircle, Lock, Key } from 'lucide-react';
+import { Plus, Trash2, Edit2, Shield, Wrench, Eye, AlertCircle, Lock, Key, Save, Loader2 } from 'lucide-react';
 
 export default function Users() {
   const { usersList, addUser, updateUser, deleteUser, currentUser } = useAppContext();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   const [formData, setFormData] = useState<Partial<User>>({
     name: '', email: '', role: 'technician', password: ''
@@ -27,19 +27,18 @@ export default function Users() {
   }
 
   const handleEdit = (user: User) => {
-    // Permission Check: Admin cannot edit Super Admin or other Admins
+    // Permission Check
     if (!isSuperAdmin && (user.role === 'super_admin' || user.role === 'admin')) {
         alert("No tienes permisos para modificar a este usuario.");
         return;
     }
 
-    setFormData({ ...user, password: '' }); // Don't show password, just allow reset
+    setFormData({ ...user, password: '' }); 
     setEditingId(user.id);
     setIsModalOpen(true);
   };
 
   const handleDelete = (user: User) => {
-    // Permission Check
     if (!isSuperAdmin && (user.role === 'super_admin' || user.role === 'admin')) {
         alert("No tienes permisos para eliminar a este usuario.");
         return;
@@ -49,41 +48,52 @@ export default function Users() {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name || !formData.email) return;
     
-    // Validate role assignment permission
+    // Validate role
     if (!isSuperAdmin && (formData.role === 'super_admin' || formData.role === 'admin')) {
         alert("No tienes permisos para crear o asignar este rol.");
         return;
     }
 
-    if (editingId) {
-      // If password field is empty, keep old password. We need to find the old user to keep it.
-      const oldUser = usersList.find(u => u.id === editingId);
-      const finalPassword = formData.password ? formData.password : oldUser?.password;
-
-      updateUser({ 
-          ...formData, 
-          id: editingId,
-          password: finalPassword
-      } as User);
-    } else {
-      if (!formData.password) {
-          alert("Debes asignar una contraseña inicial");
-          return;
-      }
-      addUser({
-        id: Date.now().toString(),
-        name: formData.name!,
-        email: formData.email!,
-        role: formData.role as UserRole,
-        password: formData.password
-      });
-    }
+    setIsSaving(true);
     
-    closeModal();
+    // Simular un pequeño delay para que la UI responda
+    await new Promise(r => setTimeout(r, 500));
+
+    try {
+        if (editingId) {
+            const oldUser = usersList.find(u => u.id === editingId);
+            const finalPassword = formData.password ? formData.password : oldUser?.password;
+
+            updateUser({ 
+                ...formData, 
+                id: editingId,
+                password: finalPassword
+            } as User);
+        } else {
+            if (!formData.password) {
+                alert("Debes asignar una contraseña inicial");
+                setIsSaving(false);
+                return;
+            }
+            await addUser({
+                id: Date.now().toString(),
+                name: formData.name!,
+                email: formData.email!,
+                role: formData.role as UserRole,
+                password: formData.password
+            });
+        }
+        closeModal();
+    } catch (error) {
+        console.error("Error saving user", error);
+        alert("Ocurrió un error al guardar. Revisa la consola.");
+    } finally {
+        setIsSaving(false);
+    }
   };
 
   const closeModal = () => {
@@ -121,7 +131,9 @@ export default function Users() {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {usersList.map((user) => (
+            {usersList.length === 0 ? (
+                <tr><td colSpan={4} className="p-4 text-center text-gray-500">No hay usuarios registrados.</td></tr>
+            ) : usersList.map((user) => (
               <tr key={user.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
@@ -218,7 +230,14 @@ export default function Users() {
 
               <div className="flex justify-end space-x-2 pt-4">
                 <button type="button" onClick={closeModal} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancelar</button>
-                <button type="submit" className="px-4 py-2 bg-hemp-600 text-white rounded hover:bg-hemp-700 shadow-sm">Guardar</button>
+                <button 
+                    type="submit" 
+                    disabled={isSaving}
+                    className="px-4 py-2 bg-hemp-600 text-white rounded hover:bg-hemp-700 shadow-sm flex items-center disabled:opacity-70"
+                >
+                    {isSaving ? <Loader2 className="animate-spin mr-2" size={16} /> : <Save className="mr-2" size={16} />}
+                    Guardar
+                </button>
               </div>
             </form>
           </div>

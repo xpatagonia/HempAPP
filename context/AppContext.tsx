@@ -16,7 +16,7 @@ interface AppContextType {
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
 
-  addProject: (p: Project) => void;
+  addProject: (p: Project) => Promise<boolean>;
   updateProject: (p: Project) => void;
   
   addVariety: (v: Variety) => void;
@@ -27,7 +27,7 @@ interface AppContextType {
   updateLocation: (l: Location) => void;
   deleteLocation: (id: string) => void;
   
-  addPlot: (p: Plot) => void;
+  addPlot: (p: Plot) => Promise<void>;
   updatePlot: (p: Plot) => void;
   
   addTrialRecord: (r: TrialRecord) => void;
@@ -36,7 +36,7 @@ interface AppContextType {
   
   addLog: (l: FieldLog) => void;
   
-  addUser: (u: User) => void;
+  addUser: (u: User) => Promise<boolean>;
   updateUser: (u: User) => void;
   deleteUser: (id: string) => void;
 
@@ -62,6 +62,15 @@ const RESCUE_USER: User = {
     role: 'super_admin'
 };
 
+// Helpers para LocalStorage
+const saveToLocal = (key: string, data: any[]) => localStorage.setItem(`ht_local_${key}`, JSON.stringify(data));
+const getFromLocal = (key: string) => {
+    try {
+        const item = localStorage.getItem(`ht_local_${key}`);
+        return item ? JSON.parse(item) : [];
+    } catch { return []; }
+};
+
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [usersList, setUsersList] = useState<User[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -79,44 +88,71 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   useEffect(() => {
     let isMounted = true;
 
-    // Función de seguridad: Si Supabase tarda más de 3 segundos, forzamos el modo rescate
-    // Esto evita que la app se quede en blanco "Cargando..."
     const safetyTimeout = setTimeout(() => {
         if (loading && isMounted) {
-            console.warn("Timeout de conexión: Activando Modo Rescate forzado.");
-            setUsersList([RESCUE_USER]);
+            console.warn("Timeout de conexión: Activando Modo Híbrido.");
+            // Si falla timeout, cargamos lo local
+            setUsersList([...getFromLocal('users'), RESCUE_USER]);
+            setProjects(getFromLocal('projects'));
+            setVarieties(getFromLocal('varieties'));
+            setLocations(getFromLocal('locations'));
+            setPlots(getFromLocal('plots'));
             setIsEmergencyMode(true);
             setLoading(false);
         }
-    }, 3000);
+    }, 2500);
 
     const initSystem = async () => {
         setLoading(true);
         try {
-            // Intentamos obtener usuarios
-            const { data: users, error: userError } = await supabase.from('users').select('*');
+            // Cargar datos locales primero (para respuesta inmediata)
+            const localUsers = getFromLocal('users');
+            const localProjects = getFromLocal('projects');
+            const localVarieties = getFromLocal('varieties');
+            const localLocations = getFromLocal('locations');
+            const localPlots = getFromLocal('plots');
+
+            // Intentar Supabase
+            const { data: dbUsers, error: userError } = await supabase.from('users').select('*');
             
             if (!isMounted) return;
 
-            if (userError || !users || users.length === 0) {
-                console.warn("Base de datos vacía o error: Modo Rescate.");
-                setUsersList([RESCUE_USER]);
+            let finalUsers = [...localUsers];
+
+            if (userError || !dbUsers || dbUsers.length === 0) {
+                console.warn("Usando usuarios locales y de rescate.");
+                if (!finalUsers.find((u: User) => u.email === RESCUE_USER.email)) {
+                    finalUsers.push(RESCUE_USER);
+                }
                 setIsEmergencyMode(true);
             } else {
-                // Verificar si existe el usuario de rescate en la DB real, si no, agregarlo en memoria por si acaso
-                setUsersList(users as User[]);
+                // Merge DB users with Local users (avoid duplicates by ID)
+                const dbIds = new Set(dbUsers.map((u: any) => u.id));
+                const uniqueLocal = localUsers.filter((u: User) => !dbIds.has(u.id));
+                finalUsers = [...(dbUsers as User[]), ...uniqueLocal];
                 setIsEmergencyMode(false);
             }
+            
+            setUsersList(finalUsers);
+            
+            // Cargar resto (mezclando local y remoto si es necesario, simplificado aquí a remoto si existe)
+            const fetchOrLocal = async (table: string, setter: any, localData: any[]) => {
+                 const { data, error } = await supabase.from(table).select('*');
+                 if (!error && data) {
+                     setter([...data, ...localData.filter((l: any) => !data.find((d: any) => d.id === l.id))]);
+                 } else {
+                     setter(localData);
+                 }
+            };
 
-            // Cargar resto de datos sin bloquear
             await Promise.allSettled([
-                supabase.from('projects').select('*').then(res => isMounted && res.data && setProjects(res.data as Project[])),
-                supabase.from('varieties').select('*').then(res => isMounted && res.data && setVarieties(res.data as Variety[])),
-                supabase.from('locations').select('*').then(res => isMounted && res.data && setLocations(res.data as Location[])),
-                supabase.from('plots').select('*').then(res => isMounted && res.data && setPlots(res.data as Plot[])),
-                supabase.from('trial_records').select('*').then(res => isMounted && res.data && setTrialRecords(res.data as TrialRecord[])),
-                supabase.from('field_logs').select('*').then(res => isMounted && res.data && setLogs(res.data as FieldLog[])),
-                supabase.from('tasks').select('*').then(res => isMounted && res.data && setTasks(res.data as Task[]))
+                fetchOrLocal('projects', setProjects, localProjects),
+                fetchOrLocal('varieties', setVarieties, localVarieties),
+                fetchOrLocal('locations', setLocations, localLocations),
+                fetchOrLocal('plots', setPlots, localPlots),
+                supabase.from('trial_records').select('*').then(res => res.data && setTrialRecords(res.data as TrialRecord[])),
+                supabase.from('field_logs').select('*').then(res => res.data && setLogs(res.data as FieldLog[])),
+                supabase.from('tasks').select('*').then(res => res.data && setTasks(res.data as Task[]))
             ]);
 
             // Restaurar sesión
@@ -124,18 +160,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             if (savedUser) {
                 try {
                     const parsed = JSON.parse(savedUser);
-                    // Permitir entrar si es el rescue user O si está en la lista descargada
-                    const isValid = (parsed.email === RESCUE_USER.email) || 
-                                    (users && users.some((u: any) => u.id === parsed.id));
-                    
+                    const isValid = finalUsers.some((u: User) => u.id === parsed.id) || parsed.email === RESCUE_USER.email;
                     if (isValid) setCurrentUser(parsed);
                 } catch (e) { localStorage.removeItem('ht_session_user'); }
             }
 
         } catch (err) {
             console.error("Error crítico en carga:", err);
+            // Fallback total
             if(isMounted) {
-                setUsersList([RESCUE_USER]);
+                setUsersList([...getFromLocal('users'), RESCUE_USER]);
                 setIsEmergencyMode(true);
             }
         } finally {
@@ -151,24 +185,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, []);
 
   const login = async (email: string, password: string): Promise<boolean> => {
-    // Verificar contra la lista actual (que incluye el de rescate si falló la DB)
     const validUser = usersList.find(u => 
         u.email.toLowerCase().trim() === email.toLowerCase().trim() && 
         u.password === password
     );
-
-    // Fallback explícito: si el usuario escribe las credenciales de rescate, dejarlo entrar siempre
-    if (!validUser && email === RESCUE_USER.email && password === RESCUE_USER.password) {
-        setCurrentUser(RESCUE_USER);
-        localStorage.setItem('ht_session_user', JSON.stringify(RESCUE_USER));
-        return true;
-    }
 
     if (validUser) {
       setCurrentUser(validUser);
       localStorage.setItem('ht_session_user', JSON.stringify(validUser));
       return true;
     }
+    // Fallback explícito para rescate si no está en la lista
+    if (email === RESCUE_USER.email && password === RESCUE_USER.password) {
+        setCurrentUser(RESCUE_USER);
+        localStorage.setItem('ht_session_user', JSON.stringify(RESCUE_USER));
+        return true;
+    }
+
     return false;
   };
 
@@ -177,34 +210,99 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     localStorage.removeItem('ht_session_user');
   };
 
-  // CRUD Functions (simplified)
-  const addProject = async (p: Project) => { const { error } = await supabase.from('projects').insert([p]); if (!error) setProjects(prev => [...prev, p]); };
-  const updateProject = async (p: Project) => { const { error } = await supabase.from('projects').update(p).eq('id', p.id); if (!error) setProjects(prev => prev.map(item => item.id === p.id ? p : item)); };
+  // --- CRUD WRAPPERS CON FALLBACK A LOCALSTORAGE ---
+
+  const addUser = async (u: User): Promise<boolean> => {
+      // 1. Intentar Supabase
+      const { error } = await supabase.from('users').insert([u]);
+      
+      // 2. Siempre actualizar estado local (Optimistic UI / Offline Mode)
+      setUsersList(prev => {
+          const newList = [...prev, u];
+          saveToLocal('users', newList.filter(user => user.id !== RESCUE_USER.id)); // No guardar rescate user
+          return newList;
+      });
+
+      if (error) {
+          console.warn("Supabase falló, usuario guardado localmente:", error.message);
+      }
+      return true; 
+  };
   
-  const addVariety = async (v: Variety) => { const { error } = await supabase.from('varieties').insert([v]); if (!error) setVarieties(prev => [...prev, v]); };
-  const updateVariety = async (v: Variety) => { const { error } = await supabase.from('varieties').update(v).eq('id', v.id); if (!error) setVarieties(prev => prev.map(item => item.id === v.id ? v : item)); };
-  const deleteVariety = async (id: string) => { const { error } = await supabase.from('varieties').delete().eq('id', id); if (!error) setVarieties(prev => prev.filter(item => item.id !== id)); };
+  const updateUser = async (u: User) => {
+      await supabase.from('users').update(u).eq('id', u.id);
+      setUsersList(prev => {
+          const newList = prev.map(item => item.id === u.id ? u : item);
+          saveToLocal('users', newList.filter(user => user.id !== RESCUE_USER.id));
+          return newList;
+      });
+  };
+  
+  const deleteUser = async (id: string) => {
+      await supabase.from('users').delete().eq('id', id);
+      setUsersList(prev => {
+          const newList = prev.filter(item => item.id !== id);
+          saveToLocal('users', newList.filter(user => user.id !== RESCUE_USER.id));
+          return newList;
+      });
+  };
 
-  const addLocation = async (l: Location) => { const { error } = await supabase.from('locations').insert([l]); if (!error) setLocations(prev => [...prev, l]); };
-  const updateLocation = async (l: Location) => { const { error } = await supabase.from('locations').update(l).eq('id', l.id); if (!error) setLocations(prev => prev.map(item => item.id === l.id ? l : item)); };
-  const deleteLocation = async (id: string) => { const { error } = await supabase.from('locations').delete().eq('id', id); if (!error) setLocations(prev => prev.filter(item => item.id !== id)); };
+  // Generic patterns applied to other critical entities for setup
+  const addProject = async (p: Project): Promise<boolean> => {
+      const { error } = await supabase.from('projects').insert([p]);
+      setProjects(prev => { const n = [...prev, p]; saveToLocal('projects', n); return n; });
+      return !error;
+  };
+  const updateProject = async (p: Project) => {
+      await supabase.from('projects').update(p).eq('id', p.id);
+      setProjects(prev => { const n = prev.map(item => item.id === p.id ? p : item); saveToLocal('projects', n); return n; });
+  };
 
-  const addPlot = async (p: Plot) => { const { error } = await supabase.from('plots').insert([p]); if (!error) setPlots(prev => [...prev, p]); };
-  const updatePlot = async (p: Plot) => { const { error } = await supabase.from('plots').update(p).eq('id', p.id); if (!error) setPlots(prev => prev.map(item => item.id === p.id ? p : item)); };
+  const addVariety = async (v: Variety) => { 
+      await supabase.from('varieties').insert([v]); 
+      setVarieties(prev => { const n = [...prev, v]; saveToLocal('varieties', n); return n; }); 
+  };
+  const updateVariety = async (v: Variety) => { 
+      await supabase.from('varieties').update(v).eq('id', v.id); 
+      setVarieties(prev => { const n = prev.map(item => item.id === v.id ? v : item); saveToLocal('varieties', n); return n; }); 
+  };
+  const deleteVariety = async (id: string) => { 
+      await supabase.from('varieties').delete().eq('id', id); 
+      setVarieties(prev => { const n = prev.filter(item => item.id !== id); saveToLocal('varieties', n); return n; }); 
+  };
 
-  const addTrialRecord = async (r: TrialRecord) => { const { error } = await supabase.from('trial_records').insert([r]); if (!error) setTrialRecords(prev => [...prev, r]); };
-  const updateTrialRecord = async (r: TrialRecord) => { const { error } = await supabase.from('trial_records').update(r).eq('id', r.id); if (!error) setTrialRecords(prev => prev.map(item => item.id === r.id ? r : item)); };
-  const deleteTrialRecord = async (id: string) => { const { error } = await supabase.from('trial_records').delete().eq('id', id); if (!error) setTrialRecords(prev => prev.filter(item => item.id !== id)); };
+  const addLocation = async (l: Location) => { 
+      await supabase.from('locations').insert([l]); 
+      setLocations(prev => { const n = [...prev, l]; saveToLocal('locations', n); return n; }); 
+  };
+  const updateLocation = async (l: Location) => { 
+      await supabase.from('locations').update(l).eq('id', l.id); 
+      setLocations(prev => { const n = prev.map(item => item.id === l.id ? l : item); saveToLocal('locations', n); return n; }); 
+  };
+  const deleteLocation = async (id: string) => { 
+      await supabase.from('locations').delete().eq('id', id); 
+      setLocations(prev => { const n = prev.filter(item => item.id !== id); saveToLocal('locations', n); return n; }); 
+  };
 
-  const addLog = async (l: FieldLog) => { const { error } = await supabase.from('field_logs').insert([l]); if (!error) setLogs(prev => [l, ...prev]); };
+  const addPlot = async (p: Plot) => { 
+      await supabase.from('plots').insert([p]); 
+      setPlots(prev => { const n = [...prev, p]; saveToLocal('plots', n); return n; }); 
+  };
+  const updatePlot = async (p: Plot) => { 
+      await supabase.from('plots').update(p).eq('id', p.id); 
+      setPlots(prev => { const n = prev.map(item => item.id === p.id ? p : item); saveToLocal('plots', n); return n; }); 
+  };
 
-  const addUser = async (u: User) => { const { error } = await supabase.from('users').insert([u]); if (!error) setUsersList(prev => [...prev, u]); };
-  const updateUser = async (u: User) => { const { error } = await supabase.from('users').update(u).eq('id', u.id); if (!error) setUsersList(prev => prev.map(item => item.id === u.id ? u : item)); };
-  const deleteUser = async (id: string) => { const { error } = await supabase.from('users').delete().eq('id', id); if (!error) setUsersList(prev => prev.filter(item => item.id !== id)); };
+  // Non-critical data (Trial Records, Logs, Tasks) - Keep simpler for now, but update state optimistically
+  const addTrialRecord = async (r: TrialRecord) => { const { error } = await supabase.from('trial_records').insert([r]); if (!error || true) setTrialRecords(prev => [...prev, r]); };
+  const updateTrialRecord = async (r: TrialRecord) => { const { error } = await supabase.from('trial_records').update(r).eq('id', r.id); if (!error || true) setTrialRecords(prev => prev.map(item => item.id === r.id ? r : item)); };
+  const deleteTrialRecord = async (id: string) => { const { error } = await supabase.from('trial_records').delete().eq('id', id); if (!error || true) setTrialRecords(prev => prev.filter(item => item.id !== id)); };
 
-  const addTask = async (t: Task) => { const { error } = await supabase.from('tasks').insert([t]); if (!error) setTasks(prev => [t, ...prev]); };
-  const updateTask = async (t: Task) => { const { error } = await supabase.from('tasks').update(t).eq('id', t.id); if (!error) setTasks(prev => prev.map(item => item.id === t.id ? t : item)); };
-  const deleteTask = async (id: string) => { const { error } = await supabase.from('tasks').delete().eq('id', id); if (!error) setTasks(prev => prev.filter(item => item.id !== id)); };
+  const addLog = async (l: FieldLog) => { const { error } = await supabase.from('field_logs').insert([l]); if (!error || true) setLogs(prev => [l, ...prev]); };
+
+  const addTask = async (t: Task) => { const { error } = await supabase.from('tasks').insert([t]); if (!error || true) setTasks(prev => [t, ...prev]); };
+  const updateTask = async (t: Task) => { const { error } = await supabase.from('tasks').update(t).eq('id', t.id); if (!error || true) setTasks(prev => prev.map(item => item.id === t.id ? t : item)); };
+  const deleteTask = async (id: string) => { const { error } = await supabase.from('tasks').delete().eq('id', id); if (!error || true) setTasks(prev => prev.filter(item => item.id !== id)); };
 
   const getPlotHistory = (plotId: string) => { return trialRecords.filter(r => r.plotId === plotId).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); };
   const getLatestRecord = (plotId: string) => { const history = getPlotHistory(plotId); return history.length > 0 ? history[0] : undefined; };
