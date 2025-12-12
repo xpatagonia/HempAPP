@@ -1,7 +1,8 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, AreaChart, Area } from 'recharts';
-import { Sprout, MapPin, Activity, CheckCircle, FileText, Download } from 'lucide-react';
+import { Sprout, MapPin, Activity, CheckCircle, FileText, Download, ArrowRight, Users, FolderOpen, AlertCircle } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -19,14 +20,17 @@ const StatCard = ({ title, value, icon: Icon, color }: any) => (
 );
 
 export default function Dashboard() {
-  const { varieties, locations, plots, getLatestRecord } = useAppContext();
+  const { varieties, locations, plots, projects, usersList, getLatestRecord, currentUser } = useAppContext();
+
+  // --- ONBOARDING LOGIC ---
+  // Si no hay datos críticos, mostramos la guía de inicio en lugar de los gráficos vacíos
+  const isSetupMode = varieties.length === 0 && locations.length === 0 && projects.length === 0;
 
   // 1. Calculate Average Yield by Variety (Using latest data)
   const yieldDataMap = new Map<string, { totalYield: number; count: number }>();
 
   plots.forEach(plot => {
     const latestData = getLatestRecord(plot.id);
-    // Only consider data with actual yield values
     if (!latestData || !latestData.yield || latestData.yield <= 0) return;
 
     const variety = varieties.find(v => v.id === plot.varietyId);
@@ -53,19 +57,18 @@ export default function Dashboard() {
   const pieData = Array.from(usageDataMap.entries()).map(([name, value]) => ({ name, value }));
   const pieColors = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
 
-  // 3. Data for Height/Vigor Comparison (Using latest height)
+  // 3. Data for Height/Vigor Comparison
   const heightData = plots.map(p => {
       const latest = getLatestRecord(p.id);
       return {
-          name: p.name.split('-')[0], // Short name
+          name: p.name.split('-')[0],
           height: latest?.plantHeight || 0,
           fullName: p.name
       };
-  }).filter(d => d.height > 0).slice(0, 10); // Top 10 for readability
+  }).filter(d => d.height > 0).slice(0, 10);
 
   const activePlots = plots.filter(p => p.status === 'Activa').length;
   const completedPlots = plots.filter(p => p.status === 'Cosechada').length;
-  // Count plots that have at least one record with yield
   const harvestedDataCount = plots.filter(p => {
       const latest = getLatestRecord(p.id);
       return latest && latest.yield && latest.yield > 0;
@@ -119,6 +122,83 @@ export default function Dashboard() {
       XLSX.utils.book_append_sheet(wb, ws, "Dashboard");
       XLSX.writeFile(wb, "dashboard_data.xlsx");
   };
+
+  if (isSetupMode) {
+      return (
+          <div className="max-w-4xl mx-auto py-10">
+              <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-hemp-100">
+                  <div className="bg-hemp-600 p-8 text-white">
+                      <h1 className="text-3xl font-bold mb-2">¡Bienvenido a HempAPP! 👋</h1>
+                      <p className="text-hemp-100 text-lg">Parece que es tu primera vez aquí. Vamos a configurar el sistema.</p>
+                  </div>
+                  <div className="p-8">
+                      <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center">
+                          <AlertCircle className="mr-2 text-hemp-600"/> Pasos Recomendados
+                      </h2>
+                      
+                      <div className="space-y-4">
+                          {/* Step 1: Create User */}
+                          <div className={`p-4 rounded-xl border flex items-center justify-between ${currentUser?.id === 'rescue-admin-001' ? 'bg-orange-50 border-orange-200' : 'bg-gray-50 border-gray-200 opacity-60'}`}>
+                              <div className="flex items-center space-x-4">
+                                  <div className="bg-white p-3 rounded-full shadow-sm">
+                                      <Users className="text-orange-500" size={24} />
+                                  </div>
+                                  <div>
+                                      <h3 className="font-bold text-gray-800">1. Crear Usuario Real</h3>
+                                      <p className="text-sm text-gray-600">Estás usando un usuario temporal. Crea tu administrador definitivo.</p>
+                                  </div>
+                              </div>
+                              <Link to="/users" className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition font-medium text-sm flex items-center">
+                                  Ir a Usuarios <ArrowRight size={16} className="ml-2"/>
+                              </Link>
+                          </div>
+
+                          {/* Step 2: Master Data */}
+                          <div className="p-4 rounded-xl border bg-white border-gray-200 hover:border-hemp-300 transition shadow-sm flex items-center justify-between group">
+                              <div className="flex items-center space-x-4">
+                                  <div className="bg-blue-50 p-3 rounded-full group-hover:bg-blue-100 transition">
+                                      <Sprout className="text-blue-500" size={24} />
+                                  </div>
+                                  <div>
+                                      <h3 className="font-bold text-gray-800">2. Cargar Variedades y Locaciones</h3>
+                                      <p className="text-sm text-gray-600">Define qué genéticas vas a probar y dónde.</p>
+                                  </div>
+                              </div>
+                              <div className="flex space-x-2">
+                                  <Link to="/varieties" className="px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition text-sm">
+                                      Variedades
+                                  </Link>
+                                  <Link to="/locations" className="px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition text-sm">
+                                      Locaciones
+                                  </Link>
+                              </div>
+                          </div>
+
+                          {/* Step 3: Projects */}
+                          <div className="p-4 rounded-xl border bg-white border-gray-200 hover:border-hemp-300 transition shadow-sm flex items-center justify-between group">
+                              <div className="flex items-center space-x-4">
+                                  <div className="bg-purple-50 p-3 rounded-full group-hover:bg-purple-100 transition">
+                                      <FolderOpen className="text-purple-500" size={24} />
+                                  </div>
+                                  <div>
+                                      <h3 className="font-bold text-gray-800">3. Crear Proyecto Marco</h3>
+                                      <p className="text-sm text-gray-600">Agrupa tus ensayos (ej: "Campaña 2024").</p>
+                                  </div>
+                              </div>
+                              <Link to="/projects" className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium text-sm">
+                                  Crear Proyecto
+                              </Link>
+                          </div>
+                      </div>
+
+                      <div className="mt-8 p-4 bg-gray-50 rounded-lg text-center text-sm text-gray-500">
+                          Una vez completes estos pasos, este panel será reemplazado por los gráficos de rendimiento.
+                      </div>
+                  </div>
+              </div>
+          </div>
+      );
+  }
 
   return (
     <div className="space-y-6">
