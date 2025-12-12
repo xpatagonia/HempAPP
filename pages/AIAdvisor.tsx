@@ -80,14 +80,12 @@ export default function AIAdvisor() {
         setError(null);
 
         try {
-            // TRUCO PARA EVITAR ERROR DE BUILD EN VERCEL:
-            // Usamos una variable para el nombre del módulo. Esto impide que Vite intente analizar
-            // o resolver la dependencia durante la compilación.
-            // La carga se realiza 100% en el navegador del usuario usando esm.sh.
-            const moduleName = "https://esm.sh/@google/genai@0.2.1";
-            
-            // @ts-ignore
-            const { GoogleGenAI } = await import(/* @vite-ignore */ moduleName);
+            // SOLUCIÓN DEFINITIVA PARA ERROR DE BUILD EN VERCEL:
+            // Usamos 'new Function' para crear el import dinámicamente.
+            // Esto oculta completamente la sentencia import del analizador estático de Vite/Rollup.
+            // El navegador ejecutará esto en tiempo de ejecución descargando la librería desde el CDN.
+            const loadGenAI = new Function('return import("https://esm.sh/@google/genai@0.2.1")');
+            const { GoogleGenAI } = await loadGenAI();
             
             const ai = new GoogleGenAI({ apiKey });
             
