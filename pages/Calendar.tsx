@@ -12,6 +12,7 @@ export default function CalendarPage() {
 
   const prevMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
   const nextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+  const goToToday = () => setCurrentDate(new Date());
 
   // --- EVENT GENERATION LOGIC ---
   const events: any[] = [];
@@ -32,16 +33,24 @@ export default function CalendarPage() {
         // Logic: Sowing Date + Variety Cycle Days
         const variety = varieties.find(v => v.id === p.varietyId);
         if (variety && variety.cycleDays) {
-            const sowing = new Date(p.sowingDate);
-            // Add cycle days (UTC safe approx)
-            const harvest = new Date(sowing.getTime() + (variety.cycleDays * 24 * 60 * 60 * 1000));
-            events.push({
-                date: harvest.toISOString().split('T')[0],
-                title: `Cosecha Est: ${p.name}`,
-                type: 'harvest_est',
-                id: p.id + '_h',
-                details: `${variety.name} (${variety.cycleDays} días)`
-            });
+            // Treat date as simple ISO to avoid timezone shifts
+            const parts = p.sowingDate.split('-');
+            if(parts.length === 3) {
+                const sowingTs = new Date(Number(parts[0]), Number(parts[1])-1, Number(parts[2])).getTime();
+                const harvestDate = new Date(sowingTs + (variety.cycleDays * 24 * 60 * 60 * 1000));
+                
+                const yyyy = harvestDate.getFullYear();
+                const mm = String(harvestDate.getMonth() + 1).padStart(2, '0');
+                const dd = String(harvestDate.getDate()).padStart(2, '0');
+
+                events.push({
+                    date: `${yyyy}-${mm}-${dd}`,
+                    title: `Cosecha Est: ${p.name}`,
+                    type: 'harvest_est',
+                    id: p.id + '_h',
+                    details: `${variety.name} (${variety.cycleDays} días)`
+                });
+            }
         }
     }
   });
@@ -85,16 +94,21 @@ export default function CalendarPage() {
              </div>
         </div>
         
-        <div className="flex items-center bg-white rounded-lg shadow-sm border p-1">
-            <button onClick={prevMonth} className="p-2 hover:bg-gray-100 rounded text-gray-600">
-                <ChevronLeft size={20}/>
+        <div className="flex items-center space-x-2">
+            <button onClick={goToToday} className="px-3 py-2 bg-white border rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition shadow-sm mr-2">
+                Hoy
             </button>
-            <span className="px-6 font-bold text-gray-800 capitalize min-w-[180px] text-center">
-                {monthName}
-            </span>
-            <button onClick={nextMonth} className="p-2 hover:bg-gray-100 rounded text-gray-600">
-                <ChevronRight size={20}/>
-            </button>
+            <div className="flex items-center bg-white rounded-lg shadow-sm border p-1">
+                <button onClick={prevMonth} className="p-2 hover:bg-gray-100 rounded text-gray-600">
+                    <ChevronLeft size={20}/>
+                </button>
+                <span className="px-6 font-bold text-gray-800 capitalize min-w-[180px] text-center">
+                    {monthName}
+                </span>
+                <button onClick={nextMonth} className="p-2 hover:bg-gray-100 rounded text-gray-600">
+                    <ChevronRight size={20}/>
+                </button>
+            </div>
         </div>
       </div>
 
@@ -143,8 +157,13 @@ export default function CalendarPage() {
                                       {ev.type === 'harvest_est' && <Clock size={10} className="mr-1 flex-shrink-0" />}
                                       {ev.type === 'task' && <CheckSquare size={10} className="mr-1 flex-shrink-0" />}
                                       <span className="truncate">{ev.title.replace('Siembra: ', '').replace('Tarea: ', '')}</span>
+                                      
+                                      {/* Links */}
                                       {ev.type === 'sowing' && (
                                           <Link to={`/plots/${ev.id}`} className="absolute inset-0" />
+                                      )}
+                                      {ev.type === 'task' && (
+                                          <Link to={`/tasks`} className="absolute inset-0" />
                                       )}
                                   </div>
                               ))}
@@ -155,14 +174,14 @@ export default function CalendarPage() {
           </div>
       </div>
 
-      <div className="flex space-x-6 text-sm text-gray-600 justify-center">
+      <div className="flex flex-wrap gap-4 text-sm text-gray-600 justify-center">
           <div className="flex items-center">
               <span className="w-3 h-3 bg-green-100 border border-green-200 rounded mr-2"></span>
               Siembra Realizada
           </div>
           <div className="flex items-center">
               <span className="w-3 h-3 bg-amber-100 border border-amber-200 rounded mr-2"></span>
-              Cosecha Estimada (Calculada)
+              Cosecha Estimada
           </div>
           <div className="flex items-center">
               <span className="w-3 h-3 bg-blue-50 border border-blue-100 rounded mr-2"></span>
