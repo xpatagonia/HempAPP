@@ -80,6 +80,7 @@ export interface SeedMovement {
   transportType?: 'Propio' | 'Tercerizado'; // Nuevo
   driverName: string;
   vehiclePlate: string;
+  vehicleModel?: string; // Modelo del vehiculo (Nuevo)
   transportCompany?: string;
   routeItinerary?: string; // Calles / Rutas principales (Nuevo)
   

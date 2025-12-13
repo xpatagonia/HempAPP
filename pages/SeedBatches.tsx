@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { SeedBatch, SeedMovement } from '../types';
-import { Plus, ScanBarcode, Edit2, Trash2, Tag, Calendar, Package, Truck, Printer, MapPin, FileText, ArrowRight, Building, FileDigit, Globe, Clock, Box, ShieldCheck, Map, Barcode } from 'lucide-react';
+import { Plus, ScanBarcode, Edit2, Trash2, Tag, Calendar, Package, Truck, Printer, MapPin, FileText, ArrowRight, Building, FileDigit, Globe, Clock, Box, ShieldCheck, Map, Barcode, UserCheck, Car } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -24,16 +24,16 @@ export default function SeedBatches() {
     supplierCuit: '',
     supplierRenspa: '',
     supplierAddress: '',
-    originCountry: '', // Nuevo
+    originCountry: '',
     batchCode: '',
-    gs1Code: '', // Nuevo
+    gs1Code: '',
     certificationNumber: '',
     purchaseDate: new Date().toISOString().split('T')[0],
     initialQuantity: 0,
     remainingQuantity: 0,
     storageConditions: '',
-    storageAddress: '', // Nuevo
-    logisticsResponsible: '', // Nuevo
+    storageAddress: '',
+    logisticsResponsible: '',
     notes: '',
     isActive: true
   });
@@ -47,11 +47,12 @@ export default function SeedBatches() {
       date: new Date().toISOString().split('T')[0],
       dispatchTime: new Date().toTimeString().substring(0, 5),
       transportGuideNumber: '',
-      transportType: 'Propio', // Nuevo
+      transportType: 'Propio',
       driverName: '',
       vehiclePlate: '',
+      vehicleModel: '', // Nuevo
       transportCompany: '',
-      routeItinerary: '', // Nuevo
+      routeItinerary: '',
       status: 'En Tránsito'
   });
 
@@ -139,6 +140,7 @@ export default function SeedBatches() {
           transportType: moveFormData.transportType || 'Propio',
           driverName: moveFormData.driverName || '',
           vehiclePlate: moveFormData.vehiclePlate || '',
+          vehicleModel: moveFormData.vehicleModel || '',
           transportCompany: moveFormData.transportCompany || '',
           routeItinerary: moveFormData.routeItinerary || '',
           status: 'En Tránsito'
@@ -161,7 +163,7 @@ export default function SeedBatches() {
         batchId: '', targetLocationId: '', quantity: 0,
         date: new Date().toISOString().split('T')[0],
         dispatchTime: new Date().toTimeString().substring(0, 5),
-        transportGuideNumber: '', transportType: 'Propio', driverName: '', vehiclePlate: '', transportCompany: '', routeItinerary: '', status: 'En Tránsito'
+        transportGuideNumber: '', transportType: 'Propio', driverName: '', vehiclePlate: '', vehicleModel: '', transportCompany: '', routeItinerary: '', status: 'En Tránsito'
       });
   };
 
@@ -245,28 +247,36 @@ export default function SeedBatches() {
       doc.setFont("helvetica", "normal");
       doc.text(`Modalidad: ${m.transportType || 'Propio'}`, 14, finalY + 8);
       doc.text(`Conductor: ${m.driverName}`, 14, finalY + 14);
-      doc.text(`Patente Vehículo: ${m.vehiclePlate}`, 14, finalY + 20);
+      doc.text(`Vehículo: ${m.vehicleModel || 'No especificado'}`, 14, finalY + 20);
+      doc.text(`Patente: ${m.vehiclePlate}`, 110, finalY + 20);
       doc.text(`Empresa: ${m.transportCompany || '-'}`, 110, finalY + 14);
       
-      // Itinerario
+      // Itinerario (Declaración Jurada de Ruta)
+      const routeY = finalY + 30;
+      doc.setDrawColor(0);
+      doc.rect(14, routeY, 182, 35);
+      doc.setFont("helvetica", "bold");
+      doc.text("DECLARACIÓN DE ITINERARIO (RUTA)", 16, routeY + 6);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
       if (m.routeItinerary) {
-          doc.text(`Itinerario / Ruta:`, 14, finalY + 28);
-          doc.setFontSize(9);
-          const splitText = doc.splitTextToSize(m.routeItinerary, 180);
-          doc.text(splitText, 14, finalY + 34);
+          const splitText = doc.splitTextToSize(m.routeItinerary, 178);
+          doc.text(splitText, 16, routeY + 12);
+      } else {
+          doc.text("Ruta directa por vías principales según normativa vigente.", 16, routeY + 12);
       }
 
       // Firmas
-      doc.line(14, 260, 80, 260);
+      doc.line(14, 270, 80, 270);
       doc.setFontSize(10);
-      doc.text("Firma Emisor", 30, 265);
+      doc.text("Firma Emisor", 30, 275);
       
-      doc.line(120, 260, 186, 260);
-      doc.text("Firma Receptor / Conductor", 130, 265);
+      doc.line(120, 270, 186, 270);
+      doc.text("Firma Receptor / Conductor", 130, 275);
 
       // Footer disclaimer
       doc.setFontSize(8);
-      doc.text("Este documento ampara el tránsito de semilla fiscalizada según Ley de Semillas vigente.", 105, 280, { align: 'center' });
+      doc.text("Este documento ampara el tránsito de semilla fiscalizada según Ley de Semillas vigente.", 105, 285, { align: 'center' });
 
       doc.save(`Guia_Transporte_${m.transportGuideNumber}.pdf`);
   };
@@ -650,19 +660,24 @@ export default function SeedBatches() {
                         <input required type="text" className={inputClass} value={moveFormData.driverName} onChange={e => setMoveFormData({...moveFormData, driverName: e.target.value})} />
                     </div>
                     <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Vehículo (Modelo)</label>
+                        <input required type="text" placeholder="Ej: Toyota Hilux" className={inputClass} value={moveFormData.vehicleModel} onChange={e => setMoveFormData({...moveFormData, vehicleModel: e.target.value})} />
+                    </div>
+                    <div className="col-span-2">
                         <label className="block text-sm font-medium text-gray-700 mb-1">Patente / Dominio</label>
-                        <input required type="text" className={inputClass} value={moveFormData.vehiclePlate} onChange={e => setMoveFormData({...moveFormData, vehiclePlate: e.target.value})} />
+                        <input required type="text" placeholder="AA 123 BB" className={inputClass} value={moveFormData.vehiclePlate} onChange={e => setMoveFormData({...moveFormData, vehiclePlate: e.target.value})} />
                     </div>
                 </div>
 
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
-                        <Map size={14} className="mr-1"/> Itinerario (Calles / Ruta)
+                        <Map size={14} className="mr-1"/> Itinerario (Rutas / Calles)
                     </label>
                     <textarea 
                         className={inputClass} 
                         rows={2} 
-                        placeholder="Ej: Salida por RN7, empalme RP31, camino rural hasta tranquera."
+                        required
+                        placeholder="Obligatorio: Declarar ruta principal (Ej: Salida por RN7, empalme RP31...)"
                         value={moveFormData.routeItinerary}
                         onChange={e => setMoveFormData({...moveFormData, routeItinerary: e.target.value})}
                     />
@@ -679,38 +694,65 @@ export default function SeedBatches() {
         </div>
       )}
 
-      {/* --- LABEL MODAL (QR / GS1) --- */}
+      {/* --- LABEL MODAL (REDESIGNED) --- */}
       {showLabelModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-xl max-w-sm w-full p-6 shadow-xl text-center">
-                  <h3 className="text-lg font-bold text-gray-800 mb-1">Etiqueta de Trazabilidad</h3>
-                  <p className="text-sm text-gray-500 mb-4">{showLabelModal.batchCode}</p>
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+              <div className="bg-white rounded-xl max-w-sm w-full p-0 shadow-2xl overflow-hidden border-2 border-gray-900">
                   
-                  <div className="border-2 border-black p-4 inline-block bg-white mb-4">
-                        {/* QR Code */}
-                        <img 
-                            src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(`BATCH:${showLabelModal.batchCode}|GS1:${showLabelModal.gs1Code || ''}`)}`} 
-                            alt="QR" 
-                            className="w-32 h-32 mx-auto mb-2"
-                        />
-                        {/* Fake Barcode Visual */}
-                        <div className="font-mono text-xs tracking-widest mt-2 flex flex-col items-center">
-                            <Barcode size={32} className="w-full h-10"/>
-                            <span>{showLabelModal.gs1Code || 'SIN GTIN'}</span>
-                        </div>
+                  {/* Sticker Header */}
+                  <div className="bg-gray-900 text-white p-3 text-center">
+                      <h3 className="text-lg font-bold uppercase tracking-wider">Trazabilidad Oficial</h3>
+                      <p className="text-[10px] text-gray-400">MATERIAL DE PROPAGACIÓN - FISCALIZADO</p>
                   </div>
 
-                  <div className="text-left text-sm bg-gray-50 p-3 rounded mb-4">
-                      <div><strong>Variedad:</strong> {varieties.find(v => v.id === showLabelModal.varietyId)?.name}</div>
-                      <div><strong>Origen:</strong> {showLabelModal.originCountry || 'N/A'}</div>
-                      <div><strong>Ubicación:</strong> {showLabelModal.storageAddress || 'Depósito'}</div>
+                  <div className="p-6 text-center">
+                      <h2 className="text-2xl font-mono font-black text-gray-900 mb-1">{showLabelModal.batchCode}</h2>
+                      <p className="text-xs text-gray-500 uppercase font-bold mb-4 tracking-widest">
+                          {varieties.find(v => v.id === showLabelModal.varietyId)?.name}
+                      </p>
+                      
+                      <div className="border-4 border-black p-4 inline-block bg-white mb-4 relative">
+                            {/* QR Code */}
+                            <img 
+                                src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(`BATCH:${showLabelModal.batchCode}|GS1:${showLabelModal.gs1Code || ''}|ORIGIN:${showLabelModal.originCountry}`)}`} 
+                                alt="QR" 
+                                className="w-32 h-32 mx-auto mb-2"
+                            />
+                            
+                            {/* Visual Corners for scan feel */}
+                            <div className="absolute top-0 left-0 w-4 h-4 border-l-4 border-t-4 border-black"></div>
+                            <div className="absolute top-0 right-0 w-4 h-4 border-r-4 border-t-4 border-black"></div>
+                            <div className="absolute bottom-0 left-0 w-4 h-4 border-l-4 border-b-4 border-black"></div>
+                            <div className="absolute bottom-0 right-0 w-4 h-4 border-r-4 border-b-4 border-black"></div>
+
+                            {/* GS1 Barcode Simulation */}
+                            <div className="font-mono text-xs tracking-widest mt-2 flex flex-col items-center">
+                                <Barcode size={40} className="w-full h-8"/>
+                                <span className="font-bold">{showLabelModal.gs1Code || 'GS1 NO REGISTRADO'}</span>
+                            </div>
+                      </div>
+
+                      <div className="text-left text-xs bg-gray-100 p-3 rounded border border-gray-300 font-mono space-y-1">
+                          <div className="flex justify-between">
+                              <span className="text-gray-500">ORIGEN:</span> 
+                              <span className="font-bold">{showLabelModal.originCountry || 'N/A'}</span>
+                          </div>
+                          <div className="flex justify-between">
+                              <span className="text-gray-500">FECHA:</span> 
+                              <span className="font-bold">{showLabelModal.purchaseDate}</span>
+                          </div>
+                          <div className="flex justify-between">
+                              <span className="text-gray-500">PROVEEDOR:</span> 
+                              <span className="font-bold">{showLabelModal.supplierName.substring(0,15)}</span>
+                          </div>
+                      </div>
                   </div>
 
-                  <div className="flex justify-center space-x-2">
-                      <button onClick={() => window.print()} className="bg-gray-800 text-white px-4 py-2 rounded flex items-center hover:bg-gray-900">
-                          <Printer size={16} className="mr-2"/> Imprimir
+                  <div className="flex bg-gray-50 p-4 border-t border-gray-200 justify-center space-x-4">
+                      <button onClick={() => window.print()} className="bg-gray-900 text-white px-6 py-2 rounded font-bold hover:bg-black flex items-center shadow-lg transform hover:-translate-y-0.5 transition">
+                          <Printer size={18} className="mr-2"/> Imprimir
                       </button>
-                      <button onClick={() => setShowLabelModal(null)} className="text-gray-500 hover:bg-gray-100 px-4 py-2 rounded">
+                      <button onClick={() => setShowLabelModal(null)} className="text-gray-600 hover:bg-gray-200 px-6 py-2 rounded font-medium transition">
                           Cerrar
                       </button>
                   </div>
