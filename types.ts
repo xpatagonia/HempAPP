@@ -58,13 +58,14 @@ export interface Location {
 export interface Plot {
   id: string;
   name: string; // Generated Name e.g. "VAR-B1-R1"
+  type: 'Ensayo' | 'Producción'; // Nuevo: Diferencia I+D de Lotes Comerciales
   projectId: string; 
   locationId: string;
   varietyId: string;
   
   // Experimental Design Identifiers
-  block: string;    // Bloque
-  replicate: number; // Rep (Repetición)
+  block: string;    // Bloque (o Lote en producción)
+  replicate: number; // Rep (Repetición o Sector)
   
   // Ownership
   ownerName: string; 
@@ -73,7 +74,7 @@ export interface Plot {
   // Setup
   sowingDate: string;
   surfaceArea?: number; // Nueva Superficie
-  surfaceUnit?: 'm2' | 'ha'; // Unidad de medida
+  surfaceUnit?: 'm2' | 'ha' | 'ac'; // Unidad de medida (Agregado Acres)
   rowDistance: number; // cm
   density: number; // plants/m2 target
   status: 'Activa' | 'Cosechada' | 'Cancelada';

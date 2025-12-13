@@ -1,8 +1,9 @@
+
 import React, { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { Plot } from '../types';
-import { Plus, ChevronRight, CheckCircle, FileSpreadsheet, Edit2, Calendar, UserCheck, MapPin, Box, Trash2, LayoutGrid, List, Image as ImageIcon, Ruler, Droplets } from 'lucide-react';
+import { Plus, ChevronRight, CheckCircle, FileSpreadsheet, Edit2, Calendar, UserCheck, MapPin, Box, Trash2, LayoutGrid, List, Image as ImageIcon, Ruler, Droplets, FlaskConical, Tractor } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 export default function Plots() {
@@ -19,10 +20,12 @@ export default function Plots() {
 
   const [filterLoc, setFilterLoc] = useState('all');
   const [filterProj, setFilterProj] = useState(initialProjectFilter);
+  const [filterType, setFilterType] = useState<'all' | 'Ensayo' | 'Producción'>('all');
 
   // Extended form state to handle lat/lng strings
   const [formData, setFormData] = useState<Partial<Plot> & { lat?: string, lng?: string }>({
     projectId: '', locationId: '', varietyId: '', 
+    type: 'Ensayo',
     block: '1', replicate: 1,
     ownerName: '', responsibleIds: [],
     sowingDate: '', rowDistance: 0, density: 0, 
@@ -43,7 +46,14 @@ export default function Plots() {
     // Generate standard name if creating
     const v = varieties.find(v => v.id === formData.varietyId);
     const varCode = v ? v.name.substring(0, 3).toUpperCase() : 'VAR';
-    const autoName = `${varCode}-B${formData.block}-R${formData.replicate}`;
+    
+    // Naming convention differs slightly by type
+    let autoName = '';
+    if (formData.type === 'Producción') {
+        autoName = `LOTE-${formData.block}-${varCode}`; // Example: LOTE-A1-USO
+    } else {
+        autoName = `${varCode}-B${formData.block}-R${formData.replicate}`; // Example: USO-B1-R1
+    }
 
     // Process coordinates
     const coordinates = (formData.lat && formData.lng) 
@@ -51,6 +61,7 @@ export default function Plots() {
       : undefined;
 
     const plotPayload = {
+      type: formData.type || 'Ensayo',
       locationId: formData.locationId!,
       varietyId: formData.varietyId!,
       projectId: formData.projectId!,
@@ -71,7 +82,8 @@ export default function Plots() {
 
     if (editingId) {
         // When editing, keep ID and Name (unless we want to regen name, but better keep stable)
-        updatePlot({ ...plotPayload, id: editingId, name: autoName } as Plot);
+        // Only regen name if user specifically cleared it or logic demanded (omitted for stability)
+        updatePlot({ ...plotPayload, id: editingId, name: plots.find(p => p.id === editingId)?.name || autoName } as Plot);
     } else {
         addPlot({
             ...plotPayload,
@@ -86,7 +98,7 @@ export default function Plots() {
 
   const resetForm = () => {
     setFormData({
-        projectId: '', locationId: '', varietyId: '', block: '1', replicate: 1,
+        projectId: '', locationId: '', varietyId: '', type: 'Ensayo', block: '1', replicate: 1,
         ownerName: '', responsibleIds: [], sowingDate: '', rowDistance: 0, density: 0, 
         surfaceArea: 0, surfaceUnit: 'm2',
         status: 'Activa', observations: '', irrigationType: '',
@@ -106,7 +118,8 @@ export default function Plots() {
         lat: p.coordinates?.lat.toString() || '',
         lng: p.coordinates?.lng.toString() || '',
         surfaceArea: p.surfaceArea || 0,
-        surfaceUnit: p.surfaceUnit || 'm2'
+        surfaceUnit: p.surfaceUnit || 'm2',
+        type: p.type || 'Ensayo'
       });
       setEditingId(p.id);
       setIsModalOpen(true);
@@ -131,10 +144,11 @@ export default function Plots() {
         const d = getLatestRecord(p.id);
 
         return {
+            'Tipo': p.type || 'Ensayo',
             'Proyecto': pr?.name,
             'Locación': l?.name,
             'Variedad': v?.name,
-            'Bloque': p.block,
+            'Bloque/Lote': p.block,
             'Repetición': p.replicate,
             'Latitud': p.coordinates?.lat || l?.coordinates?.lat || '-',
             'Longitud': p.coordinates?.lng || l?.coordinates?.lng || '-',
@@ -142,21 +156,7 @@ export default function Plots() {
             'Fecha Siembra': p.sowingDate,
             'Último Reg': d?.date || '-',
             'Etapa': d?.stage || '-',
-            'Emergencia': d?.emergenceDate || '-',
-            'N° Plantas/m (Ini)': d?.plantsPerMeterInit || '-',
-            'Uniformidad': d?.uniformity || '-',
-            'Vigor': d?.vigor || '-',
-            'Floración': d?.floweringDate || '-',
             'Altura Planta': d?.plantHeight || '-',
-            'Vuelco': d?.lodging || '-',
-            'Daño Aves': d?.birdDamage || '-',
-            'Enfermedades': d?.diseases || '-',
-            'Plagas': d?.pests || '-',
-            'Fecha Cosecha': d?.harvestDate || '-',
-            'Altura Cosecha': d?.harvestHeight || '-',
-            'N° Plantas/m (Fin)': d?.plantsPerMeterFinal || '-',
-            'Peso Tallo (g)': d?.stemWeight || '-',
-            'Peso Hoja (g)': d?.leafWeight || '-',
             'Rendimiento': d?.yield || '-',
             'Observaciones': p.observations || '-',
             'Riego': p.irrigationType || '-'
@@ -165,8 +165,8 @@ export default function Plots() {
 
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Resumen Ensayos");
-    XLSX.writeFile(workbook, "Registro_Ensayos_Canamo.xlsx");
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Registro_Cultivos");
+    XLSX.writeFile(workbook, "HempAPP_Registro_Cultivos.xlsx");
   };
 
   const toggleResponsible = (userId: string) => {
@@ -181,8 +181,9 @@ export default function Plots() {
   const filteredPlots = plots.filter(p => {
       const matchLoc = filterLoc === 'all' || p.locationId === filterLoc;
       const matchProj = filterProj === 'all' || p.projectId === filterProj;
+      const matchType = filterType === 'all' || p.type === filterType;
       const isAssigned = isAdmin || (currentUser && p.responsibleIds?.includes(currentUser.id));
-      return matchLoc && matchProj && isAssigned;
+      return matchLoc && matchProj && matchType && isAssigned;
   });
 
   const getLatestPhoto = (plotId: string) => {
@@ -200,8 +201,8 @@ export default function Plots() {
     <div>
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <div>
-            <h1 className="text-2xl font-bold text-gray-800">Planilla de Ensayos</h1>
-            <p className="text-sm text-gray-500">Gestión operativa y monitoreo de parcelas.</p>
+            <h1 className="text-2xl font-bold text-gray-800">Planilla de Cultivo</h1>
+            <p className="text-sm text-gray-500">Gestión de parcelas de ensayo y lotes productivos.</p>
         </div>
         <div className="flex space-x-2 w-full sm:w-auto">
           {/* View Toggle */}
@@ -235,14 +236,40 @@ export default function Plots() {
 
       {/* Filters */}
       <div className="mb-6 space-y-3">
-        <div className="flex items-center space-x-2 overflow-x-auto pb-1 custom-scrollbar">
-             <span className="text-sm font-semibold text-gray-500 mr-2">Proyecto:</span>
-             <button onClick={() => setFilterProj('all')} className={`px-3 py-1 rounded-full text-xs whitespace-nowrap border transition ${filterProj === 'all' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>Todos</button>
-             {projects.map(pr => (
-                 <button key={pr.id} onClick={() => setFilterProj(pr.id)} className={`px-3 py-1 rounded-full text-xs whitespace-nowrap border transition ${filterProj === pr.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
-                    {pr.name}
-                 </button>
-             ))}
+        <div className="flex flex-col md:flex-row gap-4">
+            
+            {/* Type Filter */}
+            <div className="flex items-center bg-gray-100 p-1 rounded-lg w-fit">
+                <button 
+                    onClick={() => setFilterType('all')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition ${filterType === 'all' ? 'bg-white shadow text-gray-800' : 'text-gray-500'}`}
+                >
+                    Todos
+                </button>
+                <button 
+                    onClick={() => setFilterType('Ensayo')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition flex items-center ${filterType === 'Ensayo' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}
+                >
+                    <FlaskConical size={12} className="mr-1"/> I+D (Ensayos)
+                </button>
+                <button 
+                    onClick={() => setFilterType('Producción')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition flex items-center ${filterType === 'Producción' ? 'bg-white shadow text-green-600' : 'text-gray-500'}`}
+                >
+                    <Tractor size={12} className="mr-1"/> Producción
+                </button>
+            </div>
+
+            {/* Project Filter */}
+            <div className="flex items-center space-x-2 overflow-x-auto pb-1 custom-scrollbar flex-1">
+                 <span className="text-sm font-semibold text-gray-500 mr-2 whitespace-nowrap">Proyecto:</span>
+                 <button onClick={() => setFilterProj('all')} className={`px-3 py-1 rounded-full text-xs whitespace-nowrap border transition ${filterProj === 'all' ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>Todos</button>
+                 {projects.map(pr => (
+                     <button key={pr.id} onClick={() => setFilterProj(pr.id)} className={`px-3 py-1 rounded-full text-xs whitespace-nowrap border transition ${filterProj === pr.id ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
+                        {pr.name}
+                     </button>
+                 ))}
+            </div>
         </div>
       </div>
 
@@ -252,12 +279,12 @@ export default function Plots() {
             <table className="min-w-full divide-y divide-gray-200 text-sm">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500 uppercase">ID</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500 uppercase">ID / Nombre</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500 uppercase">Tipo</th>
                   <th className="px-4 py-3 text-left font-medium text-gray-500 uppercase">Variedad</th>
                   <th className="px-4 py-3 text-center font-medium text-gray-500 uppercase">Bloque</th>
-                  <th className="px-4 py-3 text-center font-medium text-gray-500 uppercase">Rep</th>
                   <th className="px-4 py-3 text-left font-medium text-gray-500 uppercase">Locación</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500 uppercase">Siembra</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500 uppercase">Superficie</th>
                   <th className="px-4 py-3 text-left font-medium text-gray-500 uppercase">Estado</th>
                   <th className="px-4 py-3 text-right"></th>
                 </tr>
@@ -278,11 +305,23 @@ export default function Plots() {
                   return (
                     <tr key={p.id} className="hover:bg-gray-50 group">
                       <td className="px-4 py-3 font-medium text-gray-900">{p.name}</td>
+                      <td className="px-4 py-3">
+                          {p.type === 'Producción' ? (
+                              <span className="flex items-center text-green-700 text-xs bg-green-50 px-2 py-0.5 rounded border border-green-100 w-fit">
+                                  <Tractor size={10} className="mr-1"/> Prod.
+                              </span>
+                          ) : (
+                              <span className="flex items-center text-blue-700 text-xs bg-blue-50 px-2 py-0.5 rounded border border-blue-100 w-fit">
+                                  <FlaskConical size={10} className="mr-1"/> I+D
+                              </span>
+                          )}
+                      </td>
                       <td className="px-4 py-3 text-hemp-800 font-semibold">{vari?.name}</td>
                       <td className="px-4 py-3 text-center">{p.block}</td>
-                      <td className="px-4 py-3 text-center">{p.replicate}</td>
                       <td className="px-4 py-3 text-gray-600">{loc?.name}</td>
-                      <td className="px-4 py-3 text-gray-600">{p.sowingDate}</td>
+                      <td className="px-4 py-3 text-gray-600">
+                          {p.surfaceArea ? `${p.surfaceArea} ${p.surfaceUnit}` : '-'}
+                      </td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                           p.status === 'Activa' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
@@ -322,7 +361,20 @@ export default function Plots() {
                   const latestData = getLatestRecord(p.id);
 
                   return (
-                      <Link to={`/plots/${p.id}`} key={p.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition group flex flex-col h-full">
+                      <Link to={`/plots/${p.id}`} key={p.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition group flex flex-col h-full relative">
+                          {/* Type Badge */}
+                          <div className="absolute top-2 left-2 z-10">
+                              {p.type === 'Producción' ? (
+                                  <span className="bg-green-600 text-white text-[10px] font-bold px-2 py-1 rounded shadow-sm flex items-center">
+                                      <Tractor size={10} className="mr-1"/> COMERCIAL
+                                  </span>
+                              ) : (
+                                  <span className="bg-blue-600 text-white text-[10px] font-bold px-2 py-1 rounded shadow-sm flex items-center">
+                                      <FlaskConical size={10} className="mr-1"/> ENSAYO
+                                  </span>
+                              )}
+                          </div>
+
                           {/* Card Image Header */}
                           <div className="h-48 bg-gray-100 relative overflow-hidden">
                               {latestPhoto ? (
@@ -359,9 +411,9 @@ export default function Plots() {
                                       </div>
                                   </div>
                                   <div className="bg-gray-50 p-2 rounded border border-gray-100">
-                                      <span className="text-[10px] text-gray-500 uppercase font-bold block mb-1">Etapa</span>
-                                      <div className="text-sm font-bold text-gray-800 truncate" title={latestData?.stage}>
-                                          {latestData?.stage || 'Inicial'}
+                                      <span className="text-[10px] text-gray-500 uppercase font-bold block mb-1">Superficie</span>
+                                      <div className="text-sm font-bold text-gray-800 truncate">
+                                          {p.surfaceArea ? `${p.surfaceArea} ${p.surfaceUnit}` : '-'}
                                       </div>
                                   </div>
                               </div>
@@ -389,21 +441,30 @@ export default function Plots() {
        {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-3xl w-full p-6 shadow-xl max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold mb-4 text-gray-900">{editingId ? 'Editar Unidad Experimental' : 'Nueva Unidad Experimental'}</h2>
+            <h2 className="text-xl font-bold mb-4 text-gray-900">{editingId ? 'Editar Unidad' : 'Nueva Unidad de Cultivo'}</h2>
             <form onSubmit={handleSubmit} className="space-y-6">
               
               {/* Sección 1: Identidad */}
               <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
                   <h3 className="text-sm font-bold text-gray-700 mb-3 flex items-center uppercase">
-                      <Box size={14} className="mr-2"/> Identidad del Ensayo
+                      <Box size={14} className="mr-2"/> Identidad y Propósito
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                     <div className="md:col-span-2">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Proyecto Marco</label>
-                        <select required className={inputClass} value={formData.projectId} onChange={e => setFormData({...formData, projectId: e.target.value})}>
-                            <option value="">Seleccionar Proyecto...</option>
-                            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                        </select>
+                     <div className="md:col-span-2 grid grid-cols-2 gap-4">
+                         <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Proyecto Marco</label>
+                            <select required className={inputClass} value={formData.projectId} onChange={e => setFormData({...formData, projectId: e.target.value})}>
+                                <option value="">Seleccionar Proyecto...</option>
+                                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                            </select>
+                         </div>
+                         <div>
+                             <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Cultivo</label>
+                             <select className={inputClass} value={formData.type || 'Ensayo'} onChange={e => setFormData({...formData, type: e.target.value as any})}>
+                                 <option value="Ensayo">I+D (Ensayo Experimental)</option>
+                                 <option value="Producción">Producción (Lote Comercial)</option>
+                             </select>
+                         </div>
                      </div>
                      <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Variedad</label>
@@ -414,11 +475,13 @@ export default function Plots() {
                      </div>
                      <div className="grid grid-cols-2 gap-2">
                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Bloque</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Bloque / Lote</label>
                             <input required type="text" className={inputClass} placeholder="1" value={formData.block} onChange={e => setFormData({...formData, block: e.target.value})} />
                          </div>
                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Rep (R)</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                {formData.type === 'Producción' ? 'Sector' : 'Rep (R)'}
+                            </label>
                             <input required type="number" className={inputClass} placeholder="1" value={formData.replicate} onChange={e => setFormData({...formData, replicate: Number(e.target.value)})} />
                          </div>
                      </div>
@@ -428,11 +491,11 @@ export default function Plots() {
               {/* Sección 2: Ubicación */}
               <div className="border border-gray-200 rounded-lg p-4">
                   <h3 className="text-sm font-bold text-gray-700 mb-3 flex items-center uppercase">
-                      <MapPin size={14} className="mr-2"/> Ubicación
+                      <MapPin size={14} className="mr-2"/> Ubicación Geográfica
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Locación (Base)</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Locación (Establecimiento)</label>
                         <select required className={inputClass} value={formData.locationId} onChange={e => setFormData({...formData, locationId: e.target.value})}>
                           <option value="">Seleccionar...</option>
                           {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
@@ -480,18 +543,19 @@ export default function Plots() {
                         </select>
                     </div>
                     <div className="md:col-span-2">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Superficie</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Superficie Total</label>
                         <div className="flex">
                             <input type="number" step="any" placeholder="0" className={`${inputClass} rounded-r-none border-r-0`} value={formData.surfaceArea || ''} onChange={e => setFormData({...formData, surfaceArea: Number(e.target.value)})} />
                             <select className="bg-gray-50 border border-gray-300 text-gray-700 text-sm rounded-r px-1 focus:outline-none" value={formData.surfaceUnit} onChange={e => setFormData({...formData, surfaceUnit: e.target.value as any})}>
                                 <option value="m2">m²</option>
                                 <option value="ha">ha</option>
+                                <option value="ac">acres</option>
                             </select>
                         </div>
                     </div>
                     <div className="md:col-span-4">
                         <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
-                          <UserCheck size={14} className="mr-1" /> Responsables
+                          <UserCheck size={14} className="mr-1" /> Responsables Asignados
                         </label>
                         <div className="border border-gray-300 bg-white rounded p-2 h-20 overflow-y-auto text-xs grid grid-cols-2 gap-1">
                           {assignableUsers.map(u => (

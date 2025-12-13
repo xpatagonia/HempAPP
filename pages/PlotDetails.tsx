@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { TrialRecord } from '../types';
-import { ArrowLeft, Activity, Scale, AlertTriangle, Camera, FileText, Calendar, MapPin, Globe, Plus, Edit2, Trash2, Download, Droplets, Wind, QrCode, Printer, CheckSquare, Sun, Eye, Loader2, Ruler, Bug, SprayCan } from 'lucide-react';
+import { ArrowLeft, Activity, Scale, AlertTriangle, Camera, FileText, Calendar, MapPin, Globe, Plus, Edit2, Trash2, Download, Droplets, Wind, QrCode, Printer, CheckSquare, Sun, Eye, Loader2, Ruler, Bug, SprayCan, Tractor, FlaskConical } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 export default function PlotDetails() {
@@ -217,7 +218,18 @@ export default function PlotDetails() {
           <div className="p-5 lg:col-span-2 space-y-4">
              <div className="flex justify-between items-start">
                  <div>
-                    <h1 className="text-2xl font-bold text-gray-900">{plot.name}</h1>
+                    <div className="flex items-center space-x-2 mb-1">
+                        <h1 className="text-2xl font-bold text-gray-900">{plot.name}</h1>
+                        {plot.type === 'Producción' ? (
+                            <span className="bg-green-100 text-green-800 border border-green-200 px-2 py-0.5 rounded text-xs font-bold uppercase flex items-center">
+                                <Tractor size={12} className="mr-1"/> Producción
+                            </span>
+                        ) : (
+                             <span className="bg-blue-100 text-blue-800 border border-blue-200 px-2 py-0.5 rounded text-xs font-bold uppercase flex items-center">
+                                <FlaskConical size={12} className="mr-1"/> Ensayo
+                            </span>
+                        )}
+                    </div>
                     <p className="text-sm text-gray-500">{variety?.name} • {location?.name}</p>
                  </div>
                  
