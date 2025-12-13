@@ -23,7 +23,8 @@ import {
   Sun,
   Moon,
   Bell,
-  ScanBarcode
+  ScanBarcode,
+  Building
 } from 'lucide-react';
 
 const NavItem = ({ to, icon: Icon, label, onClick }: any) => {
@@ -192,6 +193,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
           <div className="pt-2">
                <p className="px-4 text-xs font-semibold text-gray-400 uppercase mb-2">Base de Datos</p>
+               <NavItem to="/suppliers" icon={Building} label="Proveedores" onClick={() => setIsMobileOpen(false)} />
                <NavItem to="/varieties" icon={Sprout} label="Variedades" onClick={() => setIsMobileOpen(false)} />
                <NavItem to="/seed-batches" icon={ScanBarcode} label="Stock Semillas" onClick={() => setIsMobileOpen(false)} />
                <NavItem to="/locations" icon={MapPin} label="Locaciones" onClick={() => setIsMobileOpen(false)} />

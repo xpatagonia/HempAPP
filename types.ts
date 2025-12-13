@@ -27,11 +27,23 @@ export interface Project {
   responsibleIds?: string[]; // Usuarios a cargo del proyecto general
 }
 
+// NUEVO: Entidad Proveedor (Semillero / Breeder)
+export interface Supplier {
+  id: string;
+  name: string; // Nombre Comercial / Fantasía
+  legalName?: string; // Razón Social
+  cuit?: string; // Tax ID
+  country: string; // País de Origen
+  website?: string;
+  notes?: string;
+}
+
 export interface Variety {
   id: string;
+  supplierId: string; // Link estricto a Supplier
   name: string;
   usage: UsageType;
-  genetics: string; // Proveedor/Genética (Default)
+  // genetics: string; // REMOVIDO: Ahora se usa supplierId
   cycleDays: number;
   expectedThc: number;
   notes?: string;

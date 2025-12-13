@@ -1,5 +1,6 @@
+
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
-import { Variety, Location, Plot, FieldLog, TrialRecord, User, Project, Task, SeedBatch, SeedMovement } from '../types';
+import { Variety, Location, Plot, FieldLog, TrialRecord, User, Project, Task, SeedBatch, SeedMovement, Supplier } from '../types';
 import { supabase } from '../supabaseClient';
 
 export interface AppNotification {
@@ -20,7 +21,8 @@ interface AppContextType {
   logs: FieldLog[];
   tasks: Task[];
   seedBatches: SeedBatch[];
-  seedMovements: SeedMovement[]; // Nueva Entidad
+  seedMovements: SeedMovement[];
+  suppliers: Supplier[]; // NEW
   notifications: AppNotification[]; 
   
   currentUser: User | null;
@@ -35,6 +37,10 @@ interface AppContextType {
   addVariety: (v: Variety) => void;
   updateVariety: (v: Variety) => void;
   deleteVariety: (id: string) => void;
+
+  addSupplier: (s: Supplier) => Promise<string>; // NEW
+  updateSupplier: (s: Supplier) => void; // NEW
+  deleteSupplier: (id: string) => void; // NEW
 
   addLocation: (l: Location) => void;
   updateLocation: (l: Location) => void;
@@ -106,6 +112,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [usersList, setUsersList] = useState<User[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [varieties, setVarieties] = useState<Variety[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]); // NEW
   const [locations, setLocations] = useState<Location[]>([]);
   const [plots, setPlots] = useState<Plot[]>([]);
   const [trialRecords, setTrialRecords] = useState<TrialRecord[]>([]);
@@ -241,10 +248,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             setUsersList([...getFromLocal('users'), RESCUE_USER]);
             setProjects(getFromLocal('projects'));
             setVarieties(getFromLocal('varieties'));
+            setSuppliers(getFromLocal('suppliers')); // Local
             setLocations(getFromLocal('locations'));
             setPlots(getFromLocal('plots'));
             setSeedBatches(getFromLocal('seedBatches')); 
-            setSeedMovements(getFromLocal('seedMovements')); // LOAD LOCAL
+            setSeedMovements(getFromLocal('seedMovements'));
             setIsEmergencyMode(true);
             setLoading(false);
         }
@@ -259,6 +267,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             const localUsers = getFromLocal('users');
             const localProjects = getFromLocal('projects');
             const localVarieties = getFromLocal('varieties');
+            const localSuppliers = getFromLocal('suppliers');
             const localLocations = getFromLocal('locations');
             const localPlots = getFromLocal('plots');
             const localSeedBatches = getFromLocal('seedBatches');
@@ -299,11 +308,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
             await Promise.allSettled([
                 fetchOrLocal('projects', setProjects, localProjects),
+                fetchOrLocal('suppliers', setSuppliers, localSuppliers), // Fetch Suppliers
                 fetchOrLocal('varieties', setVarieties, localVarieties),
                 fetchOrLocal('locations', setLocations, localLocations),
                 fetchOrLocal('plots', setPlots, localPlots),
                 fetchOrLocal('seed_batches', setSeedBatches, localSeedBatches),
-                fetchOrLocal('seed_movements', setSeedMovements, localSeedMovements), // NEW FETCH
+                fetchOrLocal('seed_movements', setSeedMovements, localSeedMovements),
                 supabase.from('trial_records').select('*').then(res => res.data && setTrialRecords(res.data as TrialRecord[])),
                 supabase.from('field_logs').select('*').then(res => res.data && setLogs(res.data as FieldLog[])),
                 supabase.from('tasks').select('*').then(res => res.data && setTasks(res.data as Task[]))
@@ -392,6 +402,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           saveToLocal('users', newList.filter(user => user.id !== RESCUE_USER.id));
           return newList;
       });
+  };
+
+  // SUPPLIERS
+  const addSupplier = async (s: Supplier) => { 
+      await supabase.from('suppliers').insert([s]); 
+      setSuppliers(prev => { const n = [...prev, s]; saveToLocal('suppliers', n); return n; }); 
+      return s.id;
+  };
+  const updateSupplier = async (s: Supplier) => { 
+      await supabase.from('suppliers').update(s).eq('id', s.id); 
+      setSuppliers(prev => { const n = prev.map(item => item.id === s.id ? s : item); saveToLocal('suppliers', n); return n; }); 
+  };
+  const deleteSupplier = async (id: string) => { 
+      await supabase.from('suppliers').delete().eq('id', id); 
+      setSuppliers(prev => { const n = prev.filter(item => item.id !== id); saveToLocal('suppliers', n); return n; }); 
   };
 
   const addProject = async (p: Project): Promise<boolean> => {
@@ -490,7 +515,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   return (
     <AppContext.Provider value={{
-      projects, varieties, locations, plots, trialRecords, logs, tasks, seedBatches, seedMovements, notifications,
+      projects, varieties, locations, plots, trialRecords, logs, tasks, seedBatches, seedMovements, suppliers, notifications,
       currentUser, usersList, login, logout,
       addProject, updateProject, deleteProject,
       addVariety, updateVariety, deleteVariety,
@@ -501,7 +526,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       addUser, updateUser, deleteUser,
       addTask, updateTask, deleteTask,
       addSeedBatch, updateSeedBatch, deleteSeedBatch,
-      addSeedMovement, updateSeedMovement, deleteSeedMovement, // New Exports
+      addSeedMovement, updateSeedMovement, deleteSeedMovement,
+      addSupplier, updateSupplier, deleteSupplier, // Suppliers
       getPlotHistory, getLatestRecord,
       loading, isEmergencyMode,
       globalApiKey, refreshGlobalConfig,

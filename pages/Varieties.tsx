@@ -1,41 +1,39 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Variety, UsageType } from '../types';
-import { Plus, Search, Tag, Edit2, Trash2, CloudDownload, Sprout } from 'lucide-react';
+import { Plus, Search, Tag, Edit2, Trash2, CloudDownload, Sprout, AlertCircle, Building } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
-// Catálogo Oficial Hemp-it (Datos aproximados de ficha técnica)
-const HEMP_IT_CATALOG: Omit<Variety, 'id'>[] = [
-    { name: 'USO 31', usage: 'Grano', genetics: 'Hemp-it (Francia)', cycleDays: 100, expectedThc: 0.04, notes: 'Monoica. Ciclo muy temprano. Referencia mundial para grano. Tallo fino.' },
-    { name: 'Earlina 8FC', usage: 'Fibra', genetics: 'Hemp-it (Francia)', cycleDays: 110, expectedThc: 0.10, notes: 'Monoica. Ciclo temprano. Alta producción de fibra técnica.' },
-    { name: 'Fedora 17', usage: 'Dual', genetics: 'Hemp-it (Francia)', cycleDays: 130, expectedThc: 0.12, notes: 'Monoica. Ciclo medio-temprano. Muy versátil (grano y fibra). Estable.' },
-    { name: 'Felina 32', usage: 'Dual', genetics: 'Hemp-it (Francia)', cycleDays: 135, expectedThc: 0.12, notes: 'Monoica. Ciclo medio. La variedad más cultivada en Europa. Rústica.' },
-    { name: 'Ferimon', usage: 'Dual', genetics: 'Hemp-it (Francia)', cycleDays: 132, expectedThc: 0.12, notes: 'Monoica. Ciclo medio. Alto contenido de aceite en grano.' },
-    { name: 'Santhica 27', usage: 'Fibra', genetics: 'Hemp-it (Francia)', cycleDays: 135, expectedThc: 0.00, notes: 'Monoica. Rica en CBG. Libre de THC. Uso principal biomasa y fibra.' },
-    { name: 'Santhica 70', usage: 'Fibra', genetics: 'Hemp-it (Francia)', cycleDays: 140, expectedThc: 0.00, notes: 'Monoica. Rica en CBG. Mayor biomasa que S27.' },
-    { name: 'Futura 75', usage: 'Dual', genetics: 'Hemp-it (Francia)', cycleDays: 145, expectedThc: 0.12, notes: 'Monoica. Ciclo tardío. Gran porte, mucha biomasa. Grano y Fibra.' },
-    { name: 'Futura 83', usage: 'Dual', genetics: 'Hemp-it (Francia)', cycleDays: 148, expectedThc: 0.15, notes: 'Monoica. Ciclo tardío. Mejora de F75 con mayor rendimiento.' },
-    { name: 'Fibranova', usage: 'Fibra', genetics: 'Hemp-it (Francia)', cycleDays: 150, expectedThc: 0.10, notes: 'Dioica. Ciclo tardío. Específica para fibra textil y construcción.' },
-    { name: 'Dioïca 88', usage: 'Fibra', genetics: 'Hemp-it (Francia)', cycleDays: 155, expectedThc: 0.10, notes: 'Dioica. Ciclo muy tardío. Máxima producción de biomasa.' },
-    { name: 'Orion 33', usage: 'Dual', genetics: 'Hemp-it (Francia)', cycleDays: 125, expectedThc: 0.10, notes: 'Monoica. Ciclo medio-temprano. Adaptada a diversas latitudes.' }
-];
+// Catálogo Oficial Hemp-it con datos para importación automática
+const HEMP_IT_TEMPLATE = {
+    name: 'Hemp-it France',
+    country: 'Francia',
+    varieties: [
+        { name: 'USO 31', usage: 'Grano', cycleDays: 100, expectedThc: 0.04, notes: 'Monoica. Ciclo muy temprano.' },
+        { name: 'Fedora 17', usage: 'Dual', cycleDays: 130, expectedThc: 0.12, notes: 'Monoica. Ciclo medio-temprano.' },
+        { name: 'Felina 32', usage: 'Dual', cycleDays: 135, expectedThc: 0.12, notes: 'Monoica. Ciclo medio.' },
+        { name: 'Santhica 27', usage: 'Fibra', cycleDays: 135, expectedThc: 0.00, notes: 'Monoica. Rica en CBG. Libre de THC.' },
+        { name: 'Futura 75', usage: 'Dual', cycleDays: 145, expectedThc: 0.12, notes: 'Monoica. Ciclo tardío.' }
+    ]
+};
 
 export default function Varieties() {
-  const { varieties, addVariety, updateVariety, deleteVariety, currentUser } = useAppContext();
+  const { varieties, addVariety, updateVariety, deleteVariety, currentUser, suppliers, addSupplier } = useAppContext();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [isImporting, setIsImporting] = useState(false);
 
-  // Form State
+  // Form State - genetics removed, supplierId added
   const [formData, setFormData] = useState<Partial<Variety>>({
-    name: '', usage: 'Fibra', genetics: '', cycleDays: 120, expectedThc: 0, notes: ''
+    name: '', usage: 'Fibra', supplierId: '', cycleDays: 120, expectedThc: 0, notes: ''
   });
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name) return;
+    if (!formData.name || !formData.supplierId) return;
     
     if (editingId) {
       updateVariety({
@@ -43,7 +41,7 @@ export default function Varieties() {
         id: editingId,
         name: formData.name!,
         usage: formData.usage as UsageType,
-        genetics: formData.genetics || '',
+        supplierId: formData.supplierId!,
         cycleDays: Number(formData.cycleDays),
         expectedThc: Number(formData.expectedThc),
         notes: formData.notes
@@ -53,7 +51,7 @@ export default function Varieties() {
         id: Date.now().toString(),
         name: formData.name!,
         usage: formData.usage as UsageType,
-        genetics: formData.genetics || '',
+        supplierId: formData.supplierId!,
         cycleDays: Number(formData.cycleDays),
         expectedThc: Number(formData.expectedThc),
         notes: formData.notes
@@ -65,7 +63,7 @@ export default function Varieties() {
 
   const closeModal = () => {
     setIsModalOpen(false);
-    setFormData({ name: '', usage: 'Fibra', genetics: '', cycleDays: 120, expectedThc: 0, notes: '' });
+    setFormData({ name: '', usage: 'Fibra', supplierId: '', cycleDays: 120, expectedThc: 0, notes: '' });
     setEditingId(null);
   };
 
@@ -82,36 +80,44 @@ export default function Varieties() {
   };
 
   const handleImportCatalog = async () => {
-      if(!window.confirm("¿Importar el catálogo oficial de Hemp-it? Se agregarán las variedades que no existan en tu base de datos.")) return;
+      if(!window.confirm("¿Importar catálogo base de Hemp-it? Se creará el proveedor si no existe.")) return;
       
       setIsImporting(true);
-      let count = 0;
       
-      // Simular delay de carga
-      await new Promise(r => setTimeout(r, 800));
+      // 1. Find or Create Supplier
+      let supplierId = suppliers.find(s => s.name.toLowerCase().includes('hemp-it'))?.id;
+      
+      if (!supplierId) {
+          supplierId = await addSupplier({
+              id: Date.now().toString(),
+              name: HEMP_IT_TEMPLATE.name,
+              country: HEMP_IT_TEMPLATE.country,
+              legalName: 'Hemp-it Cooperative'
+          });
+      }
 
-      HEMP_IT_CATALOG.forEach(template => {
-          // Check if variety name already exists (case insensitive)
+      // 2. Add Varieties
+      let count = 0;
+      HEMP_IT_TEMPLATE.varieties.forEach(template => {
           const exists = varieties.some(v => v.name.toLowerCase() === template.name.toLowerCase());
-          
           if (!exists) {
               addVariety({
                   ...template,
                   id: Date.now().toString() + Math.random().toString().slice(2,5),
-                  genetics: 'Hemp-it (Francia)' // Asegurar proveedor
+                  supplierId: supplierId!
               } as Variety);
               count++;
           }
       });
 
       setIsImporting(false);
-      alert(count > 0 ? `Se importaron ${count} variedades exitosamente.` : "Todas las variedades de Hemp-it ya están en tu catálogo.");
+      alert(count > 0 ? `Se importaron ${count} variedades.` : "El catálogo ya está actualizado.");
   };
 
-  const filtered = varieties.filter(v => 
-    v.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    v.genetics.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filtered = varieties.filter(v => {
+      const supplierName = suppliers.find(s => s.id === v.supplierId)?.name || '';
+      return v.name.toLowerCase().includes(searchTerm.toLowerCase()) || supplierName.toLowerCase().includes(searchTerm.toLowerCase());
+  });
 
   const inputClass = "w-full border border-gray-300 bg-white text-gray-900 p-2 rounded focus:ring-2 focus:ring-hemp-500 focus:border-transparent outline-none transition-colors";
 
@@ -120,7 +126,7 @@ export default function Varieties() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>
             <h1 className="text-2xl font-bold text-gray-800">Catálogo de Variedades</h1>
-            <p className="text-sm text-gray-500">Gestión de genética y proveedores de semilla.</p>
+            <p className="text-sm text-gray-500">Gestión de genética vinculada a proveedores.</p>
         </div>
         
         {isAdmin && (
@@ -129,7 +135,6 @@ export default function Varieties() {
                 onClick={handleImportCatalog}
                 disabled={isImporting}
                 className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-blue-700 transition w-full md:w-auto justify-center shadow-sm disabled:opacity-70"
-                title="Cargar variedades de Hemp-it"
               >
                 {isImporting ? <span className="animate-spin mr-2">C</span> : <CloudDownload size={20} className="mr-2" />}
                 Importar Hemp-it
@@ -137,13 +142,13 @@ export default function Varieties() {
               <button 
                 onClick={() => {
                     setEditingId(null);
-                    setFormData({ name: '', usage: 'Fibra', genetics: '', cycleDays: 120, expectedThc: 0, notes: '' });
+                    setFormData({ name: '', usage: 'Fibra', supplierId: '', cycleDays: 120, expectedThc: 0, notes: '' });
                     setIsModalOpen(true);
                 }}
                 className="bg-hemp-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-hemp-700 transition w-full md:w-auto justify-center shadow-sm"
               >
                 <Plus size={20} className="mr-2" />
-                Nueva Manual
+                Nueva Variedad
               </button>
           </div>
         )}
@@ -153,7 +158,7 @@ export default function Varieties() {
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
         <input 
           type="text" 
-          placeholder="Buscar por nombre o proveedor genético..." 
+          placeholder="Buscar por nombre o proveedor..." 
           className="w-full pl-10 pr-4 py-2 border border-gray-300 bg-white text-gray-900 rounded-lg focus:ring-2 focus:ring-hemp-500 outline-none shadow-sm"
           value={searchTerm}
           onChange={e => setSearchTerm(e.target.value)}
@@ -161,56 +166,59 @@ export default function Varieties() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filtered.map(v => (
-          <div key={v.id} className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition relative group">
-             {isAdmin && (
-               <div className="absolute top-3 right-3 flex space-x-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => handleEdit(v)} className="p-1 text-gray-400 hover:text-hemp-600 hover:bg-gray-100 rounded">
-                      <Edit2 size={16} />
-                  </button>
-                  <button onClick={() => handleDelete(v.id)} className="p-1 text-gray-400 hover:text-red-600 hover:bg-gray-100 rounded">
-                      <Trash2 size={16} />
-                  </button>
-               </div>
-             )}
+        {filtered.map(v => {
+            const supplier = suppliers.find(s => s.id === v.supplierId);
+            return (
+              <div key={v.id} className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition relative group">
+                 {isAdmin && (
+                   <div className="absolute top-3 right-3 flex space-x-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => handleEdit(v)} className="p-1 text-gray-400 hover:text-hemp-600 hover:bg-gray-100 rounded">
+                          <Edit2 size={16} />
+                      </button>
+                      <button onClick={() => handleDelete(v.id)} className="p-1 text-gray-400 hover:text-red-600 hover:bg-gray-100 rounded">
+                          <Trash2 size={16} />
+                      </button>
+                   </div>
+                 )}
 
-            <div className="flex justify-between items-start mb-2 pr-12">
-              <div className="flex items-center">
-                  <Sprout size={18} className="text-hemp-500 mr-2" />
-                  <h3 className="text-xl font-bold text-gray-800">{v.name}</h3>
-              </div>
-              <span className={`px-2 py-1 rounded text-xs font-semibold uppercase tracking-wide ${
-                v.usage === 'Medicinal' ? 'bg-purple-100 text-purple-800' :
-                v.usage === 'Fibra' ? 'bg-amber-100 text-amber-800' :
-                'bg-blue-100 text-blue-800'
-              }`}>
-                {v.usage}
-              </span>
-            </div>
-            
-            <div className="bg-gray-50 rounded-lg p-3 space-y-2 text-sm text-gray-600 mb-3 border border-gray-100">
-              <div className="flex justify-between border-b border-gray-200 pb-1">
-                  <span className="font-semibold text-gray-500">Proveedor:</span> 
-                  <span className="font-medium text-gray-900">{v.genetics}</span>
-              </div>
-              <div className="flex justify-between border-b border-gray-200 pb-1">
-                  <span className="font-semibold text-gray-500">Ciclo Aprox:</span> 
-                  <span className="font-medium text-gray-900">{v.cycleDays} días</span>
-              </div>
-              <div className="flex justify-between">
-                  <span className="font-semibold text-gray-500">THC Ref:</span> 
-                  <span className={`font-medium ${v.expectedThc > 0.3 ? 'text-red-500' : 'text-green-600'}`}>{v.expectedThc}%</span>
-              </div>
-            </div>
-            
-            {v.notes && (
-                <div className="flex items-start text-xs text-gray-500 italic mt-2">
-                    <Tag size={12} className="mr-1 mt-0.5 flex-shrink-0" />
-                    {v.notes}
+                <div className="flex justify-between items-start mb-2 pr-12">
+                  <div className="flex items-center">
+                      <Sprout size={18} className="text-hemp-500 mr-2" />
+                      <h3 className="text-xl font-bold text-gray-800">{v.name}</h3>
+                  </div>
+                  <span className={`px-2 py-1 rounded text-xs font-semibold uppercase tracking-wide ${
+                    v.usage === 'Medicinal' ? 'bg-purple-100 text-purple-800' :
+                    v.usage === 'Fibra' ? 'bg-amber-100 text-amber-800' :
+                    'bg-blue-100 text-blue-800'
+                  }`}>
+                    {v.usage}
+                  </span>
                 </div>
-            )}
-          </div>
-        ))}
+                
+                <div className="bg-gray-50 rounded-lg p-3 space-y-2 text-sm text-gray-600 mb-3 border border-gray-100">
+                  <div className="flex justify-between border-b border-gray-200 pb-1">
+                      <span className="font-semibold text-gray-500">Proveedor:</span> 
+                      <span className="font-medium text-gray-900">{supplier?.name || 'Desconocido'}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-gray-200 pb-1">
+                      <span className="font-semibold text-gray-500">Ciclo Aprox:</span> 
+                      <span className="font-medium text-gray-900">{v.cycleDays} días</span>
+                  </div>
+                  <div className="flex justify-between">
+                      <span className="font-semibold text-gray-500">THC Ref:</span> 
+                      <span className={`font-medium ${v.expectedThc > 0.3 ? 'text-red-500' : 'text-green-600'}`}>{v.expectedThc}%</span>
+                  </div>
+                </div>
+                
+                {v.notes && (
+                    <div className="flex items-start text-xs text-gray-500 italic mt-2">
+                        <Tag size={12} className="mr-1 mt-0.5 flex-shrink-0" />
+                        {v.notes}
+                    </div>
+                )}
+              </div>
+            );
+        })}
       </div>
 
       {/* Modal */}
@@ -218,6 +226,22 @@ export default function Varieties() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-lg w-full p-6 shadow-xl max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold mb-4 text-gray-900">{editingId ? 'Editar Variedad' : 'Registrar Variedad'}</h2>
+            
+            {suppliers.length === 0 && (
+                <div className="bg-red-50 p-4 rounded-lg border border-red-100 mb-4 flex items-start">
+                    <AlertCircle className="text-red-600 mr-2 mt-0.5 flex-shrink-0" size={18}/>
+                    <div>
+                        <h4 className="font-bold text-red-800 text-sm">Falta Proveedor</h4>
+                        <p className="text-red-700 text-xs mt-1">
+                            Debes crear al menos un proveedor antes de registrar variedades.
+                        </p>
+                        <Link to="/suppliers" className="text-red-900 underline text-xs font-bold mt-2 block">
+                            Ir a Proveedores
+                        </Link>
+                    </div>
+                </div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Nombre Comercial</label>
@@ -234,8 +258,21 @@ export default function Varieties() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Proveedor / Genética</label>
-                  <input type="text" placeholder="Ej: Hemp-it" className={inputClass} value={formData.genetics} onChange={e => setFormData({...formData, genetics: e.target.value})} />
+                  <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
+                      <Building size={12} className="mr-1"/> Proveedor
+                  </label>
+                  <select 
+                    required 
+                    className={inputClass} 
+                    value={formData.supplierId} 
+                    onChange={e => setFormData({...formData, supplierId: e.target.value})}
+                    disabled={suppliers.length === 0}
+                  >
+                      <option value="">Seleccionar...</option>
+                      {suppliers.map(s => (
+                          <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                  </select>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -254,7 +291,7 @@ export default function Varieties() {
               </div>
               <div className="flex justify-end space-x-2 pt-4">
                 <button type="button" onClick={closeModal} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancelar</button>
-                <button type="submit" className="px-4 py-2 bg-hemp-600 text-white rounded hover:bg-hemp-700 shadow-sm">Guardar</button>
+                <button type="submit" className="px-4 py-2 bg-hemp-600 text-white rounded hover:bg-hemp-700 shadow-sm" disabled={suppliers.length === 0}>Guardar</button>
               </div>
             </form>
           </div>
