@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { TrialRecord } from '../types';
-import { ArrowLeft, Activity, Scale, AlertTriangle, Camera, FileText, Calendar, MapPin, Globe, Plus, Edit2, Trash2, Download, Droplets, Wind, QrCode, Printer, CheckSquare, Sun, Eye, Loader2, Ruler, Bug, SprayCan, Tractor, FlaskConical, Tag } from 'lucide-react';
+import { ArrowLeft, Activity, Scale, AlertTriangle, Camera, FileText, Calendar, MapPin, Globe, Plus, Edit2, Trash2, Download, Droplets, Wind, QrCode, Printer, CheckSquare, Sun, Eye, Loader2, Ruler, Bug, SprayCan, Tractor, FlaskConical, Tag, Clock, UserCheck } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 export default function PlotDetails() {
@@ -34,6 +34,7 @@ export default function PlotDetails() {
 
   const [recordForm, setRecordForm] = useState<Partial<TrialRecord>>({
       date: new Date().toISOString().split('T')[0],
+      time: new Date().toTimeString().substring(0, 5), // Default to current time HH:MM
       stage: 'Vegetativo',
       plantHeight: 0, vigor: 3, uniformity: 3
   });
@@ -92,6 +93,7 @@ export default function PlotDetails() {
           setEditingRecordId(null);
           setRecordForm({
               date: new Date().toISOString().split('T')[0],
+              time: new Date().toTimeString().substring(0, 5),
               stage: 'Vegetativo',
               plantHeight: 0, vigor: 3, uniformity: 3,
               stemDiameter: 0, nodesCount: 0
@@ -109,7 +111,9 @@ export default function PlotDetails() {
       const payload: any = {
           ...recordForm,
           plotId: plot.id,
-          stage: showHarvestSection ? 'Cosecha' : recordForm.stage
+          stage: showHarvestSection ? 'Cosecha' : recordForm.stage,
+          createdBy: editingRecordId ? recordForm.createdBy : currentUser?.id, // Keep original creator if editing
+          createdByName: editingRecordId ? recordForm.createdByName : currentUser?.name // Keep original name
       };
 
       if (!showAppSection) {
@@ -136,6 +140,8 @@ export default function PlotDetails() {
   const handleExportHistory = () => {
     const data = history.map(h => ({
         Fecha: h.date,
+        Hora: h.time || '-',
+        Responsable: h.createdByName || '-',
         Etapa: h.stage,
         'Altura (cm)': h.plantHeight || '-',
         'Aplicación': h.applicationProduct ? `${h.applicationType}: ${h.applicationProduct} (${h.applicationDose})` : '-',
@@ -389,7 +395,8 @@ export default function PlotDetails() {
                 <table className="min-w-full text-sm">
                     <thead className="bg-gray-50">
                         <tr>
-                            <th className="px-4 py-3 text-left font-medium text-gray-500">Fecha</th>
+                            <th className="px-4 py-3 text-left font-medium text-gray-500">Fecha/Hora</th>
+                            <th className="px-4 py-3 text-left font-medium text-gray-500">Responsable</th>
                             <th className="px-4 py-3 text-left font-medium text-gray-500">Etapa</th>
                             <th className="px-4 py-3 text-left font-medium text-gray-500">Altura</th>
                             <th className="px-4 py-3 text-left font-medium text-gray-500">Aplicaciones</th>
@@ -400,12 +407,24 @@ export default function PlotDetails() {
                     <tbody className="divide-y divide-gray-100">
                         {history.length === 0 ? (
                             <tr>
-                                <td colSpan={6} className="px-4 py-8 text-center text-gray-400 italic">No hay registros cargados aún.</td>
+                                <td colSpan={7} className="px-4 py-8 text-center text-gray-400 italic">No hay registros cargados aún.</td>
                             </tr>
                         ) : (
                             history.map(r => (
                                 <tr key={r.id} className="hover:bg-gray-50 cursor-pointer group" onClick={() => handleOpenRecordModal(r, true)}>
-                                    <td className="px-4 py-3 text-gray-900 font-medium">{r.date}</td>
+                                    <td className="px-4 py-3 text-gray-900 font-medium">
+                                        <div className="flex flex-col">
+                                            <span>{r.date}</span>
+                                            {r.time && <span className="text-xs text-gray-400 flex items-center"><Clock size={10} className="mr-1"/> {r.time}</span>}
+                                        </div>
+                                    </td>
+                                    <td className="px-4 py-3 text-gray-700">
+                                        {r.createdByName ? (
+                                            <span className="flex items-center text-xs bg-gray-100 px-2 py-1 rounded w-fit">
+                                                <UserCheck size={10} className="mr-1 text-gray-500"/> {r.createdByName}
+                                            </span>
+                                        ) : '-'}
+                                    </td>
                                     <td className="px-4 py-3">
                                         <span className={`px-2 py-1 rounded-full text-xs border ${getStageStyle(r.stage)}`}>
                                             {r.stage}
@@ -581,11 +600,11 @@ export default function PlotDetails() {
                        <form onSubmit={handleSaveRecord} className="space-y-6">
                            
                            {/* Common Data */}
-                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                <div>
                                    <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
                                      <Calendar size={14} className="mr-1 text-hemp-600"/>
-                                     Fecha del Registro
+                                     Fecha
                                    </label>
                                    <input 
                                      type="date" 
@@ -595,6 +614,20 @@ export default function PlotDetails() {
                                      value={recordForm.date} 
                                      onChange={e => setRecordForm({...recordForm, date: e.target.value})} 
                                      onClick={(e) => { !isViewMode && e.currentTarget.showPicker() }}
+                                    />
+                               </div>
+                               <div>
+                                   <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
+                                     <Clock size={14} className="mr-1 text-hemp-600"/>
+                                     Hora
+                                   </label>
+                                   <input 
+                                     type="time" 
+                                     required 
+                                     disabled={isViewMode}
+                                     className={`${getInputClass()} cursor-pointer`} 
+                                     value={recordForm.time} 
+                                     onChange={e => setRecordForm({...recordForm, time: e.target.value})} 
                                     />
                                </div>
                                <div>
@@ -802,7 +835,7 @@ export default function PlotDetails() {
                                </button>
                                {!isViewMode && (
                                    <button type="submit" className="px-4 py-2 bg-hemp-600 text-white rounded hover:bg-hemp-700 shadow-sm font-medium">
-                                       {editingRecordId ? 'Guardar Cambios' : 'Registrar Datos'}
+                                       {editingRecordId ? 'Guardar Cambios' : 'Firmar y Registrar'}
                                    </button>
                                )}
                            </div>

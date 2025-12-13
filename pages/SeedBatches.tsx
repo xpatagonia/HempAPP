@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { SeedBatch, SeedMovement } from '../types';
-import { Plus, ScanBarcode, Edit2, Trash2, Tag, Calendar, Package, Truck, Printer, MapPin, FileText, ArrowRight, Building, FileDigit, Globe } from 'lucide-react';
+import { Plus, ScanBarcode, Edit2, Trash2, Tag, Calendar, Package, Truck, Printer, MapPin, FileText, ArrowRight, Building, FileDigit, Globe, Clock } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -38,6 +38,7 @@ export default function SeedBatches() {
       targetLocationId: '',
       quantity: 0,
       date: new Date().toISOString().split('T')[0],
+      dispatchTime: new Date().toTimeString().substring(0, 5), // Default current time
       transportGuideNumber: '',
       driverName: '',
       vehiclePlate: '',
@@ -120,6 +121,7 @@ export default function SeedBatches() {
           targetLocationId: moveFormData.targetLocationId!,
           quantity: Number(moveFormData.quantity),
           date: moveFormData.date!,
+          dispatchTime: moveFormData.dispatchTime || '',
           transportGuideNumber: moveFormData.transportGuideNumber || `G-${Date.now()}`,
           driverName: moveFormData.driverName || '',
           vehiclePlate: moveFormData.vehiclePlate || '',
@@ -143,6 +145,7 @@ export default function SeedBatches() {
       setMoveFormData({
         batchId: '', targetLocationId: '', quantity: 0,
         date: new Date().toISOString().split('T')[0],
+        dispatchTime: new Date().toTimeString().substring(0, 5),
         transportGuideNumber: '', driverName: '', vehiclePlate: '', transportCompany: '', status: 'En Tránsito'
       });
   };
@@ -170,7 +173,8 @@ export default function SeedBatches() {
       doc.setFont("helvetica", "normal");
       doc.text(`Titular: HempC App Enterprise`, 14, 48);
       doc.text(`Dirección: Depósito Central - Ruta Nac. KM 0`, 14, 54);
-      doc.text(`Fecha de Emisión: ${m.date}`, 14, 60);
+      doc.text(`Fecha Emisión: ${m.date}`, 14, 60);
+      doc.text(`Hora Salida: ${m.dispatchTime || '-'}`, 14, 66); // Include dispatch time
 
       // Receptor (Locación)
       doc.setFont("helvetica", "bold");
@@ -181,7 +185,7 @@ export default function SeedBatches() {
       doc.text(`Localidad: ${location?.city}, ${location?.province}`, 110, 60);
       doc.text(`CUIE/RENSPA: ${location?.cuie || 'N/A'}`, 110, 66);
 
-      // Datos del Proveedor (Origen de la Semilla) - NUEVO
+      // Datos del Proveedor (Origen de la Semilla)
       doc.setFont("helvetica", "bold");
       doc.text("3. ORIGEN LEGAL DE LA SEMILLA (PROVEEDOR)", 14, 80);
       doc.setFont("helvetica", "normal");
@@ -385,7 +389,10 @@ export default function SeedBatches() {
                               const location = locations.find(l => l.id === m.targetLocationId);
                               return (
                                   <tr key={m.id} className="hover:bg-gray-50">
-                                      <td className="px-6 py-4 text-gray-600">{m.date}</td>
+                                      <td className="px-6 py-4 text-gray-600">
+                                          <div>{m.date}</div>
+                                          {m.dispatchTime && <div className="text-xs text-gray-400 flex items-center"><Clock size={10} className="mr-1"/>{m.dispatchTime}</div>}
+                                      </td>
                                       <td className="px-6 py-4 font-mono font-bold text-gray-800">{m.transportGuideNumber}</td>
                                       <td className="px-6 py-4">
                                           <div className="flex items-center text-gray-800 font-medium">
@@ -538,6 +545,21 @@ export default function SeedBatches() {
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Cantidad a Enviar (kg)</label>
                         <input required type="number" step="0.1" className={inputClass} value={moveFormData.quantity} onChange={e => setMoveFormData({...moveFormData, quantity: Number(e.target.value)})} />
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
+                            <Calendar size={14} className="mr-1 text-gray-500"/> Fecha Salida
+                        </label>
+                        <input type="date" className={inputClass} value={moveFormData.date} onChange={e => setMoveFormData({...moveFormData, date: e.target.value})} />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
+                            <Clock size={14} className="mr-1 text-gray-500"/> Hora Salida
+                        </label>
+                        <input type="time" className={inputClass} value={moveFormData.dispatchTime} onChange={e => setMoveFormData({...moveFormData, dispatchTime: e.target.value})} />
                     </div>
                 </div>
 

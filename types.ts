@@ -66,6 +66,7 @@ export interface SeedMovement {
   targetLocationId: string;
   quantity: number; // kg enviados
   date: string;
+  dispatchTime?: string; // Hora de salida (Compliance)
   
   // Datos de Transporte (Compliance)
   transportGuideNumber: string; // N° Guía / Remito
@@ -136,6 +137,10 @@ export interface TrialRecord {
   id: string;
   plotId: string;
   date: string; // Fecha del registro (toma de dato)
+  time?: string; // Hora del registro (HH:MM) - Nuevo
+  createdBy?: string; // ID del ingeniero/técnico - Nuevo
+  createdByName?: string; // Nombre para visualización rápida - Nuevo
+
   // Expanded stages for better precision
   stage: 'Emergencia' | 'Vegetativo' | 'Floración' | 'Maduración' | 'Cosecha'; 
   
