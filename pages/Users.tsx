@@ -1,7 +1,19 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { User, UserRole } from '../types';
-import { Plus, Trash2, Edit2, Shield, Wrench, Eye, AlertCircle, Lock, Key, Save, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Edit2, Shield, Wrench, Eye, AlertCircle, Lock, Key, Save, Loader2, Phone, Briefcase, User as UserIcon } from 'lucide-react';
+
+// Avatares Predefinidos (DiceBear)
+const PRESET_AVATARS = [
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix",
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=Aneka",
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=Bob",
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=Callie",
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=Dante",
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=Eliza",
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=Gizmo",
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=Harley"
+];
 
 export default function Users() {
   const { usersList, addUser, updateUser, deleteUser, currentUser } = useAppContext();
@@ -10,7 +22,7 @@ export default function Users() {
   const [isSaving, setIsSaving] = useState(false);
 
   const [formData, setFormData] = useState<Partial<User>>({
-    name: '', email: '', role: 'technician', password: ''
+    name: '', email: '', role: 'technician', password: '', jobTitle: '', phone: '', avatar: ''
   });
 
   const isSuperAdmin = currentUser?.role === 'super_admin';
@@ -64,12 +76,21 @@ export default function Users() {
     await new Promise(r => setTimeout(r, 500));
 
     try {
+        const payload = {
+            name: formData.name!,
+            email: formData.email!,
+            role: formData.role as UserRole,
+            jobTitle: formData.jobTitle || '',
+            phone: formData.phone || '',
+            avatar: formData.avatar || PRESET_AVATARS[0]
+        };
+
         if (editingId) {
             const oldUser = usersList.find(u => u.id === editingId);
             const finalPassword = formData.password ? formData.password : oldUser?.password;
 
             updateUser({ 
-                ...formData, 
+                ...payload,
                 id: editingId,
                 password: finalPassword
             } as User);
@@ -80,10 +101,8 @@ export default function Users() {
                 return;
             }
             await addUser({
+                ...payload,
                 id: Date.now().toString(),
-                name: formData.name!,
-                email: formData.email!,
-                role: formData.role as UserRole,
                 password: formData.password
             });
         }
@@ -98,7 +117,7 @@ export default function Users() {
 
   const closeModal = () => {
       setIsModalOpen(false);
-      setFormData({ name: '', email: '', role: 'technician', password: '' });
+      setFormData({ name: '', email: '', role: 'technician', password: '', jobTitle: '', phone: '', avatar: '' });
       setEditingId(null);
   };
 
@@ -111,7 +130,7 @@ export default function Users() {
         <button 
           onClick={() => {
             setEditingId(null);
-            setFormData({ name: '', email: '', role: 'technician', password: '' });
+            setFormData({ name: '', email: '', role: 'technician', password: '', avatar: PRESET_AVATARS[Math.floor(Math.random() * PRESET_AVATARS.length)] });
             setIsModalOpen(true);
           }} 
           className="bg-hemp-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-hemp-700 transition"
@@ -125,8 +144,8 @@ export default function Users() {
           <thead className="bg-gray-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usuario</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rol</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contacto</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rol & Cargo</th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
             </tr>
           </thead>
@@ -134,32 +153,45 @@ export default function Users() {
             {usersList.length === 0 ? (
                 <tr><td colSpan={4} className="p-4 text-center text-gray-500">No hay usuarios registrados.</td></tr>
             ) : usersList.map((user) => (
-              <tr key={user.id} className="hover:bg-gray-50">
+              <tr key={user.id} className="hover:bg-gray-50 transition">
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
-                    <div className="flex-shrink-0 h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-500">
-                      {user.role === 'super_admin' ? <Lock size={20} className="text-red-500"/> : 
-                       user.role === 'admin' ? <Shield size={20} /> : 
-                       user.role === 'technician' ? <Wrench size={20} /> : <Eye size={20} />}
+                    <div className="flex-shrink-0 h-10 w-10 relative">
+                        {user.avatar ? (
+                            <img className="h-10 w-10 rounded-full border border-gray-200" src={user.avatar} alt="" />
+                        ) : (
+                            <div className="h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-500">
+                                <UserIcon size={20}/>
+                            </div>
+                        )}
+                        {/* Status Dot (Simulated) */}
+                        <span className="absolute bottom-0 right-0 block h-2.5 w-2.5 rounded-full bg-green-400 ring-2 ring-white"></span>
                     </div>
                     <div className="ml-4">
-                      <div className="text-sm font-medium text-gray-900">{user.name}</div>
+                      <div className="text-sm font-bold text-gray-900">{user.name}</div>
+                      <div className="text-xs text-gray-500">ID: {user.id.substring(0, 6)}...</div>
                     </div>
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {user.email}
+                  <div className="flex flex-col">
+                      <span>{user.email}</span>
+                      {user.phone && <span className="text-xs text-gray-400 mt-0.5">{user.phone}</span>}
+                  </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                    ${user.role === 'super_admin' ? 'bg-red-100 text-red-800' :
-                      user.role === 'admin' ? 'bg-purple-100 text-purple-800' : 
-                      user.role === 'technician' ? 'bg-blue-100 text-blue-800' : 
-                      'bg-amber-100 text-amber-800'}`}>
-                    {user.role === 'super_admin' ? 'Super Admin' : 
-                     user.role === 'technician' ? 'Técnico' : 
-                     user.role === 'viewer' ? 'Productor/Visita' : 'Administrador'}
-                  </span>
+                  <div className="flex flex-col items-start">
+                      <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full mb-1
+                        ${user.role === 'super_admin' ? 'bg-red-100 text-red-800' :
+                          user.role === 'admin' ? 'bg-purple-100 text-purple-800' : 
+                          user.role === 'technician' ? 'bg-blue-100 text-blue-800' : 
+                          'bg-amber-100 text-amber-800'}`}>
+                        {user.role === 'super_admin' ? 'Super Admin' : 
+                         user.role === 'technician' ? 'Técnico' : 
+                         user.role === 'viewer' ? 'Productor/Visita' : 'Administrador'}
+                      </span>
+                      {user.jobTitle && <span className="text-xs text-gray-500 font-medium">{user.jobTitle}</span>}
+                  </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     {/* Visual check for permissions to gray out buttons */}
@@ -185,16 +217,53 @@ export default function Users() {
       {/* Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-xl">
-            <h2 className="text-xl font-bold mb-4 text-gray-900">{editingId ? 'Editar Usuario' : 'Nuevo Usuario'}</h2>
-            <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="bg-white rounded-xl max-w-xl w-full p-6 shadow-xl max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl font-bold mb-4 text-gray-900">{editingId ? 'Editar Perfil' : 'Nuevo Usuario'}</h2>
+            <form onSubmit={handleSubmit} className="space-y-6">
+              
+              {/* AVATAR SELECTOR */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nombre Completo</label>
-                <input required type="text" className={inputClass} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Selecciona un Avatar</label>
+                  <div className="flex flex-wrap gap-2 mb-2">
+                      {PRESET_AVATARS.map((avatarUrl, idx) => (
+                          <div 
+                            key={idx}
+                            onClick={() => setFormData({...formData, avatar: avatarUrl})}
+                            className={`w-12 h-12 rounded-full cursor-pointer border-2 transition-all p-0.5 ${formData.avatar === avatarUrl ? 'border-hemp-600 scale-110 shadow-md' : 'border-transparent hover:border-gray-300 hover:scale-105'}`}
+                          >
+                              <img src={avatarUrl} alt={`Avatar ${idx}`} className="w-full h-full rounded-full bg-gray-50" />
+                          </div>
+                      ))}
+                  </div>
+                  <input 
+                    type="text" 
+                    placeholder="O pega una URL de imagen personalizada..." 
+                    className="w-full text-xs border-b border-gray-200 focus:border-hemp-500 outline-none py-1 text-gray-500"
+                    value={formData.avatar}
+                    onChange={e => setFormData({...formData, avatar: e.target.value})}
+                  />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <input required type="email" className={inputClass} value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+
+              <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Nombre Completo</label>
+                    <input required type="text" className={inputClass} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Cargo / Puesto</label>
+                    <input type="text" placeholder="Ej: Ing. Agrónomo" className={inputClass} value={formData.jobTitle} onChange={e => setFormData({...formData, jobTitle: e.target.value})} />
+                  </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                    <input required type="email" className={inputClass} value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
+                    <input type="text" className={inputClass} value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
+                  </div>
               </div>
               
               <div>
@@ -211,8 +280,8 @@ export default function Users() {
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Rol / Permisos</label>
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                <label className="block text-sm font-bold text-gray-700 mb-2">Rol & Permisos</label>
                 <select className={inputClass} value={formData.role} onChange={e => setFormData({...formData, role: e.target.value as UserRole})}>
                   <option value="technician">Técnico de Campo (Operativo)</option>
                   <option value="viewer">Productor / Visita (Solo lectura)</option>
@@ -220,9 +289,9 @@ export default function Users() {
                   {(isSuperAdmin || isAdmin) && <option value="admin">Administrador (Gestión)</option>}
                   {isSuperAdmin && <option value="super_admin">Super Admin (Root)</option>}
                 </select>
-                <p className="text-xs text-gray-500 mt-1">
-                    {formData.role === 'technician' && "Puede cargar datos en parcelas asignadas."}
-                    {formData.role === 'viewer' && "Solo puede ver reportes y dashboard."}
+                <p className="text-xs text-gray-500 mt-2 leading-relaxed">
+                    {formData.role === 'technician' && "Puede cargar datos en parcelas y completar tareas asignadas."}
+                    {formData.role === 'viewer' && "Solo puede ver reportes y dashboard. No edita datos."}
                     {formData.role === 'admin' && "Gestión completa de proyectos y usuarios básicos."}
                     {formData.role === 'super_admin' && "Control total del sistema."}
                 </p>
@@ -236,7 +305,7 @@ export default function Users() {
                     className="px-4 py-2 bg-hemp-600 text-white rounded hover:bg-hemp-700 shadow-sm flex items-center disabled:opacity-70"
                 >
                     {isSaving ? <Loader2 className="animate-spin mr-2" size={16} /> : <Save className="mr-2" size={16} />}
-                    Guardar
+                    Guardar Perfil
                 </button>
               </div>
             </form>

@@ -13,7 +13,9 @@ export interface User {
   email: string;
   password?: string; // Optional for listing, required for login/creation
   role: UserRole;
-  avatar?: string;
+  avatar?: string; // URL to avatar image
+  jobTitle?: string; // Nuevo: Cargo (ej: Ingeniero Agrónomo, Director)
+  phone?: string;    // Nuevo: Teléfono de contacto
 }
 
 // Entities
@@ -24,7 +26,8 @@ export interface Project {
   description: string;
   startDate: string;
   status: 'Planificación' | 'En Curso' | 'Finalizado';
-  responsibleIds?: string[]; // Usuarios a cargo del proyecto general
+  directorId?: string; // Nuevo: ID del Director del Proyecto (Líder)
+  responsibleIds?: string[]; // Usuarios operativos a cargo
 }
 
 // NUEVO: Entidad Proveedor (Semillero / Breeder)

@@ -127,9 +127,25 @@ CREATE TABLE IF NOT EXISTS public.suppliers (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
--- 3. ACTUALIZAR TABLAS EXISTENTES CON NUEVOS CAMPOS
+-- 3. ACTUALIZAR TABLAS EXISTENTES CON NUEVOS CAMPOS (v2.6)
 DO $$
 BEGIN
+    -- Projects: Director
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'projects' AND column_name = 'directorId') THEN
+        ALTER TABLE public.projects ADD COLUMN "directorId" TEXT;
+    END IF;
+
+    -- Users: Gamification & Details
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'avatar') THEN
+        ALTER TABLE public.users ADD COLUMN "avatar" TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'jobTitle') THEN
+        ALTER TABLE public.users ADD COLUMN "jobTitle" TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'phone') THEN
+        ALTER TABLE public.users ADD COLUMN "phone" TEXT;
+    END IF;
+
     -- Suppliers: Nuevos campos de contacto (Hotfix v2.5)
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'suppliers' AND column_name = 'city') THEN
         ALTER TABLE public.suppliers ADD COLUMN "city" TEXT;

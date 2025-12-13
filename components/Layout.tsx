@@ -90,7 +90,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       <div className={`lg:hidden fixed top-0 w-full bg-slate-900 text-white z-50 border-b border-slate-800 px-4 py-3 flex justify-between items-center shadow-md ${dbNeedsMigration ? 'mt-10' : ''}`}>
         <div className="flex items-center space-x-2">
           <Leaf className="w-6 h-6 text-hemp-500" />
-          <span className="font-bold text-lg">HempC v2.4</span>
+          <span className="font-bold text-lg">HempC v2.6</span>
         </div>
         <div className="flex items-center space-x-2">
             <button onClick={() => setIsNotifOpen(!isNotifOpen)} className="p-2 relative text-gray-300 hover:text-white">
@@ -162,7 +162,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         <div className="h-16 flex items-center px-6 border-b dark:border-dark-border justify-between bg-slate-900 text-white lg:bg-white lg:text-gray-800 lg:dark:bg-dark-card lg:dark:text-white">
           <div className="flex items-center">
              <Leaf className="w-8 h-8 text-hemp-500 lg:text-hemp-600 mr-2" />
-             <span className="text-xl font-bold">HempC <span className="text-hemp-500 text-sm bg-hemp-900 lg:bg-hemp-100 px-1 rounded ml-1">v2.4</span></span>
+             <span className="text-xl font-bold">HempC <span className="text-hemp-500 text-sm bg-hemp-900 lg:bg-hemp-100 px-1 rounded ml-1">v2.6</span></span>
           </div>
           
           <div className="flex items-center space-x-1">
@@ -228,12 +228,16 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         <div className="border-t dark:border-dark-border bg-gray-50 dark:bg-dark-card">
            <div className="p-4">
               <div className="flex items-center space-x-3 mb-3">
-                  <div className={`p-2 rounded-full ${isEmergencyMode ? 'bg-amber-100 text-amber-700' : 'bg-hemp-100 dark:bg-hemp-900 text-hemp-700 dark:text-hemp-300'}`}>
-                      <UserCircle size={24} />
-                  </div>
+                  {currentUser.avatar ? (
+                      <img src={currentUser.avatar} alt="Profile" className="w-10 h-10 rounded-full border-2 border-white shadow-sm object-cover" />
+                  ) : (
+                      <div className={`p-2 rounded-full ${isEmergencyMode ? 'bg-amber-100 text-amber-700' : 'bg-hemp-100 dark:bg-hemp-900 text-hemp-700 dark:text-hemp-300'}`}>
+                          <UserCircle size={24} />
+                      </div>
+                  )}
                   <div className="flex-1 min-w-0">
                       <p className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">{currentUser.name}</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate capitalize">{getRoleLabel(currentUser.role)}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate capitalize">{currentUser.jobTitle || getRoleLabel(currentUser.role)}</p>
                   </div>
               </div>
               <button 
@@ -248,7 +252,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
            <div className="bg-gray-100 dark:bg-slate-900 py-3 text-center border-t border-gray-200 dark:border-dark-border">
                <p className="text-[10px] text-gray-400 font-mono leading-tight">Dev gaston.barea.moreno@gmail.com</p>
                <div className="flex items-center justify-center space-x-2 mt-1">
-                   <span className="text-[10px] bg-green-100 text-green-800 px-1.5 py-0.5 rounded font-bold">v2.4 (Hotfix)</span>
+                   <span className="text-[10px] bg-green-100 text-green-800 px-1.5 py-0.5 rounded font-bold">v2.6</span>
                    <a href="https://xpatagonia.com" target="_blank" rel="noopener noreferrer" className="text-[10px] text-hemp-600 dark:text-hemp-500 font-bold font-mono hover:underline">
                        xpatagonia.com
                    </a>

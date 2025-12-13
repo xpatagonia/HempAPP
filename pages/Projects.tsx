@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Project } from '../types';
-import { Plus, Folder, Calendar, Edit2, Users, Trash2 } from 'lucide-react';
+import { Plus, Folder, Calendar, Edit2, Users, Trash2, UserCheck, Star } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export default function Projects() {
@@ -10,7 +10,7 @@ export default function Projects() {
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const [formData, setFormData] = useState<Partial<Project>>({
-    name: '', description: '', startDate: '', status: 'Planificación', responsibleIds: []
+    name: '', description: '', startDate: '', status: 'Planificación', responsibleIds: [], directorId: ''
   });
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
@@ -28,6 +28,7 @@ export default function Projects() {
             description: formData.description || '',
             startDate: formData.startDate || new Date().toISOString().split('T')[0],
             status: formData.status as any,
+            directorId: formData.directorId,
             responsibleIds: formData.responsibleIds || []
         });
     }
@@ -37,7 +38,7 @@ export default function Projects() {
   };
 
   const resetForm = () => {
-    setFormData({ name: '', description: '', startDate: '', status: 'Planificación', responsibleIds: [] });
+    setFormData({ name: '', description: '', startDate: '', status: 'Planificación', responsibleIds: [], directorId: '' });
     setEditingId(null);
   };
 
@@ -85,6 +86,8 @@ export default function Projects() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {projects.map(project => {
           const responsibles = usersList.filter(u => project.responsibleIds?.includes(u.id));
+          const director = usersList.find(u => u.id === project.directorId);
+
           return (
             <div key={project.id} className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition relative group">
               {isAdmin && (
@@ -118,18 +121,43 @@ export default function Projects() {
               
               <p className="text-gray-600 text-sm mb-4 min-h-[40px]">{project.description}</p>
               
+              {/* DIRECTOR SECTION (NEW) */}
+              {director && (
+                  <div className="mb-3 bg-gray-50 p-2 rounded-lg border border-gray-100 flex items-center">
+                      <div className="mr-3 relative">
+                          <img 
+                            src={director.avatar || `https://ui-avatars.com/api/?name=${director.name}`} 
+                            alt={director.name} 
+                            className="w-10 h-10 rounded-full border-2 border-white shadow-sm"
+                          />
+                          <div className="absolute -bottom-1 -right-1 bg-yellow-400 p-0.5 rounded-full border border-white">
+                              <Star size={8} className="text-white fill-current" />
+                          </div>
+                      </div>
+                      <div>
+                          <p className="text-xs text-gray-400 uppercase font-bold">Director</p>
+                          <p className="text-sm font-semibold text-gray-800 leading-tight">{director.name}</p>
+                          <p className="text-xs text-gray-500">{director.jobTitle || 'Líder de Proyecto'}</p>
+                      </div>
+                  </div>
+              )}
+
               {/* Responsibles Display */}
               <div className="mb-4">
                  <div className="flex items-center text-xs font-semibold text-gray-500 mb-2">
-                    <Users size={14} className="mr-1" /> Coordinadores / Responsables
+                    <Users size={14} className="mr-1" /> Equipo Operativo
                  </div>
                  <div className="flex items-center space-x-2">
                     {responsibles.length > 0 ? (
-                        <div className="flex -space-x-2 overflow-hidden">
+                        <div className="flex -space-x-2 overflow-hidden pl-1">
                            {responsibles.map(u => (
-                               <div key={u.id} className="inline-block h-8 w-8 rounded-full ring-2 ring-white bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600" title={`${u.name} (${u.role})`}>
-                                   {u.name.charAt(0)}
-                               </div>
+                               <img 
+                                key={u.id}
+                                src={u.avatar || `https://ui-avatars.com/api/?name=${u.name}`}
+                                alt={u.name}
+                                className="inline-block h-8 w-8 rounded-full ring-2 ring-white"
+                                title={`${u.name} (${u.role})`} 
+                               />
                            ))}
                         </div>
                     ) : (
@@ -168,10 +196,29 @@ export default function Projects() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Nombre del Proyecto</label>
                 <input required type="text" placeholder="Ej: Campaña Fibra 2024" className={inputClass} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
               </div>
+              
+              {/* Director Selector */}
+              <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
+                      <Star size={14} className="mr-1 text-yellow-500 fill-yellow-500"/> Director del Proyecto
+                  </label>
+                  <select 
+                    className={inputClass} 
+                    value={formData.directorId || ''} 
+                    onChange={e => setFormData({...formData, directorId: e.target.value})}
+                  >
+                      <option value="">Seleccionar Director...</option>
+                      {usersList.map(u => (
+                          <option key={u.id} value={u.id}>{u.name} ({u.jobTitle || u.role})</option>
+                      ))}
+                  </select>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
                 <textarea className={inputClass} rows={3} value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})}></textarea>
               </div>
+              
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
@@ -183,13 +230,7 @@ export default function Projects() {
                     className={`${inputClass} cursor-pointer`} 
                     value={formData.startDate} 
                     onChange={e => setFormData({...formData, startDate: e.target.value})} 
-                    onClick={(e) => {
-                      try {
-                        e.currentTarget.showPicker();
-                      } catch (error) {
-                        // Ignore if not supported
-                      }
-                    }}
+                    onClick={(e) => {try{e.currentTarget.showPicker()}catch(e){}}}
                   />
                 </div>
                 <div>
@@ -203,7 +244,7 @@ export default function Projects() {
               </div>
 
               <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Responsables / Coordinadores</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Equipo Operativo (Responsables)</label>
                   <div className="border border-gray-300 bg-white rounded p-2 h-24 overflow-y-auto text-xs">
                     {usersList.map(u => (
                         <label key={u.id} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 py-1">
@@ -213,7 +254,12 @@ export default function Projects() {
                                 checked={formData.responsibleIds?.includes(u.id)} 
                                 onChange={() => toggleResponsible(u.id)} 
                             />
-                            <span className="text-gray-900">{u.name} <span className="text-gray-400">({u.role})</span></span>
+                            {u.avatar ? (
+                                <img src={u.avatar} className="w-5 h-5 rounded-full" alt="avatar"/>
+                            ) : (
+                                <div className="w-5 h-5 bg-gray-200 rounded-full flex items-center justify-center text-[8px] font-bold text-gray-600">{u.name.charAt(0)}</div>
+                            )}
+                            <span className="text-gray-900">{u.name}</span>
                         </label>
                     ))}
                   </div>
