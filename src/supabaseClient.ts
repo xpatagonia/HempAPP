@@ -5,7 +5,6 @@ import { createClient } from '@supabase/supabase-js';
 // ------------------------------------------------------------------
 
 // 1. Intentamos leer las variables de entorno inyectadas por Vercel (Vite)
-// Al eliminar las constantes HARDCODED, aseguramos que Vercel tome el control.
 const env = (import.meta as any).env || {};
 let SUPABASE_URL = env.VITE_SUPABASE_URL;
 let SUPABASE_ANON_KEY = env.VITE_SUPABASE_ANON_KEY;
