@@ -43,11 +43,32 @@ export interface SeedBatch {
   varietyId: string;
   supplierName: string;     // Proveedor específico de este lote (ej: Hemp-it France)
   batchCode: string;        // Número de etiqueta oficial / Lote
+  certificationNumber?: string; // N° Certificado Fiscalización (INASE/SENASA)
   purchaseDate: string;     // Fecha de adquisición
   initialQuantity: number;  // Cantidad comprada (kg)
   remainingQuantity: number; // Stock actual (kg)
+  storageConditions?: string; // Temp/Humedad (Compliance)
   notes?: string;
   isActive: boolean;        // Si el lote está disponible para siembra
+}
+
+// NUEVO: Movimientos Logísticos (Hoja de Ruta)
+export interface SeedMovement {
+  id: string;
+  batchId: string;
+  targetLocationId: string;
+  quantity: number; // kg enviados
+  date: string;
+  
+  // Datos de Transporte (Compliance)
+  transportGuideNumber: string; // N° Guía / Remito
+  driverName: string;
+  vehiclePlate: string;
+  transportCompany?: string;
+  
+  status: 'En Tránsito' | 'Recibido' | 'Cancelado';
+  receivedBy?: string; // User ID
+  notes?: string;
 }
 
 export interface Location {
@@ -66,6 +87,7 @@ export interface Location {
   ownerName?: string; // Nombre del titular (Empresa, ONG)
   ownerType?: RoleType;
   responsibleIds?: string[]; // IDs de usuarios asignados a la locación
+  cuie?: string; // Clave Única de Identificación de Establecimiento (Compliance)
 }
 
 export interface Plot {

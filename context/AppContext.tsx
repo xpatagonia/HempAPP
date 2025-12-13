@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
-import { Variety, Location, Plot, FieldLog, TrialRecord, User, Project, Task, SeedBatch } from '../types';
+import { Variety, Location, Plot, FieldLog, TrialRecord, User, Project, Task, SeedBatch, SeedMovement } from '../types';
 import { supabase } from '../supabaseClient';
 
 export interface AppNotification {
@@ -19,7 +19,8 @@ interface AppContextType {
   trialRecords: TrialRecord[];
   logs: FieldLog[];
   tasks: Task[];
-  seedBatches: SeedBatch[]; // Nueva Entidad
+  seedBatches: SeedBatch[];
+  seedMovements: SeedMovement[]; // Nueva Entidad
   notifications: AppNotification[]; 
   
   currentUser: User | null;
@@ -57,11 +58,15 @@ interface AppContextType {
   updateTask: (t: Task) => void;
   deleteTask: (id: string) => void;
 
-  // Seed Batch CRUD
+  // Seed Batch & Movements CRUD
   addSeedBatch: (s: SeedBatch) => void;
   updateSeedBatch: (s: SeedBatch) => void;
   deleteSeedBatch: (id: string) => void;
   
+  addSeedMovement: (m: SeedMovement) => void;
+  updateSeedMovement: (m: SeedMovement) => void;
+  deleteSeedMovement: (id: string) => void;
+
   getPlotHistory: (plotId: string) => TrialRecord[];
   getLatestRecord: (plotId: string) => TrialRecord | undefined;
   
@@ -107,6 +112,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [logs, setLogs] = useState<FieldLog[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [seedBatches, setSeedBatches] = useState<SeedBatch[]>([]);
+  const [seedMovements, setSeedMovements] = useState<SeedMovement[]>([]);
   
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -237,7 +243,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             setVarieties(getFromLocal('varieties'));
             setLocations(getFromLocal('locations'));
             setPlots(getFromLocal('plots'));
-            setSeedBatches(getFromLocal('seedBatches')); // LOAD LOCAL
+            setSeedBatches(getFromLocal('seedBatches')); 
+            setSeedMovements(getFromLocal('seedMovements')); // LOAD LOCAL
             setIsEmergencyMode(true);
             setLoading(false);
         }
@@ -255,6 +262,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             const localLocations = getFromLocal('locations');
             const localPlots = getFromLocal('plots');
             const localSeedBatches = getFromLocal('seedBatches');
+            const localSeedMovements = getFromLocal('seedMovements');
 
             // Intentar Supabase
             const { data: dbUsers, error: userError } = await supabase.from('users').select('*');
@@ -294,7 +302,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 fetchOrLocal('varieties', setVarieties, localVarieties),
                 fetchOrLocal('locations', setLocations, localLocations),
                 fetchOrLocal('plots', setPlots, localPlots),
-                fetchOrLocal('seed_batches', setSeedBatches, localSeedBatches), // NEW FETCH
+                fetchOrLocal('seed_batches', setSeedBatches, localSeedBatches),
+                fetchOrLocal('seed_movements', setSeedMovements, localSeedMovements), // NEW FETCH
                 supabase.from('trial_records').select('*').then(res => res.data && setTrialRecords(res.data as TrialRecord[])),
                 supabase.from('field_logs').select('*').then(res => res.data && setLogs(res.data as FieldLog[])),
                 supabase.from('tasks').select('*').then(res => res.data && setTasks(res.data as Task[]))
@@ -452,6 +461,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setSeedBatches(prev => { const n = prev.filter(item => item.id !== id); saveToLocal('seedBatches', n); return n; });
   };
 
+  // Seed Movements CRUD
+  const addSeedMovement = async (m: SeedMovement) => {
+      await supabase.from('seed_movements').insert([m]);
+      setSeedMovements(prev => { const n = [m, ...prev]; saveToLocal('seedMovements', n); return n; }); // Newest first
+  };
+  const updateSeedMovement = async (m: SeedMovement) => {
+      await supabase.from('seed_movements').update(m).eq('id', m.id);
+      setSeedMovements(prev => { const n = prev.map(item => item.id === m.id ? m : item); saveToLocal('seedMovements', n); return n; });
+  };
+  const deleteSeedMovement = async (id: string) => {
+      await supabase.from('seed_movements').delete().eq('id', id);
+      setSeedMovements(prev => { const n = prev.filter(item => item.id !== id); saveToLocal('seedMovements', n); return n; });
+  };
+
   const addTrialRecord = async (r: TrialRecord) => { const { error } = await supabase.from('trial_records').insert([r]); if (!error || true) setTrialRecords(prev => [...prev, r]); };
   const updateTrialRecord = async (r: TrialRecord) => { const { error } = await supabase.from('trial_records').update(r).eq('id', r.id); if (!error || true) setTrialRecords(prev => prev.map(item => item.id === r.id ? r : item)); };
   const deleteTrialRecord = async (id: string) => { const { error } = await supabase.from('trial_records').delete().eq('id', id); if (!error || true) setTrialRecords(prev => prev.filter(item => item.id !== id)); };
@@ -467,7 +490,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   return (
     <AppContext.Provider value={{
-      projects, varieties, locations, plots, trialRecords, logs, tasks, seedBatches, notifications,
+      projects, varieties, locations, plots, trialRecords, logs, tasks, seedBatches, seedMovements, notifications,
       currentUser, usersList, login, logout,
       addProject, updateProject, deleteProject,
       addVariety, updateVariety, deleteVariety,
@@ -477,7 +500,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       addLog,
       addUser, updateUser, deleteUser,
       addTask, updateTask, deleteTask,
-      addSeedBatch, updateSeedBatch, deleteSeedBatch, // New Exports
+      addSeedBatch, updateSeedBatch, deleteSeedBatch,
+      addSeedMovement, updateSeedMovement, deleteSeedMovement, // New Exports
       getPlotHistory, getLatestRecord,
       loading, isEmergencyMode,
       globalApiKey, refreshGlobalConfig,
