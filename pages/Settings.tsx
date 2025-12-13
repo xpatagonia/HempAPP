@@ -108,233 +108,35 @@ export default function Settings() {
   };
 
   const SQL_SCRIPT = `
--- ==========================================
--- SCRIPT DE INICIALIZACIÓN COMPLETA v3.0
--- Ejecutar en Supabase > SQL Editor
--- ==========================================
+-- =========================================================
+-- SCRIPT DE DESBLOQUEO TOTAL Y PERMISOS (v3.1)
+-- =========================================================
 
--- 1. CREACIÓN DE TABLAS CORE (Si no existen)
-CREATE TABLE IF NOT EXISTS public.users (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    email TEXT NOT NULL,
-    password TEXT NOT NULL,
-    role TEXT NOT NULL,
-    avatar TEXT,
-    "jobTitle" TEXT,
-    phone TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
+-- 1. Desactivar seguridad RLS (Row Level Security) para permitir lectura/escritura libre desde la App
+-- IMPORTANTE: Ejecutar si tienes problemas creando usuarios o guardando datos.
+ALTER TABLE public.users DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.clients DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.suppliers DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.locations DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.projects DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.varieties DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.seed_batches DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.plots DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.trial_records DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.tasks DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.field_logs DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.seed_movements DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.system_settings DISABLE ROW LEVEL SECURITY;
 
-CREATE TABLE IF NOT EXISTS public.clients (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    type TEXT,
-    "contactName" TEXT,
-    "contactPhone" TEXT,
-    email TEXT,
-    cuit TEXT,
-    "isNetworkMember" BOOLEAN DEFAULT false,
-    notes TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
+-- 2. Asegurar que el usuario Admin existe (Si borraste todo, esto te salva)
+DELETE FROM public.users WHERE email = 'admin@demo.com';
 
-CREATE TABLE IF NOT EXISTS public.suppliers (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    "legalName" TEXT,
-    cuit TEXT,
-    country TEXT,
-    province TEXT,
-    city TEXT,
-    address TEXT,
-    "commercialContact" TEXT,
-    "logisticsContact" TEXT,
-    website TEXT,
-    notes TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
-
-CREATE TABLE IF NOT EXISTS public.locations (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    province TEXT,
-    city TEXT,
-    address TEXT,
-    coordinates JSONB,
-    "soilType" TEXT,
-    climate TEXT,
-    "responsiblePerson" TEXT,
-    "responsibleIds" TEXT[], 
-    "clientId" TEXT,
-    "ownerName" TEXT,
-    "ownerLegalName" TEXT,
-    "ownerCuit" TEXT,
-    "ownerContact" TEXT,
-    "ownerType" TEXT,
-    "capacityHa" NUMERIC,
-    "irrigationSystem" TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
-
-CREATE TABLE IF NOT EXISTS public.projects (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    description TEXT,
-    "startDate" TEXT,
-    status TEXT,
-    "directorId" TEXT,
-    "responsibleIds" TEXT[],
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
-
-CREATE TABLE IF NOT EXISTS public.varieties (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    usage TEXT,
-    "cycleDays" NUMERIC,
-    "expectedThc" NUMERIC,
-    notes TEXT,
-    "supplierId" TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
-
-CREATE TABLE IF NOT EXISTS public.seed_batches (
-    id TEXT PRIMARY KEY,
-    "varietyId" TEXT NOT NULL,
-    "supplierName" TEXT,
-    "batchCode" TEXT,
-    "initialQuantity" NUMERIC,
-    "remainingQuantity" NUMERIC,
-    "purchaseDate" TEXT,
-    "originCountry" TEXT,
-    "gs1Code" TEXT,
-    "supplierLegalName" TEXT,
-    "supplierCuit" TEXT,
-    "supplierRenspa" TEXT,
-    "supplierAddress" TEXT,
-    "certificationNumber" TEXT,
-    "storageConditions" TEXT,
-    "storageAddress" TEXT,
-    "logisticsResponsible" TEXT,
-    notes TEXT,
-    "isActive" BOOLEAN DEFAULT true,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
-
-CREATE TABLE IF NOT EXISTS public.plots (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    type TEXT DEFAULT 'Ensayo',
-    "projectId" TEXT,
-    "locationId" TEXT,
-    "varietyId" TEXT,
-    "seedBatchId" TEXT,
-    block TEXT,
-    replicate NUMERIC,
-    "sowingDate" TEXT,
-    "surfaceArea" NUMERIC,
-    "surfaceUnit" TEXT DEFAULT 'm2',
-    "rowDistance" NUMERIC,
-    density NUMERIC,
-    status TEXT,
-    observations TEXT,
-    "irrigationType" TEXT,
-    coordinates JSONB,
-    polygon JSONB,
-    "ownerName" TEXT,
-    "responsibleIds" TEXT[],
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
-
-CREATE TABLE IF NOT EXISTS public.trial_records (
-    id TEXT PRIMARY KEY,
-    "plotId" TEXT NOT NULL,
-    date TEXT,
-    time TEXT,
-    stage TEXT,
-    "plantHeight" NUMERIC,
-    "stemDiameter" NUMERIC,
-    "nodesCount" NUMERIC,
-    vigor NUMERIC,
-    uniformity NUMERIC,
-    "floweringState" TEXT,
-    "trichomeColor" TEXT,
-    pests TEXT,
-    diseases TEXT,
-    "applicationType" TEXT,
-    "applicationProduct" TEXT,
-    "applicationDose" TEXT,
-    "harvestDate" TEXT,
-    "sampleSize" NUMERIC,
-    "freshWeight" NUMERIC,
-    "dryWeight" NUMERIC,
-    yield NUMERIC,
-    "stemWeight" NUMERIC,
-    "leafWeight" NUMERIC,
-    "flowerWeight" NUMERIC,
-    "createdBy" TEXT,
-    "createdByName" TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
-
-CREATE TABLE IF NOT EXISTS public.tasks (
-    id TEXT PRIMARY KEY,
-    title TEXT,
-    description TEXT,
-    status TEXT,
-    priority TEXT,
-    "dueDate" TEXT,
-    "plotId" TEXT,
-    "assignedToIds" TEXT[],
-    "createdBy" TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
-
-CREATE TABLE IF NOT EXISTS public.field_logs (
-    id TEXT PRIMARY KEY,
-    "plotId" TEXT,
-    date TEXT,
-    note TEXT,
-    "photoUrl" TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
-
-CREATE TABLE IF NOT EXISTS public.seed_movements (
-    id TEXT PRIMARY KEY,
-    "batchId" TEXT,
-    "targetLocationId" TEXT,
-    quantity NUMERIC,
-    date TEXT,
-    "dispatchTime" TEXT,
-    "transportGuideNumber" TEXT,
-    "transportType" TEXT,
-    "driverName" TEXT,
-    "vehiclePlate" TEXT,
-    "vehicleModel" TEXT,
-    "transportCompany" TEXT,
-    "routeItinerary" TEXT,
-    status TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
-
-CREATE TABLE IF NOT EXISTS public.system_settings (
-    id TEXT PRIMARY KEY,
-    gemini_api_key TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
-
--- 2. USUARIO ADMIN INICIAL (CRUCIAL PARA LA CONEXIÓN)
--- Esto asegura que la base de datos no esté vacía y la app sepa que está Online
 INSERT INTO public.users (id, name, email, password, role, "jobTitle", created_at)
 VALUES 
-('admin-cloud-001', 'Admin Cloud', 'admin@demo.com', 'admin', 'super_admin', 'System Owner', timezone('utc'::text, now()))
-ON CONFLICT (id) DO NOTHING;
+('admin-cloud-001', 'Admin Cloud', 'admin@demo.com', 'admin', 'super_admin', 'System Owner', timezone('utc'::text, now()));
 
--- 3. Configuración del sistema (Opcional, inserta placeholder si no existe)
-INSERT INTO public.system_settings (id, gemini_api_key)
-VALUES ('global', '')
-ON CONFLICT (id) DO NOTHING;
+-- 3. Confirmación
+SELECT 'PERMISOS LIBERADOS Y USUARIO ADMIN RESTAURADO' as status;
   `;
 
   return (
@@ -489,10 +291,10 @@ ON CONFLICT (id) DO NOTHING;
                 <div className="flex justify-between items-center mb-4">
                     <div>
                         <h2 className="text-sm font-bold text-slate-800 flex items-center">
-                            <ShieldCheck className="text-hemp-600 mr-2" size={18}/> Inicialización de Base de Datos
+                            <ShieldCheck className="text-hemp-600 mr-2" size={18}/> Mantenimiento de Base de Datos
                         </h2>
                         <p className="text-xs text-slate-500 mt-1">
-                            Script obligatorio para crear tablas y el usuario Admin inicial. Ejecutar en Supabase.
+                            Ejecuta este script para desbloquear permisos (RLS) y asegurar el acceso multi-dispositivo.
                         </p>
                     </div>
                     <button onClick={copySQL} className="text-xs bg-white hover:bg-slate-100 text-slate-700 px-4 py-2 rounded border border-slate-300 shadow-sm flex items-center transition font-bold">

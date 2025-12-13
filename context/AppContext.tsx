@@ -23,7 +23,7 @@ interface AppContextType {
   seedBatches: SeedBatch[];
   seedMovements: SeedMovement[];
   suppliers: Supplier[];
-  clients: Client[]; // Nuevo
+  clients: Client[]; 
   notifications: AppNotification[]; 
   
   currentUser: User | null;
@@ -43,9 +43,9 @@ interface AppContextType {
   updateSupplier: (s: Supplier) => void;
   deleteSupplier: (id: string) => void;
 
-  addClient: (c: Client) => Promise<void>; // Nuevo
-  updateClient: (c: Client) => void; // Nuevo
-  deleteClient: (id: string) => void; // Nuevo
+  addClient: (c: Client) => Promise<void>; 
+  updateClient: (c: Client) => void; 
+  deleteClient: (id: string) => void; 
 
   addLocation: (l: Location) => void;
   updateLocation: (l: Location) => void;
@@ -114,7 +114,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [projects, setProjects] = useState<Project[]>([]);
   const [varieties, setVarieties] = useState<Variety[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [clients, setClients] = useState<Client[]>([]); // Nuevo
+  const [clients, setClients] = useState<Client[]>([]); 
   const [locations, setLocations] = useState<Location[]>([]);
   const [plots, setPlots] = useState<Plot[]>([]);
   const [trialRecords, setTrialRecords] = useState<TrialRecord[]>([]);
@@ -256,7 +256,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         try {
             await refreshGlobalConfig();
 
-            // CHECK MIGRATION STATUS: Check if table 'suppliers' exists
+            // CHECK MIGRATION STATUS
             const { error: checkError } = await supabase.from('suppliers').select('id').limit(1);
             if (checkError && (checkError.code === '42P01' || checkError.message.includes('does not exist'))) {
                 setDbNeedsMigration(true);
@@ -280,7 +280,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
             let finalUsers = [...localUsers];
 
-            if (userError || !dbUsers || dbUsers.length === 0) {
+            if (userError || !dbUsers) {
                 console.warn("Usando usuarios locales y de rescate.");
                 if (!finalUsers.find((u: User) => u.email === RESCUE_USER.email)) {
                     finalUsers.push(RESCUE_USER);
@@ -300,7 +300,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                  if (!error && data) {
                      setter([...data, ...localData.filter((l: any) => !data.find((d: any) => d.id === l.id))]);
                  } else {
-                     // Si la tabla no existe, usamos local pero ya marcamos dbNeedsMigration
                      setter(localData);
                  }
             };
@@ -308,7 +307,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             await Promise.allSettled([
                 fetchOrLocal('projects', setProjects, localProjects),
                 fetchOrLocal('suppliers', setSuppliers, localSuppliers),
-                fetchOrLocal('clients', setClients, localClients), // Nueva entidad
+                fetchOrLocal('clients', setClients, localClients), 
                 fetchOrLocal('varieties', setVarieties, localVarieties),
                 fetchOrLocal('locations', setLocations, localLocations),
                 fetchOrLocal('plots', setPlots, localPlots),
@@ -323,8 +322,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             if (savedUser) {
                 try {
                     const parsed = JSON.parse(savedUser);
+                    // Validamos si el usuario guardado sigue siendo válido
                     const isValid = finalUsers.some((u: User) => u.id === parsed.id) || parsed.email === RESCUE_USER.email;
-                    if (isValid) setCurrentUser(parsed);
+                    
+                    // Si no está en lista local, verificar en DB una vez más (caso borde)
+                    if (isValid) {
+                        setCurrentUser(parsed);
+                    } else {
+                        // Último intento: verificar DB directa
+                        const { data: directUser } = await supabase.from('users').select('*').eq('id', parsed.id).single();
+                        if (directUser) {
+                            setCurrentUser(directUser as User);
+                        }
+                    }
                 } catch (e) { localStorage.removeItem('ht_session_user'); }
             }
 
@@ -347,21 +357,42 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, []);
 
   const login = async (email: string, password: string): Promise<boolean> => {
-    const validUser = usersList.find(u => 
+    // 1. Intentar con lista en memoria (rápido)
+    let validUser = usersList.find(u => 
         u.email.toLowerCase().trim() === email.toLowerCase().trim() && 
         u.password === password
     );
+
+    // 2. Si no está en memoria, preguntar a la base de datos (seguro)
+    if (!validUser && !isEmergencyMode) {
+        try {
+            const { data, error } = await supabase.from('users')
+                .select('*')
+                .eq('email', email.toLowerCase().trim())
+                .eq('password', password) // En prod usaríamos hash, pero aquí es texto plano según diseño
+                .single();
+            
+            if (data && !error) {
+                validUser = data as User;
+                // Agregarlo a la lista local para la sesión
+                setUsersList(prev => [...prev, validUser as User]);
+            }
+        } catch (e) {
+            console.error("Login DB check failed", e);
+        }
+    }
+
+    // 3. Chequeo Admin Rescate
+    if (!validUser && email === RESCUE_USER.email && password === RESCUE_USER.password) {
+        validUser = RESCUE_USER;
+    }
 
     if (validUser) {
       setCurrentUser(validUser);
       localStorage.setItem('ht_session_user', JSON.stringify(validUser));
       return true;
     }
-    if (email === RESCUE_USER.email && password === RESCUE_USER.password) {
-        setCurrentUser(RESCUE_USER);
-        localStorage.setItem('ht_session_user', JSON.stringify(RESCUE_USER));
-        return true;
-    }
+    
     return false;
   };
 
@@ -372,6 +403,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const addUser = async (u: User): Promise<boolean> => {
       const { error } = await supabase.from('users').insert([u]);
+      if (error) {
+          console.error("Error creando usuario:", error);
+          alert("Error al guardar en la nube. Verifica permisos o conexión.");
+          // Fallback local solo si es emergencia
+          if(isEmergencyMode) {
+             setUsersList(prev => { const newList = [...prev, u]; saveToLocal('users', newList.filter(user => user.id !== RESCUE_USER.id)); return newList; });
+             return true;
+          }
+          return false;
+      }
       setUsersList(prev => { const newList = [...prev, u]; saveToLocal('users', newList.filter(user => user.id !== RESCUE_USER.id)); return newList; });
       return true; 
   };
