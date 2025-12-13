@@ -275,18 +275,35 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             const localSeedBatches = getFromLocal('seedBatches');
             const localSeedMovements = getFromLocal('seedMovements');
 
-            // ATTEMPT TO FETCH USERS
-            // Handling PGRST204 Error explicitly here to avoid white screen of death
+            // ATTEMPT TO FETCH USERS (ROBUST STRATEGY)
             let dbUsers: any[] | null = null;
             let userError: any = null;
             
             try {
-                const response = await supabase.from('users').select('*');
-                dbUsers = response.data;
-                userError = response.error;
-            } catch (err) {
-                console.error("Fetch threw exception", err);
-                userError = err;
+                // Try 1: Fetch ALL columns (Ideal)
+                const resFull = await supabase.from('users').select('*');
+                if (resFull.error) throw resFull.error;
+                dbUsers = resFull.data;
+            } catch (err: any) {
+                console.warn("Full user fetch failed (Schema Issue?):", err.message);
+                
+                // Try 2: Fetch ONLY basic columns (Legacy compatibility) if schema cache is broken
+                if (err.code === 'PGRST204' || err.message?.includes('column') || err.message?.includes('schema')) {
+                    console.log("Attempting fallback fetch for users...");
+                    try {
+                        const resBasic = await supabase.from('users').select('id, name, email, password, role');
+                        if (!resBasic.error) {
+                            dbUsers = resBasic.data;
+                            setDbNeedsMigration(true); // Flag that we are missing columns but app is running
+                        } else {
+                            throw resBasic.error;
+                        }
+                    } catch (e) {
+                        userError = e;
+                    }
+                } else {
+                    userError = err;
+                }
             }
             
             if (!isMounted) return;
@@ -294,13 +311,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             let finalUsers = [...localUsers];
 
             if (userError || !dbUsers) {
-                console.warn("Error cargando usuarios (Posible PGRST204 o Red). Usando rescate.", userError);
-                
-                // If distinct error PGRST204 (Column missing), trigger migration warning but allow app to load
-                if (userError?.code === 'PGRST204' || userError?.message?.includes('schema cache')) {
-                    setDbNeedsMigration(true);
-                }
-
+                console.warn("Error crítico cargando usuarios. Usando rescate.", userError);
                 if (!finalUsers.find((u: User) => u.email === RESCUE_USER.email)) {
                     finalUsers.push(RESCUE_USER);
                 }
@@ -309,9 +320,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 const dbIds = new Set(dbUsers.map((u: any) => u.id));
                 const uniqueLocal = localUsers.filter((u: User) => !dbIds.has(u.id));
                 finalUsers = [...(dbUsers as User[]), ...uniqueLocal];
-                // Only unset emergency mode if users loaded successfully
-                // setIsEmergencyMode(false); 
-                // Wait, if other tables fail we might still want emergency mode. Let's assume OK for now.
+                // Do not force emergency false if dbNeedsMigration is true
             }
             
             setUsersList(finalUsers);
@@ -349,7 +358,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                         setCurrentUser(parsed);
                     } else {
                         // Fallback check
-                        const { data: directUser } = await supabase.from('users').select('*').eq('id', parsed.id).single();
+                        const { data: directUser } = await supabase.from('users').select('id, name, email, role').eq('id', parsed.id).single();
                         if (directUser) {
                             setCurrentUser(directUser as User);
                         }
@@ -396,8 +405,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             if (data && !error) {
                 validUser = data as User;
                 setUsersList(prev => [...prev, validUser as User]);
-                // Si el login fue exitoso contra la DB, quizás la conexión esté bien, pero el schema no
-                // No forzamos emergency false aquí si dbNeedsMigration es true
             }
         } catch (e) {
             console.error("Login DB check failed", e);
