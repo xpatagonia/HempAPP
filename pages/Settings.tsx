@@ -127,15 +127,24 @@ CREATE TABLE IF NOT EXISTS public.suppliers (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
--- 3. ACTUALIZAR TABLAS EXISTENTES CON NUEVOS CAMPOS (v2.6)
+-- 3. ACTUALIZAR TABLAS EXISTENTES CON NUEVOS CAMPOS
 DO $$
 BEGIN
-    -- Projects: Director
+    -- Suppliers: Nuevos campos de contacto (Hotfix v2.5)
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'suppliers' AND column_name = 'city') THEN
+        ALTER TABLE public.suppliers ADD COLUMN "city" TEXT;
+        ALTER TABLE public.suppliers ADD COLUMN "province" TEXT;
+        ALTER TABLE public.suppliers ADD COLUMN "address" TEXT;
+        ALTER TABLE public.suppliers ADD COLUMN "commercialContact" TEXT;
+        ALTER TABLE public.suppliers ADD COLUMN "logisticsContact" TEXT;
+    END IF;
+
+    -- Projects: Director (Hotfix v2.6)
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'projects' AND column_name = 'directorId') THEN
         ALTER TABLE public.projects ADD COLUMN "directorId" TEXT;
     END IF;
 
-    -- Users: Gamification & Details
+    -- Users: Gamification & Details (Hotfix v2.6)
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'avatar') THEN
         ALTER TABLE public.users ADD COLUMN "avatar" TEXT;
     END IF;
@@ -144,15 +153,6 @@ BEGIN
     END IF;
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'phone') THEN
         ALTER TABLE public.users ADD COLUMN "phone" TEXT;
-    END IF;
-
-    -- Suppliers: Nuevos campos de contacto (Hotfix v2.5)
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'suppliers' AND column_name = 'city') THEN
-        ALTER TABLE public.suppliers ADD COLUMN "city" TEXT;
-        ALTER TABLE public.suppliers ADD COLUMN "province" TEXT;
-        ALTER TABLE public.suppliers ADD COLUMN "address" TEXT;
-        ALTER TABLE public.suppliers ADD COLUMN "commercialContact" TEXT;
-        ALTER TABLE public.suppliers ADD COLUMN "logisticsContact" TEXT;
     END IF;
 
     -- Plots: Tipo, Unidad, Vinculo Lote Semilla
