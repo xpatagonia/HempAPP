@@ -92,7 +92,7 @@ export default function Settings() {
 
   const copySQL = () => {
       navigator.clipboard.writeText(SQL_SCRIPT);
-      alert("SQL copiado al portapapeles. Pégalo en el SQL Editor de Supabase.");
+      alert("SQL copiado al portapapeles. Pégalo en el SQL Editor de Supabase y dale RUN.");
   };
 
   const clearLocalCache = () => {
@@ -109,9 +109,8 @@ export default function Settings() {
 
   const SQL_SCRIPT = `
 -- =========================================================
--- SCRIPT DE REPARACIÓN Y MIGRACIÓN (v3.3)
--- Ejecuta esto en el SQL Editor de Supabase para corregir
--- errores de columnas faltantes (PGRST204)
+-- SCRIPT DE REPARACIÓN Y MIGRACIÓN (v3.4 - FIX PGRST204)
+-- Ejecuta esto en el SQL Editor de Supabase.
 -- =========================================================
 
 -- 1. CONFIGURACIÓN DEL SISTEMA
@@ -363,8 +362,11 @@ ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS "assignedToIds" JSONB DEFAULT 
 ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS "createdBy" TEXT;
 ALTER TABLE public.tasks DISABLE ROW LEVEL SECURITY;
 
--- Confirmación final
-SELECT 'MIGRACIÓN EXITOSA: Base de Datos Actualizada' as status;
+-- 14. RECARGAR CACHÉ DE ESQUEMA (CRÍTICO PARA ERROR PGRST204)
+-- Este comando fuerza a la API a reconocer las nuevas columnas.
+NOTIFY pgrst, 'reload schema';
+
+SELECT 'MIGRACIÓN EXITOSA: Base de Datos Actualizada y Caché Recargada' as status;
   `;
 
   return (
@@ -528,6 +530,10 @@ SELECT 'MIGRACIÓN EXITOSA: Base de Datos Actualizada' as status;
                     <button onClick={copySQL} className="text-xs bg-white hover:bg-slate-100 text-slate-700 px-4 py-2 rounded border border-slate-300 shadow-sm flex items-center transition font-bold">
                         <Copy size={14} className="mr-2" /> Copiar SQL
                     </button>
+                </div>
+                <div className="bg-amber-50 text-amber-800 text-xs p-3 rounded mb-2 border border-amber-200">
+                    <strong>Importante:</strong> Si el error "Could not find the 'jobTitle' column" persiste después de ejecutar este script, 
+                    ve a tu Dashboard de Supabase &gt; Project Settings &gt; API &gt; y haz clic en <strong>"Reload schema cache"</strong> manualmente.
                 </div>
                 <div className="bg-slate-900 border border-slate-800 p-4 rounded-lg text-xs font-mono text-blue-300 overflow-x-auto mb-2 whitespace-pre h-64 custom-scrollbar shadow-inner">
                     {SQL_SCRIPT}
