@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, AreaChart, Area } from 'recharts';
-import { Sprout, MapPin, Activity, CheckCircle, FileText, Download, ArrowRight, Users, FolderOpen, AlertCircle, TrendingUp, Calendar, FileCheck, CheckSquare, Printer, X, Filter } from 'lucide-react';
+import { Sprout, MapPin, Activity, CheckCircle, FileText, Download, ArrowRight, Users, FolderOpen, AlertCircle, TrendingUp, Calendar, FileCheck, CheckSquare, Printer, X, Filter, Sparkles, Building } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -242,6 +242,17 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6 pb-10">
+      {/* Update Banner */}
+      <div className="bg-purple-50 border border-purple-200 p-3 rounded-lg flex items-center justify-between animate-in fade-in slide-in-from-top-4">
+          <div className="flex items-center text-purple-900 text-sm">
+              <Sparkles size={16} className="mr-2 text-purple-600"/>
+              <strong>¡Nueva Funcionalidad!</strong>&nbsp; Gestión de Proveedores y Stock de Semillas habilitada.
+          </div>
+          <Link to="/suppliers" className="text-xs bg-white text-purple-700 px-3 py-1 rounded border border-purple-200 font-bold hover:bg-purple-50 transition flex items-center">
+              Ir a Proveedores <ArrowRight size={12} className="ml-1"/>
+          </Link>
+      </div>
+
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
             <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Panel de Control</h1>

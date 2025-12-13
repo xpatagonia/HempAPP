@@ -234,9 +234,12 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
            {/* Developer Footer */}
            <div className="bg-gray-100 dark:bg-slate-900 py-3 text-center border-t border-gray-200 dark:border-dark-border">
                <p className="text-[10px] text-gray-400 font-mono leading-tight">Dev gaston.barea.moreno@gmail.com</p>
-               <a href="https://xpatagonia.com" target="_blank" rel="noopener noreferrer" className="text-[10px] text-hemp-600 dark:text-hemp-500 font-bold font-mono hover:underline">
-                   xpatagonia.com
-               </a>
+               <div className="flex items-center justify-center space-x-2 mt-1">
+                   <span className="text-[10px] bg-hemp-100 text-hemp-800 px-1.5 py-0.5 rounded font-bold">v2.1 Suppliers</span>
+                   <a href="https://xpatagonia.com" target="_blank" rel="noopener noreferrer" className="text-[10px] text-hemp-600 dark:text-hemp-500 font-bold font-mono hover:underline">
+                       xpatagonia.com
+                   </a>
+               </div>
            </div>
         </div>
       </aside>

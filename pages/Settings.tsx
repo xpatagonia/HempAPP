@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Save, Database, Copy, RefreshCw, AlertTriangle, Lock, Settings as SettingsIcon, Sliders, Sparkles, ExternalLink } from 'lucide-react';
+import { Save, Database, Copy, RefreshCw, AlertTriangle, Lock, Settings as SettingsIcon, Sliders, Sparkles, ExternalLink, Trash2 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
 export default function Settings() {
@@ -92,6 +92,18 @@ export default function Settings() {
   const copySQL = () => {
       navigator.clipboard.writeText(SQL_SCRIPT);
       alert("SQL copiado al portapapeles. Pégalo en el SQL Editor de Supabase.");
+  };
+
+  const clearLocalCache = () => {
+      if(confirm("¿Seguro que quieres borrar la caché local? Esto obligará a la app a descargar todos los datos nuevamente.")) {
+          // Clear all keys starting with ht_local_
+          Object.keys(localStorage).forEach(key => {
+              if (key.startsWith('ht_local_')) {
+                  localStorage.removeItem(key);
+              }
+          });
+          window.location.reload();
+      }
   };
 
   const SQL_SCRIPT = `
@@ -216,6 +228,20 @@ END $$;
                 <div className="text-sm text-amber-800">
                     <strong>Importante:</strong> Como Super Admin, las claves que guardes aquí se almacenarán en la base de datos para que el resto del equipo pueda usar las funciones de IA sin configurar nada.
                 </div>
+            </div>
+
+            {/* CACHE TOOL */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex justify-between items-center">
+                <div>
+                    <h2 className="text-sm font-bold text-gray-800 flex items-center">
+                        <Database size={16} className="mr-2 text-gray-400" />
+                        Almacenamiento Local (Caché)
+                    </h2>
+                    <p className="text-xs text-gray-500 mt-1">Si no ves los cambios recientes, intenta limpiar la caché.</p>
+                </div>
+                <button onClick={clearLocalCache} className="text-red-600 border border-red-200 hover:bg-red-50 px-4 py-2 rounded-lg text-xs font-bold flex items-center transition">
+                    <Trash2 size={14} className="mr-2"/> Forzar Recarga
+                </button>
             </div>
 
             {/* 1. Supabase Connection */}
