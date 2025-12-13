@@ -95,26 +95,69 @@ export default function Settings() {
   };
 
   const SQL_SCRIPT = `
--- 1. HABILITAR CONFIGURACIÓN GLOBAL (IA)
--- Ejecuta esto para crear la tabla donde se guarda la API Key de forma segura
+-- 1. CONFIGURACIÓN GLOBAL (IA)
 CREATE TABLE IF NOT EXISTS public.system_settings (
     id TEXT PRIMARY KEY DEFAULT 'global',
     gemini_api_key TEXT,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
-
--- Insertar registro base
 INSERT INTO public.system_settings (id) VALUES ('global') ON CONFLICT DO NOTHING;
 
--- 2. ACTUALIZAR TABLAS EXISTENTES (Si faltan columnas)
--- Agrega columnas nuevas sin romper datos existentes
+-- 2. TABLA PROVEEDORES (NUEVO)
+CREATE TABLE IF NOT EXISTS public.suppliers (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    "legalName" TEXT,
+    cuit TEXT,
+    country TEXT,
+    website TEXT,
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+
+-- 3. ACTUALIZAR TABLAS EXISTENTES CON NUEVOS CAMPOS
 DO $$
 BEGIN
+    -- Plots: Tipo, Unidad, Vinculo Lote Semilla
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'plots' AND column_name = 'type') THEN
         ALTER TABLE public.plots ADD COLUMN "type" TEXT DEFAULT 'Ensayo';
     END IF;
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'plots' AND column_name = 'surfaceUnit') THEN
         ALTER TABLE public.plots ADD COLUMN "surfaceUnit" TEXT DEFAULT 'm2';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'plots' AND column_name = 'seedBatchId') THEN
+        ALTER TABLE public.plots ADD COLUMN "seedBatchId" TEXT;
+    END IF;
+
+    -- Varieties: Vinculo Proveedor
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'varieties' AND column_name = 'supplierId') THEN
+        ALTER TABLE public.varieties ADD COLUMN "supplierId" TEXT;
+    END IF;
+    
+    -- Seed Batches: Compliance Data Completo
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'seed_batches' AND column_name = 'supplierName') THEN
+        ALTER TABLE public.seed_batches ADD COLUMN "supplierName" TEXT;
+        ALTER TABLE public.seed_batches ADD COLUMN "supplierLegalName" TEXT;
+        ALTER TABLE public.seed_batches ADD COLUMN "supplierCuit" TEXT;
+        ALTER TABLE public.seed_batches ADD COLUMN "supplierRenspa" TEXT;
+        ALTER TABLE public.seed_batches ADD COLUMN "supplierAddress" TEXT;
+        ALTER TABLE public.seed_batches ADD COLUMN "originCountry" TEXT;
+        ALTER TABLE public.seed_batches ADD COLUMN "gs1Code" TEXT;
+        ALTER TABLE public.seed_batches ADD COLUMN "certificationNumber" TEXT;
+        ALTER TABLE public.seed_batches ADD COLUMN "storageConditions" TEXT;
+        ALTER TABLE public.seed_batches ADD COLUMN "storageAddress" TEXT;
+        ALTER TABLE public.seed_batches ADD COLUMN "logisticsResponsible" TEXT;
+    END IF;
+
+    -- Seed Movements: Datos Transporte y Ruta
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'seed_movements' AND column_name = 'transportGuideNumber') THEN
+        ALTER TABLE public.seed_movements ADD COLUMN "transportGuideNumber" TEXT;
+        ALTER TABLE public.seed_movements ADD COLUMN "transportType" TEXT;
+        ALTER TABLE public.seed_movements ADD COLUMN "vehiclePlate" TEXT;
+        ALTER TABLE public.seed_movements ADD COLUMN "vehicleModel" TEXT;
+        ALTER TABLE public.seed_movements ADD COLUMN "driverName" TEXT;
+        ALTER TABLE public.seed_movements ADD COLUMN "routeItinerary" TEXT;
+        ALTER TABLE public.seed_movements ADD COLUMN "dispatchTime" TEXT;
     END IF;
 END $$;
   `;
@@ -255,16 +298,12 @@ END $$;
                         <Copy size={12} className="mr-1" /> Copiar SQL
                     </button>
                 </div>
-                <div className="bg-white border border-gray-200 p-3 rounded text-xs font-mono text-gray-600 overflow-x-auto mb-2 whitespace-pre">
-{`CREATE TABLE IF NOT EXISTS public.system_settings (
-  id TEXT PRIMARY KEY DEFAULT 'global',
-  gemini_api_key TEXT
-);
-INSERT INTO public.system_settings (id) VALUES ('global') ON CONFLICT DO NOTHING;`}
+                <div className="bg-white border border-gray-200 p-3 rounded text-xs font-mono text-gray-600 overflow-x-auto mb-2 whitespace-pre h-48 custom-scrollbar">
+                    {SQL_SCRIPT}
                 </div>
                 <p className="text-xs text-gray-500">
                     <AlertTriangle size={12} className="inline mr-1 text-amber-500"/>
-                    Si obtuviste errores de "relation already exists", usa este script simplificado para crear solo la tabla faltante.
+                    Ejecuta esto en Supabase para crear las tablas nuevas (Proveedores) y las columnas de logística necesarias.
                 </p>
             </div>
         </div>
