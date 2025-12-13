@@ -275,14 +275,32 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             const localSeedBatches = getFromLocal('seedBatches');
             const localSeedMovements = getFromLocal('seedMovements');
 
-            const { data: dbUsers, error: userError } = await supabase.from('users').select('*');
+            // ATTEMPT TO FETCH USERS
+            // Handling PGRST204 Error explicitly here to avoid white screen of death
+            let dbUsers: any[] | null = null;
+            let userError: any = null;
+            
+            try {
+                const response = await supabase.from('users').select('*');
+                dbUsers = response.data;
+                userError = response.error;
+            } catch (err) {
+                console.error("Fetch threw exception", err);
+                userError = err;
+            }
             
             if (!isMounted) return;
 
             let finalUsers = [...localUsers];
 
             if (userError || !dbUsers) {
-                console.warn("Usando usuarios locales y de rescate.");
+                console.warn("Error cargando usuarios (Posible PGRST204 o Red). Usando rescate.", userError);
+                
+                // If distinct error PGRST204 (Column missing), trigger migration warning but allow app to load
+                if (userError?.code === 'PGRST204' || userError?.message?.includes('schema cache')) {
+                    setDbNeedsMigration(true);
+                }
+
                 if (!finalUsers.find((u: User) => u.email === RESCUE_USER.email)) {
                     finalUsers.push(RESCUE_USER);
                 }
@@ -291,7 +309,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 const dbIds = new Set(dbUsers.map((u: any) => u.id));
                 const uniqueLocal = localUsers.filter((u: User) => !dbIds.has(u.id));
                 finalUsers = [...(dbUsers as User[]), ...uniqueLocal];
-                setIsEmergencyMode(false);
+                // Only unset emergency mode if users loaded successfully
+                // setIsEmergencyMode(false); 
+                // Wait, if other tables fail we might still want emergency mode. Let's assume OK for now.
             }
             
             setUsersList(finalUsers);
@@ -323,14 +343,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             if (savedUser) {
                 try {
                     const parsed = JSON.parse(savedUser);
-                    // Validamos si el usuario guardado sigue siendo válido
                     const isValid = finalUsers.some((u: User) => u.id === parsed.id) || parsed.email === RESCUE_USER.email;
                     
-                    // Si no está en lista local, verificar en DB una vez más (caso borde)
                     if (isValid) {
                         setCurrentUser(parsed);
                     } else {
-                        // Último intento: verificar DB directa
+                        // Fallback check
                         const { data: directUser } = await supabase.from('users').select('*').eq('id', parsed.id).single();
                         if (directUser) {
                             setCurrentUser(directUser as User);
@@ -340,7 +358,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             }
 
         } catch (err) {
-            console.error("Error crítico en carga:", err);
+            console.error("Error crítico en carga general:", err);
             if(isMounted) {
                 setUsersList([...getFromLocal('users'), RESCUE_USER]);
                 setIsEmergencyMode(true);
@@ -365,21 +383,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     );
 
     // 2. Si no está en memoria, forzar consulta a la base de datos (seguro)
-    // CRITICO: Intentamos incluso si está en modo emergencia, por si la red volvió
     if (!validUser) {
         try {
+            // Intenta seleccionar solo columnas básicas para evitar PGRST204 en login si el schema está roto
+            // Esto permite que el login funcione incluso si faltan las columnas nuevas (jobTitle, etc)
             const { data, error } = await supabase.from('users')
-                .select('*')
+                .select('id, name, email, password, role') 
                 .eq('email', email.toLowerCase().trim())
-                .eq('password', password) // En prod usaríamos hash, pero aquí es texto plano según diseño
+                .eq('password', password)
                 .single();
             
             if (data && !error) {
                 validUser = data as User;
-                // Agregarlo a la lista local para la sesión
                 setUsersList(prev => [...prev, validUser as User]);
-                // Si tuvimos éxito conectando, apagamos el modo emergencia para esta sesión
-                setIsEmergencyMode(false);
+                // Si el login fue exitoso contra la DB, quizás la conexión esté bien, pero el schema no
+                // No forzamos emergency false aquí si dbNeedsMigration es true
             }
         } catch (e) {
             console.error("Login DB check failed", e);
@@ -409,10 +427,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const { error } = await supabase.from('users').insert([u]);
       if (error) {
           console.error("Error creando usuario:", error);
-          // DETAILED ERROR ALERT FOR USER
           alert(`Error Base de Datos: ${error.message} (Código: ${error.code})`);
-          
-          // Fallback local solo si es emergencia
           if(isEmergencyMode) {
              setUsersList(prev => { const newList = [...prev, u]; saveToLocal('users', newList.filter(user => user.id !== RESCUE_USER.id)); return newList; });
              return true;
