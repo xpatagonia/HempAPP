@@ -74,7 +74,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       <div className="lg:hidden fixed top-0 w-full bg-white dark:bg-dark-card z-50 border-b dark:border-dark-border px-4 py-3 flex justify-between items-center shadow-sm">
         <div className="flex items-center space-x-2 text-hemp-800 dark:text-hemp-400">
           <Leaf className="w-6 h-6" />
-          <span className="font-bold text-lg">HempAPP</span>
+          <span className="font-bold text-lg">HempC App</span>
         </div>
         <div className="flex items-center space-x-2">
             {/* Bell Mobile */}
@@ -146,7 +146,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         <div className="h-16 flex items-center px-6 border-b dark:border-dark-border justify-between">
           <div className="flex items-center">
              <Leaf className="w-8 h-8 text-hemp-600 dark:text-hemp-500 mr-2" />
-             <span className="text-xl font-bold text-gray-800 dark:text-gray-100">HempAPP</span>
+             <span className="text-xl font-bold text-gray-800 dark:text-gray-100">HempC App</span>
           </div>
           
           <div className="flex items-center space-x-1">

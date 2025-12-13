@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Mail, ArrowRight, AlertTriangle, Database, Settings, X, Save, RefreshCw, UserCheck, CloudOff } from 'lucide-react';
+import { Lock, Mail, ArrowRight, AlertTriangle, Database, Settings, X, Save, RefreshCw, UserCheck, CloudOff, Leaf } from 'lucide-react';
 
 export default function Login() {
   const { login, isEmergencyMode } = useAppContext();
@@ -84,16 +84,18 @@ export default function Login() {
         {/* BRANDING HEADER */}
         <div className="text-center mb-8 relative">
             <div className="flex justify-center mb-6 relative group">
-                <div className="absolute inset-0 bg-hemp-500 blur-3xl opacity-10 group-hover:opacity-20 transition-opacity duration-500 rounded-full w-2/3 mx-auto"></div>
-                {/* LOGO EMPRESA: Asegúrate de guardar tu imagen como 'logo.png' en la carpeta public */}
-                <img 
-                  src="/logo.png" 
-                  alt="HempC Logo" 
-                  className="h-28 object-contain relative z-10 drop-shadow-2xl transition-transform duration-300 group-hover:scale-105" 
-                />
+                <div className="absolute inset-0 bg-hemp-500 blur-3xl opacity-20 group-hover:opacity-30 transition-opacity duration-500 rounded-full w-2/3 mx-auto"></div>
+                {/* ICONO ESTILIZADO (Reemplazo de logo.png) */}
+                <div className="relative z-10 bg-slate-900/50 p-4 rounded-2xl border border-white/10 shadow-2xl group-hover:scale-110 transition-transform duration-500 backdrop-blur-sm">
+                    <Leaf size={48} className="text-hemp-500" />
+                </div>
             </div>
-            {/* Si el logo ya contiene el nombre, podemos comentar el H1 para no duplicar */}
-            {/* <h1 className="text-4xl font-black text-white tracking-tight mb-2">HempAPP<span className="text-hemp-500">.</span></h1> */}
+            
+            {/* TEXTO DESTACADO */}
+            <h1 className="text-4xl font-black text-white tracking-tight mb-2">
+                HempC <span className="text-hemp-500">App</span>
+            </h1>
+            
             <p className="text-slate-400 text-sm font-medium">Gestión Inteligente de Cultivos & Ensayos</p>
         </div>
 
