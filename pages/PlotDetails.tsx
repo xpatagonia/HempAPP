@@ -4,6 +4,7 @@ import { useAppContext } from '../context/AppContext';
 import { TrialRecord } from '../types';
 import { ArrowLeft, Activity, Scale, AlertTriangle, Camera, FileText, Calendar, MapPin, Globe, Plus, Edit2, Trash2, Download, Droplets, Wind, QrCode, Printer, CheckSquare, Sun, Eye, Loader2, Ruler, Bug, SprayCan, Tractor, FlaskConical, Tag, Clock, UserCheck } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import MapEditor from '../components/MapEditor';
 
 export default function PlotDetails() {
   const { id } = useParams<{ id: string }>();
@@ -330,21 +331,17 @@ export default function PlotDetails() {
             )}
           </div>
 
-          {/* Map Preview */}
-          <div className="h-48 lg:h-auto bg-gray-100 relative border-t lg:border-t-0 lg:border-l border-gray-200">
-              {displayCoordinates ? (
-                 <iframe 
-                   width="100%" 
-                   height="100%" 
-                   frameBorder="0" 
-                   scrolling="no" 
-                   marginHeight={0} 
-                   marginWidth={0} 
-                   src={`https://maps.google.com/maps?q=${displayCoordinates.lat},${displayCoordinates.lng}&z=${isSpecificCoordinates ? 17 : 14}&output=embed`}
-                   className="absolute inset-0"
-                 ></iframe>
+          {/* Interactive Map */}
+          <div className="h-64 lg:h-auto border-t lg:border-t-0 lg:border-l border-gray-200">
+              {displayCoordinates || (plot.polygon && plot.polygon.length > 0) ? (
+                 <MapEditor 
+                    initialPolygon={plot.polygon}
+                    initialCenter={displayCoordinates}
+                    readOnly={true}
+                    height="100%"
+                 />
               ) : (
-                <div className="flex items-center justify-center h-full text-gray-400 flex-col">
+                <div className="flex items-center justify-center h-full text-gray-400 flex-col bg-gray-50">
                   <Globe size={32} className="mb-2 opacity-50" />
                   <span className="text-sm">Sin mapa disponible</span>
                   <span className="text-xs text-gray-400">(Faltan coordenadas)</span>

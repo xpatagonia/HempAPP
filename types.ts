@@ -165,6 +165,9 @@ export interface Plot {
     lat: number;
     lng: number;
   };
+  
+  // NUEVO: Polígono de la parcela (Array de coordenadas para dibujar el mapa)
+  polygon?: { lat: number; lng: number }[];
 }
 
 // The official registry data structure (Hoja de Excel), now historical

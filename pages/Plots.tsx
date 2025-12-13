@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { Plot } from '../types';
-import { Plus, ChevronRight, CheckCircle, FileSpreadsheet, Edit2, Calendar, UserCheck, MapPin, Box, Trash2, LayoutGrid, List, Image as ImageIcon, Ruler, Droplets, FlaskConical, Tractor, Tag, Sprout } from 'lucide-react';
+import { Plus, ChevronRight, CheckCircle, FileSpreadsheet, Edit2, Calendar, UserCheck, MapPin, Box, Trash2, LayoutGrid, List, Image as ImageIcon, Ruler, Droplets, FlaskConical, Tractor, Tag, Sprout, Map } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import MapEditor from '../components/MapEditor';
 
 export default function Plots() {
   const { plots, locations, varieties, projects, usersList, addPlot, updatePlot, deletePlot, currentUser, getLatestRecord, logs, seedBatches } = useAppContext();
@@ -21,7 +22,7 @@ export default function Plots() {
   const [filterProj, setFilterProj] = useState(initialProjectFilter);
   const [filterType, setFilterType] = useState<'all' | 'Ensayo' | 'Producción'>('all');
 
-  // Extended form state to handle lat/lng strings
+  // Extended form state to handle lat/lng strings and Polygon
   const [formData, setFormData] = useState<Partial<Plot> & { lat?: string, lng?: string }>({
     projectId: '', locationId: '', varietyId: '', seedBatchId: '',
     type: 'Ensayo',
@@ -32,7 +33,8 @@ export default function Plots() {
     status: 'Activa',
     observations: '',
     irrigationType: '',
-    lat: '', lng: ''
+    lat: '', lng: '',
+    polygon: []
   });
 
   const isSuperAdmin = currentUser?.role === 'super_admin';
@@ -40,6 +42,12 @@ export default function Plots() {
 
   // Filter available batches based on selected variety
   const availableBatches = seedBatches.filter(b => b.varietyId === formData.varietyId);
+
+  // Get location center for map init
+  const selectedLocation = locations.find(l => l.id === formData.locationId);
+  const mapCenter = selectedLocation?.coordinates 
+    ? { lat: selectedLocation.coordinates.lat, lng: selectedLocation.coordinates.lng } 
+    : undefined;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,16 +65,25 @@ export default function Plots() {
         autoName = `${varCode}-B${formData.block}-R${formData.replicate}`; // Example: USO-B1-R1
     }
 
-    // Process coordinates
-    const coordinates = (formData.lat && formData.lng) 
-      ? { lat: parseFloat(formData.lat), lng: parseFloat(formData.lng) }
+    // Process coordinates (Center)
+    // If user drew a polygon, use the first point as center if no lat/lng manually entered
+    let finalLat = parseFloat(formData.lat || '0');
+    let finalLng = parseFloat(formData.lng || '0');
+
+    if (!finalLat && formData.polygon && formData.polygon.length > 0) {
+        finalLat = formData.polygon[0].lat;
+        finalLng = formData.polygon[0].lng;
+    }
+
+    const coordinates = (finalLat && finalLng) 
+      ? { lat: finalLat, lng: finalLng }
       : undefined;
 
     const plotPayload = {
       type: formData.type || 'Ensayo',
       locationId: formData.locationId!,
       varietyId: formData.varietyId!,
-      seedBatchId: formData.seedBatchId || null, // IMPORTANT: Send null, not empty string, for optional FKs
+      seedBatchId: formData.seedBatchId || null, 
       projectId: formData.projectId!,
       block: formData.block!,
       replicate: Number(formData.replicate),
@@ -80,12 +97,11 @@ export default function Plots() {
       status: formData.status || 'Activa',
       observations: formData.observations,
       irrigationType: formData.irrigationType,
-      coordinates
+      coordinates,
+      polygon: formData.polygon || [] // Save the drawn polygon
     } as any;
 
     if (editingId) {
-        // When editing, keep ID and Name (unless we want to regen name, but better keep stable)
-        // Only regen name if user specifically cleared it or logic demanded (omitted for stability)
         updatePlot({ ...plotPayload, id: editingId, name: plots.find(p => p.id === editingId)?.name || autoName } as Plot);
     } else {
         addPlot({
@@ -105,7 +121,7 @@ export default function Plots() {
         ownerName: '', responsibleIds: [], sowingDate: '', rowDistance: 0, density: 0, 
         surfaceArea: 0, surfaceUnit: 'm2',
         status: 'Activa', observations: '', irrigationType: '',
-        lat: '', lng: ''
+        lat: '', lng: '', polygon: []
     });
     setEditingId(null);
   };
@@ -123,10 +139,21 @@ export default function Plots() {
         surfaceArea: p.surfaceArea || 0,
         surfaceUnit: p.surfaceUnit || 'm2',
         type: p.type || 'Ensayo',
-        seedBatchId: p.seedBatchId || ''
+        seedBatchId: p.seedBatchId || '',
+        polygon: p.polygon || []
       });
       setEditingId(p.id);
       setIsModalOpen(true);
+  };
+
+  const handlePolygonChange = (newPoly: { lat: number, lng: number }[], areaHa: number) => {
+      setFormData(prev => ({
+          ...prev,
+          polygon: newPoly,
+          // Auto-calculate area if unit is hectares
+          surfaceArea: areaHa > 0 ? Number(areaHa.toFixed(2)) : prev.surfaceArea,
+          surfaceUnit: areaHa > 0 ? 'ha' : prev.surfaceUnit
+      }));
   };
 
   const handleDelete = async (id?: string) => {
@@ -138,14 +165,12 @@ export default function Plots() {
   };
 
   const handleExport = () => {
-    // Export full merged data (Plot Info + Latest Trial Data)
+    // Export full merged data
     const exportData = plots.map(p => {
         const l = locations.find(l => l.id === p.locationId);
         const v = varieties.find(v => v.id === p.varietyId);
         const pr = projects.find(proj => proj.id === p.projectId);
         const sb = seedBatches.find(b => b.id === p.seedBatchId);
-        
-        // Use the new helper to get current status
         const d = getLatestRecord(p.id);
 
         return {
@@ -387,8 +412,18 @@ export default function Plots() {
                                   <img src={latestPhoto} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                               ) : (
                                   <div className="w-full h-full flex flex-col items-center justify-center text-gray-300 bg-gray-50 pattern-grid-lg">
-                                      <ImageIcon size={32} className="mb-2 opacity-50" />
-                                      <span className="text-xs font-medium">Sin fotos</span>
+                                      {/* Show Map Icon if coordinates/polygon exist but no photo */}
+                                      {p.coordinates || (p.polygon && p.polygon.length > 0) ? (
+                                          <>
+                                            <Map size={32} className="mb-2 opacity-50" />
+                                            <span className="text-xs font-medium">Ubicada</span>
+                                          </>
+                                      ) : (
+                                          <>
+                                            <ImageIcon size={32} className="mb-2 opacity-50" />
+                                            <span className="text-xs font-medium">Sin datos</span>
+                                          </>
+                                      )}
                                   </div>
                               )}
                               
@@ -446,172 +481,199 @@ export default function Plots() {
        {/* Modal */}
        {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-3xl w-full p-6 shadow-xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl max-w-4xl w-full p-6 shadow-xl max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold mb-4 text-gray-900">{editingId ? 'Editar Unidad' : 'Nueva Unidad de Cultivo'}</h2>
             <form onSubmit={handleSubmit} className="space-y-6">
               
-              {/* Sección 1: Identidad (COLOR PÚRPURA SUAVE) */}
-              <div className="bg-purple-50 border border-purple-100 rounded-lg p-4">
-                  <h3 className="text-sm font-bold text-purple-800 mb-3 flex items-center uppercase">
-                      <Box size={14} className="mr-2"/> Identidad y Propósito
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                     <div className="md:col-span-2 grid grid-cols-2 gap-4">
-                         <div>
-                            <label className="block text-sm font-medium text-purple-900 mb-1">Proyecto Marco</label>
-                            <select required className={inputClass} value={formData.projectId} onChange={e => setFormData({...formData, projectId: e.target.value})}>
-                                <option value="">Seleccionar Proyecto...</option>
-                                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                            </select>
-                         </div>
-                         <div>
-                             <label className="block text-sm font-medium text-purple-900 mb-1">Tipo de Cultivo</label>
-                             <select className={inputClass} value={formData.type || 'Ensayo'} onChange={e => setFormData({...formData, type: e.target.value as any})}>
-                                 <option value="Ensayo">I+D (Ensayo Experimental)</option>
-                                 <option value="Producción">Producción (Lote Comercial)</option>
-                             </select>
-                         </div>
-                     </div>
-                     <div>
-                        <label className="block text-sm font-medium text-purple-900 mb-1">Variedad</label>
-                        <select required className={inputClass} value={formData.varietyId} onChange={e => setFormData({...formData, varietyId: e.target.value, seedBatchId: ''})}>
-                          <option value="">Seleccionar...</option>
-                          {varieties.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-                        </select>
-                     </div>
-                     {/* SEED BATCH SELECTOR (NUEVO) */}
-                     <div>
-                        <label className="block text-sm font-medium text-purple-900 mb-1 flex items-center">
-                            <Tag size={12} className="mr-1"/> Lote de Semilla (Trazabilidad)
-                        </label>
-                        <select 
-                            className={inputClass} 
-                            value={formData.seedBatchId || ''} 
-                            onChange={e => setFormData({...formData, seedBatchId: e.target.value})}
-                            disabled={!formData.varietyId}
-                        >
-                          <option value="">-- Origen Genérico --</option>
-                          {availableBatches.map(b => (
-                              <option key={b.id} value={b.id}>
-                                  {b.batchCode} ({b.supplierName})
-                              </option>
-                          ))}
-                        </select>
-                        <div className="text-xs text-purple-400 mt-1">
-                            {formData.varietyId && availableBatches.length === 0 ? "No hay lotes registrados para esta variedad." : ""}
-                        </div>
-                     </div>
-                     
-                     <div className="grid grid-cols-2 gap-2">
-                         <div>
-                            <label className="block text-sm font-medium text-purple-900 mb-1">Bloque / Lote</label>
-                            <input required type="text" className={inputClass} placeholder="1" value={formData.block} onChange={e => setFormData({...formData, block: e.target.value})} />
-                         </div>
-                         <div>
-                            <label className="block text-sm font-medium text-purple-900 mb-1">
-                                {formData.type === 'Producción' ? 'Sector' : 'Rep (R)'}
-                            </label>
-                            <input required type="number" className={inputClass} placeholder="1" value={formData.replicate} onChange={e => setFormData({...formData, replicate: Number(e.target.value)})} />
-                         </div>
-                     </div>
-                  </div>
-              </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* LEFT COLUMN: BASIC INFO */}
+                  <div className="space-y-6">
+                      {/* Sección 1: Identidad (COLOR PÚRPURA SUAVE) */}
+                      <div className="bg-purple-50 border border-purple-100 rounded-lg p-4">
+                          <h3 className="text-sm font-bold text-purple-800 mb-3 flex items-center uppercase">
+                              <Box size={14} className="mr-2"/> Identidad y Propósito
+                          </h3>
+                          <div className="grid grid-cols-1 gap-4">
+                             <div className="grid grid-cols-2 gap-4">
+                                 <div>
+                                    <label className="block text-sm font-medium text-purple-900 mb-1">Proyecto Marco</label>
+                                    <select required className={inputClass} value={formData.projectId} onChange={e => setFormData({...formData, projectId: e.target.value})}>
+                                        <option value="">Seleccionar Proyecto...</option>
+                                        {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                    </select>
+                                 </div>
+                                 <div>
+                                     <label className="block text-sm font-medium text-purple-900 mb-1">Tipo de Cultivo</label>
+                                     <select className={inputClass} value={formData.type || 'Ensayo'} onChange={e => setFormData({...formData, type: e.target.value as any})}>
+                                         <option value="Ensayo">I+D (Ensayo Experimental)</option>
+                                         <option value="Producción">Producción (Lote Comercial)</option>
+                                     </select>
+                                 </div>
+                             </div>
+                             <div>
+                                <label className="block text-sm font-medium text-purple-900 mb-1">Variedad</label>
+                                <select required className={inputClass} value={formData.varietyId} onChange={e => setFormData({...formData, varietyId: e.target.value, seedBatchId: ''})}>
+                                  <option value="">Seleccionar...</option>
+                                  {varieties.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                                </select>
+                             </div>
+                             {/* SEED BATCH SELECTOR */}
+                             <div>
+                                <label className="block text-sm font-medium text-purple-900 mb-1 flex items-center">
+                                    <Tag size={12} className="mr-1"/> Lote de Semilla (Trazabilidad)
+                                </label>
+                                <select 
+                                    className={inputClass} 
+                                    value={formData.seedBatchId || ''} 
+                                    onChange={e => setFormData({...formData, seedBatchId: e.target.value})}
+                                    disabled={!formData.varietyId}
+                                >
+                                  <option value="">-- Origen Genérico --</option>
+                                  {availableBatches.map(b => (
+                                      <option key={b.id} value={b.id}>
+                                          {b.batchCode} ({b.supplierName})
+                                      </option>
+                                  ))}
+                                </select>
+                             </div>
+                             
+                             <div className="grid grid-cols-2 gap-2">
+                                 <div>
+                                    <label className="block text-sm font-medium text-purple-900 mb-1">Bloque / Lote</label>
+                                    <input required type="text" className={inputClass} placeholder="1" value={formData.block} onChange={e => setFormData({...formData, block: e.target.value})} />
+                                 </div>
+                                 <div>
+                                    <label className="block text-sm font-medium text-purple-900 mb-1">
+                                        {formData.type === 'Producción' ? 'Sector' : 'Rep (R)'}
+                                    </label>
+                                    <input required type="number" className={inputClass} placeholder="1" value={formData.replicate} onChange={e => setFormData({...formData, replicate: Number(e.target.value)})} />
+                                 </div>
+                             </div>
+                          </div>
+                      </div>
 
-              {/* Sección 2: Ubicación (COLOR AZUL SUAVE) */}
-              <div className="bg-blue-50 border border-blue-100 rounded-lg p-4">
-                  <h3 className="text-sm font-bold text-blue-800 mb-3 flex items-center uppercase">
-                      <MapPin size={14} className="mr-2"/> Ubicación Geográfica
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-blue-900 mb-1">Locación (Establecimiento)</label>
-                        <select required className={inputClass} value={formData.locationId} onChange={e => setFormData({...formData, locationId: e.target.value})}>
-                          <option value="">Seleccionar...</option>
-                          {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-                        </select>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                          <div>
-                              <label className="block text-sm font-medium text-blue-900 mb-1">Latitud</label>
-                              <input type="number" step="any" placeholder="-34..." className={inputClass} value={formData.lat} onChange={e => setFormData({...formData, lat: e.target.value})} />
-                          </div>
-                          <div>
-                              <label className="block text-sm font-medium text-blue-900 mb-1">Longitud</label>
-                              <input type="number" step="any" placeholder="-58..." className={inputClass} value={formData.lng} onChange={e => setFormData({...formData, lng: e.target.value})} />
+                      {/* Sección 3: Manejo Agronómico (COLOR VERDE SUAVE) */}
+                      <div className="bg-green-50 border border-green-100 rounded-lg p-4">
+                          <h3 className="text-sm font-bold text-green-800 mb-3 flex items-center uppercase">
+                              <Sprout size={14} className="mr-2"/> Manejo Agronómico
+                          </h3>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-green-900 mb-1">Fecha Siembra</label>
+                                <input type="date" className={`${inputClass} cursor-pointer`} value={formData.sowingDate} onChange={e => setFormData({...formData, sowingDate: e.target.value})} />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-green-900 mb-1">Riego</label>
+                                <select className={inputClass} value={formData.irrigationType || ''} onChange={e => setFormData({...formData, irrigationType: e.target.value})}>
+                                    <option value="">-</option>
+                                    <option value="Goteo">Goteo</option>
+                                    <option value="Aspersión">Aspersión</option>
+                                    <option value="Surco">Surco</option>
+                                    <option value="Secano">Secano</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-green-900 mb-1">Densidad (pl/m2)</label>
+                                <input type="number" className={inputClass} value={formData.density} onChange={e => setFormData({...formData, density: Number(e.target.value)})} />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-green-900 mb-1">Distancia (cm)</label>
+                                <input type="number" className={inputClass} value={formData.rowDistance} onChange={e => setFormData({...formData, rowDistance: Number(e.target.value)})} />
+                            </div>
+                            <div className="col-span-2">
+                                <label className="block text-sm font-medium text-green-900 mb-1">Superficie Total</label>
+                                <div className="flex">
+                                    <input type="number" step="any" placeholder="0" className={`${inputClass} rounded-r-none border-r-0`} value={formData.surfaceArea || ''} onChange={e => setFormData({...formData, surfaceArea: Number(e.target.value)})} />
+                                    <select className="bg-white border border-gray-300 text-gray-700 text-sm rounded-r px-1 focus:outline-none" value={formData.surfaceUnit} onChange={e => setFormData({...formData, surfaceUnit: e.target.value as any})}>
+                                        <option value="m2">m²</option>
+                                        <option value="ha">ha</option>
+                                        <option value="ac">acres</option>
+                                    </select>
+                                </div>
+                                <p className="text-xs text-gray-500 mt-1">Calculada automáticamente si dibujas el polígono.</p>
+                            </div>
                           </div>
                       </div>
                   </div>
-              </div>
-              
-              {/* Sección 3: Manejo Agronómico (COLOR VERDE SUAVE) */}
-              <div className="bg-green-50 border border-green-100 rounded-lg p-4">
-                  <h3 className="text-sm font-bold text-green-800 mb-3 flex items-center uppercase">
-                      <Sprout size={14} className="mr-2"/> Manejo Agronómico
-                  </h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div>
-                        <label className="block text-sm font-medium text-green-900 mb-1">Fecha Siembra</label>
-                        <input type="date" className={`${inputClass} cursor-pointer`} value={formData.sowingDate} onChange={e => setFormData({...formData, sowingDate: e.target.value})} />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-green-900 mb-1">Densidad (pl/m2)</label>
-                        <input type="number" className={inputClass} value={formData.density} onChange={e => setFormData({...formData, density: Number(e.target.value)})} />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-green-900 mb-1">Distancia (cm)</label>
-                        <input type="number" className={inputClass} value={formData.rowDistance} onChange={e => setFormData({...formData, rowDistance: Number(e.target.value)})} />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-green-900 mb-1">Riego</label>
-                        <select className={inputClass} value={formData.irrigationType || ''} onChange={e => setFormData({...formData, irrigationType: e.target.value})}>
-                            <option value="">-</option>
-                            <option value="Goteo">Goteo</option>
-                            <option value="Aspersión">Aspersión</option>
-                            <option value="Surco">Surco</option>
-                            <option value="Secano">Secano</option>
-                        </select>
-                    </div>
-                    <div className="md:col-span-2">
-                        <label className="block text-sm font-medium text-green-900 mb-1">Superficie Total</label>
-                        <div className="flex">
-                            <input type="number" step="any" placeholder="0" className={`${inputClass} rounded-r-none border-r-0`} value={formData.surfaceArea || ''} onChange={e => setFormData({...formData, surfaceArea: Number(e.target.value)})} />
-                            <select className="bg-white border border-gray-300 text-gray-700 text-sm rounded-r px-1 focus:outline-none" value={formData.surfaceUnit} onChange={e => setFormData({...formData, surfaceUnit: e.target.value as any})}>
-                                <option value="m2">m²</option>
-                                <option value="ha">ha</option>
-                                <option value="ac">acres</option>
+
+                  {/* RIGHT COLUMN: MAPS & LOCATION */}
+                  <div className="space-y-6">
+                      {/* Sección 2: Ubicación (COLOR AZUL SUAVE) */}
+                      <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 h-full flex flex-col">
+                          <h3 className="text-sm font-bold text-blue-800 mb-3 flex items-center uppercase">
+                              <MapPin size={14} className="mr-2"/> Georreferenciación
+                          </h3>
+                          
+                          <div className="mb-4">
+                            <label className="block text-sm font-medium text-blue-900 mb-1">Locación (Establecimiento)</label>
+                            <select required className={inputClass} value={formData.locationId} onChange={e => setFormData({...formData, locationId: e.target.value})}>
+                              <option value="">Seleccionar...</option>
+                              {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
                             </select>
-                        </div>
-                    </div>
-                    <div className="md:col-span-4">
-                        <label className="block text-sm font-medium text-green-900 mb-1 flex items-center">
-                          <UserCheck size={14} className="mr-1" /> Responsables Asignados
-                        </label>
-                        <div className="border border-gray-300 bg-white rounded p-2 h-20 overflow-y-auto text-xs grid grid-cols-2 gap-1">
-                          {assignableUsers.map(u => (
-                              <label key={u.id} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
-                                  <input 
-                                     type="checkbox" 
-                                     className="rounded text-hemp-600 focus:ring-hemp-500" 
-                                     checked={formData.responsibleIds?.includes(u.id)} 
-                                     onChange={() => toggleResponsible(u.id)} 
+                          </div>
+
+                          <div className="flex-1 flex flex-col">
+                              <label className="block text-sm font-medium text-blue-900 mb-2">Dibujar Polígono del Lote</label>
+                              
+                              {/* MAP EDITOR COMPONENT */}
+                              {formData.locationId ? (
+                                  <MapEditor 
+                                    initialCenter={mapCenter}
+                                    initialPolygon={formData.polygon}
+                                    onPolygonChange={handlePolygonChange}
+                                    height="300px"
                                   />
-                                  <span className="text-gray-900">{u.name}</span>
-                              </label>
-                          ))}
-                       </div>
-                    </div>
+                              ) : (
+                                  <div className="bg-gray-200 rounded h-64 flex items-center justify-center text-gray-500 text-sm border-2 border-dashed border-gray-300">
+                                      Selecciona una locación primero
+                                  </div>
+                              )}
+                              
+                              <div className="grid grid-cols-2 gap-2 mt-4">
+                                  <div>
+                                      <label className="block text-xs font-medium text-blue-900 mb-1">Latitud (Centro)</label>
+                                      <input type="number" step="any" placeholder="-34..." className={inputClass} value={formData.lat || (formData.polygon?.[0]?.lat || '')} onChange={e => setFormData({...formData, lat: e.target.value})} />
+                                  </div>
+                                  <div>
+                                      <label className="block text-xs font-medium text-blue-900 mb-1">Longitud (Centro)</label>
+                                      <input type="number" step="any" placeholder="-58..." className={inputClass} value={formData.lng || (formData.polygon?.[0]?.lng || '')} onChange={e => setFormData({...formData, lng: e.target.value})} />
+                                  </div>
+                              </div>
+                          </div>
+                      </div>
                   </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Observaciones Generales</label>
-                <textarea
-                  className={inputClass}
-                  rows={2}
-                  value={formData.observations || ''}
-                  onChange={e => setFormData({...formData, observations: e.target.value})}
-                  placeholder="Notas sobre el suelo, condiciones iniciales, etc."
-                ></textarea>
+              {/* FULL WIDTH BOTTOM SECTIONS */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
+                      <UserCheck size={14} className="mr-1" /> Responsables Asignados
+                    </label>
+                    <div className="border border-gray-300 bg-white rounded p-2 h-24 overflow-y-auto text-xs grid grid-cols-2 gap-1">
+                      {assignableUsers.map(u => (
+                          <label key={u.id} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                              <input 
+                                 type="checkbox" 
+                                 className="rounded text-hemp-600 focus:ring-hemp-500" 
+                                 checked={formData.responsibleIds?.includes(u.id)} 
+                                 onChange={() => toggleResponsible(u.id)} 
+                              />
+                              <span className="text-gray-900">{u.name}</span>
+                          </label>
+                      ))}
+                   </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Observaciones Generales</label>
+                    <textarea
+                      className={`${inputClass} h-24`}
+                      value={formData.observations || ''}
+                      onChange={e => setFormData({...formData, observations: e.target.value})}
+                      placeholder="Notas sobre el suelo, condiciones iniciales, etc."
+                    ></textarea>
+                  </div>
               </div>
 
               <div className="flex justify-between items-center pt-4 border-t border-gray-100">
