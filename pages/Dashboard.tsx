@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, AreaChart, Area } from 'recharts';
-import { Sprout, MapPin, Activity, CheckCircle, FileText, Download, ArrowRight, Users, FolderOpen, AlertCircle, TrendingUp, Calendar, FileCheck, CheckSquare, Printer, X, Filter, Sparkles, Building } from 'lucide-react';
+import { Sprout, MapPin, Activity, CheckCircle, FileText, Download, ArrowRight, Users, FolderOpen, AlertCircle, TrendingUp, Calendar, FileCheck, CheckSquare, Printer, X, Filter, Sparkles, Building, Globe } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -39,13 +39,20 @@ export default function Dashboard() {
       includeCharts: false // Placeholder for future chart integration
   });
 
+  const isClient = currentUser?.role === 'client';
+
   // --- ONBOARDING LOGIC ---
-  const isSetupMode = varieties.length === 0 && locations.length === 0 && projects.length === 0;
+  const isSetupMode = varieties.length === 0 && locations.length === 0 && projects.length === 0 && !isClient;
 
   // 1. Calculate Average Yield by Variety
   const yieldDataMap = new Map<string, { totalYield: number; count: number }>();
 
-  plots.forEach(plot => {
+  // Filter plots if client
+  const relevantPlots = isClient 
+    ? plots.filter(p => p.responsibleIds?.includes(currentUser?.id || ''))
+    : plots;
+
+  relevantPlots.forEach(plot => {
     const latestData = getLatestRecord(plot.id);
     if (!latestData || !latestData.yield || latestData.yield <= 0) return;
 
@@ -74,7 +81,7 @@ export default function Dashboard() {
   const pieColors = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
 
   // 3. Data for Height/Vigor Comparison
-  const heightData = plots.map(p => {
+  const heightData = relevantPlots.map(p => {
       const latest = getLatestRecord(p.id);
       return {
           name: p.name.split('-')[0],
@@ -83,9 +90,9 @@ export default function Dashboard() {
       };
   }).filter(d => d.height > 0).slice(0, 10);
 
-  const activePlots = plots.filter(p => p.status === 'Activa').length;
-  const completedPlots = plots.filter(p => p.status === 'Cosechada').length;
-  const harvestedDataCount = plots.filter(p => {
+  const activePlots = relevantPlots.filter(p => p.status === 'Activa').length;
+  const completedPlots = relevantPlots.filter(p => p.status === 'Cosechada').length;
+  const harvestedDataCount = relevantPlots.filter(p => {
       const latest = getLatestRecord(p.id);
       return latest && latest.yield && latest.yield > 0;
   }).length;
@@ -98,9 +105,14 @@ export default function Dashboard() {
     const selectedProjectName = reportConfig.projectId === 'all' ? 'Consolidado General' : projects.find(p => p.id === reportConfig.projectId)?.name;
 
     // Filter Data
-    const filteredPlots = reportConfig.projectId === 'all' 
+    let filteredPlots = reportConfig.projectId === 'all' 
         ? plots 
         : plots.filter(p => p.projectId === reportConfig.projectId);
+    
+    // Apply client filter for report too
+    if (isClient) {
+        filteredPlots = filteredPlots.filter(p => p.responsibleIds?.includes(currentUser?.id || ''));
+    }
 
     // --- Header ---
     doc.setFillColor(22, 163, 74); // Hemp Green
@@ -183,7 +195,7 @@ export default function Dashboard() {
   };
 
   const exportExcel = () => {
-      const data = plots.map(p => {
+      const data = relevantPlots.map(p => {
           const v = varieties.find(val => val.id === p.varietyId);
           const latest = getLatestRecord(p.id);
           return {
@@ -242,21 +254,54 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6 pb-10">
-      {/* Update Banner */}
-      <div className="bg-purple-50 border border-purple-200 p-3 rounded-lg flex items-center justify-between animate-in fade-in slide-in-from-top-4">
-          <div className="flex items-center text-purple-900 text-sm">
-              <Sparkles size={16} className="mr-2 text-purple-600"/>
-              <strong>¡Nueva Funcionalidad!</strong>&nbsp; Gestión de Proveedores y Stock de Semillas habilitada.
+      
+      {/* WELCOME BANNER FOR FARMERS NETWORK (Clients) */}
+      {isClient && (
+          <div className="bg-gradient-to-r from-hemp-700 to-hemp-600 text-white rounded-xl p-6 shadow-lg relative overflow-hidden animate-in fade-in slide-in-from-top-4">
+              <div className="relative z-10">
+                  <h1 className="text-2xl font-bold mb-2 flex items-center">
+                      <Globe className="mr-2" size={28}/> Bienvenid@ a la Red de Agricultores
+                  </h1>
+                  <p className="text-hemp-100 max-w-2xl">
+                      Gracias por formar parte de nuestra red productiva. Desde este panel podrás registrar los avances de tus lotes, consultar tareas asignadas y contactar con soporte técnico.
+                  </p>
+                  <div className="mt-4 flex space-x-3">
+                      <Link to="/plots" className="bg-white text-hemp-700 px-4 py-2 rounded-lg font-bold text-sm hover:bg-hemp-50 transition shadow-sm">
+                          Ver Mis Lotes
+                      </Link>
+                      <Link to="/advisor" className="bg-hemp-500/30 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-hemp-500/50 transition border border-white/20">
+                          Consultar Asistente IA
+                      </Link>
+                  </div>
+              </div>
+              {/* Background Pattern */}
+              <div className="absolute right-0 top-0 h-full w-1/3 opacity-10 pointer-events-none">
+                  <Sprout size={200} className="absolute -right-10 -top-10 text-white"/>
+              </div>
           </div>
-          <Link to="/suppliers" className="text-xs bg-white text-purple-700 px-3 py-1 rounded border border-purple-200 font-bold hover:bg-purple-50 transition flex items-center">
-              Ir a Proveedores <ArrowRight size={12} className="ml-1"/>
-          </Link>
-      </div>
+      )}
+
+      {/* Update Banner (Only for admins/internal) */}
+      {!isClient && (
+        <div className="bg-purple-50 border border-purple-200 p-3 rounded-lg flex items-center justify-between animate-in fade-in slide-in-from-top-4">
+            <div className="flex items-center text-purple-900 text-sm">
+                <Sparkles size={16} className="mr-2 text-purple-600"/>
+                <strong>¡Nueva Funcionalidad!</strong>&nbsp; Gestión de Proveedores y Stock de Semillas habilitada.
+            </div>
+            <Link to="/suppliers" className="text-xs bg-white text-purple-700 px-3 py-1 rounded border border-purple-200 font-bold hover:bg-purple-50 transition flex items-center">
+                Ir a Proveedores <ArrowRight size={12} className="ml-1"/>
+            </Link>
+        </div>
+      )}
 
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-            <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Panel de Control</h1>
-            <p className="text-gray-500 dark:text-gray-400 text-sm">Resumen general de operaciones.</p>
+            {!isClient && (
+                <>
+                    <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Panel de Control</h1>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm">Resumen general de operaciones.</p>
+                </>
+            )}
         </div>
         
         {/* Report Actions */}
@@ -280,24 +325,28 @@ export default function Dashboard() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {!isClient && (
+            <>
+                <StatCard 
+                title="Variedades" 
+                value={varieties.length} 
+                icon={Sprout} 
+                colorClass="bg-blue-500 text-blue-500" 
+                />
+                <StatCard 
+                title="Locaciones" 
+                value={locations.length} 
+                icon={MapPin} 
+                colorClass="bg-amber-500 text-amber-500" 
+                />
+            </>
+        )}
         <StatCard 
-          title="Variedades" 
-          value={varieties.length} 
-          icon={Sprout} 
-          colorClass="bg-blue-500 text-blue-500" 
-        />
-        <StatCard 
-          title="Locaciones" 
-          value={locations.length} 
-          icon={MapPin} 
-          colorClass="bg-amber-500 text-amber-500" 
-        />
-        <StatCard 
-          title="Ensayos Activos" 
+          title={isClient ? "Mis Lotes Activos" : "Ensayos Activos"}
           value={activePlots} 
           icon={Activity} 
           colorClass="bg-hemp-500 text-hemp-500" 
-          trend="+2 esta sem."
+          trend={isClient ? undefined : "+2 esta sem."}
         />
         <StatCard 
           title="Cosechados" 
@@ -457,19 +506,21 @@ export default function Dashboard() {
                   </div>
                   
                   <div className="p-6 space-y-6">
-                      <div>
-                          <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Filtrar por Proyecto</label>
-                          <select 
-                              className="w-full border border-gray-300 dark:border-dark-border bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 p-2.5 rounded-lg focus:ring-2 focus:ring-hemp-500 outline-none"
-                              value={reportConfig.projectId}
-                              onChange={(e) => setReportConfig({...reportConfig, projectId: e.target.value})}
-                          >
-                              <option value="all">Todos los Proyectos (Consolidado)</option>
-                              {projects.map(p => (
-                                  <option key={p.id} value={p.id}>{p.name}</option>
-                              ))}
-                          </select>
-                      </div>
+                      {!isClient && (
+                          <div>
+                              <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Filtrar por Proyecto</label>
+                              <select 
+                                  className="w-full border border-gray-300 dark:border-dark-border bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 p-2.5 rounded-lg focus:ring-2 focus:ring-hemp-500 outline-none"
+                                  value={reportConfig.projectId}
+                                  onChange={(e) => setReportConfig({...reportConfig, projectId: e.target.value})}
+                              >
+                                  <option value="all">Todos los Proyectos (Consolidado)</option>
+                                  {projects.map(p => (
+                                      <option key={p.id} value={p.id}>{p.name}</option>
+                                  ))}
+                              </select>
+                          </div>
+                      )}
 
                       <div className="space-y-3">
                           <label className="block text-sm font-bold text-gray-700 dark:text-gray-300">Contenido Opcional</label>

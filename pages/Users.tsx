@@ -185,10 +185,12 @@ export default function Users() {
                         ${user.role === 'super_admin' ? 'bg-red-100 text-red-800' :
                           user.role === 'admin' ? 'bg-purple-100 text-purple-800' : 
                           user.role === 'technician' ? 'bg-blue-100 text-blue-800' : 
+                          user.role === 'client' ? 'bg-green-100 text-green-800' :
                           'bg-amber-100 text-amber-800'}`}>
                         {user.role === 'super_admin' ? 'Super Admin' : 
                          user.role === 'technician' ? 'Técnico' : 
-                         user.role === 'viewer' ? 'Productor/Visita' : 'Administrador'}
+                         user.role === 'client' ? 'Cliente Red' :
+                         user.role === 'viewer' ? 'Visita' : 'Administrador'}
                       </span>
                       {user.jobTitle && <span className="text-xs text-gray-500 font-medium">{user.jobTitle}</span>}
                   </div>
@@ -284,13 +286,15 @@ export default function Users() {
                 <label className="block text-sm font-bold text-gray-700 mb-2">Rol & Permisos</label>
                 <select className={inputClass} value={formData.role} onChange={e => setFormData({...formData, role: e.target.value as UserRole})}>
                   <option value="technician">Técnico de Campo (Operativo)</option>
-                  <option value="viewer">Productor / Visita (Solo lectura)</option>
+                  <option value="client">Cliente / Productor Red (Acceso a sus Lotes)</option>
+                  <option value="viewer">Visita (Solo lectura)</option>
                   {/* Only Super Admin can create other admins or super admins */}
                   {(isSuperAdmin || isAdmin) && <option value="admin">Administrador (Gestión)</option>}
                   {isSuperAdmin && <option value="super_admin">Super Admin (Root)</option>}
                 </select>
                 <p className="text-xs text-gray-500 mt-2 leading-relaxed">
                     {formData.role === 'technician' && "Puede cargar datos en parcelas y completar tareas asignadas."}
+                    {formData.role === 'client' && "Acceso limitado a sus locaciones asignadas. Puede reportar datos."}
                     {formData.role === 'viewer' && "Solo puede ver reportes y dashboard. No edita datos."}
                     {formData.role === 'admin' && "Gestión completa de proyectos y usuarios básicos."}
                     {formData.role === 'super_admin' && "Control total del sistema."}

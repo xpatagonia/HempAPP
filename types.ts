@@ -6,7 +6,7 @@ export type SoilType = 'Franco' | 'Arcilloso' | 'Arenoso' | 'Limoso';
 export type RoleType = 'Empresa Privada' | 'Gobierno' | 'Academia' | 'Particular' | 'ONG/Cooperativa';
 
 // Auth Types
-export type UserRole = 'super_admin' | 'admin' | 'technician' | 'viewer';
+export type UserRole = 'super_admin' | 'admin' | 'technician' | 'viewer' | 'client';
 
 export interface User {
   id: string;

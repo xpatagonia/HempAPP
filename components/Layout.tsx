@@ -62,12 +62,14 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       case 'super_admin': return 'Super Admin';
       case 'admin': return 'Administrador';
       case 'technician': return 'Técnico';
+      case 'client': return 'Productor Red';
       default: return 'Visita';
     }
   };
 
   const isAdminOrSuper = currentUser.role === 'admin' || currentUser.role === 'super_admin';
   const isSuperAdmin = currentUser.role === 'super_admin';
+  const isClient = currentUser.role === 'client';
   const unreadCount = notifications.length;
 
   return (
@@ -189,28 +191,36 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
         <nav className="flex-1 p-4 space-y-2 overflow-y-auto custom-scrollbar">
           <NavItem to="/" icon={LayoutDashboard} label="Dashboard" onClick={() => setIsMobileOpen(false)} />
-          <NavItem to="/projects" icon={FolderOpen} label="Proyectos" onClick={() => setIsMobileOpen(false)} />
+          
+          {!isClient && (
+              <NavItem to="/projects" icon={FolderOpen} label="Proyectos" onClick={() => setIsMobileOpen(false)} />
+          )}
+          
           <NavItem to="/calendar" icon={CalendarIcon} label="Calendario" onClick={() => setIsMobileOpen(false)} />
           
           <div className="pt-2 pb-2">
               <p className="px-4 text-xs font-semibold text-gray-400 uppercase mb-2">Operativo</p>
-              <NavItem to="/plots" icon={ClipboardList} label="Parcelas / Ensayos" onClick={() => setIsMobileOpen(false)} />
+              <NavItem to="/plots" icon={ClipboardList} label={isClient ? "Mis Lotes" : "Parcelas / Ensayos"} onClick={() => setIsMobileOpen(false)} />
               <NavItem to="/tasks" icon={CheckSquare} label="Tareas" onClick={() => setIsMobileOpen(false)} />
           </div>
 
           <div className="pt-2 pb-2">
               <p className="px-4 text-xs font-semibold text-gray-400 uppercase mb-2">Inteligencia</p>
               <NavItem to="/advisor" icon={Sparkles} label="Asistente IA" onClick={() => setIsMobileOpen(false)} />
-              <NavItem to="/analytics" icon={BarChart2} label="Análisis Comparativo" onClick={() => setIsMobileOpen(false)} />
+              {!isClient && <NavItem to="/analytics" icon={BarChart2} label="Análisis Comparativo" onClick={() => setIsMobileOpen(false)} />}
               <NavItem to="/tools" icon={Calculator} label="Herramientas" onClick={() => setIsMobileOpen(false)} />
           </div>
 
           <div className="pt-2">
                <p className="px-4 text-xs font-semibold text-gray-400 uppercase mb-2">Base de Datos</p>
-               <NavItem to="/suppliers" icon={Building} label="Proveedores" onClick={() => setIsMobileOpen(false)} />
-               <NavItem to="/varieties" icon={Sprout} label="Variedades" onClick={() => setIsMobileOpen(false)} />
-               <NavItem to="/seed-batches" icon={ScanBarcode} label="Stock Semillas" onClick={() => setIsMobileOpen(false)} />
-               <NavItem to="/locations" icon={MapPin} label="Locaciones" onClick={() => setIsMobileOpen(false)} />
+               {!isClient && (
+                   <>
+                       <NavItem to="/suppliers" icon={Building} label="Proveedores" onClick={() => setIsMobileOpen(false)} />
+                       <NavItem to="/varieties" icon={Sprout} label="Variedades" onClick={() => setIsMobileOpen(false)} />
+                       <NavItem to="/seed-batches" icon={ScanBarcode} label="Stock Semillas" onClick={() => setIsMobileOpen(false)} />
+                   </>
+               )}
+               <NavItem to="/locations" icon={MapPin} label={isClient ? "Mis Ubicaciones" : "Locaciones"} onClick={() => setIsMobileOpen(false)} />
           </div>
           
           <div className="pt-4 mt-4 border-t dark:border-dark-border border-gray-100">
@@ -220,6 +230,11 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                 )}
                 {isSuperAdmin && (
                     <NavItem to="/settings" icon={Database} label="Configuración DB" onClick={() => setIsMobileOpen(false)} />
+                )}
+                {isClient && (
+                    <div className="px-4 text-xs text-gray-400 italic">
+                        Acceso Limitado: Red de Agricultores
+                    </div>
                 )}
             </div>
         </nav>

@@ -49,7 +49,8 @@ export default function PlotDetails() {
   
   // PERMISSIONS CHECK
   const isAssigned = plot?.responsibleIds?.includes(currentUser?.id || '');
-  const canEdit = currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || (currentUser?.role === 'technician' && isAssigned);
+  // Client can edit if assigned, just like technician
+  const canEdit = currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || ((currentUser?.role === 'technician' || currentUser?.role === 'client') && isAssigned);
 
   // Filter logs for this plot
   const plotLogs = logs.filter(l => l.plotId === id).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
