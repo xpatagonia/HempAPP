@@ -69,7 +69,7 @@ export default function Settings() {
                   console.error("Error guardando config global:", error);
                   // Fallback: Guardar local si falla DB (ej: tabla no existe aún)
                   localStorage.setItem('hemp_ai_key', aiKey.trim());
-                  alert("⚠️ No se pudo guardar globalmente (quizás falta crear la tabla 'system_settings'). Se guardó solo en este dispositivo.");
+                  alert("⚠️ No se pudo guardar globalmente (probablemente falta crear la tabla 'system_settings'). Se guardó solo en este dispositivo. Por favor corre el script SQL de abajo.");
               } else {
                   // Limpiar local para priorizar global
                   localStorage.removeItem('hemp_ai_key');
@@ -95,28 +95,28 @@ export default function Settings() {
   };
 
   const SQL_SCRIPT = `
--- TABLA DE CONFIGURACIÓN GLOBAL (Para compartir API Key)
+-- 1. HABILITAR CONFIGURACIÓN GLOBAL (IA)
+-- Ejecuta esto para crear la tabla donde se guarda la API Key de forma segura
 CREATE TABLE IF NOT EXISTS public.system_settings (
     id TEXT PRIMARY KEY DEFAULT 'global',
     gemini_api_key TEXT,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
--- Insertar fila inicial si no existe
+
+-- Insertar registro base
 INSERT INTO public.system_settings (id) VALUES ('global') ON CONFLICT DO NOTHING;
 
--- TABLA DE USUARIOS
-CREATE TABLE IF NOT EXISTS public.users (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    email TEXT NOT NULL UNIQUE,
-    password TEXT NOT NULL,
-    role TEXT NOT NULL DEFAULT 'viewer',
-    avatar TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
--- ... (Resto de las tablas)
-ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS type TEXT DEFAULT 'Ensayo';
-ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS "surfaceUnit" TEXT DEFAULT 'm2';
+-- 2. ACTUALIZAR TABLAS EXISTENTES (Si faltan columnas)
+-- Agrega columnas nuevas sin romper datos existentes
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'plots' AND column_name = 'type') THEN
+        ALTER TABLE public.plots ADD COLUMN "type" TEXT DEFAULT 'Ensayo';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'plots' AND column_name = 'surfaceUnit') THEN
+        ALTER TABLE public.plots ADD COLUMN "surfaceUnit" TEXT DEFAULT 'm2';
+    END IF;
+END $$;
   `;
 
   return (
@@ -247,16 +247,24 @@ ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS "surfaceUnit" TEXT DEFAULT 'm2
                 )}
             </button>
 
-            {/* 3. SQL Setup (Optional) */}
+            {/* 3. SQL Setup (Updated) */}
             <div className="bg-gray-50 rounded-xl border border-gray-200 p-6">
                 <div className="flex justify-between items-center mb-2">
-                    <h2 className="text-sm font-bold text-gray-600">Script SQL de Inicialización</h2>
+                    <h2 className="text-sm font-bold text-gray-600">Script SQL de Actualización</h2>
                     <button onClick={copySQL} className="text-xs bg-white hover:bg-gray-100 text-gray-700 px-3 py-1.5 rounded border flex items-center transition">
                         <Copy size={12} className="mr-1" /> Copiar SQL
                     </button>
                 </div>
-                <p className="text-xs text-gray-400 mb-3">
-                    Ejecuta este script en Supabase para crear las tablas necesarias, incluida la de configuración global.
+                <div className="bg-white border border-gray-200 p-3 rounded text-xs font-mono text-gray-600 overflow-x-auto mb-2 whitespace-pre">
+{`CREATE TABLE IF NOT EXISTS public.system_settings (
+  id TEXT PRIMARY KEY DEFAULT 'global',
+  gemini_api_key TEXT
+);
+INSERT INTO public.system_settings (id) VALUES ('global') ON CONFLICT DO NOTHING;`}
+                </div>
+                <p className="text-xs text-gray-500">
+                    <AlertTriangle size={12} className="inline mr-1 text-amber-500"/>
+                    Si obtuviste errores de "relation already exists", usa este script simplificado para crear solo la tabla faltante.
                 </p>
             </div>
         </div>
