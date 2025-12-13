@@ -102,11 +102,14 @@ export default function Users() {
                 setIsSaving(false);
                 return;
             }
-            await addUser({
+            const success = await addUser({
                 ...payload,
                 id: Date.now().toString(),
                 password: formData.password
             });
+            if (success) {
+                alert(`¡Usuario ${payload.name} creado correctamente en la nube! Ya puede iniciar sesión.`);
+            }
         }
         closeModal();
     } catch (error) {

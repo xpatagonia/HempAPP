@@ -409,7 +409,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const { error } = await supabase.from('users').insert([u]);
       if (error) {
           console.error("Error creando usuario:", error);
-          alert("Error al guardar en la nube. Verifica permisos o conexión.");
+          // DETAILED ERROR ALERT FOR USER
+          alert(`Error Base de Datos: ${error.message} (Código: ${error.code})`);
+          
           // Fallback local solo si es emergencia
           if(isEmergencyMode) {
              setUsersList(prev => { const newList = [...prev, u]; saveToLocal('users', newList.filter(user => user.id !== RESCUE_USER.id)); return newList; });

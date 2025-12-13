@@ -109,34 +109,264 @@ export default function Settings() {
 
   const SQL_SCRIPT = `
 -- =========================================================
--- SCRIPT DE DESBLOQUEO TOTAL Y PERMISOS (v3.1)
+-- SCRIPT INICIALIZACIÓN COMPLETA DE BASE DE DATOS (v3.2)
+-- Crea tablas faltantes, columnas y desbloquea permisos
 -- =========================================================
 
--- 1. Desactivar seguridad RLS (Row Level Security) para permitir lectura/escritura libre desde la App
--- IMPORTANTE: Ejecutar si tienes problemas creando usuarios o guardando datos.
-ALTER TABLE public.users DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.clients DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.suppliers DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.locations DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.projects DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.varieties DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.seed_batches DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.plots DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.trial_records DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.tasks DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.field_logs DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.seed_movements DISABLE ROW LEVEL SECURITY;
+-- 1. CONFIGURACIÓN DEL SISTEMA
+CREATE TABLE IF NOT EXISTS public.system_settings (
+    id TEXT PRIMARY KEY,
+    gemini_api_key TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
 ALTER TABLE public.system_settings DISABLE ROW LEVEL SECURITY;
 
--- 2. Asegurar que el usuario Admin existe (Si borraste todo, esto te salva)
-DELETE FROM public.users WHERE email = 'admin@demo.com';
+-- 2. USUARIOS (Asegurando todas las columnas necesarias)
+CREATE TABLE IF NOT EXISTS public.users (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL,
+    password TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'technician',
+    "jobTitle" TEXT,
+    phone TEXT,
+    avatar TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+ALTER TABLE public.users DISABLE ROW LEVEL SECURITY;
 
+-- Asegurar que el Admin de rescate exista siempre
 INSERT INTO public.users (id, name, email, password, role, "jobTitle", created_at)
-VALUES 
-('admin-cloud-001', 'Admin Cloud', 'admin@demo.com', 'admin', 'super_admin', 'System Owner', timezone('utc'::text, now()));
+VALUES ('admin-cloud-001', 'Admin Cloud', 'admin@demo.com', 'admin', 'super_admin', 'System Owner', timezone('utc'::text, now()))
+ON CONFLICT (id) DO NOTHING;
 
--- 3. Confirmación
-SELECT 'PERMISOS LIBERADOS Y USUARIO ADMIN RESTAURADO' as status;
+-- 3. PROYECTOS
+CREATE TABLE IF NOT EXISTS public.projects (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    "startDate" TEXT,
+    status TEXT DEFAULT 'Planificación',
+    "directorId" TEXT,
+    "responsibleIds" JSONB DEFAULT '[]',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+ALTER TABLE public.projects DISABLE ROW LEVEL SECURITY;
+
+-- 4. CLIENTES
+CREATE TABLE IF NOT EXISTS public.clients (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    type TEXT DEFAULT 'Empresa Privada',
+    cuit TEXT,
+    "contactName" TEXT,
+    "contactPhone" TEXT,
+    email TEXT,
+    "isNetworkMember" BOOLEAN DEFAULT FALSE,
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+ALTER TABLE public.clients DISABLE ROW LEVEL SECURITY;
+
+-- 5. PROVEEDORES
+CREATE TABLE IF NOT EXISTS public.suppliers (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    "legalName" TEXT,
+    cuit TEXT,
+    country TEXT,
+    province TEXT,
+    city TEXT,
+    address TEXT,
+    "commercialContact" TEXT,
+    "logisticsContact" TEXT,
+    website TEXT,
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+ALTER TABLE public.suppliers DISABLE ROW LEVEL SECURITY;
+
+-- 6. VARIEDADES
+CREATE TABLE IF NOT EXISTS public.varieties (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    usage TEXT NOT NULL,
+    "supplierId" TEXT,
+    "cycleDays" NUMERIC,
+    "expectedThc" NUMERIC,
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+ALTER TABLE public.varieties DISABLE ROW LEVEL SECURITY;
+
+-- 7. LOCACIONES
+CREATE TABLE IF NOT EXISTS public.locations (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    province TEXT,
+    city TEXT,
+    address TEXT,
+    coordinates JSONB,
+    "soilType" TEXT,
+    climate TEXT,
+    "responsiblePerson" TEXT,
+    "clientId" TEXT,
+    "ownerName" TEXT,
+    "ownerLegalName" TEXT,
+    "ownerCuit" TEXT,
+    "ownerType" TEXT,
+    "ownerContact" TEXT,
+    "capacityHa" NUMERIC,
+    "irrigationSystem" TEXT,
+    "responsibleIds" JSONB DEFAULT '[]',
+    cuie TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+ALTER TABLE public.locations DISABLE ROW LEVEL SECURITY;
+
+-- 8. LOTES DE SEMILLA (STOCK)
+CREATE TABLE IF NOT EXISTS public.seed_batches (
+    id TEXT PRIMARY KEY,
+    "varietyId" TEXT NOT NULL,
+    "supplierName" TEXT,
+    "supplierLegalName" TEXT,
+    "supplierCuit" TEXT,
+    "supplierRenspa" TEXT,
+    "supplierAddress" TEXT,
+    "originCountry" TEXT,
+    "batchCode" TEXT,
+    "gs1Code" TEXT,
+    "certificationNumber" TEXT,
+    "purchaseDate" TEXT,
+    "initialQuantity" NUMERIC,
+    "remainingQuantity" NUMERIC,
+    "storageConditions" TEXT,
+    "storageAddress" TEXT,
+    "logisticsResponsible" TEXT,
+    notes TEXT,
+    "isActive" BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+ALTER TABLE public.seed_batches DISABLE ROW LEVEL SECURITY;
+
+-- 9. PARCELAS (CULTIVOS)
+CREATE TABLE IF NOT EXISTS public.plots (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    type TEXT DEFAULT 'Ensayo',
+    "projectId" TEXT,
+    "locationId" TEXT,
+    "varietyId" TEXT,
+    "seedBatchId" TEXT,
+    block TEXT,
+    replicate NUMERIC,
+    "ownerName" TEXT,
+    "responsibleIds" JSONB DEFAULT '[]',
+    "sowingDate" TEXT,
+    "surfaceArea" NUMERIC,
+    "surfaceUnit" TEXT,
+    "rowDistance" NUMERIC,
+    density NUMERIC,
+    status TEXT DEFAULT 'Activa',
+    observations TEXT,
+    "irrigationType" TEXT,
+    coordinates JSONB,
+    polygon JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+ALTER TABLE public.plots DISABLE ROW LEVEL SECURITY;
+
+-- 10. REGISTROS TÉCNICOS
+CREATE TABLE IF NOT EXISTS public.trial_records (
+    id TEXT PRIMARY KEY,
+    "plotId" TEXT NOT NULL,
+    date TEXT NOT NULL,
+    time TEXT,
+    "createdBy" TEXT,
+    "createdByName" TEXT,
+    stage TEXT,
+    "emergenceDate" TEXT,
+    "plantsPerMeterInit" NUMERIC,
+    uniformity NUMERIC,
+    vigor NUMERIC,
+    "floweringDate" TEXT,
+    "plantHeight" NUMERIC,
+    "stemDiameter" NUMERIC,
+    "nodesCount" NUMERIC,
+    "floweringState" TEXT,
+    "trichomeColor" TEXT,
+    lodging NUMERIC,
+    "birdDamage" TEXT,
+    diseases TEXT,
+    pests TEXT,
+    "applicationType" TEXT,
+    "applicationProduct" TEXT,
+    "applicationDose" TEXT,
+    "harvestDate" TEXT,
+    "harvestHeight" NUMERIC,
+    "plantsPerMeterFinal" NUMERIC,
+    "sampleSize" NUMERIC,
+    "freshWeight" NUMERIC,
+    "dryWeight" NUMERIC,
+    yield NUMERIC,
+    "stemWeight" NUMERIC,
+    "leafWeight" NUMERIC,
+    "flowerWeight" NUMERIC,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+ALTER TABLE public.trial_records DISABLE ROW LEVEL SECURITY;
+
+-- 11. BITÁCORA Y FOTOS
+CREATE TABLE IF NOT EXISTS public.field_logs (
+    id TEXT PRIMARY KEY,
+    "plotId" TEXT NOT NULL,
+    date TEXT NOT NULL,
+    note TEXT,
+    "photoUrl" TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+ALTER TABLE public.field_logs DISABLE ROW LEVEL SECURITY;
+
+-- 12. TAREAS
+CREATE TABLE IF NOT EXISTS public.tasks (
+    id TEXT PRIMARY KEY,
+    "plotId" TEXT,
+    "projectId" TEXT,
+    title TEXT NOT NULL,
+    description TEXT,
+    "dueDate" TEXT,
+    status TEXT DEFAULT 'Pendiente',
+    priority TEXT DEFAULT 'Media',
+    "assignedToIds" JSONB DEFAULT '[]',
+    "createdBy" TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+ALTER TABLE public.tasks DISABLE ROW LEVEL SECURITY;
+
+-- 13. MOVIMIENTOS SEMILLA (LOGÍSTICA)
+CREATE TABLE IF NOT EXISTS public.seed_movements (
+    id TEXT PRIMARY KEY,
+    "batchId" TEXT NOT NULL,
+    "targetLocationId" TEXT NOT NULL,
+    quantity NUMERIC NOT NULL,
+    date TEXT NOT NULL,
+    "dispatchTime" TEXT,
+    "transportGuideNumber" TEXT,
+    "transportType" TEXT,
+    "driverName" TEXT,
+    "vehiclePlate" TEXT,
+    "vehicleModel" TEXT,
+    "transportCompany" TEXT,
+    "routeItinerary" TEXT,
+    status TEXT DEFAULT 'En Tránsito',
+    "receivedBy" TEXT,
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+ALTER TABLE public.seed_movements DISABLE ROW LEVEL SECURITY;
+
+-- Confirmación final
+SELECT 'BASE DE DATOS INICIALIZADA CORRECTAMENTE' as status;
   `;
 
   return (
@@ -294,7 +524,7 @@ SELECT 'PERMISOS LIBERADOS Y USUARIO ADMIN RESTAURADO' as status;
                             <ShieldCheck className="text-hemp-600 mr-2" size={18}/> Mantenimiento de Base de Datos
                         </h2>
                         <p className="text-xs text-slate-500 mt-1">
-                            Ejecuta este script para desbloquear permisos (RLS) y asegurar el acceso multi-dispositivo.
+                            Script de inicialización total. Crea tablas faltantes y corrige permisos.
                         </p>
                     </div>
                     <button onClick={copySQL} className="text-xs bg-white hover:bg-slate-100 text-slate-700 px-4 py-2 rounded border border-slate-300 shadow-sm flex items-center transition font-bold">

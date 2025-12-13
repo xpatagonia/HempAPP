@@ -185,7 +185,7 @@ export default function Login() {
             <div className="bg-slate-950/30 px-8 py-4 border-t border-white/5 flex items-center justify-between">
                 <div className="flex items-center text-xs text-slate-500">
                     <Database size={12} className="mr-1.5 text-slate-600" />
-                    <span className="font-mono">v2.6-prod</span>
+                    <span className="font-mono text-hemp-400">v2.7-live</span>
                 </div>
                 <div className="flex items-center space-x-4">
                      <span className="text-[10px] text-slate-600 font-medium">POWERED BY</span>
