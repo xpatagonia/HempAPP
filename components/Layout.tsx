@@ -75,13 +75,13 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       
       {/* DB MIGRATION WARNING BANNER */}
       {dbNeedsMigration && (
-          <div className="fixed top-0 left-0 w-full z-[100] bg-red-600 text-white px-4 py-2 flex justify-between items-center shadow-md">
+          <div className="fixed top-0 left-0 w-full z-[100] bg-red-600 text-white px-4 py-2 flex justify-between items-center shadow-md animate-pulse">
               <div className="flex items-center text-xs md:text-sm font-bold">
-                  <AlertTriangle className="mr-2 animate-pulse" size={18}/>
-                  <span>ATENCIÓN: La base de datos está desactualizada. Algunas funciones (Proveedores, Stock) fallarán.</span>
+                  <AlertTriangle className="mr-2" size={18}/>
+                  <span>ATENCIÓN: Base de datos desactualizada. Ejecuta el script SQL en Configuración.</span>
               </div>
               <Link to="/settings" className="bg-white text-red-600 text-xs px-3 py-1 rounded font-bold hover:bg-gray-100">
-                  SOLUCIONAR AHORA
+                  SOLUCIONAR
               </Link>
           </div>
       )}
@@ -90,7 +90,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       <div className={`lg:hidden fixed top-0 w-full bg-white dark:bg-dark-card z-50 border-b dark:border-dark-border px-4 py-3 flex justify-between items-center shadow-sm ${dbNeedsMigration ? 'mt-10' : ''}`}>
         <div className="flex items-center space-x-2 text-hemp-800 dark:text-hemp-400">
           <Leaf className="w-6 h-6" />
-          <span className="font-bold text-lg">HempC App</span>
+          <span className="font-bold text-lg">HempC v2.3</span>
         </div>
         <div className="flex items-center space-x-2">
             <button onClick={() => setIsNotifOpen(!isNotifOpen)} className="p-2 relative text-gray-600 dark:text-gray-300">
@@ -162,7 +162,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         <div className="h-16 flex items-center px-6 border-b dark:border-dark-border justify-between">
           <div className="flex items-center">
              <Leaf className="w-8 h-8 text-hemp-600 dark:text-hemp-500 mr-2" />
-             <span className="text-xl font-bold text-gray-800 dark:text-gray-100">HempC App</span>
+             <span className="text-xl font-bold text-gray-800 dark:text-gray-100">HempC <span className="text-hemp-600 text-sm bg-hemp-100 px-1 rounded ml-1">v2.3</span></span>
           </div>
           
           <div className="flex items-center space-x-1">
@@ -248,7 +248,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
            <div className="bg-gray-100 dark:bg-slate-900 py-3 text-center border-t border-gray-200 dark:border-dark-border">
                <p className="text-[10px] text-gray-400 font-mono leading-tight">Dev gaston.barea.moreno@gmail.com</p>
                <div className="flex items-center justify-center space-x-2 mt-1">
-                   <span className="text-[10px] bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded font-bold">v2.2 (DB Check)</span>
+                   <span className="text-[10px] bg-green-100 text-green-800 px-1.5 py-0.5 rounded font-bold">v2.3 (Stable)</span>
                    <a href="https://xpatagonia.com" target="_blank" rel="noopener noreferrer" className="text-[10px] text-hemp-600 dark:text-hemp-500 font-bold font-mono hover:underline">
                        xpatagonia.com
                    </a>

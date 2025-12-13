@@ -5,7 +5,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { BarChart2, ArrowLeftRight, Scale, Ruler, Sprout } from 'lucide-react';
 
 export default function Analytics() {
-  const { varieties, plots, getLatestRecord } = useAppContext();
+  const { varieties, plots, getLatestRecord, suppliers } = useAppContext();
 
   // Selection State
   const [varietyAId, setVarietyAId] = useState<string>(varieties[0]?.id || '');
@@ -13,6 +13,9 @@ export default function Analytics() {
 
   const varietyA = varieties.find(v => v.id === varietyAId);
   const varietyB = varieties.find(v => v.id === varietyBId);
+
+  const supplierA = suppliers.find(s => s.id === varietyA?.supplierId);
+  const supplierB = suppliers.find(s => s.id === varietyB?.supplierId);
 
   // Helper to aggregate data for a specific variety
   const getVarietyStats = (varId: string) => {
@@ -197,9 +200,9 @@ export default function Analytics() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                   <tr>
-                      <td className="px-6 py-3 font-medium text-gray-600">Origen / Genética</td>
-                      <td className="px-6 py-3 text-center text-gray-700">{varietyA?.genetics}</td>
-                      <td className="px-6 py-3 text-center text-gray-700">{varietyB?.genetics}</td>
+                      <td className="px-6 py-3 font-medium text-gray-600">Origen / Proveedor</td>
+                      <td className="px-6 py-3 text-center text-gray-700">{supplierA?.name || '-'}</td>
+                      <td className="px-6 py-3 text-center text-gray-700">{supplierB?.name || '-'}</td>
                   </tr>
                   <tr className="bg-gray-50">
                       <td className="px-6 py-3 font-medium text-gray-600">Uso Principal</td>
@@ -231,4 +234,3 @@ export default function Analytics() {
     </div>
   );
 }
-    
