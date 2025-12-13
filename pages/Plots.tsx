@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { Plot } from '../types';
-import { Plus, ChevronRight, CheckCircle, FileSpreadsheet, Edit2, Calendar, UserCheck, MapPin, Box, Trash2, LayoutGrid, List, Image as ImageIcon, Ruler, Droplets, FlaskConical, Tractor, Tag } from 'lucide-react';
+import { Plus, ChevronRight, CheckCircle, FileSpreadsheet, Edit2, Calendar, UserCheck, MapPin, Box, Trash2, LayoutGrid, List, Image as ImageIcon, Ruler, Droplets, FlaskConical, Tractor, Tag, Sprout } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 export default function Plots() {
@@ -449,22 +449,22 @@ export default function Plots() {
             <h2 className="text-xl font-bold mb-4 text-gray-900">{editingId ? 'Editar Unidad' : 'Nueva Unidad de Cultivo'}</h2>
             <form onSubmit={handleSubmit} className="space-y-6">
               
-              {/* Sección 1: Identidad */}
-              <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                  <h3 className="text-sm font-bold text-gray-700 mb-3 flex items-center uppercase">
+              {/* Sección 1: Identidad (COLOR PÚRPURA SUAVE) */}
+              <div className="bg-purple-50 border border-purple-100 rounded-lg p-4">
+                  <h3 className="text-sm font-bold text-purple-800 mb-3 flex items-center uppercase">
                       <Box size={14} className="mr-2"/> Identidad y Propósito
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                      <div className="md:col-span-2 grid grid-cols-2 gap-4">
                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Proyecto Marco</label>
+                            <label className="block text-sm font-medium text-purple-900 mb-1">Proyecto Marco</label>
                             <select required className={inputClass} value={formData.projectId} onChange={e => setFormData({...formData, projectId: e.target.value})}>
                                 <option value="">Seleccionar Proyecto...</option>
                                 {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                             </select>
                          </div>
                          <div>
-                             <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Cultivo</label>
+                             <label className="block text-sm font-medium text-purple-900 mb-1">Tipo de Cultivo</label>
                              <select className={inputClass} value={formData.type || 'Ensayo'} onChange={e => setFormData({...formData, type: e.target.value as any})}>
                                  <option value="Ensayo">I+D (Ensayo Experimental)</option>
                                  <option value="Producción">Producción (Lote Comercial)</option>
@@ -472,7 +472,7 @@ export default function Plots() {
                          </div>
                      </div>
                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Variedad</label>
+                        <label className="block text-sm font-medium text-purple-900 mb-1">Variedad</label>
                         <select required className={inputClass} value={formData.varietyId} onChange={e => setFormData({...formData, varietyId: e.target.value, seedBatchId: ''})}>
                           <option value="">Seleccionar...</option>
                           {varieties.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
@@ -480,7 +480,7 @@ export default function Plots() {
                      </div>
                      {/* SEED BATCH SELECTOR (NUEVO) */}
                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
+                        <label className="block text-sm font-medium text-purple-900 mb-1 flex items-center">
                             <Tag size={12} className="mr-1"/> Lote de Semilla (Trazabilidad)
                         </label>
                         <select 
@@ -496,18 +496,18 @@ export default function Plots() {
                               </option>
                           ))}
                         </select>
-                        <div className="text-xs text-gray-400 mt-1">
+                        <div className="text-xs text-purple-400 mt-1">
                             {formData.varietyId && availableBatches.length === 0 ? "No hay lotes registrados para esta variedad." : ""}
                         </div>
                      </div>
                      
                      <div className="grid grid-cols-2 gap-2">
                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Bloque / Lote</label>
+                            <label className="block text-sm font-medium text-purple-900 mb-1">Bloque / Lote</label>
                             <input required type="text" className={inputClass} placeholder="1" value={formData.block} onChange={e => setFormData({...formData, block: e.target.value})} />
                          </div>
                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label className="block text-sm font-medium text-purple-900 mb-1">
                                 {formData.type === 'Producción' ? 'Sector' : 'Rep (R)'}
                             </label>
                             <input required type="number" className={inputClass} placeholder="1" value={formData.replicate} onChange={e => setFormData({...formData, replicate: Number(e.target.value)})} />
@@ -516,14 +516,14 @@ export default function Plots() {
                   </div>
               </div>
 
-              {/* Sección 2: Ubicación */}
-              <div className="border border-gray-200 rounded-lg p-4">
-                  <h3 className="text-sm font-bold text-gray-700 mb-3 flex items-center uppercase">
+              {/* Sección 2: Ubicación (COLOR AZUL SUAVE) */}
+              <div className="bg-blue-50 border border-blue-100 rounded-lg p-4">
+                  <h3 className="text-sm font-bold text-blue-800 mb-3 flex items-center uppercase">
                       <MapPin size={14} className="mr-2"/> Ubicación Geográfica
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Locación (Establecimiento)</label>
+                        <label className="block text-sm font-medium text-blue-900 mb-1">Locación (Establecimiento)</label>
                         <select required className={inputClass} value={formData.locationId} onChange={e => setFormData({...formData, locationId: e.target.value})}>
                           <option value="">Seleccionar...</option>
                           {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
@@ -531,37 +531,37 @@ export default function Plots() {
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                           <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Latitud</label>
+                              <label className="block text-sm font-medium text-blue-900 mb-1">Latitud</label>
                               <input type="number" step="any" placeholder="-34..." className={inputClass} value={formData.lat} onChange={e => setFormData({...formData, lat: e.target.value})} />
                           </div>
                           <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Longitud</label>
+                              <label className="block text-sm font-medium text-blue-900 mb-1">Longitud</label>
                               <input type="number" step="any" placeholder="-58..." className={inputClass} value={formData.lng} onChange={e => setFormData({...formData, lng: e.target.value})} />
                           </div>
                       </div>
                   </div>
               </div>
               
-              {/* Sección 3: Manejo Agronómico */}
-              <div className="border border-gray-200 rounded-lg p-4">
-                  <h3 className="text-sm font-bold text-gray-700 mb-3 flex items-center uppercase">
-                      <Calendar size={14} className="mr-2"/> Manejo Agronómico
+              {/* Sección 3: Manejo Agronómico (COLOR VERDE SUAVE) */}
+              <div className="bg-green-50 border border-green-100 rounded-lg p-4">
+                  <h3 className="text-sm font-bold text-green-800 mb-3 flex items-center uppercase">
+                      <Sprout size={14} className="mr-2"/> Manejo Agronómico
                   </h3>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Fecha Siembra</label>
+                        <label className="block text-sm font-medium text-green-900 mb-1">Fecha Siembra</label>
                         <input type="date" className={`${inputClass} cursor-pointer`} value={formData.sowingDate} onChange={e => setFormData({...formData, sowingDate: e.target.value})} />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Densidad (pl/m2)</label>
+                        <label className="block text-sm font-medium text-green-900 mb-1">Densidad (pl/m2)</label>
                         <input type="number" className={inputClass} value={formData.density} onChange={e => setFormData({...formData, density: Number(e.target.value)})} />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Distancia (cm)</label>
+                        <label className="block text-sm font-medium text-green-900 mb-1">Distancia (cm)</label>
                         <input type="number" className={inputClass} value={formData.rowDistance} onChange={e => setFormData({...formData, rowDistance: Number(e.target.value)})} />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Riego</label>
+                        <label className="block text-sm font-medium text-green-900 mb-1">Riego</label>
                         <select className={inputClass} value={formData.irrigationType || ''} onChange={e => setFormData({...formData, irrigationType: e.target.value})}>
                             <option value="">-</option>
                             <option value="Goteo">Goteo</option>
@@ -571,10 +571,10 @@ export default function Plots() {
                         </select>
                     </div>
                     <div className="md:col-span-2">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Superficie Total</label>
+                        <label className="block text-sm font-medium text-green-900 mb-1">Superficie Total</label>
                         <div className="flex">
                             <input type="number" step="any" placeholder="0" className={`${inputClass} rounded-r-none border-r-0`} value={formData.surfaceArea || ''} onChange={e => setFormData({...formData, surfaceArea: Number(e.target.value)})} />
-                            <select className="bg-gray-50 border border-gray-300 text-gray-700 text-sm rounded-r px-1 focus:outline-none" value={formData.surfaceUnit} onChange={e => setFormData({...formData, surfaceUnit: e.target.value as any})}>
+                            <select className="bg-white border border-gray-300 text-gray-700 text-sm rounded-r px-1 focus:outline-none" value={formData.surfaceUnit} onChange={e => setFormData({...formData, surfaceUnit: e.target.value as any})}>
                                 <option value="m2">m²</option>
                                 <option value="ha">ha</option>
                                 <option value="ac">acres</option>
@@ -582,7 +582,7 @@ export default function Plots() {
                         </div>
                     </div>
                     <div className="md:col-span-4">
-                        <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
+                        <label className="block text-sm font-medium text-green-900 mb-1 flex items-center">
                           <UserCheck size={14} className="mr-1" /> Responsables Asignados
                         </label>
                         <div className="border border-gray-300 bg-white rounded p-2 h-20 overflow-y-auto text-xs grid grid-cols-2 gap-1">
