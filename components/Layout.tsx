@@ -24,7 +24,8 @@ import {
   Moon,
   Bell,
   ScanBarcode,
-  Building
+  Building,
+  AlertTriangle
 } from 'lucide-react';
 
 const NavItem = ({ to, icon: Icon, label, onClick }: any) => {
@@ -48,7 +49,7 @@ const NavItem = ({ to, icon: Icon, label, onClick }: any) => {
 };
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { currentUser, logout, isEmergencyMode, theme, toggleTheme, notifications } = useAppContext();
+  const { currentUser, logout, isEmergencyMode, dbNeedsMigration, theme, toggleTheme, notifications } = useAppContext();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
 
@@ -71,14 +72,27 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-dark-bg flex transition-colors duration-300">
+      
+      {/* DB MIGRATION WARNING BANNER */}
+      {dbNeedsMigration && (
+          <div className="fixed top-0 left-0 w-full z-[100] bg-red-600 text-white px-4 py-2 flex justify-between items-center shadow-md">
+              <div className="flex items-center text-xs md:text-sm font-bold">
+                  <AlertTriangle className="mr-2 animate-pulse" size={18}/>
+                  <span>ATENCIÓN: La base de datos está desactualizada. Algunas funciones (Proveedores, Stock) fallarán.</span>
+              </div>
+              <Link to="/settings" className="bg-white text-red-600 text-xs px-3 py-1 rounded font-bold hover:bg-gray-100">
+                  SOLUCIONAR AHORA
+              </Link>
+          </div>
+      )}
+
       {/* Mobile Header */}
-      <div className="lg:hidden fixed top-0 w-full bg-white dark:bg-dark-card z-50 border-b dark:border-dark-border px-4 py-3 flex justify-between items-center shadow-sm">
+      <div className={`lg:hidden fixed top-0 w-full bg-white dark:bg-dark-card z-50 border-b dark:border-dark-border px-4 py-3 flex justify-between items-center shadow-sm ${dbNeedsMigration ? 'mt-10' : ''}`}>
         <div className="flex items-center space-x-2 text-hemp-800 dark:text-hemp-400">
           <Leaf className="w-6 h-6" />
           <span className="font-bold text-lg">HempC App</span>
         </div>
         <div className="flex items-center space-x-2">
-            {/* Bell Mobile */}
             <button onClick={() => setIsNotifOpen(!isNotifOpen)} className="p-2 relative text-gray-600 dark:text-gray-300">
                 <Bell size={24} />
                 {unreadCount > 0 && (
@@ -99,9 +113,9 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         />
       )}
 
-      {/* Notifications Dropdown (Absolute to Layout) */}
+      {/* Notifications Dropdown */}
       {isNotifOpen && (
-        <div className="fixed top-16 right-4 lg:right-10 z-50 w-80 bg-white dark:bg-dark-card rounded-xl shadow-2xl border border-gray-100 dark:border-dark-border overflow-hidden animate-in fade-in slide-in-from-top-2">
+        <div className={`fixed right-4 lg:right-10 z-50 w-80 bg-white dark:bg-dark-card rounded-xl shadow-2xl border border-gray-100 dark:border-dark-border overflow-hidden animate-in fade-in slide-in-from-top-2 ${dbNeedsMigration ? 'top-24' : 'top-16'}`}>
             <div className="px-4 py-3 border-b dark:border-dark-border bg-gray-50 dark:bg-slate-900/50 flex justify-between items-center">
                 <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm">Notificaciones ({unreadCount})</h3>
                 <button onClick={() => setIsNotifOpen(false)}><X size={16} className="text-gray-400"/></button>
@@ -143,6 +157,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         fixed lg:static inset-y-0 left-0 z-40 w-64 bg-white dark:bg-dark-card border-r dark:border-dark-border transform transition-transform duration-200 ease-in-out flex flex-col
         ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}
         lg:translate-x-0
+        ${dbNeedsMigration ? 'mt-10 lg:mt-10' : ''}
       `}>
         <div className="h-16 flex items-center px-6 border-b dark:border-dark-border justify-between">
           <div className="flex items-center">
@@ -162,11 +177,10 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                   )}
               </button>
 
-              {/* Theme Toggle in Header (Desktop) */}
+              {/* Theme Toggle */}
               <button 
                 onClick={toggleTheme} 
                 className="p-2 rounded-full text-gray-400 hover:text-hemp-600 hover:bg-gray-100 dark:hover:bg-dark-border transition-colors"
-                title={theme === 'dark' ? 'Modo Claro' : 'Modo Oscuro'}
               >
                   {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
               </button>
@@ -204,7 +218,6 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                 {isAdminOrSuper && (
                     <NavItem to="/users" icon={Users} label="Gestión Usuarios" onClick={() => setIsMobileOpen(false)} />
                 )}
-                {/* Botón de configuración VISIBLE UNICAMENTE PARA SUPER ADMIN */}
                 {isSuperAdmin && (
                     <NavItem to="/settings" icon={Database} label="Configuración DB" onClick={() => setIsMobileOpen(false)} />
                 )}
@@ -235,7 +248,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
            <div className="bg-gray-100 dark:bg-slate-900 py-3 text-center border-t border-gray-200 dark:border-dark-border">
                <p className="text-[10px] text-gray-400 font-mono leading-tight">Dev gaston.barea.moreno@gmail.com</p>
                <div className="flex items-center justify-center space-x-2 mt-1">
-                   <span className="text-[10px] bg-hemp-100 text-hemp-800 px-1.5 py-0.5 rounded font-bold">v2.1 Suppliers</span>
+                   <span className="text-[10px] bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded font-bold">v2.2 (DB Check)</span>
                    <a href="https://xpatagonia.com" target="_blank" rel="noopener noreferrer" className="text-[10px] text-hemp-600 dark:text-hemp-500 font-bold font-mono hover:underline">
                        xpatagonia.com
                    </a>
@@ -245,7 +258,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 lg:ml-0 pt-16 lg:pt-0 overflow-y-auto h-screen bg-gray-50 dark:bg-dark-bg transition-colors duration-300">
+      <main className={`flex-1 lg:ml-0 pt-16 lg:pt-0 overflow-y-auto h-screen bg-gray-50 dark:bg-dark-bg transition-colors duration-300 ${dbNeedsMigration ? 'mt-10 lg:mt-10' : ''}`}>
         <div className="container mx-auto p-4 lg:p-8 max-w-7xl">
           {children}
         </div>
