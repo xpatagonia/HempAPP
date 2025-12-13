@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Save, Database, Copy, RefreshCw, AlertTriangle, Lock, Settings as SettingsIcon, Sliders } from 'lucide-react';
+import { Save, Database, Copy, RefreshCw, AlertTriangle, Lock, Settings as SettingsIcon, Sliders, Sparkles, ExternalLink } from 'lucide-react';
 
 export default function Settings() {
   const { currentUser } = useAppContext();
@@ -13,14 +12,20 @@ export default function Settings() {
   const [url, setUrl] = useState('');
   const [key, setKey] = useState('');
   
+  // AI State
+  const [aiKey, setAiKey] = useState('');
+  
   const [status, setStatus] = useState<'idle' | 'checking' | 'success' | 'error'>('idle');
 
   useEffect(() => {
       // Cargar configuración existente
       const storedUrl = localStorage.getItem('hemp_sb_url');
       const storedKey = localStorage.getItem('hemp_sb_key');
+      const storedAiKey = localStorage.getItem('hemp_ai_key');
+      
       if (storedUrl) setUrl(storedUrl);
       if (storedKey) setKey(storedKey);
+      if (storedAiKey) setAiKey(storedAiKey);
   }, []);
 
   // PERMISSION GUARD: Solo Super Admin puede ver esto
@@ -41,9 +46,10 @@ export default function Settings() {
   const handleSave = async () => {
       setStatus('checking');
       
-      // Save Supabase Config
+      // Save Configs
       localStorage.setItem('hemp_sb_url', url.trim());
       localStorage.setItem('hemp_sb_key', key.trim());
+      localStorage.setItem('hemp_ai_key', aiKey.trim());
 
       // Force reload to apply changes
       setTimeout(() => {
@@ -125,7 +131,7 @@ ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS "surfaceUnit" TEXT DEFAULT 'm2
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start">
                 <AlertTriangle className="text-amber-600 mr-3 flex-shrink-0 mt-0.5" />
                 <div className="text-sm text-amber-800">
-                    <strong>Importante:</strong> Esta configuración técnica guarda tus claves localmente en este navegador para facilitar el desarrollo.
+                    <strong>Importante:</strong> Esta configuración técnica guarda tus claves localmente en este navegador para facilitar el desarrollo sin servidores.
                 </div>
             </div>
 
@@ -156,6 +162,30 @@ ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS "surfaceUnit" TEXT DEFAULT 'm2
                             onChange={e => setKey(e.target.value)}
                         />
                     </div>
+                </div>
+            </div>
+
+            {/* 2. AI Connection */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
+                    <Sparkles size={20} className="mr-2 text-purple-500" />
+                    Inteligencia Artificial (Google Gemini)
+                </h2>
+                <div>
+                    <div className="flex justify-between items-center mb-1">
+                        <label className="block text-sm font-medium text-gray-700">Google Gemini API Key</label>
+                        <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline flex items-center">
+                            Conseguir Key <ExternalLink size={10} className="ml-1"/>
+                        </a>
+                    </div>
+                    <input 
+                        type="password" 
+                        placeholder="AIzaSy..." 
+                        className="w-full border border-gray-300 rounded p-2 focus:ring-2 focus:ring-purple-500 outline-none font-mono text-sm"
+                        value={aiKey}
+                        onChange={e => setAiKey(e.target.value)}
+                    />
+                    <p className="text-xs text-gray-400 mt-1">Necesario para habilitar el Asistente IA.</p>
                 </div>
             </div>
 

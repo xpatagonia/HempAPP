@@ -1,14 +1,6 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Send, Bot, User, Image as ImageIcon, Loader2, Sparkles, AlertTriangle, X, Key } from 'lucide-react';
-
-// ------------------------------------------------------------------
-// CONFIGURACIÓN DE GEMINI API (REST)
-// ------------------------------------------------------------------
-// La clave anterior fue revocada. Se deja vacío para obligar el uso de variable de entorno o ingreso manual.
-const HARDCODED_GEMINI_KEY = ''; 
-// ------------------------------------------------------------------
+import { Send, Bot, User, Image as ImageIcon, Loader2, Sparkles, AlertTriangle, X, Key, ExternalLink } from 'lucide-react';
 
 interface Message {
     id: string;
@@ -31,11 +23,29 @@ export default function AIAdvisor() {
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     
-    // Estado para gestionar la API Key manualmente si la hardcoded falla
+    // Estado para gestionar la API Key manualmente con persistencia
     const [manualKey, setManualKey] = useState('');
     const [showKeyInput, setShowKeyInput] = useState(false);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
+
+    // Cargar Key guardada al iniciar
+    useEffect(() => {
+        const storedKey = localStorage.getItem('hemp_ai_key');
+        if (storedKey) {
+            setManualKey(storedKey);
+        } else {
+            // Si no hay key, mostrar el input discretamente para invitar a configurar
+            const envKey = (import.meta as any).env.VITE_GEMINI_API_KEY;
+            if (!envKey) setShowKeyInput(true);
+        }
+    }, []);
+
+    // Guardar Key cuando cambia
+    const handleKeyChange = (val: string) => {
+        setManualKey(val);
+        localStorage.setItem('hemp_ai_key', val);
+    };
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -67,11 +77,11 @@ export default function AIAdvisor() {
     const handleSend = async () => {
         if ((!input.trim() && !selectedImage) || isLoading) return;
 
-        // Prioridad: 1. Manual Key (UI), 2. Hardcoded Key, 3. Variable Entorno
-        const activeKey = manualKey || HARDCODED_GEMINI_KEY || (import.meta as any).env.VITE_GEMINI_API_KEY;
+        // Prioridad: 1. Manual Key (Storage), 2. Variable Entorno
+        const activeKey = manualKey || (import.meta as any).env.VITE_GEMINI_API_KEY;
 
         if (!activeKey) {
-            setError("Falta la API Key. Por favor ingrésala en el botón de llave arriba a la derecha.");
+            setError("Falta la API Key de Google Gemini.");
             setShowKeyInput(true);
             return;
         }
@@ -142,7 +152,6 @@ export default function AIAdvisor() {
 
             if (!response.ok) {
                 const errorData = await response.json();
-                // Extraemos el mensaje real de Google
                 const googleMsg = errorData.error?.message || `Error HTTP ${response.status}`;
                 throw new Error(googleMsg);
             }
@@ -162,20 +171,20 @@ export default function AIAdvisor() {
             console.error("Gemini API Error Full:", err);
             
             let userFriendlyError = "Error desconocido.";
-            if (err.message.includes('API key not valid')) {
-                userFriendlyError = "La API Key es inválida o expiró. Usa el botón de llave 🔑 arriba para ingresar una nueva.";
+            if (err.message.includes('API key not valid') || err.message.includes('400')) {
+                userFriendlyError = "La API Key es inválida o expiró. Verifica que la clave ingresada sea correcta.";
                 setShowKeyInput(true);
             } else if (err.message.includes('404')) {
-                userFriendlyError = "Modelo no encontrado. Google puede haber cambiado el nombre del modelo.";
+                userFriendlyError = "Modelo no encontrado o no disponible en tu región.";
             } else {
-                userFriendlyError = `Error de Google: ${err.message}`;
+                userFriendlyError = `Respuesta de Google: ${err.message}`;
             }
 
             setError(userFriendlyError);
             setMessages(prev => [...prev, {
                 id: Date.now().toString(),
                 role: 'model',
-                text: '⚠️ Ocurrió un error al procesar tu solicitud. Revisa el mensaje de error arriba.'
+                text: '⚠️ Ocurrió un error de conexión con la IA. Por favor verifica tu API Key.'
             }]);
         } finally {
             setIsLoading(false);
@@ -194,28 +203,33 @@ export default function AIAdvisor() {
                 </div>
                 <button 
                     onClick={() => setShowKeyInput(!showKeyInput)}
-                    className={`p-2 rounded-lg transition ${showKeyInput ? 'bg-purple-100 text-purple-700' : 'text-gray-400 hover:text-gray-600'}`}
-                    title="Configurar API Key Manual"
+                    className={`p-2 rounded-lg transition border ${showKeyInput ? 'bg-purple-50 border-purple-200 text-purple-700' : 'bg-white border-gray-200 text-gray-400 hover:text-gray-600'}`}
+                    title="Configurar API Key"
                 >
                     <Key size={20} />
                 </button>
             </div>
 
-            {/* Input manual de API Key (Emergencia) */}
+            {/* Input manual de API Key (Persistente) */}
             {showKeyInput && (
-                <div className="bg-purple-50 p-3 rounded-lg border border-purple-100 mb-4 animate-in fade-in slide-in-from-top-2">
-                    <label className="block text-xs font-bold text-purple-800 uppercase mb-1">
-                        API Key Manual (Temporal)
-                    </label>
+                <div className="bg-purple-50 p-4 rounded-lg border border-purple-100 mb-4 animate-in fade-in slide-in-from-top-2 shadow-sm">
+                    <div className="flex justify-between items-start mb-2">
+                        <label className="block text-xs font-bold text-purple-800 uppercase flex items-center">
+                            <Key size={12} className="mr-1"/> API Key de Google (Requerido)
+                        </label>
+                        <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-xs text-purple-600 hover:text-purple-800 flex items-center underline">
+                            Obtener clave gratis <ExternalLink size={10} className="ml-1"/>
+                        </a>
+                    </div>
                     <input 
                         type="password" 
                         value={manualKey}
-                        onChange={(e) => setManualKey(e.target.value)}
-                        placeholder="Pega tu API Key de Google AI Studio aquí..."
-                        className="w-full border border-purple-200 rounded p-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        onChange={(e) => handleKeyChange(e.target.value)}
+                        placeholder="Pega tu API Key aquí (comienza con AIza...)"
+                        className="w-full border border-purple-200 rounded p-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white"
                     />
-                    <p className="text-[10px] text-purple-600 mt-1">
-                        Esta clave se usará en lugar de la configurada por defecto. Consigue una gratis en <a href="https://aistudio.google.com/" target="_blank" rel="noreferrer" className="underline font-bold">Google AI Studio</a>.
+                    <p className="text-[10px] text-purple-500 mt-2">
+                        La clave se guardará localmente en tu navegador para futuras sesiones.
                     </p>
                 </div>
             )}
@@ -223,7 +237,7 @@ export default function AIAdvisor() {
             <div className="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
                 <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
                     {error && (
-                        <div className="bg-red-50 border border-red-200 text-red-800 p-3 rounded-lg flex items-start text-sm">
+                        <div className="bg-red-50 border border-red-200 text-red-800 p-3 rounded-lg flex items-start text-sm animate-in zoom-in-95">
                             <AlertTriangle className="mr-2 flex-shrink-0 mt-0.5" size={16} />
                             <div>
                                 <span className="font-bold block">Error de Conexión:</span>
