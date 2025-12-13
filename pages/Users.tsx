@@ -1,7 +1,9 @@
+
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { User, UserRole } from '../types';
-import { Plus, Trash2, Edit2, Shield, Wrench, Eye, AlertCircle, Lock, Key, Save, Loader2, Phone, Briefcase, User as UserIcon } from 'lucide-react';
+import { Plus, Trash2, Edit2, Shield, Wrench, Eye, AlertCircle, Lock, Key, Save, Loader2, Phone, Briefcase, User as UserIcon, CloudOff } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 // Avatares Predefinidos (DiceBear)
 const PRESET_AVATARS = [
@@ -16,7 +18,7 @@ const PRESET_AVATARS = [
 ];
 
 export default function Users() {
-  const { usersList, addUser, updateUser, deleteUser, currentUser } = useAppContext();
+  const { usersList, addUser, updateUser, deleteUser, currentUser, isEmergencyMode } = useAppContext();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -221,6 +223,21 @@ export default function Users() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-xl w-full p-6 shadow-xl max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold mb-4 text-gray-900">{editingId ? 'Editar Perfil' : 'Nuevo Usuario'}</h2>
+            
+            {/* EMERGENCY MODE WARNING */}
+            {isEmergencyMode && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 flex items-start text-sm text-amber-800">
+                    <CloudOff className="mr-2 flex-shrink-0 mt-0.5" size={18}/>
+                    <div>
+                        <strong>¡Atención! Estás en Modo Offline.</strong>
+                        <p className="mt-1 text-xs text-amber-700">
+                            El usuario que crees aquí <strong>solo existirá en esta computadora</strong>. 
+                            No podrás iniciar sesión con él en otros dispositivos (como tu celular) hasta que configures la base de datos en <Link to="/settings" className="underline font-bold">Configuración</Link>.
+                        </p>
+                    </div>
+                </div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-6">
               
               {/* AVATAR SELECTOR */}

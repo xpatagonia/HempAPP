@@ -27,7 +27,9 @@ import {
   ScanBarcode,
   Building,
   AlertTriangle,
-  Briefcase
+  Briefcase,
+  Cloud,
+  CloudOff
 } from 'lucide-react';
 
 const NavItem = ({ to, icon: Icon, label, onClick }: any) => {
@@ -218,7 +220,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                {!isClient && (
                    <>
                        <NavItem to="/suppliers" icon={Building} label="Proveedores" onClick={() => setIsMobileOpen(false)} />
-                       <NavItem to="/clients" icon={Briefcase} label="Clientes" onClick={() => setIsMobileOpen(false)} /> {/* NEW LINK */}
+                       <NavItem to="/clients" icon={Briefcase} label="Clientes" onClick={() => setIsMobileOpen(false)} />
                        <NavItem to="/varieties" icon={Sprout} label="Variedades" onClick={() => setIsMobileOpen(false)} />
                        <NavItem to="/seed-batches" icon={ScanBarcode} label="Stock Semillas" onClick={() => setIsMobileOpen(false)} />
                    </>
@@ -244,12 +246,24 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
         {/* User Profile Section & Footer */}
         <div className="border-t dark:border-dark-border bg-gray-50 dark:bg-dark-card">
+           
+           {/* Connection Status Indicator */}
+           <div className={`px-4 py-2 text-xs font-bold flex items-center justify-between border-b dark:border-dark-border ${isEmergencyMode ? 'bg-amber-100 text-amber-800' : 'bg-green-100 text-green-800'}`}>
+                <div className="flex items-center">
+                    {isEmergencyMode ? <CloudOff size={14} className="mr-2"/> : <Cloud size={14} className="mr-2"/>}
+                    {isEmergencyMode ? 'MODO LOCAL (OFFLINE)' : 'CONECTADO A LA NUBE'}
+                </div>
+                {isEmergencyMode && (
+                    <Link to="/settings" className="underline text-[10px]">Conectar</Link>
+                )}
+           </div>
+
            <div className="p-4">
               <div className="flex items-center space-x-3 mb-3">
                   {currentUser.avatar ? (
                       <img src={currentUser.avatar} alt="Profile" className="w-10 h-10 rounded-full border-2 border-white shadow-sm object-cover" />
                   ) : (
-                      <div className={`p-2 rounded-full ${isEmergencyMode ? 'bg-amber-100 text-amber-700' : 'bg-hemp-100 dark:bg-hemp-900 text-hemp-700 dark:text-hemp-300'}`}>
+                      <div className={`p-2 rounded-full ${isEmergencyMode ? 'bg-amber-200 text-amber-700' : 'bg-hemp-100 dark:bg-hemp-900 text-hemp-700 dark:text-hemp-300'}`}>
                           <UserCircle size={24} />
                       </div>
                   )}
