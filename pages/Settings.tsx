@@ -130,6 +130,15 @@ CREATE TABLE IF NOT EXISTS public.suppliers (
 -- 3. ACTUALIZAR TABLAS EXISTENTES CON NUEVOS CAMPOS
 DO $$
 BEGIN
+    -- Suppliers: Nuevos campos de contacto (Hotfix v2.5)
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'suppliers' AND column_name = 'city') THEN
+        ALTER TABLE public.suppliers ADD COLUMN "city" TEXT;
+        ALTER TABLE public.suppliers ADD COLUMN "province" TEXT;
+        ALTER TABLE public.suppliers ADD COLUMN "address" TEXT;
+        ALTER TABLE public.suppliers ADD COLUMN "commercialContact" TEXT;
+        ALTER TABLE public.suppliers ADD COLUMN "logisticsContact" TEXT;
+    END IF;
+
     -- Plots: Tipo, Unidad, Vinculo Lote Semilla
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'plots' AND column_name = 'type') THEN
         ALTER TABLE public.plots ADD COLUMN "type" TEXT DEFAULT 'Ensayo';

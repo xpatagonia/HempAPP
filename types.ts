@@ -33,7 +33,17 @@ export interface Supplier {
   name: string; // Nombre Comercial / Fantasía
   legalName?: string; // Razón Social
   cuit?: string; // Tax ID
+  
+  // Ubicación Detallada
   country: string; // País de Origen
+  province?: string; // Nuevo: Provincia / Estado
+  city?: string;     // Nuevo: Ciudad
+  address?: string;  // Nuevo: Dirección específica
+
+  // Contactos
+  commercialContact?: string; // Nuevo: Nombre y Teléfono Comercial
+  logisticsContact?: string;  // Nuevo: Nombre y Teléfono Logística
+  
   website?: string;
   notes?: string;
 }
