@@ -1,13 +1,12 @@
-
 import React, { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { Plot } from '../types';
-import { Plus, ChevronRight, CheckCircle, FileSpreadsheet, Edit2, Calendar, UserCheck, MapPin, Box, Trash2, LayoutGrid, List, Image as ImageIcon, Ruler, Droplets, FlaskConical, Tractor } from 'lucide-react';
+import { Plus, ChevronRight, CheckCircle, FileSpreadsheet, Edit2, Calendar, UserCheck, MapPin, Box, Trash2, LayoutGrid, List, Image as ImageIcon, Ruler, Droplets, FlaskConical, Tractor, Tag } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 export default function Plots() {
-  const { plots, locations, varieties, projects, usersList, addPlot, updatePlot, deletePlot, currentUser, getLatestRecord, logs } = useAppContext();
+  const { plots, locations, varieties, projects, usersList, addPlot, updatePlot, deletePlot, currentUser, getLatestRecord, logs, seedBatches } = useAppContext();
   
   const [searchParams] = useSearchParams();
   const initialProjectFilter = searchParams.get('project') || 'all';
@@ -24,7 +23,7 @@ export default function Plots() {
 
   // Extended form state to handle lat/lng strings
   const [formData, setFormData] = useState<Partial<Plot> & { lat?: string, lng?: string }>({
-    projectId: '', locationId: '', varietyId: '', 
+    projectId: '', locationId: '', varietyId: '', seedBatchId: '',
     type: 'Ensayo',
     block: '1', replicate: 1,
     ownerName: '', responsibleIds: [],
@@ -38,6 +37,9 @@ export default function Plots() {
 
   const isSuperAdmin = currentUser?.role === 'super_admin';
   const isAdmin = currentUser?.role === 'admin' || isSuperAdmin;
+
+  // Filter available batches based on selected variety
+  const availableBatches = seedBatches.filter(b => b.varietyId === formData.varietyId);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,6 +66,7 @@ export default function Plots() {
       type: formData.type || 'Ensayo',
       locationId: formData.locationId!,
       varietyId: formData.varietyId!,
+      seedBatchId: formData.seedBatchId || undefined, // Nuevo
       projectId: formData.projectId!,
       block: formData.block!,
       replicate: Number(formData.replicate),
@@ -98,7 +101,7 @@ export default function Plots() {
 
   const resetForm = () => {
     setFormData({
-        projectId: '', locationId: '', varietyId: '', type: 'Ensayo', block: '1', replicate: 1,
+        projectId: '', locationId: '', varietyId: '', seedBatchId: '', type: 'Ensayo', block: '1', replicate: 1,
         ownerName: '', responsibleIds: [], sowingDate: '', rowDistance: 0, density: 0, 
         surfaceArea: 0, surfaceUnit: 'm2',
         status: 'Activa', observations: '', irrigationType: '',
@@ -139,6 +142,7 @@ export default function Plots() {
         const l = locations.find(l => l.id === p.locationId);
         const v = varieties.find(v => v.id === p.varietyId);
         const pr = projects.find(proj => proj.id === p.projectId);
+        const sb = seedBatches.find(b => b.id === p.seedBatchId);
         
         // Use the new helper to get current status
         const d = getLatestRecord(p.id);
@@ -148,6 +152,7 @@ export default function Plots() {
             'Proyecto': pr?.name,
             'Locación': l?.name,
             'Variedad': v?.name,
+            'Lote Semilla': sb ? sb.batchCode : '-',
             'Bloque/Lote': p.block,
             'Repetición': p.replicate,
             'Latitud': p.coordinates?.lat || l?.coordinates?.lat || '-',
@@ -468,11 +473,34 @@ export default function Plots() {
                      </div>
                      <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Variedad</label>
-                        <select required className={inputClass} value={formData.varietyId} onChange={e => setFormData({...formData, varietyId: e.target.value})}>
-                          <option value="">...</option>
+                        <select required className={inputClass} value={formData.varietyId} onChange={e => setFormData({...formData, varietyId: e.target.value, seedBatchId: ''})}>
+                          <option value="">Seleccionar...</option>
                           {varieties.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
                         </select>
                      </div>
+                     {/* SEED BATCH SELECTOR (NUEVO) */}
+                     <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
+                            <Tag size={12} className="mr-1"/> Lote de Semilla (Trazabilidad)
+                        </label>
+                        <select 
+                            className={inputClass} 
+                            value={formData.seedBatchId || ''} 
+                            onChange={e => setFormData({...formData, seedBatchId: e.target.value})}
+                            disabled={!formData.varietyId}
+                        >
+                          <option value="">-- Origen Genérico --</option>
+                          {availableBatches.map(b => (
+                              <option key={b.id} value={b.id}>
+                                  {b.batchCode} ({b.supplierName})
+                              </option>
+                          ))}
+                        </select>
+                        <div className="text-xs text-gray-400 mt-1">
+                            {formData.varietyId && availableBatches.length === 0 ? "No hay lotes registrados para esta variedad." : ""}
+                        </div>
+                     </div>
+                     
                      <div className="grid grid-cols-2 gap-2">
                          <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Bloque / Lote</label>

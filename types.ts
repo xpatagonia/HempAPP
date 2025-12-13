@@ -31,10 +31,23 @@ export interface Variety {
   id: string;
   name: string;
   usage: UsageType;
-  genetics: string; // Proveedor/Genética
+  genetics: string; // Proveedor/Genética (Default)
   cycleDays: number;
   expectedThc: number;
   notes?: string;
+}
+
+// NUEVO: Gestión de Stock y Trazabilidad de Semillas
+export interface SeedBatch {
+  id: string;
+  varietyId: string;
+  supplierName: string;     // Proveedor específico de este lote (ej: Hemp-it France)
+  batchCode: string;        // Número de etiqueta oficial / Lote
+  purchaseDate: string;     // Fecha de adquisición
+  initialQuantity: number;  // Cantidad comprada (kg)
+  remainingQuantity: number; // Stock actual (kg)
+  notes?: string;
+  isActive: boolean;        // Si el lote está disponible para siembra
 }
 
 export interface Location {
@@ -62,6 +75,7 @@ export interface Plot {
   projectId: string; 
   locationId: string;
   varietyId: string;
+  seedBatchId?: string; // NUEVO: Vinculación para trazabilidad exacta
   
   // Experimental Design Identifiers
   block: string;    // Bloque (o Lote en producción)

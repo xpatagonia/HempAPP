@@ -1,19 +1,21 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { TrialRecord } from '../types';
-import { ArrowLeft, Activity, Scale, AlertTriangle, Camera, FileText, Calendar, MapPin, Globe, Plus, Edit2, Trash2, Download, Droplets, Wind, QrCode, Printer, CheckSquare, Sun, Eye, Loader2, Ruler, Bug, SprayCan, Tractor, FlaskConical } from 'lucide-react';
+import { ArrowLeft, Activity, Scale, AlertTriangle, Camera, FileText, Calendar, MapPin, Globe, Plus, Edit2, Trash2, Download, Droplets, Wind, QrCode, Printer, CheckSquare, Sun, Eye, Loader2, Ruler, Bug, SprayCan, Tractor, FlaskConical, Tag } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 export default function PlotDetails() {
   const { id } = useParams<{ id: string }>();
-  const { plots, locations, varieties, getPlotHistory, addTrialRecord, updateTrialRecord, deleteTrialRecord, logs, addLog, currentUser, tasks } = useAppContext();
+  const { plots, locations, varieties, getPlotHistory, addTrialRecord, updateTrialRecord, deleteTrialRecord, logs, addLog, currentUser, tasks, seedBatches } = useAppContext();
   
   const plot = plots.find(p => p.id === id);
   const location = locations.find(l => l.id === plot?.locationId);
   const variety = varieties.find(v => v.id === plot?.varietyId);
   
+  // Seed Batch Info
+  const seedBatch = seedBatches.find(b => b.id === plot?.seedBatchId);
+
   // Historical Records
   const history = getPlotHistory(id!);
   const plotTasks = tasks.filter(t => t.plotId === id && t.status !== 'Completada');
@@ -278,8 +280,19 @@ export default function PlotDetails() {
                     </p>
                 </div>
                  <div>
-                    <span className="text-xs text-gray-500 uppercase font-semibold">Tipo de Riego</span>
-                    <p className="text-gray-800 font-medium">{plot.irrigationType || 'No especificado'}</p>
+                    <span className="text-xs text-gray-500 uppercase font-semibold">Origen Genética</span>
+                    <p className="text-gray-800 font-medium flex items-center">
+                        {seedBatch ? (
+                            <span className="bg-purple-50 text-purple-700 px-2 py-0.5 rounded border border-purple-100 text-xs font-mono">
+                                LOTE: {seedBatch.batchCode}
+                            </span>
+                        ) : (
+                            <span className="text-gray-400 italic text-xs">Sin traza</span>
+                        )}
+                    </p>
+                    {seedBatch && (
+                        <span className="text-[10px] text-gray-500">{seedBatch.supplierName}</span>
+                    )}
                 </div>
                  <div>
                     <span className="text-xs text-gray-500 uppercase font-semibold">Coordenadas</span>
