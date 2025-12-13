@@ -86,20 +86,20 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           </div>
       )}
 
-      {/* Mobile Header */}
-      <div className={`lg:hidden fixed top-0 w-full bg-white dark:bg-dark-card z-50 border-b dark:border-dark-border px-4 py-3 flex justify-between items-center shadow-sm ${dbNeedsMigration ? 'mt-10' : ''}`}>
-        <div className="flex items-center space-x-2 text-hemp-800 dark:text-hemp-400">
-          <Leaf className="w-6 h-6" />
-          <span className="font-bold text-lg">HempC v2.3</span>
+      {/* Mobile Header (Dark Style to confirm update) */}
+      <div className={`lg:hidden fixed top-0 w-full bg-slate-900 text-white z-50 border-b border-slate-800 px-4 py-3 flex justify-between items-center shadow-md ${dbNeedsMigration ? 'mt-10' : ''}`}>
+        <div className="flex items-center space-x-2">
+          <Leaf className="w-6 h-6 text-hemp-500" />
+          <span className="font-bold text-lg">HempC v2.4</span>
         </div>
         <div className="flex items-center space-x-2">
-            <button onClick={() => setIsNotifOpen(!isNotifOpen)} className="p-2 relative text-gray-600 dark:text-gray-300">
+            <button onClick={() => setIsNotifOpen(!isNotifOpen)} className="p-2 relative text-gray-300 hover:text-white">
                 <Bell size={24} />
                 {unreadCount > 0 && (
-                    <span className="absolute top-1 right-1 h-3 w-3 bg-red-500 rounded-full border-2 border-white dark:border-dark-card"></span>
+                    <span className="absolute top-1 right-1 h-3 w-3 bg-red-500 rounded-full border-2 border-slate-900"></span>
                 )}
             </button>
-            <button onClick={toggleMobile} className="p-2 text-gray-600 dark:text-gray-300">
+            <button onClick={toggleMobile} className="p-2 text-gray-300 hover:text-white">
               {isMobileOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
         </div>
@@ -159,10 +159,10 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         lg:translate-x-0
         ${dbNeedsMigration ? 'mt-10 lg:mt-10' : ''}
       `}>
-        <div className="h-16 flex items-center px-6 border-b dark:border-dark-border justify-between">
+        <div className="h-16 flex items-center px-6 border-b dark:border-dark-border justify-between bg-slate-900 text-white lg:bg-white lg:text-gray-800 lg:dark:bg-dark-card lg:dark:text-white">
           <div className="flex items-center">
-             <Leaf className="w-8 h-8 text-hemp-600 dark:text-hemp-500 mr-2" />
-             <span className="text-xl font-bold text-gray-800 dark:text-gray-100">HempC <span className="text-hemp-600 text-sm bg-hemp-100 px-1 rounded ml-1">v2.3</span></span>
+             <Leaf className="w-8 h-8 text-hemp-500 lg:text-hemp-600 mr-2" />
+             <span className="text-xl font-bold">HempC <span className="text-hemp-500 text-sm bg-hemp-900 lg:bg-hemp-100 px-1 rounded ml-1">v2.4</span></span>
           </div>
           
           <div className="flex items-center space-x-1">
@@ -248,7 +248,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
            <div className="bg-gray-100 dark:bg-slate-900 py-3 text-center border-t border-gray-200 dark:border-dark-border">
                <p className="text-[10px] text-gray-400 font-mono leading-tight">Dev gaston.barea.moreno@gmail.com</p>
                <div className="flex items-center justify-center space-x-2 mt-1">
-                   <span className="text-[10px] bg-green-100 text-green-800 px-1.5 py-0.5 rounded font-bold">v2.3 (Stable)</span>
+                   <span className="text-[10px] bg-green-100 text-green-800 px-1.5 py-0.5 rounded font-bold">v2.4 (Hotfix)</span>
                    <a href="https://xpatagonia.com" target="_blank" rel="noopener noreferrer" className="text-[10px] text-hemp-600 dark:text-hemp-500 font-bold font-mono hover:underline">
                        xpatagonia.com
                    </a>

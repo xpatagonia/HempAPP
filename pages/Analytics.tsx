@@ -1,7 +1,6 @@
-
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { BarChart2, ArrowLeftRight, Scale, Ruler, Sprout } from 'lucide-react';
 
 export default function Analytics() {
