@@ -41,7 +41,14 @@ export interface Variety {
 export interface SeedBatch {
   id: string;
   varietyId: string;
-  supplierName: string;     // Proveedor específico de este lote (ej: Hemp-it France)
+  
+  // Datos Comerciales del Proveedor (Compliance)
+  supplierName: string;       // Nombre Fantasía (ej: Hemp-it)
+  supplierLegalName?: string; // Razón Social (ej: Hemp-it France SAS)
+  supplierCuit?: string;      // CUIT / Tax ID
+  supplierRenspa?: string;    // N° Registro Semillero / RENSPA Origen
+  supplierAddress?: string;   // Dirección Fiscal / Origen
+  
   batchCode: string;        // Número de etiqueta oficial / Lote
   certificationNumber?: string; // N° Certificado Fiscalización (INASE/SENASA)
   purchaseDate: string;     // Fecha de adquisición

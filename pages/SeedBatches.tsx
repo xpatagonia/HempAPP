@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { SeedBatch, SeedMovement } from '../types';
-import { Plus, ScanBarcode, Edit2, Trash2, Tag, Calendar, Package, Truck, Printer, MapPin, FileText, ArrowRight } from 'lucide-react';
+import { Plus, ScanBarcode, Edit2, Trash2, Tag, Calendar, Package, Truck, Printer, MapPin, FileText, ArrowRight, Building, FileDigit, Globe } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -17,6 +17,10 @@ export default function SeedBatches() {
   const [batchFormData, setBatchFormData] = useState<Partial<SeedBatch>>({
     varietyId: '',
     supplierName: '',
+    supplierLegalName: '',
+    supplierCuit: '',
+    supplierRenspa: '',
+    supplierAddress: '',
     batchCode: '',
     certificationNumber: '',
     purchaseDate: new Date().toISOString().split('T')[0],
@@ -52,6 +56,10 @@ export default function SeedBatches() {
     const payload = {
         varietyId: batchFormData.varietyId!,
         supplierName: batchFormData.supplierName!,
+        supplierLegalName: batchFormData.supplierLegalName || '',
+        supplierCuit: batchFormData.supplierCuit || '',
+        supplierRenspa: batchFormData.supplierRenspa || '',
+        supplierAddress: batchFormData.supplierAddress || '',
         batchCode: batchFormData.batchCode!,
         certificationNumber: batchFormData.certificationNumber || '',
         purchaseDate: batchFormData.purchaseDate!,
@@ -74,7 +82,8 @@ export default function SeedBatches() {
 
   const resetBatchForm = () => {
     setBatchFormData({
-        varietyId: '', supplierName: '', batchCode: '', certificationNumber: '',
+        varietyId: '', supplierName: '', supplierLegalName: '', supplierCuit: '', supplierRenspa: '', supplierAddress: '',
+        batchCode: '', certificationNumber: '',
         purchaseDate: new Date().toISOString().split('T')[0],
         initialQuantity: 0, remainingQuantity: 0, storageConditions: '', notes: '', isActive: true
     });
@@ -118,8 +127,7 @@ export default function SeedBatches() {
           status: 'En Tránsito'
       });
 
-      // Optional: Deduct from central stock (Logic choice: if moving keeps ownership, maybe don't deduct total owned, but deduct 'available at central'. For simplicity, we just log it.)
-      // To strictly follow inventory logic, we SHOULD update the batch remaining quantity.
+      // Update Stock
       if(batch) {
           updateSeedBatch({
               ...batch,
@@ -173,16 +181,34 @@ export default function SeedBatches() {
       doc.text(`Localidad: ${location?.city}, ${location?.province}`, 110, 60);
       doc.text(`CUIE/RENSPA: ${location?.cuie || 'N/A'}`, 110, 66);
 
+      // Datos del Proveedor (Origen de la Semilla) - NUEVO
+      doc.setFont("helvetica", "bold");
+      doc.text("3. ORIGEN LEGAL DE LA SEMILLA (PROVEEDOR)", 14, 80);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      
+      const supplierInfo = [
+          [`Razón Social: ${batch?.supplierLegalName || batch?.supplierName || '-'}`, `CUIT: ${batch?.supplierCuit || '-'}`],
+          [`RENSPA Origen: ${batch?.supplierRenspa || '-'}`, `Certificación: ${batch?.certificationNumber || '-'}`],
+          [`Dirección Origen: ${batch?.supplierAddress || '-'}`]
+      ];
+      
+      autoTable(doc, {
+          startY: 85,
+          body: supplierInfo,
+          theme: 'plain',
+          styles: { fontSize: 9, cellPadding: 1 }
+      });
+
       // Detalle de Carga
       autoTable(doc, {
-          startY: 80,
-          head: [['Especie', 'Variedad', 'N° Lote / Etiqueta', 'Certificado', 'Cantidad (kg)', 'Tipo Envase']],
+          startY: doc.lastAutoTable.finalY + 10,
+          head: [['Especie', 'Variedad', 'N° Lote / Etiqueta', 'Cantidad (kg)', 'Tipo Envase']],
           body: [
               [
                   'Cannabis Sativa L.', 
                   variety?.name || '-', 
                   batch?.batchCode || '-', 
-                  batch?.certificationNumber || '-', 
                   `${m.quantity} kg`, 
                   'Bolsa Certificada'
               ]
@@ -192,12 +218,14 @@ export default function SeedBatches() {
       });
 
       // Datos del Transporte
+      const finalY = doc.lastAutoTable.finalY + 15;
+      doc.setFontSize(11);
       doc.setFont("helvetica", "bold");
-      doc.text("3. DATOS DEL TRANSPORTE", 14, 130);
+      doc.text("4. DATOS DEL TRANSPORTE", 14, finalY);
       doc.setFont("helvetica", "normal");
-      doc.text(`Conductor: ${m.driverName}`, 14, 138);
-      doc.text(`Patente Vehículo: ${m.vehiclePlate}`, 14, 144);
-      doc.text(`Empresa: ${m.transportCompany || 'Propio'}`, 110, 138);
+      doc.text(`Conductor: ${m.driverName}`, 14, finalY + 8);
+      doc.text(`Patente Vehículo: ${m.vehiclePlate}`, 14, finalY + 14);
+      doc.text(`Empresa: ${m.transportCompany || 'Propio'}`, 110, finalY + 8);
 
       // Firmas
       doc.line(14, 250, 80, 250);
@@ -283,8 +311,9 @@ export default function SeedBatches() {
                                   </td>
                                   <td className="px-6 py-4 text-hemp-700 font-medium">{variety?.name || 'Desconocida'}</td>
                                   <td className="px-6 py-4">
-                                      <div className="text-gray-900">{batch.supplierName}</div>
-                                      {batch.certificationNumber && <div className="text-xs text-gray-500">Cert: {batch.certificationNumber}</div>}
+                                      <div className="text-gray-900 font-medium">{batch.supplierName}</div>
+                                      <div className="text-xs text-gray-500">{batch.supplierLegalName}</div>
+                                      {batch.supplierCuit && <div className="text-[10px] text-gray-400">CUIT: {batch.supplierCuit}</div>}
                                   </td>
                                   <td className="px-6 py-4 text-gray-600">
                                       {batch.storageConditions || 'Ambiente Controlado'}
@@ -389,48 +418,82 @@ export default function SeedBatches() {
           </div>
       )}
 
-      {/* --- MODAL 1: BATCH --- */}
+      {/* --- MODAL 1: BATCH (UPDATED WITH COMMERCIAL DATA) --- */}
       {isBatchModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-lg w-full p-6 shadow-xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl max-w-2xl w-full p-6 shadow-xl max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold mb-4 text-gray-900">{editingBatchId ? 'Editar Lote' : 'Alta de Nuevo Lote'}</h2>
             <form onSubmit={handleBatchSubmit} className="space-y-4">
-                {/* Form fields same as before plus Certification Number & Storage Conditions */}
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Código de Lote / Etiqueta</label>
-                    <input required type="text" className={inputClass} value={batchFormData.batchCode} onChange={e => setBatchFormData({...batchFormData, batchCode: e.target.value})} />
-                </div>
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">N° Certificado Fiscalización (INASE/SENASA)</label>
-                    <input type="text" placeholder="Opcional" className={inputClass} value={batchFormData.certificationNumber} onChange={e => setBatchFormData({...batchFormData, certificationNumber: e.target.value})} />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Variedad</label>
-                        <select required className={inputClass} value={batchFormData.varietyId} onChange={e => setBatchFormData({...batchFormData, varietyId: e.target.value})}>
-                            <option value="">Seleccionar...</option>
-                            {varieties.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Proveedor</label>
-                        <input required type="text" className={inputClass} value={batchFormData.supplierName} onChange={e => setBatchFormData({...batchFormData, supplierName: e.target.value})} />
-                    </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Cantidad Inicial (kg)</label>
-                        <input required type="number" step="0.1" className={inputClass} value={batchFormData.initialQuantity} onChange={e => setBatchFormData({...batchFormData, initialQuantity: Number(e.target.value), remainingQuantity: Number(e.target.value)})} />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Fecha Compra</label>
-                        <input type="date" className={inputClass} value={batchFormData.purchaseDate} onChange={e => setBatchFormData({...batchFormData, purchaseDate: e.target.value})} />
+                
+                {/* SECTION 1: PRODUCT INFO */}
+                <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                    <h3 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center">
+                        <Tag size={12} className="mr-1"/> Identificación del Material
+                    </h3>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Variedad</label>
+                            <select required className={inputClass} value={batchFormData.varietyId} onChange={e => setBatchFormData({...batchFormData, varietyId: e.target.value})}>
+                                <option value="">Seleccionar...</option>
+                                {varieties.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Código Lote / Etiqueta</label>
+                            <input required type="text" className={inputClass} value={batchFormData.batchCode} onChange={e => setBatchFormData({...batchFormData, batchCode: e.target.value})} />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Cantidad Inicial (kg)</label>
+                            <input required type="number" step="0.1" className={inputClass} value={batchFormData.initialQuantity} onChange={e => setBatchFormData({...batchFormData, initialQuantity: Number(e.target.value), remainingQuantity: Number(e.target.value)})} />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Fecha Compra</label>
+                            <input type="date" className={inputClass} value={batchFormData.purchaseDate} onChange={e => setBatchFormData({...batchFormData, purchaseDate: e.target.value})} />
+                        </div>
                     </div>
                 </div>
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Condiciones Almacenamiento</label>
-                    <input type="text" placeholder="Ej: Cámara Fría 4°C, Humedad 40%" className={inputClass} value={batchFormData.storageConditions} onChange={e => setBatchFormData({...batchFormData, storageConditions: e.target.value})} />
+
+                {/* SECTION 2: SUPPLIER COMMERCIAL DATA (NEW) */}
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                    <h3 className="text-xs font-bold text-blue-700 uppercase mb-3 flex items-center">
+                        <Building size={12} className="mr-1"/> Datos Comerciales del Proveedor
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Nombre Fantasía</label>
+                            <input required type="text" placeholder="Ej: Hemp-it" className={inputClass} value={batchFormData.supplierName} onChange={e => setBatchFormData({...batchFormData, supplierName: e.target.value})} />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Razón Social</label>
+                            <input type="text" placeholder="Ej: Hemp-it France SAS" className={inputClass} value={batchFormData.supplierLegalName} onChange={e => setBatchFormData({...batchFormData, supplierLegalName: e.target.value})} />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">CUIT / Tax ID</label>
+                            <input type="text" className={inputClass} value={batchFormData.supplierCuit} onChange={e => setBatchFormData({...batchFormData, supplierCuit: e.target.value})} />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">N° Registro (RENSPA)</label>
+                            <input type="text" placeholder="Registro Semillero" className={inputClass} value={batchFormData.supplierRenspa} onChange={e => setBatchFormData({...batchFormData, supplierRenspa: e.target.value})} />
+                        </div>
+                        <div className="md:col-span-2">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Dirección de Origen</label>
+                            <input type="text" placeholder="Calle, Ciudad, Provincia/País" className={inputClass} value={batchFormData.supplierAddress} onChange={e => setBatchFormData({...batchFormData, supplierAddress: e.target.value})} />
+                        </div>
+                    </div>
                 </div>
+
+                {/* SECTION 3: COMPLIANCE & STORAGE */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">N° Certificado Fiscalización</label>
+                        <input type="text" placeholder="INASE/SENASA (Opcional)" className={inputClass} value={batchFormData.certificationNumber} onChange={e => setBatchFormData({...batchFormData, certificationNumber: e.target.value})} />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Condiciones Almacenamiento</label>
+                        <input type="text" placeholder="Ej: Cámara Fría 4°C, Humedad 40%" className={inputClass} value={batchFormData.storageConditions} onChange={e => setBatchFormData({...batchFormData, storageConditions: e.target.value})} />
+                    </div>
+                </div>
+
                 <div className="flex justify-end space-x-2 pt-4">
                     <button type="button" onClick={() => setIsBatchModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancelar</button>
                     <button type="submit" className="px-4 py-2 bg-hemp-600 text-white rounded hover:bg-hemp-700 shadow-sm font-bold">Guardar</button>
