@@ -2,7 +2,8 @@
 // Enums and Types
 export type UsageType = 'Fibra' | 'Grano' | 'Dual' | 'Medicinal';
 export type SoilType = 'Franco' | 'Arcilloso' | 'Arenoso' | 'Limoso';
-export type RoleType = 'Productor' | 'Cooperativa' | 'Institución';
+// Redefinición de Roles de Cliente
+export type RoleType = 'Empresa Privada' | 'Gobierno' | 'Academia' | 'Particular' | 'ONG/Cooperativa';
 
 // Auth Types
 export type UserRole = 'super_admin' | 'admin' | 'technician' | 'viewer';
@@ -127,8 +128,14 @@ export interface Location {
   soilType: SoilType;
   climate: string;
   responsiblePerson: string; // Deprecated visual field, prefer responsibleIds logic if needed, but keeping for now
-  ownerName?: string; // Nombre del titular (Empresa, ONG)
-  ownerType?: RoleType;
+  
+  // CLIENTE / TITULAR
+  ownerName?: string; // Nombre Comercial / Fantasía del Cliente
+  ownerLegalName?: string; // Razón Social (Nuevo)
+  ownerCuit?: string; // CUIT / Tax ID (Nuevo)
+  ownerType?: RoleType; // Tipo de Cliente (Empresa, Gobierno, etc)
+  ownerContact?: string; // Email o Teléfono de contacto del cliente (Nuevo)
+
   responsibleIds?: string[]; // IDs de usuarios asignados a la locación
   cuie?: string; // Clave Única de Identificación de Establecimiento (Compliance)
 }

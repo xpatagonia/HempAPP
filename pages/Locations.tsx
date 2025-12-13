@@ -1,8 +1,7 @@
-
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Location, SoilType, RoleType } from '../types';
-import { Plus, MapPin, User, Globe, Edit2, Trash2, Keyboard, List } from 'lucide-react';
+import { Plus, MapPin, User, Globe, Edit2, Trash2, Keyboard, List, Briefcase, Building, Landmark, GraduationCap, Users } from 'lucide-react';
 
 // Expanded Argentina Database with Rural Hubs
 const ARG_GEO: Record<string, string[]> = {
@@ -95,7 +94,7 @@ export default function Locations() {
   const [formData, setFormData] = useState<Partial<Location> & { lat: string, lng: string }>({
     name: '', province: '', city: '', address: '', soilType: 'Franco', climate: '', 
     responsiblePerson: '', lat: '', lng: '',
-    ownerName: '', ownerType: 'Institución', responsibleIds: []
+    ownerName: '', ownerLegalName: '', ownerCuit: '', ownerContact: '', ownerType: 'Empresa Privada', responsibleIds: []
   });
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
@@ -117,8 +116,13 @@ export default function Locations() {
       climate: formData.climate || '',
       responsiblePerson: formData.responsiblePerson || '', // Legacy support
       coordinates,
+      // Client Data
       ownerName: formData.ownerName || '',
+      ownerLegalName: formData.ownerLegalName || '',
+      ownerCuit: formData.ownerCuit || '',
+      ownerContact: formData.ownerContact || '',
       ownerType: formData.ownerType as RoleType,
+      
       responsibleIds: formData.responsibleIds || []
     };
 
@@ -136,7 +140,7 @@ export default function Locations() {
     setFormData({ 
         name: '', province: '', city: '', address: '', soilType: 'Franco', climate: '', 
         responsiblePerson: '', lat: '', lng: '',
-        ownerName: '', ownerType: 'Institución', responsibleIds: []
+        ownerName: '', ownerLegalName: '', ownerCuit: '', ownerContact: '', ownerType: 'Empresa Privada', responsibleIds: []
     });
     setEditingId(null);
     setIsManualCity(false);
@@ -153,6 +157,11 @@ export default function Locations() {
           lng: loc.coordinates?.lng.toString() || '',
           province: loc.province || '',
           city: loc.city || '',
+          // Fallback defaults if new fields missing
+          ownerType: loc.ownerType || 'Empresa Privada',
+          ownerLegalName: loc.ownerLegalName || '',
+          ownerCuit: loc.ownerCuit || '',
+          ownerContact: loc.ownerContact || ''
       });
       setEditingId(loc.id);
       setIsManualCity(!isStandardCity && !!loc.city); // If city exists but not in list, enable manual mode
@@ -172,6 +181,16 @@ export default function Locations() {
     } else {
         setFormData({...formData, responsibleIds: [...current, userId]});
     }
+  };
+
+  const getClientIcon = (type?: RoleType) => {
+      switch(type) {
+          case 'Empresa Privada': return <Building size={16} className="text-gray-500" />;
+          case 'Gobierno': return <Landmark size={16} className="text-blue-500" />;
+          case 'Academia': return <GraduationCap size={16} className="text-purple-500" />;
+          case 'Particular': return <User size={16} className="text-green-500" />;
+          default: return <Users size={16} className="text-gray-400" />;
+      }
   };
 
   const inputClass = "w-full border border-gray-300 bg-white text-gray-900 p-2 rounded focus:ring-2 focus:ring-hemp-500 focus:border-transparent outline-none transition-colors";
@@ -244,20 +263,31 @@ export default function Locations() {
 
                   <div className="grid grid-cols-2 gap-4">
                       <div className="bg-gray-50 p-3 rounded-lg">
-                          <span className="block text-gray-500 text-xs uppercase font-semibold">Suelo</span>
-                          <span className="text-gray-800">{loc.soilType}</span>
+                          <span className="block text-gray-500 text-xs uppercase font-semibold">Suelo & Clima</span>
+                          <div className="text-gray-800 text-sm mt-1">
+                              {loc.soilType} • {loc.climate || 'No especificado'}
+                          </div>
                       </div>
-                      <div className="bg-gray-50 p-3 rounded-lg">
-                          <span className="block text-gray-500 text-xs uppercase font-semibold">Clima</span>
-                          <span className="text-gray-800">{loc.climate}</span>
+                      
+                      {/* CLIENT CARD */}
+                      <div className="bg-indigo-50 p-3 rounded-lg border border-indigo-100">
+                          <span className="text-indigo-800 text-xs uppercase font-bold flex items-center mb-1">
+                              {getClientIcon(loc.ownerType)} <span className="ml-1">Cliente / Titular</span>
+                          </span>
+                          <div className="text-gray-800 font-bold text-sm leading-tight">{loc.ownerName || '-'}</div>
+                          {loc.ownerLegalName && loc.ownerLegalName !== loc.ownerName && (
+                              <div className="text-xs text-gray-500 mt-0.5 truncate" title={loc.ownerLegalName}>{loc.ownerLegalName}</div>
+                          )}
+                          <div className="flex justify-between items-center mt-1">
+                              <span className="text-[10px] bg-white px-1.5 py-0.5 rounded border border-indigo-200 text-indigo-700">
+                                  {loc.ownerType}
+                              </span>
+                              {loc.ownerContact && <span className="text-[10px] text-gray-500" title="Contacto">{loc.ownerContact}</span>}
+                          </div>
                       </div>
-                      <div className="bg-gray-50 p-3 rounded-lg">
-                          <span className="block text-gray-500 text-xs uppercase font-semibold">Titular</span>
-                          <span className="text-gray-800 font-medium">{loc.ownerName || '-'}</span>
-                          <span className="text-xs text-gray-500 block">({loc.ownerType})</span>
-                      </div>
-                      <div className="bg-gray-50 p-3 rounded-lg">
-                           <span className="block text-gray-500 text-xs uppercase font-semibold">Equipo Local</span>
+
+                      <div className="bg-gray-50 p-3 rounded-lg col-span-2">
+                           <span className="block text-gray-500 text-xs uppercase font-semibold">Equipo Técnico Local</span>
                            <div className="flex -space-x-2 mt-2 overflow-hidden py-1">
                               {responsibles.length > 0 ? responsibles.map(u => (
                                    <div key={u.id} className="inline-block h-8 w-8 rounded-full ring-2 ring-white bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600" title={u.name}>
@@ -278,77 +308,121 @@ export default function Locations() {
        {/* Modal */}
        {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-lg w-full p-6 shadow-xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl max-w-2xl w-full p-6 shadow-xl max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold mb-4 text-gray-900">{editingId ? 'Editar Sitio' : 'Nuevo Sitio'}</h2>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nombre del Sitio</label>
-                <input required type="text" className={inputClass} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-              </div>
               
-              <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Provincia</label>
-                    <select className={inputClass} value={formData.province} onChange={e => setFormData({...formData, province: e.target.value, city: ''})}>
-                        <option value="">Seleccionar...</option>
-                        {Object.keys(ARG_GEO).sort().map(p => (
-                            <option key={p} value={p}>{p}</option>
-                        ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1 flex justify-between">
-                        Ciudad / Paraje
-                        <button 
-                            type="button" 
-                            tabIndex={-1}
-                            onClick={() => setIsManualCity(!isManualCity)} 
-                            className="text-hemp-600 text-xs font-semibold hover:underline flex items-center"
-                            title={isManualCity ? "Volver a lista" : "Ingresar manualmente"}
-                        >
-                            {isManualCity ? <List size={12} className="mr-1"/> : <Keyboard size={12} className="mr-1"/>}
-                            {isManualCity ? "Lista" : "Manual"}
-                        </button>
-                    </label>
-                    
-                    {isManualCity ? (
-                         <input 
-                            type="text" 
-                            className={inputClass} 
-                            placeholder="Ej: Paraje La Niña, Colonia Menonita..." 
-                            value={formData.city} 
-                            onChange={e => setFormData({...formData, city: e.target.value})}
-                         />
-                    ) : (
-                        <select className={inputClass} value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})} disabled={!formData.province}>
-                            <option value="">Seleccionar...</option>
-                            {formData.province && ARG_GEO[formData.province]?.map(c => (
-                                <option key={c} value={c}>{c}</option>
-                            ))}
-                        </select>
-                    )}
+              {/* SECTION 1: UBICACION */}
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                  <h3 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center">
+                      <MapPin size={12} className="mr-1"/> Ubicación Geográfica
+                  </h3>
+                  <div className="space-y-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Nombre del Sitio</label>
+                        <input required type="text" placeholder="Ej: Campo Experimental Norte" className={inputClass} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Provincia</label>
+                            <select className={inputClass} value={formData.province} onChange={e => setFormData({...formData, province: e.target.value, city: ''})}>
+                                <option value="">Seleccionar...</option>
+                                {Object.keys(ARG_GEO).sort().map(p => (
+                                    <option key={p} value={p}>{p}</option>
+                                ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1 flex justify-between">
+                                Ciudad
+                                <button 
+                                    type="button" 
+                                    tabIndex={-1}
+                                    onClick={() => setIsManualCity(!isManualCity)} 
+                                    className="text-hemp-600 text-xs font-semibold hover:underline flex items-center"
+                                >
+                                    {isManualCity ? <List size={12} className="mr-1"/> : <Keyboard size={12} className="mr-1"/>}
+                                    {isManualCity ? "Lista" : "Manual"}
+                                </button>
+                            </label>
+                            
+                            {isManualCity ? (
+                                <input 
+                                    type="text" 
+                                    className={inputClass} 
+                                    value={formData.city} 
+                                    onChange={e => setFormData({...formData, city: e.target.value})}
+                                />
+                            ) : (
+                                <select className={inputClass} value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})} disabled={!formData.province}>
+                                    <option value="">Seleccionar...</option>
+                                    {formData.province && ARG_GEO[formData.province]?.map(c => (
+                                        <option key={c} value={c}>{c}</option>
+                                    ))}
+                                </select>
+                            )}
+                          </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                         <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Dirección / Referencia</label>
+                            <input type="text" className={inputClass} value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} />
+                         </div>
+                         <div className="grid grid-cols-2 gap-2">
+                             <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Latitud</label>
+                                <input type="number" step="any" placeholder="-34..." className={inputClass} value={formData.lat} onChange={e => setFormData({...formData, lat: e.target.value})} />
+                             </div>
+                             <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Longitud</label>
+                                <input type="number" step="any" placeholder="-58..." className={inputClass} value={formData.lng} onChange={e => setFormData({...formData, lng: e.target.value})} />
+                             </div>
+                         </div>
+                      </div>
                   </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Dirección / Referencia</label>
-                <input type="text" className={inputClass} value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} />
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Latitud</label>
-                    <input type="number" step="any" placeholder="-34.6037" className={inputClass} value={formData.lat} onChange={e => setFormData({...formData, lat: e.target.value})} />
-                 </div>
-                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Longitud</label>
-                    <input type="number" step="any" placeholder="-58.3816" className={inputClass} value={formData.lng} onChange={e => setFormData({...formData, lng: e.target.value})} />
-                 </div>
+              {/* SECTION 2: CLIENTE / TITULAR (REDEFINED) */}
+              <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-100">
+                  <h3 className="text-xs font-bold text-indigo-700 uppercase mb-3 flex items-center">
+                      <Briefcase size={12} className="mr-1"/> Cliente / Titular del Proyecto
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Entidad</label>
+                          <select className={inputClass} value={formData.ownerType} onChange={e => setFormData({...formData, ownerType: e.target.value as RoleType})}>
+                              <option value="Empresa Privada">Empresa Privada</option>
+                              <option value="Gobierno">Gobierno / Estado</option>
+                              <option value="Academia">Universidad / Academia</option>
+                              <option value="ONG/Cooperativa">ONG / Cooperativa</option>
+                              <option value="Particular">Productor Particular</option>
+                          </select>
+                      </div>
+                      <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Nombre Comercial (Fantasía)</label>
+                          <input type="text" placeholder="Ej: Agrogenetics S.A." required className={inputClass} value={formData.ownerName} onChange={e => setFormData({...formData, ownerName: e.target.value})} />
+                      </div>
+                      <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Razón Social</label>
+                          <input type="text" placeholder="Nombre Legal" className={inputClass} value={formData.ownerLegalName} onChange={e => setFormData({...formData, ownerLegalName: e.target.value})} />
+                      </div>
+                      <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">CUIT / Tax ID</label>
+                          <input type="text" className={inputClass} value={formData.ownerCuit} onChange={e => setFormData({...formData, ownerCuit: e.target.value})} />
+                      </div>
+                      <div className="md:col-span-2">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Contacto Directo</label>
+                          <input type="text" placeholder="Email o Teléfono del responsable del cliente" className={inputClass} value={formData.ownerContact} onChange={e => setFormData({...formData, ownerContact: e.target.value})} />
+                      </div>
+                  </div>
               </div>
 
+              {/* SECTION 3: DATOS AGRONOMICOS */}
               <div className="grid grid-cols-2 gap-4">
                  <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Suelo</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Suelo</label>
                   <select className={inputClass} value={formData.soilType} onChange={e => setFormData({...formData, soilType: e.target.value as SoilType})}>
                     <option value="Franco">Franco</option>
                     <option value="Arcilloso">Arcilloso</option>
@@ -357,29 +431,14 @@ export default function Locations() {
                   </select>
                 </div>
                  <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Clima</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Régimen Climático</label>
                   <input type="text" className={inputClass} placeholder="Ej: Templado húmedo" value={formData.climate} onChange={e => setFormData({...formData, climate: e.target.value})} />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 bg-gray-50 p-3 rounded border border-gray-100">
-                  <div className="col-span-2 text-xs text-gray-500 font-semibold uppercase">Propiedad y Gestión</div>
-                  <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Titular (Nombre)</label>
-                      <input type="text" placeholder="Ej: INTA Castelar" className={inputClass} value={formData.ownerName} onChange={e => setFormData({...formData, ownerName: e.target.value})} />
-                  </div>
-                  <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Tipo Entidad</label>
-                      <select className={inputClass} value={formData.ownerType} onChange={e => setFormData({...formData, ownerType: e.target.value as RoleType})}>
-                          <option value="Institución">Institución</option>
-                          <option value="Productor">Productor Privado</option>
-                          <option value="Cooperativa">Cooperativa</option>
-                      </select>
-                  </div>
-              </div>
-
+              {/* SECTION 4: EQUIPO */}
               <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Asignar Responsables</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Equipo Técnico Asignado</label>
                   <div className="border border-gray-300 bg-white rounded p-2 h-24 overflow-y-auto text-xs">
                     {usersList.map(u => (
                         <label key={u.id} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 py-1">
@@ -397,7 +456,7 @@ export default function Locations() {
 
               <div className="flex justify-end space-x-2 pt-4">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancelar</button>
-                <button type="submit" className="px-4 py-2 bg-hemp-600 text-white rounded hover:bg-hemp-700 shadow-sm">Guardar</button>
+                <button type="submit" className="px-4 py-2 bg-hemp-600 text-white rounded hover:bg-hemp-700 shadow-sm font-bold">Guardar Locación</button>
               </div>
             </form>
           </div>

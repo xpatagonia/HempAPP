@@ -108,7 +108,7 @@ export default function Settings() {
 
   const SQL_SCRIPT = `
 -- ==========================================
--- SCRIPT DE MIGRACIÓN Y FORTALECIMIENTO v2.7
+-- SCRIPT DE MIGRACIÓN Y FORTALECIMIENTO v2.7.1
 -- Ejecutar en Supabase > SQL Editor
 -- ==========================================
 
@@ -143,6 +143,13 @@ BEGIN
         ALTER TABLE public.suppliers ADD COLUMN "logisticsContact" TEXT;
     END IF;
 
+    -- Locations: Nuevos campos de Cliente (v2.7.1)
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'locations' AND column_name = 'ownerLegalName') THEN
+        ALTER TABLE public.locations ADD COLUMN "ownerLegalName" TEXT;
+        ALTER TABLE public.locations ADD COLUMN "ownerCuit" TEXT;
+        ALTER TABLE public.locations ADD COLUMN "ownerContact" TEXT;
+    END IF;
+
     -- Projects: Director
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'projects' AND column_name = 'directorId') THEN
         ALTER TABLE public.projects ADD COLUMN "directorId" TEXT;
@@ -160,6 +167,7 @@ BEGIN
         ALTER TABLE public.plots ADD COLUMN "type" TEXT DEFAULT 'Ensayo';
         ALTER TABLE public.plots ADD COLUMN "surfaceUnit" TEXT DEFAULT 'm2';
         ALTER TABLE public.plots ADD COLUMN "seedBatchId" TEXT;
+        ALTER TABLE public.plots ADD COLUMN "polygon" JSONB; -- Para guardar el polígono del mapa
     END IF;
 
     -- Varieties: Link Proveedor
