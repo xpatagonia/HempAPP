@@ -234,9 +234,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   useEffect(() => {
     let isMounted = true;
 
+    // INCREASED TIMEOUT FOR MOBILE NETWORKS (8 seconds)
     const safetyTimeout = setTimeout(() => {
         if (loading && isMounted) {
-            console.warn("Timeout: Activando Modo Híbrido.");
+            console.warn("Timeout: Activando Modo Híbrido por conexión lenta.");
             setUsersList([...getFromLocal('users'), RESCUE_USER]);
             setProjects(getFromLocal('projects'));
             setVarieties(getFromLocal('varieties'));
@@ -249,7 +250,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             setIsEmergencyMode(true);
             setLoading(false);
         }
-    }, 3500);
+    }, 8000); 
 
     const initSystem = async () => {
         setLoading(true);
@@ -363,8 +364,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         u.password === password
     );
 
-    // 2. Si no está en memoria, preguntar a la base de datos (seguro)
-    if (!validUser && !isEmergencyMode) {
+    // 2. Si no está en memoria, forzar consulta a la base de datos (seguro)
+    // CRITICO: Intentamos incluso si está en modo emergencia, por si la red volvió
+    if (!validUser) {
         try {
             const { data, error } = await supabase.from('users')
                 .select('*')
@@ -376,6 +378,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 validUser = data as User;
                 // Agregarlo a la lista local para la sesión
                 setUsersList(prev => [...prev, validUser as User]);
+                // Si tuvimos éxito conectando, apagamos el modo emergencia para esta sesión
+                setIsEmergencyMode(false);
             }
         } catch (e) {
             console.error("Login DB check failed", e);
