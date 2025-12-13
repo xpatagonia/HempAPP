@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Mail, ArrowRight, AlertTriangle, Database, Settings, X, Save, RefreshCw, UserCheck, CloudOff, Leaf } from 'lucide-react';
+import { Lock, Mail, ArrowRight, AlertTriangle, Database, Settings, X, Save, RefreshCw, UserCheck, CloudOff, Leaf, Tractor } from 'lucide-react';
 
 export default function Login() {
   const { login, isEmergencyMode } = useAppContext();
@@ -68,6 +68,14 @@ export default function Login() {
       setPassword('admin');
   };
 
+  const loginAsClient = async () => {
+      // Create a temporary client session logic here or assume a standard client login
+      // For now, we simulate a login by creating a dummy client user in Context if needed,
+      // but strictly we should use existing users. 
+      // If we are in emergency mode, we can just login.
+      alert("Para ver la vista de cliente, asegúrate de crear un usuario con rol 'client' en el panel de admin primero, o usa las credenciales de un cliente real.");
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 relative overflow-hidden font-sans selection:bg-hemp-500 selection:text-white">
       
@@ -111,7 +119,7 @@ export default function Login() {
                         </p>
                         <div className="grid grid-cols-2 gap-2">
                              <button onClick={fillDemoCredentials} className="text-xs bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/30 py-1.5 px-3 rounded transition flex items-center justify-center">
-                                <UserCheck size={12} className="mr-1"/> Usar Demo Local
+                                <UserCheck size={12} className="mr-1"/> Usar Demo Admin
                             </button>
                             <button onClick={() => setShowConfig(true)} className="text-xs bg-amber-600 hover:bg-amber-700 text-white py-1.5 px-3 rounded transition flex items-center justify-center font-bold shadow-md">
                                 <Settings size={12} className="mr-1"/> Configurar
@@ -192,7 +200,7 @@ export default function Login() {
             <div className="bg-slate-950/30 px-8 py-4 border-t border-white/5 flex items-center justify-between">
                 <div className="flex items-center text-xs text-slate-500">
                     <Database size={12} className="mr-1.5 text-slate-600" />
-                    <span className="font-mono">v2.0.4-stable</span>
+                    <span className="font-mono">v2.6-prod</span>
                 </div>
                 <div className="flex items-center space-x-4">
                      <span className="text-[10px] text-slate-600 font-medium">POWERED BY</span>

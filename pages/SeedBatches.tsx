@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { SeedBatch, SeedMovement } from '../types';
-import { Plus, ScanBarcode, Edit2, Trash2, Tag, Calendar, Package, Truck, Printer, MapPin, FileText, ArrowRight, Building, FileDigit, Globe, Clock, Box, ShieldCheck, Map, Barcode, UserCheck, Car } from 'lucide-react';
+import { Plus, ScanBarcode, Edit2, Trash2, Tag, Calendar, Package, Truck, Printer, MapPin, FileText, ArrowRight, Building, FileDigit, Globe, Clock, Box, ShieldCheck, Map, UserCheck } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -727,7 +727,8 @@ export default function SeedBatches() {
 
                             {/* GS1 Barcode Simulation */}
                             <div className="font-mono text-xs tracking-widest mt-2 flex flex-col items-center">
-                                <Barcode size={40} className="w-full h-8"/>
+                                {/* Use ScanBarcode instead of Barcode to avoid crashes */}
+                                <ScanBarcode size={40} className="w-full h-8"/>
                                 <span className="font-bold">{showLabelModal.gs1Code || 'GS1 NO REGISTRADO'}</span>
                             </div>
                       </div>
