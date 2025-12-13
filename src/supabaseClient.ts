@@ -5,6 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 // ------------------------------------------------------------------
 
 // 1. Intentamos leer las variables de entorno inyectadas por Vercel (Vite)
+// Al eliminar las constantes HARDCODED, aseguramos que Vercel tome el control.
 const env = (import.meta as any).env || {};
 let SUPABASE_URL = env.VITE_SUPABASE_URL;
 let SUPABASE_ANON_KEY = env.VITE_SUPABASE_ANON_KEY;
@@ -44,7 +45,8 @@ export const checkConnection = async () => {
         // Intentamos una lectura muy liviana (HEAD request)
         const { count, error } = await supabase.from('users').select('*', { count: 'exact', head: true });
         
-        // Si no hay error de red, asumimos conectado
+        // Si no hay error de red, asumimos conectado (aunque devuelva error de permiso/tabla vacía)
+        if (error && error.code === 'PGRST116') return true; // Código de éxito en .single() vacío
         if (!error || (error && error.code !== 'NetworkError' && error.code !== '500')) return true;
         
         return false;
