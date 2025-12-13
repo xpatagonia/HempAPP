@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Send, Bot, User, Image as ImageIcon, Loader2, Sparkles, AlertTriangle, X, Key } from 'lucide-react';
@@ -5,8 +6,8 @@ import { Send, Bot, User, Image as ImageIcon, Loader2, Sparkles, AlertTriangle, 
 // ------------------------------------------------------------------
 // CONFIGURACIÓN DE GEMINI API (REST)
 // ------------------------------------------------------------------
-// Si esta key fue revocada por Google, usa el input en pantalla para probar una nueva.
-const HARDCODED_GEMINI_KEY = 'AIzaSyA5Gmha-l3vOJRkI7RfZjVeTefjzbjZisQ'; 
+// La clave anterior fue revocada. Se deja vacío para obligar el uso de variable de entorno o ingreso manual.
+const HARDCODED_GEMINI_KEY = ''; 
 // ------------------------------------------------------------------
 
 interface Message {
@@ -71,6 +72,7 @@ export default function AIAdvisor() {
 
         if (!activeKey) {
             setError("Falta la API Key. Por favor ingrésala en el botón de llave arriba a la derecha.");
+            setShowKeyInput(true);
             return;
         }
 
@@ -128,7 +130,7 @@ export default function AIAdvisor() {
                 }
             };
 
-            // Usamos el modelo gemini-2.5-flash según instrucciones, fallback a 1.5 si falla la URL específica
+            // Usamos el modelo gemini-2.5-flash según instrucciones
             const response = await fetch(
                 `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${activeKey}`,
                 {
