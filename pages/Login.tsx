@@ -3,20 +3,6 @@ import { useAppContext } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
 import { Lock, Mail, ArrowRight, AlertTriangle, Database, Settings, X, Save, RefreshCw, UserCheck, CloudOff } from 'lucide-react';
 
-// Custom Hemp Leaf Icon Component
-const HempLogo = ({ className = "", size = 40 }: { className?: string, size?: number }) => (
-  <svg 
-    width={size} 
-    height={size} 
-    viewBox="0 0 24 24" 
-    fill="currentColor" 
-    className={className}
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    <path d="M12 2C12 2 12.8 7.5 13 9.5C15 7.5 18.5 5 18.5 5C18.5 5 16 10.5 15 12.5C18 13.5 21 15 21 15C21 15 16.5 15.5 14.5 15C15.5 18.5 16.5 22 16.5 22C16.5 22 12.5 19 12 18.5C11.5 19 7.5 22 7.5 22C7.5 22 8.5 18.5 9.5 15C7.5 15.5 3 15 3 15C3 15 6 13.5 9 12.5C8 10.5 5.5 5 5.5 5C5.5 5 9 7.5 11 9.5C11.2 7.5 12 2 12 2Z" />
-  </svg>
-);
-
 export default function Login() {
   const { login, isEmergencyMode } = useAppContext();
   const navigate = useNavigate();
@@ -97,11 +83,17 @@ export default function Login() {
         
         {/* BRANDING HEADER */}
         <div className="text-center mb-8 relative">
-            <div className="inline-flex items-center justify-center p-5 bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl shadow-2xl mb-6 border border-slate-700/50 relative group">
-                <div className="absolute inset-0 bg-hemp-500 blur-xl opacity-20 group-hover:opacity-30 transition-opacity duration-500"></div>
-                <HempLogo className="text-hemp-500 relative z-10 group-hover:scale-110 transition-transform duration-300" size={48} />
+            <div className="flex justify-center mb-6 relative group">
+                <div className="absolute inset-0 bg-hemp-500 blur-3xl opacity-10 group-hover:opacity-20 transition-opacity duration-500 rounded-full w-2/3 mx-auto"></div>
+                {/* LOGO EMPRESA: Asegúrate de guardar tu imagen como 'logo.png' en la carpeta public */}
+                <img 
+                  src="/logo.png" 
+                  alt="HempC Logo" 
+                  className="h-28 object-contain relative z-10 drop-shadow-2xl transition-transform duration-300 group-hover:scale-105" 
+                />
             </div>
-            <h1 className="text-4xl font-black text-white tracking-tight mb-2">HempAPP<span className="text-hemp-500">.</span></h1>
+            {/* Si el logo ya contiene el nombre, podemos comentar el H1 para no duplicar */}
+            {/* <h1 className="text-4xl font-black text-white tracking-tight mb-2">HempAPP<span className="text-hemp-500">.</span></h1> */}
             <p className="text-slate-400 text-sm font-medium">Gestión Inteligente de Cultivos & Ensayos</p>
         </div>
 
