@@ -109,8 +109,9 @@ export default function Settings() {
 
   const SQL_SCRIPT = `
 -- =========================================================
--- SCRIPT INICIALIZACIÓN COMPLETA DE BASE DE DATOS (v3.2)
--- Crea tablas faltantes, columnas y desbloquea permisos
+-- SCRIPT DE REPARACIÓN Y MIGRACIÓN (v3.3)
+-- Ejecuta esto en el SQL Editor de Supabase para corregir
+-- errores de columnas faltantes (PGRST204)
 -- =========================================================
 
 -- 1. CONFIGURACIÓN DEL SISTEMA
@@ -121,24 +122,20 @@ CREATE TABLE IF NOT EXISTS public.system_settings (
 );
 ALTER TABLE public.system_settings DISABLE ROW LEVEL SECURITY;
 
--- 2. USUARIOS (Asegurando todas las columnas necesarias)
+-- 2. USUARIOS (Reparación de columnas faltantes)
 CREATE TABLE IF NOT EXISTS public.users (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     email TEXT NOT NULL,
     password TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'technician',
-    "jobTitle" TEXT,
-    phone TEXT,
-    avatar TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
+-- Estos comandos agregan las columnas si no existen
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "jobTitle" TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS avatar TEXT;
 ALTER TABLE public.users DISABLE ROW LEVEL SECURITY;
-
--- Asegurar que el Admin de rescate exista siempre
-INSERT INTO public.users (id, name, email, password, role, "jobTitle", created_at)
-VALUES ('admin-cloud-001', 'Admin Cloud', 'admin@demo.com', 'admin', 'super_admin', 'System Owner', timezone('utc'::text, now()))
-ON CONFLICT (id) DO NOTHING;
 
 -- 3. PROYECTOS
 CREATE TABLE IF NOT EXISTS public.projects (
@@ -147,13 +144,66 @@ CREATE TABLE IF NOT EXISTS public.projects (
     description TEXT,
     "startDate" TEXT,
     status TEXT DEFAULT 'Planificación',
-    "directorId" TEXT,
-    "responsibleIds" JSONB DEFAULT '[]',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
+ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS "directorId" TEXT;
+ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS "responsibleIds" JSONB DEFAULT '[]';
 ALTER TABLE public.projects DISABLE ROW LEVEL SECURITY;
 
--- 4. CLIENTES
+-- 4. LOCACIONES (Reparación)
+CREATE TABLE IF NOT EXISTS public.locations (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    address TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS province TEXT;
+ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS city TEXT;
+ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS coordinates JSONB;
+ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS "soilType" TEXT;
+ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS climate TEXT;
+ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS "responsiblePerson" TEXT;
+-- Nuevas columnas v2.6
+ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS "clientId" TEXT;
+ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS "ownerName" TEXT;
+ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS "ownerLegalName" TEXT;
+ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS "ownerCuit" TEXT;
+ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS "ownerType" TEXT;
+ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS "ownerContact" TEXT;
+ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS "capacityHa" NUMERIC;
+ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS "irrigationSystem" TEXT;
+ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS "responsibleIds" JSONB DEFAULT '[]';
+ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS cuie TEXT;
+ALTER TABLE public.locations DISABLE ROW LEVEL SECURITY;
+
+-- 5. PARCELAS (Reparación)
+CREATE TABLE IF NOT EXISTS public.plots (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS type TEXT DEFAULT 'Ensayo';
+ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS "projectId" TEXT;
+ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS "locationId" TEXT;
+ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS "varietyId" TEXT;
+ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS "seedBatchId" TEXT;
+ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS block TEXT;
+ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS replicate NUMERIC;
+ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS "ownerName" TEXT;
+ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS "responsibleIds" JSONB DEFAULT '[]';
+ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS "sowingDate" TEXT;
+ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS "surfaceArea" NUMERIC;
+ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS "surfaceUnit" TEXT;
+ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS "rowDistance" NUMERIC;
+ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS density NUMERIC;
+ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'Activa';
+ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS observations TEXT;
+ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS "irrigationType" TEXT;
+ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS coordinates JSONB;
+ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS polygon JSONB;
+ALTER TABLE public.plots DISABLE ROW LEVEL SECURITY;
+
+-- 6. CLIENTES (NUEVA TABLA)
 CREATE TABLE IF NOT EXISTS public.clients (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -168,7 +218,7 @@ CREATE TABLE IF NOT EXISTS public.clients (
 );
 ALTER TABLE public.clients DISABLE ROW LEVEL SECURITY;
 
--- 5. PROVEEDORES
+-- 7. PROVEEDORES (NUEVA TABLA)
 CREATE TABLE IF NOT EXISTS public.suppliers (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -186,45 +236,20 @@ CREATE TABLE IF NOT EXISTS public.suppliers (
 );
 ALTER TABLE public.suppliers DISABLE ROW LEVEL SECURITY;
 
--- 6. VARIEDADES
+-- 8. VARIEDADES
 CREATE TABLE IF NOT EXISTS public.varieties (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     usage TEXT NOT NULL,
-    "supplierId" TEXT,
-    "cycleDays" NUMERIC,
-    "expectedThc" NUMERIC,
-    notes TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
+ALTER TABLE public.varieties ADD COLUMN IF NOT EXISTS "supplierId" TEXT;
+ALTER TABLE public.varieties ADD COLUMN IF NOT EXISTS "cycleDays" NUMERIC;
+ALTER TABLE public.varieties ADD COLUMN IF NOT EXISTS "expectedThc" NUMERIC;
+ALTER TABLE public.varieties ADD COLUMN IF NOT EXISTS notes TEXT;
 ALTER TABLE public.varieties DISABLE ROW LEVEL SECURITY;
 
--- 7. LOCACIONES
-CREATE TABLE IF NOT EXISTS public.locations (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    province TEXT,
-    city TEXT,
-    address TEXT,
-    coordinates JSONB,
-    "soilType" TEXT,
-    climate TEXT,
-    "responsiblePerson" TEXT,
-    "clientId" TEXT,
-    "ownerName" TEXT,
-    "ownerLegalName" TEXT,
-    "ownerCuit" TEXT,
-    "ownerType" TEXT,
-    "ownerContact" TEXT,
-    "capacityHa" NUMERIC,
-    "irrigationSystem" TEXT,
-    "responsibleIds" JSONB DEFAULT '[]',
-    cuie TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
-ALTER TABLE public.locations DISABLE ROW LEVEL SECURITY;
-
--- 8. LOTES DE SEMILLA (STOCK)
+-- 9. LOTES DE SEMILLA (STOCK)
 CREATE TABLE IF NOT EXISTS public.seed_batches (
     id TEXT PRIMARY KEY,
     "varietyId" TEXT NOT NULL,
@@ -249,101 +274,7 @@ CREATE TABLE IF NOT EXISTS public.seed_batches (
 );
 ALTER TABLE public.seed_batches DISABLE ROW LEVEL SECURITY;
 
--- 9. PARCELAS (CULTIVOS)
-CREATE TABLE IF NOT EXISTS public.plots (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    type TEXT DEFAULT 'Ensayo',
-    "projectId" TEXT,
-    "locationId" TEXT,
-    "varietyId" TEXT,
-    "seedBatchId" TEXT,
-    block TEXT,
-    replicate NUMERIC,
-    "ownerName" TEXT,
-    "responsibleIds" JSONB DEFAULT '[]',
-    "sowingDate" TEXT,
-    "surfaceArea" NUMERIC,
-    "surfaceUnit" TEXT,
-    "rowDistance" NUMERIC,
-    density NUMERIC,
-    status TEXT DEFAULT 'Activa',
-    observations TEXT,
-    "irrigationType" TEXT,
-    coordinates JSONB,
-    polygon JSONB,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
-ALTER TABLE public.plots DISABLE ROW LEVEL SECURITY;
-
--- 10. REGISTROS TÉCNICOS
-CREATE TABLE IF NOT EXISTS public.trial_records (
-    id TEXT PRIMARY KEY,
-    "plotId" TEXT NOT NULL,
-    date TEXT NOT NULL,
-    time TEXT,
-    "createdBy" TEXT,
-    "createdByName" TEXT,
-    stage TEXT,
-    "emergenceDate" TEXT,
-    "plantsPerMeterInit" NUMERIC,
-    uniformity NUMERIC,
-    vigor NUMERIC,
-    "floweringDate" TEXT,
-    "plantHeight" NUMERIC,
-    "stemDiameter" NUMERIC,
-    "nodesCount" NUMERIC,
-    "floweringState" TEXT,
-    "trichomeColor" TEXT,
-    lodging NUMERIC,
-    "birdDamage" TEXT,
-    diseases TEXT,
-    pests TEXT,
-    "applicationType" TEXT,
-    "applicationProduct" TEXT,
-    "applicationDose" TEXT,
-    "harvestDate" TEXT,
-    "harvestHeight" NUMERIC,
-    "plantsPerMeterFinal" NUMERIC,
-    "sampleSize" NUMERIC,
-    "freshWeight" NUMERIC,
-    "dryWeight" NUMERIC,
-    yield NUMERIC,
-    "stemWeight" NUMERIC,
-    "leafWeight" NUMERIC,
-    "flowerWeight" NUMERIC,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
-ALTER TABLE public.trial_records DISABLE ROW LEVEL SECURITY;
-
--- 11. BITÁCORA Y FOTOS
-CREATE TABLE IF NOT EXISTS public.field_logs (
-    id TEXT PRIMARY KEY,
-    "plotId" TEXT NOT NULL,
-    date TEXT NOT NULL,
-    note TEXT,
-    "photoUrl" TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
-ALTER TABLE public.field_logs DISABLE ROW LEVEL SECURITY;
-
--- 12. TAREAS
-CREATE TABLE IF NOT EXISTS public.tasks (
-    id TEXT PRIMARY KEY,
-    "plotId" TEXT,
-    "projectId" TEXT,
-    title TEXT NOT NULL,
-    description TEXT,
-    "dueDate" TEXT,
-    status TEXT DEFAULT 'Pendiente',
-    priority TEXT DEFAULT 'Media',
-    "assignedToIds" JSONB DEFAULT '[]',
-    "createdBy" TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
-ALTER TABLE public.tasks DISABLE ROW LEVEL SECURITY;
-
--- 13. MOVIMIENTOS SEMILLA (LOGÍSTICA)
+-- 10. MOVIMIENTOS SEMILLA (LOGÍSTICA)
 CREATE TABLE IF NOT EXISTS public.seed_movements (
     id TEXT PRIMARY KEY,
     "batchId" TEXT NOT NULL,
@@ -365,8 +296,75 @@ CREATE TABLE IF NOT EXISTS public.seed_movements (
 );
 ALTER TABLE public.seed_movements DISABLE ROW LEVEL SECURITY;
 
+-- 11. REGISTROS TÉCNICOS
+CREATE TABLE IF NOT EXISTS public.trial_records (
+    id TEXT PRIMARY KEY,
+    "plotId" TEXT NOT NULL,
+    date TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS time TEXT;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "createdBy" TEXT;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "createdByName" TEXT;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS stage TEXT;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "emergenceDate" TEXT;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "plantsPerMeterInit" NUMERIC;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS uniformity NUMERIC;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS vigor NUMERIC;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "floweringDate" TEXT;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "plantHeight" NUMERIC;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "stemDiameter" NUMERIC;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "nodesCount" NUMERIC;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "floweringState" TEXT;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "trichomeColor" TEXT;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS lodging NUMERIC;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "birdDamage" TEXT;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS diseases TEXT;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS pests TEXT;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "applicationType" TEXT;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "applicationProduct" TEXT;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "applicationDose" TEXT;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "harvestDate" TEXT;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "harvestHeight" NUMERIC;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "plantsPerMeterFinal" NUMERIC;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "sampleSize" NUMERIC;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "freshWeight" NUMERIC;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "dryWeight" NUMERIC;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS yield NUMERIC;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "stemWeight" NUMERIC;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "leafWeight" NUMERIC;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "flowerWeight" NUMERIC;
+ALTER TABLE public.trial_records DISABLE ROW LEVEL SECURITY;
+
+-- 12. BITÁCORA Y FOTOS
+CREATE TABLE IF NOT EXISTS public.field_logs (
+    id TEXT PRIMARY KEY,
+    "plotId" TEXT NOT NULL,
+    date TEXT NOT NULL,
+    note TEXT,
+    "photoUrl" TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+ALTER TABLE public.field_logs DISABLE ROW LEVEL SECURITY;
+
+-- 13. TAREAS
+CREATE TABLE IF NOT EXISTS public.tasks (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS "plotId" TEXT;
+ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS "projectId" TEXT;
+ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS "dueDate" TEXT;
+ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'Pendiente';
+ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS priority TEXT DEFAULT 'Media';
+ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS "assignedToIds" JSONB DEFAULT '[]';
+ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS "createdBy" TEXT;
+ALTER TABLE public.tasks DISABLE ROW LEVEL SECURITY;
+
 -- Confirmación final
-SELECT 'BASE DE DATOS INICIALIZADA CORRECTAMENTE' as status;
+SELECT 'MIGRACIÓN EXITOSA: Base de Datos Actualizada' as status;
   `;
 
   return (
