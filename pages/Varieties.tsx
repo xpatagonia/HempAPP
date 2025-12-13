@@ -35,27 +35,26 @@ export default function Varieties() {
     e.preventDefault();
     if (!formData.name || !formData.supplierId) return;
     
-    if (editingId) {
-      updateVariety({
-        ...formData,
-        id: editingId,
+    // Preparar payload, enviando null si no hay supplier (aunque el form lo hace required, es buena práctica)
+    const payload = {
         name: formData.name!,
         usage: formData.usage as UsageType,
-        supplierId: formData.supplierId!,
+        supplierId: formData.supplierId || null, 
         cycleDays: Number(formData.cycleDays),
         expectedThc: Number(formData.expectedThc),
         notes: formData.notes
+    };
+
+    if (editingId) {
+      updateVariety({
+        ...payload,
+        id: editingId,
       } as Variety);
     } else {
       addVariety({
+        ...payload,
         id: Date.now().toString(),
-        name: formData.name!,
-        usage: formData.usage as UsageType,
-        supplierId: formData.supplierId!,
-        cycleDays: Number(formData.cycleDays),
-        expectedThc: Number(formData.expectedThc),
-        notes: formData.notes
-      });
+      } as Variety);
     }
     
     closeModal();

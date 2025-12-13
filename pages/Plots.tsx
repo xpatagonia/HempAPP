@@ -66,7 +66,7 @@ export default function Plots() {
       type: formData.type || 'Ensayo',
       locationId: formData.locationId!,
       varietyId: formData.varietyId!,
-      seedBatchId: formData.seedBatchId || undefined, // Nuevo
+      seedBatchId: formData.seedBatchId || null, // IMPORTANT: Send null, not empty string, for optional FKs
       projectId: formData.projectId!,
       block: formData.block!,
       replicate: Number(formData.replicate),
@@ -122,7 +122,8 @@ export default function Plots() {
         lng: p.coordinates?.lng.toString() || '',
         surfaceArea: p.surfaceArea || 0,
         surfaceUnit: p.surfaceUnit || 'm2',
-        type: p.type || 'Ensayo'
+        type: p.type || 'Ensayo',
+        seedBatchId: p.seedBatchId || ''
       });
       setEditingId(p.id);
       setIsModalOpen(true);

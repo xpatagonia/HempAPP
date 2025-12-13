@@ -108,7 +108,7 @@ export default function Settings() {
 
   const SQL_SCRIPT = `
 -- ==========================================
--- SCRIPT DE MIGRACIÓN Y FORTALECIMIENTO v2.6
+-- SCRIPT DE MIGRACIÓN Y FORTALECIMIENTO v2.7
 -- Ejecutar en Supabase > SQL Editor
 -- ==========================================
 
@@ -193,15 +193,14 @@ BEGIN
     END IF;
 END $$;
 
--- 3. INTEGRIDAD REFERENCIAL (FOREIGN KEYS - OPCIONAL PERO RECOMENDADO)
--- Evita datos huérfanos. Si da error es porque ya tienes datos inconsistentes.
+-- 3. INTEGRIDAD REFERENCIAL (FOREIGN KEYS)
 DO $$
 BEGIN
-    -- Link Parcelas -> Proyectos (Si se borra proyecto, se pone null en parcela)
+    -- Link Parcelas -> Proyectos
     IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'fk_plots_project') THEN
         BEGIN
             ALTER TABLE public.plots ADD CONSTRAINT fk_plots_project FOREIGN KEY ("projectId") REFERENCES public.projects(id) ON DELETE SET NULL;
-        EXCEPTION WHEN OTHERS THEN RAISE NOTICE 'No se pudo crear FK plots_project (posibles datos sucios)'; END;
+        EXCEPTION WHEN OTHERS THEN RAISE NOTICE 'No se pudo crear FK plots_project'; END;
     END IF;
 
     -- Link Parcelas -> Locaciones
@@ -211,7 +210,14 @@ BEGIN
         EXCEPTION WHEN OTHERS THEN RAISE NOTICE 'No se pudo crear FK plots_location'; END;
     END IF;
 
-    -- Link Registros -> Parcelas (Si borras parcela, se borran sus registros)
+    -- Link Variedades -> Proveedores (NUEVO v2.7)
+    IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'fk_varieties_supplier') THEN
+        BEGIN
+            ALTER TABLE public.varieties ADD CONSTRAINT fk_varieties_supplier FOREIGN KEY ("supplierId") REFERENCES public.suppliers(id) ON DELETE SET NULL;
+        EXCEPTION WHEN OTHERS THEN RAISE NOTICE 'No se pudo crear FK varieties_supplier'; END;
+    END IF;
+
+    -- Link Registros -> Parcelas
     IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'fk_records_plot') THEN
         BEGIN
             ALTER TABLE public.trial_records ADD CONSTRAINT fk_records_plot FOREIGN KEY ("plotId") REFERENCES public.plots(id) ON DELETE CASCADE;
