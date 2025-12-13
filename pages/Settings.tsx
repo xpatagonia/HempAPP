@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Save, Database, Copy, RefreshCw, AlertTriangle, ShieldAlert, Lock, Mail, Key, Server, Settings as SettingsIcon, Sliders } from 'lucide-react';
+import { Save, Database, Copy, RefreshCw, AlertTriangle, Lock, Settings as SettingsIcon, Sliders } from 'lucide-react';
 
 export default function Settings() {
   const { currentUser } = useAppContext();
@@ -13,11 +13,6 @@ export default function Settings() {
   const [url, setUrl] = useState('');
   const [key, setKey] = useState('');
   
-  // EmailJS State
-  const [emailServiceId, setEmailServiceId] = useState('');
-  const [emailTemplateId, setEmailTemplateId] = useState('');
-  const [emailPublicKey, setEmailPublicKey] = useState('');
-
   const [status, setStatus] = useState<'idle' | 'checking' | 'success' | 'error'>('idle');
 
   useEffect(() => {
@@ -26,14 +21,6 @@ export default function Settings() {
       const storedKey = localStorage.getItem('hemp_sb_key');
       if (storedUrl) setUrl(storedUrl);
       if (storedKey) setKey(storedKey);
-
-      // Cargar Email config
-      const sId = localStorage.getItem('hemp_email_service');
-      const tId = localStorage.getItem('hemp_email_template');
-      const pKey = localStorage.getItem('hemp_email_key');
-      if (sId) setEmailServiceId(sId);
-      if (tId) setEmailTemplateId(tId);
-      if (pKey) setEmailPublicKey(pKey);
   }, []);
 
   // PERMISSION GUARD: Solo Super Admin puede ver esto
@@ -58,11 +45,6 @@ export default function Settings() {
       localStorage.setItem('hemp_sb_url', url.trim());
       localStorage.setItem('hemp_sb_key', key.trim());
 
-      // Save Email Config
-      localStorage.setItem('hemp_email_service', emailServiceId.trim());
-      localStorage.setItem('hemp_email_template', emailTemplateId.trim());
-      localStorage.setItem('hemp_email_key', emailPublicKey.trim());
-      
       // Force reload to apply changes
       setTimeout(() => {
           window.location.reload();
@@ -172,56 +154,6 @@ ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS "surfaceUnit" TEXT DEFAULT 'm2
                             className="w-full border border-gray-300 rounded p-2 focus:ring-2 focus:ring-hemp-500 outline-none font-mono text-sm"
                             value={key}
                             onChange={e => setKey(e.target.value)}
-                        />
-                    </div>
-                </div>
-            </div>
-
-            {/* 2. EmailJS Connection */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                <h2 className="text-lg font-bold text-gray-800 mb-2 flex items-center">
-                    <Mail size={20} className="mr-2 text-gray-400" />
-                    Configuración de Correo
-                </h2>
-                
-                <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 mb-5 text-sm text-blue-800">
-                    <div className="font-bold mb-1 flex items-center"><Server size={16} className="mr-2"/> Uso de SMTP Corporativo</div>
-                    <p className="mb-2">
-                        Esta aplicación utiliza <strong>EmailJS</strong> como puente de seguridad.
-                    </p>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Service ID</label>
-                        <input 
-                            type="text" 
-                            placeholder="service_xxxxx" 
-                            className="w-full border border-gray-300 rounded p-2 focus:ring-2 focus:ring-hemp-500 outline-none font-mono text-sm"
-                            value={emailServiceId}
-                            onChange={e => setEmailServiceId(e.target.value)}
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Template ID</label>
-                        <input 
-                            type="text" 
-                            placeholder="template_xxxxx" 
-                            className="w-full border border-gray-300 rounded p-2 focus:ring-2 focus:ring-hemp-500 outline-none font-mono text-sm"
-                            value={emailTemplateId}
-                            onChange={e => setEmailTemplateId(e.target.value)}
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
-                            Public Key <Key size={12} className="ml-1 text-gray-400"/>
-                        </label>
-                        <input 
-                            type="password" 
-                            placeholder="user_xxxxx / public key" 
-                            className="w-full border border-gray-300 rounded p-2 focus:ring-2 focus:ring-hemp-500 outline-none font-mono text-sm"
-                            value={emailPublicKey}
-                            onChange={e => setEmailPublicKey(e.target.value)}
                         />
                     </div>
                 </div>
