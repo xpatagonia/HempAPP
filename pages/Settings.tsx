@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Save, Database, Copy, RefreshCw, AlertTriangle, Lock, Settings as SettingsIcon, Sliders, Sparkles, ExternalLink, Trash2 } from 'lucide-react';
+import { Save, Database, Copy, RefreshCw, AlertTriangle, Lock, Settings as SettingsIcon, Sliders, Sparkles, ExternalLink, Trash2, ShieldCheck } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
 export default function Settings() {
@@ -107,7 +107,12 @@ export default function Settings() {
   };
 
   const SQL_SCRIPT = `
--- 1. CONFIGURACIÓN GLOBAL (IA)
+-- ==========================================
+-- SCRIPT DE MIGRACIÓN Y FORTALECIMIENTO v2.6
+-- Ejecutar en Supabase > SQL Editor
+-- ==========================================
+
+-- 1. TABLAS CORE FALTANTES
 CREATE TABLE IF NOT EXISTS public.system_settings (
     id TEXT PRIMARY KEY DEFAULT 'global',
     gemini_api_key TEXT,
@@ -115,7 +120,6 @@ CREATE TABLE IF NOT EXISTS public.system_settings (
 );
 INSERT INTO public.system_settings (id) VALUES ('global') ON CONFLICT DO NOTHING;
 
--- 2. TABLA PROVEEDORES (NUEVO)
 CREATE TABLE IF NOT EXISTS public.suppliers (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -127,10 +131,10 @@ CREATE TABLE IF NOT EXISTS public.suppliers (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
--- 3. ACTUALIZAR TABLAS EXISTENTES CON NUEVOS CAMPOS
+-- 2. ACTUALIZACIÓN DE COLUMNAS (MIGRACIONES)
 DO $$
 BEGIN
-    -- Suppliers: Nuevos campos de contacto (Hotfix v2.5)
+    -- Suppliers: Nuevos campos
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'suppliers' AND column_name = 'city') THEN
         ALTER TABLE public.suppliers ADD COLUMN "city" TEXT;
         ALTER TABLE public.suppliers ADD COLUMN "province" TEXT;
@@ -139,39 +143,31 @@ BEGIN
         ALTER TABLE public.suppliers ADD COLUMN "logisticsContact" TEXT;
     END IF;
 
-    -- Projects: Director (Hotfix v2.6)
+    -- Projects: Director
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'projects' AND column_name = 'directorId') THEN
         ALTER TABLE public.projects ADD COLUMN "directorId" TEXT;
     END IF;
 
-    -- Users: Gamification & Details (Hotfix v2.6)
+    -- Users: Perfil y Avatar
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'avatar') THEN
         ALTER TABLE public.users ADD COLUMN "avatar" TEXT;
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'jobTitle') THEN
         ALTER TABLE public.users ADD COLUMN "jobTitle" TEXT;
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'phone') THEN
         ALTER TABLE public.users ADD COLUMN "phone" TEXT;
     END IF;
 
-    -- Plots: Tipo, Unidad, Vinculo Lote Semilla
+    -- Plots: Campos productivos
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'plots' AND column_name = 'type') THEN
         ALTER TABLE public.plots ADD COLUMN "type" TEXT DEFAULT 'Ensayo';
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'plots' AND column_name = 'surfaceUnit') THEN
         ALTER TABLE public.plots ADD COLUMN "surfaceUnit" TEXT DEFAULT 'm2';
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'plots' AND column_name = 'seedBatchId') THEN
         ALTER TABLE public.plots ADD COLUMN "seedBatchId" TEXT;
     END IF;
 
-    -- Varieties: Vinculo Proveedor
+    -- Varieties: Link Proveedor
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'varieties' AND column_name = 'supplierId') THEN
         ALTER TABLE public.varieties ADD COLUMN "supplierId" TEXT;
     END IF;
     
-    -- Seed Batches: Compliance Data Completo
+    -- Seed Batches & Movements: Logística Completa
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'seed_batches' AND column_name = 'supplierName') THEN
         ALTER TABLE public.seed_batches ADD COLUMN "supplierName" TEXT;
         ALTER TABLE public.seed_batches ADD COLUMN "supplierLegalName" TEXT;
@@ -186,7 +182,6 @@ BEGIN
         ALTER TABLE public.seed_batches ADD COLUMN "logisticsResponsible" TEXT;
     END IF;
 
-    -- Seed Movements: Datos Transporte y Ruta
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'seed_movements' AND column_name = 'transportGuideNumber') THEN
         ALTER TABLE public.seed_movements ADD COLUMN "transportGuideNumber" TEXT;
         ALTER TABLE public.seed_movements ADD COLUMN "transportType" TEXT;
@@ -197,6 +192,38 @@ BEGIN
         ALTER TABLE public.seed_movements ADD COLUMN "dispatchTime" TEXT;
     END IF;
 END $$;
+
+-- 3. INTEGRIDAD REFERENCIAL (FOREIGN KEYS - OPCIONAL PERO RECOMENDADO)
+-- Evita datos huérfanos. Si da error es porque ya tienes datos inconsistentes.
+DO $$
+BEGIN
+    -- Link Parcelas -> Proyectos (Si se borra proyecto, se pone null en parcela)
+    IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'fk_plots_project') THEN
+        BEGIN
+            ALTER TABLE public.plots ADD CONSTRAINT fk_plots_project FOREIGN KEY ("projectId") REFERENCES public.projects(id) ON DELETE SET NULL;
+        EXCEPTION WHEN OTHERS THEN RAISE NOTICE 'No se pudo crear FK plots_project (posibles datos sucios)'; END;
+    END IF;
+
+    -- Link Parcelas -> Locaciones
+    IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'fk_plots_location') THEN
+        BEGIN
+            ALTER TABLE public.plots ADD CONSTRAINT fk_plots_location FOREIGN KEY ("locationId") REFERENCES public.locations(id) ON DELETE SET NULL;
+        EXCEPTION WHEN OTHERS THEN RAISE NOTICE 'No se pudo crear FK plots_location'; END;
+    END IF;
+
+    -- Link Registros -> Parcelas (Si borras parcela, se borran sus registros)
+    IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'fk_records_plot') THEN
+        BEGIN
+            ALTER TABLE public.trial_records ADD CONSTRAINT fk_records_plot FOREIGN KEY ("plotId") REFERENCES public.plots(id) ON DELETE CASCADE;
+        EXCEPTION WHEN OTHERS THEN RAISE NOTICE 'No se pudo crear FK records_plot'; END;
+    END IF;
+END $$;
+
+-- 4. ÍNDICES DE RENDIMIENTO (VELOCIDAD)
+CREATE INDEX IF NOT EXISTS idx_plots_project ON public.plots("projectId");
+CREATE INDEX IF NOT EXISTS idx_plots_variety ON public.plots("varietyId");
+CREATE INDEX IF NOT EXISTS idx_records_plot ON public.trial_records("plotId");
+CREATE INDEX IF NOT EXISTS idx_logs_plot ON public.field_logs("plotId");
   `;
 
   return (
@@ -231,14 +258,15 @@ END $$;
               </div>
               <h3 className="text-xl font-bold text-gray-800">Parametrización del Negocio</h3>
               <p className="text-gray-500 max-w-lg mx-auto">
-                  Aquí podrás configurar valores por defecto para nuevas parcelas, unidades de medida preferidas y listas desplegables personalizadas.
+                  El sistema está configurado para operaciones de Cáñamo Industrial y Cannabis Medicinal.
               </p>
               <div className="bg-gray-50 border border-gray-200 rounded p-4 text-sm text-left max-w-md mx-auto">
-                  <p className="font-bold mb-2">Características Actuales:</p>
+                  <p className="font-bold mb-2">Características Activadas (v2.6):</p>
                   <ul className="list-disc list-inside text-gray-600 space-y-1">
-                      <li>Soporte para <strong>Acres (ac)</strong>, Hectáreas (ha) y Metros (m²).</li>
-                      <li>Distinción entre <strong>Ensayos (I+D)</strong> y <strong>Producción</strong>.</li>
-                      <li>Nomenclatura automática de lotes.</li>
+                      <li>Unidades: <strong>Acres (ac)</strong>, Hectáreas (ha), m².</li>
+                      <li>Módulos: <strong>I+D (Ensayos)</strong> y <strong>Producción Masiva</strong>.</li>
+                      <li>Trazabilidad: <strong>Lotes de Semilla</strong> y Logística.</li>
+                      <li>Inteligencia: <strong>Asistente IA</strong> conectado.</li>
                   </ul>
               </div>
           </div>
@@ -251,7 +279,7 @@ END $$;
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start">
                 <AlertTriangle className="text-amber-600 mr-3 flex-shrink-0 mt-0.5" />
                 <div className="text-sm text-amber-800">
-                    <strong>Importante:</strong> Como Super Admin, las claves que guardes aquí se almacenarán en la base de datos para que el resto del equipo pueda usar las funciones de IA sin configurar nada.
+                    <strong>Importante:</strong> Las configuraciones guardadas aquí afectan la conexión con la base de datos y la inteligencia artificial.
                 </div>
             </div>
 
@@ -297,14 +325,16 @@ END $$;
                         />
                     </div>
                 </div>
-                <p className="text-xs text-gray-400 mt-2">Esta configuración es local por dispositivo (necesaria para conectar).</p>
+                <p className="text-xs text-gray-400 mt-2">
+                    Actualmente conectado a: <strong>{url || 'Desconocido'}</strong>
+                </p>
             </div>
 
             {/* 2. AI Connection */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
                 <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
                     <Sparkles size={20} className="mr-2 text-purple-500" />
-                    Inteligencia Artificial (Google Gemini) - GLOBAL
+                    Inteligencia Artificial (Google Gemini)
                 </h2>
                 <div>
                     <div className="flex justify-between items-center mb-1">
@@ -320,7 +350,7 @@ END $$;
                         value={aiKey}
                         onChange={e => setAiKey(e.target.value)}
                     />
-                    <p className="text-xs text-green-600 mt-1 font-medium">Al guardar, esta llave se compartirá con todos los usuarios de la organización.</p>
+                    <p className="text-xs text-green-600 mt-1 font-medium">Esta llave se guardará globalmente para toda la organización.</p>
                 </div>
             </div>
 
@@ -341,21 +371,24 @@ END $$;
                 )}
             </button>
 
-            {/* 3. SQL Setup (Updated) */}
-            <div className="bg-gray-50 rounded-xl border border-gray-200 p-6">
-                <div className="flex justify-between items-center mb-2">
-                    <h2 className="text-sm font-bold text-gray-600">Script SQL de Actualización</h2>
-                    <button onClick={copySQL} className="text-xs bg-white hover:bg-gray-100 text-gray-700 px-3 py-1.5 rounded border flex items-center transition">
-                        <Copy size={12} className="mr-1" /> Copiar SQL
+            {/* 3. SQL Setup (Fortalecimiento) */}
+            <div className="bg-slate-50 rounded-xl border border-slate-200 p-6 mt-8">
+                <div className="flex justify-between items-center mb-4">
+                    <div>
+                        <h2 className="text-sm font-bold text-slate-800 flex items-center">
+                            <ShieldCheck className="text-hemp-600 mr-2" size={18}/> Mantenimiento de Base de Datos
+                        </h2>
+                        <p className="text-xs text-slate-500 mt-1">
+                            Ejecuta este script en Supabase para crear las tablas nuevas, activar integridad referencial (Foreign Keys) y optimizar velocidad (Índices).
+                        </p>
+                    </div>
+                    <button onClick={copySQL} className="text-xs bg-white hover:bg-slate-100 text-slate-700 px-4 py-2 rounded border border-slate-300 shadow-sm flex items-center transition font-bold">
+                        <Copy size={14} className="mr-2" /> Copiar Script SQL
                     </button>
                 </div>
-                <div className="bg-white border border-gray-200 p-3 rounded text-xs font-mono text-gray-600 overflow-x-auto mb-2 whitespace-pre h-48 custom-scrollbar">
+                <div className="bg-slate-900 border border-slate-800 p-4 rounded-lg text-xs font-mono text-blue-300 overflow-x-auto mb-2 whitespace-pre h-64 custom-scrollbar shadow-inner">
                     {SQL_SCRIPT}
                 </div>
-                <p className="text-xs text-gray-500">
-                    <AlertTriangle size={12} className="inline mr-1 text-amber-500"/>
-                    Ejecuta esto en Supabase para crear las tablas nuevas (Proveedores) y las columnas de logística necesarias.
-                </p>
             </div>
         </div>
       )}
