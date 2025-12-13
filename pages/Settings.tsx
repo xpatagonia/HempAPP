@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Save, Database, Copy, RefreshCw, AlertTriangle, Lock, Settings as SettingsIcon, Sliders, Sparkles, ExternalLink } from 'lucide-react';
+import { supabase } from '../supabaseClient';
 
 export default function Settings() {
-  const { currentUser } = useAppContext();
+  const { currentUser, globalApiKey, refreshGlobalConfig } = useAppContext();
   
   // Tab State
   const [activeTab, setActiveTab] = useState<'general' | 'connections'>('connections');
@@ -18,15 +19,20 @@ export default function Settings() {
   const [status, setStatus] = useState<'idle' | 'checking' | 'success' | 'error'>('idle');
 
   useEffect(() => {
-      // Cargar configuración existente
+      // Cargar configuración existente local y global
       const storedUrl = localStorage.getItem('hemp_sb_url');
       const storedKey = localStorage.getItem('hemp_sb_key');
-      const storedAiKey = localStorage.getItem('hemp_ai_key');
       
       if (storedUrl) setUrl(storedUrl);
       if (storedKey) setKey(storedKey);
-      if (storedAiKey) setAiKey(storedAiKey);
-  }, []);
+      
+      // La API Key de IA preferimos mostrar la global si existe, sino la local
+      if (globalApiKey) {
+          setAiKey(globalApiKey);
+      } else {
+          setAiKey(localStorage.getItem('hemp_ai_key') || '');
+      }
+  }, [globalApiKey]);
 
   // PERMISSION GUARD: Solo Super Admin puede ver esto
   if (currentUser?.role !== 'super_admin') {
@@ -46,15 +52,41 @@ export default function Settings() {
   const handleSave = async () => {
       setStatus('checking');
       
-      // Save Configs
+      // 1. Guardar Config Supabase Localmente (Por dispositivo, ya que es la conexión misma)
       localStorage.setItem('hemp_sb_url', url.trim());
       localStorage.setItem('hemp_sb_key', key.trim());
-      localStorage.setItem('hemp_ai_key', aiKey.trim());
 
-      // Force reload to apply changes
-      setTimeout(() => {
-          window.location.reload();
-      }, 1000);
+      // 2. Guardar Config AI en Base de Datos (GLOBAL para todos los usuarios)
+      try {
+          if (aiKey.trim()) {
+              // Intentar guardar en DB
+              const { error } = await supabase.from('system_settings').upsert({
+                  id: 'global',
+                  gemini_api_key: aiKey.trim()
+              });
+
+              if (error) {
+                  console.error("Error guardando config global:", error);
+                  // Fallback: Guardar local si falla DB (ej: tabla no existe aún)
+                  localStorage.setItem('hemp_ai_key', aiKey.trim());
+                  alert("⚠️ No se pudo guardar globalmente (quizás falta crear la tabla 'system_settings'). Se guardó solo en este dispositivo.");
+              } else {
+                  // Limpiar local para priorizar global
+                  localStorage.removeItem('hemp_ai_key');
+              }
+          }
+      } catch (e) {
+          console.error(e);
+      }
+
+      await refreshGlobalConfig();
+      setStatus('success');
+      setTimeout(() => setStatus('idle'), 2000);
+      
+      // Recargar si cambiaron credenciales de base de datos
+      if (url !== localStorage.getItem('hemp_sb_url') || key !== localStorage.getItem('hemp_sb_key')) {
+         setTimeout(() => window.location.reload(), 1000);
+      }
   };
 
   const copySQL = () => {
@@ -63,6 +95,15 @@ export default function Settings() {
   };
 
   const SQL_SCRIPT = `
+-- TABLA DE CONFIGURACIÓN GLOBAL (Para compartir API Key)
+CREATE TABLE IF NOT EXISTS public.system_settings (
+    id TEXT PRIMARY KEY DEFAULT 'global',
+    gemini_api_key TEXT,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+-- Insertar fila inicial si no existe
+INSERT INTO public.system_settings (id) VALUES ('global') ON CONFLICT DO NOTHING;
+
 -- TABLA DE USUARIOS
 CREATE TABLE IF NOT EXISTS public.users (
     id TEXT PRIMARY KEY,
@@ -74,7 +115,6 @@ CREATE TABLE IF NOT EXISTS public.users (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 -- ... (Resto de las tablas)
--- Nota: Asegúrate de actualizar la tabla 'plots' si no existe el campo 'type' o 'surfaceUnit'
 ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS type TEXT DEFAULT 'Ensayo';
 ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS "surfaceUnit" TEXT DEFAULT 'm2';
   `;
@@ -131,7 +171,7 @@ ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS "surfaceUnit" TEXT DEFAULT 'm2
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start">
                 <AlertTriangle className="text-amber-600 mr-3 flex-shrink-0 mt-0.5" />
                 <div className="text-sm text-amber-800">
-                    <strong>Importante:</strong> Esta configuración técnica guarda tus claves localmente en este navegador para facilitar el desarrollo sin servidores.
+                    <strong>Importante:</strong> Como Super Admin, las claves que guardes aquí se almacenarán en la base de datos para que el resto del equipo pueda usar las funciones de IA sin configurar nada.
                 </div>
             </div>
 
@@ -163,13 +203,14 @@ ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS "surfaceUnit" TEXT DEFAULT 'm2
                         />
                     </div>
                 </div>
+                <p className="text-xs text-gray-400 mt-2">Esta configuración es local por dispositivo (necesaria para conectar).</p>
             </div>
 
             {/* 2. AI Connection */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
                 <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
                     <Sparkles size={20} className="mr-2 text-purple-500" />
-                    Inteligencia Artificial (Google Gemini)
+                    Inteligencia Artificial (Google Gemini) - GLOBAL
                 </h2>
                 <div>
                     <div className="flex justify-between items-center mb-1">
@@ -185,7 +226,7 @@ ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS "surfaceUnit" TEXT DEFAULT 'm2
                         value={aiKey}
                         onChange={e => setAiKey(e.target.value)}
                     />
-                    <p className="text-xs text-gray-400 mt-1">Necesario para habilitar el Asistente IA.</p>
+                    <p className="text-xs text-green-600 mt-1 font-medium">Al guardar, esta llave se compartirá con todos los usuarios de la organización.</p>
                 </div>
             </div>
 
@@ -193,11 +234,14 @@ ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS "surfaceUnit" TEXT DEFAULT 'm2
                 onClick={handleSave}
                 disabled={status === 'checking'}
                 className={`w-full py-4 rounded-xl font-bold text-white flex items-center justify-center transition-all shadow-lg ${
-                    status === 'checking' ? 'bg-gray-400' : 'bg-hemp-600 hover:bg-hemp-700'
+                    status === 'checking' ? 'bg-gray-400' : 
+                    status === 'success' ? 'bg-green-600' : 'bg-hemp-600 hover:bg-hemp-700'
                 }`}
             >
                 {status === 'checking' ? (
-                    <><RefreshCw className="animate-spin mr-2"/> Guardando cambios...</>
+                    <><RefreshCw className="animate-spin mr-2"/> Guardando...</>
+                ) : status === 'success' ? (
+                    <><Save className="mr-2"/> ¡Guardado con Éxito!</>
                 ) : (
                     <><Save className="mr-2"/> Guardar Configuración Técnica</>
                 )}
@@ -212,7 +256,7 @@ ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS "surfaceUnit" TEXT DEFAULT 'm2
                     </button>
                 </div>
                 <p className="text-xs text-gray-400 mb-3">
-                    Útil solo si estás creando el proyecto Supabase desde cero o actualizando tablas.
+                    Ejecuta este script en Supabase para crear las tablas necesarias, incluida la de configuración global.
                 </p>
             </div>
         </div>

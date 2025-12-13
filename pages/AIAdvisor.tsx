@@ -10,7 +10,7 @@ interface Message {
 }
 
 export default function AIAdvisor() {
-    const { plots, varieties, locations, trialRecords } = useAppContext();
+    const { plots, varieties, locations, trialRecords, globalApiKey, refreshGlobalConfig } = useAppContext();
     const [messages, setMessages] = useState<Message[]>([
         {
             id: '1',
@@ -23,25 +23,29 @@ export default function AIAdvisor() {
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     
-    // Estado para gestionar la API Key manualmente con persistencia
+    // Estado para gestionar la API Key manualmente si no hay global
     const [manualKey, setManualKey] = useState('');
     const [showKeyInput, setShowKeyInput] = useState(false);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
-    // Cargar Key guardada al iniciar
+    // Cargar Key si es necesario
     useEffect(() => {
-        const storedKey = localStorage.getItem('hemp_ai_key');
-        if (storedKey) {
-            setManualKey(storedKey);
-        } else {
-            // Si no hay key, mostrar el input discretamente para invitar a configurar
-            const envKey = (import.meta as any).env.VITE_GEMINI_API_KEY;
-            if (!envKey) setShowKeyInput(true);
-        }
+        refreshGlobalConfig();
     }, []);
 
-    // Guardar Key cuando cambia
+    // Si hay key global, ocultamos el input manual
+    useEffect(() => {
+        if (globalApiKey) {
+            setShowKeyInput(false);
+        } else {
+            // Chequear local storage como fallback
+            const localKey = localStorage.getItem('hemp_ai_key');
+            if (localKey) setManualKey(localKey);
+            else setShowKeyInput(true);
+        }
+    }, [globalApiKey]);
+
     const handleKeyChange = (val: string) => {
         setManualKey(val);
         localStorage.setItem('hemp_ai_key', val);
@@ -77,11 +81,11 @@ export default function AIAdvisor() {
     const handleSend = async () => {
         if ((!input.trim() && !selectedImage) || isLoading) return;
 
-        // Prioridad: 1. Manual Key (Storage), 2. Variable Entorno
-        const activeKey = manualKey || (import.meta as any).env.VITE_GEMINI_API_KEY;
+        // Prioridad: 1. Global Key (Supabase), 2. Manual Key (Storage), 3. Variable Entorno
+        const activeKey = globalApiKey || manualKey || (import.meta as any).env.VITE_GEMINI_API_KEY;
 
         if (!activeKey) {
-            setError("Falta la API Key de Google Gemini.");
+            setError("Falta la API Key de Google Gemini. Contacta al Administrador para que la configure.");
             setShowKeyInput(true);
             return;
         }
@@ -172,8 +176,8 @@ export default function AIAdvisor() {
             
             let userFriendlyError = "Error desconocido.";
             if (err.message.includes('API key not valid') || err.message.includes('400')) {
-                userFriendlyError = "La API Key es inválida o expiró. Verifica que la clave ingresada sea correcta.";
-                setShowKeyInput(true);
+                userFriendlyError = "La API Key es inválida o expiró. Verifica la configuración.";
+                if(!globalApiKey) setShowKeyInput(true);
             } else if (err.message.includes('404')) {
                 userFriendlyError = "Modelo no encontrado o no disponible en tu región.";
             } else {
@@ -184,7 +188,7 @@ export default function AIAdvisor() {
             setMessages(prev => [...prev, {
                 id: Date.now().toString(),
                 role: 'model',
-                text: '⚠️ Ocurrió un error de conexión con la IA. Por favor verifica tu API Key.'
+                text: '⚠️ Ocurrió un error de conexión con la IA.'
             }]);
         } finally {
             setIsLoading(false);
@@ -201,21 +205,29 @@ export default function AIAdvisor() {
                         <p className="text-gray-500 text-sm">Potenciado por Google Gemini</p>
                     </div>
                 </div>
-                <button 
-                    onClick={() => setShowKeyInput(!showKeyInput)}
-                    className={`p-2 rounded-lg transition border ${showKeyInput ? 'bg-purple-50 border-purple-200 text-purple-700' : 'bg-white border-gray-200 text-gray-400 hover:text-gray-600'}`}
-                    title="Configurar API Key"
-                >
-                    <Key size={20} />
-                </button>
+                {/* Solo mostramos botón de configuración manual si NO hay key global */}
+                {!globalApiKey && (
+                    <button 
+                        onClick={() => setShowKeyInput(!showKeyInput)}
+                        className={`p-2 rounded-lg transition border ${showKeyInput ? 'bg-purple-50 border-purple-200 text-purple-700' : 'bg-white border-gray-200 text-gray-400 hover:text-gray-600'}`}
+                        title="Configurar API Key Localmente"
+                    >
+                        <Key size={20} />
+                    </button>
+                )}
+                {globalApiKey && (
+                    <div className="flex items-center text-xs text-green-600 bg-green-50 px-2 py-1 rounded border border-green-200">
+                        <Key size={12} className="mr-1"/> Licencia Activa (Global)
+                    </div>
+                )}
             </div>
 
-            {/* Input manual de API Key (Persistente) */}
-            {showKeyInput && (
+            {/* Input manual de API Key (Solo si no hay global y el usuario quiere forzar una local) */}
+            {showKeyInput && !globalApiKey && (
                 <div className="bg-purple-50 p-4 rounded-lg border border-purple-100 mb-4 animate-in fade-in slide-in-from-top-2 shadow-sm">
                     <div className="flex justify-between items-start mb-2">
                         <label className="block text-xs font-bold text-purple-800 uppercase flex items-center">
-                            <Key size={12} className="mr-1"/> API Key de Google (Requerido)
+                            <Key size={12} className="mr-1"/> API Key Personal
                         </label>
                         <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-xs text-purple-600 hover:text-purple-800 flex items-center underline">
                             Obtener clave gratis <ExternalLink size={10} className="ml-1"/>
@@ -229,7 +241,7 @@ export default function AIAdvisor() {
                         className="w-full border border-purple-200 rounded p-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white"
                     />
                     <p className="text-[10px] text-purple-500 mt-2">
-                        La clave se guardará localmente en tu navegador para futuras sesiones.
+                        Esta clave es solo para tu dispositivo. Pide al admin que configure la global.
                     </p>
                 </div>
             )}

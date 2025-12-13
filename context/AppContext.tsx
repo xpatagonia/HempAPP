@@ -19,7 +19,7 @@ interface AppContextType {
   trialRecords: TrialRecord[];
   logs: FieldLog[];
   tasks: Task[];
-  notifications: AppNotification[]; // Nueva propiedad
+  notifications: AppNotification[]; 
   
   currentUser: User | null;
   usersList: User[];
@@ -62,6 +62,10 @@ interface AppContextType {
   loading: boolean;
   isEmergencyMode: boolean;
 
+  // Global Config
+  globalApiKey: string | null;
+  refreshGlobalConfig: () => Promise<void>;
+
   // Theme support
   theme: 'light' | 'dark';
   toggleTheme: () => void;
@@ -101,6 +105,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [loading, setLoading] = useState(true);
   const [isEmergencyMode, setIsEmergencyMode] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
+
+  // AI Key Global
+  const [globalApiKey, setGlobalApiKey] = useState<string | null>(null);
 
   // Theme Initialization
   useEffect(() => {
@@ -191,6 +198,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return notifs.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [tasks, plots, trialRecords, currentUser]);
 
+  const refreshGlobalConfig = async () => {
+    try {
+        // Intentar obtener la config global desde la tabla system_settings
+        const { data, error } = await supabase.from('system_settings').select('gemini_api_key').eq('id', 'global').single();
+        
+        let keyToUse = null;
+
+        if (!error && data?.gemini_api_key) {
+            keyToUse = data.gemini_api_key;
+        } else {
+            // Fallback a localStorage o ENV
+            keyToUse = localStorage.getItem('hemp_ai_key') || (import.meta as any).env.VITE_GEMINI_API_KEY || null;
+        }
+        setGlobalApiKey(keyToUse);
+    } catch (e) {
+        console.warn("No se pudo cargar configuración global. Usando local.");
+        setGlobalApiKey(localStorage.getItem('hemp_ai_key'));
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -212,6 +238,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const initSystem = async () => {
         setLoading(true);
         try {
+            await refreshGlobalConfig();
+
             // Cargar datos locales primero (para respuesta inmediata)
             const localUsers = getFromLocal('users');
             const localProjects = getFromLocal('projects');
@@ -427,6 +455,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       addTask, updateTask, deleteTask,
       getPlotHistory, getLatestRecord,
       loading, isEmergencyMode,
+      globalApiKey, refreshGlobalConfig,
       theme, toggleTheme
     }}>
       {children}
