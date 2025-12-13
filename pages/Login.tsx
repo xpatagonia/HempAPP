@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Mail, ArrowRight, AlertTriangle, Database, Settings, X, Save, RefreshCw, UserCheck, CloudOff, Leaf, Tractor, Globe } from 'lucide-react';
+import { Lock, Mail, ArrowRight, AlertTriangle, Database, Settings, X, Save, RefreshCw, CloudOff, Leaf } from 'lucide-react';
 
 export default function Login() {
   const { login, isEmergencyMode } = useAppContext();
@@ -64,17 +64,6 @@ export default function Login() {
       setTimeout(() => { window.location.reload(); }, 1000);
   };
 
-  const fillDemoCredentials = () => {
-      setEmail('admin@demo.com');
-      setPassword('admin');
-  };
-
-  const loginAsClient = () => {
-      // Intentar loguear con un usuario cliente existente o crear uno temporal
-      // Aquí simulamos para demostración rápida
-      alert("Para probar como cliente, crea un usuario con rol 'client' en el panel de admin y logueate con sus datos. O usa: cliente@red.com / 1234 (si existe).");
-  };
-
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 relative overflow-hidden font-sans selection:bg-hemp-500 selection:text-white">
       
@@ -92,7 +81,7 @@ export default function Login() {
         <div className="text-center mb-8 relative">
             <div className="flex justify-center mb-6 relative group">
                 <div className="absolute inset-0 bg-hemp-500 blur-3xl opacity-20 group-hover:opacity-30 transition-opacity duration-500 rounded-full w-2/3 mx-auto"></div>
-                {/* ICONO ESTILIZADO (Reemplazo de logo.png) */}
+                {/* ICONO ESTILIZADO */}
                 <div className="relative z-10 bg-slate-900/50 p-4 rounded-2xl border border-white/10 shadow-2xl group-hover:scale-110 transition-transform duration-500 backdrop-blur-sm">
                     <Leaf size={48} className="text-hemp-500" />
                 </div>
@@ -116,12 +105,9 @@ export default function Login() {
                         <p className="text-amber-100/80 text-xs mb-3">
                             No hay conexión con la base de datos cloud.
                         </p>
-                        <div className="grid grid-cols-2 gap-2">
-                             <button onClick={fillDemoCredentials} className="text-xs bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/30 py-1.5 px-3 rounded transition flex items-center justify-center">
-                                <UserCheck size={12} className="mr-1"/> Usar Demo Admin
-                            </button>
-                            <button onClick={() => setShowConfig(true)} className="text-xs bg-amber-600 hover:bg-amber-700 text-white py-1.5 px-3 rounded transition flex items-center justify-center font-bold shadow-md">
-                                <Settings size={12} className="mr-1"/> Configurar
+                        <div className="grid grid-cols-1">
+                            <button onClick={() => setShowConfig(true)} className="text-xs bg-amber-600 hover:bg-amber-700 text-white py-2 px-3 rounded transition flex items-center justify-center font-bold shadow-md w-full">
+                                <Settings size={12} className="mr-1"/> Configurar Conexión
                             </button>
                         </div>
                     </div>
@@ -193,16 +179,6 @@ export default function Login() {
                         )}
                     </button>
                 </form>
-
-                {/* DEMO BUTTONS AREA - Always Visible */}
-                <div className="mt-4 pt-4 border-t border-white/5 grid grid-cols-2 gap-3">
-                    <button onClick={fillDemoCredentials} className="text-xs bg-slate-800 text-slate-400 hover:text-white py-2 rounded-lg flex items-center justify-center transition hover:bg-slate-700">
-                        <UserCheck size={14} className="mr-2"/> Admin Demo
-                    </button>
-                    <button onClick={loginAsClient} className="text-xs bg-slate-800 text-green-400 hover:text-green-300 py-2 rounded-lg flex items-center justify-center transition hover:bg-slate-700 font-bold">
-                        <Globe size={14} className="mr-2"/> Portal Red Demo
-                    </button>
-                </div>
             </div>
             
             {/* Footer Section */}
