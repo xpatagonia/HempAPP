@@ -48,13 +48,20 @@ export interface SeedBatch {
   supplierCuit?: string;      // CUIT / Tax ID
   supplierRenspa?: string;    // N° Registro Semillero / RENSPA Origen
   supplierAddress?: string;   // Dirección Fiscal / Origen
+  originCountry?: string;     // País de Origen de la Semilla (Nuevo)
   
   batchCode: string;        // Número de etiqueta oficial / Lote
+  gs1Code?: string;         // Código de Barras GS1 / GTIN (Nuevo)
   certificationNumber?: string; // N° Certificado Fiscalización (INASE/SENASA)
   purchaseDate: string;     // Fecha de adquisición
+  
+  // Almacenamiento Físico
   initialQuantity: number;  // Cantidad comprada (kg)
   remainingQuantity: number; // Stock actual (kg)
   storageConditions?: string; // Temp/Humedad (Compliance)
+  storageAddress?: string;    // Ubicación física exacta (Galpón/Estantería) (Nuevo)
+  logisticsResponsible?: string; // Nombre del responsable de custodia (Nuevo)
+  
   notes?: string;
   isActive: boolean;        // Si el lote está disponible para siembra
 }
@@ -70,9 +77,11 @@ export interface SeedMovement {
   
   // Datos de Transporte (Compliance)
   transportGuideNumber: string; // N° Guía / Remito
+  transportType?: 'Propio' | 'Tercerizado'; // Nuevo
   driverName: string;
   vehiclePlate: string;
   transportCompany?: string;
+  routeItinerary?: string; // Calles / Rutas principales (Nuevo)
   
   status: 'En Tránsito' | 'Recibido' | 'Cancelado';
   receivedBy?: string; // User ID

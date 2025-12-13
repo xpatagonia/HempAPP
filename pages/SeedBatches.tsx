@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { SeedBatch, SeedMovement } from '../types';
-import { Plus, ScanBarcode, Edit2, Trash2, Tag, Calendar, Package, Truck, Printer, MapPin, FileText, ArrowRight, Building, FileDigit, Globe, Clock } from 'lucide-react';
+import { Plus, ScanBarcode, Edit2, Trash2, Tag, Calendar, Package, Truck, Printer, MapPin, FileText, ArrowRight, Building, FileDigit, Globe, Clock, Box, ShieldCheck, Map, Barcode } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -14,6 +14,9 @@ export default function SeedBatches() {
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
   const [editingBatchId, setEditingBatchId] = useState<string | null>(null);
   
+  // -- LABEL MODAL STATE --
+  const [showLabelModal, setShowLabelModal] = useState<SeedBatch | null>(null);
+
   const [batchFormData, setBatchFormData] = useState<Partial<SeedBatch>>({
     varietyId: '',
     supplierName: '',
@@ -21,12 +24,16 @@ export default function SeedBatches() {
     supplierCuit: '',
     supplierRenspa: '',
     supplierAddress: '',
+    originCountry: '', // Nuevo
     batchCode: '',
+    gs1Code: '', // Nuevo
     certificationNumber: '',
     purchaseDate: new Date().toISOString().split('T')[0],
     initialQuantity: 0,
     remainingQuantity: 0,
     storageConditions: '',
+    storageAddress: '', // Nuevo
+    logisticsResponsible: '', // Nuevo
     notes: '',
     isActive: true
   });
@@ -38,11 +45,13 @@ export default function SeedBatches() {
       targetLocationId: '',
       quantity: 0,
       date: new Date().toISOString().split('T')[0],
-      dispatchTime: new Date().toTimeString().substring(0, 5), // Default current time
+      dispatchTime: new Date().toTimeString().substring(0, 5),
       transportGuideNumber: '',
+      transportType: 'Propio', // Nuevo
       driverName: '',
       vehiclePlate: '',
       transportCompany: '',
+      routeItinerary: '', // Nuevo
       status: 'En Tránsito'
   });
 
@@ -61,12 +70,16 @@ export default function SeedBatches() {
         supplierCuit: batchFormData.supplierCuit || '',
         supplierRenspa: batchFormData.supplierRenspa || '',
         supplierAddress: batchFormData.supplierAddress || '',
+        originCountry: batchFormData.originCountry || '',
         batchCode: batchFormData.batchCode!,
+        gs1Code: batchFormData.gs1Code || '',
         certificationNumber: batchFormData.certificationNumber || '',
         purchaseDate: batchFormData.purchaseDate!,
         initialQuantity: Number(batchFormData.initialQuantity),
         remainingQuantity: Number(batchFormData.remainingQuantity),
         storageConditions: batchFormData.storageConditions || '',
+        storageAddress: batchFormData.storageAddress || '',
+        logisticsResponsible: batchFormData.logisticsResponsible || '',
         notes: batchFormData.notes,
         isActive: batchFormData.isActive ?? true
     };
@@ -83,10 +96,10 @@ export default function SeedBatches() {
 
   const resetBatchForm = () => {
     setBatchFormData({
-        varietyId: '', supplierName: '', supplierLegalName: '', supplierCuit: '', supplierRenspa: '', supplierAddress: '',
-        batchCode: '', certificationNumber: '',
+        varietyId: '', supplierName: '', supplierLegalName: '', supplierCuit: '', supplierRenspa: '', supplierAddress: '', originCountry: '',
+        batchCode: '', gs1Code: '', certificationNumber: '',
         purchaseDate: new Date().toISOString().split('T')[0],
-        initialQuantity: 0, remainingQuantity: 0, storageConditions: '', notes: '', isActive: true
+        initialQuantity: 0, remainingQuantity: 0, storageConditions: '', storageAddress: '', logisticsResponsible: '', notes: '', isActive: true
     });
     setEditingBatchId(null);
   };
@@ -123,9 +136,11 @@ export default function SeedBatches() {
           date: moveFormData.date!,
           dispatchTime: moveFormData.dispatchTime || '',
           transportGuideNumber: moveFormData.transportGuideNumber || `G-${Date.now()}`,
+          transportType: moveFormData.transportType || 'Propio',
           driverName: moveFormData.driverName || '',
           vehiclePlate: moveFormData.vehiclePlate || '',
           transportCompany: moveFormData.transportCompany || '',
+          routeItinerary: moveFormData.routeItinerary || '',
           status: 'En Tránsito'
       });
 
@@ -146,7 +161,7 @@ export default function SeedBatches() {
         batchId: '', targetLocationId: '', quantity: 0,
         date: new Date().toISOString().split('T')[0],
         dispatchTime: new Date().toTimeString().substring(0, 5),
-        transportGuideNumber: '', driverName: '', vehiclePlate: '', transportCompany: '', status: 'En Tránsito'
+        transportGuideNumber: '', transportType: 'Propio', driverName: '', vehiclePlate: '', transportCompany: '', routeItinerary: '', status: 'En Tránsito'
       });
   };
 
@@ -172,7 +187,7 @@ export default function SeedBatches() {
       doc.text("1. DATOS DEL EMISOR (ALMACÉN CENTRAL)", 14, 40);
       doc.setFont("helvetica", "normal");
       doc.text(`Titular: HempC App Enterprise`, 14, 48);
-      doc.text(`Dirección: Depósito Central - Ruta Nac. KM 0`, 14, 54);
+      doc.text(`Dirección Depósito: ${batch?.storageAddress || 'Depósito Central - Ruta Nac. KM 0'}`, 14, 54);
       doc.text(`Fecha Emisión: ${m.date}`, 14, 60);
       doc.text(`Hora Salida: ${m.dispatchTime || '-'}`, 14, 66); // Include dispatch time
 
@@ -194,7 +209,7 @@ export default function SeedBatches() {
       const supplierInfo = [
           [`Razón Social: ${batch?.supplierLegalName || batch?.supplierName || '-'}`, `CUIT: ${batch?.supplierCuit || '-'}`],
           [`RENSPA Origen: ${batch?.supplierRenspa || '-'}`, `Certificación: ${batch?.certificationNumber || '-'}`],
-          [`Dirección Origen: ${batch?.supplierAddress || '-'}`]
+          [`País Origen: ${batch?.originCountry || 'No declarado'}`, `Dir. Origen: ${batch?.supplierAddress || '-'}`]
       ];
       
       autoTable(doc, {
@@ -207,12 +222,13 @@ export default function SeedBatches() {
       // Detalle de Carga
       autoTable(doc, {
           startY: doc.lastAutoTable.finalY + 10,
-          head: [['Especie', 'Variedad', 'N° Lote / Etiqueta', 'Cantidad (kg)', 'Tipo Envase']],
+          head: [['Especie', 'Variedad', 'N° Lote / Etiqueta', 'GTIN / GS1', 'Cantidad', 'Envase']],
           body: [
               [
                   'Cannabis Sativa L.', 
                   variety?.name || '-', 
                   batch?.batchCode || '-', 
+                  batch?.gs1Code || '-',
                   `${m.quantity} kg`, 
                   'Bolsa Certificada'
               ]
@@ -227,16 +243,26 @@ export default function SeedBatches() {
       doc.setFont("helvetica", "bold");
       doc.text("4. DATOS DEL TRANSPORTE", 14, finalY);
       doc.setFont("helvetica", "normal");
-      doc.text(`Conductor: ${m.driverName}`, 14, finalY + 8);
-      doc.text(`Patente Vehículo: ${m.vehiclePlate}`, 14, finalY + 14);
-      doc.text(`Empresa: ${m.transportCompany || 'Propio'}`, 110, finalY + 8);
+      doc.text(`Modalidad: ${m.transportType || 'Propio'}`, 14, finalY + 8);
+      doc.text(`Conductor: ${m.driverName}`, 14, finalY + 14);
+      doc.text(`Patente Vehículo: ${m.vehiclePlate}`, 14, finalY + 20);
+      doc.text(`Empresa: ${m.transportCompany || '-'}`, 110, finalY + 14);
+      
+      // Itinerario
+      if (m.routeItinerary) {
+          doc.text(`Itinerario / Ruta:`, 14, finalY + 28);
+          doc.setFontSize(9);
+          const splitText = doc.splitTextToSize(m.routeItinerary, 180);
+          doc.text(splitText, 14, finalY + 34);
+      }
 
       // Firmas
-      doc.line(14, 250, 80, 250);
-      doc.text("Firma Emisor", 30, 255);
+      doc.line(14, 260, 80, 260);
+      doc.setFontSize(10);
+      doc.text("Firma Emisor", 30, 265);
       
-      doc.line(120, 250, 186, 250);
-      doc.text("Firma Receptor / Conductor", 130, 255);
+      doc.line(120, 260, 186, 260);
+      doc.text("Firma Receptor / Conductor", 130, 265);
 
       // Footer disclaimer
       doc.setFontSize(8);
@@ -254,7 +280,7 @@ export default function SeedBatches() {
             <h1 className="text-2xl font-bold text-gray-800 flex items-center">
                 <ScanBarcode className="mr-2 text-hemp-600"/> Gestión de Semillas
             </h1>
-            <p className="text-sm text-gray-500">Trazabilidad, inventario y logística de material de propagación.</p>
+            <p className="text-sm text-gray-500">Stock, Trazabilidad GS1 y Logística de Distribución.</p>
         </div>
         {isAdmin && (
           <div className="flex space-x-2 w-full md:w-auto">
@@ -286,11 +312,11 @@ export default function SeedBatches() {
               <table className="min-w-full divide-y divide-gray-200 text-sm">
                   <thead className="bg-gray-50">
                       <tr>
-                          <th className="px-6 py-3 text-left font-medium text-gray-500 uppercase">Lote / ID</th>
+                          <th className="px-6 py-3 text-left font-medium text-gray-500 uppercase">Lote / Origen</th>
                           <th className="px-6 py-3 text-left font-medium text-gray-500 uppercase">Variedad</th>
-                          <th className="px-6 py-3 text-left font-medium text-gray-500 uppercase">Proveedor / Cert.</th>
                           <th className="px-6 py-3 text-left font-medium text-gray-500 uppercase">Almacenamiento</th>
                           <th className="px-6 py-3 text-center font-medium text-gray-500 uppercase">Stock Disp. (kg)</th>
+                          <th className="px-6 py-3 text-right font-medium text-gray-500 uppercase">Etiquetas</th>
                           <th className="px-6 py-3 text-right font-medium text-gray-500 uppercase">Acciones</th>
                       </tr>
                   </thead>
@@ -311,16 +337,25 @@ export default function SeedBatches() {
                                           <Tag size={16} className="text-gray-400 mr-2" />
                                           <span className="font-mono font-bold text-gray-800">{batch.batchCode}</span>
                                       </div>
-                                      <div className="text-xs text-gray-400 pl-6">{batch.purchaseDate}</div>
+                                      <div className="text-xs text-gray-500 pl-6 mt-1 flex items-center">
+                                          {batch.originCountry ? <Globe size={10} className="mr-1"/> : null}
+                                          {batch.originCountry || 'Origen Nac.'}
+                                      </div>
                                   </td>
-                                  <td className="px-6 py-4 text-hemp-700 font-medium">{variety?.name || 'Desconocida'}</td>
+                                  <td className="px-6 py-4 text-hemp-700 font-medium">
+                                      {variety?.name || 'Desconocida'}
+                                      <div className="text-xs text-gray-400 font-normal">{batch.supplierName}</div>
+                                  </td>
                                   <td className="px-6 py-4">
-                                      <div className="text-gray-900 font-medium">{batch.supplierName}</div>
-                                      <div className="text-xs text-gray-500">{batch.supplierLegalName}</div>
-                                      {batch.supplierCuit && <div className="text-[10px] text-gray-400">CUIT: {batch.supplierCuit}</div>}
-                                  </td>
-                                  <td className="px-6 py-4 text-gray-600">
-                                      {batch.storageConditions || 'Ambiente Controlado'}
+                                      <div className="text-gray-900 font-medium flex items-center">
+                                          <Box size={14} className="mr-1 text-gray-400"/>
+                                          {batch.storageAddress || 'Sin asignar'}
+                                      </div>
+                                      {batch.logisticsResponsible && (
+                                          <div className="text-xs text-gray-500 flex items-center mt-1">
+                                              <ShieldCheck size={10} className="mr-1"/> {batch.logisticsResponsible}
+                                          </div>
+                                      )}
                                   </td>
                                   <td className="px-6 py-4 text-center">
                                       <span className={`px-2 py-1 rounded font-bold ${
@@ -330,6 +365,11 @@ export default function SeedBatches() {
                                       }`}>
                                           {batch.remainingQuantity} / {batch.initialQuantity}
                                       </span>
+                                  </td>
+                                  <td className="px-6 py-4 text-right">
+                                      <button onClick={() => setShowLabelModal(batch)} className="text-blue-600 hover:bg-blue-50 p-2 rounded-lg flex items-center justify-end w-full">
+                                          <Printer size={16} className="mr-1"/> <span className="text-xs font-bold">QR/GS1</span>
+                                      </button>
                                   </td>
                                   <td className="px-6 py-4 text-right">
                                       {isAdmin && (
@@ -359,7 +399,7 @@ export default function SeedBatches() {
                   <div>
                       <h3 className="font-bold text-blue-900 text-sm">Registro de Transporte Oficial</h3>
                       <p className="text-blue-800 text-xs">
-                          Cada envío genera automáticamente una Guía de Transporte (Hoja de Ruta) que debe ser impresa y acompañar la carga para cumplir con las normativas de tránsito de material de propagación.
+                          Cada envío genera automáticamente una Guía de Transporte (Hoja de Ruta) que debe ser impresa y acompañar la carga.
                       </p>
                   </div>
               </div>
@@ -372,14 +412,15 @@ export default function SeedBatches() {
                               <th className="px-6 py-3 text-left font-medium text-gray-500 uppercase">Guía N°</th>
                               <th className="px-6 py-3 text-left font-medium text-gray-500 uppercase">Destino</th>
                               <th className="px-6 py-3 text-left font-medium text-gray-500 uppercase">Lote</th>
+                              <th className="px-6 py-3 text-left font-medium text-gray-500 uppercase">Transporte</th>
                               <th className="px-6 py-3 text-right font-medium text-gray-500 uppercase">Cantidad</th>
-                              <th className="px-6 py-3 text-right font-medium text-gray-500 uppercase">Documentos</th>
+                              <th className="px-6 py-3 text-right font-medium text-gray-500 uppercase">Doc</th>
                           </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
                           {seedMovements.length === 0 ? (
                               <tr>
-                                  <td colSpan={6} className="p-8 text-center text-gray-400">
+                                  <td colSpan={7} className="p-8 text-center text-gray-400">
                                       <Truck size={32} className="mx-auto mb-2 opacity-50"/>
                                       <p>No hay envíos registrados.</p>
                                   </td>
@@ -403,7 +444,13 @@ export default function SeedBatches() {
                                       </td>
                                       <td className="px-6 py-4 text-gray-600 text-xs">
                                           <span className="block font-bold">{batch?.batchCode}</span>
-                                          <span className="block italic">{m.status}</span>
+                                          <span className="block italic text-[10px]">{batch?.originCountry}</span>
+                                      </td>
+                                      <td className="px-6 py-4">
+                                          <span className={`text-[10px] px-2 py-0.5 rounded border ${m.transportType === 'Tercerizado' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-gray-50 text-gray-700 border-gray-200'}`}>
+                                              {m.transportType || 'Propio'}
+                                          </span>
+                                          {m.transportCompany && <div className="text-xs text-gray-500 mt-1">{m.transportCompany}</div>}
                                       </td>
                                       <td className="px-6 py-4 text-right font-bold text-gray-800">
                                           {m.quantity} kg
@@ -413,7 +460,7 @@ export default function SeedBatches() {
                                             onClick={() => generateTransportPDF(m)}
                                             className="text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded text-xs font-bold transition flex items-center ml-auto"
                                           >
-                                              <Printer size={14} className="mr-1"/> Imprimir Guía
+                                              <Printer size={14} className="mr-1"/> PDF
                                           </button>
                                       </td>
                                   </tr>
@@ -425,7 +472,7 @@ export default function SeedBatches() {
           </div>
       )}
 
-      {/* --- MODAL 1: BATCH (UPDATED WITH COMMERCIAL DATA) --- */}
+      {/* --- MODAL 1: BATCH --- */}
       {isBatchModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-2xl w-full p-6 shadow-xl max-h-[90vh] overflow-y-auto">
@@ -450,12 +497,12 @@ export default function SeedBatches() {
                             <input required type="text" className={inputClass} value={batchFormData.batchCode} onChange={e => setBatchFormData({...batchFormData, batchCode: e.target.value})} />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Cantidad Inicial (kg)</label>
-                            <input required type="number" step="0.1" className={inputClass} value={batchFormData.initialQuantity} onChange={e => setBatchFormData({...batchFormData, initialQuantity: Number(e.target.value), remainingQuantity: Number(e.target.value)})} />
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Código GS1 / GTIN (Opcional)</label>
+                            <input type="text" placeholder="EAN-128" className={inputClass} value={batchFormData.gs1Code} onChange={e => setBatchFormData({...batchFormData, gs1Code: e.target.value})} />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Fecha Compra</label>
-                            <input type="date" className={inputClass} value={batchFormData.purchaseDate} onChange={e => setBatchFormData({...batchFormData, purchaseDate: e.target.value})} />
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Cantidad Inicial (kg)</label>
+                            <input required type="number" step="0.1" className={inputClass} value={batchFormData.initialQuantity} onChange={e => setBatchFormData({...batchFormData, initialQuantity: Number(e.target.value), remainingQuantity: Number(e.target.value)})} />
                         </div>
                     </div>
                 </div>
@@ -463,7 +510,7 @@ export default function SeedBatches() {
                 {/* SECTION 2: SUPPLIER COMMERCIAL DATA (NEW) */}
                 <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
                     <h3 className="text-xs font-bold text-blue-700 uppercase mb-3 flex items-center">
-                        <Building size={12} className="mr-1"/> Datos Comerciales del Proveedor
+                        <Building size={12} className="mr-1"/> Datos Comerciales y Origen
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
@@ -475,8 +522,8 @@ export default function SeedBatches() {
                             <input type="text" placeholder="Ej: Hemp-it France SAS" className={inputClass} value={batchFormData.supplierLegalName} onChange={e => setBatchFormData({...batchFormData, supplierLegalName: e.target.value})} />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">CUIT / Tax ID</label>
-                            <input type="text" className={inputClass} value={batchFormData.supplierCuit} onChange={e => setBatchFormData({...batchFormData, supplierCuit: e.target.value})} />
+                            <label className="block text-sm font-medium text-gray-700 mb-1">País de Origen</label>
+                            <input type="text" className={inputClass} value={batchFormData.originCountry} onChange={e => setBatchFormData({...batchFormData, originCountry: e.target.value})} placeholder="Ej: Francia, EEUU, Uruguay"/>
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">N° Registro (RENSPA)</label>
@@ -486,17 +533,34 @@ export default function SeedBatches() {
                             <label className="block text-sm font-medium text-gray-700 mb-1">Dirección de Origen</label>
                             <input type="text" placeholder="Calle, Ciudad, Provincia/País" className={inputClass} value={batchFormData.supplierAddress} onChange={e => setBatchFormData({...batchFormData, supplierAddress: e.target.value})} />
                         </div>
+                        <div className="md:col-span-2 grid grid-cols-2 gap-4">
+                             <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">CUIT / Tax ID</label>
+                                <input type="text" className={inputClass} value={batchFormData.supplierCuit} onChange={e => setBatchFormData({...batchFormData, supplierCuit: e.target.value})} />
+                            </div>
+                             <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Certificado Fiscalización</label>
+                                <input type="text" placeholder="INASE/SENASA" className={inputClass} value={batchFormData.certificationNumber} onChange={e => setBatchFormData({...batchFormData, certificationNumber: e.target.value})} />
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                {/* SECTION 3: COMPLIANCE & STORAGE */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* SECTION 3: STORAGE */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-orange-50 p-4 rounded border border-orange-100">
+                    <h3 className="col-span-2 text-xs font-bold text-orange-800 uppercase mb-1 flex items-center">
+                        <Box size={12} className="mr-1"/> Almacenamiento Local
+                    </h3>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">N° Certificado Fiscalización</label>
-                        <input type="text" placeholder="INASE/SENASA (Opcional)" className={inputClass} value={batchFormData.certificationNumber} onChange={e => setBatchFormData({...batchFormData, certificationNumber: e.target.value})} />
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Ubicación Física</label>
+                        <input type="text" placeholder="Ej: Galpón 2, Estantería B" className={inputClass} value={batchFormData.storageAddress} onChange={e => setBatchFormData({...batchFormData, storageAddress: e.target.value})} />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Condiciones Almacenamiento</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Responsable Logística</label>
+                        <input type="text" placeholder="Nombre Apellido" className={inputClass} value={batchFormData.logisticsResponsible} onChange={e => setBatchFormData({...batchFormData, logisticsResponsible: e.target.value})} />
+                    </div>
+                    <div className="col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Condiciones (Temp/Humedad)</label>
                         <input type="text" placeholder="Ej: Cámara Fría 4°C, Humedad 40%" className={inputClass} value={batchFormData.storageConditions} onChange={e => setBatchFormData({...batchFormData, storageConditions: e.target.value})} />
                     </div>
                 </div>
@@ -564,21 +628,44 @@ export default function SeedBatches() {
                 </div>
 
                 <hr className="border-gray-200 my-2" />
-                <h3 className="text-sm font-bold text-gray-600 uppercase">Datos del Transportista</h3>
+                <h3 className="text-sm font-bold text-gray-600 uppercase">Logística y Transporte</h3>
 
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Conductor (Nombre Completo)</label>
-                    <input required type="text" className={inputClass} value={moveFormData.driverName} onChange={e => setMoveFormData({...moveFormData, driverName: e.target.value})} />
-                </div>
                 <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Tipo Transporte</label>
+                        <select className={inputClass} value={moveFormData.transportType} onChange={e => setMoveFormData({...moveFormData, transportType: e.target.value as any})}>
+                            <option value="Propio">Propio</option>
+                            <option value="Tercerizado">Tercerizado</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Empresa (Si aplica)</label>
+                        <input type="text" className={inputClass} value={moveFormData.transportCompany} onChange={e => setMoveFormData({...moveFormData, transportCompany: e.target.value})} disabled={moveFormData.transportType === 'Propio'} placeholder="Ej: Logística S.A." />
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Conductor</label>
+                        <input required type="text" className={inputClass} value={moveFormData.driverName} onChange={e => setMoveFormData({...moveFormData, driverName: e.target.value})} />
+                    </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Patente / Dominio</label>
                         <input required type="text" className={inputClass} value={moveFormData.vehiclePlate} onChange={e => setMoveFormData({...moveFormData, vehiclePlate: e.target.value})} />
                     </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Empresa (Opcional)</label>
-                        <input type="text" className={inputClass} value={moveFormData.transportCompany} onChange={e => setMoveFormData({...moveFormData, transportCompany: e.target.value})} />
-                    </div>
+                </div>
+
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
+                        <Map size={14} className="mr-1"/> Itinerario (Calles / Ruta)
+                    </label>
+                    <textarea 
+                        className={inputClass} 
+                        rows={2} 
+                        placeholder="Ej: Salida por RN7, empalme RP31, camino rural hasta tranquera."
+                        value={moveFormData.routeItinerary}
+                        onChange={e => setMoveFormData({...moveFormData, routeItinerary: e.target.value})}
+                    />
                 </div>
 
                 <div className="flex justify-end space-x-2 pt-4">
@@ -590,6 +677,45 @@ export default function SeedBatches() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* --- LABEL MODAL (QR / GS1) --- */}
+      {showLabelModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-xl max-w-sm w-full p-6 shadow-xl text-center">
+                  <h3 className="text-lg font-bold text-gray-800 mb-1">Etiqueta de Trazabilidad</h3>
+                  <p className="text-sm text-gray-500 mb-4">{showLabelModal.batchCode}</p>
+                  
+                  <div className="border-2 border-black p-4 inline-block bg-white mb-4">
+                        {/* QR Code */}
+                        <img 
+                            src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(`BATCH:${showLabelModal.batchCode}|GS1:${showLabelModal.gs1Code || ''}`)}`} 
+                            alt="QR" 
+                            className="w-32 h-32 mx-auto mb-2"
+                        />
+                        {/* Fake Barcode Visual */}
+                        <div className="font-mono text-xs tracking-widest mt-2 flex flex-col items-center">
+                            <Barcode size={32} className="w-full h-10"/>
+                            <span>{showLabelModal.gs1Code || 'SIN GTIN'}</span>
+                        </div>
+                  </div>
+
+                  <div className="text-left text-sm bg-gray-50 p-3 rounded mb-4">
+                      <div><strong>Variedad:</strong> {varieties.find(v => v.id === showLabelModal.varietyId)?.name}</div>
+                      <div><strong>Origen:</strong> {showLabelModal.originCountry || 'N/A'}</div>
+                      <div><strong>Ubicación:</strong> {showLabelModal.storageAddress || 'Depósito'}</div>
+                  </div>
+
+                  <div className="flex justify-center space-x-2">
+                      <button onClick={() => window.print()} className="bg-gray-800 text-white px-4 py-2 rounded flex items-center hover:bg-gray-900">
+                          <Printer size={16} className="mr-2"/> Imprimir
+                      </button>
+                      <button onClick={() => setShowLabelModal(null)} className="text-gray-500 hover:bg-gray-100 px-4 py-2 rounded">
+                          Cerrar
+                      </button>
+                  </div>
+              </div>
+          </div>
       )}
     </div>
   );
