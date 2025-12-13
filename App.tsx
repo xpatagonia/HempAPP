@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider, useAppContext } from './context/AppContext';
@@ -17,7 +18,8 @@ import Settings from './pages/Settings';
 import CalendarPage from './pages/Calendar';
 import AIAdvisor from './pages/AIAdvisor';
 import SeedBatches from './pages/SeedBatches';
-import Suppliers from './pages/Suppliers'; // New Import
+import Suppliers from './pages/Suppliers'; 
+import Clients from './pages/Clients'; // Nuevo
 
 // Componente para proteger rutas
 const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
@@ -77,9 +79,14 @@ export default function App() {
                 <Varieties />
               </ProtectedRoute>
             } />
-            <Route path="/suppliers" element={ // New Route
+            <Route path="/suppliers" element={
               <ProtectedRoute>
                 <Suppliers />
+              </ProtectedRoute>
+            } />
+            <Route path="/clients" element={ // Nueva Ruta
+              <ProtectedRoute>
+                <Clients />
               </ProtectedRoute>
             } />
             <Route path="/seed-batches" element={

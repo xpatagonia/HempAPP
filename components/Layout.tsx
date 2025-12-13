@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
@@ -25,7 +26,8 @@ import {
   Bell,
   ScanBarcode,
   Building,
-  AlertTriangle
+  AlertTriangle,
+  Briefcase
 } from 'lucide-react';
 
 const NavItem = ({ to, icon: Icon, label, onClick }: any) => {
@@ -216,6 +218,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                {!isClient && (
                    <>
                        <NavItem to="/suppliers" icon={Building} label="Proveedores" onClick={() => setIsMobileOpen(false)} />
+                       <NavItem to="/clients" icon={Briefcase} label="Clientes" onClick={() => setIsMobileOpen(false)} /> {/* NEW LINK */}
                        <NavItem to="/varieties" icon={Sprout} label="Variedades" onClick={() => setIsMobileOpen(false)} />
                        <NavItem to="/seed-batches" icon={ScanBarcode} label="Stock Semillas" onClick={() => setIsMobileOpen(false)} />
                    </>

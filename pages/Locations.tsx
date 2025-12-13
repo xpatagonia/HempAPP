@@ -1,7 +1,8 @@
+
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Location, SoilType, RoleType } from '../types';
-import { Plus, MapPin, User, Globe, Edit2, Trash2, Keyboard, List, Briefcase, Building, Landmark, GraduationCap, Users } from 'lucide-react';
+import { Plus, MapPin, User, Globe, Edit2, Trash2, Keyboard, List, Briefcase, Building, Landmark, GraduationCap, Users, Droplets, Ruler } from 'lucide-react';
 
 // Expanded Argentina Database with Rural Hubs
 const ARG_GEO: Record<string, string[]> = {
@@ -84,7 +85,7 @@ const ARG_GEO: Record<string, string[]> = {
 };
 
 export default function Locations() {
-  const { locations, addLocation, updateLocation, deleteLocation, currentUser, usersList } = useAppContext();
+  const { locations, addLocation, updateLocation, deleteLocation, currentUser, usersList, clients } = useAppContext();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -94,7 +95,9 @@ export default function Locations() {
   const [formData, setFormData] = useState<Partial<Location> & { lat: string, lng: string }>({
     name: '', province: '', city: '', address: '', soilType: 'Franco', climate: '', 
     responsiblePerson: '', lat: '', lng: '',
-    ownerName: '', ownerLegalName: '', ownerCuit: '', ownerContact: '', ownerType: 'Empresa Privada', responsibleIds: []
+    clientId: '', ownerName: '', ownerLegalName: '', ownerCuit: '', ownerContact: '', ownerType: 'Empresa Privada', 
+    capacityHa: 0, irrigationSystem: '',
+    responsibleIds: []
   });
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
@@ -107,6 +110,22 @@ export default function Locations() {
       ? { lat: parseFloat(formData.lat), lng: parseFloat(formData.lng) }
       : undefined;
 
+    // Resolve client info if clientId is selected
+    let ownerName = formData.ownerName;
+    let ownerType = formData.ownerType;
+    let ownerContact = formData.ownerContact;
+    let ownerCuit = formData.ownerCuit;
+
+    if (formData.clientId) {
+        const client = clients.find(c => c.id === formData.clientId);
+        if (client) {
+            ownerName = client.name;
+            ownerType = client.type;
+            ownerContact = `${client.contactName} (${client.email || client.contactPhone})`;
+            ownerCuit = client.cuit;
+        }
+    }
+
     const payload: any = {
       name: formData.name!,
       province: formData.province || '',
@@ -116,13 +135,19 @@ export default function Locations() {
       climate: formData.climate || '',
       responsiblePerson: formData.responsiblePerson || '', // Legacy support
       coordinates,
-      // Client Data
-      ownerName: formData.ownerName || '',
-      ownerLegalName: formData.ownerLegalName || '',
-      ownerCuit: formData.ownerCuit || '',
-      ownerContact: formData.ownerContact || '',
-      ownerType: formData.ownerType as RoleType,
       
+      // Client Data
+      clientId: formData.clientId || null,
+      ownerName: ownerName || '',
+      ownerLegalName: formData.ownerLegalName || '',
+      ownerCuit: ownerCuit || '',
+      ownerContact: ownerContact || '',
+      ownerType: ownerType as RoleType,
+      
+      // Capacity & Irrigation
+      capacityHa: Number(formData.capacityHa),
+      irrigationSystem: formData.irrigationSystem || '',
+
       responsibleIds: formData.responsibleIds || []
     };
 
@@ -140,7 +165,9 @@ export default function Locations() {
     setFormData({ 
         name: '', province: '', city: '', address: '', soilType: 'Franco', climate: '', 
         responsiblePerson: '', lat: '', lng: '',
-        ownerName: '', ownerLegalName: '', ownerCuit: '', ownerContact: '', ownerType: 'Empresa Privada', responsibleIds: []
+        clientId: '', ownerName: '', ownerLegalName: '', ownerCuit: '', ownerContact: '', ownerType: 'Empresa Privada', 
+        capacityHa: 0, irrigationSystem: '',
+        responsibleIds: []
     });
     setEditingId(null);
     setIsManualCity(false);
@@ -161,7 +188,10 @@ export default function Locations() {
           ownerType: loc.ownerType || 'Empresa Privada',
           ownerLegalName: loc.ownerLegalName || '',
           ownerCuit: loc.ownerCuit || '',
-          ownerContact: loc.ownerContact || ''
+          ownerContact: loc.ownerContact || '',
+          clientId: loc.clientId || '',
+          capacityHa: loc.capacityHa || 0,
+          irrigationSystem: loc.irrigationSystem || ''
       });
       setEditingId(loc.id);
       setIsManualCity(!isStandardCity && !!loc.city); // If city exists but not in list, enable manual mode
@@ -263,9 +293,9 @@ export default function Locations() {
 
                   <div className="grid grid-cols-2 gap-4">
                       <div className="bg-gray-50 p-3 rounded-lg">
-                          <span className="block text-gray-500 text-xs uppercase font-semibold">Suelo & Clima</span>
+                          <span className="block text-gray-500 text-xs uppercase font-semibold">Infraestructura</span>
                           <div className="text-gray-800 text-sm mt-1">
-                              {loc.soilType} • {loc.climate || 'No especificado'}
+                              {loc.capacityHa ? <span className="font-bold">{loc.capacityHa} Ha</span> : '-'} • {loc.irrigationSystem || 'Sin datos riego'}
                           </div>
                       </div>
                       
@@ -389,6 +419,41 @@ export default function Locations() {
                   <h3 className="text-xs font-bold text-indigo-700 uppercase mb-3 flex items-center">
                       <Briefcase size={12} className="mr-1"/> Cliente / Titular del Proyecto
                   </h3>
+                  
+                  {/* CLIENT SELECTOR */}
+                  <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Seleccionar Cliente Existente</label>
+                      <select 
+                        className={inputClass} 
+                        value={formData.clientId || ''} 
+                        onChange={e => {
+                            const selectedId = e.target.value;
+                            if (selectedId) {
+                                // Auto-fill fields from selected client
+                                const c = clients.find(cl => cl.id === selectedId);
+                                if (c) {
+                                    setFormData({
+                                        ...formData,
+                                        clientId: c.id,
+                                        ownerName: c.name,
+                                        ownerType: c.type,
+                                        ownerCuit: c.cuit,
+                                        ownerContact: c.contactName + (c.contactPhone ? ` (${c.contactPhone})` : '')
+                                    });
+                                }
+                            } else {
+                                // Reset link but keep text for manual edit if needed
+                                setFormData({...formData, clientId: ''});
+                            }
+                        }}
+                      >
+                          <option value="">-- Manual / Sin Asignar --</option>
+                          {clients.map(c => (
+                              <option key={c.id} value={c.id}>{c.name} ({c.type})</option>
+                          ))}
+                      </select>
+                  </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Entidad</label>
@@ -404,14 +469,6 @@ export default function Locations() {
                           <label className="block text-sm font-medium text-gray-700 mb-1">Nombre Comercial (Fantasía)</label>
                           <input type="text" placeholder="Ej: Agrogenetics S.A." required className={inputClass} value={formData.ownerName} onChange={e => setFormData({...formData, ownerName: e.target.value})} />
                       </div>
-                      <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Razón Social</label>
-                          <input type="text" placeholder="Nombre Legal" className={inputClass} value={formData.ownerLegalName} onChange={e => setFormData({...formData, ownerLegalName: e.target.value})} />
-                      </div>
-                      <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">CUIT / Tax ID</label>
-                          <input type="text" className={inputClass} value={formData.ownerCuit} onChange={e => setFormData({...formData, ownerCuit: e.target.value})} />
-                      </div>
                       <div className="md:col-span-2">
                           <label className="block text-sm font-medium text-gray-700 mb-1">Contacto Directo</label>
                           <input type="text" placeholder="Email o Teléfono del responsable del cliente" className={inputClass} value={formData.ownerContact} onChange={e => setFormData({...formData, ownerContact: e.target.value})} />
@@ -419,21 +476,36 @@ export default function Locations() {
                   </div>
               </div>
 
-              {/* SECTION 3: DATOS AGRONOMICOS */}
-              <div className="grid grid-cols-2 gap-4">
-                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Suelo</label>
-                  <select className={inputClass} value={formData.soilType} onChange={e => setFormData({...formData, soilType: e.target.value as SoilType})}>
-                    <option value="Franco">Franco</option>
-                    <option value="Arcilloso">Arcilloso</option>
-                    <option value="Arenoso">Arenoso</option>
-                    <option value="Limoso">Limoso</option>
-                  </select>
-                </div>
-                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Régimen Climático</label>
-                  <input type="text" className={inputClass} placeholder="Ej: Templado húmedo" value={formData.climate} onChange={e => setFormData({...formData, climate: e.target.value})} />
-                </div>
+              {/* SECTION 3: DATOS AGRONOMICOS & INFRAESTRUCTURA (IMPROVED) */}
+              <div className="bg-green-50 p-4 rounded-lg border border-green-100">
+                  <h3 className="text-xs font-bold text-green-700 uppercase mb-3 flex items-center">
+                      <Ruler size={12} className="mr-1"/> Agronomía e Infraestructura
+                  </h3>
+                  <div className="grid grid-cols-2 gap-4 mb-3">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Capacidad Productiva (Ha)</label>
+                        <input type="number" step="0.1" className={inputClass} value={formData.capacityHa} onChange={e => setFormData({...formData, capacityHa: Number(e.target.value)})} />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Sistemas de Riego</label>
+                        <input type="text" placeholder="Ej: Goteo, Pivot, Inundación" className={inputClass} value={formData.irrigationSystem} onChange={e => setFormData({...formData, irrigationSystem: e.target.value})} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Suelo</label>
+                        <select className={inputClass} value={formData.soilType} onChange={e => setFormData({...formData, soilType: e.target.value as SoilType})}>
+                            <option value="Franco">Franco</option>
+                            <option value="Arcilloso">Arcilloso</option>
+                            <option value="Arenoso">Arenoso</option>
+                            <option value="Limoso">Limoso</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Régimen Climático</label>
+                        <input type="text" className={inputClass} placeholder="Ej: Templado húmedo" value={formData.climate} onChange={e => setFormData({...formData, climate: e.target.value})} />
+                    </div>
+                  </div>
               </div>
 
               {/* SECTION 4: EQUIPO */}

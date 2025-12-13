@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Mail, ArrowRight, AlertTriangle, Database, Settings, X, Save, RefreshCw, UserCheck, CloudOff, Leaf, Tractor } from 'lucide-react';
+import { Lock, Mail, ArrowRight, AlertTriangle, Database, Settings, X, Save, RefreshCw, UserCheck, CloudOff, Leaf, Tractor, Globe } from 'lucide-react';
 
 export default function Login() {
   const { login, isEmergencyMode } = useAppContext();
@@ -68,12 +69,10 @@ export default function Login() {
       setPassword('admin');
   };
 
-  const loginAsClient = async () => {
-      // Create a temporary client session logic here or assume a standard client login
-      // For now, we simulate a login by creating a dummy client user in Context if needed,
-      // but strictly we should use existing users. 
-      // If we are in emergency mode, we can just login.
-      alert("Para ver la vista de cliente, asegúrate de crear un usuario con rol 'client' en el panel de admin primero, o usa las credenciales de un cliente real.");
+  const loginAsClient = () => {
+      // Intentar loguear con un usuario cliente existente o crear uno temporal
+      // Aquí simulamos para demostración rápida
+      alert("Para probar como cliente, crea un usuario con rol 'client' en el panel de admin y logueate con sus datos. O usa: cliente@red.com / 1234 (si existe).");
   };
 
   return (
@@ -194,6 +193,16 @@ export default function Login() {
                         )}
                     </button>
                 </form>
+
+                {/* DEMO BUTTONS AREA - Always Visible */}
+                <div className="mt-4 pt-4 border-t border-white/5 grid grid-cols-2 gap-3">
+                    <button onClick={fillDemoCredentials} className="text-xs bg-slate-800 text-slate-400 hover:text-white py-2 rounded-lg flex items-center justify-center transition hover:bg-slate-700">
+                        <UserCheck size={14} className="mr-2"/> Admin Demo
+                    </button>
+                    <button onClick={loginAsClient} className="text-xs bg-slate-800 text-green-400 hover:text-green-300 py-2 rounded-lg flex items-center justify-center transition hover:bg-slate-700 font-bold">
+                        <Globe size={14} className="mr-2"/> Portal Red Demo
+                    </button>
+                </div>
             </div>
             
             {/* Footer Section */}

@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
-import { Variety, Location, Plot, FieldLog, TrialRecord, User, Project, Task, SeedBatch, SeedMovement, Supplier } from '../types';
+import { Variety, Location, Plot, FieldLog, TrialRecord, User, Project, Task, SeedBatch, SeedMovement, Supplier, Client } from '../types';
 import { supabase } from '../supabaseClient';
 
 export interface AppNotification {
@@ -23,6 +23,7 @@ interface AppContextType {
   seedBatches: SeedBatch[];
   seedMovements: SeedMovement[];
   suppliers: Supplier[];
+  clients: Client[]; // Nuevo
   notifications: AppNotification[]; 
   
   currentUser: User | null;
@@ -41,6 +42,10 @@ interface AppContextType {
   addSupplier: (s: Supplier) => Promise<string>;
   updateSupplier: (s: Supplier) => void;
   deleteSupplier: (id: string) => void;
+
+  addClient: (c: Client) => Promise<void>; // Nuevo
+  updateClient: (c: Client) => void; // Nuevo
+  deleteClient: (id: string) => void; // Nuevo
 
   addLocation: (l: Location) => void;
   updateLocation: (l: Location) => void;
@@ -77,7 +82,7 @@ interface AppContextType {
   
   loading: boolean;
   isEmergencyMode: boolean;
-  dbNeedsMigration: boolean; // Nuevo: Alerta de falta de tablas
+  dbNeedsMigration: boolean; 
 
   globalApiKey: string | null;
   refreshGlobalConfig: () => Promise<void>;
@@ -109,6 +114,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [projects, setProjects] = useState<Project[]>([]);
   const [varieties, setVarieties] = useState<Variety[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [clients, setClients] = useState<Client[]>([]); // Nuevo
   const [locations, setLocations] = useState<Location[]>([]);
   const [plots, setPlots] = useState<Plot[]>([]);
   const [trialRecords, setTrialRecords] = useState<TrialRecord[]>([]);
@@ -235,6 +241,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             setProjects(getFromLocal('projects'));
             setVarieties(getFromLocal('varieties'));
             setSuppliers(getFromLocal('suppliers'));
+            setClients(getFromLocal('clients'));
             setLocations(getFromLocal('locations'));
             setPlots(getFromLocal('plots'));
             setSeedBatches(getFromLocal('seedBatches')); 
@@ -261,6 +268,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             const localProjects = getFromLocal('projects');
             const localVarieties = getFromLocal('varieties');
             const localSuppliers = getFromLocal('suppliers');
+            const localClients = getFromLocal('clients');
             const localLocations = getFromLocal('locations');
             const localPlots = getFromLocal('plots');
             const localSeedBatches = getFromLocal('seedBatches');
@@ -300,6 +308,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             await Promise.allSettled([
                 fetchOrLocal('projects', setProjects, localProjects),
                 fetchOrLocal('suppliers', setSuppliers, localSuppliers),
+                fetchOrLocal('clients', setClients, localClients), // Nueva entidad
                 fetchOrLocal('varieties', setVarieties, localVarieties),
                 fetchOrLocal('locations', setLocations, localLocations),
                 fetchOrLocal('plots', setPlots, localPlots),
@@ -379,6 +388,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const updateSupplier = async (s: Supplier) => { await supabase.from('suppliers').update(s).eq('id', s.id); setSuppliers(prev => { const n = prev.map(item => item.id === s.id ? s : item); saveToLocal('suppliers', n); return n; }); };
   const deleteSupplier = async (id: string) => { await supabase.from('suppliers').delete().eq('id', id); setSuppliers(prev => { const n = prev.filter(item => item.id !== id); saveToLocal('suppliers', n); return n; }); };
 
+  const addClient = async (c: Client) => { await supabase.from('clients').insert([c]); setClients(prev => { const n = [...prev, c]; saveToLocal('clients', n); return n; }); };
+  const updateClient = async (c: Client) => { await supabase.from('clients').update(c).eq('id', c.id); setClients(prev => { const n = prev.map(item => item.id === c.id ? c : item); saveToLocal('clients', n); return n; }); };
+  const deleteClient = async (id: string) => { await supabase.from('clients').delete().eq('id', id); setClients(prev => { const n = prev.filter(item => item.id !== id); saveToLocal('clients', n); return n; }); };
+
   const addProject = async (p: Project): Promise<boolean> => { const { error } = await supabase.from('projects').insert([p]); setProjects(prev => { const n = [...prev, p]; saveToLocal('projects', n); return n; }); return !error; };
   const updateProject = async (p: Project) => { await supabase.from('projects').update(p).eq('id', p.id); setProjects(prev => { const n = prev.map(item => item.id === p.id ? p : item); saveToLocal('projects', n); return n; }); };
   const deleteProject = async (id: string) => { await supabase.from('projects').delete().eq('id', id); setProjects(prev => { const n = prev.filter(item => item.id !== id); saveToLocal('projects', n); return n; }); };
@@ -418,7 +431,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   return (
     <AppContext.Provider value={{
-      projects, varieties, locations, plots, trialRecords, logs, tasks, seedBatches, seedMovements, suppliers, notifications,
+      projects, varieties, locations, plots, trialRecords, logs, tasks, seedBatches, seedMovements, suppliers, clients, notifications,
       currentUser, usersList, login, logout,
       addProject, updateProject, deleteProject,
       addVariety, updateVariety, deleteVariety,
@@ -431,6 +444,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       addSeedBatch, updateSeedBatch, deleteSeedBatch,
       addSeedMovement, updateSeedMovement, deleteSeedMovement,
       addSupplier, updateSupplier, deleteSupplier,
+      addClient, updateClient, deleteClient,
       getPlotHistory, getLatestRecord,
       loading, isEmergencyMode, dbNeedsMigration,
       globalApiKey, refreshGlobalConfig,

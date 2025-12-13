@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Save, Database, Copy, RefreshCw, AlertTriangle, Lock, Settings as SettingsIcon, Sliders, Sparkles, ExternalLink, Trash2, ShieldCheck } from 'lucide-react';
@@ -108,17 +109,23 @@ export default function Settings() {
 
   const SQL_SCRIPT = `
 -- ==========================================
--- SCRIPT DE MIGRACIÓN Y FORTALECIMIENTO v2.7.1
+-- SCRIPT DE MIGRACIÓN Y FORTALECIMIENTO v2.7.2 (Clientes)
 -- Ejecutar en Supabase > SQL Editor
 -- ==========================================
 
--- 1. TABLAS CORE FALTANTES
-CREATE TABLE IF NOT EXISTS public.system_settings (
-    id TEXT PRIMARY KEY DEFAULT 'global',
-    gemini_api_key TEXT,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+-- 1. TABLAS CORE
+CREATE TABLE IF NOT EXISTS public.clients (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    type TEXT,
+    contactName TEXT,
+    contactPhone TEXT,
+    email TEXT,
+    cuit TEXT,
+    "isNetworkMember" BOOLEAN DEFAULT false,
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
-INSERT INTO public.system_settings (id) VALUES ('global') ON CONFLICT DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS public.suppliers (
     id TEXT PRIMARY KEY,
@@ -134,6 +141,18 @@ CREATE TABLE IF NOT EXISTS public.suppliers (
 -- 2. ACTUALIZACIÓN DE COLUMNAS (MIGRACIONES)
 DO $$
 BEGIN
+    -- Clients: Tabla nueva checkeada arriba
+
+    -- Locations: Nuevos campos de Cliente, Capacidad y Riego
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'locations' AND column_name = 'capacityHa') THEN
+        ALTER TABLE public.locations ADD COLUMN "capacityHa" NUMERIC;
+        ALTER TABLE public.locations ADD COLUMN "irrigationSystem" TEXT;
+        ALTER TABLE public.locations ADD COLUMN "clientId" TEXT;
+        ALTER TABLE public.locations ADD COLUMN "ownerLegalName" TEXT;
+        ALTER TABLE public.locations ADD COLUMN "ownerCuit" TEXT;
+        ALTER TABLE public.locations ADD COLUMN "ownerContact" TEXT;
+    END IF;
+
     -- Suppliers: Nuevos campos
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'suppliers' AND column_name = 'city') THEN
         ALTER TABLE public.suppliers ADD COLUMN "city" TEXT;
@@ -141,13 +160,6 @@ BEGIN
         ALTER TABLE public.suppliers ADD COLUMN "address" TEXT;
         ALTER TABLE public.suppliers ADD COLUMN "commercialContact" TEXT;
         ALTER TABLE public.suppliers ADD COLUMN "logisticsContact" TEXT;
-    END IF;
-
-    -- Locations: Nuevos campos de Cliente (v2.7.1)
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'locations' AND column_name = 'ownerLegalName') THEN
-        ALTER TABLE public.locations ADD COLUMN "ownerLegalName" TEXT;
-        ALTER TABLE public.locations ADD COLUMN "ownerCuit" TEXT;
-        ALTER TABLE public.locations ADD COLUMN "ownerContact" TEXT;
     END IF;
 
     -- Projects: Director
@@ -167,77 +179,32 @@ BEGIN
         ALTER TABLE public.plots ADD COLUMN "type" TEXT DEFAULT 'Ensayo';
         ALTER TABLE public.plots ADD COLUMN "surfaceUnit" TEXT DEFAULT 'm2';
         ALTER TABLE public.plots ADD COLUMN "seedBatchId" TEXT;
-        ALTER TABLE public.plots ADD COLUMN "polygon" JSONB; -- Para guardar el polígono del mapa
+        ALTER TABLE public.plots ADD COLUMN "polygon" JSONB;
     END IF;
 
     -- Varieties: Link Proveedor
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'varieties' AND column_name = 'supplierId') THEN
         ALTER TABLE public.varieties ADD COLUMN "supplierId" TEXT;
     END IF;
-    
-    -- Seed Batches & Movements: Logística Completa
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'seed_batches' AND column_name = 'supplierName') THEN
-        ALTER TABLE public.seed_batches ADD COLUMN "supplierName" TEXT;
-        ALTER TABLE public.seed_batches ADD COLUMN "supplierLegalName" TEXT;
-        ALTER TABLE public.seed_batches ADD COLUMN "supplierCuit" TEXT;
-        ALTER TABLE public.seed_batches ADD COLUMN "supplierRenspa" TEXT;
-        ALTER TABLE public.seed_batches ADD COLUMN "supplierAddress" TEXT;
-        ALTER TABLE public.seed_batches ADD COLUMN "originCountry" TEXT;
-        ALTER TABLE public.seed_batches ADD COLUMN "gs1Code" TEXT;
-        ALTER TABLE public.seed_batches ADD COLUMN "certificationNumber" TEXT;
-        ALTER TABLE public.seed_batches ADD COLUMN "storageConditions" TEXT;
-        ALTER TABLE public.seed_batches ADD COLUMN "storageAddress" TEXT;
-        ALTER TABLE public.seed_batches ADD COLUMN "logisticsResponsible" TEXT;
-    END IF;
-
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'seed_movements' AND column_name = 'transportGuideNumber') THEN
-        ALTER TABLE public.seed_movements ADD COLUMN "transportGuideNumber" TEXT;
-        ALTER TABLE public.seed_movements ADD COLUMN "transportType" TEXT;
-        ALTER TABLE public.seed_movements ADD COLUMN "vehiclePlate" TEXT;
-        ALTER TABLE public.seed_movements ADD COLUMN "vehicleModel" TEXT;
-        ALTER TABLE public.seed_movements ADD COLUMN "driverName" TEXT;
-        ALTER TABLE public.seed_movements ADD COLUMN "routeItinerary" TEXT;
-        ALTER TABLE public.seed_movements ADD COLUMN "dispatchTime" TEXT;
-    END IF;
 END $$;
 
 -- 3. INTEGRIDAD REFERENCIAL (FOREIGN KEYS)
 DO $$
 BEGIN
-    -- Link Parcelas -> Proyectos
-    IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'fk_plots_project') THEN
+    -- Link Locations -> Clients (NUEVO)
+    IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'fk_locations_client') THEN
         BEGIN
-            ALTER TABLE public.plots ADD CONSTRAINT fk_plots_project FOREIGN KEY ("projectId") REFERENCES public.projects(id) ON DELETE SET NULL;
-        EXCEPTION WHEN OTHERS THEN RAISE NOTICE 'No se pudo crear FK plots_project'; END;
+            ALTER TABLE public.locations ADD CONSTRAINT fk_locations_client FOREIGN KEY ("clientId") REFERENCES public.clients(id) ON DELETE SET NULL;
+        EXCEPTION WHEN OTHERS THEN RAISE NOTICE 'No se pudo crear FK locations_client'; END;
     END IF;
 
-    -- Link Parcelas -> Locaciones
-    IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'fk_plots_location') THEN
-        BEGIN
-            ALTER TABLE public.plots ADD CONSTRAINT fk_plots_location FOREIGN KEY ("locationId") REFERENCES public.locations(id) ON DELETE SET NULL;
-        EXCEPTION WHEN OTHERS THEN RAISE NOTICE 'No se pudo crear FK plots_location'; END;
-    END IF;
-
-    -- Link Variedades -> Proveedores (NUEVO v2.7)
+    -- Link Variedades -> Proveedores
     IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'fk_varieties_supplier') THEN
         BEGIN
             ALTER TABLE public.varieties ADD CONSTRAINT fk_varieties_supplier FOREIGN KEY ("supplierId") REFERENCES public.suppliers(id) ON DELETE SET NULL;
         EXCEPTION WHEN OTHERS THEN RAISE NOTICE 'No se pudo crear FK varieties_supplier'; END;
     END IF;
-
-    -- Link Registros -> Parcelas
-    IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'fk_records_plot') THEN
-        BEGIN
-            ALTER TABLE public.trial_records ADD CONSTRAINT fk_records_plot FOREIGN KEY ("plotId") REFERENCES public.plots(id) ON DELETE CASCADE;
-        EXCEPTION WHEN OTHERS THEN RAISE NOTICE 'No se pudo crear FK records_plot'; END;
-    END IF;
 END $$;
-
--- 4. ÍNDICES DE RENDIMIENTO (VELOCIDAD)
-CREATE INDEX IF NOT EXISTS idx_plots_project ON public.plots("projectId");
-CREATE INDEX IF NOT EXISTS idx_plots_variety ON public.plots("varietyId");
-CREATE INDEX IF NOT EXISTS idx_records_plot ON public.trial_records("plotId");
-CREATE INDEX IF NOT EXISTS idx_logs_plot ON public.field_logs("plotId");
   `;
 
   return (

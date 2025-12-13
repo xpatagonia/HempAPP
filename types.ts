@@ -31,6 +31,24 @@ export interface Project {
   responsibleIds?: string[]; // Usuarios operativos a cargo
 }
 
+// NUEVO: Entidad Cliente (Para gestión comercial y Red de Agricultores)
+export interface Client {
+  id: string;
+  name: string; // Nombre Comercial / Razón Social
+  type: RoleType;
+  cuit?: string; // Tax ID
+  
+  // Contacto Principal
+  contactName: string;
+  contactPhone?: string;
+  email?: string;
+  
+  // Red de Agricultores
+  isNetworkMember: boolean; // ¿Pertenece a la Red?
+  
+  notes?: string;
+}
+
 // NUEVO: Entidad Proveedor (Semillero / Breeder)
 export interface Supplier {
   id: string;
@@ -130,11 +148,16 @@ export interface Location {
   responsiblePerson: string; // Deprecated visual field, prefer responsibleIds logic if needed, but keeping for now
   
   // CLIENTE / TITULAR
-  ownerName?: string; // Nombre Comercial / Fantasía del Cliente
+  clientId?: string; // Nuevo: Link a entidad Client
+  ownerName?: string; // Nombre Comercial / Fantasía del Cliente (Legacy o Display)
   ownerLegalName?: string; // Razón Social (Nuevo)
   ownerCuit?: string; // CUIT / Tax ID (Nuevo)
   ownerType?: RoleType; // Tipo de Cliente (Empresa, Gobierno, etc)
   ownerContact?: string; // Email o Teléfono de contacto del cliente (Nuevo)
+
+  // CAPACIDAD & RIEGO (NUEVO REQUERIMIENTO)
+  capacityHa?: number; // Capacidad total en Hectáreas
+  irrigationSystem?: string; // Texto descriptivo o tags (ej: "Goteo, Pivot, Canales")
 
   responsibleIds?: string[]; // IDs de usuarios asignados a la locación
   cuie?: string; // Clave Única de Identificación de Establecimiento (Compliance)
