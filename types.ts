@@ -79,6 +79,24 @@ export interface Supplier {
   notes?: string;
 }
 
+// NUEVO: Puntos de Almacenamiento (Depósitos)
+export interface StoragePoint {
+  id: string;
+  name: string; // Ej: Depósito Central BsAs
+  type: 'Propio' | 'Tercerizado' | 'Transitorio';
+  address: string;
+  city?: string;
+  province?: string;
+  coordinates?: {
+    lat: number;
+    lng: number;
+  };
+  responsibleUserId?: string; // Encargado de Logística/Llaves
+  capacityKg?: number; // Capacidad máxima estimada
+  conditions?: string; // Ej: Refrigerado, Seco, Control Humedad
+  notes?: string;
+}
+
 export interface Variety {
   id: string;
   supplierId: string; // Link estricto a Supplier
@@ -117,8 +135,10 @@ export interface SeedBatch {
   // Almacenamiento Físico
   initialQuantity: number;  // Cantidad comprada (kg)
   remainingQuantity: number; // Stock actual (kg)
+  storagePointId?: string;    // LINK a StoragePoint (Nuevo - Reemplaza storageAddress texto libre)
+  storageAddress?: string;    // Legacy text field (Deprecado visualmente pero mantenido por compatibilidad)
   storageConditions?: string; // Temp/Humedad (Compliance)
-  storageAddress?: string;    // Ubicación física exacta (Galpón/Estantería) (Nuevo)
+  
   logisticsResponsible?: string; // Nombre del responsable de custodia (Nuevo)
   
   notes?: string;
@@ -130,7 +150,9 @@ export interface SeedMovement {
   id: string;
   batchId: string;
   clientId?: string; // NUEVO: Cliente destinatario (para facilitar filtrado)
-  targetLocationId: string;
+  targetLocationId: string; // Destino
+  originStorageId?: string; // Origen (Nuevo)
+  
   quantity: number; // kg enviados
   date: string;
   dispatchTime?: string; // Hora de salida (Compliance)
@@ -142,7 +164,10 @@ export interface SeedMovement {
   vehiclePlate: string;
   vehicleModel?: string; // Modelo del vehiculo (Nuevo)
   transportCompany?: string;
-  routeItinerary?: string; // Calles / Rutas principales (Nuevo)
+  
+  // Ruta
+  routeGoogleLink?: string; // Link generado a GMaps
+  estimatedDistanceKm?: number;
   
   status: 'En Tránsito' | 'Recibido' | 'Cancelado';
   receivedBy?: string; // User ID

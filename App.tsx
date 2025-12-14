@@ -20,7 +20,8 @@ import AIAdvisor from './pages/AIAdvisor';
 import SeedBatches from './pages/SeedBatches';
 import Suppliers from './pages/Suppliers'; 
 import Clients from './pages/Clients'; 
-import Resources from './pages/Resources'; // Nuevo
+import Resources from './pages/Resources'; 
+import Storage from './pages/Storage'; // Nuevo
 
 // Componente para proteger rutas
 const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
@@ -90,9 +91,14 @@ export default function App() {
                 <Clients />
               </ProtectedRoute>
             } />
-            <Route path="/resources" element={ // Nueva Ruta
+            <Route path="/resources" element={
               <ProtectedRoute>
                 <Resources />
+              </ProtectedRoute>
+            } />
+            <Route path="/storage" element={ // Nueva Ruta
+              <ProtectedRoute>
+                <Storage />
               </ProtectedRoute>
             } />
             <Route path="/seed-batches" element={

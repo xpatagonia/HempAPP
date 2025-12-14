@@ -30,7 +30,8 @@ import {
   Briefcase,
   Cloud,
   CloudOff,
-  Archive
+  Archive,
+  Warehouse
 } from 'lucide-react';
 
 const NavItem = ({ to, icon: Icon, label, onClick }: any) => {
@@ -223,6 +224,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                        <NavItem to="/suppliers" icon={Building} label="Proveedores" onClick={() => setIsMobileOpen(false)} />
                        <NavItem to="/clients" icon={Briefcase} label="Clientes" onClick={() => setIsMobileOpen(false)} />
                        <NavItem to="/varieties" icon={Sprout} label="Variedades" onClick={() => setIsMobileOpen(false)} />
+                       <NavItem to="/storage" icon={Warehouse} label="Almacenamiento" onClick={() => setIsMobileOpen(false)} />
                        <NavItem to="/seed-batches" icon={ScanBarcode} label="Stock Semillas" onClick={() => setIsMobileOpen(false)} />
                        <NavItem to="/resources" icon={Archive} label="Recursos" onClick={() => setIsMobileOpen(false)} />
                    </>
