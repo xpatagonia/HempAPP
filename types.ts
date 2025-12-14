@@ -96,6 +96,7 @@ export interface SeedBatch {
   varietyId: string;
   
   // Datos Comerciales del Proveedor (Compliance)
+  supplierId?: string;        // Link directo al ID del proveedor (Nuevo)
   supplierName: string;       // Nombre Fantasía (ej: Hemp-it)
   supplierLegalName?: string; // Razón Social (ej: Hemp-it France SAS)
   supplierCuit?: string;      // CUIT / Tax ID
@@ -103,10 +104,15 @@ export interface SeedBatch {
   supplierAddress?: string;   // Dirección Fiscal / Origen
   originCountry?: string;     // País de Origen de la Semilla (Nuevo)
   
+  // Datos de Compra (Nuevo)
+  purchaseOrder?: string;   // N° Orden de Compra / Factura
+  purchaseDate: string;     // Fecha de adquisición
+  pricePerKg?: number;      // Precio por Kg (Opcional)
+
+  // Identificación Técnica
   batchCode: string;        // Número de etiqueta oficial / Lote
   gs1Code?: string;         // Código de Barras GS1 / GTIN (Nuevo)
   certificationNumber?: string; // N° Certificado Fiscalización (INASE/SENASA)
-  purchaseDate: string;     // Fecha de adquisición
   
   // Almacenamiento Físico
   initialQuantity: number;  // Cantidad comprada (kg)
