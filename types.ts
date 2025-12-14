@@ -123,6 +123,7 @@ export interface SeedBatch {
 export interface SeedMovement {
   id: string;
   batchId: string;
+  clientId?: string; // NUEVO: Cliente destinatario (para facilitar filtrado)
   targetLocationId: string;
   quantity: number; // kg enviados
   date: string;
@@ -139,6 +140,17 @@ export interface SeedMovement {
   
   status: 'En Tránsito' | 'Recibido' | 'Cancelado';
   receivedBy?: string; // User ID
+  notes?: string;
+}
+
+// NUEVO: Recursos e Insumos (Plan Agrícola)
+export interface Resource {
+  id: string;
+  name: string; // Urea, Glifosato, Jornal
+  type: 'Fertilizante' | 'Fitosanitario' | 'Labor' | 'Insumo' | 'Maquinaria';
+  unit: 'kg' | 'lts' | 'horas' | 'unidad' | 'ha';
+  costPerUnit: number; // Costo estimado
+  stock?: number; // Stock actual en depósito central
   notes?: string;
 }
 
@@ -270,7 +282,7 @@ export interface FieldLog {
   photoUrl?: string;
 }
 
-// Task Management
+// Task Management with Resources
 export interface Task {
   id: string;
   plotId?: string; // Optional, can be general
@@ -282,6 +294,11 @@ export interface Task {
   priority: 'Alta' | 'Media' | 'Baja';
   assignedToIds: string[]; // User IDs
   createdBy: string;
+  
+  // NUEVO: Uso de Recursos (Plan Agrícola)
+  resourceId?: string; // ID del recurso (Fertilizante, etc)
+  resourceQuantity?: number; // Cantidad planificada
+  resourceCost?: number; // Costo total estimado
 }
 
 // Stats Interface

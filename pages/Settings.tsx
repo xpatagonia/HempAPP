@@ -6,7 +6,7 @@ import { supabase } from '../supabaseClient';
 import { User, Client, Supplier, Variety, Location, Project, Plot } from '../types';
 
 export default function Settings() {
-  const { currentUser, globalApiKey, refreshGlobalConfig, addClient, addSupplier, addVariety, addUser, addLocation, addProject, addPlot } = useAppContext();
+  const { currentUser, globalApiKey, refreshGlobalConfig, addClient, addSupplier, addVariety, addUser, addLocation, addProject, addPlot, addSeedBatch, addSeedMovement } = useAppContext();
   
   // Tab State
   const [activeTab, setActiveTab] = useState<'general' | 'connections' | 'demo'>('connections');
@@ -93,61 +93,94 @@ export default function Settings() {
   };
 
   const handleInjectDemoData = async () => {
-      if (!confirm("¿Generar datos de demostración? Esto creará Proveedores, Clientes, Usuarios y Locaciones de prueba.")) return;
+      if (!confirm("¿Generar datos de demostración? Esto creará una cadena completa: Proveedor -> Variedad -> Cliente -> Locación -> Lote Semilla -> Parcela.")) return;
       
       setDemoLoading(true);
       try {
           // 1. Crear Proveedores (Suppliers)
           const sup1Id = Date.now().toString();
-          const sup2Id = (Date.now() + 1).toString();
           
           await addSupplier({
               id: sup1Id, name: 'Hemp-it France', legalName: 'Hemp-it Cooperative', country: 'Francia', 
               province: 'Angers', city: 'Beaufort-en-Anjou', commercialContact: 'Pierre Dubois', notes: 'Líder en genética europea.'
           });
-          await addSupplier({
-              id: sup2Id, name: 'Oregon CBD', legalName: 'Oregon CBD Seeds Inc.', country: 'Estados Unidos', 
-              province: 'Oregon', city: 'Independence', commercialContact: 'John Smith', notes: 'Genética alta en CBD.'
+
+          // 2. Crear Variedad vinculada
+          const varId = (Date.now()+1).toString();
+          await addVariety({ 
+              id: varId, 
+              supplierId: sup1Id, 
+              name: 'FEDORA 17', 
+              usage: 'Dual', 
+              cycleDays: 130, 
+              expectedThc: 0.12 
           });
 
-          // 2. Crear Variedades vinculadas
-          await addVariety({ id: (Date.now()+2).toString(), supplierId: sup1Id, name: 'USO 31', usage: 'Grano', cycleDays: 105, expectedThc: 0.02 });
-          await addVariety({ id: (Date.now()+3).toString(), supplierId: sup1Id, name: 'Fedora 17', usage: 'Dual', cycleDays: 130, expectedThc: 0.12 });
-          await addVariety({ id: (Date.now()+4).toString(), supplierId: sup2Id, name: 'Lifter', usage: 'Medicinal', cycleDays: 140, expectedThc: 0.3 });
-
-          // 3. Crear Clientes (Tipos Variados)
-          const cli1Id = (Date.now()+10).toString(); // Productor Pequeño
-          const cli2Id = (Date.now()+11).toString(); // Gobierno
-          
+          // 3. Crear Cliente (Productor)
+          const cliId = (Date.now()+10).toString();
           await addClient({
-              id: cli1Id, name: 'Finca El Hornero', type: 'Productor Pequeño (<5 ha)', 
+              id: cliId, name: 'Finca El Hornero', type: 'Productor Mediano (5-15 ha)', 
               contactName: 'Carlos Gómez', contactPhone: '2323-555555', isNetworkMember: true, cuit: '20-11111111-1'
           });
-          await addClient({
-              id: cli2Id, name: 'INTA Castelar', type: 'Gobierno', 
-              contactName: 'Dra. Ana Martinez', email: 'martinez.ana@inta.gob.ar', isNetworkMember: true, cuit: '30-55555555-5'
-          });
 
-          // 4. Crear Usuarios vinculados a Clientes
-          await addUser({
-              id: `user-${cli1Id}`, name: 'Carlos Gómez (Productor)', email: 'productor@demo.com', password: 'demo', 
-              role: 'client', clientId: cli1Id, jobTitle: 'Dueño', phone: '2323-555555'
-          });
-
-          // 5. Crear Locaciones vinculadas
+          // 4. Crear Locación del Cliente
+          const locId = (Date.now()+20).toString();
           await addLocation({
-              id: (Date.now()+20).toString(), name: 'Campo Experimental INTA', province: 'Buenos Aires', city: 'Castelar',
-              address: 'Las Cabañas S/N', soilType: 'Franco', climate: 'Templado', clientId: cli2Id, ownerName: 'INTA Castelar', 
-              ownerType: 'Gobierno', capacityHa: 50, coordinates: { lat: -34.606, lng: -58.666 }
-          });
-          
-          await addLocation({
-              id: (Date.now()+21).toString(), name: 'Lote Don Carlos', province: 'Buenos Aires', city: 'Mercedes',
-              address: 'Ruta 5 km 100', soilType: 'Arcilloso', climate: 'Templado', clientId: cli1Id, ownerName: 'Finca El Hornero',
-              ownerType: 'Productor Pequeño (<5 ha)', capacityHa: 4, coordinates: { lat: -34.650, lng: -59.430 }
+              id: locId, name: 'Campo Experimental Hornero', province: 'Buenos Aires', city: 'Mercedes',
+              address: 'Ruta 5 km 100', soilType: 'Franco', climate: 'Templado', clientId: cliId, ownerName: 'Finca El Hornero',
+              ownerType: 'Productor Mediano (5-15 ha)', capacityHa: 15, coordinates: { lat: -34.650, lng: -59.430 }
           });
 
-          alert("¡Datos de demostración cargados exitosamente!");
+          // 5. Crear Proyecto General
+          const projId = (Date.now()+30).toString();
+          await addProject({
+              id: projId, name: 'Campaña Fibra 2024', description: 'Producción extensiva fibra textil',
+              startDate: new Date().toISOString().split('T')[0], status: 'En Curso', responsibleIds: []
+          });
+
+          // 6. Crear Lote de Semillas (Stock Central)
+          const batchId = (Date.now()+40).toString();
+          await addSeedBatch({
+              id: batchId, varietyId: varId, supplierName: 'Hemp-it France', batchCode: 'LOT-DEMO-2024',
+              originCountry: 'Francia', initialQuantity: 1000, remainingQuantity: 950, purchaseDate: new Date().toISOString().split('T')[0],
+              isActive: true
+          });
+
+          // 7. ASIGNAR SEMILLA AL CLIENTE (Movimiento Logístico)
+          await addSeedMovement({
+              id: (Date.now()+50).toString(),
+              batchId: batchId,
+              clientId: cliId, // Link to Client
+              targetLocationId: locId, // Link to Location
+              quantity: 50,
+              date: new Date().toISOString().split('T')[0],
+              transportGuideNumber: 'GUIA-DEMO-001',
+              status: 'Recibido',
+              transportType: 'Propio', driverName: 'Carlos Gómez', vehiclePlate: 'AA123BB'
+          });
+
+          // 8. Crear Parcela en la Locación del Cliente
+          await addPlot({
+              id: (Date.now()+60).toString(),
+              name: 'LOTE-DEMO-1',
+              type: 'Producción',
+              projectId: projId,
+              locationId: locId,
+              varietyId: varId,
+              seedBatchId: batchId,
+              block: 'A',
+              replicate: 1,
+              ownerName: 'Finca El Hornero',
+              responsibleIds: [],
+              sowingDate: new Date().toISOString().split('T')[0],
+              surfaceArea: 5,
+              surfaceUnit: 'ha',
+              rowDistance: 17.5,
+              density: 250,
+              status: 'Activa'
+          });
+
+          alert("¡Datos de demostración cargados exitosamente! Se creó la cadena completa: Proveedor > Variedad > Cliente > Locación > Semilla > Parcela.");
       } catch (e) {
           console.error(e);
           alert("Hubo un error cargando algunos datos.");
@@ -157,8 +190,28 @@ export default function Settings() {
   };
 
   const SQL_SCRIPT = `
--- COPY FROM PREVIOUS STEP (GENESIS SCRIPT V2.7)
--- (Omitted for brevity, kept same as before)
+-- TABLA RECURSOS (PLAN AGRÍCOLA)
+CREATE TABLE IF NOT EXISTS public.resources (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    type TEXT,
+    unit TEXT,
+    "costPerUnit" NUMERIC,
+    stock NUMERIC,
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+ALTER TABLE public.resources DISABLE ROW LEVEL SECURITY;
+
+-- ACTUALIZAR TASKS CON RECURSOS
+ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS "resourceId" TEXT;
+ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS "resourceQuantity" NUMERIC;
+ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS "resourceCost" NUMERIC;
+
+-- ACTUALIZAR SEED_MOVEMENTS CON CLIENTE
+ALTER TABLE public.seed_movements ADD COLUMN IF NOT EXISTS "clientId" TEXT;
+
+-- Rest of the tables from previous steps...
   `;
 
   return (
@@ -191,14 +244,13 @@ export default function Settings() {
                   <div className="bg-purple-50 p-4 rounded-full inline-block"><PlayCircle size={32} className="text-purple-600" /></div>
                   <h3 className="text-xl font-bold text-gray-800">Generador de Datos de Prueba</h3>
                   <p className="text-gray-500 max-w-md mx-auto">
-                      Si el sistema está vacío, utiliza esta herramienta para poblar la base de datos con:
+                      Si el sistema está vacío, utiliza esta herramienta para poblar la base de datos con un flujo completo de negocio.
                   </p>
                   <ul className="text-sm text-left max-w-xs mx-auto list-disc text-gray-600 space-y-1 bg-gray-50 p-4 rounded">
-                      <li>2 Proveedores Internacionales</li>
-                      <li>3 Variedades de Cáñamo</li>
-                      <li>2 Clientes (Productor y Gobierno)</li>
-                      <li>1 Usuario "Cliente" vinculado</li>
-                      <li>2 Locaciones Georreferenciadas</li>
+                      <li>Proveedores y Variedades</li>
+                      <li>Cliente Productor y su Locación</li>
+                      <li>Envío de Semilla (Logística)</li>
+                      <li>Parcela productiva asignada</li>
                   </ul>
                   <button 
                     onClick={handleInjectDemoData}
@@ -206,7 +258,7 @@ export default function Settings() {
                     className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition flex items-center justify-center mx-auto disabled:opacity-50"
                   >
                       {demoLoading ? <RefreshCw className="animate-spin mr-2"/> : <Sparkles className="mr-2"/>}
-                      {demoLoading ? 'Generando...' : 'Inyectar Datos Demo'}
+                      {demoLoading ? 'Generando...' : 'Inyectar Cadena Completa'}
                   </button>
               </div>
           </div>
@@ -258,7 +310,9 @@ export default function Settings() {
                     <h2 className="text-sm font-bold text-slate-800">Inicialización SQL</h2>
                     <button onClick={copySQL} className="text-xs bg-white border px-3 py-1 rounded shadow-sm font-bold">Copiar SQL</button>
                 </div>
-                <div className="bg-slate-900 p-4 rounded-lg text-xs font-mono text-blue-300 overflow-x-auto h-32 custom-scrollbar">-- Script disponible en portapapeles --</div>
+                <div className="bg-slate-900 p-4 rounded-lg text-xs font-mono text-blue-300 overflow-x-auto h-32 custom-scrollbar">
+                    {SQL_SCRIPT}
+                </div>
             </div>
         </div>
       )}

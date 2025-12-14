@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
-import { Variety, Location, Plot, FieldLog, TrialRecord, User, Project, Task, SeedBatch, SeedMovement, Supplier, Client } from '../types';
+import { Variety, Location, Plot, FieldLog, TrialRecord, User, Project, Task, SeedBatch, SeedMovement, Supplier, Client, Resource } from '../types';
 import { supabase } from '../supabaseClient';
 
 export interface AppNotification {
@@ -24,6 +24,7 @@ interface AppContextType {
   seedMovements: SeedMovement[];
   suppliers: Supplier[];
   clients: Client[]; 
+  resources: Resource[]; // NUEVO
   notifications: AppNotification[]; 
   
   currentUser: User | null;
@@ -46,6 +47,10 @@ interface AppContextType {
   addClient: (c: Client) => Promise<void>; 
   updateClient: (c: Client) => void; 
   deleteClient: (id: string) => void; 
+
+  addResource: (r: Resource) => void; // NUEVO
+  updateResource: (r: Resource) => void; // NUEVO
+  deleteResource: (id: string) => void; // NUEVO
 
   addLocation: (l: Location) => void;
   updateLocation: (l: Location) => void;
@@ -122,6 +127,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [seedBatches, setSeedBatches] = useState<SeedBatch[]>([]);
   const [seedMovements, setSeedMovements] = useState<SeedMovement[]>([]);
+  const [resources, setResources] = useState<Resource[]>([]); // NUEVO
   
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -247,6 +253,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             setPlots(getFromLocal('plots'));
             setSeedBatches(getFromLocal('seedBatches')); 
             setSeedMovements(getFromLocal('seedMovements'));
+            setResources(getFromLocal('resources')); // Load Local Resources
             setIsEmergencyMode(true);
             setLoading(false);
         }
@@ -274,6 +281,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             const localPlots = getFromLocal('plots');
             const localSeedBatches = getFromLocal('seedBatches');
             const localSeedMovements = getFromLocal('seedMovements');
+            const localResources = getFromLocal('resources');
 
             // ATTEMPT TO FETCH USERS (ROBUST STRATEGY)
             let dbUsers: any[] | null = null;
@@ -343,6 +351,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 fetchOrLocal('plots', setPlots, localPlots),
                 fetchOrLocal('seed_batches', setSeedBatches, localSeedBatches),
                 fetchOrLocal('seed_movements', setSeedMovements, localSeedMovements),
+                fetchOrLocal('resources', setResources, localResources), // Add Resources
                 supabase.from('trial_records').select('*').then(res => res.data && setTrialRecords(res.data as TrialRecord[])),
                 supabase.from('field_logs').select('*').then(res => res.data && setLogs(res.data as FieldLog[])),
                 supabase.from('tasks').select('*').then(res => res.data && setTasks(res.data as Task[]))
@@ -461,6 +470,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const updateClient = async (c: Client) => { await supabase.from('clients').update(c).eq('id', c.id); setClients(prev => { const n = prev.map(item => item.id === c.id ? c : item); saveToLocal('clients', n); return n; }); };
   const deleteClient = async (id: string) => { await supabase.from('clients').delete().eq('id', id); setClients(prev => { const n = prev.filter(item => item.id !== id); saveToLocal('clients', n); return n; }); };
 
+  const addResource = async (r: Resource) => { await supabase.from('resources').insert([r]); setResources(prev => { const n = [...prev, r]; saveToLocal('resources', n); return n; }); };
+  const updateResource = async (r: Resource) => { await supabase.from('resources').update(r).eq('id', r.id); setResources(prev => { const n = prev.map(item => item.id === r.id ? r : item); saveToLocal('resources', n); return n; }); };
+  const deleteResource = async (id: string) => { await supabase.from('resources').delete().eq('id', id); setResources(prev => { const n = prev.filter(item => item.id !== id); saveToLocal('resources', n); return n; }); };
+
   const addProject = async (p: Project): Promise<boolean> => { const { error } = await supabase.from('projects').insert([p]); setProjects(prev => { const n = [...prev, p]; saveToLocal('projects', n); return n; }); return !error; };
   const updateProject = async (p: Project) => { await supabase.from('projects').update(p).eq('id', p.id); setProjects(prev => { const n = prev.map(item => item.id === p.id ? p : item); saveToLocal('projects', n); return n; }); };
   const deleteProject = async (id: string) => { await supabase.from('projects').delete().eq('id', id); setProjects(prev => { const n = prev.filter(item => item.id !== id); saveToLocal('projects', n); return n; }); };
@@ -500,7 +513,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   return (
     <AppContext.Provider value={{
-      projects, varieties, locations, plots, trialRecords, logs, tasks, seedBatches, seedMovements, suppliers, clients, notifications,
+      projects, varieties, locations, plots, trialRecords, logs, tasks, seedBatches, seedMovements, suppliers, clients, resources, notifications,
       currentUser, usersList, login, logout,
       addProject, updateProject, deleteProject,
       addVariety, updateVariety, deleteVariety,
@@ -514,6 +527,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       addSeedMovement, updateSeedMovement, deleteSeedMovement,
       addSupplier, updateSupplier, deleteSupplier,
       addClient, updateClient, deleteClient,
+      addResource, updateResource, deleteResource,
       getPlotHistory, getLatestRecord,
       loading, isEmergencyMode, dbNeedsMigration,
       globalApiKey, refreshGlobalConfig,

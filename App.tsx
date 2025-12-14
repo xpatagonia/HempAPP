@@ -19,7 +19,8 @@ import CalendarPage from './pages/Calendar';
 import AIAdvisor from './pages/AIAdvisor';
 import SeedBatches from './pages/SeedBatches';
 import Suppliers from './pages/Suppliers'; 
-import Clients from './pages/Clients'; // Nuevo
+import Clients from './pages/Clients'; 
+import Resources from './pages/Resources'; // Nuevo
 
 // Componente para proteger rutas
 const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
@@ -84,9 +85,14 @@ export default function App() {
                 <Suppliers />
               </ProtectedRoute>
             } />
-            <Route path="/clients" element={ // Nueva Ruta
+            <Route path="/clients" element={
               <ProtectedRoute>
                 <Clients />
+              </ProtectedRoute>
+            } />
+            <Route path="/resources" element={ // Nueva Ruta
+              <ProtectedRoute>
+                <Resources />
               </ProtectedRoute>
             } />
             <Route path="/seed-batches" element={
