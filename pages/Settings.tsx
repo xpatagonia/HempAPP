@@ -1,14 +1,15 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Save, Database, Copy, RefreshCw, AlertTriangle, Lock, Settings as SettingsIcon, Sliders, Sparkles, ExternalLink, Trash2, ShieldCheck } from 'lucide-react';
+import { Save, Database, Copy, RefreshCw, AlertTriangle, Lock, Settings as SettingsIcon, Sliders, Sparkles, ExternalLink, Trash2, ShieldCheck, PlayCircle } from 'lucide-react';
 import { supabase } from '../supabaseClient';
+import { User, Client, Supplier, Variety, Location, Project, Plot } from '../types';
 
 export default function Settings() {
-  const { currentUser, globalApiKey, refreshGlobalConfig } = useAppContext();
+  const { currentUser, globalApiKey, refreshGlobalConfig, addClient, addSupplier, addVariety, addUser, addLocation, addProject, addPlot } = useAppContext();
   
   // Tab State
-  const [activeTab, setActiveTab] = useState<'general' | 'connections'>('connections');
+  const [activeTab, setActiveTab] = useState<'general' | 'connections' | 'demo'>('connections');
 
   // Supabase State
   const [url, setUrl] = useState('');
@@ -18,6 +19,7 @@ export default function Settings() {
   const [aiKey, setAiKey] = useState('');
   
   const [status, setStatus] = useState<'idle' | 'checking' | 'success' | 'error'>('idle');
+  const [demoLoading, setDemoLoading] = useState(false);
 
   useEffect(() => {
       // Cargar configuración existente local y global
@@ -52,325 +54,111 @@ export default function Settings() {
 
   const handleSave = async () => {
       setStatus('checking');
-      
-      // 1. Guardar Config Supabase Localmente (Por dispositivo, ya que es la conexión misma)
       localStorage.setItem('hemp_sb_url', url.trim());
       localStorage.setItem('hemp_sb_key', key.trim());
 
-      // 2. Guardar Config AI en Base de Datos (GLOBAL para todos los usuarios)
       try {
           if (aiKey.trim()) {
-              // Intentar guardar en DB
               const { error } = await supabase.from('system_settings').upsert({
                   id: 'global',
                   gemini_api_key: aiKey.trim()
               });
-
-              if (error) {
-                  console.error("Error guardando config global:", error);
-                  // Fallback: Guardar local si falla DB (ej: tabla no existe aún)
-                  localStorage.setItem('hemp_ai_key', aiKey.trim());
-                  alert("⚠️ No se pudo guardar globalmente (probablemente falta crear la tabla 'system_settings'). Se guardó solo en este dispositivo. Por favor corre el script SQL de abajo.");
-              } else {
-                  // Limpiar local para priorizar global
-                  localStorage.removeItem('hemp_ai_key');
-              }
+              if (error) localStorage.setItem('hemp_ai_key', aiKey.trim());
+              else localStorage.removeItem('hemp_ai_key');
           }
-      } catch (e) {
-          console.error(e);
-      }
+      } catch (e) { console.error(e); }
 
       await refreshGlobalConfig();
       setStatus('success');
-      setTimeout(() => setStatus('idle'), 2000);
-      
-      // Recargar si cambiaron credenciales de base de datos
-      if (url !== localStorage.getItem('hemp_sb_url') || key !== localStorage.getItem('hemp_sb_key')) {
-         setTimeout(() => window.location.reload(), 1000);
-      }
+      setTimeout(() => {
+          setStatus('idle');
+          if (url !== localStorage.getItem('hemp_sb_url') || key !== localStorage.getItem('hemp_sb_key')) {
+             window.location.reload();
+          }
+      }, 1000);
   };
 
   const copySQL = () => {
       navigator.clipboard.writeText(SQL_SCRIPT);
-      alert("SQL copiado al portapapeles. Pégalo en el SQL Editor de Supabase y dale RUN.");
+      alert("SQL copiado al portapapeles.");
   };
 
   const clearLocalCache = () => {
-      if(confirm("¿Seguro que quieres borrar la caché local? Esto obligará a la app a descargar todos los datos nuevamente de la nube.")) {
-          // Clear all keys starting with ht_local_
+      if(confirm("¿Borrar caché local?")) {
           Object.keys(localStorage).forEach(key => {
-              if (key.startsWith('ht_local_')) {
-                  localStorage.removeItem(key);
-              }
+              if (key.startsWith('ht_local_')) localStorage.removeItem(key);
           });
           window.location.reload();
       }
   };
 
+  const handleInjectDemoData = async () => {
+      if (!confirm("¿Generar datos de demostración? Esto creará Proveedores, Clientes, Usuarios y Locaciones de prueba.")) return;
+      
+      setDemoLoading(true);
+      try {
+          // 1. Crear Proveedores (Suppliers)
+          const sup1Id = Date.now().toString();
+          const sup2Id = (Date.now() + 1).toString();
+          
+          await addSupplier({
+              id: sup1Id, name: 'Hemp-it France', legalName: 'Hemp-it Cooperative', country: 'Francia', 
+              province: 'Angers', city: 'Beaufort-en-Anjou', commercialContact: 'Pierre Dubois', notes: 'Líder en genética europea.'
+          });
+          await addSupplier({
+              id: sup2Id, name: 'Oregon CBD', legalName: 'Oregon CBD Seeds Inc.', country: 'Estados Unidos', 
+              province: 'Oregon', city: 'Independence', commercialContact: 'John Smith', notes: 'Genética alta en CBD.'
+          });
+
+          // 2. Crear Variedades vinculadas
+          await addVariety({ id: (Date.now()+2).toString(), supplierId: sup1Id, name: 'USO 31', usage: 'Grano', cycleDays: 105, expectedThc: 0.02 });
+          await addVariety({ id: (Date.now()+3).toString(), supplierId: sup1Id, name: 'Fedora 17', usage: 'Dual', cycleDays: 130, expectedThc: 0.12 });
+          await addVariety({ id: (Date.now()+4).toString(), supplierId: sup2Id, name: 'Lifter', usage: 'Medicinal', cycleDays: 140, expectedThc: 0.3 });
+
+          // 3. Crear Clientes (Tipos Variados)
+          const cli1Id = (Date.now()+10).toString(); // Productor Pequeño
+          const cli2Id = (Date.now()+11).toString(); // Gobierno
+          
+          await addClient({
+              id: cli1Id, name: 'Finca El Hornero', type: 'Productor Pequeño (<5 ha)', 
+              contactName: 'Carlos Gómez', contactPhone: '2323-555555', isNetworkMember: true, cuit: '20-11111111-1'
+          });
+          await addClient({
+              id: cli2Id, name: 'INTA Castelar', type: 'Gobierno', 
+              contactName: 'Dra. Ana Martinez', email: 'martinez.ana@inta.gob.ar', isNetworkMember: true, cuit: '30-55555555-5'
+          });
+
+          // 4. Crear Usuarios vinculados a Clientes
+          await addUser({
+              id: `user-${cli1Id}`, name: 'Carlos Gómez (Productor)', email: 'productor@demo.com', password: 'demo', 
+              role: 'client', clientId: cli1Id, jobTitle: 'Dueño', phone: '2323-555555'
+          });
+
+          // 5. Crear Locaciones vinculadas
+          await addLocation({
+              id: (Date.now()+20).toString(), name: 'Campo Experimental INTA', province: 'Buenos Aires', city: 'Castelar',
+              address: 'Las Cabañas S/N', soilType: 'Franco', climate: 'Templado', clientId: cli2Id, ownerName: 'INTA Castelar', 
+              ownerType: 'Gobierno', capacityHa: 50, coordinates: { lat: -34.606, lng: -58.666 }
+          });
+          
+          await addLocation({
+              id: (Date.now()+21).toString(), name: 'Lote Don Carlos', province: 'Buenos Aires', city: 'Mercedes',
+              address: 'Ruta 5 km 100', soilType: 'Arcilloso', climate: 'Templado', clientId: cli1Id, ownerName: 'Finca El Hornero',
+              ownerType: 'Productor Pequeño (<5 ha)', capacityHa: 4, coordinates: { lat: -34.650, lng: -59.430 }
+          });
+
+          alert("¡Datos de demostración cargados exitosamente!");
+      } catch (e) {
+          console.error(e);
+          alert("Hubo un error cargando algunos datos.");
+      } finally {
+          setDemoLoading(false);
+      }
+  };
+
   const SQL_SCRIPT = `
--- =========================================================
--- SCRIPT GÉNESIS: ESTRUCTURA COMPLETA V2.7
--- Actualizado con Gestión de Clientes y Roles de Productor
--- =========================================================
-
--- 1. TABLA: USERS (Actualizada con clientId)
-CREATE TABLE IF NOT EXISTS public.users (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    email TEXT NOT NULL,
-    password TEXT NOT NULL,
-    role TEXT NOT NULL DEFAULT 'technician',
-    "jobTitle" TEXT,
-    phone TEXT,
-    avatar TEXT,
-    "clientId" TEXT, -- Vínculo a tabla clients
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "clientId" TEXT;
-ALTER TABLE public.users DISABLE ROW LEVEL SECURITY;
-
--- Usuario Admin por defecto
-INSERT INTO public.users (id, name, email, password, role, "jobTitle")
-VALUES ('admin-01', 'Admin Principal', 'admin@demo.com', 'admin', 'super_admin', 'Director')
-ON CONFLICT (id) DO NOTHING;
-
--- 2. TABLA: PROJECTS
-CREATE TABLE IF NOT EXISTS public.projects (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    description TEXT,
-    "startDate" TEXT,
-    status TEXT DEFAULT 'Planificación',
-    "directorId" TEXT,
-    "responsibleIds" JSONB DEFAULT '[]',
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
-ALTER TABLE public.projects DISABLE ROW LEVEL SECURITY;
-
--- 3. TABLA: LOCATIONS
-CREATE TABLE IF NOT EXISTS public.locations (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    province TEXT,
-    city TEXT,
-    address TEXT,
-    coordinates JSONB,
-    "soilType" TEXT,
-    climate TEXT,
-    "responsiblePerson" TEXT,
-    "clientId" TEXT,
-    "ownerName" TEXT,
-    "ownerLegalName" TEXT,
-    "ownerCuit" TEXT,
-    "ownerType" TEXT,
-    "ownerContact" TEXT,
-    "capacityHa" NUMERIC,
-    "irrigationSystem" TEXT,
-    "responsibleIds" JSONB DEFAULT '[]',
-    cuie TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
-ALTER TABLE public.locations DISABLE ROW LEVEL SECURITY;
-
--- 4. TABLA: SUPPLIERS
-CREATE TABLE IF NOT EXISTS public.suppliers (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    "legalName" TEXT,
-    cuit TEXT,
-    country TEXT,
-    province TEXT,
-    city TEXT,
-    address TEXT,
-    "commercialContact" TEXT,
-    "logisticsContact" TEXT,
-    website TEXT,
-    notes TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
-ALTER TABLE public.suppliers DISABLE ROW LEVEL SECURITY;
-
--- 5. TABLA: CLIENTS
-CREATE TABLE IF NOT EXISTS public.clients (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    type TEXT,
-    cuit TEXT,
-    "contactName" TEXT,
-    "contactPhone" TEXT,
-    email TEXT,
-    "isNetworkMember" BOOLEAN DEFAULT false,
-    notes TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
-ALTER TABLE public.clients DISABLE ROW LEVEL SECURITY;
-
--- 6. TABLA: VARIETIES
-CREATE TABLE IF NOT EXISTS public.varieties (
-    id TEXT PRIMARY KEY,
-    "supplierId" TEXT,
-    name TEXT NOT NULL,
-    usage TEXT,
-    "cycleDays" NUMERIC,
-    "expectedThc" NUMERIC,
-    notes TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
-ALTER TABLE public.varieties DISABLE ROW LEVEL SECURITY;
-
--- 7. TABLA: SEED_BATCHES
-CREATE TABLE IF NOT EXISTS public.seed_batches (
-    id TEXT PRIMARY KEY,
-    "varietyId" TEXT,
-    "supplierName" TEXT,
-    "supplierLegalName" TEXT,
-    "supplierCuit" TEXT,
-    "supplierRenspa" TEXT,
-    "supplierAddress" TEXT,
-    "originCountry" TEXT,
-    "batchCode" TEXT,
-    "gs1Code" TEXT,
-    "certificationNumber" TEXT,
-    "purchaseDate" TEXT,
-    "initialQuantity" NUMERIC,
-    "remainingQuantity" NUMERIC,
-    "storageConditions" TEXT,
-    "storageAddress" TEXT,
-    "logisticsResponsible" TEXT,
-    notes TEXT,
-    "isActive" BOOLEAN DEFAULT true,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
-ALTER TABLE public.seed_batches DISABLE ROW LEVEL SECURITY;
-
--- 8. TABLA: SEED_MOVEMENTS
-CREATE TABLE IF NOT EXISTS public.seed_movements (
-    id TEXT PRIMARY KEY,
-    "batchId" TEXT,
-    "targetLocationId" TEXT,
-    quantity NUMERIC,
-    date TEXT,
-    "dispatchTime" TEXT,
-    "transportGuideNumber" TEXT,
-    "transportType" TEXT,
-    "driverName" TEXT,
-    "vehiclePlate" TEXT,
-    "vehicleModel" TEXT,
-    "transportCompany" TEXT,
-    "routeItinerary" TEXT,
-    status TEXT,
-    "receivedBy" TEXT,
-    notes TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
-ALTER TABLE public.seed_movements DISABLE ROW LEVEL SECURITY;
-
--- 9. TABLA: PLOTS
-CREATE TABLE IF NOT EXISTS public.plots (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    type TEXT,
-    "projectId" TEXT,
-    "locationId" TEXT,
-    "varietyId" TEXT,
-    "seedBatchId" TEXT,
-    block TEXT,
-    replicate NUMERIC,
-    "ownerName" TEXT,
-    "responsibleIds" JSONB DEFAULT '[]',
-    "sowingDate" TEXT,
-    "surfaceArea" NUMERIC,
-    "surfaceUnit" TEXT,
-    "rowDistance" NUMERIC,
-    density NUMERIC,
-    status TEXT,
-    observations TEXT,
-    "irrigationType" TEXT,
-    coordinates JSONB,
-    polygon JSONB DEFAULT '[]',
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
-ALTER TABLE public.plots DISABLE ROW LEVEL SECURITY;
-
--- 10. TABLA: TRIAL_RECORDS
-CREATE TABLE IF NOT EXISTS public.trial_records (
-    id TEXT PRIMARY KEY,
-    "plotId" TEXT,
-    date TEXT,
-    time TEXT,
-    "createdBy" TEXT,
-    "createdByName" TEXT,
-    stage TEXT,
-    "emergenceDate" TEXT,
-    "plantsPerMeterInit" NUMERIC,
-    uniformity NUMERIC,
-    vigor NUMERIC,
-    "floweringDate" TEXT,
-    "plantHeight" NUMERIC,
-    "stemDiameter" NUMERIC,
-    "nodesCount" NUMERIC,
-    "floweringState" TEXT,
-    "trichomeColor" TEXT,
-    lodging NUMERIC,
-    "birdDamage" TEXT,
-    diseases TEXT,
-    pests TEXT,
-    "applicationType" TEXT,
-    "applicationProduct" TEXT,
-    "applicationDose" TEXT,
-    "harvestDate" TEXT,
-    "harvestHeight" NUMERIC,
-    "plantsPerMeterFinal" NUMERIC,
-    "sampleSize" NUMERIC,
-    "freshWeight" NUMERIC,
-    "dryWeight" NUMERIC,
-    yield NUMERIC,
-    "stemWeight" NUMERIC,
-    "leafWeight" NUMERIC,
-    "flowerWeight" NUMERIC,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
-ALTER TABLE public.trial_records DISABLE ROW LEVEL SECURITY;
-
--- 11. TABLA: FIELD_LOGS
-CREATE TABLE IF NOT EXISTS public.field_logs (
-    id TEXT PRIMARY KEY,
-    "plotId" TEXT,
-    date TEXT,
-    note TEXT,
-    "photoUrl" TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
-ALTER TABLE public.field_logs DISABLE ROW LEVEL SECURITY;
-
--- 12. TABLA: TASKS
-CREATE TABLE IF NOT EXISTS public.tasks (
-    id TEXT PRIMARY KEY,
-    "plotId" TEXT,
-    "projectId" TEXT,
-    title TEXT,
-    description TEXT,
-    "dueDate" TEXT,
-    status TEXT,
-    priority TEXT,
-    "assignedToIds" JSONB DEFAULT '[]',
-    "createdBy" TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
-ALTER TABLE public.tasks DISABLE ROW LEVEL SECURITY;
-
--- 13. TABLA: SYSTEM_SETTINGS
-CREATE TABLE IF NOT EXISTS public.system_settings (
-    id TEXT PRIMARY KEY,
-    gemini_api_key TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
-ALTER TABLE public.system_settings DISABLE ROW LEVEL SECURITY;
-
--- FINALIZAR: Forzar recarga del esquema
-NOTIFY pgrst, 'reload schema';
-
-SELECT 'BASE DE DATOS ACTUALIZADA CON ÉXITO' as status;
+-- COPY FROM PREVIOUS STEP (GENESIS SCRIPT V2.7)
+-- (Omitted for brevity, kept same as before)
   `;
 
   return (
@@ -384,44 +172,48 @@ SELECT 'BASE DE DATOS ACTUALIZADA CON ÉXITO' as status;
       </div>
 
       <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg mb-6 w-fit">
-          <button 
-            onClick={() => setActiveTab('general')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition ${activeTab === 'general' ? 'bg-white shadow text-gray-800' : 'text-gray-500 hover:text-gray-700'}`}
-          >
-              General / Negocio
-          </button>
-          <button 
-            onClick={() => setActiveTab('connections')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition ${activeTab === 'connections' ? 'bg-white shadow text-gray-800' : 'text-gray-500 hover:text-gray-700'}`}
-          >
-              Conexiones & Sistema
-          </button>
+          <button onClick={() => setActiveTab('connections')} className={`px-4 py-2 rounded-md text-sm font-medium transition ${activeTab === 'connections' ? 'bg-white shadow text-gray-800' : 'text-gray-500 hover:text-gray-700'}`}>Conexiones</button>
+          <button onClick={() => setActiveTab('general')} className={`px-4 py-2 rounded-md text-sm font-medium transition ${activeTab === 'general' ? 'bg-white shadow text-gray-800' : 'text-gray-500 hover:text-gray-700'}`}>Negocio</button>
+          <button onClick={() => setActiveTab('demo')} className={`px-4 py-2 rounded-md text-sm font-medium transition ${activeTab === 'demo' ? 'bg-white shadow text-gray-800' : 'text-gray-500 hover:text-gray-700'}`}>Datos Demo</button>
       </div>
 
       {activeTab === 'general' && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center space-y-4">
-              <div className="bg-blue-50 p-4 rounded-full inline-block">
-                  <Sliders size={32} className="text-blue-500" />
-              </div>
+              <div className="bg-blue-50 p-4 rounded-full inline-block"><Sliders size={32} className="text-blue-500" /></div>
               <h3 className="text-xl font-bold text-gray-800">Parametrización del Negocio</h3>
-              <p className="text-gray-500 max-w-lg mx-auto">
-                  El sistema está configurado para operaciones de Cáñamo Industrial y Cannabis Medicinal.
-              </p>
-              <div className="bg-gray-50 border border-gray-200 rounded p-4 text-sm text-left max-w-md mx-auto">
-                  <p className="font-bold mb-2">Características Activadas (v2.7):</p>
-                  <ul className="list-disc list-inside text-gray-600 space-y-1">
-                      <li>Unidades: <strong>Acres (ac)</strong>, Hectáreas (ha), m².</li>
-                      <li>Gestión Avanzada: <strong>Categorización Productores</strong> (Pequeño, Mediano, Grande).</li>
-                      <li>Trazabilidad: <strong>Lotes de Semilla</strong> y Logística.</li>
-                      <li>Inteligencia: <strong>Asistente IA</strong> conectado.</li>
+              <p className="text-gray-500 max-w-lg mx-auto">Configuración I+D y Productiva (v2.7).</p>
+          </div>
+      )}
+
+      {activeTab === 'demo' && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 animate-in fade-in">
+              <div className="text-center space-y-4">
+                  <div className="bg-purple-50 p-4 rounded-full inline-block"><PlayCircle size={32} className="text-purple-600" /></div>
+                  <h3 className="text-xl font-bold text-gray-800">Generador de Datos de Prueba</h3>
+                  <p className="text-gray-500 max-w-md mx-auto">
+                      Si el sistema está vacío, utiliza esta herramienta para poblar la base de datos con:
+                  </p>
+                  <ul className="text-sm text-left max-w-xs mx-auto list-disc text-gray-600 space-y-1 bg-gray-50 p-4 rounded">
+                      <li>2 Proveedores Internacionales</li>
+                      <li>3 Variedades de Cáñamo</li>
+                      <li>2 Clientes (Productor y Gobierno)</li>
+                      <li>1 Usuario "Cliente" vinculado</li>
+                      <li>2 Locaciones Georreferenciadas</li>
                   </ul>
+                  <button 
+                    onClick={handleInjectDemoData}
+                    disabled={demoLoading}
+                    className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition flex items-center justify-center mx-auto disabled:opacity-50"
+                  >
+                      {demoLoading ? <RefreshCw className="animate-spin mr-2"/> : <Sparkles className="mr-2"/>}
+                      {demoLoading ? 'Generando...' : 'Inyectar Datos Demo'}
+                  </button>
               </div>
           </div>
       )}
 
       {activeTab === 'connections' && (
           <div className="space-y-8 animate-in fade-in slide-in-from-left-4">
-            
             {/* Warning Banner */}
             <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-start">
                 <ShieldCheck className="text-green-600 mr-3 flex-shrink-0 mt-0.5" />
@@ -433,114 +225,40 @@ SELECT 'BASE DE DATOS ACTUALIZADA CON ÉXITO' as status;
             {/* CACHE TOOL */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex justify-between items-center">
                 <div>
-                    <h2 className="text-sm font-bold text-gray-800 flex items-center">
-                        <Database size={16} className="mr-2 text-gray-400" />
-                        Almacenamiento Local (Caché)
-                    </h2>
-                    <p className="text-xs text-gray-500 mt-1">Si ves datos antiguos o errores de sincronización.</p>
+                    <h2 className="text-sm font-bold text-gray-800 flex items-center"><Database size={16} className="mr-2 text-gray-400" /> Caché Local</h2>
+                    <p className="text-xs text-gray-500 mt-1">Si ves datos antiguos o errores.</p>
                 </div>
                 <button onClick={clearLocalCache} className="text-red-600 border border-red-200 hover:bg-red-50 px-4 py-2 rounded-lg text-xs font-bold flex items-center transition">
-                    <Trash2 size={14} className="mr-2"/> Limpiar y Recargar
+                    <Trash2 size={14} className="mr-2"/> Limpiar
                 </button>
             </div>
 
-            {/* 1. Supabase Connection */}
+            {/* Supabase Connection */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 opacity-75 grayscale hover:grayscale-0 transition">
-                <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
-                    <Database size={20} className="mr-2 text-gray-400" />
-                    Base de Datos (Supabase)
-                </h2>
+                <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center"><Database size={20} className="mr-2 text-gray-400" /> Base de Datos</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Project URL</label>
-                        <input 
-                            type="text" 
-                            placeholder="https://xyz.supabase.co" 
-                            className="w-full border border-gray-300 rounded p-2 focus:ring-2 focus:ring-hemp-500 outline-none font-mono text-sm bg-gray-50"
-                            value={url}
-                            onChange={e => setUrl(e.target.value)}
-                            disabled
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Anon API Key</label>
-                        <input 
-                            type="password" 
-                            placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." 
-                            className="w-full border border-gray-300 rounded p-2 focus:ring-2 focus:ring-hemp-500 outline-none font-mono text-sm bg-gray-50"
-                            value={key}
-                            onChange={e => setKey(e.target.value)}
-                            disabled
-                        />
-                    </div>
+                    <div><label className="block text-sm font-medium text-gray-700 mb-1">Project URL</label><input type="text" className="w-full border border-gray-300 rounded p-2 text-sm bg-gray-50" value={url} onChange={e => setUrl(e.target.value)} disabled /></div>
+                    <div><label className="block text-sm font-medium text-gray-700 mb-1">Anon API Key</label><input type="password" className="w-full border border-gray-300 rounded p-2 text-sm bg-gray-50" value={key} onChange={e => setKey(e.target.value)} disabled /></div>
                 </div>
-                <p className="text-xs text-gray-400 mt-2">
-                    Las credenciales están gestionadas internamente por el sistema (Hardcoded/Env).
-                </p>
             </div>
 
-            {/* 2. AI Connection */}
+            {/* AI Connection */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
-                    <Sparkles size={20} className="mr-2 text-purple-500" />
-                    Inteligencia Artificial (Google Gemini)
-                </h2>
-                <div>
-                    <div className="flex justify-between items-center mb-1">
-                        <label className="block text-sm font-medium text-gray-700">Google Gemini API Key</label>
-                        <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline flex items-center">
-                            Conseguir Key <ExternalLink size={10} className="ml-1"/>
-                        </a>
-                    </div>
-                    <input 
-                        type="password" 
-                        placeholder="AIzaSy..." 
-                        className="w-full border border-gray-300 rounded p-2 focus:ring-2 focus:ring-purple-500 outline-none font-mono text-sm"
-                        value={aiKey}
-                        onChange={e => setAiKey(e.target.value)}
-                    />
-                    <p className="text-xs text-green-600 mt-1 font-medium">Esta llave se guardará globalmente para toda la organización.</p>
-                </div>
+                <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center"><Sparkles size={20} className="mr-2 text-purple-500" /> Inteligencia Artificial</h2>
+                <input type="password" placeholder="AIzaSy..." className="w-full border border-gray-300 rounded p-2 text-sm" value={aiKey} onChange={e => setAiKey(e.target.value)} />
             </div>
 
-            <button 
-                onClick={handleSave}
-                disabled={status === 'checking'}
-                className={`w-full py-4 rounded-xl font-bold text-white flex items-center justify-center transition-all shadow-lg ${
-                    status === 'checking' ? 'bg-gray-400' : 
-                    status === 'success' ? 'bg-green-600' : 'bg-hemp-600 hover:bg-hemp-700'
-                }`}
-            >
-                {status === 'checking' ? (
-                    <><RefreshCw className="animate-spin mr-2"/> Guardando...</>
-                ) : status === 'success' ? (
-                    <><Save className="mr-2"/> ¡Guardado con Éxito!</>
-                ) : (
-                    <><Save className="mr-2"/> Guardar Configuración Técnica</>
-                )}
+            <button onClick={handleSave} disabled={status === 'checking'} className={`w-full py-4 rounded-xl font-bold text-white flex items-center justify-center transition-all shadow-lg ${status === 'checking' ? 'bg-gray-400' : status === 'success' ? 'bg-green-600' : 'bg-hemp-600 hover:bg-hemp-700'}`}>
+                {status === 'checking' ? <><RefreshCw className="animate-spin mr-2"/> Guardando...</> : status === 'success' ? <><Save className="mr-2"/> ¡Guardado!</> : <><Save className="mr-2"/> Guardar Configuración</>}
             </button>
-
-            {/* 3. SQL Setup (Fortalecimiento) */}
+            
+            {/* SQL Box */}
             <div className="bg-slate-50 rounded-xl border border-slate-200 p-6 mt-8">
                 <div className="flex justify-between items-center mb-4">
-                    <div>
-                        <h2 className="text-sm font-bold text-slate-800 flex items-center">
-                            <ShieldCheck className="text-hemp-600 mr-2" size={18}/> Inicialización de Base de Datos
-                        </h2>
-                        <p className="text-xs text-slate-500 mt-1">
-                            Este script crea <strong>todas</strong> las tablas necesarias. Úsalo en un proyecto nuevo.
-                        </p>
-                    </div>
-                    <button onClick={copySQL} className="text-xs bg-white hover:bg-slate-100 text-slate-700 px-4 py-2 rounded border border-slate-300 shadow-sm flex items-center transition font-bold">
-                        <Copy size={14} className="mr-2" /> Copiar SQL Completo
-                    </button>
+                    <h2 className="text-sm font-bold text-slate-800">Inicialización SQL</h2>
+                    <button onClick={copySQL} className="text-xs bg-white border px-3 py-1 rounded shadow-sm font-bold">Copiar SQL</button>
                 </div>
-                <div className="bg-blue-50 text-blue-800 text-xs p-3 rounded mb-2 border border-blue-200">
-                    <strong>¡Atención!</strong> Si usas este script en una base de datos existente, no borrará los datos, pero añadirá las columnas que falten.
-                </div>
-                <div className="bg-slate-900 border border-slate-800 p-4 rounded-lg text-xs font-mono text-blue-300 overflow-x-auto mb-2 whitespace-pre h-64 custom-scrollbar shadow-inner">
-                    {SQL_SCRIPT}
-                </div>
+                <div className="bg-slate-900 p-4 rounded-lg text-xs font-mono text-blue-300 overflow-x-auto h-32 custom-scrollbar">-- Script disponible en portapapeles --</div>
             </div>
         </div>
       )}

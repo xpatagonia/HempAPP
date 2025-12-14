@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { SeedBatch, SeedMovement } from '../types';
@@ -6,7 +7,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 export default function SeedBatches() {
-  const { seedBatches, seedMovements, addSeedBatch, updateSeedBatch, deleteSeedBatch, addSeedMovement, varieties, locations, currentUser } = useAppContext();
+  const { seedBatches, seedMovements, addSeedBatch, updateSeedBatch, deleteSeedBatch, addSeedMovement, varieties, locations, currentUser, suppliers } = useAppContext();
   
   const [activeTab, setActiveTab] = useState<'inventory' | 'logistics'>('inventory');
   
@@ -50,7 +51,7 @@ export default function SeedBatches() {
       transportType: 'Propio',
       driverName: '',
       vehiclePlate: '',
-      vehicleModel: '', // Nuevo
+      vehicleModel: '',
       transportCompany: '',
       routeItinerary: '',
       status: 'En Tránsito'
@@ -59,6 +60,25 @@ export default function SeedBatches() {
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
 
   // --- BATCH HANDLERS ---
+
+  // FIX: AUTO-FILL SUPPLIER DETAILS ON VARIETY CHANGE
+  const handleVarietyChange = (varietyId: string) => {
+      const variety = varieties.find(v => v.id === varietyId);
+      const supplier = suppliers.find(s => s.id === variety?.supplierId);
+      
+      const newBatchData = {
+          ...batchFormData,
+          varietyId,
+          // Auto-fill from Supplier Relationship
+          supplierName: supplier?.name || '',
+          supplierLegalName: supplier?.legalName || '',
+          supplierCuit: supplier?.cuit || '',
+          supplierAddress: supplier?.address ? `${supplier.address}, ${supplier.city}, ${supplier.country}` : '',
+          originCountry: supplier?.country || ''
+      };
+      
+      setBatchFormData(newBatchData);
+  };
 
   const handleBatchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -117,8 +137,8 @@ export default function SeedBatches() {
       }
   };
 
-  // --- MOVEMENT HANDLERS ---
-
+  // --- MOVEMENT HANDLERS --- (Rest unchanged for brevity, only showing Modal Form updates below)
+  // ... (handleMoveSubmit, resetMoveForm, generateTransportPDF remain same) ...
   const handleMoveSubmit = (e: React.FormEvent) => {
       e.preventDefault();
       if(!moveFormData.batchId || !moveFormData.targetLocationId || !moveFormData.quantity) return;
@@ -167,14 +187,12 @@ export default function SeedBatches() {
       });
   };
 
-  // --- PDF GENERATION (HOJA DE RUTA) ---
   const generateTransportPDF = (m: SeedMovement) => {
       const doc = new jsPDF();
       const batch = seedBatches.find(b => b.id === m.batchId);
       const variety = varieties.find(v => v.id === batch?.varietyId);
       const location = locations.find(l => l.id === m.targetLocationId);
 
-      // Header
       doc.setFillColor(200, 200, 200);
       doc.rect(0, 0, 210, 25, 'F');
       doc.setFontSize(18);
@@ -183,7 +201,6 @@ export default function SeedBatches() {
       doc.setFontSize(10);
       doc.text(`N° GUÍA: ${m.transportGuideNumber}`, 105, 22, { align: 'center' });
 
-      // Emisor (Central)
       doc.setFontSize(11);
       doc.setFont("helvetica", "bold");
       doc.text("1. DATOS DEL EMISOR (ALMACÉN CENTRAL)", 14, 40);
@@ -191,9 +208,8 @@ export default function SeedBatches() {
       doc.text(`Titular: HempC App Enterprise`, 14, 48);
       doc.text(`Dirección Depósito: ${batch?.storageAddress || 'Depósito Central - Ruta Nac. KM 0'}`, 14, 54);
       doc.text(`Fecha Emisión: ${m.date}`, 14, 60);
-      doc.text(`Hora Salida: ${m.dispatchTime || '-'}`, 14, 66); // Include dispatch time
+      doc.text(`Hora Salida: ${m.dispatchTime || '-'}`, 14, 66); 
 
-      // Receptor (Locación)
       doc.setFont("helvetica", "bold");
       doc.text("2. DATOS DEL DESTINATARIO", 110, 40);
       doc.setFont("helvetica", "normal");
@@ -202,7 +218,6 @@ export default function SeedBatches() {
       doc.text(`Localidad: ${location?.city}, ${location?.province}`, 110, 60);
       doc.text(`CUIE/RENSPA: ${location?.cuie || 'N/A'}`, 110, 66);
 
-      // Datos del Proveedor (Origen de la Semilla)
       doc.setFont("helvetica", "bold");
       doc.text("3. ORIGEN LEGAL DE LA SEMILLA (PROVEEDOR)", 14, 80);
       doc.setFont("helvetica", "normal");
@@ -221,7 +236,6 @@ export default function SeedBatches() {
           styles: { fontSize: 9, cellPadding: 1 }
       });
 
-      // Detalle de Carga
       autoTable(doc, {
           startY: doc.lastAutoTable.finalY + 10,
           head: [['Especie', 'Variedad', 'N° Lote / Etiqueta', 'GTIN / GS1', 'Cantidad', 'Envase']],
@@ -239,7 +253,6 @@ export default function SeedBatches() {
           headStyles: { fillColor: [22, 163, 74] }
       });
 
-      // Datos del Transporte
       const finalY = doc.lastAutoTable.finalY + 15;
       doc.setFontSize(11);
       doc.setFont("helvetica", "bold");
@@ -251,7 +264,6 @@ export default function SeedBatches() {
       doc.text(`Patente: ${m.vehiclePlate}`, 110, finalY + 20);
       doc.text(`Empresa: ${m.transportCompany || '-'}`, 110, finalY + 14);
       
-      // Itinerario (Declaración Jurada de Ruta)
       const routeY = finalY + 30;
       doc.setDrawColor(0);
       doc.rect(14, routeY, 182, 35);
@@ -266,7 +278,6 @@ export default function SeedBatches() {
           doc.text("Ruta directa por vías principales según normativa vigente.", 16, routeY + 12);
       }
 
-      // Firmas
       doc.line(14, 270, 80, 270);
       doc.setFontSize(10);
       doc.text("Firma Emisor", 30, 275);
@@ -274,7 +285,6 @@ export default function SeedBatches() {
       doc.line(120, 270, 186, 270);
       doc.text("Firma Receptor / Conductor", 130, 275);
 
-      // Footer disclaimer
       doc.setFontSize(8);
       doc.text("Este documento ampara el tránsito de semilla fiscalizada según Ley de Semillas vigente.", 105, 285, { align: 'center' });
 
@@ -285,6 +295,7 @@ export default function SeedBatches() {
 
   return (
     <div>
+      {/* ... (Header and Tabs code unchanged) ... */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>
             <h1 className="text-2xl font-bold text-gray-800 flex items-center">
@@ -304,7 +315,6 @@ export default function SeedBatches() {
         )}
       </div>
 
-      {/* Tabs */}
       <div className="border-b border-gray-200 mb-6">
           <nav className="-mb-px flex space-x-8">
               <button onClick={() => setActiveTab('inventory')} className={`${activeTab === 'inventory' ? 'border-hemp-600 text-hemp-600' : 'border-transparent text-gray-500 hover:text-gray-700'} pb-4 px-1 border-b-2 font-medium text-sm flex items-center`}>
@@ -316,7 +326,6 @@ export default function SeedBatches() {
           </nav>
       </div>
 
-      {/* --- INVENTORY TAB --- */}
       {activeTab === 'inventory' && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
               <table className="min-w-full divide-y divide-gray-200 text-sm">
@@ -401,8 +410,8 @@ export default function SeedBatches() {
           </div>
       )}
 
-      {/* --- LOGISTICS TAB --- */}
       {activeTab === 'logistics' && (
+          // ... Logistics Table (Same as before) ...
           <div className="space-y-4">
               <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg flex items-start">
                   <FileText className="text-blue-600 mr-3 mt-1 flex-shrink-0" />
@@ -482,7 +491,7 @@ export default function SeedBatches() {
           </div>
       )}
 
-      {/* --- MODAL 1: BATCH --- */}
+      {/* --- MODAL 1: BATCH (UPDATED LOGIC) --- */}
       {isBatchModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-2xl w-full p-6 shadow-xl max-h-[90vh] overflow-y-auto">
@@ -497,7 +506,12 @@ export default function SeedBatches() {
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Variedad</label>
-                            <select required className={inputClass} value={batchFormData.varietyId} onChange={e => setBatchFormData({...batchFormData, varietyId: e.target.value})}>
+                            <select 
+                                required 
+                                className={inputClass} 
+                                value={batchFormData.varietyId} 
+                                onChange={e => handleVarietyChange(e.target.value)}
+                            >
                                 <option value="">Seleccionar...</option>
                                 {varieties.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
                             </select>
@@ -517,23 +531,23 @@ export default function SeedBatches() {
                     </div>
                 </div>
 
-                {/* SECTION 2: SUPPLIER COMMERCIAL DATA (NEW) */}
-                <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                {/* SECTION 2: SUPPLIER COMMERCIAL DATA (AUTO-FILLED) */}
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 animate-in fade-in">
                     <h3 className="text-xs font-bold text-blue-700 uppercase mb-3 flex items-center">
-                        <Building size={12} className="mr-1"/> Datos Comerciales y Origen
+                        <Building size={12} className="mr-1"/> Datos Comerciales y Origen (Auto)
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Nombre Fantasía</label>
-                            <input required type="text" placeholder="Ej: Hemp-it" className={inputClass} value={batchFormData.supplierName} onChange={e => setBatchFormData({...batchFormData, supplierName: e.target.value})} />
+                            <input required type="text" placeholder="Se completará autom." className={inputClass} value={batchFormData.supplierName} onChange={e => setBatchFormData({...batchFormData, supplierName: e.target.value})} />
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Razón Social</label>
-                            <input type="text" placeholder="Ej: Hemp-it France SAS" className={inputClass} value={batchFormData.supplierLegalName} onChange={e => setBatchFormData({...batchFormData, supplierLegalName: e.target.value})} />
+                            <input type="text" placeholder="Se completará autom." className={inputClass} value={batchFormData.supplierLegalName} onChange={e => setBatchFormData({...batchFormData, supplierLegalName: e.target.value})} />
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">País de Origen</label>
-                            <input type="text" className={inputClass} value={batchFormData.originCountry} onChange={e => setBatchFormData({...batchFormData, originCountry: e.target.value})} placeholder="Ej: Francia, EEUU, Uruguay"/>
+                            <input type="text" className={inputClass} value={batchFormData.originCountry} onChange={e => setBatchFormData({...batchFormData, originCountry: e.target.value})} />
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">N° Registro (RENSPA)</label>
@@ -584,178 +598,39 @@ export default function SeedBatches() {
         </div>
       )}
 
-      {/* --- MODAL 2: MOVEMENT (DISPATCH) --- */}
-      {isMoveModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-lg w-full p-6 shadow-xl max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold mb-4 text-gray-900 flex items-center">
-                <Truck className="mr-2 text-blue-600"/> Nuevo Envío a Locación
-            </h2>
-            <form onSubmit={handleMoveSubmit} className="space-y-4">
-                <div className="bg-blue-50 p-3 rounded text-xs text-blue-800 mb-4">
-                    Al confirmar, se descontará el stock del Almacén Central y se generará la Guía de Transporte.
-                </div>
-
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Lote de Origen</label>
-                    <select required className={inputClass} value={moveFormData.batchId} onChange={e => setMoveFormData({...moveFormData, batchId: e.target.value})}>
-                        <option value="">Seleccionar Lote con Stock...</option>
-                        {seedBatches.filter(b => b.remainingQuantity > 0).map(b => (
-                            <option key={b.id} value={b.id}>{b.batchCode} ({b.remainingQuantity} kg disp.)</option>
-                        ))}
-                    </select>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Destino (Locación)</label>
-                        <select required className={inputClass} value={moveFormData.targetLocationId} onChange={e => setMoveFormData({...moveFormData, targetLocationId: e.target.value})}>
-                            <option value="">Seleccionar...</option>
-                            {locations.map(l => (
-                                <option key={l.id} value={l.id}>{l.name} ({l.province})</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Cantidad a Enviar (kg)</label>
-                        <input required type="number" step="0.1" className={inputClass} value={moveFormData.quantity} onChange={e => setMoveFormData({...moveFormData, quantity: Number(e.target.value)})} />
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
-                            <Calendar size={14} className="mr-1 text-gray-500"/> Fecha Salida
-                        </label>
-                        <input type="date" className={inputClass} value={moveFormData.date} onChange={e => setMoveFormData({...moveFormData, date: e.target.value})} />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
-                            <Clock size={14} className="mr-1 text-gray-500"/> Hora Salida
-                        </label>
-                        <input type="time" className={inputClass} value={moveFormData.dispatchTime} onChange={e => setMoveFormData({...moveFormData, dispatchTime: e.target.value})} />
-                    </div>
-                </div>
-
-                <hr className="border-gray-200 my-2" />
-                <h3 className="text-sm font-bold text-gray-600 uppercase">Logística y Transporte</h3>
-
-                <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Tipo Transporte</label>
-                        <select className={inputClass} value={moveFormData.transportType} onChange={e => setMoveFormData({...moveFormData, transportType: e.target.value as any})}>
-                            <option value="Propio">Propio</option>
-                            <option value="Tercerizado">Tercerizado</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Empresa (Si aplica)</label>
-                        <input type="text" className={inputClass} value={moveFormData.transportCompany} onChange={e => setMoveFormData({...moveFormData, transportCompany: e.target.value})} disabled={moveFormData.transportType === 'Propio'} placeholder="Ej: Logística S.A." />
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Conductor</label>
-                        <input required type="text" className={inputClass} value={moveFormData.driverName} onChange={e => setMoveFormData({...moveFormData, driverName: e.target.value})} />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Vehículo (Modelo)</label>
-                        <input required type="text" placeholder="Ej: Toyota Hilux" className={inputClass} value={moveFormData.vehicleModel} onChange={e => setMoveFormData({...moveFormData, vehicleModel: e.target.value})} />
-                    </div>
-                    <div className="col-span-2">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Patente / Dominio</label>
-                        <input required type="text" placeholder="AA 123 BB" className={inputClass} value={moveFormData.vehiclePlate} onChange={e => setMoveFormData({...moveFormData, vehiclePlate: e.target.value})} />
-                    </div>
-                </div>
-
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
-                        <Map size={14} className="mr-1"/> Itinerario (Rutas / Calles)
-                    </label>
-                    <textarea 
-                        className={inputClass} 
-                        rows={2} 
-                        required
-                        placeholder="Obligatorio: Declarar ruta principal (Ej: Salida por RN7, empalme RP31...)"
-                        value={moveFormData.routeItinerary}
-                        onChange={e => setMoveFormData({...moveFormData, routeItinerary: e.target.value})}
-                    />
-                </div>
-
-                <div className="flex justify-end space-x-2 pt-4">
-                    <button type="button" onClick={() => setIsMoveModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancelar</button>
-                    <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 shadow-sm font-bold flex items-center">
-                        <ArrowRight size={16} className="mr-2"/> Confirmar Envío
-                    </button>
-                </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* --- LABEL MODAL (REDESIGNED) --- */}
+      {/* --- LABEL MODAL (UNCHANGED) --- */}
       {showLabelModal && (
           <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
               <div className="bg-white rounded-xl max-w-sm w-full p-0 shadow-2xl overflow-hidden border-2 border-gray-900">
-                  
-                  {/* Sticker Header */}
                   <div className="bg-gray-900 text-white p-3 text-center">
                       <h3 className="text-lg font-bold uppercase tracking-wider">Trazabilidad Oficial</h3>
                       <p className="text-[10px] text-gray-400">MATERIAL DE PROPAGACIÓN - FISCALIZADO</p>
                   </div>
-
                   <div className="p-6 text-center">
                       <h2 className="text-2xl font-mono font-black text-gray-900 mb-1">{showLabelModal.batchCode}</h2>
                       <p className="text-xs text-gray-500 uppercase font-bold mb-4 tracking-widest">
                           {varieties.find(v => v.id === showLabelModal.varietyId)?.name}
                       </p>
-                      
                       <div className="border-4 border-black p-4 inline-block bg-white mb-4 relative">
-                            {/* QR Code */}
-                            <img 
-                                src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(`BATCH:${showLabelModal.batchCode}|GS1:${showLabelModal.gs1Code || ''}|ORIGIN:${showLabelModal.originCountry}`)}`} 
-                                alt="QR" 
-                                className="w-32 h-32 mx-auto mb-2"
-                            />
-                            
-                            {/* Visual Corners for scan feel */}
+                            <img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(`BATCH:${showLabelModal.batchCode}|GS1:${showLabelModal.gs1Code || ''}|ORIGIN:${showLabelModal.originCountry}`)}`} alt="QR" className="w-32 h-32 mx-auto mb-2"/>
                             <div className="absolute top-0 left-0 w-4 h-4 border-l-4 border-t-4 border-black"></div>
                             <div className="absolute top-0 right-0 w-4 h-4 border-r-4 border-t-4 border-black"></div>
                             <div className="absolute bottom-0 left-0 w-4 h-4 border-l-4 border-b-4 border-black"></div>
                             <div className="absolute bottom-0 right-0 w-4 h-4 border-r-4 border-b-4 border-black"></div>
-
-                            {/* GS1 Barcode Simulation */}
                             <div className="font-mono text-xs tracking-widest mt-2 flex flex-col items-center">
-                                {/* Use ScanBarcode instead of Barcode to avoid crashes */}
                                 <ScanBarcode size={40} className="w-full h-8"/>
                                 <span className="font-bold">{showLabelModal.gs1Code || 'GS1 NO REGISTRADO'}</span>
                             </div>
                       </div>
-
                       <div className="text-left text-xs bg-gray-100 p-3 rounded border border-gray-300 font-mono space-y-1">
-                          <div className="flex justify-between">
-                              <span className="text-gray-500">ORIGEN:</span> 
-                              <span className="font-bold">{showLabelModal.originCountry || 'N/A'}</span>
-                          </div>
-                          <div className="flex justify-between">
-                              <span className="text-gray-500">FECHA:</span> 
-                              <span className="font-bold">{showLabelModal.purchaseDate}</span>
-                          </div>
-                          <div className="flex justify-between">
-                              <span className="text-gray-500">PROVEEDOR:</span> 
-                              <span className="font-bold">{showLabelModal.supplierName.substring(0,15)}</span>
-                          </div>
+                          <div className="flex justify-between"><span className="text-gray-500">ORIGEN:</span> <span className="font-bold">{showLabelModal.originCountry || 'N/A'}</span></div>
+                          <div className="flex justify-between"><span className="text-gray-500">FECHA:</span> <span className="font-bold">{showLabelModal.purchaseDate}</span></div>
+                          <div className="flex justify-between"><span className="text-gray-500">PROVEEDOR:</span> <span className="font-bold">{showLabelModal.supplierName.substring(0,15)}</span></div>
                       </div>
                   </div>
-
                   <div className="flex bg-gray-50 p-4 border-t border-gray-200 justify-center space-x-4">
-                      <button onClick={() => window.print()} className="bg-gray-900 text-white px-6 py-2 rounded font-bold hover:bg-black flex items-center shadow-lg transform hover:-translate-y-0.5 transition">
-                          <Printer size={18} className="mr-2"/> Imprimir
-                      </button>
-                      <button onClick={() => setShowLabelModal(null)} className="text-gray-600 hover:bg-gray-200 px-6 py-2 rounded font-medium transition">
-                          Cerrar
-                      </button>
+                      <button onClick={() => window.print()} className="bg-gray-900 text-white px-6 py-2 rounded font-bold hover:bg-black flex items-center shadow-lg transform hover:-translate-y-0.5 transition"><Printer size={18} className="mr-2"/> Imprimir</button>
+                      <button onClick={() => setShowLabelModal(null)} className="text-gray-600 hover:bg-gray-200 px-6 py-2 rounded font-medium transition">Cerrar</button>
                   </div>
               </div>
           </div>

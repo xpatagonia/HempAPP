@@ -1,10 +1,10 @@
+
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Variety, UsageType } from '../types';
-import { Plus, Search, Tag, Edit2, Trash2, CloudDownload, Sprout, AlertCircle, Building } from 'lucide-react';
+import { Plus, Search, Tag, Edit2, Trash2, CloudDownload, Sprout, AlertCircle, Building, Globe } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
-// Catálogo Oficial Hemp-it con datos para importación automática
 const HEMP_IT_TEMPLATE = {
     name: 'Hemp-it France',
     country: 'Francia',
@@ -24,7 +24,6 @@ export default function Varieties() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isImporting, setIsImporting] = useState(false);
 
-  // Form State - genetics removed, supplierId added
   const [formData, setFormData] = useState<Partial<Variety>>({
     name: '', usage: 'Fibra', supplierId: '', cycleDays: 120, expectedThc: 0, notes: ''
   });
@@ -35,7 +34,6 @@ export default function Varieties() {
     e.preventDefault();
     if (!formData.name || !formData.supplierId) return;
     
-    // Preparar payload, enviando null si no hay supplier (aunque el form lo hace required, es buena práctica)
     const payload = {
         name: formData.name!,
         usage: formData.usage as UsageType,
@@ -46,15 +44,9 @@ export default function Varieties() {
     };
 
     if (editingId) {
-      updateVariety({
-        ...payload,
-        id: editingId,
-      } as Variety);
+      updateVariety({ ...payload, id: editingId } as Variety);
     } else {
-      addVariety({
-        ...payload,
-        id: Date.now().toString(),
-      } as Variety);
+      addVariety({ ...payload, id: Date.now().toString() } as Variety);
     }
     
     closeModal();
@@ -80,12 +72,9 @@ export default function Varieties() {
 
   const handleImportCatalog = async () => {
       if(!window.confirm("¿Importar catálogo base de Hemp-it? Se creará el proveedor si no existe.")) return;
-      
       setIsImporting(true);
       
-      // 1. Find or Create Supplier
       let supplierId = suppliers.find(s => s.name.toLowerCase().includes('hemp-it'))?.id;
-      
       if (!supplierId) {
           supplierId = await addSupplier({
               id: Date.now().toString(),
@@ -95,8 +84,6 @@ export default function Varieties() {
           });
       }
 
-      // 2. Add Varieties
-      let count = 0;
       HEMP_IT_TEMPLATE.varieties.forEach(template => {
           const exists = varieties.some(v => v.name.toLowerCase() === template.name.toLowerCase());
           if (!exists) {
@@ -105,12 +92,11 @@ export default function Varieties() {
                   id: Date.now().toString() + Math.random().toString().slice(2,5),
                   supplierId: supplierId!
               } as Variety);
-              count++;
           }
       });
 
       setIsImporting(false);
-      alert(count > 0 ? `Se importaron ${count} variedades.` : "El catálogo ya está actualizado.");
+      alert("Catálogo importado correctamente.");
   };
 
   const filtered = varieties.filter(v => {
@@ -197,15 +183,19 @@ export default function Varieties() {
                 <div className="bg-gray-50 rounded-lg p-3 space-y-2 text-sm text-gray-600 mb-3 border border-gray-100">
                   <div className="flex justify-between border-b border-gray-200 pb-1">
                       <span className="font-semibold text-gray-500">Proveedor:</span> 
-                      <span className="font-medium text-gray-900">{supplier?.name || 'Desconocido'}</span>
+                      <span className="font-medium text-gray-900 truncate max-w-[100px]" title={supplier?.name}>{supplier?.name || 'Desconocido'}</span>
                   </div>
+                  {/* FIX: Relación explícita con el país del proveedor */}
                   <div className="flex justify-between border-b border-gray-200 pb-1">
-                      <span className="font-semibold text-gray-500">Ciclo Aprox:</span> 
-                      <span className="font-medium text-gray-900">{v.cycleDays} días</span>
+                      <span className="font-semibold text-gray-500">Origen:</span> 
+                      <span className="font-medium text-gray-900 flex items-center">
+                          {supplier?.country && <Globe size={10} className="mr-1 text-gray-400"/>}
+                          {supplier?.country || 'N/A'}
+                      </span>
                   </div>
                   <div className="flex justify-between">
-                      <span className="font-semibold text-gray-500">THC Ref:</span> 
-                      <span className={`font-medium ${v.expectedThc > 0.3 ? 'text-red-500' : 'text-green-600'}`}>{v.expectedThc}%</span>
+                      <span className="font-semibold text-gray-500">Ciclo / THC:</span> 
+                      <span className="font-medium text-gray-900">{v.cycleDays} d / {v.expectedThc}%</span>
                   </div>
                 </div>
                 
@@ -220,7 +210,6 @@ export default function Varieties() {
         })}
       </div>
 
-      {/* Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-lg w-full p-6 shadow-xl max-h-[90vh] overflow-y-auto">
@@ -269,7 +258,7 @@ export default function Varieties() {
                   >
                       <option value="">Seleccionar...</option>
                       {suppliers.map(s => (
-                          <option key={s.id} value={s.id}>{s.name}</option>
+                          <option key={s.id} value={s.id}>{s.name} ({s.country})</option>
                       ))}
                   </select>
                 </div>
