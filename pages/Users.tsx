@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { User, UserRole } from '../types';
-import { Plus, Trash2, Edit2, Shield, Wrench, Eye, AlertCircle, Lock, Key, Save, Loader2, Phone, Briefcase, User as UserIcon, CloudOff } from 'lucide-react';
+import { Plus, Trash2, Edit2, Shield, Wrench, Eye, AlertCircle, Lock, Key, Save, Loader2, Phone, Briefcase, User as UserIcon, CloudOff, Link as LinkIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 // Avatares Predefinidos (DiceBear)
@@ -18,13 +18,13 @@ const PRESET_AVATARS = [
 ];
 
 export default function Users() {
-  const { usersList, addUser, updateUser, deleteUser, currentUser, isEmergencyMode } = useAppContext();
+  const { usersList, addUser, updateUser, deleteUser, currentUser, isEmergencyMode, clients } = useAppContext();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   const [formData, setFormData] = useState<Partial<User>>({
-    name: '', email: '', role: 'technician', password: '', jobTitle: '', phone: '', avatar: ''
+    name: '', email: '', role: 'technician', password: '', jobTitle: '', phone: '', avatar: '', clientId: ''
   });
 
   const isSuperAdmin = currentUser?.role === 'super_admin';
@@ -74,7 +74,6 @@ export default function Users() {
 
     setIsSaving(true);
     
-    // Simular un pequeño delay para que la UI responda
     await new Promise(r => setTimeout(r, 500));
 
     try {
@@ -84,7 +83,8 @@ export default function Users() {
             role: formData.role as UserRole,
             jobTitle: formData.jobTitle || '',
             phone: formData.phone || '',
-            avatar: formData.avatar || PRESET_AVATARS[0]
+            avatar: formData.avatar || PRESET_AVATARS[0],
+            clientId: formData.role === 'client' ? formData.clientId : null // Only save clientId if role is client
         };
 
         if (editingId) {
@@ -122,7 +122,7 @@ export default function Users() {
 
   const closeModal = () => {
       setIsModalOpen(false);
-      setFormData({ name: '', email: '', role: 'technician', password: '', jobTitle: '', phone: '', avatar: '' });
+      setFormData({ name: '', email: '', role: 'technician', password: '', jobTitle: '', phone: '', avatar: '', clientId: '' });
       setEditingId(null);
   };
 
@@ -198,6 +198,12 @@ export default function Users() {
                          user.role === 'viewer' ? 'Visita' : 'Administrador'}
                       </span>
                       {user.jobTitle && <span className="text-xs text-gray-500 font-medium">{user.jobTitle}</span>}
+                      {user.role === 'client' && user.clientId && (
+                          <span className="text-[10px] text-gray-400 flex items-center mt-1">
+                              <LinkIcon size={8} className="mr-1"/> 
+                              {clients.find(c => c.id === user.clientId)?.name || 'Cliente desconocido'}
+                          </span>
+                      )}
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -227,45 +233,8 @@ export default function Users() {
           <div className="bg-white rounded-xl max-w-xl w-full p-6 shadow-xl max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold mb-4 text-gray-900">{editingId ? 'Editar Perfil' : 'Nuevo Usuario'}</h2>
             
-            {/* EMERGENCY MODE WARNING */}
-            {isEmergencyMode && (
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 flex items-start text-sm text-amber-800">
-                    <CloudOff className="mr-2 flex-shrink-0 mt-0.5" size={18}/>
-                    <div>
-                        <strong>¡Atención! Estás en Modo Offline.</strong>
-                        <p className="mt-1 text-xs text-amber-700">
-                            El usuario que crees aquí <strong>solo existirá en esta computadora</strong>. 
-                            No podrás iniciar sesión con él en otros dispositivos (como tu celular) hasta que configures la base de datos en <Link to="/settings" className="underline font-bold">Configuración</Link>.
-                        </p>
-                    </div>
-                </div>
-            )}
-
             <form onSubmit={handleSubmit} className="space-y-6">
               
-              {/* AVATAR SELECTOR */}
-              <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">Selecciona un Avatar</label>
-                  <div className="flex flex-wrap gap-2 mb-2">
-                      {PRESET_AVATARS.map((avatarUrl, idx) => (
-                          <div 
-                            key={idx}
-                            onClick={() => setFormData({...formData, avatar: avatarUrl})}
-                            className={`w-12 h-12 rounded-full cursor-pointer border-2 transition-all p-0.5 ${formData.avatar === avatarUrl ? 'border-hemp-600 scale-110 shadow-md' : 'border-transparent hover:border-gray-300 hover:scale-105'}`}
-                          >
-                              <img src={avatarUrl} alt={`Avatar ${idx}`} className="w-full h-full rounded-full bg-gray-50" />
-                          </div>
-                      ))}
-                  </div>
-                  <input 
-                    type="text" 
-                    placeholder="O pega una URL de imagen personalizada..." 
-                    className="w-full text-xs border-b border-gray-200 focus:border-hemp-500 outline-none py-1 text-gray-500"
-                    value={formData.avatar}
-                    onChange={e => setFormData({...formData, avatar: e.target.value})}
-                  />
-              </div>
-
               <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Nombre Completo</label>
@@ -306,18 +275,35 @@ export default function Users() {
                 <label className="block text-sm font-bold text-gray-700 mb-2">Rol & Permisos</label>
                 <select className={inputClass} value={formData.role} onChange={e => setFormData({...formData, role: e.target.value as UserRole})}>
                   <option value="technician">Técnico de Campo (Operativo)</option>
-                  <option value="client">Cliente / Productor Red (Acceso a sus Lotes)</option>
+                  <option value="client">Cliente / Productor Red</option>
                   <option value="viewer">Visita (Solo lectura)</option>
-                  {/* Only Super Admin can create other admins or super admins */}
                   {(isSuperAdmin || isAdmin) && <option value="admin">Administrador (Gestión)</option>}
                   {isSuperAdmin && <option value="super_admin">Super Admin (Root)</option>}
                 </select>
+                
+                {/* CLIENT LINKER */}
+                {formData.role === 'client' && (
+                    <div className="mt-3 bg-green-50 p-3 rounded border border-green-100 animate-in fade-in slide-in-from-top-2">
+                        <label className="block text-xs font-bold text-green-800 mb-1 uppercase">Vincular a Entidad Cliente</label>
+                        <select 
+                            required
+                            className="w-full border border-green-300 rounded p-2 text-sm focus:outline-none"
+                            value={formData.clientId || ''}
+                            onChange={e => setFormData({...formData, clientId: e.target.value})}
+                        >
+                            <option value="">Seleccionar Entidad...</option>
+                            {clients.map(c => (
+                                <option key={c.id} value={c.id}>{c.name} ({c.type})</option>
+                            ))}
+                        </select>
+                        <p className="text-[10px] text-green-700 mt-1">
+                            Este usuario tendrá permiso para agregar parcelas asociadas a este cliente.
+                        </p>
+                    </div>
+                )}
+
                 <p className="text-xs text-gray-500 mt-2 leading-relaxed">
-                    {formData.role === 'technician' && "Puede cargar datos en parcelas y completar tareas asignadas."}
-                    {formData.role === 'client' && "Acceso limitado a sus locaciones asignadas. Puede reportar datos."}
-                    {formData.role === 'viewer' && "Solo puede ver reportes y dashboard. No edita datos."}
-                    {formData.role === 'admin' && "Gestión completa de proyectos y usuarios básicos."}
-                    {formData.role === 'super_admin' && "Control total del sistema."}
+                    {formData.role === 'client' && "Acceso exclusivo a sus lotes. Puede crear/eliminar sus parcelas."}
                 </p>
               </div>
 

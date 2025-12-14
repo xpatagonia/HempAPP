@@ -109,13 +109,11 @@ export default function Settings() {
 
   const SQL_SCRIPT = `
 -- =========================================================
--- SCRIPT GÉNESIS: ESTRUCTURA COMPLETA V2.6
--- =========================================================
--- Ejecutar este script creará TODAS las tablas necesarias
--- para que la aplicación funcione correctamente.
+-- SCRIPT GÉNESIS: ESTRUCTURA COMPLETA V2.7
+-- Actualizado con Gestión de Clientes y Roles de Productor
 -- =========================================================
 
--- 1. TABLA: USERS
+-- 1. TABLA: USERS (Actualizada con clientId)
 CREATE TABLE IF NOT EXISTS public.users (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -125,8 +123,10 @@ CREATE TABLE IF NOT EXISTS public.users (
     "jobTitle" TEXT,
     phone TEXT,
     avatar TEXT,
+    "clientId" TEXT, -- Vínculo a tabla clients
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "clientId" TEXT;
 ALTER TABLE public.users DISABLE ROW LEVEL SECURITY;
 
 -- Usuario Admin por defecto
@@ -370,7 +370,7 @@ ALTER TABLE public.system_settings DISABLE ROW LEVEL SECURITY;
 -- FINALIZAR: Forzar recarga del esquema
 NOTIFY pgrst, 'reload schema';
 
-SELECT 'BASE DE DATOS INICIALIZADA CORRECTAMENTE' as status;
+SELECT 'BASE DE DATOS ACTUALIZADA CON ÉXITO' as status;
   `;
 
   return (
@@ -408,10 +408,10 @@ SELECT 'BASE DE DATOS INICIALIZADA CORRECTAMENTE' as status;
                   El sistema está configurado para operaciones de Cáñamo Industrial y Cannabis Medicinal.
               </p>
               <div className="bg-gray-50 border border-gray-200 rounded p-4 text-sm text-left max-w-md mx-auto">
-                  <p className="font-bold mb-2">Características Activadas (v2.6):</p>
+                  <p className="font-bold mb-2">Características Activadas (v2.7):</p>
                   <ul className="list-disc list-inside text-gray-600 space-y-1">
                       <li>Unidades: <strong>Acres (ac)</strong>, Hectáreas (ha), m².</li>
-                      <li>Módulos: <strong>I+D (Ensayos)</strong> y <strong>Producción Masiva</strong>.</li>
+                      <li>Gestión Avanzada: <strong>Categorización Productores</strong> (Pequeño, Mediano, Grande).</li>
                       <li>Trazabilidad: <strong>Lotes de Semilla</strong> y Logística.</li>
                       <li>Inteligencia: <strong>Asistente IA</strong> conectado.</li>
                   </ul>
@@ -536,7 +536,7 @@ SELECT 'BASE DE DATOS INICIALIZADA CORRECTAMENTE' as status;
                     </button>
                 </div>
                 <div className="bg-blue-50 text-blue-800 text-xs p-3 rounded mb-2 border border-blue-200">
-                    <strong>¡Atención!</strong> Si usas este script en una base de datos existente, no borrará los datos, pero añadirá las columnas que falten. Si quieres un reinicio total, borra el proyecto en Supabase primero.
+                    <strong>¡Atención!</strong> Si usas este script en una base de datos existente, no borrará los datos, pero añadirá las columnas que falten.
                 </div>
                 <div className="bg-slate-900 border border-slate-800 p-4 rounded-lg text-xs font-mono text-blue-300 overflow-x-auto mb-2 whitespace-pre h-64 custom-scrollbar shadow-inner">
                     {SQL_SCRIPT}

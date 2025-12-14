@@ -2,8 +2,16 @@
 // Enums and Types
 export type UsageType = 'Fibra' | 'Grano' | 'Dual' | 'Medicinal';
 export type SoilType = 'Franco' | 'Arcilloso' | 'Arenoso' | 'Limoso';
-// Redefinición de Roles de Cliente
-export type RoleType = 'Empresa Privada' | 'Gobierno' | 'Academia' | 'Particular' | 'ONG/Cooperativa';
+
+// Redefinición de Roles de Cliente / Entidad
+export type RoleType = 
+  | 'Productor Pequeño (<5 ha)' 
+  | 'Productor Mediano (5-15 ha)' 
+  | 'Productor Grande (>15 ha)' 
+  | 'Empresa Privada' 
+  | 'Gobierno' 
+  | 'Academia' 
+  | 'ONG/Cooperativa';
 
 // Auth Types
 export type UserRole = 'super_admin' | 'admin' | 'technician' | 'viewer' | 'client';
@@ -17,6 +25,7 @@ export interface User {
   avatar?: string; // URL to avatar image
   jobTitle?: string; // Nuevo: Cargo (ej: Ingeniero Agrónomo, Director)
   phone?: string;    // Nuevo: Teléfono de contacto
+  clientId?: string; // NUEVO: Vinculación directa a la entidad Cliente
 }
 
 // Entities

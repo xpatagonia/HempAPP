@@ -101,6 +101,18 @@ export default function Locations() {
   });
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
+  const isClient = currentUser?.role === 'client';
+  const canManage = isAdmin || isClient;
+
+  // Filter Locations for Client view
+  const visibleLocations = locations.filter(l => {
+      if (isAdmin) return true;
+      if (isClient && currentUser.clientId) {
+          // Show if owned by client entity OR user is responsible
+          return l.clientId === currentUser.clientId || l.responsibleIds?.includes(currentUser.id);
+      }
+      return l.responsibleIds?.includes(currentUser?.id || '');
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -115,8 +127,19 @@ export default function Locations() {
     let ownerType = formData.ownerType;
     let ownerContact = formData.ownerContact;
     let ownerCuit = formData.ownerCuit;
+    let clientId = formData.clientId;
 
-    if (formData.clientId) {
+    // Auto-assign client if user is client
+    if (isClient && currentUser.clientId) {
+        clientId = currentUser.clientId;
+        const c = clients.find(cl => cl.id === clientId);
+        if (c) {
+            ownerName = c.name;
+            ownerType = c.type;
+            ownerContact = `${c.contactName} (${c.email || c.contactPhone})`;
+            ownerCuit = c.cuit;
+        }
+    } else if (formData.clientId) {
         const client = clients.find(c => c.id === formData.clientId);
         if (client) {
             ownerName = client.name;
@@ -124,6 +147,12 @@ export default function Locations() {
             ownerContact = `${client.contactName} (${client.email || client.contactPhone})`;
             ownerCuit = client.cuit;
         }
+    }
+
+    // Ensure creator is responsible
+    let finalResponsibles = formData.responsibleIds || [];
+    if (isClient && !finalResponsibles.includes(currentUser!.id)) {
+        finalResponsibles.push(currentUser!.id);
     }
 
     const payload: any = {
@@ -137,7 +166,7 @@ export default function Locations() {
       coordinates,
       
       // Client Data
-      clientId: formData.clientId || null,
+      clientId: clientId || null,
       ownerName: ownerName || '',
       ownerLegalName: formData.ownerLegalName || '',
       ownerCuit: ownerCuit || '',
@@ -148,7 +177,7 @@ export default function Locations() {
       capacityHa: Number(formData.capacityHa),
       irrigationSystem: formData.irrigationSystem || '',
 
-      responsibleIds: formData.responsibleIds || []
+      responsibleIds: finalResponsibles
     };
 
     if (editingId) {
@@ -214,11 +243,11 @@ export default function Locations() {
   };
 
   const getClientIcon = (type?: RoleType) => {
+      if (type?.includes('Productor')) return <User size={16} className="text-green-600" />;
       switch(type) {
           case 'Empresa Privada': return <Building size={16} className="text-gray-500" />;
           case 'Gobierno': return <Landmark size={16} className="text-blue-500" />;
           case 'Academia': return <GraduationCap size={16} className="text-purple-500" />;
-          case 'Particular': return <User size={16} className="text-green-500" />;
           default: return <Users size={16} className="text-gray-400" />;
       }
   };
@@ -229,7 +258,7 @@ export default function Locations() {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-800">Sitios de Ensayo</h1>
-        {isAdmin && (
+        {canManage && (
           <button onClick={() => { resetForm(); setIsModalOpen(true); }} className="bg-hemp-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-hemp-700 transition">
             <Plus size={20} className="mr-2" /> Nuevo Sitio
           </button>
@@ -237,7 +266,12 @@ export default function Locations() {
       </div>
 
       <div className="space-y-6">
-        {locations.map(loc => {
+        {visibleLocations.length === 0 && (
+            <div className="text-center py-10 bg-gray-50 rounded-lg border border-dashed text-gray-500">
+                No tienes locaciones registradas.
+            </div>
+        )}
+        {visibleLocations.map(loc => {
           const responsibles = usersList.filter(u => loc.responsibleIds?.includes(u.id));
 
           return (
@@ -265,7 +299,7 @@ export default function Locations() {
 
               {/* Info Section */}
               <div className="p-6 flex-1 flex flex-col justify-center relative">
-                  {isAdmin && (
+                  {canManage && (
                       <div className="absolute top-4 right-4 flex space-x-2">
                           <button onClick={() => handleEdit(loc)} className="p-2 text-gray-400 hover:text-hemp-600 bg-white rounded-full shadow-sm border hover:border-hemp-300">
                               <Edit2 size={16} />
@@ -302,17 +336,16 @@ export default function Locations() {
                       {/* CLIENT CARD */}
                       <div className="bg-indigo-50 p-3 rounded-lg border border-indigo-100">
                           <span className="text-indigo-800 text-xs uppercase font-bold flex items-center mb-1">
-                              {getClientIcon(loc.ownerType)} <span className="ml-1">Cliente / Titular</span>
+                              {getClientIcon(loc.ownerType)} <span className="ml-1">Titular</span>
                           </span>
                           <div className="text-gray-800 font-bold text-sm leading-tight">{loc.ownerName || '-'}</div>
                           {loc.ownerLegalName && loc.ownerLegalName !== loc.ownerName && (
                               <div className="text-xs text-gray-500 mt-0.5 truncate" title={loc.ownerLegalName}>{loc.ownerLegalName}</div>
                           )}
                           <div className="flex justify-between items-center mt-1">
-                              <span className="text-[10px] bg-white px-1.5 py-0.5 rounded border border-indigo-200 text-indigo-700">
+                              <span className="text-[10px] bg-white px-1.5 py-0.5 rounded border border-indigo-200 text-indigo-700 truncate max-w-[120px]" title={loc.ownerType}>
                                   {loc.ownerType}
                               </span>
-                              {loc.ownerContact && <span className="text-[10px] text-gray-500" title="Contacto">{loc.ownerContact}</span>}
                           </div>
                       </div>
 
@@ -421,44 +454,47 @@ export default function Locations() {
                   </h3>
                   
                   {/* CLIENT SELECTOR */}
-                  <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Seleccionar Cliente Existente</label>
-                      <select 
-                        className={inputClass} 
-                        value={formData.clientId || ''} 
-                        onChange={e => {
-                            const selectedId = e.target.value;
-                            if (selectedId) {
-                                // Auto-fill fields from selected client
-                                const c = clients.find(cl => cl.id === selectedId);
-                                if (c) {
-                                    setFormData({
-                                        ...formData,
-                                        clientId: c.id,
-                                        ownerName: c.name,
-                                        ownerType: c.type,
-                                        ownerCuit: c.cuit,
-                                        ownerContact: c.contactName + (c.contactPhone ? ` (${c.contactPhone})` : '')
-                                    });
+                  {isAdmin && (
+                      <div className="mb-4">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Seleccionar Cliente Existente</label>
+                          <select 
+                            className={inputClass} 
+                            value={formData.clientId || ''} 
+                            onChange={e => {
+                                const selectedId = e.target.value;
+                                if (selectedId) {
+                                    // Auto-fill fields from selected client
+                                    const c = clients.find(cl => cl.id === selectedId);
+                                    if (c) {
+                                        setFormData({
+                                            ...formData,
+                                            clientId: c.id,
+                                            ownerName: c.name,
+                                            ownerType: c.type,
+                                            ownerCuit: c.cuit,
+                                            ownerContact: c.contactName + (c.contactPhone ? ` (${c.contactPhone})` : '')
+                                        });
+                                    }
+                                } else {
+                                    // Reset link but keep text for manual edit if needed
+                                    setFormData({...formData, clientId: ''});
                                 }
-                            } else {
-                                // Reset link but keep text for manual edit if needed
-                                setFormData({...formData, clientId: ''});
-                            }
-                        }}
-                      >
-                          <option value="">-- Manual / Sin Asignar --</option>
-                          {clients.map(c => (
-                              <option key={c.id} value={c.id}>{c.name} ({c.type})</option>
-                          ))}
-                      </select>
-                  </div>
+                            }}
+                          >
+                              <option value="">-- Manual / Sin Asignar --</option>
+                              {clients.map(c => (
+                                  <option key={c.id} value={c.id}>{c.name} ({c.type})</option>
+                              ))}
+                          </select>
+                      </div>
+                  )}
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Entidad</label>
                           <select className={inputClass} value={formData.ownerType} onChange={e => setFormData({...formData, ownerType: e.target.value as RoleType})}>
                               <option value="Empresa Privada">Empresa Privada</option>
+                              <option value="Productor Mediano (5-15 ha)">Productor Mediano</option>
                               <option value="Gobierno">Gobierno / Estado</option>
                               <option value="Academia">Universidad / Academia</option>
                               <option value="ONG/Cooperativa">ONG / Cooperativa</option>
@@ -467,11 +503,11 @@ export default function Locations() {
                       </div>
                       <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">Nombre Comercial (Fantasía)</label>
-                          <input type="text" placeholder="Ej: Agrogenetics S.A." required className={inputClass} value={formData.ownerName} onChange={e => setFormData({...formData, ownerName: e.target.value})} />
+                          <input type="text" placeholder="Ej: Agrogenetics S.A." required className={inputClass} value={formData.ownerName} onChange={e => setFormData({...formData, ownerName: e.target.value})} disabled={isClient} />
                       </div>
                       <div className="md:col-span-2">
                           <label className="block text-sm font-medium text-gray-700 mb-1">Contacto Directo</label>
-                          <input type="text" placeholder="Email o Teléfono del responsable del cliente" className={inputClass} value={formData.ownerContact} onChange={e => setFormData({...formData, ownerContact: e.target.value})} />
+                          <input type="text" placeholder="Email o Teléfono del responsable del cliente" className={inputClass} value={formData.ownerContact} onChange={e => setFormData({...formData, ownerContact: e.target.value})} disabled={isClient} />
                       </div>
                   </div>
               </div>
@@ -509,22 +545,24 @@ export default function Locations() {
               </div>
 
               {/* SECTION 4: EQUIPO */}
-              <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Equipo Técnico Asignado</label>
-                  <div className="border border-gray-300 bg-white rounded p-2 h-24 overflow-y-auto text-xs">
-                    {usersList.map(u => (
-                        <label key={u.id} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 py-1">
-                            <input 
-                                type="checkbox" 
-                                className="rounded text-hemp-600 focus:ring-hemp-500" 
-                                checked={formData.responsibleIds?.includes(u.id)} 
-                                onChange={() => toggleResponsible(u.id)} 
-                            />
-                            <span className="text-gray-900">{u.name} <span className="text-gray-400">({u.role})</span></span>
-                        </label>
-                    ))}
+              {isAdmin && (
+                  <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Equipo Técnico Asignado</label>
+                      <div className="border border-gray-300 bg-white rounded p-2 h-24 overflow-y-auto text-xs">
+                        {usersList.map(u => (
+                            <label key={u.id} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 py-1">
+                                <input 
+                                    type="checkbox" 
+                                    className="rounded text-hemp-600 focus:ring-hemp-500" 
+                                    checked={formData.responsibleIds?.includes(u.id)} 
+                                    onChange={() => toggleResponsible(u.id)} 
+                                />
+                                <span className="text-gray-900">{u.name} <span className="text-gray-400">({u.role})</span></span>
+                            </label>
+                        ))}
+                      </div>
                   </div>
-              </div>
+              )}
 
               <div className="flex justify-end space-x-2 pt-4">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancelar</button>

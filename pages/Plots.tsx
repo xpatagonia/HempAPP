@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
@@ -39,6 +40,21 @@ export default function Plots() {
 
   const isSuperAdmin = currentUser?.role === 'super_admin';
   const isAdmin = currentUser?.role === 'admin' || isSuperAdmin;
+  const isClient = currentUser?.role === 'client';
+  
+  // PERMISSION CHECK: Can Create/Edit/Delete?
+  // Admins can do everything. Clients can manage their own plots.
+  const canManagePlots = isAdmin || isClient;
+
+  // Filter locations available for selection in the modal
+  // If Client, only show locations linked to their Client ID or where they are assigned responsible
+  const availableLocations = locations.filter(l => {
+      if (isAdmin) return true;
+      if (isClient && currentUser.clientId) {
+          return l.clientId === currentUser.clientId || l.responsibleIds?.includes(currentUser.id);
+      }
+      return l.responsibleIds?.includes(currentUser?.id || '');
+  });
 
   // Filter available batches based on selected variety
   const availableBatches = seedBatches.filter(b => b.varietyId === formData.varietyId);
@@ -51,8 +67,23 @@ export default function Plots() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.projectId || !formData.locationId || !formData.varietyId) return;
+    if (!formData.locationId || !formData.varietyId) return;
     
+    // Auto-assign project for client if not selected or hidden
+    // For clients, we might pick the first available project or a general one if not specified
+    let finalProjectId = formData.projectId;
+    if (!finalProjectId && isClient) {
+        // Fallback: Try to find a project where this client is responsible, or just pick the first one
+        // In a real scenario, we might create a default "Client Project" hidden from UI
+        const defaultProj = projects.find(p => p.responsibleIds?.includes(currentUser!.id)) || projects[0];
+        finalProjectId = defaultProj?.id || '';
+    }
+
+    if (!finalProjectId) {
+        alert("Debe seleccionar un proyecto.");
+        return;
+    }
+
     // Generate standard name if creating
     const v = varieties.find(v => v.id === formData.varietyId);
     const varCode = v ? v.name.substring(0, 3).toUpperCase() : 'VAR';
@@ -60,13 +91,12 @@ export default function Plots() {
     // Naming convention differs slightly by type
     let autoName = '';
     if (formData.type === 'Producción') {
-        autoName = `LOTE-${formData.block}-${varCode}`; // Example: LOTE-A1-USO
+        autoName = `LOTE-${formData.block}-${varCode}`; 
     } else {
-        autoName = `${varCode}-B${formData.block}-R${formData.replicate}`; // Example: USO-B1-R1
+        autoName = `${varCode}-B${formData.block}-R${formData.replicate}`; 
     }
 
     // Process coordinates (Center)
-    // If user drew a polygon, use the first point as center if no lat/lng manually entered
     let finalLat = parseFloat(formData.lat || '0');
     let finalLng = parseFloat(formData.lng || '0');
 
@@ -79,16 +109,22 @@ export default function Plots() {
       ? { lat: finalLat, lng: finalLng }
       : undefined;
 
+    // Ensure the creator (client) is added as responsible
+    let finalResponsibles = formData.responsibleIds || [];
+    if (isClient && !finalResponsibles.includes(currentUser!.id)) {
+        finalResponsibles.push(currentUser!.id);
+    }
+
     const plotPayload = {
       type: formData.type || 'Ensayo',
       locationId: formData.locationId!,
       varietyId: formData.varietyId!,
       seedBatchId: formData.seedBatchId || null, 
-      projectId: formData.projectId!,
+      projectId: finalProjectId,
       block: formData.block!,
       replicate: Number(formData.replicate),
       ownerName: formData.ownerName || 'No especificado',
-      responsibleIds: formData.responsibleIds || [],
+      responsibleIds: finalResponsibles,
       sowingDate: formData.sowingDate!,
       rowDistance: Number(formData.rowDistance),
       density: Number(formData.density),
@@ -98,7 +134,7 @@ export default function Plots() {
       observations: formData.observations,
       irrigationType: formData.irrigationType,
       coordinates,
-      polygon: formData.polygon || [] // Save the drawn polygon
+      polygon: formData.polygon || [] 
     } as any;
 
     if (editingId) {
@@ -127,6 +163,11 @@ export default function Plots() {
   };
 
   const openNew = () => {
+      // Validation: Can only open if locations available
+      if (availableLocations.length === 0) {
+          alert("No tienes locaciones disponibles. Crea una locación primero.");
+          return;
+      }
       resetForm();
       setIsModalOpen(true);
   };
@@ -166,7 +207,7 @@ export default function Plots() {
 
   const handleExport = () => {
     // Export full merged data
-    const exportData = plots.map(p => {
+    const exportData = filteredPlots.map(p => {
         const l = locations.find(l => l.id === p.locationId);
         const v = varieties.find(v => v.id === p.varietyId);
         const pr = projects.find(proj => proj.id === p.projectId);
@@ -213,8 +254,19 @@ export default function Plots() {
       const matchLoc = filterLoc === 'all' || p.locationId === filterLoc;
       const matchProj = filterProj === 'all' || p.projectId === filterProj;
       const matchType = filterType === 'all' || p.type === filterType;
-      const isAssigned = isAdmin || (currentUser && p.responsibleIds?.includes(currentUser.id));
-      return matchLoc && matchProj && matchType && isAssigned;
+      
+      // Permission Filter: Admins see all, Clients see assigned/owned
+      let hasAccess = false;
+      if (isAdmin) hasAccess = true;
+      else if (isClient && currentUser.clientId) {
+          // If client, check if location belongs to client OR explicitly assigned
+          const loc = locations.find(l => l.id === p.locationId);
+          hasAccess = (loc?.clientId === currentUser.clientId) || (p.responsibleIds?.includes(currentUser.id));
+      } else {
+          hasAccess = p.responsibleIds?.includes(currentUser?.id || '');
+      }
+
+      return matchLoc && matchProj && matchType && hasAccess;
   });
 
   const getLatestPhoto = (plotId: string) => {
@@ -257,7 +309,7 @@ export default function Plots() {
           <button onClick={handleExport} className="border border-gray-300 bg-white text-gray-700 px-3 py-2 rounded-lg text-sm hover:bg-gray-50 flex items-center justify-center transition" title="Exportar Excel">
              <FileSpreadsheet size={18} />
           </button>
-          {isAdmin && (
+          {canManagePlots && (
             <button onClick={openNew} className="bg-hemp-600 text-white px-4 py-2 rounded-lg flex items-center justify-center hover:bg-hemp-700 transition flex-1 sm:flex-none font-medium">
                 <Plus size={20} className="mr-2" /> Nueva
             </button>
@@ -362,7 +414,7 @@ export default function Plots() {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right space-x-2">
-                        {isAdmin && (
+                        {canManagePlots && (
                             <>
                                 <button onClick={() => handleEdit(p)} className="text-gray-400 hover:text-hemp-600 inline-block align-middle p-1" title="Editar">
                                     <Edit2 size={16} />
@@ -608,8 +660,11 @@ export default function Plots() {
                             <label className="block text-sm font-medium text-blue-900 mb-1">Locación (Establecimiento)</label>
                             <select required className={inputClass} value={formData.locationId} onChange={e => setFormData({...formData, locationId: e.target.value})}>
                               <option value="">Seleccionar...</option>
-                              {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                              {availableLocations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
                             </select>
+                            {availableLocations.length === 0 && (
+                                <p className="text-xs text-red-500 mt-1">No tienes locaciones registradas. Crea una primero.</p>
+                            )}
                           </div>
 
                           <div className="flex-1 flex flex-col">
@@ -677,7 +732,7 @@ export default function Plots() {
               </div>
 
               <div className="flex justify-between items-center pt-4 border-t border-gray-100">
-                {editingId && isAdmin ? (
+                {editingId && canManagePlots ? (
                      <button type="button" onClick={() => handleDelete()} className="text-red-500 hover:text-red-700 text-sm flex items-center px-2 py-1 hover:bg-red-50 rounded transition">
                          <Trash2 size={16} className="mr-1"/> Eliminar Parcela
                      </button>

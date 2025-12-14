@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Client, RoleType } from '../types';
-import { Plus, Edit2, Trash2, Briefcase, MapPin, Phone, Mail, Globe, Users, Building, AlertCircle } from 'lucide-react';
+import { Plus, Edit2, Trash2, Briefcase, MapPin, Phone, Mail, Globe, Users, Building, AlertCircle, Tractor } from 'lucide-react';
 
 export default function Clients() {
   const { clients, addClient, updateClient, deleteClient, currentUser, locations } = useAppContext();
@@ -69,9 +69,9 @@ export default function Clients() {
       <div className="flex justify-between items-center mb-6">
         <div>
             <h1 className="text-2xl font-bold text-gray-800 flex items-center">
-                <Briefcase className="mr-2 text-hemp-600"/> Gestión de Clientes
+                <Briefcase className="mr-2 text-hemp-600"/> Gestión de Clientes / Productores
             </h1>
-            <p className="text-sm text-gray-500">Administración de titulares y miembros de la Red de Agricultores.</p>
+            <p className="text-sm text-gray-500">Administración de titulares y clasificación por escala.</p>
         </div>
         {isAdmin && (
           <button onClick={() => { resetForm(); setIsModalOpen(true); }} className="bg-hemp-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-hemp-700 transition">
@@ -88,6 +88,8 @@ export default function Clients() {
             </div>
         ) : clients.map(client => {
             const locCount = locations.filter(l => l.clientId === client.id || l.ownerName === client.name).length;
+            const isProducer = client.type.includes('Productor');
+            
             return (
                 <div key={client.id} className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition relative group flex flex-col h-full">
                   {isAdmin && (
@@ -102,12 +104,14 @@ export default function Clients() {
                   )}
 
                   <div className="flex items-center space-x-3 mb-3">
-                      <div className={`p-3 rounded-full ${client.isNetworkMember ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
-                          {client.isNetworkMember ? <Globe size={20} /> : <Building size={20} />}
+                      <div className={`p-3 rounded-full ${isProducer ? 'bg-amber-100 text-amber-700' : client.isNetworkMember ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                          {isProducer ? <Tractor size={20}/> : client.isNetworkMember ? <Globe size={20} /> : <Building size={20} />}
                       </div>
                       <div>
                           <h3 className="text-lg font-bold text-gray-800 leading-tight">{client.name}</h3>
-                          <span className="text-xs text-gray-500 flex items-center mt-0.5">
+                          <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded border mt-1 inline-block ${
+                              isProducer ? 'bg-amber-50 text-amber-800 border-amber-100' : 'bg-gray-50 text-gray-600 border-gray-200'
+                          }`}>
                               {client.type}
                           </span>
                       </div>
@@ -161,7 +165,7 @@ export default function Clients() {
               <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
                   <div className="flex justify-between items-center mb-3">
                       <h3 className="text-xs font-bold text-gray-500 uppercase flex items-center">
-                          <Briefcase size={12} className="mr-1"/> Identidad
+                          <Briefcase size={12} className="mr-1"/> Identidad y Clasificación
                       </h3>
                       
                       {/* RED SWITCH */}
@@ -180,18 +184,24 @@ export default function Clients() {
                         <label className="block text-sm font-medium text-gray-700 mb-1">Nombre Comercial / Razón Social</label>
                         <input required type="text" placeholder="Ej: Agrogenetics S.A." className={inputClass} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Tipo Entidad</label>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="md:col-span-2">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Categoría / Tipo de Entidad</label>
                             <select className={inputClass} value={formData.type} onChange={e => setFormData({...formData, type: e.target.value as RoleType})}>
-                                <option value="Empresa Privada">Empresa Privada</option>
-                                <option value="Gobierno">Gobierno / Estado</option>
-                                <option value="Academia">Universidad / Academia</option>
-                                <option value="ONG/Cooperativa">ONG / Cooperativa</option>
-                                <option value="Particular">Productor Particular</option>
+                                <optgroup label="Productores">
+                                    <option value="Productor Pequeño (<5 ha)">Productor Pequeño (&lt;5 ha)</option>
+                                    <option value="Productor Mediano (5-15 ha)">Productor Mediano (5-15 ha)</option>
+                                    <option value="Productor Grande (>15 ha)">Productor Grande (&gt;15 ha)</option>
+                                </optgroup>
+                                <optgroup label="Institucional">
+                                    <option value="Empresa Privada">Empresa Privada</option>
+                                    <option value="Gobierno">Gobierno / Estado</option>
+                                    <option value="Academia">Universidad / Academia</option>
+                                    <option value="ONG/Cooperativa">ONG / Cooperativa</option>
+                                </optgroup>
                             </select>
                         </div>
-                        <div>
+                        <div className="md:col-span-2">
                             <label className="block text-sm font-medium text-gray-700 mb-1">CUIT / ID Fiscal</label>
                             <input type="text" className={inputClass} value={formData.cuit} onChange={e => setFormData({...formData, cuit: e.target.value})} />
                         </div>
