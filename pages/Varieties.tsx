@@ -9,11 +9,30 @@ const HEMP_IT_TEMPLATE = {
     name: 'Hemp-it France',
     country: 'Francia',
     varieties: [
-        { name: 'USO 31', usage: 'Grano', cycleDays: 100, expectedThc: 0.04, notes: 'Monoica. Ciclo muy temprano.' },
-        { name: 'Fedora 17', usage: 'Dual', cycleDays: 130, expectedThc: 0.12, notes: 'Monoica. Ciclo medio-temprano.' },
-        { name: 'Felina 32', usage: 'Dual', cycleDays: 135, expectedThc: 0.12, notes: 'Monoica. Ciclo medio.' },
-        { name: 'Santhica 27', usage: 'Fibra', cycleDays: 135, expectedThc: 0.00, notes: 'Monoica. Rica en CBG. Libre de THC.' },
-        { name: 'Futura 75', usage: 'Dual', cycleDays: 145, expectedThc: 0.12, notes: 'Monoica. Ciclo tardío.' }
+        // --- GRAIN / FOOD & COSMETIC ---
+        { name: 'USO 31', usage: 'Grano', cycleDays: 100, expectedThc: 0.04, notes: 'Monoica. Ciclo Muy Temprano. Referencia histórica en producción de semilla.' },
+        { name: 'EARLINA 8', usage: 'Grano', cycleDays: 100, expectedThc: 0.12, notes: 'Monoica. Ciclo Muy Temprano. Ideal para rotaciones cortas.' },
+        { name: 'OSTARA 9', usage: 'Grano', cycleDays: 105, expectedThc: 0.12, notes: 'Monoica. Ciclo Temprano. Variedad Food & Cosmetic.' },
+        { name: 'ORION 33', usage: 'Grano', cycleDays: 110, expectedThc: 0.12, notes: 'Monoica. Ciclo Temprano. Alta producción de grano.' },
+        { name: 'MONA 16', usage: 'Grano', cycleDays: 115, expectedThc: 0.12, notes: 'Monoica. Ciclo Medio. Orientada a Food & Cosmetic.' },
+        
+        // --- DUAL PURPOSE / GENERAL ---
+        { name: 'FEDORA 17', usage: 'Dual', cycleDays: 125, expectedThc: 0.12, notes: 'Monoica. Ciclo Medio-Temprano. Estándar en producción mixta.' },
+        { name: 'FELINA 32', usage: 'Dual', cycleDays: 130, expectedThc: 0.12, notes: 'Monoica. Ciclo Medio. Rústica y adaptable.' },
+        { name: 'FERIMON', usage: 'Dual', cycleDays: 132, expectedThc: 0.12, notes: 'Monoica. Ciclo Medio-Tardío. Buen equilibrio fibra/semilla.' },
+        { name: 'FUTURA 75', usage: 'Dual', cycleDays: 140, expectedThc: 0.12, notes: 'Monoica. Ciclo Tardío. La variedad más cultivada para biomasa y grano.' },
+        
+        // --- FIBRE & SHIVE (CAÑIZA) ---
+        { name: 'FIBROR 79', usage: 'Fibra', cycleDays: 145, expectedThc: 0.12, notes: 'Monoica. Ciclo Muy Tardío. Específica para producción masiva de fibra textil.' },
+        { name: 'FUTURA 83', usage: 'Fibra', cycleDays: 145, expectedThc: 0.12, notes: 'Monoica. Ciclo Tardío. Orientada a Cañiza (Shive) y construcción.' },
+        { name: 'MUKA 76', usage: 'Fibra', cycleDays: 145, expectedThc: 0.12, notes: 'Monoica. Ciclo Tardío. Alto rendimiento en fibra técnica.' },
+        { name: 'NASHINOÏDE 15', usage: 'Fibra', cycleDays: 145, expectedThc: 0.12, notes: 'Monoica. Ciclo Tardío. Variedad fibra premium.' },
+
+        // --- CANNABINOIDS / SPECIAL ---
+        { name: 'SANTHICA 27', usage: 'Medicinal', cycleDays: 135, expectedThc: 0.00, notes: 'Monoica. Rica en CBG. Libre de THC (0.00%). Ciclo Medio-Tardío.' },
+        { name: 'SANTHICA 70', usage: 'Medicinal', cycleDays: 135, expectedThc: 0.00, notes: 'Monoica. Rica en CBG. Libre de THC. Ciclo Medio.' },
+        { name: 'DJUMBO 20', usage: 'Medicinal', cycleDays: 140, expectedThc: 0.12, notes: 'Dioica. Ciclo Tardío. Alto volumen de biomasa para extracción.' },
+        { name: 'DIOÏCA 88', usage: 'Dual', cycleDays: 140, expectedThc: 0.12, notes: 'Dioica. Ciclo Tardío. Variedad rústica para biomasa.' }
     ]
 };
 
@@ -71,7 +90,7 @@ export default function Varieties() {
   };
 
   const handleImportCatalog = async () => {
-      if(!window.confirm("¿Importar catálogo base de Hemp-it? Se creará el proveedor si no existe.")) return;
+      if(!window.confirm(`¿Importar el catálogo completo de ${HEMP_IT_TEMPLATE.name}? Se añadirán ${HEMP_IT_TEMPLATE.varieties.length} variedades.`)) return;
       setIsImporting(true);
       
       let supplierId = suppliers.find(s => s.name.toLowerCase().includes('hemp-it'))?.id;
@@ -80,23 +99,29 @@ export default function Varieties() {
               id: Date.now().toString(),
               name: HEMP_IT_TEMPLATE.name,
               country: HEMP_IT_TEMPLATE.country,
-              legalName: 'Hemp-it Cooperative'
+              legalName: 'Hemp-it Cooperative',
+              website: 'www.hemp-it.coop',
+              city: 'Beaufort-en-Anjou',
+              address: '6 rue Louis Lumière, Zone Actival',
+              commercialContact: 'Sales Dept'
           });
       }
 
-      HEMP_IT_TEMPLATE.varieties.forEach(template => {
+      let count = 0;
+      for (const template of HEMP_IT_TEMPLATE.varieties) {
           const exists = varieties.some(v => v.name.toLowerCase() === template.name.toLowerCase());
           if (!exists) {
-              addVariety({
+              await addVariety({
                   ...template,
-                  id: Date.now().toString() + Math.random().toString().slice(2,5),
+                  id: (Date.now() + count).toString(),
                   supplierId: supplierId!
               } as Variety);
+              count++;
           }
-      });
+      }
 
       setIsImporting(false);
-      alert("Catálogo importado correctamente.");
+      alert(`Importación completada. Se añadieron ${count} variedades nuevas.`);
   };
 
   const filtered = varieties.filter(v => {
@@ -122,7 +147,7 @@ export default function Varieties() {
                 className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-blue-700 transition w-full md:w-auto justify-center shadow-sm disabled:opacity-70"
               >
                 {isImporting ? <span className="animate-spin mr-2">C</span> : <CloudDownload size={20} className="mr-2" />}
-                Importar Hemp-it
+                Catálogo Hemp-it
               </button>
               <button 
                 onClick={() => {
@@ -174,6 +199,7 @@ export default function Varieties() {
                   <span className={`px-2 py-1 rounded text-xs font-semibold uppercase tracking-wide ${
                     v.usage === 'Medicinal' ? 'bg-purple-100 text-purple-800' :
                     v.usage === 'Fibra' ? 'bg-amber-100 text-amber-800' :
+                    v.usage === 'Grano' ? 'bg-orange-100 text-orange-800' :
                     'bg-blue-100 text-blue-800'
                   }`}>
                     {v.usage}
@@ -200,8 +226,8 @@ export default function Varieties() {
                 </div>
                 
                 {v.notes && (
-                    <div className="flex items-start text-xs text-gray-500 italic mt-2">
-                        <Tag size={12} className="mr-1 mt-0.5 flex-shrink-0" />
+                    <div className="flex items-start text-xs text-gray-500 italic mt-2 leading-relaxed bg-blue-50/50 p-2 rounded">
+                        <Tag size={12} className="mr-1 mt-0.5 flex-shrink-0 text-blue-400" />
                         {v.notes}
                     </div>
                 )}
