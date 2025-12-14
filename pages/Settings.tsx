@@ -109,16 +109,14 @@ export default function Settings() {
 
   const SQL_SCRIPT = `
 -- =========================================================
--- HARD RESET: TABLA USUARIOS (SOLUCIÓN FINAL PGRST204)
--- ADVERTENCIA: Esto borra los usuarios existentes para
--- recrear la tabla limpia y forzar el refresco del esquema.
+-- SCRIPT GÉNESIS: ESTRUCTURA COMPLETA V2.6
+-- =========================================================
+-- Ejecutar este script creará TODAS las tablas necesarias
+-- para que la aplicación funcione correctamente.
 -- =========================================================
 
--- 1. ELIMINAR TABLA CONFLICTIVA (Forzar limpieza de cache)
-DROP TABLE IF EXISTS public.users CASCADE;
-
--- 2. RECREAR TABLA USUARIOS CORRECTAMENTE
-CREATE TABLE public.users (
+-- 1. TABLA: USERS
+CREATE TABLE IF NOT EXISTS public.users (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     email TEXT NOT NULL,
@@ -131,13 +129,237 @@ CREATE TABLE public.users (
 );
 ALTER TABLE public.users DISABLE ROW LEVEL SECURITY;
 
--- 3. INSERTAR USUARIO ADMIN POR DEFECTO
+-- Usuario Admin por defecto
 INSERT INTO public.users (id, name, email, password, role, "jobTitle")
-VALUES 
-('admin-01', 'Admin Principal', 'admin@demo.com', 'admin', 'super_admin', 'Director');
+VALUES ('admin-01', 'Admin Principal', 'admin@demo.com', 'admin', 'super_admin', 'Director')
+ON CONFLICT (id) DO NOTHING;
 
--- 4. RESTO DE TABLAS (Solo crea si no existen, NO borra datos)
+-- 2. TABLA: PROJECTS
+CREATE TABLE IF NOT EXISTS public.projects (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    "startDate" TEXT,
+    status TEXT DEFAULT 'Planificación',
+    "directorId" TEXT,
+    "responsibleIds" JSONB DEFAULT '[]',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+ALTER TABLE public.projects DISABLE ROW LEVEL SECURITY;
 
+-- 3. TABLA: LOCATIONS
+CREATE TABLE IF NOT EXISTS public.locations (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    province TEXT,
+    city TEXT,
+    address TEXT,
+    coordinates JSONB,
+    "soilType" TEXT,
+    climate TEXT,
+    "responsiblePerson" TEXT,
+    "clientId" TEXT,
+    "ownerName" TEXT,
+    "ownerLegalName" TEXT,
+    "ownerCuit" TEXT,
+    "ownerType" TEXT,
+    "ownerContact" TEXT,
+    "capacityHa" NUMERIC,
+    "irrigationSystem" TEXT,
+    "responsibleIds" JSONB DEFAULT '[]',
+    cuie TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+ALTER TABLE public.locations DISABLE ROW LEVEL SECURITY;
+
+-- 4. TABLA: SUPPLIERS
+CREATE TABLE IF NOT EXISTS public.suppliers (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    "legalName" TEXT,
+    cuit TEXT,
+    country TEXT,
+    province TEXT,
+    city TEXT,
+    address TEXT,
+    "commercialContact" TEXT,
+    "logisticsContact" TEXT,
+    website TEXT,
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+ALTER TABLE public.suppliers DISABLE ROW LEVEL SECURITY;
+
+-- 5. TABLA: CLIENTS
+CREATE TABLE IF NOT EXISTS public.clients (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    type TEXT,
+    cuit TEXT,
+    "contactName" TEXT,
+    "contactPhone" TEXT,
+    email TEXT,
+    "isNetworkMember" BOOLEAN DEFAULT false,
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+ALTER TABLE public.clients DISABLE ROW LEVEL SECURITY;
+
+-- 6. TABLA: VARIETIES
+CREATE TABLE IF NOT EXISTS public.varieties (
+    id TEXT PRIMARY KEY,
+    "supplierId" TEXT,
+    name TEXT NOT NULL,
+    usage TEXT,
+    "cycleDays" NUMERIC,
+    "expectedThc" NUMERIC,
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+ALTER TABLE public.varieties DISABLE ROW LEVEL SECURITY;
+
+-- 7. TABLA: SEED_BATCHES
+CREATE TABLE IF NOT EXISTS public.seed_batches (
+    id TEXT PRIMARY KEY,
+    "varietyId" TEXT,
+    "supplierName" TEXT,
+    "supplierLegalName" TEXT,
+    "supplierCuit" TEXT,
+    "supplierRenspa" TEXT,
+    "supplierAddress" TEXT,
+    "originCountry" TEXT,
+    "batchCode" TEXT,
+    "gs1Code" TEXT,
+    "certificationNumber" TEXT,
+    "purchaseDate" TEXT,
+    "initialQuantity" NUMERIC,
+    "remainingQuantity" NUMERIC,
+    "storageConditions" TEXT,
+    "storageAddress" TEXT,
+    "logisticsResponsible" TEXT,
+    notes TEXT,
+    "isActive" BOOLEAN DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+ALTER TABLE public.seed_batches DISABLE ROW LEVEL SECURITY;
+
+-- 8. TABLA: SEED_MOVEMENTS
+CREATE TABLE IF NOT EXISTS public.seed_movements (
+    id TEXT PRIMARY KEY,
+    "batchId" TEXT,
+    "targetLocationId" TEXT,
+    quantity NUMERIC,
+    date TEXT,
+    "dispatchTime" TEXT,
+    "transportGuideNumber" TEXT,
+    "transportType" TEXT,
+    "driverName" TEXT,
+    "vehiclePlate" TEXT,
+    "vehicleModel" TEXT,
+    "transportCompany" TEXT,
+    "routeItinerary" TEXT,
+    status TEXT,
+    "receivedBy" TEXT,
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+ALTER TABLE public.seed_movements DISABLE ROW LEVEL SECURITY;
+
+-- 9. TABLA: PLOTS
+CREATE TABLE IF NOT EXISTS public.plots (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    type TEXT,
+    "projectId" TEXT,
+    "locationId" TEXT,
+    "varietyId" TEXT,
+    "seedBatchId" TEXT,
+    block TEXT,
+    replicate NUMERIC,
+    "ownerName" TEXT,
+    "responsibleIds" JSONB DEFAULT '[]',
+    "sowingDate" TEXT,
+    "surfaceArea" NUMERIC,
+    "surfaceUnit" TEXT,
+    "rowDistance" NUMERIC,
+    density NUMERIC,
+    status TEXT,
+    observations TEXT,
+    "irrigationType" TEXT,
+    coordinates JSONB,
+    polygon JSONB DEFAULT '[]',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+ALTER TABLE public.plots DISABLE ROW LEVEL SECURITY;
+
+-- 10. TABLA: TRIAL_RECORDS
+CREATE TABLE IF NOT EXISTS public.trial_records (
+    id TEXT PRIMARY KEY,
+    "plotId" TEXT,
+    date TEXT,
+    time TEXT,
+    "createdBy" TEXT,
+    "createdByName" TEXT,
+    stage TEXT,
+    "emergenceDate" TEXT,
+    "plantsPerMeterInit" NUMERIC,
+    uniformity NUMERIC,
+    vigor NUMERIC,
+    "floweringDate" TEXT,
+    "plantHeight" NUMERIC,
+    "stemDiameter" NUMERIC,
+    "nodesCount" NUMERIC,
+    "floweringState" TEXT,
+    "trichomeColor" TEXT,
+    lodging NUMERIC,
+    "birdDamage" TEXT,
+    diseases TEXT,
+    pests TEXT,
+    "applicationType" TEXT,
+    "applicationProduct" TEXT,
+    "applicationDose" TEXT,
+    "harvestDate" TEXT,
+    "harvestHeight" NUMERIC,
+    "plantsPerMeterFinal" NUMERIC,
+    "sampleSize" NUMERIC,
+    "freshWeight" NUMERIC,
+    "dryWeight" NUMERIC,
+    yield NUMERIC,
+    "stemWeight" NUMERIC,
+    "leafWeight" NUMERIC,
+    "flowerWeight" NUMERIC,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+ALTER TABLE public.trial_records DISABLE ROW LEVEL SECURITY;
+
+-- 11. TABLA: FIELD_LOGS
+CREATE TABLE IF NOT EXISTS public.field_logs (
+    id TEXT PRIMARY KEY,
+    "plotId" TEXT,
+    date TEXT,
+    note TEXT,
+    "photoUrl" TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+ALTER TABLE public.field_logs DISABLE ROW LEVEL SECURITY;
+
+-- 12. TABLA: TASKS
+CREATE TABLE IF NOT EXISTS public.tasks (
+    id TEXT PRIMARY KEY,
+    "plotId" TEXT,
+    "projectId" TEXT,
+    title TEXT,
+    description TEXT,
+    "dueDate" TEXT,
+    status TEXT,
+    priority TEXT,
+    "assignedToIds" JSONB DEFAULT '[]',
+    "createdBy" TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+ALTER TABLE public.tasks DISABLE ROW LEVEL SECURITY;
+
+-- 13. TABLA: SYSTEM_SETTINGS
 CREATE TABLE IF NOT EXISTS public.system_settings (
     id TEXT PRIMARY KEY,
     gemini_api_key TEXT,
@@ -145,41 +367,10 @@ CREATE TABLE IF NOT EXISTS public.system_settings (
 );
 ALTER TABLE public.system_settings DISABLE ROW LEVEL SECURITY;
 
--- ... (Resto de tablas asegurando columnas)
--- LOCACIONES
-CREATE TABLE IF NOT EXISTS public.locations (id TEXT PRIMARY KEY, name TEXT NOT NULL, created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()));
-ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS address TEXT;
-ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS province TEXT;
-ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS city TEXT;
-ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS coordinates JSONB;
-ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS "soilType" TEXT;
-ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS climate TEXT;
-ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS "responsiblePerson" TEXT;
-ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS "clientId" TEXT;
-ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS "ownerName" TEXT;
-ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS "ownerLegalName" TEXT;
-ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS "ownerCuit" TEXT;
-ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS "ownerType" TEXT;
-ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS "ownerContact" TEXT;
-ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS "capacityHa" NUMERIC;
-ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS "irrigationSystem" TEXT;
-ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS "responsibleIds" JSONB DEFAULT '[]';
-ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS cuie TEXT;
-ALTER TABLE public.locations DISABLE ROW LEVEL SECURITY;
-
--- ... (Otras tablas clave para que la app no falle)
-CREATE TABLE IF NOT EXISTS public.projects (id TEXT PRIMARY KEY, name TEXT NOT NULL, created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()));
-ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS description TEXT;
-ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS "startDate" TEXT;
-ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'Planificación';
-ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS "directorId" TEXT;
-ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS "responsibleIds" JSONB DEFAULT '[]';
-ALTER TABLE public.projects DISABLE ROW LEVEL SECURITY;
-
--- 5. RECARGAR SCHEMA CACHE (Comando final)
+-- FINALIZAR: Forzar recarga del esquema
 NOTIFY pgrst, 'reload schema';
 
-SELECT 'RESET COMPLETADO: Tabla Users recreada. Inicia sesión con admin@demo.com / admin' as status;
+SELECT 'BASE DE DATOS INICIALIZADA CORRECTAMENTE' as status;
   `;
 
   return (
@@ -235,7 +426,7 @@ SELECT 'RESET COMPLETADO: Tabla Users recreada. Inicia sesión con admin@demo.co
             <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-start">
                 <ShieldCheck className="text-green-600 mr-3 flex-shrink-0 mt-0.5" />
                 <div className="text-sm text-green-800">
-                    <strong>Estado de Conexión:</strong> Las credenciales están configuradas. Asegúrate de ejecutar el script SQL abajo para inicializar la nube.
+                    <strong>Estado de Conexión:</strong> Si acabas de crear un nuevo proyecto en Supabase, asegúrate de ingresar la URL y KEY abajo.
                 </div>
             </div>
 
@@ -334,18 +525,18 @@ SELECT 'RESET COMPLETADO: Tabla Users recreada. Inicia sesión con admin@demo.co
                 <div className="flex justify-between items-center mb-4">
                     <div>
                         <h2 className="text-sm font-bold text-slate-800 flex items-center">
-                            <ShieldCheck className="text-hemp-600 mr-2" size={18}/> Mantenimiento de Base de Datos
+                            <ShieldCheck className="text-hemp-600 mr-2" size={18}/> Inicialización de Base de Datos
                         </h2>
                         <p className="text-xs text-slate-500 mt-1">
-                            Script de inicialización total. Crea tablas faltantes y corrige permisos.
+                            Este script crea <strong>todas</strong> las tablas necesarias. Úsalo en un proyecto nuevo.
                         </p>
                     </div>
                     <button onClick={copySQL} className="text-xs bg-white hover:bg-slate-100 text-slate-700 px-4 py-2 rounded border border-slate-300 shadow-sm flex items-center transition font-bold">
-                        <Copy size={14} className="mr-2" /> Copiar SQL
+                        <Copy size={14} className="mr-2" /> Copiar SQL Completo
                     </button>
                 </div>
-                <div className="bg-red-50 text-red-800 text-xs p-3 rounded mb-2 border border-red-200">
-                    <strong>¡Atención!</strong> Este script realiza un <strong>HARD RESET</strong> de la tabla de Usuarios (la borra y la crea de nuevo) para solucionar el error "Could not find column jobTitle". Los usuarios existentes se perderán.
+                <div className="bg-blue-50 text-blue-800 text-xs p-3 rounded mb-2 border border-blue-200">
+                    <strong>¡Atención!</strong> Si usas este script en una base de datos existente, no borrará los datos, pero añadirá las columnas que falten. Si quieres un reinicio total, borra el proyecto en Supabase primero.
                 </div>
                 <div className="bg-slate-900 border border-slate-800 p-4 rounded-lg text-xs font-mono text-blue-300 overflow-x-auto mb-2 whitespace-pre h-64 custom-scrollbar shadow-inner">
                     {SQL_SCRIPT}
