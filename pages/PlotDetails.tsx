@@ -3,8 +3,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { TrialRecord, Task, Plot } from '../types';
-import { ArrowLeft, Activity, Calendar, MapPin, Globe, Plus, Trash2, Droplets, Wind, QrCode, Printer, CheckSquare, Sun, Eye, Loader2, Tractor, FlaskConical, Tag, Clock, DollarSign, Package, Archive, Sprout, X, Map, Camera, FileText, ChevronRight, TrendingUp, Settings, Save, FileUp, Ruler, Edit2 } from 'lucide-react';
+import { ArrowLeft, Activity, Calendar, MapPin, Globe, Plus, Trash2, QrCode, Printer, CheckSquare, Eye, Tractor, FlaskConical, Tag, Clock, DollarSign, Package, Archive, Sprout, X, Map, Camera, FileText, Settings, Save, FileUp, Ruler, Edit2 } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
+import WeatherWidget from '../components/WeatherWidget';
 
 // Helper: Robust KML Parser
 const parseKML = (kmlText: string): { lat: number, lng: number }[] | null => {
@@ -156,10 +157,6 @@ export default function PlotDetails() {
   // UI Tabs
   const [activeTab, setActiveTab] = useState<'records' | 'logs' | 'planning' | 'qr'>('records');
 
-  // Weather State
-  const [weather, setWeather] = useState<any>(null);
-  const [weatherLoading, setWeatherLoading] = useState(false);
-
   // Modal State for Trial Record
   const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
@@ -206,17 +203,6 @@ export default function PlotDetails() {
   // Stats
   const daysSinceSowing = Math.floor((new Date().getTime() - new Date(plot?.sowingDate || '').getTime()) / (1000 * 60 * 60 * 24));
   
-  useEffect(() => {
-    if (displayCoordinates && displayCoordinates.lat && displayCoordinates.lng) {
-        setWeatherLoading(true);
-        // Using Open-Meteo API
-        fetch(`https://api.open-meteo.com/v1/forecast?latitude=${displayCoordinates.lat}&longitude=${displayCoordinates.lng}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m`)
-            .then(res => res.json())
-            .then(data => { setWeather(data.current); setWeatherLoading(false); })
-            .catch(err => { console.error(err); setWeatherLoading(false); });
-    }
-  }, [displayCoordinates]);
-
   if (!plot) return (
       <div className="flex flex-col items-center justify-center h-64 text-gray-500">
           <Globe size={48} className="mb-4 text-gray-300" />
@@ -432,22 +418,10 @@ export default function PlotDetails() {
                       </p>
                   </div>
                   
-                  {/* Weather Widget */}
+                  {/* Robust Weather Widget */}
                   {displayCoordinates && (
-                      <div className="mt-4 md:mt-0 flex items-center bg-blue-50/50 rounded-xl px-4 py-2 border border-blue-100">
-                          {weatherLoading ? <Loader2 className="animate-spin text-blue-400"/> : weather ? (
-                              <>
-                                  <div className="flex flex-col items-center mr-4">
-                                      <Sun className="text-orange-500 mb-1" size={20}/>
-                                      <span className="text-lg font-bold text-gray-800 leading-none">{weather.temperature_2m}°</span>
-                                  </div>
-                                  <div className="h-8 w-px bg-blue-200 mr-4"></div>
-                                  <div className="flex flex-col text-xs text-gray-600 space-y-1">
-                                      <div className="flex items-center"><Droplets size={12} className="mr-1 text-blue-500"/> Hum: {weather.relative_humidity_2m}%</div>
-                                      <div className="flex items-center"><Wind size={12} className="mr-1 text-gray-500"/> Viento: {weather.wind_speed_10m} km/h</div>
-                                  </div>
-                              </>
-                          ) : <span className="text-xs text-gray-400">Clima no disponible</span>}
+                      <div className="mt-4 md:mt-0">
+                          <WeatherWidget lat={displayCoordinates.lat} lng={displayCoordinates.lng} />
                       </div>
                   )}
               </div>

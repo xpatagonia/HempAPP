@@ -1,18 +1,14 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Location, SoilType, RoleType, Plot } from '../types';
-import { Plus, MapPin, User, Globe, Edit2, Trash2, Keyboard, List, Briefcase, Building, Landmark, GraduationCap, Users, Droplets, Ruler, Navigation, ChevronDown, ChevronUp, Sprout, ArrowRight } from 'lucide-react';
+import { Plus, MapPin, User, Globe, Edit2, Trash2, Keyboard, List, Briefcase, Building, Landmark, GraduationCap, Users, Droplets, Ruler, Navigation, ChevronDown, ChevronUp, Sprout, ArrowRight, LayoutDashboard, Search, Filter } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import WeatherWidget from '../components/WeatherWidget';
 
-// Expanded Argentina Database with Rural Hubs
+// Expanded Argentina Database with Rural Hubs (Keep existing list)
 const ARG_GEO: Record<string, string[]> = {
-    "Buenos Aires": [
-        "La Plata", "Mar del Plata", "Bahía Blanca", "Tandil", "Pergamino", "Junín", "Olavarría", "San Nicolás", "Balcarce", "Castelar", "CABA", "San Pedro",
-        "Trenque Lauquen", "Pehuajó", "9 de Julio", "Bolívar", "Saladillo", "Lobos", "Chascomús", "Necochea", "Tres Arroyos", 
-        "General Villegas", "Lincoln", "Chivilcoy", "Chacabuco", "Bragado", "25 de Mayo", "Azul", "Coronel Suárez", "Pigüé", "Carhué",
-        "San Antonio de Areco", "Arrecifes", "Salto", "Rojas", "Mercedes", "Luján", "Cañuelas", "Las Flores"
-    ],
+    "Buenos Aires": ["La Plata", "Mar del Plata", "Bahía Blanca", "Tandil", "Pergamino", "Junín", "Olavarría", "San Nicolás", "Balcarce", "Castelar", "CABA", "San Pedro", "Trenque Lauquen", "Pehuajó", "9 de Julio", "Bolívar", "Saladillo", "Lobos", "Chascomús", "Necochea", "Tres Arroyos", "General Villegas", "Lincoln", "Chivilcoy", "Chacabuco", "Bragado", "25 de Mayo", "Azul", "Coronel Suárez", "Pigüé", "Carhué", "San Antonio de Areco", "Arrecifes", "Salto", "Rojas", "Mercedes", "Luján", "Cañuelas", "Las Flores"],
     "Catamarca": ["San Fernando del Valle de Catamarca", "Andalgalá", "Tinogasta", "Belén", "Santa María", "Recreo", "Fiambalá"],
     "Chaco": ["Resistencia", "Sáenz Peña", "Villa Ángela", "Charata", "Castelli", "San Martín", "Las Breñas", "Quitilipi", "Machagai", "Pampa del Infierno"],
     "Chubut": ["Rawson", "Comodoro Rivadavia", "Trelew", "Puerto Madryn", "Esquel", "Trevelin", "Sarmiento", "Gaiman", "Dolavon", "Lago Puelo"],
@@ -74,7 +70,11 @@ export default function Locations() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isManualCity, setIsManualCity] = useState(false);
   
-  // Plot Creation State (Directly from Location)
+  // Filters
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterProvince, setFilterProvince] = useState('');
+
+  // Plot Creation State
   const [isPlotModalOpen, setIsPlotModalOpen] = useState(false);
   const [targetLocationId, setTargetLocationId] = useState<string | null>(null);
 
@@ -101,12 +101,47 @@ export default function Locations() {
 
   // Filter Locations
   const visibleLocations = locations.filter(l => {
-      if (isAdmin) return true;
+      let matches = true;
+      
+      // Permission check
       if (isClient && currentUser.clientId) {
-          return l.clientId === currentUser.clientId || l.responsibleIds?.includes(currentUser.id);
+          matches = (l.clientId === currentUser.clientId || l.responsibleIds?.includes(currentUser.id));
+      } else if (!isAdmin) {
+          matches = l.responsibleIds?.includes(currentUser?.id || '');
       }
-      return l.responsibleIds?.includes(currentUser?.id || '');
+
+      // Search Filter
+      if (searchTerm) {
+          const lowerTerm = searchTerm.toLowerCase();
+          matches = matches && (l.name.toLowerCase().includes(lowerTerm) || l.city?.toLowerCase().includes(lowerTerm));
+      }
+
+      // Province Filter
+      if (filterProvince) {
+          matches = matches && l.province === filterProvince;
+      }
+
+      return matches;
   });
+
+  // Calculate Dashboard Stats
+  const stats = useMemo(() => {
+      const totalLocs = visibleLocations.length;
+      const totalHa = visibleLocations.reduce((sum, l) => sum + (l.capacityHa || 0), 0);
+      
+      // Calculate occupied area
+      const activePlots = plots.filter(p => p.status === 'Activa' && visibleLocations.some(l => l.id === p.locationId));
+      const occupiedHa = activePlots.reduce((sum, p) => {
+          let area = p.surfaceArea || 0;
+          if (p.surfaceUnit === 'm2') area = area / 10000;
+          if (p.surfaceUnit === 'ac') area = area * 0.404686;
+          return sum + area;
+      }, 0);
+
+      const occupancyRate = totalHa > 0 ? (occupiedHa / totalHa) * 100 : 0;
+
+      return { totalLocs, totalHa, occupiedHa, occupancyRate, activePlotsCount: activePlots.length };
+  }, [visibleLocations, plots]);
 
   const toggleExpand = (id: string) => {
       setExpandedLocations(prev => ({...prev, [id]: !prev[id]}));
@@ -298,22 +333,78 @@ export default function Locations() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
-        <div>
-            <h1 className="text-2xl font-bold text-gray-800">Campos y Cultivos</h1>
-            <p className="text-sm text-gray-500">Gestión integrada de establecimientos y sus unidades productivas.</p>
-        </div>
-        {canManage && (
-          <button onClick={() => { resetForm(); setIsModalOpen(true); }} className="bg-hemp-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-hemp-700 transition shadow-sm">
-            <Plus size={20} className="mr-2" /> Nuevo Campo
-          </button>
-        )}
+      {/* DASHBOARD HEADER */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+          <div className="flex justify-between items-start mb-6">
+              <div>
+                  <h1 className="text-2xl font-bold text-gray-800 flex items-center">
+                      <LayoutDashboard className="mr-2 text-hemp-600"/> Gestión de Campos
+                  </h1>
+                  <p className="text-sm text-gray-500">Centro de control de establecimientos productivos.</p>
+              </div>
+              {canManage && (
+                <button onClick={() => { resetForm(); setIsModalOpen(true); }} className="bg-hemp-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-hemp-700 transition shadow-sm font-bold text-sm">
+                  <Plus size={18} className="mr-2" /> Nuevo Campo
+                </button>
+              )}
+          </div>
+
+          {/* METRICS GRID */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
+                  <div className="text-xs font-bold text-gray-500 uppercase mb-1">Total Establecimientos</div>
+                  <div className="text-2xl font-black text-gray-800">{stats.totalLocs}</div>
+              </div>
+              <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
+                  <div className="text-xs font-bold text-blue-700 uppercase mb-1">Capacidad Total</div>
+                  <div className="text-2xl font-black text-blue-900">{stats.totalHa} ha</div>
+              </div>
+              <div className="bg-green-50 rounded-lg p-4 border border-green-100">
+                  <div className="flex justify-between items-center mb-1">
+                      <div className="text-xs font-bold text-green-700 uppercase">Ocupación Activa</div>
+                      <span className="text-xs font-bold text-green-600">{stats.occupancyRate.toFixed(1)}%</span>
+                  </div>
+                  <div className="w-full bg-green-200 rounded-full h-2 mb-2">
+                      <div className="bg-green-600 h-2 rounded-full" style={{width: `${Math.min(stats.occupancyRate, 100)}%`}}></div>
+                  </div>
+                  <div className="text-xs text-green-800">
+                      <strong>{stats.occupiedHa.toFixed(1)} ha</strong> en {stats.activePlotsCount} cultivos
+                  </div>
+              </div>
+          </div>
+      </div>
+
+      {/* FILTERS BAR */}
+      <div className="flex flex-col sm:flex-row gap-4 mb-6">
+          <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+              <input 
+                type="text" 
+                placeholder="Buscar campo, ciudad..." 
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-hemp-500 outline-none text-sm"
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+              />
+          </div>
+          <div className="relative w-full sm:w-64">
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+              <select 
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-hemp-500 outline-none text-sm appearance-none bg-white"
+                value={filterProvince}
+                onChange={e => setFilterProvince(e.target.value)}
+              >
+                  <option value="">Todas las Provincias</option>
+                  {Object.keys(ARG_GEO).sort().map(p => (
+                      <option key={p} value={p}>{p}</option>
+                  ))}
+              </select>
+          </div>
       </div>
 
       <div className="space-y-6">
         {visibleLocations.length === 0 && (
             <div className="text-center py-10 bg-gray-50 rounded-lg border border-dashed text-gray-500">
-                No tienes campos registrados. Comienza agregando uno.
+                No se encontraron campos con los filtros actuales.
             </div>
         )}
         {visibleLocations.map(loc => {
@@ -321,22 +412,28 @@ export default function Locations() {
           const isExpanded = expandedLocations[loc.id];
 
           return (
-            <div key={loc.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden group">
+            <div key={loc.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden group hover:shadow-md transition-shadow">
               {/* Location Header / Summary */}
               <div className="p-0 md:p-6 flex flex-col md:flex-row gap-6">
                   {/* Map Preview (Smaller) */}
-                  <div className="w-full md:w-48 h-32 md:h-auto bg-gray-100 relative flex-shrink-0 md:rounded-lg overflow-hidden border-b md:border border-gray-200">
+                  <div className="w-full md:w-48 h-32 md:h-auto bg-gray-100 relative flex-shrink-0 md:rounded-lg overflow-hidden border-b md:border border-gray-200 group/map">
                     {loc.coordinates ? (
-                       <iframe 
-                         width="100%" 
-                         height="100%" 
-                         frameBorder="0" 
-                         scrolling="no" 
-                         marginHeight={0} 
-                         marginWidth={0} 
-                         src={`https://maps.google.com/maps?q=${loc.coordinates.lat},${loc.coordinates.lng}&z=14&output=embed`}
-                         className="absolute inset-0 opacity-80 group-hover:opacity-100 transition-opacity"
-                       ></iframe>
+                       <>
+                           <iframe 
+                             width="100%" 
+                             height="100%" 
+                             frameBorder="0" 
+                             scrolling="no" 
+                             marginHeight={0} 
+                             marginWidth={0} 
+                             src={`https://maps.google.com/maps?q=${loc.coordinates.lat},${loc.coordinates.lng}&z=14&output=embed`}
+                             className="absolute inset-0 opacity-80 group-hover/map:opacity-100 transition-opacity"
+                           ></iframe>
+                           {/* WEATHER WIDGET OVERLAY */}
+                           <div className="absolute top-2 left-2 z-10 scale-90 origin-top-left">
+                               <WeatherWidget lat={loc.coordinates.lat} lng={loc.coordinates.lng} compact={true} />
+                           </div>
+                       </>
                     ) : (
                       <div className="flex items-center justify-center h-full text-gray-400 flex-col">
                         <Globe size={32} className="mb-2 opacity-50" />
@@ -358,10 +455,10 @@ export default function Locations() {
                               </div>
                               {canManage && (
                                   <div className="flex space-x-2">
-                                      <button onClick={() => handleEdit(loc)} className="p-1.5 text-gray-400 hover:text-hemp-600 hover:bg-gray-100 rounded">
+                                      <button onClick={() => handleEdit(loc)} className="p-1.5 text-gray-400 hover:text-hemp-600 hover:bg-gray-100 rounded transition">
                                           <Edit2 size={16} />
                                       </button>
-                                      <button onClick={() => handleDelete(loc.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-gray-100 rounded">
+                                      <button onClick={() => handleDelete(loc.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-gray-100 rounded transition">
                                           <Trash2 size={16} />
                                       </button>
                                   </div>
@@ -372,8 +469,8 @@ export default function Locations() {
                               <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded border">
                                   {loc.capacityHa ? <strong>{loc.capacityHa} Ha</strong> : 'Sup. N/A'}
                               </span>
-                              <span className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded border border-blue-100">
-                                  {loc.irrigationSystem || 'Secano/Sin dato'}
+                              <span className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded border border-blue-100 flex items-center">
+                                  <Droplets size={10} className="mr-1"/> {loc.irrigationSystem || 'Secano'}
                               </span>
                               <span className="text-xs bg-indigo-50 text-indigo-700 px-2 py-1 rounded border border-indigo-100 flex items-center">
                                   {getClientIcon(loc.ownerType)} <span className="ml-1">{loc.ownerName}</span>
@@ -388,11 +485,11 @@ export default function Locations() {
                           </div>
                           <div className="flex space-x-2">
                               {canManage && (
-                                  <button onClick={() => openPlotModal(loc.id)} className="text-xs bg-hemp-50 text-hemp-700 px-3 py-1.5 rounded-lg font-bold hover:bg-hemp-100 flex items-center">
+                                  <button onClick={() => openPlotModal(loc.id)} className="text-xs bg-hemp-50 text-hemp-700 px-3 py-1.5 rounded-lg font-bold hover:bg-hemp-100 flex items-center transition">
                                       <Plus size={14} className="mr-1"/> Agregar Lote
                                   </button>
                               )}
-                              <button onClick={() => toggleExpand(loc.id)} className="text-xs bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg font-bold hover:bg-gray-200 flex items-center">
+                              <button onClick={() => toggleExpand(loc.id)} className="text-xs bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg font-bold hover:bg-gray-200 flex items-center transition">
                                   {isExpanded ? <ChevronUp size={14} className="mr-1"/> : <ChevronDown size={14} className="mr-1"/>}
                                   {isExpanded ? 'Ocultar' : 'Ver Lotes'}
                               </button>
@@ -530,6 +627,11 @@ export default function Locations() {
                   {!formData.clientId && (
                       <input type="text" placeholder="Nombre del Propietario" className={inputClass} value={formData.ownerName} onChange={e => setFormData({...formData, ownerName: e.target.value})} disabled={isClient} />
                   )}
+                  
+                  <div className="mt-3 pt-3 border-t border-indigo-200">
+                      <label className="block text-sm font-medium text-indigo-900 mb-1">Capacidad Total (Ha)</label>
+                      <input type="number" step="0.1" className={inputClass} value={formData.capacityHa} onChange={e => setFormData({...formData, capacityHa: Number(e.target.value)})} placeholder="0"/>
+                  </div>
               </div>
 
               <div className="flex justify-end space-x-2 pt-4">
