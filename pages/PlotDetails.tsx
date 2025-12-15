@@ -71,10 +71,12 @@ export default function PlotDetails() {
   const plotLogs = logs.filter(l => l.plotId === id).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   
   // SMART MAP CENTER LOGIC
+  // If plot has specific coordinates, use them. If not, check for polygon centroid. If not, fallback to location coordinates.
   const displayCoordinates = 
-      plot?.coordinates || 
-      location?.coordinates || 
-      (plot?.polygon && plot.polygon.length > 0 ? plot.polygon[0] : undefined);
+      (plot?.coordinates && plot.coordinates.lat !== 0) ? plot.coordinates :
+      (plot?.polygon && plot.polygon.length > 0) ? plot.polygon[0] :
+      (location?.coordinates && location.coordinates.lat !== 0) ? location.coordinates : 
+      undefined;
   
   // Stats
   const daysSinceSowing = Math.floor((new Date().getTime() - new Date(plot?.sowingDate || '').getTime()) / (1000 * 60 * 60 * 24));
@@ -85,6 +87,7 @@ export default function PlotDetails() {
   useEffect(() => {
     if (displayCoordinates && displayCoordinates.lat && displayCoordinates.lng) {
         setWeatherLoading(true);
+        // Using Open-Meteo API
         fetch(`https://api.open-meteo.com/v1/forecast?latitude=${displayCoordinates.lat}&longitude=${displayCoordinates.lng}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m`)
             .then(res => res.json())
             .then(data => { setWeather(data.current); setWeatherLoading(false); })
@@ -256,7 +259,7 @@ export default function PlotDetails() {
                   <div className="h-48 lg:h-auto rounded-xl overflow-hidden border border-gray-200 relative bg-gray-50">
                       {displayCoordinates ? (
                           <MapEditor 
-                            initialPolygon={plot.polygon} 
+                            initialPolygon={plot.polygon || []} 
                             initialCenter={displayCoordinates} 
                             readOnly={true} 
                             height="100%"

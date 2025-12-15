@@ -10,15 +10,10 @@ import MapEditor from '../components/MapEditor';
 // Helper: Convert DMS (Degrees Minutes Seconds) to Decimal
 const parseCoordinate = (input: string): string => {
     if (!input) return '';
-    
-    // Clean string
     const clean = input.trim().toUpperCase();
-    
-    // 1. Check if already decimal (e.g., "-34.56")
     const isDecimal = /^-?[\d.]+$/.test(clean);
     if (isDecimal) return clean;
 
-    // 2. Parse DMS (e.g. 39°23'34"S)
     const dmsRegex = /(\d+)[°\s]+(\d+)['\s]+(\d+(?:\.\d+)?)["\s]*([NSEW])?/i;
     const match = clean.match(dmsRegex);
 
@@ -26,44 +21,31 @@ const parseCoordinate = (input: string): string => {
         let deg = parseFloat(match[1]);
         let min = parseFloat(match[2]);
         let sec = parseFloat(match[3]);
-        let dir = match[4] || ''; 
-
-        if (!dir) {
-            if (clean.includes('S') || clean.includes('W')) dir = 'S'; 
-        }
-
+        let dir = match[4] || '';
+        if (!dir && (clean.includes('S') || clean.includes('W'))) dir = 'S';
         let decimal = deg + (min / 60) + (sec / 3600);
-
         if (dir === 'S' || dir === 'W' || clean.includes('S') || clean.includes('W')) {
             decimal = decimal * -1;
         }
-        
         return decimal.toFixed(6);
     }
-
     return input; 
 };
 
-// Helper: Improved KML Parser (Robust)
+// Helper: Robust KML Parser
 const parseKML = (kmlText: string): { lat: number, lng: number }[] | null => {
     try {
         const parser = new DOMParser();
         const xmlDoc = parser.parseFromString(kmlText, "text/xml");
-        
-        // Strategy: Find any "coordinates" tag. 
-        // 1. Prioritize Polygon/OuterBoundaryIs
-        // 2. Fallback to any coordinates found
         const allCoords = Array.from(xmlDoc.getElementsByTagName("coordinates"));
         
         if (allCoords.length === 0) return null;
 
-        // Sort by length desc to find the most complex shape (Polygon vs Point)
+        // Sort desc by length to find polygon first
         allCoords.sort((a, b) => (b.textContent?.length || 0) - (a.textContent?.length || 0));
         
         const targetNode = allCoords[0];
         const text = targetNode.textContent || "";
-        
-        // Normalize separators: replace newlines/tabs with space, then split by space
         const rawPoints = text.replace(/\s+/g, ' ').trim().split(' ');
         
         const latLngs = rawPoints.map(point => {
@@ -79,7 +61,6 @@ const parseKML = (kmlText: string): { lat: number, lng: number }[] | null => {
         }).filter((p): p is { lat: number, lng: number } => p !== null);
 
         return latLngs.length >= 3 ? latLngs : null;
-
     } catch (e) {
         console.error("Error parsing KML", e);
         return null;
@@ -88,41 +69,32 @@ const parseKML = (kmlText: string): { lat: number, lng: number }[] | null => {
 
 export default function Plots() {
   const { plots, locations, varieties, projects, usersList, addPlot, updatePlot, deletePlot, currentUser, getLatestRecord, logs, seedBatches } = useAppContext();
-  
   const [searchParams] = useSearchParams();
   const initialProjectFilter = searchParams.get('project') || 'all';
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isMapModalOpen, setIsMapModalOpen] = useState(false); // Modal for simple visualization
-  const [viewPlot, setViewPlot] = useState<Plot | null>(null); // Plot being visualized
+  const [isMapModalOpen, setIsMapModalOpen] = useState(false);
+  const [viewPlot, setViewPlot] = useState<Plot | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
-
-  // View Mode State
   const [viewMode, setViewMode] = useState<'table' | 'gallery'>('table');
 
   const [filterLoc, setFilterLoc] = useState('all');
   const [filterProj, setFilterProj] = useState(initialProjectFilter);
   const [filterType, setFilterType] = useState<'all' | 'Ensayo' | 'Producción'>('all');
 
-  // File Input Ref for KML
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Extended form state to handle lat/lng strings and Polygon
   const [formData, setFormData] = useState<Partial<Plot> & { lat?: string, lng?: string }>({
     projectId: '', locationId: '', varietyId: '', seedBatchId: '',
-    type: 'Ensayo',
-    block: '1', replicate: 1,
+    type: 'Ensayo', block: '1', replicate: 1,
     ownerName: '', responsibleIds: [],
     sowingDate: '', rowDistance: 0, density: 0, 
     surfaceArea: 0, surfaceUnit: 'm2', perimeter: 0,
-    status: 'Activa',
-    observations: '',
-    irrigationType: '',
-    lat: '', lng: '',
-    polygon: []
+    status: 'Activa', observations: '', irrigationType: '',
+    lat: '', lng: '', polygon: []
   });
 
-  // AUTO-FILL COORDINATES FROM LOCATION (Only if empty)
+  // AUTO-FILL COORDINATES FROM LOCATION
   useEffect(() => {
       if (formData.locationId && !formData.lat && !formData.lng && (!formData.polygon || formData.polygon.length === 0)) {
           const loc = locations.find(l => l.id === formData.locationId);
@@ -139,7 +111,6 @@ export default function Plots() {
   const isSuperAdmin = currentUser?.role === 'super_admin';
   const isAdmin = currentUser?.role === 'admin' || isSuperAdmin;
   const isClient = currentUser?.role === 'client';
-  
   const canManagePlots = isAdmin || isClient;
 
   const availableLocations = locations.filter(l => {
@@ -151,10 +122,8 @@ export default function Plots() {
   });
 
   const availableBatches = seedBatches.filter(b => b.varietyId === formData.varietyId);
-
   const selectedLocation = locations.find(l => l.id === formData.locationId);
 
-  // MAP CENTER LOGIC: Priority -> Manual Lat/Lng -> Location Center -> Default
   const mapCenter = (formData.lat && formData.lng && !isNaN(parseFloat(formData.lat))) 
       ? { lat: parseFloat(formData.lat), lng: parseFloat(formData.lng) }
       : selectedLocation?.coordinates 
@@ -182,13 +151,11 @@ export default function Plots() {
           const poly = parseKML(text);
           
           if (poly && poly.length > 2) {
-              // Calculate centroid to center the map
               const lats = poly.map(p => p.lat);
               const lngs = poly.map(p => p.lng);
               const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
               const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
 
-              // Basic Area/Perimeter Calc
               const R = 6371000;
               const toRad = (x: number) => x * Math.PI / 180;
               let area = 0;
@@ -198,17 +165,16 @@ export default function Plots() {
                   const p1 = poly[i];
                   const p2 = poly[j];
                   area += (toRad(p2.lng) - toRad(p1.lng)) * (2 + Math.sin(toRad(p1.lat)) + Math.sin(toRad(p2.lat)));
-                  
                   const dLat = toRad(p2.lat - p1.lat);
                   const dLon = toRad(p2.lng - p1.lng);
                   const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(toRad(p1.lat)) * Math.cos(toRad(p2.lat)) * Math.sin(dLon/2) * Math.sin(dLon/2);
                   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
                   perimeter += R * c;
               }
-              area = Math.abs(area * R * R / 2) / 10000; // Ha
+              area = Math.abs(area * R * R / 2) / 10000;
 
-              // FORCE STATE UPDATE
-              const newFormData = {
+              // Explicitly create new object to force React state update
+              const newState = {
                   ...formData,
                   polygon: poly,
                   lat: centerLat.toFixed(6),
@@ -217,16 +183,13 @@ export default function Plots() {
                   surfaceUnit: 'ha' as any,
                   perimeter: Math.round(perimeter)
               };
-              
-              setFormData(newFormData);
-              alert("✅ KML Importado con éxito. Se detectó el polígono.");
+              setFormData(newState);
+              alert("✅ KML Importado. El polígono se ha cargado en el mapa y los datos se actualizaron.");
           } else {
-              alert("⚠️ No se pudo extraer un polígono válido del KML.\n\nAsegúrate de que el archivo .kml contenga un Polígono dibujado.");
+              alert("⚠️ No se encontró un polígono válido en el archivo KML.");
           }
-          
           if (fileInputRef.current) fileInputRef.current.value = '';
       };
-      
       reader.onerror = () => alert("Error al leer el archivo.");
       reader.readAsText(file);
   };
@@ -260,7 +223,6 @@ export default function Plots() {
     let finalLng = parseFloat(parseCoordinate(formData.lng || '0'));
 
     if ((!finalLat || finalLat === 0) && formData.polygon && formData.polygon.length > 0) {
-        // If center not set manually but polygon exists, use polygon start
         finalLat = formData.polygon[0].lat;
         finalLng = formData.polygon[0].lng;
     }
@@ -274,6 +236,7 @@ export default function Plots() {
         finalResponsibles.push(currentUser!.id);
     }
 
+    // Ensure polygon is passed correctly
     const plotPayload = {
       type: formData.type || 'Ensayo',
       locationId: formData.locationId!,
@@ -348,7 +311,6 @@ export default function Plots() {
   };
 
   const handleViewMap = (p: Plot) => {
-      // Allow viewing if either coordinate OR polygon exists
       if (!p.coordinates && (!p.polygon || p.polygon.length === 0)) {
           alert("Esta parcela no tiene datos geográficos cargados.");
           return;
