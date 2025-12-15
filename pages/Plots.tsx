@@ -44,37 +44,33 @@ const parseCoordinate = (input: string): string => {
     return input; 
 };
 
-// Helper: Improved KML Parser
+// Helper: Improved KML Parser (Robust)
 const parseKML = (kmlText: string): { lat: number, lng: number }[] | null => {
     try {
         const parser = new DOMParser();
         const xmlDoc = parser.parseFromString(kmlText, "text/xml");
         
-        // Find ALL coordinates tags in the document
+        // Strategy: Find any "coordinates" tag. 
+        // 1. Prioritize Polygon/OuterBoundaryIs
+        // 2. Fallback to any coordinates found
         const allCoords = Array.from(xmlDoc.getElementsByTagName("coordinates"));
         
         if (allCoords.length === 0) return null;
 
-        // INTELLIGENT SELECTION:
-        // Google Earth files might contain a Point (the label location) AND a Polygon (the shape).
-        // A Polygon will always have a much longer coordinate string than a Point.
-        // We sort by length descending to find the complex shape first.
+        // Sort by length desc to find the most complex shape (Polygon vs Point)
         allCoords.sort((a, b) => (b.textContent?.length || 0) - (a.textContent?.length || 0));
         
-        // Take the longest coordinate set found (likely the Polygon boundary)
         const targetNode = allCoords[0];
         const text = targetNode.textContent || "";
         
-        // Split by whitespace (Google Earth uses space, newline, or tab to separate tuples)
-        const rawPoints = text.trim().split(/\s+/);
+        // Normalize separators: replace newlines/tabs with space, then split by space
+        const rawPoints = text.replace(/\s+/g, ' ').trim().split(' ');
         
         const latLngs = rawPoints.map(point => {
-            // KML Standard format: lon,lat,alt (No spaces after commas)
             const parts = point.split(',');
             if (parts.length >= 2) {
                 const lng = parseFloat(parts[0]);
                 const lat = parseFloat(parts[1]);
-                // Validate numbers
                 if (!isNaN(lat) && !isNaN(lng)) {
                     return { lat, lng };
                 }
@@ -82,7 +78,6 @@ const parseKML = (kmlText: string): { lat: number, lng: number }[] | null => {
             return null;
         }).filter((p): p is { lat: number, lng: number } => p !== null);
 
-        // A valid polygon needs at least 3 points to enclose an area
         return latLngs.length >= 3 ? latLngs : null;
 
     } catch (e) {
@@ -127,7 +122,7 @@ export default function Plots() {
     polygon: []
   });
 
-  // AUTO-FILL COORDINATES FROM LOCATION
+  // AUTO-FILL COORDINATES FROM LOCATION (Only if empty)
   useEffect(() => {
       if (formData.locationId && !formData.lat && !formData.lng && (!formData.polygon || formData.polygon.length === 0)) {
           const loc = locations.find(l => l.id === formData.locationId);
@@ -181,13 +176,6 @@ export default function Plots() {
       const file = e.target.files?.[0];
       if (!file) return;
 
-      // Check file extension
-      if (!file.name.toLowerCase().endsWith('.kml')) {
-          alert("Por favor, sube un archivo .kml (Google Earth). Los archivos .kmz (comprimidos) no son soportados directamente.");
-          if (fileInputRef.current) fileInputRef.current.value = '';
-          return;
-      }
-
       const reader = new FileReader();
       reader.onload = (event) => {
           const text = event.target?.result as string;
@@ -200,7 +188,7 @@ export default function Plots() {
               const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
               const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
 
-              // Basic Area/Perimeter Calc for immediate feedback
+              // Basic Area/Perimeter Calc
               const R = 6371000;
               const toRad = (x: number) => x * Math.PI / 180;
               let area = 0;
@@ -219,22 +207,23 @@ export default function Plots() {
               }
               area = Math.abs(area * R * R / 2) / 10000; // Ha
 
-              setFormData(prev => ({
-                  ...prev,
+              // FORCE STATE UPDATE
+              const newFormData = {
+                  ...formData,
                   polygon: poly,
                   lat: centerLat.toFixed(6),
                   lng: centerLng.toFixed(6),
                   surfaceArea: Number(area.toFixed(2)),
-                  surfaceUnit: 'ha',
+                  surfaceUnit: 'ha' as any,
                   perimeter: Math.round(perimeter)
-              }));
+              };
               
+              setFormData(newFormData);
               alert("✅ KML Importado con éxito. Se detectó el polígono.");
           } else {
-              alert("⚠️ No se pudo extraer un polígono válido del KML.\n\nAsegúrate de:\n1. Que el archivo sea .kml (no .kmz)\n2. Que contenga un polígono dibujado en Google Earth.\n3. Que no esté vacío.");
+              alert("⚠️ No se pudo extraer un polígono válido del KML.\n\nAsegúrate de que el archivo .kml contenga un Polígono dibujado.");
           }
           
-          // Reset file input
           if (fileInputRef.current) fileInputRef.current.value = '';
       };
       
@@ -271,6 +260,7 @@ export default function Plots() {
     let finalLng = parseFloat(parseCoordinate(formData.lng || '0'));
 
     if ((!finalLat || finalLat === 0) && formData.polygon && formData.polygon.length > 0) {
+        // If center not set manually but polygon exists, use polygon start
         finalLat = formData.polygon[0].lat;
         finalLng = formData.polygon[0].lng;
     }
@@ -358,6 +348,7 @@ export default function Plots() {
   };
 
   const handleViewMap = (p: Plot) => {
+      // Allow viewing if either coordinate OR polygon exists
       if (!p.coordinates && (!p.polygon || p.polygon.length === 0)) {
           alert("Esta parcela no tiene datos geográficos cargados.");
           return;
@@ -647,6 +638,7 @@ export default function Plots() {
                    <div className="h-[60vh] bg-gray-100">
                        <MapEditor 
                            initialPolygon={viewPlot.polygon}
+                           // Logic to center map even if only polygon exists (centroid)
                            initialCenter={viewPlot.coordinates || (viewPlot.polygon && viewPlot.polygon.length > 0 ? viewPlot.polygon[0] : undefined)}
                            readOnly={true}
                            height="100%"

@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { TrialRecord, Resource, Task } from '../types';
-import { ArrowLeft, Activity, Scale, AlertTriangle, Camera, FileText, Calendar, MapPin, Globe, Plus, Edit2, Trash2, Download, Droplets, Wind, QrCode, Printer, CheckSquare, Sun, Eye, Loader2, Ruler, Bug, SprayCan, Tractor, FlaskConical, Tag, Clock, UserCheck, DollarSign, Package, Archive, ThermometerSun, Sprout, X, Flag } from 'lucide-react';
+import { ArrowLeft, Activity, Scale, AlertTriangle, Camera, FileText, Calendar, MapPin, Globe, Plus, Edit2, Trash2, Download, Droplets, Wind, QrCode, Printer, CheckSquare, Sun, Eye, Loader2, Ruler, Bug, SprayCan, Tractor, FlaskConical, Tag, Clock, UserCheck, DollarSign, Package, Archive, Sprout, X } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import MapEditor from '../components/MapEditor';
 
@@ -11,7 +11,7 @@ import MapEditor from '../components/MapEditor';
 const KPI = ({ label, value, icon: Icon, color }: any) => (
     <div className="bg-white border border-gray-100 p-3 rounded-xl shadow-sm flex items-center space-x-3">
         <div className={`p-2 rounded-lg ${color} bg-opacity-10 text-${color.split('-')[1]}-600`}>
-            <Icon size={20} />
+            {Icon ? <Icon size={20} /> : <Activity size={20} />}
         </div>
         <div>
             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wide">{label}</p>
@@ -28,7 +28,7 @@ export default function PlotDetails() {
   const location = locations.find(l => l.id === plot?.locationId);
   const variety = varieties.find(v => v.id === plot?.varietyId);
   const seedBatch = seedBatches.find(b => b.id === plot?.seedBatchId);
-  const history = getPlotHistory(id!);
+  const history = getPlotHistory(id || '');
   
   // Filter active tasks
   const plotTasks = tasks.filter(t => t.plotId === id);
@@ -70,7 +70,11 @@ export default function PlotDetails() {
   const canEdit = currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || ((currentUser?.role === 'technician' || currentUser?.role === 'client') && isAssigned);
   const plotLogs = logs.filter(l => l.plotId === id).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   
-  const displayCoordinates = plot?.coordinates || location?.coordinates;
+  // SMART MAP CENTER LOGIC
+  const displayCoordinates = 
+      plot?.coordinates || 
+      location?.coordinates || 
+      (plot?.polygon && plot.polygon.length > 0 ? plot.polygon[0] : undefined);
   
   // Stats
   const daysSinceSowing = Math.floor((new Date().getTime() - new Date(plot?.sowingDate || '').getTime()) / (1000 * 60 * 60 * 24));
@@ -79,7 +83,7 @@ export default function PlotDetails() {
       : 'N/A';
 
   useEffect(() => {
-    if (displayCoordinates) {
+    if (displayCoordinates && displayCoordinates.lat && displayCoordinates.lng) {
         setWeatherLoading(true);
         fetch(`https://api.open-meteo.com/v1/forecast?latitude=${displayCoordinates.lat}&longitude=${displayCoordinates.lng}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m`)
             .then(res => res.json())
@@ -88,7 +92,13 @@ export default function PlotDetails() {
     }
   }, [displayCoordinates]);
 
-  if (!plot) return <div>Parcela no encontrada</div>;
+  if (!plot) return (
+      <div className="flex flex-col items-center justify-center h-64 text-gray-500">
+          <AlertTriangle size={48} className="mb-4 text-amber-500" />
+          <h2 className="text-xl font-bold text-gray-800">Parcela no encontrada</h2>
+          <Link to="/plots" className="text-hemp-600 hover:underline mt-2">Volver al listado</Link>
+      </div>
+  );
 
   // --- RECORD MANAGEMENT ---
   const handleOpenRecordModal = (existing?: TrialRecord, viewOnly: boolean = false) => {
@@ -216,7 +226,7 @@ export default function PlotDetails() {
                           {weatherLoading ? <Loader2 className="animate-spin text-blue-400"/> : weather ? (
                               <>
                                   <div className="flex flex-col items-center mr-4">
-                                      <ThermometerSun className="text-orange-500 mb-1" size={20}/>
+                                      <Sun className="text-orange-500 mb-1" size={20}/>
                                       <span className="text-lg font-bold text-gray-800 leading-none">{weather.temperature_2m}°</span>
                                   </div>
                                   <div className="h-8 w-px bg-blue-200 mr-4"></div>
@@ -236,7 +246,7 @@ export default function PlotDetails() {
                   <div className="lg:col-span-2 grid grid-cols-2 sm:grid-cols-3 gap-4">
                       <KPI label="Días Ciclo" value={`${daysSinceSowing} días`} icon={Clock} color="bg-blue-100 text-blue-600" />
                       <KPI label="Fecha Siembra" value={plot.sowingDate} icon={Calendar} color="bg-green-100 text-green-600" />
-                      <KPI label="Cosecha Est." value={estimatedHarvestDate} icon={Flag} color="bg-amber-100 text-amber-600" />
+                      <KPI label="Cosecha Est." value={estimatedHarvestDate} icon={MapPin} color="bg-amber-100 text-amber-600" />
                       <KPI label="Superficie" value={`${plot.surfaceArea} ${plot.surfaceUnit}`} icon={Map} color="bg-purple-100 text-purple-600" />
                       <KPI label="Densidad" value={`${plot.density} pl/m²`} icon={Sprout} color="bg-emerald-100 text-emerald-600" />
                       <KPI label="Semilla" value={seedBatch?.batchCode || 'N/A'} icon={Tag} color="bg-gray-100 text-gray-600" />
@@ -245,7 +255,12 @@ export default function PlotDetails() {
                   {/* Right: Map Preview */}
                   <div className="h-48 lg:h-auto rounded-xl overflow-hidden border border-gray-200 relative bg-gray-50">
                       {displayCoordinates ? (
-                          <MapEditor initialPolygon={plot.polygon} initialCenter={displayCoordinates} readOnly={true} height="100%"/>
+                          <MapEditor 
+                            initialPolygon={plot.polygon} 
+                            initialCenter={displayCoordinates} 
+                            readOnly={true} 
+                            height="100%"
+                          />
                       ) : (
                           <div className="h-full flex flex-col items-center justify-center text-gray-400 text-sm">
                               <Globe size={32} className="mb-2 opacity-50"/>
