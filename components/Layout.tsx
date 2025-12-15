@@ -31,7 +31,8 @@ import {
   Cloud,
   CloudOff,
   Archive,
-  Warehouse
+  Warehouse,
+  Tractor
 } from 'lucide-react';
 
 const NavItem = ({ to, icon: Icon, label, onClick }: any) => {
@@ -206,7 +207,9 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           
           <div className="pt-2 pb-2">
               <p className="px-4 text-xs font-semibold text-gray-400 uppercase mb-2">Operativo</p>
-              <NavItem to="/plots" icon={ClipboardList} label={isClient ? "Mis Lotes" : "Parcelas / Ensayos"} onClick={() => setIsMobileOpen(false)} />
+              {/* CAMBIO PRINCIPAL: INTEGRACIÓN */}
+              <NavItem to="/locations" icon={Tractor} label="Campos y Cultivos" onClick={() => setIsMobileOpen(false)} />
+              <NavItem to="/plots" icon={ClipboardList} label="Planilla Global" onClick={() => setIsMobileOpen(false)} />
               <NavItem to="/tasks" icon={CheckSquare} label="Tareas" onClick={() => setIsMobileOpen(false)} />
           </div>
 
@@ -229,7 +232,6 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                        <NavItem to="/resources" icon={Archive} label="Recursos" onClick={() => setIsMobileOpen(false)} />
                    </>
                )}
-               <NavItem to="/locations" icon={MapPin} label={isClient ? "Mis Ubicaciones" : "Locaciones"} onClick={() => setIsMobileOpen(false)} />
           </div>
           
           <div className="pt-4 mt-4 border-t dark:border-dark-border border-gray-100">
