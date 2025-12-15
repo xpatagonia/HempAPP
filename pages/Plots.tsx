@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { Plot } from '../types';
-import { Plus, ChevronRight, CheckCircle, FileSpreadsheet, Edit2, Calendar, UserCheck, MapPin, Box, Trash2, LayoutGrid, List, Image as ImageIcon, Ruler, Droplets, FlaskConical, Tractor, Tag, Sprout, Map, Navigation, Upload, FileUp } from 'lucide-react';
+import { Plus, ChevronRight, CheckCircle, FileSpreadsheet, Edit2, Calendar, UserCheck, MapPin, Box, Trash2, LayoutGrid, List, Image as ImageIcon, Ruler, Droplets, FlaskConical, Tractor, Tag, Sprout, Map, Navigation, FileUp, AlertTriangle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import MapEditor from '../components/MapEditor';
 
@@ -44,39 +44,51 @@ const parseCoordinate = (input: string): string => {
     return input; 
 };
 
-// Helper: Parse KML content to LatLng array
+// Helper: Improved KML Parser
 const parseKML = (kmlText: string): { lat: number, lng: number }[] | null => {
     try {
         const parser = new DOMParser();
         const xmlDoc = parser.parseFromString(kmlText, "text/xml");
         
-        // Find coordinates tag. Google Earth uses <coordinates> inside <Polygon> or <LineString>
-        const coordinates = xmlDoc.getElementsByTagName("coordinates");
+        // Find ALL coordinates tags in the document
+        const allCoords = Array.from(xmlDoc.getElementsByTagName("coordinates"));
         
-        if (coordinates.length > 0) {
-            // Get the text content of the first coordinate set found
-            const text = coordinates[0].textContent || "";
-            // Split by whitespace (Google Earth separates tuples by space or newline)
-            const points = text.trim().split(/\s+/);
-            
-            const latLngs = points.map(point => {
-                // KML format is "lon,lat,alt" (longitude first!)
-                const parts = point.split(',');
-                if (parts.length >= 2) {
-                    return {
-                        lng: parseFloat(parts[0]),
-                        lat: parseFloat(parts[1])
-                    };
-                }
-                return null;
-            }).filter((p): p is { lat: number, lng: number } => p !== null && !isNaN(p.lat) && !isNaN(p.lng));
+        if (allCoords.length === 0) return null;
 
-            return latLngs.length > 2 ? latLngs : null;
-        }
+        // INTELLIGENT SELECTION:
+        // Google Earth files might contain a Point (the label location) AND a Polygon (the shape).
+        // A Polygon will always have a much longer coordinate string than a Point.
+        // We sort by length descending to find the complex shape first.
+        allCoords.sort((a, b) => (b.textContent?.length || 0) - (a.textContent?.length || 0));
+        
+        // Take the longest coordinate set found (likely the Polygon boundary)
+        const targetNode = allCoords[0];
+        const text = targetNode.textContent || "";
+        
+        // Split by whitespace (Google Earth uses space, newline, or tab to separate tuples)
+        const rawPoints = text.trim().split(/\s+/);
+        
+        const latLngs = rawPoints.map(point => {
+            // KML Standard format: lon,lat,alt (No spaces after commas)
+            const parts = point.split(',');
+            if (parts.length >= 2) {
+                const lng = parseFloat(parts[0]);
+                const lat = parseFloat(parts[1]);
+                // Validate numbers
+                if (!isNaN(lat) && !isNaN(lng)) {
+                    return { lat, lng };
+                }
+            }
+            return null;
+        }).filter((p): p is { lat: number, lng: number } => p !== null);
+
+        // A valid polygon needs at least 3 points to enclose an area
+        return latLngs.length >= 3 ? latLngs : null;
+
     } catch (e) {
         console.error("Error parsing KML", e);
+        return null;
     }
-    return null;
 };
 
 export default function Plots() {
@@ -167,30 +179,26 @@ export default function Plots() {
       const file = e.target.files?.[0];
       if (!file) return;
 
+      // Check file extension
+      if (!file.name.toLowerCase().endsWith('.kml')) {
+          alert("Por favor, sube un archivo .kml (Google Earth). Los archivos .kmz (comprimidos) no son soportados directamente.");
+          if (fileInputRef.current) fileInputRef.current.value = '';
+          return;
+      }
+
       const reader = new FileReader();
       reader.onload = (event) => {
           const text = event.target?.result as string;
           const poly = parseKML(text);
-          if (poly) {
+          
+          if (poly && poly.length > 2) {
               // Calculate centroid to center the map
               const lats = poly.map(p => p.lat);
               const lngs = poly.map(p => p.lng);
               const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
               const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
 
-              // We don't have direct access to area calculation logic here without duplication or a ref to map,
-              // but MapEditor will recalculate area on render if we pass the polygon.
-              // However, to fill the input fields immediately, we can use the same logic or let the user click "save".
-              // Better: MapEditor calls onPolygonChange on init/update? No, usually on user interaction.
-              // Let's rely on MapEditor logic to re-trigger or just update state and let map render it.
-              
-              // We will just update polygon and center. The MapEditor creates area when drawn, 
-              // BUT MapEditor only triggers onPolygonChange on user interaction usually.
-              // To ensure Area is updated, we duplicate the math here briefly or just set the polygon.
-              // Let's set the polygon. The MapEditor visual will update. 
-              // To update the area text input, we need the math.
-              
-              // --- Quick Math for immediate UI feedback ---
+              // Basic Area/Perimeter Calc for immediate feedback
               const R = 6371000;
               const toRad = (x: number) => x * Math.PI / 180;
               let area = 0;
@@ -201,7 +209,6 @@ export default function Plots() {
                   const p2 = poly[j];
                   area += (toRad(p2.lng) - toRad(p1.lng)) * (2 + Math.sin(toRad(p1.lat)) + Math.sin(toRad(p2.lat)));
                   
-                  // Perimeter segment
                   const dLat = toRad(p2.lat - p1.lat);
                   const dLon = toRad(p2.lng - p1.lng);
                   const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(toRad(p1.lat)) * Math.cos(toRad(p2.lat)) * Math.sin(dLon/2) * Math.sin(dLon/2);
@@ -213,21 +220,23 @@ export default function Plots() {
               setFormData(prev => ({
                   ...prev,
                   polygon: poly,
-                  lat: centerLat.toString(),
-                  lng: centerLng.toString(),
+                  lat: centerLat.toFixed(6),
+                  lng: centerLng.toFixed(6),
                   surfaceArea: Number(area.toFixed(2)),
                   surfaceUnit: 'ha',
                   perimeter: Math.round(perimeter)
               }));
               
-              alert("KML Importado con éxito. Polígono, área y perímetro actualizados.");
+              alert("✅ KML Importado con éxito. Se detectó el polígono.");
           } else {
-              alert("No se pudo extraer un polígono válido del KML. Asegúrate de que sea un archivo de Google Earth con un polígono o ruta.");
+              alert("⚠️ No se pudo extraer un polígono válido del KML.\n\nAsegúrate de:\n1. Que el archivo sea .kml (no .kmz)\n2. Que contenga un polígono dibujado en Google Earth.\n3. Que no esté vacío.");
           }
           
           // Reset file input
           if (fileInputRef.current) fileInputRef.current.value = '';
       };
+      
+      reader.onerror = () => alert("Error al leer el archivo.");
       reader.readAsText(file);
   };
 
