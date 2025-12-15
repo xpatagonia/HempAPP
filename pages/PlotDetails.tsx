@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { TrialRecord, Resource, Task } from '../types';
-import { ArrowLeft, Activity, Scale, AlertTriangle, Camera, FileText, Calendar, MapPin, Globe, Plus, Edit2, Trash2, Download, Droplets, Wind, QrCode, Printer, CheckSquare, Sun, Eye, Loader2, Ruler, Bug, SprayCan, Tractor, FlaskConical, Tag, Clock, UserCheck, DollarSign, Package, Archive, ThermometerSun, Sprout, X } from 'lucide-react';
+import { ArrowLeft, Activity, Scale, AlertTriangle, Camera, FileText, Calendar, MapPin, Globe, Plus, Edit2, Trash2, Download, Droplets, Wind, QrCode, Printer, CheckSquare, Sun, Eye, Loader2, Ruler, Bug, SprayCan, Tractor, FlaskConical, Tag, Clock, UserCheck, DollarSign, Package, Archive, ThermometerSun, Sprout, X, Flag } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import MapEditor from '../components/MapEditor';
 
@@ -235,7 +236,7 @@ export default function PlotDetails() {
                   <div className="lg:col-span-2 grid grid-cols-2 sm:grid-cols-3 gap-4">
                       <KPI label="Días Ciclo" value={`${daysSinceSowing} días`} icon={Clock} color="bg-blue-100 text-blue-600" />
                       <KPI label="Fecha Siembra" value={plot.sowingDate} icon={Calendar} color="bg-green-100 text-green-600" />
-                      <KPI label="Cosecha Est." value={estimatedHarvestDate} icon={Flag} color="bg-amber-100 text-amber-600" /> {/* Flag is not imported, swapping for CheckSquare */}
+                      <KPI label="Cosecha Est." value={estimatedHarvestDate} icon={Flag} color="bg-amber-100 text-amber-600" />
                       <KPI label="Superficie" value={`${plot.surfaceArea} ${plot.surfaceUnit}`} icon={Map} color="bg-purple-100 text-purple-600" />
                       <KPI label="Densidad" value={`${plot.density} pl/m²`} icon={Sprout} color="bg-emerald-100 text-emerald-600" />
                       <KPI label="Semilla" value={seedBatch?.batchCode || 'N/A'} icon={Tag} color="bg-gray-100 text-gray-600" />
@@ -521,5 +522,3 @@ export default function PlotDetails() {
     </div>
   );
 }
-// Helper Dummy Flag icon for quick fix if lucide doesn't export Flag in used version, swapping to MapPin usually works or define SVG
-const Flag = ({size, className}: any) => <MapPin size={size} className={className} />;
