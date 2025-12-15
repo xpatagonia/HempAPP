@@ -3,21 +3,106 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { TrialRecord, Task } from '../types';
-import { ArrowLeft, Activity, Calendar, MapPin, Globe, Plus, Trash2, Droplets, Wind, QrCode, Printer, CheckSquare, Sun, Eye, Loader2, Tractor, FlaskConical, Tag, Clock, DollarSign, Package, Archive, Sprout, X, Map, Camera, FileText } from 'lucide-react';
+import { ArrowLeft, Activity, Calendar, MapPin, Globe, Plus, Trash2, Droplets, Wind, QrCode, Printer, CheckSquare, Sun, Eye, Loader2, Tractor, FlaskConical, Tag, Clock, DollarSign, Package, Archive, Sprout, X, Map, Camera, FileText, ChevronRight, TrendingUp } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
 
-// Helper component for KPI Cards
-const KPI = ({ label, value, icon: Icon, color }: any) => (
-    <div className="bg-white border border-gray-100 p-3 rounded-xl shadow-sm flex items-center space-x-3">
-        <div className={`p-2 rounded-lg ${color} bg-opacity-10 text-${color.split('-')[1]}-600`}>
-            {Icon ? <Icon size={20} /> : <Activity size={20} />}
+// Helper component for KPI Cards (Redesigned)
+const KPI = ({ label, value, icon: Icon, color, subtext }: any) => (
+    <div className="bg-white border border-gray-100 p-4 rounded-xl shadow-sm flex items-start space-x-4 hover:shadow-md transition-shadow relative overflow-hidden group">
+        <div className={`p-3 rounded-xl ${color} bg-opacity-10 text-${color.split('-')[1]}-600 group-hover:scale-110 transition-transform`}>
+            {Icon ? <Icon size={24} /> : <Activity size={24} />}
         </div>
-        <div>
-            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wide">{label}</p>
-            <p className="text-sm font-bold text-gray-800">{value}</p>
+        <div className="flex-1 z-10">
+            <p className="text-xs text-gray-500 font-bold uppercase tracking-wide mb-1">{label}</p>
+            <p className="text-xl font-black text-gray-800 leading-none">{value}</p>
+            {subtext && <p className="text-[10px] text-gray-400 mt-1">{subtext}</p>}
         </div>
+        {/* Decorative circle */}
+        <div className={`absolute -right-4 -bottom-4 w-16 h-16 rounded-full ${color} opacity-5 group-hover:opacity-10 transition-opacity`}></div>
     </div>
 );
+
+// Cycle Progress Component
+const CycleGraph = ({ sowingDate, cycleDays }: { sowingDate: string, cycleDays: number }) => {
+    if (!sowingDate || !cycleDays) return null;
+
+    const start = new Date(sowingDate).getTime();
+    const end = start + (cycleDays * 24 * 60 * 60 * 1000);
+    const now = new Date().getTime();
+    
+    let progress = 0;
+    if (now > start) {
+        progress = ((now - start) / (end - start)) * 100;
+    }
+    if (progress > 100) progress = 100;
+    if (progress < 0) progress = 0;
+
+    const daysLeft = Math.ceil((end - now) / (1000 * 60 * 60 * 24));
+    const isFinished = daysLeft <= 0;
+
+    return (
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 mb-6 relative overflow-hidden">
+            <div className="flex justify-between items-end mb-2 relative z-10">
+                <div>
+                    <h3 className="text-lg font-bold text-gray-800 flex items-center">
+                        <Clock size={20} className="mr-2 text-hemp-600"/> Ciclo de Cultivo
+                    </h3>
+                    <p className="text-sm text-gray-500">Progreso biológico estimado según genética.</p>
+                </div>
+                <div className="text-right">
+                    <span className={`text-2xl font-black ${isFinished ? 'text-green-600' : 'text-hemp-600'}`}>
+                        {Math.round(progress)}%
+                    </span>
+                    <p className="text-xs text-gray-400 font-bold uppercase">Completado</p>
+                </div>
+            </div>
+
+            {/* Timeline Bar */}
+            <div className="h-4 bg-gray-100 rounded-full w-full relative mb-8 mt-4 overflow-hidden border border-gray-200">
+                {/* Progress Fill */}
+                <div 
+                    className={`h-full rounded-full transition-all duration-1000 ease-out relative ${isFinished ? 'bg-green-500' : 'bg-gradient-to-r from-hemp-400 to-hemp-600'}`} 
+                    style={{ width: `${progress}%` }}
+                >
+                    {/* Stripes effect */}
+                    <div className="absolute inset-0 opacity-20 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9InN0cmlwZXMiIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTTAgNDBMODAgMEgwTDQwIDQwVjB6IiBmaWxsPSIjZmZmIiBmaWxsLW9wYWNpdHk9IjAuMiIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNzdHJpcGVzKSIvPjwvc3ZnPg==')]"></div>
+                </div>
+                
+                {/* Marker: Today */}
+                {!isFinished && (
+                    <div 
+                        className="absolute top-0 w-1 h-full bg-black/20 backdrop-blur-sm z-20 border-l border-white/50" 
+                        style={{ left: `${progress}%` }}
+                    >
+                        <div className="absolute -top-1 -translate-x-1/2 left-1/2 bg-gray-900 text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm">HOY</div>
+                    </div>
+                )}
+            </div>
+
+            {/* Milestones */}
+            <div className="flex justify-between text-xs text-gray-500 font-medium relative z-10">
+                <div className="text-left">
+                    <div className="font-bold text-gray-800">Siembra</div>
+                    <div>{new Date(sowingDate).toLocaleDateString()}</div>
+                </div>
+                
+                {/* Approximate Flowering (usually 50-60% for many hemps, purely visual approx) */}
+                <div className="text-center absolute left-1/2 -translate-x-1/2 hidden sm:block opacity-50">
+                    <div className="font-bold">Floración (Est.)</div>
+                    <div>~ Día {Math.round(cycleDays * 0.55)}</div>
+                </div>
+
+                <div className="text-right">
+                    <div className="font-bold text-gray-800">Cosecha Estimada</div>
+                    <div className={`${isFinished ? 'text-green-600 font-bold' : ''}`}>
+                        {new Date(end).toLocaleDateString()} 
+                        {!isFinished && <span className="block text-[10px] text-gray-400">({daysLeft} días restantes)</span>}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 export default function PlotDetails() {
   const { id } = useParams<{ id: string }>();
@@ -79,10 +164,7 @@ export default function PlotDetails() {
   
   // Stats
   const daysSinceSowing = Math.floor((new Date().getTime() - new Date(plot?.sowingDate || '').getTime()) / (1000 * 60 * 60 * 24));
-  const estimatedHarvestDate = variety?.cycleDays 
-      ? new Date(new Date(plot?.sowingDate || '').getTime() + variety.cycleDays * 24 * 60 * 60 * 1000).toLocaleDateString()
-      : 'N/A';
-
+  
   useEffect(() => {
     if (displayCoordinates && displayCoordinates.lat && displayCoordinates.lng) {
         setWeatherLoading(true);
@@ -242,20 +324,59 @@ export default function PlotDetails() {
                   )}
               </div>
 
+              {/* Cycle Graph (New) */}
+              <CycleGraph sowingDate={plot.sowingDate} cycleDays={variety?.cycleDays || 120} />
+
               {/* Main Grid */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  {/* Left: KPIs */}
-                  <div className="lg:col-span-2 grid grid-cols-2 sm:grid-cols-3 gap-4">
-                      <KPI label="Días Ciclo" value={`${daysSinceSowing} días`} icon={Clock} color="bg-blue-100 text-blue-600" />
-                      <KPI label="Fecha Siembra" value={plot.sowingDate} icon={Calendar} color="bg-green-100 text-green-600" />
-                      <KPI label="Cosecha Est." value={estimatedHarvestDate} icon={MapPin} color="bg-amber-100 text-amber-600" />
-                      <KPI label="Superficie" value={`${plot.surfaceArea} ${plot.surfaceUnit}`} icon={Map} color="bg-purple-100 text-purple-600" />
-                      <KPI label="Densidad" value={`${plot.density} pl/m²`} icon={Sprout} color="bg-emerald-100 text-emerald-600" />
-                      <KPI label="Semilla" value={seedBatch?.batchCode || 'N/A'} icon={Tag} color="bg-gray-100 text-gray-600" />
+                  {/* Left: KPIs Grid (Redesigned) */}
+                  <div className="lg:col-span-2 grid grid-cols-2 sm:grid-cols-3 gap-4 auto-rows-min">
+                      <KPI 
+                        label="Días Ciclo" 
+                        value={`${daysSinceSowing}`} 
+                        subtext="días desde siembra"
+                        icon={Clock} 
+                        color="bg-blue-100 text-blue-600" 
+                      />
+                      <KPI 
+                        label="Fecha Siembra" 
+                        value={new Date(plot.sowingDate).toLocaleDateString(undefined, {month:'short', day:'numeric'})} 
+                        subtext={new Date(plot.sowingDate).getFullYear()}
+                        icon={Calendar} 
+                        color="bg-green-100 text-green-600" 
+                      />
+                      <KPI 
+                        label="Superficie" 
+                        value={`${plot.surfaceArea}`} 
+                        subtext={plot.surfaceUnit}
+                        icon={Map} 
+                        color="bg-purple-100 text-purple-600" 
+                      />
+                      <KPI 
+                        label="Densidad" 
+                        value={`${plot.density}`} 
+                        subtext="plantas/m²"
+                        icon={Sprout} 
+                        color="bg-emerald-100 text-emerald-600" 
+                      />
+                      <KPI 
+                        label="Origen Semilla" 
+                        value={seedBatch?.batchCode || 'N/A'} 
+                        subtext={seedBatch?.supplierName}
+                        icon={Tag} 
+                        color="bg-amber-100 text-amber-600" 
+                      />
+                      <KPI 
+                        label="Estado Actual" 
+                        value={history.length > 0 ? history[0].stage : 'Inicial'} 
+                        subtext="Último monitoreo"
+                        icon={Activity} 
+                        color="bg-rose-100 text-rose-600" 
+                      />
                   </div>
 
-                  {/* Right: Map Preview */}
-                  <div className="h-48 lg:h-auto rounded-xl overflow-hidden border border-gray-200 relative bg-gray-50">
+                  {/* Right: Map Preview (Enlarged) */}
+                  <div className="h-80 lg:h-full min-h-[350px] rounded-xl overflow-hidden border border-gray-200 relative bg-gray-50 shadow-inner">
                       {displayCoordinates ? (
                           <MapEditor 
                             initialPolygon={plot.polygon || []} 
