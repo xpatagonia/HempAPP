@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { Plot } from '../types';
-import { Plus, ChevronRight, CheckCircle, FileSpreadsheet, Edit2, Calendar, UserCheck, MapPin, Box, Trash2, LayoutGrid, List, Image as ImageIcon, Ruler, Droplets, FlaskConical, Tractor, Tag, Sprout, Map, Navigation, FileUp, AlertTriangle, X } from 'lucide-react';
+import { Plus, ChevronRight, CheckCircle, FileSpreadsheet, Edit2, Calendar, UserCheck, MapPin, Box, Trash2, LayoutGrid, List, Image as ImageIcon, Ruler, Droplets, FlaskConical, Tractor, Tag, Sprout, Map, Navigation, FileUp, AlertTriangle, X, Eye } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import MapEditor from '../components/MapEditor';
 
@@ -503,11 +503,11 @@ export default function Plots() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-4 py-3 text-left font-medium text-gray-500 uppercase">ID / Nombre</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500 uppercase">Tipo</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500 uppercase hidden sm:table-cell">Tipo</th>
                   <th className="px-4 py-3 text-left font-medium text-gray-500 uppercase">Variedad</th>
-                  <th className="px-4 py-3 text-center font-medium text-gray-500 uppercase">Bloque</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500 uppercase">Locación</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500 uppercase">Superficie</th>
+                  <th className="px-4 py-3 text-center font-medium text-gray-500 uppercase hidden md:table-cell">Bloque</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500 uppercase hidden md:table-cell">Locación</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500 uppercase hidden sm:table-cell">Superficie</th>
                   <th className="px-4 py-3 text-left font-medium text-gray-500 uppercase">Estado</th>
                   <th className="px-4 py-3 text-right"></th>
                 </tr>
@@ -524,8 +524,11 @@ export default function Plots() {
                   const vari = varieties.find(v => v.id === p.varietyId);
                   return (
                     <tr key={p.id} className="hover:bg-gray-50 group">
-                      <td className="px-4 py-3 font-medium text-gray-900">{p.name}</td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 font-medium text-gray-900">
+                          {p.name}
+                          <div className="sm:hidden text-xs text-gray-500 mt-1">{loc?.name}</div>
+                      </td>
+                      <td className="px-4 py-3 hidden sm:table-cell">
                           {p.type === 'Producción' ? (
                               <span className="flex items-center text-green-700 text-xs bg-green-50 px-2 py-0.5 rounded border border-green-100 w-fit"><Tractor size={10} className="mr-1"/> Prod.</span>
                           ) : (
@@ -533,28 +536,32 @@ export default function Plots() {
                           )}
                       </td>
                       <td className="px-4 py-3 text-hemp-800 font-semibold">{vari?.name}</td>
-                      <td className="px-4 py-3 text-center">{p.block}</td>
-                      <td className="px-4 py-3 text-gray-600">{loc?.name}</td>
-                      <td className="px-4 py-3 text-gray-600">{p.surfaceArea ? `${p.surfaceArea} ${p.surfaceUnit}` : '-'}</td>
+                      <td className="px-4 py-3 text-center hidden md:table-cell">{p.block}</td>
+                      <td className="px-4 py-3 text-gray-600 hidden md:table-cell">{loc?.name}</td>
+                      <td className="px-4 py-3 text-gray-600 hidden sm:table-cell">{p.surfaceArea ? `${p.surfaceArea} ${p.surfaceUnit}` : '-'}</td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${p.status === 'Activa' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
                           {p.status === 'Activa' && <CheckCircle size={10} className="mr-1"/>}
                           {p.status}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-right space-x-2">
+                      <td className="px-4 py-3 text-right space-x-2 whitespace-nowrap">
                         {/* VIEW MAP BUTTON */}
-                        <button onClick={() => handleViewMap(p)} className="text-gray-400 hover:text-blue-600 inline-block align-middle p-1" title="Visualizar Mapa">
-                            <Map size={16} />
+                        <button 
+                            onClick={() => handleViewMap(p)} 
+                            className="text-blue-500 hover:text-blue-700 hover:bg-blue-50 inline-block align-middle p-1.5 rounded transition" 
+                            title="Ver Mapa"
+                        >
+                            <Map size={18} />
                         </button>
                         
                         {canManagePlots && (
                             <>
-                                <button onClick={() => handleEdit(p)} className="text-gray-400 hover:text-hemp-600 inline-block align-middle p-1"><Edit2 size={16} /></button>
-                                <button onClick={() => handleDelete(p.id)} className="text-gray-400 hover:text-red-600 inline-block align-middle p-1"><Trash2 size={16} /></button>
+                                <button onClick={() => handleEdit(p)} className="text-gray-400 hover:text-hemp-600 hover:bg-gray-100 inline-block align-middle p-1.5 rounded transition"><Edit2 size={18} /></button>
+                                <button onClick={() => handleDelete(p.id)} className="text-gray-400 hover:text-red-600 hover:bg-red-50 inline-block align-middle p-1.5 rounded transition"><Trash2 size={18} /></button>
                             </>
                         )}
-                        <Link to={`/plots/${p.id}`} className="text-hemp-600 hover:text-hemp-900 font-medium inline-block align-middle p-1"><ChevronRight size={20} /></Link>
+                        <Link to={`/plots/${p.id}`} className="text-gray-400 hover:text-hemp-900 font-medium inline-block align-middle p-1.5 rounded hover:bg-gray-100 transition"><ChevronRight size={20} /></Link>
                       </td>
                     </tr>
                   );
