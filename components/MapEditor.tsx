@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Polygon, Marker, useMapEvents, useMap } from 'react-leaflet';
-import { Trash2, MapPin, MousePointer, Ruler } from 'lucide-react';
+import { Trash2, MapPin, MousePointer, Ruler, Route } from 'lucide-react';
 import L from 'leaflet';
 
 // Fix Leaflet icons in React
@@ -19,7 +19,7 @@ L.Marker.prototype.options.icon = DefaultIcon;
 interface MapEditorProps {
     initialPolygon?: { lat: number, lng: number }[];
     initialCenter?: { lat: number, lng: number };
-    onPolygonChange?: (polygon: { lat: number, lng: number }[], areaHa: number, center: { lat: number, lng: number }) => void;
+    onPolygonChange?: (polygon: { lat: number, lng: number }[], areaHa: number, center: { lat: number, lng: number }, perimeterM: number) => void;
     readOnly?: boolean;
     height?: string;
 }
@@ -68,7 +68,11 @@ export default function MapEditor({ initialPolygon = [], initialCenter, onPolygo
         }
     }, [initialPolygon]);
 
-    // Calculate Area simple (Shoelace formula approx for small areas)
+    // --- MATH HELPERS ---
+
+    const toRad = (value: number) => (value * Math.PI) / 180;
+
+    // Calculate Area (Shoelace formula approx for small areas + Earth Radius adjustment)
     const calculateAreaHa = (coords: { lat: number, lng: number }[]) => {
         if (coords.length < 3) return 0;
         const earthRadius = 6371000; // meters
@@ -79,17 +83,43 @@ export default function MapEditor({ initialPolygon = [], initialCenter, onPolygo
             const p1 = coords[i];
             const p2 = coords[j];
             
-            // Convert to radians
-            const lat1 = p1.lat * Math.PI / 180;
-            const lat2 = p2.lat * Math.PI / 180;
-            const lng1 = p1.lng * Math.PI / 180;
-            const lng2 = p2.lng * Math.PI / 180;
-
-            area += (lng2 - lng1) * (2 + Math.sin(lat1) + Math.sin(lat2));
+            area += (toRad(p2.lng) - toRad(p1.lng)) * (2 + Math.sin(toRad(p1.lat)) + Math.sin(toRad(p2.lat)));
         }
         
         area = Math.abs(area * earthRadius * earthRadius / 2);
         return area / 10000; // Convert m2 to hectares
+    };
+
+    // Calculate Perimeter (Sum of Haversine distances)
+    const calculatePerimeterMeters = (coords: { lat: number, lng: number }[]) => {
+        if (coords.length < 2) return 0;
+        let perimeter = 0;
+        const R = 6371000; // Earth radius in meters
+
+        for (let i = 0; i < coords.length; i++) {
+            const j = (i + 1) % coords.length;
+            // If it's not a closed polygon (drawing in progress), don't calculate last segment closure yet unless desired.
+            // But usually for "polygon" we imply closure. Let's calculate closed loop.
+            
+            const lat1 = coords[i].lat;
+            const lon1 = coords[i].lng;
+            const lat2 = coords[j].lat;
+            const lon2 = coords[j].lng;
+
+            const dLat = toRad(lat2 - lat1);
+            const dLon = toRad(lon2 - lon1);
+            
+            const a = 
+                Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * 
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+            
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            const d = R * c;
+            
+            perimeter += d;
+        }
+        return perimeter;
     };
 
     const calculateCentroid = (coords: { lat: number, lng: number }[]) => {
@@ -111,17 +141,19 @@ export default function MapEditor({ initialPolygon = [], initialCenter, onPolygo
         
         if (onPolygonChange) {
             const area = calculateAreaHa(newPoly);
+            const perimeter = calculatePerimeterMeters(newPoly);
             const newCenter = calculateCentroid(newPoly);
-            onPolygonChange(newPoly, area, newCenter);
+            onPolygonChange(newPoly, area, newCenter, perimeter);
         }
     };
 
     const handleClear = () => {
         setPolygon([]);
-        if (onPolygonChange) onPolygonChange([], 0, center);
+        if (onPolygonChange) onPolygonChange([], 0, center, 0);
     };
 
     const currentArea = calculateAreaHa(polygon);
+    const currentPerimeter = calculatePerimeterMeters(polygon);
 
     return (
         <div className="relative rounded-lg overflow-hidden border border-gray-300 shadow-inner" style={{ height }}>
@@ -137,16 +169,19 @@ export default function MapEditor({ initialPolygon = [], initialCenter, onPolygo
                         <Trash2 size={14} className="mr-1"/> Borrar
                     </button>
                     <div className="text-xs font-bold text-gray-700 bg-gray-50 p-2 rounded border border-gray-200">
-                        {polygon.length < 3 ? 'Marca 3+ puntos' : `${currentArea.toFixed(2)} ha`}
+                        <div className="flex items-center mb-1"><Ruler size={10} className="mr-1"/> {currentArea.toFixed(2)} ha</div>
+                        <div className="flex items-center"><Route size={10} className="mr-1"/> {Math.round(currentPerimeter)} m</div>
                     </div>
                 </div>
             )}
 
             {readOnly && polygon.length >= 3 && (
-                 <div className="absolute top-2 right-2 z-[1000] bg-white/90 backdrop-blur p-2 rounded shadow border border-gray-200">
-                     <span className="text-sm font-bold text-gray-800 flex items-center">
-                         <Ruler size={14} className="mr-1 text-hemp-600"/>
-                         {currentArea.toFixed(2)} ha
+                 <div className="absolute top-2 right-2 z-[1000] bg-white/90 backdrop-blur p-2 rounded shadow border border-gray-200 text-xs">
+                     <span className="font-bold text-gray-800 flex items-center mb-1">
+                         <Ruler size={12} className="mr-1 text-hemp-600"/> {currentArea.toFixed(2)} ha
+                     </span>
+                     <span className="font-bold text-gray-600 flex items-center">
+                         <Route size={12} className="mr-1 text-blue-600"/> {Math.round(currentPerimeter)} m
                      </span>
                  </div>
             )}

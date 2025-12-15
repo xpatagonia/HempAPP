@@ -30,7 +30,7 @@ export default function Plots() {
     block: '1', replicate: 1,
     ownerName: '', responsibleIds: [],
     sowingDate: '', rowDistance: 0, density: 0, 
-    surfaceArea: 0, surfaceUnit: 'm2',
+    surfaceArea: 0, surfaceUnit: 'm2', perimeter: 0,
     status: 'Activa',
     observations: '',
     irrigationType: '',
@@ -118,6 +118,7 @@ export default function Plots() {
       density: Number(formData.density),
       surfaceArea: Number(formData.surfaceArea || 0),
       surfaceUnit: formData.surfaceUnit || 'm2',
+      perimeter: Number(formData.perimeter || 0),
       status: formData.status || 'Activa',
       observations: formData.observations,
       irrigationType: formData.irrigationType,
@@ -143,7 +144,7 @@ export default function Plots() {
     setFormData({
         projectId: '', locationId: '', varietyId: '', seedBatchId: '', type: 'Ensayo', block: '1', replicate: 1,
         ownerName: '', responsibleIds: [], sowingDate: '', rowDistance: 0, density: 0, 
-        surfaceArea: 0, surfaceUnit: 'm2',
+        surfaceArea: 0, surfaceUnit: 'm2', perimeter: 0,
         status: 'Activa', observations: '', irrigationType: '',
         lat: '', lng: '', polygon: []
     });
@@ -166,6 +167,7 @@ export default function Plots() {
         lng: p.coordinates?.lng.toString() || '',
         surfaceArea: p.surfaceArea || 0,
         surfaceUnit: p.surfaceUnit || 'm2',
+        perimeter: p.perimeter || 0,
         type: p.type || 'Ensayo',
         seedBatchId: p.seedBatchId || '',
         polygon: p.polygon || []
@@ -174,14 +176,15 @@ export default function Plots() {
       setIsModalOpen(true);
   };
 
-  // Improved Handler with Center calculation
-  const handlePolygonChange = (newPoly: { lat: number, lng: number }[], areaHa: number, center: { lat: number, lng: number }) => {
+  // Improved Handler with Center calculation and Perimeter
+  const handlePolygonChange = (newPoly: { lat: number, lng: number }[], areaHa: number, center: { lat: number, lng: number }, perimeterM: number) => {
       setFormData(prev => ({
           ...prev,
           polygon: newPoly,
           // Auto-calculate area if unit is hectares
           surfaceArea: areaHa > 0 ? Number(areaHa.toFixed(2)) : prev.surfaceArea,
           surfaceUnit: areaHa > 0 ? 'ha' : prev.surfaceUnit,
+          perimeter: Math.round(perimeterM),
           // Auto-update center coordinates from polygon centroid
           lat: center.lat.toString(),
           lng: center.lng.toString()
@@ -215,6 +218,7 @@ export default function Plots() {
             'Latitud': p.coordinates?.lat || l?.coordinates?.lat || '-',
             'Longitud': p.coordinates?.lng || l?.coordinates?.lng || '-',
             'Sup. Siembra': p.surfaceArea ? `${p.surfaceArea} ${p.surfaceUnit}` : '-',
+            'Perímetro (m)': p.perimeter || '-',
             'Fecha Siembra': p.sowingDate,
             'Último Reg': d?.date || '-',
             'Etapa': d?.stage || '-',
@@ -505,17 +509,24 @@ export default function Plots() {
                                 <label className="block text-sm font-medium text-green-900 mb-1">Distancia (cm)</label>
                                 <input type="number" className={inputClass} value={formData.rowDistance} onChange={e => setFormData({...formData, rowDistance: Number(e.target.value)})} />
                             </div>
-                            <div className="col-span-2">
-                                <label className="block text-sm font-medium text-green-900 mb-1">Superficie Total</label>
-                                <div className="flex">
-                                    <input type="number" step="any" placeholder="0" className={`${inputClass} rounded-r-none border-r-0`} value={formData.surfaceArea || ''} onChange={e => setFormData({...formData, surfaceArea: Number(e.target.value)})} />
-                                    <select className="bg-white border border-gray-300 text-gray-700 text-sm rounded-r px-1 focus:outline-none" value={formData.surfaceUnit} onChange={e => setFormData({...formData, surfaceUnit: e.target.value as any})}>
-                                        <option value="m2">m²</option>
-                                        <option value="ha">ha</option>
-                                        <option value="ac">acres</option>
-                                    </select>
+                            <div className="col-span-2 grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-green-900 mb-1">Superficie Total</label>
+                                    <div className="flex">
+                                        <input type="number" step="any" placeholder="0" className={`${inputClass} rounded-r-none border-r-0`} value={formData.surfaceArea || ''} onChange={e => setFormData({...formData, surfaceArea: Number(e.target.value)})} />
+                                        <select className="bg-white border border-gray-300 text-gray-700 text-sm rounded-r px-1 focus:outline-none" value={formData.surfaceUnit} onChange={e => setFormData({...formData, surfaceUnit: e.target.value as any})}>
+                                            <option value="m2">m²</option>
+                                            <option value="ha">ha</option>
+                                            <option value="ac">acres</option>
+                                        </select>
+                                    </div>
+                                    <p className="text-xs text-gray-500 mt-1">Calculada automáticamente.</p>
                                 </div>
-                                <p className="text-xs text-gray-500 mt-1">Calculada automáticamente al dibujar el polígono.</p>
+                                <div>
+                                    <label className="block text-sm font-medium text-green-900 mb-1">Perímetro (m)</label>
+                                    <input type="number" step="1" placeholder="0" className={inputClass} value={formData.perimeter || ''} onChange={e => setFormData({...formData, perimeter: Number(e.target.value)})} />
+                                    <p className="text-xs text-gray-500 mt-1">Metros lineales.</p>
+                                </div>
                             </div>
                           </div>
                       </div>

@@ -236,6 +236,7 @@ export interface Plot {
   sowingDate: string;
   surfaceArea?: number; // Nueva Superficie
   surfaceUnit?: 'm2' | 'ha' | 'ac'; // Unidad de medida (Agregado Acres)
+  perimeter?: number; // NUEVO: Perímetro en metros
   rowDistance: number; // cm
   density: number; // plants/m2 target
   status: 'Activa' | 'Cosechada' | 'Cancelada';
