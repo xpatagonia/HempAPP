@@ -3,9 +3,48 @@ import React, { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { Plot } from '../types';
-import { Plus, ChevronRight, CheckCircle, FileSpreadsheet, Edit2, Calendar, UserCheck, MapPin, Box, Trash2, LayoutGrid, List, Image as ImageIcon, Ruler, Droplets, FlaskConical, Tractor, Tag, Sprout, Map } from 'lucide-react';
+import { Plus, ChevronRight, CheckCircle, FileSpreadsheet, Edit2, Calendar, UserCheck, MapPin, Box, Trash2, LayoutGrid, List, Image as ImageIcon, Ruler, Droplets, FlaskConical, Tractor, Tag, Sprout, Map, Navigation } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import MapEditor from '../components/MapEditor';
+
+// Helper: Convert DMS (Degrees Minutes Seconds) to Decimal
+const parseCoordinate = (input: string): string => {
+    if (!input) return '';
+    
+    // Clean string
+    const clean = input.trim().toUpperCase();
+    
+    // 1. Check if already decimal (e.g., "-34.56")
+    const isDecimal = /^-?[\d.]+$/.test(clean);
+    if (isDecimal) return clean;
+
+    // 2. Parse DMS (e.g. 39°23'34"S)
+    // Regex matches: Degrees, separator, Minutes, separator, Seconds, separator, Direction (optional)
+    const dmsRegex = /(\d+)[°\s]+(\d+)['\s]+(\d+(?:\.\d+)?)["\s]*([NSEW])?/i;
+    const match = clean.match(dmsRegex);
+
+    if (match) {
+        let deg = parseFloat(match[1]);
+        let min = parseFloat(match[2]);
+        let sec = parseFloat(match[3]);
+        let dir = match[4] || ''; // Direction might be missing or at start/end
+
+        // Check for direction at start/end if not in group 4
+        if (!dir) {
+            if (clean.includes('S') || clean.includes('W')) dir = 'S'; // Assume S/W implies negation context
+        }
+
+        let decimal = deg + (min / 60) + (sec / 3600);
+
+        if (dir === 'S' || dir === 'W' || clean.includes('S') || clean.includes('W')) {
+            decimal = decimal * -1;
+        }
+        
+        return decimal.toFixed(6);
+    }
+
+    return input; // Return original if parse fails
+};
 
 export default function Plots() {
   const { plots, locations, varieties, projects, usersList, addPlot, updatePlot, deletePlot, currentUser, getLatestRecord, logs, seedBatches } = useAppContext();
@@ -79,6 +118,17 @@ export default function Plots() {
         ? { lat: selectedLocation.coordinates.lat, lng: selectedLocation.coordinates.lng } 
         : undefined;
 
+  const handleCoordinateBlur = (field: 'lat' | 'lng') => {
+      if (field === 'lat' && formData.lat) {
+          const parsed = parseCoordinate(formData.lat);
+          setFormData(prev => ({ ...prev, lat: parsed }));
+      }
+      if (field === 'lng' && formData.lng) {
+          const parsed = parseCoordinate(formData.lng);
+          setFormData(prev => ({ ...prev, lng: parsed }));
+      }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.locationId || !formData.varietyId) return;
@@ -104,8 +154,9 @@ export default function Plots() {
         autoName = `${varCode}-B${formData.block}-R${formData.replicate}`; 
     }
 
-    let finalLat = parseFloat(formData.lat || '0');
-    let finalLng = parseFloat(formData.lng || '0');
+    // Try to parse one last time before submit in case blur didn't fire
+    let finalLat = parseFloat(parseCoordinate(formData.lat || '0'));
+    let finalLng = parseFloat(parseCoordinate(formData.lng || '0'));
 
     // Use polygon start if center is missing (fallback)
     if ((!finalLat || finalLat === 0) && formData.polygon && formData.polygon.length > 0) {
@@ -113,9 +164,6 @@ export default function Plots() {
         finalLng = formData.polygon[0].lng;
     }
 
-    // Determine valid coordinates object
-    // Allow 0,0 only if explicitly typed, but usually we filter out 0,0 as 'undefined' for maps unless it's real.
-    // Here we check isNaN to be safe.
     const coordinates = (!isNaN(finalLat) && !isNaN(finalLng) && (finalLat !== 0 || finalLng !== 0)) 
       ? { lat: finalLat, lng: finalLng }
       : undefined;
@@ -587,18 +635,38 @@ export default function Plots() {
                               
                               <div className="grid grid-cols-2 gap-2 mt-4">
                                   <div>
-                                      <label className="block text-xs font-medium text-blue-900 mb-1">Latitud (Centro)</label>
-                                      {/* REMOVED READONLY TO ALLOW MANUAL INPUT */}
-                                      <input type="number" step="any" className={inputClass} value={formData.lat} onChange={e => setFormData({...formData, lat: e.target.value})} />
+                                      <label className="block text-xs font-medium text-blue-900 mb-1 flex items-center justify-between">
+                                          Latitud (Centro)
+                                          <Navigation size={10} className="text-blue-500" />
+                                      </label>
+                                      {/* Changed to text for DMS parsing */}
+                                      <input 
+                                        type="text" 
+                                        placeholder="-34.56 o 34°S" 
+                                        className={inputClass} 
+                                        value={formData.lat} 
+                                        onChange={e => setFormData({...formData, lat: e.target.value})} 
+                                        onBlur={() => handleCoordinateBlur('lat')}
+                                      />
                                   </div>
                                   <div>
-                                      <label className="block text-xs font-medium text-blue-900 mb-1">Longitud (Centro)</label>
-                                      {/* REMOVED READONLY TO ALLOW MANUAL INPUT */}
-                                      <input type="number" step="any" className={inputClass} value={formData.lng} onChange={e => setFormData({...formData, lng: e.target.value})} />
+                                      <label className="block text-xs font-medium text-blue-900 mb-1 flex items-center justify-between">
+                                          Longitud (Centro)
+                                          <Navigation size={10} className="text-blue-500" />
+                                      </label>
+                                      {/* Changed to text for DMS parsing */}
+                                      <input 
+                                        type="text" 
+                                        placeholder="-58.44 o 58°W" 
+                                        className={inputClass} 
+                                        value={formData.lng} 
+                                        onChange={e => setFormData({...formData, lng: e.target.value})} 
+                                        onBlur={() => handleCoordinateBlur('lng')}
+                                      />
                                   </div>
                               </div>
                               <p className="text-[10px] text-blue-700 mt-1">
-                                  Dibuja el polígono para calcular área/centro O ingresa coordenadas manuales.
+                                  Soporta Grados Decimales (-34.5) o DMS (34°30'S). Se convierte automáticamente.
                               </p>
                           </div>
                       </div>

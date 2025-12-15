@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Location, SoilType, RoleType } from '../types';
-import { Plus, MapPin, User, Globe, Edit2, Trash2, Keyboard, List, Briefcase, Building, Landmark, GraduationCap, Users, Droplets, Ruler } from 'lucide-react';
+import { Plus, MapPin, User, Globe, Edit2, Trash2, Keyboard, List, Briefcase, Building, Landmark, GraduationCap, Users, Droplets, Ruler, Navigation } from 'lucide-react';
 
 // Expanded Argentina Database with Rural Hubs
 const ARG_GEO: Record<string, string[]> = {
@@ -84,6 +84,35 @@ const ARG_GEO: Record<string, string[]> = {
     ]
 };
 
+// Helper: Convert DMS to Decimal (Duplicated from Plots to avoid circular deps or creating new utils file)
+const parseCoordinate = (input: string): string => {
+    if (!input) return '';
+    const clean = input.trim().toUpperCase();
+    const isDecimal = /^-?[\d.]+$/.test(clean);
+    if (isDecimal) return clean;
+
+    const dmsRegex = /(\d+)[°\s]+(\d+)['\s]+(\d+(?:\.\d+)?)["\s]*([NSEW])?/i;
+    const match = clean.match(dmsRegex);
+
+    if (match) {
+        let deg = parseFloat(match[1]);
+        let min = parseFloat(match[2]);
+        let sec = parseFloat(match[3]);
+        let dir = match[4] || '';
+        
+        if (!dir) {
+            if (clean.includes('S') || clean.includes('W')) dir = 'S';
+        }
+
+        let decimal = deg + (min / 60) + (sec / 3600);
+        if (dir === 'S' || dir === 'W' || clean.includes('S') || clean.includes('W')) {
+            decimal = decimal * -1;
+        }
+        return decimal.toFixed(6);
+    }
+    return input;
+};
+
 export default function Locations() {
   const { locations, addLocation, updateLocation, deleteLocation, currentUser, usersList, clients } = useAppContext();
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -114,12 +143,27 @@ export default function Locations() {
       return l.responsibleIds?.includes(currentUser?.id || '');
   });
 
+  const handleCoordinateBlur = (field: 'lat' | 'lng') => {
+      if (field === 'lat' && formData.lat) {
+          const parsed = parseCoordinate(formData.lat);
+          setFormData(prev => ({ ...prev, lat: parsed }));
+      }
+      if (field === 'lng' && formData.lng) {
+          const parsed = parseCoordinate(formData.lng);
+          setFormData(prev => ({ ...prev, lng: parsed }));
+      }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name) return;
     
-    const coordinates = (formData.lat && formData.lng) 
-      ? { lat: parseFloat(formData.lat), lng: parseFloat(formData.lng) }
+    // Parse one last time on submit
+    const finalLat = parseFloat(parseCoordinate(formData.lat));
+    const finalLng = parseFloat(parseCoordinate(formData.lng));
+
+    const coordinates = (!isNaN(finalLat) && !isNaN(finalLng)) 
+      ? { lat: finalLat, lng: finalLng }
       : undefined;
 
     // Resolve client info if clientId is selected
@@ -435,12 +479,32 @@ export default function Locations() {
                          </div>
                          <div className="grid grid-cols-2 gap-2">
                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Latitud</label>
-                                <input type="number" step="any" placeholder="-34..." className={inputClass} value={formData.lat} onChange={e => setFormData({...formData, lat: e.target.value})} />
+                                <label className="block text-xs font-medium text-blue-900 mb-1 flex items-center justify-between">
+                                    Latitud
+                                    <Navigation size={10} className="text-blue-500" />
+                                </label>
+                                <input 
+                                    type="text" 
+                                    placeholder="-34.5 o 34°S" 
+                                    className={inputClass} 
+                                    value={formData.lat} 
+                                    onChange={e => setFormData({...formData, lat: e.target.value})} 
+                                    onBlur={() => handleCoordinateBlur('lat')}
+                                />
                              </div>
                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Longitud</label>
-                                <input type="number" step="any" placeholder="-58..." className={inputClass} value={formData.lng} onChange={e => setFormData({...formData, lng: e.target.value})} />
+                                <label className="block text-xs font-medium text-blue-900 mb-1 flex items-center justify-between">
+                                    Longitud
+                                    <Navigation size={10} className="text-blue-500" />
+                                </label>
+                                <input 
+                                    type="text" 
+                                    placeholder="-58.4 o 58°W" 
+                                    className={inputClass} 
+                                    value={formData.lng} 
+                                    onChange={e => setFormData({...formData, lng: e.target.value})} 
+                                    onBlur={() => handleCoordinateBlur('lng')}
+                                />
                              </div>
                          </div>
                       </div>
