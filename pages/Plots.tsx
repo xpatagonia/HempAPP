@@ -599,7 +599,7 @@ export default function Plots() {
                    </div>
                    <div className="h-[60vh] bg-gray-100">
                        <MapEditor 
-                           initialPolygon={viewPlot.polygon}
+                           initialPolygon={viewPlot.polygon || []}
                            // Logic to center map even if only polygon exists (centroid)
                            initialCenter={viewPlot.coordinates || (viewPlot.polygon && viewPlot.polygon.length > 0 ? viewPlot.polygon[0] : undefined)}
                            readOnly={true}
@@ -754,7 +754,7 @@ export default function Plots() {
                               {formData.locationId ? (
                                   <MapEditor 
                                     initialCenter={mapCenter}
-                                    initialPolygon={formData.polygon}
+                                    initialPolygon={formData.polygon || []}
                                     onPolygonChange={handlePolygonChange}
                                     height="300px"
                                   />

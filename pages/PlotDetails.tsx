@@ -2,9 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
-import { TrialRecord, Resource, Task } from '../types';
-import { ArrowLeft, Activity, Scale, AlertTriangle, Camera, FileText, Calendar, MapPin, Globe, Plus, Edit2, Trash2, Download, Droplets, Wind, QrCode, Printer, CheckSquare, Sun, Eye, Loader2, Ruler, Bug, SprayCan, Tractor, FlaskConical, Tag, Clock, UserCheck, DollarSign, Package, Archive, Sprout, X } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import { TrialRecord, Task } from '../types';
+import { ArrowLeft, Activity, Calendar, MapPin, Globe, Plus, Trash2, Droplets, Wind, QrCode, Printer, CheckSquare, Sun, Eye, Loader2, Tractor, FlaskConical, Tag, Clock, DollarSign, Package, Archive, Sprout, X, Map, Camera, FileText } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
 
 // Helper component for KPI Cards
@@ -70,8 +69,8 @@ export default function PlotDetails() {
   const canEdit = currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || ((currentUser?.role === 'technician' || currentUser?.role === 'client') && isAssigned);
   const plotLogs = logs.filter(l => l.plotId === id).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   
-  // SMART MAP CENTER LOGIC
-  // If plot has specific coordinates, use them. If not, check for polygon centroid. If not, fallback to location coordinates.
+  // SMART MAP CENTER LOGIC (Safe Access)
+  // Ensures we don't crash if polygon is null/undefined
   const displayCoordinates = 
       (plot?.coordinates && plot.coordinates.lat !== 0) ? plot.coordinates :
       (plot?.polygon && plot.polygon.length > 0) ? plot.polygon[0] :
@@ -97,7 +96,7 @@ export default function PlotDetails() {
 
   if (!plot) return (
       <div className="flex flex-col items-center justify-center h-64 text-gray-500">
-          <AlertTriangle size={48} className="mb-4 text-amber-500" />
+          <Globe size={48} className="mb-4 text-gray-300" />
           <h2 className="text-xl font-bold text-gray-800">Parcela no encontrada</h2>
           <Link to="/plots" className="text-hemp-600 hover:underline mt-2">Volver al listado</Link>
       </div>
