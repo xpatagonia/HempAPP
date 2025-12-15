@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Polygon, Marker, useMapEvents, useMap } from 'react-leaflet';
 import { Trash2, MapPin, MousePointer, Ruler } from 'lucide-react';
@@ -18,7 +19,7 @@ L.Marker.prototype.options.icon = DefaultIcon;
 interface MapEditorProps {
     initialPolygon?: { lat: number, lng: number }[];
     initialCenter?: { lat: number, lng: number };
-    onPolygonChange?: (polygon: { lat: number, lng: number }[], areaHa: number) => void;
+    onPolygonChange?: (polygon: { lat: number, lng: number }[], areaHa: number, center: { lat: number, lng: number }) => void;
     readOnly?: boolean;
     height?: string;
 }
@@ -35,7 +36,9 @@ const MapEvents = ({ onAddPoint }: { onAddPoint: (e: L.LeafletMouseEvent) => voi
 const MapRecenter = ({ center }: { center: { lat: number, lng: number } }) => {
     const map = useMap();
     useEffect(() => {
-        if (center) map.setView(center, 16);
+        if (center) {
+            map.flyTo(center, 16, { duration: 1.5 }); // Smooth fly animation
+        }
     }, [center, map]);
     return null;
 };
@@ -43,10 +46,27 @@ const MapRecenter = ({ center }: { center: { lat: number, lng: number } }) => {
 export default function MapEditor({ initialPolygon = [], initialCenter, onPolygonChange, readOnly = false, height = "400px" }: MapEditorProps) {
     const [polygon, setPolygon] = useState<{ lat: number, lng: number }[]>(initialPolygon);
     
-    // Default center (Argentina Central approx) or specific
+    // Default center (Argentina Central approx)
     const [center, setCenter] = useState<{ lat: number, lng: number }>(
         initialCenter || (initialPolygon.length > 0 ? initialPolygon[0] : { lat: -34.6037, lng: -58.3816 })
     );
+
+    // React to prop changes for center (Critical for Location selection)
+    useEffect(() => {
+        if (initialCenter) {
+            setCenter(initialCenter);
+        }
+    }, [initialCenter]);
+
+    // React to prop changes for polygon (Critical for Edit mode)
+    useEffect(() => {
+        if (initialPolygon && initialPolygon.length > 0) {
+            setPolygon(initialPolygon);
+            if(!initialCenter) {
+                 setCenter(initialPolygon[0]);
+            }
+        }
+    }, [initialPolygon]);
 
     // Calculate Area simple (Shoelace formula approx for small areas)
     const calculateAreaHa = (coords: { lat: number, lng: number }[]) => {
@@ -72,6 +92,17 @@ export default function MapEditor({ initialPolygon = [], initialCenter, onPolygo
         return area / 10000; // Convert m2 to hectares
     };
 
+    const calculateCentroid = (coords: { lat: number, lng: number }[]) => {
+        if (coords.length === 0) return center;
+        const lats = coords.map(c => c.lat);
+        const lngs = coords.map(c => c.lng);
+        const minLat = Math.min(...lats);
+        const maxLat = Math.max(...lats);
+        const minLng = Math.min(...lngs);
+        const maxLng = Math.max(...lngs);
+        return { lat: (minLat + maxLat) / 2, lng: (minLng + maxLng) / 2 };
+    };
+
     const handleAddPoint = (e: L.LeafletMouseEvent) => {
         if (readOnly) return;
         const newPoint = { lat: e.latlng.lat, lng: e.latlng.lng };
@@ -79,13 +110,15 @@ export default function MapEditor({ initialPolygon = [], initialCenter, onPolygo
         setPolygon(newPoly);
         
         if (onPolygonChange) {
-            onPolygonChange(newPoly, calculateAreaHa(newPoly));
+            const area = calculateAreaHa(newPoly);
+            const newCenter = calculateCentroid(newPoly);
+            onPolygonChange(newPoly, area, newCenter);
         }
     };
 
     const handleClear = () => {
         setPolygon([]);
-        if (onPolygonChange) onPolygonChange([], 0);
+        if (onPolygonChange) onPolygonChange([], 0, center);
     };
 
     const currentArea = calculateAreaHa(polygon);
@@ -119,7 +152,7 @@ export default function MapEditor({ initialPolygon = [], initialCenter, onPolygo
             )}
 
             <MapContainer center={center} zoom={15} style={{ height: "100%", width: "100%" }}>
-                {/* Esri Satellite Imagery (Free, no API Key needed) */}
+                {/* Esri Satellite Imagery */}
                 <TileLayer
                     attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
                     url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
@@ -151,8 +184,8 @@ export default function MapEditor({ initialPolygon = [], initialCenter, onPolygo
             </MapContainer>
             
             {!readOnly && polygon.length === 0 && (
-                <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-[1000] bg-black/60 text-white px-4 py-2 rounded-full text-xs font-bold pointer-events-none flex items-center">
-                    <MousePointer size={14} className="mr-2 animate-bounce"/> Haz clic en el mapa para marcar los vértices
+                <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-[1000] bg-black/60 text-white px-4 py-2 rounded-full text-xs font-bold pointer-events-none flex items-center shadow-lg border border-white/20 whitespace-nowrap">
+                    <MousePointer size={14} className="mr-2 animate-bounce"/> Haz clic en el mapa para delimitar la parcela
                 </div>
             )}
         </div>
