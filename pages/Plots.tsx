@@ -38,6 +38,21 @@ export default function Plots() {
     polygon: []
   });
 
+  // AUTO-FILL COORDINATES FROM LOCATION
+  useEffect(() => {
+      // If a location is selected, AND there are no manually entered coordinates, AND no polygon drawn
+      if (formData.locationId && !formData.lat && !formData.lng && (!formData.polygon || formData.polygon.length === 0)) {
+          const loc = locations.find(l => l.id === formData.locationId);
+          if (loc && loc.coordinates) {
+              setFormData(prev => ({
+                  ...prev,
+                  lat: loc.coordinates?.lat.toString(),
+                  lng: loc.coordinates?.lng.toString()
+              }));
+          }
+      }
+  }, [formData.locationId]);
+
   const isSuperAdmin = currentUser?.role === 'super_admin';
   const isAdmin = currentUser?.role === 'admin' || isSuperAdmin;
   const isClient = currentUser?.role === 'client';
@@ -56,9 +71,13 @@ export default function Plots() {
 
   // Get location center for map init. This updates when formData.locationId changes.
   const selectedLocation = locations.find(l => l.id === formData.locationId);
-  const mapCenter = selectedLocation?.coordinates 
-    ? { lat: selectedLocation.coordinates.lat, lng: selectedLocation.coordinates.lng } 
-    : undefined;
+  
+  // MAP CENTER LOGIC: Priority -> Manual Lat/Lng -> Location Center -> Default
+  const mapCenter = (formData.lat && formData.lng && !isNaN(parseFloat(formData.lat))) 
+      ? { lat: parseFloat(formData.lat), lng: parseFloat(formData.lng) }
+      : selectedLocation?.coordinates 
+        ? { lat: selectedLocation.coordinates.lat, lng: selectedLocation.coordinates.lng } 
+        : undefined;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,12 +108,15 @@ export default function Plots() {
     let finalLng = parseFloat(formData.lng || '0');
 
     // Use polygon start if center is missing (fallback)
-    if (!finalLat && formData.polygon && formData.polygon.length > 0) {
+    if ((!finalLat || finalLat === 0) && formData.polygon && formData.polygon.length > 0) {
         finalLat = formData.polygon[0].lat;
         finalLng = formData.polygon[0].lng;
     }
 
-    const coordinates = (finalLat && finalLng) 
+    // Determine valid coordinates object
+    // Allow 0,0 only if explicitly typed, but usually we filter out 0,0 as 'undefined' for maps unless it's real.
+    // Here we check isNaN to be safe.
+    const coordinates = (!isNaN(finalLat) && !isNaN(finalLng) && (finalLat !== 0 || finalLng !== 0)) 
       ? { lat: finalLat, lng: finalLng }
       : undefined;
 
@@ -566,14 +588,18 @@ export default function Plots() {
                               <div className="grid grid-cols-2 gap-2 mt-4">
                                   <div>
                                       <label className="block text-xs font-medium text-blue-900 mb-1">Latitud (Centro)</label>
-                                      <input type="number" step="any" className={inputClass} value={formData.lat} onChange={e => setFormData({...formData, lat: e.target.value})} readOnly />
+                                      {/* REMOVED READONLY TO ALLOW MANUAL INPUT */}
+                                      <input type="number" step="any" className={inputClass} value={formData.lat} onChange={e => setFormData({...formData, lat: e.target.value})} />
                                   </div>
                                   <div>
                                       <label className="block text-xs font-medium text-blue-900 mb-1">Longitud (Centro)</label>
-                                      <input type="number" step="any" className={inputClass} value={formData.lng} onChange={e => setFormData({...formData, lng: e.target.value})} readOnly />
+                                      {/* REMOVED READONLY TO ALLOW MANUAL INPUT */}
+                                      <input type="number" step="any" className={inputClass} value={formData.lng} onChange={e => setFormData({...formData, lng: e.target.value})} />
                                   </div>
                               </div>
-                              <p className="text-[10px] text-blue-700 mt-1">Las coordenadas del centro se calculan automáticamente al dibujar la parcela.</p>
+                              <p className="text-[10px] text-blue-700 mt-1">
+                                  Dibuja el polígono para calcular área/centro O ingresa coordenadas manuales.
+                              </p>
                           </div>
                       </div>
                   </div>
