@@ -1,9 +1,9 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { Plot } from '../types';
-import { Plus, ChevronRight, CheckCircle, FileSpreadsheet, Edit2, Calendar, UserCheck, MapPin, Box, Trash2, LayoutGrid, List, Image as ImageIcon, Ruler, Droplets, FlaskConical, Tractor, Tag, Sprout, Map, Navigation } from 'lucide-react';
+import { Plus, ChevronRight, CheckCircle, FileSpreadsheet, Edit2, Calendar, UserCheck, MapPin, Box, Trash2, LayoutGrid, List, Image as ImageIcon, Ruler, Droplets, FlaskConical, Tractor, Tag, Sprout, Map, Navigation, Upload, FileUp } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import MapEditor from '../components/MapEditor';
 
@@ -19,7 +19,6 @@ const parseCoordinate = (input: string): string => {
     if (isDecimal) return clean;
 
     // 2. Parse DMS (e.g. 39°23'34"S)
-    // Regex matches: Degrees, separator, Minutes, separator, Seconds, separator, Direction (optional)
     const dmsRegex = /(\d+)[°\s]+(\d+)['\s]+(\d+(?:\.\d+)?)["\s]*([NSEW])?/i;
     const match = clean.match(dmsRegex);
 
@@ -27,11 +26,10 @@ const parseCoordinate = (input: string): string => {
         let deg = parseFloat(match[1]);
         let min = parseFloat(match[2]);
         let sec = parseFloat(match[3]);
-        let dir = match[4] || ''; // Direction might be missing or at start/end
+        let dir = match[4] || ''; 
 
-        // Check for direction at start/end if not in group 4
         if (!dir) {
-            if (clean.includes('S') || clean.includes('W')) dir = 'S'; // Assume S/W implies negation context
+            if (clean.includes('S') || clean.includes('W')) dir = 'S'; 
         }
 
         let decimal = deg + (min / 60) + (sec / 3600);
@@ -43,7 +41,42 @@ const parseCoordinate = (input: string): string => {
         return decimal.toFixed(6);
     }
 
-    return input; // Return original if parse fails
+    return input; 
+};
+
+// Helper: Parse KML content to LatLng array
+const parseKML = (kmlText: string): { lat: number, lng: number }[] | null => {
+    try {
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(kmlText, "text/xml");
+        
+        // Find coordinates tag. Google Earth uses <coordinates> inside <Polygon> or <LineString>
+        const coordinates = xmlDoc.getElementsByTagName("coordinates");
+        
+        if (coordinates.length > 0) {
+            // Get the text content of the first coordinate set found
+            const text = coordinates[0].textContent || "";
+            // Split by whitespace (Google Earth separates tuples by space or newline)
+            const points = text.trim().split(/\s+/);
+            
+            const latLngs = points.map(point => {
+                // KML format is "lon,lat,alt" (longitude first!)
+                const parts = point.split(',');
+                if (parts.length >= 2) {
+                    return {
+                        lng: parseFloat(parts[0]),
+                        lat: parseFloat(parts[1])
+                    };
+                }
+                return null;
+            }).filter((p): p is { lat: number, lng: number } => p !== null && !isNaN(p.lat) && !isNaN(p.lng));
+
+            return latLngs.length > 2 ? latLngs : null;
+        }
+    } catch (e) {
+        console.error("Error parsing KML", e);
+    }
+    return null;
 };
 
 export default function Plots() {
@@ -62,6 +95,9 @@ export default function Plots() {
   const [filterProj, setFilterProj] = useState(initialProjectFilter);
   const [filterType, setFilterType] = useState<'all' | 'Ensayo' | 'Producción'>('all');
 
+  // File Input Ref for KML
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // Extended form state to handle lat/lng strings and Polygon
   const [formData, setFormData] = useState<Partial<Plot> & { lat?: string, lng?: string }>({
     projectId: '', locationId: '', varietyId: '', seedBatchId: '',
@@ -79,7 +115,6 @@ export default function Plots() {
 
   // AUTO-FILL COORDINATES FROM LOCATION
   useEffect(() => {
-      // If a location is selected, AND there are no manually entered coordinates, AND no polygon drawn
       if (formData.locationId && !formData.lat && !formData.lng && (!formData.polygon || formData.polygon.length === 0)) {
           const loc = locations.find(l => l.id === formData.locationId);
           if (loc && loc.coordinates) {
@@ -108,9 +143,8 @@ export default function Plots() {
 
   const availableBatches = seedBatches.filter(b => b.varietyId === formData.varietyId);
 
-  // Get location center for map init. This updates when formData.locationId changes.
   const selectedLocation = locations.find(l => l.id === formData.locationId);
-  
+
   // MAP CENTER LOGIC: Priority -> Manual Lat/Lng -> Location Center -> Default
   const mapCenter = (formData.lat && formData.lng && !isNaN(parseFloat(formData.lat))) 
       ? { lat: parseFloat(formData.lat), lng: parseFloat(formData.lng) }
@@ -127,6 +161,74 @@ export default function Plots() {
           const parsed = parseCoordinate(formData.lng);
           setFormData(prev => ({ ...prev, lng: parsed }));
       }
+  };
+
+  const handleKMLUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+          const text = event.target?.result as string;
+          const poly = parseKML(text);
+          if (poly) {
+              // Calculate centroid to center the map
+              const lats = poly.map(p => p.lat);
+              const lngs = poly.map(p => p.lng);
+              const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+              const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
+
+              // We don't have direct access to area calculation logic here without duplication or a ref to map,
+              // but MapEditor will recalculate area on render if we pass the polygon.
+              // However, to fill the input fields immediately, we can use the same logic or let the user click "save".
+              // Better: MapEditor calls onPolygonChange on init/update? No, usually on user interaction.
+              // Let's rely on MapEditor logic to re-trigger or just update state and let map render it.
+              
+              // We will just update polygon and center. The MapEditor creates area when drawn, 
+              // BUT MapEditor only triggers onPolygonChange on user interaction usually.
+              // To ensure Area is updated, we duplicate the math here briefly or just set the polygon.
+              // Let's set the polygon. The MapEditor visual will update. 
+              // To update the area text input, we need the math.
+              
+              // --- Quick Math for immediate UI feedback ---
+              const R = 6371000;
+              const toRad = (x: number) => x * Math.PI / 180;
+              let area = 0;
+              let perimeter = 0;
+              for (let i = 0; i < poly.length; i++) {
+                  const j = (i + 1) % poly.length;
+                  const p1 = poly[i];
+                  const p2 = poly[j];
+                  area += (toRad(p2.lng) - toRad(p1.lng)) * (2 + Math.sin(toRad(p1.lat)) + Math.sin(toRad(p2.lat)));
+                  
+                  // Perimeter segment
+                  const dLat = toRad(p2.lat - p1.lat);
+                  const dLon = toRad(p2.lng - p1.lng);
+                  const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(toRad(p1.lat)) * Math.cos(toRad(p2.lat)) * Math.sin(dLon/2) * Math.sin(dLon/2);
+                  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                  perimeter += R * c;
+              }
+              area = Math.abs(area * R * R / 2) / 10000; // Ha
+
+              setFormData(prev => ({
+                  ...prev,
+                  polygon: poly,
+                  lat: centerLat.toString(),
+                  lng: centerLng.toString(),
+                  surfaceArea: Number(area.toFixed(2)),
+                  surfaceUnit: 'ha',
+                  perimeter: Math.round(perimeter)
+              }));
+              
+              alert("KML Importado con éxito. Polígono, área y perímetro actualizados.");
+          } else {
+              alert("No se pudo extraer un polígono válido del KML. Asegúrate de que sea un archivo de Google Earth con un polígono o ruta.");
+          }
+          
+          // Reset file input
+          if (fileInputRef.current) fileInputRef.current.value = '';
+      };
+      reader.readAsText(file);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -154,11 +256,9 @@ export default function Plots() {
         autoName = `${varCode}-B${formData.block}-R${formData.replicate}`; 
     }
 
-    // Try to parse one last time before submit in case blur didn't fire
     let finalLat = parseFloat(parseCoordinate(formData.lat || '0'));
     let finalLng = parseFloat(parseCoordinate(formData.lng || '0'));
 
-    // Use polygon start if center is missing (fallback)
     if ((!finalLat || finalLat === 0) && formData.polygon && formData.polygon.length > 0) {
         finalLat = formData.polygon[0].lat;
         finalLng = formData.polygon[0].lng;
@@ -246,16 +346,13 @@ export default function Plots() {
       setIsModalOpen(true);
   };
 
-  // Improved Handler with Center calculation and Perimeter
   const handlePolygonChange = (newPoly: { lat: number, lng: number }[], areaHa: number, center: { lat: number, lng: number }, perimeterM: number) => {
       setFormData(prev => ({
           ...prev,
           polygon: newPoly,
-          // Auto-calculate area if unit is hectares
           surfaceArea: areaHa > 0 ? Number(areaHa.toFixed(2)) : prev.surfaceArea,
           surfaceUnit: areaHa > 0 ? 'ha' : prev.surfaceUnit,
           perimeter: Math.round(perimeterM),
-          // Auto-update center coordinates from polygon centroid
           lat: center.lat.toString(),
           lng: center.lng.toString()
       }));
@@ -617,7 +714,27 @@ export default function Plots() {
                           </div>
 
                           <div className="flex-1 flex flex-col">
-                              <label className="block text-sm font-medium text-blue-900 mb-2">Dibujar Polígono del Lote</label>
+                              <div className="flex justify-between items-center mb-2">
+                                  <label className="block text-sm font-medium text-blue-900">Dibujar o Importar</label>
+                                  {/* KML IMPORT BUTTON */}
+                                  <div className="relative">
+                                      <input 
+                                        type="file" 
+                                        accept=".kml" 
+                                        ref={fileInputRef}
+                                        className="hidden"
+                                        onChange={handleKMLUpload}
+                                      />
+                                      <button 
+                                        type="button"
+                                        onClick={() => fileInputRef.current?.click()}
+                                        className="flex items-center text-xs bg-white border border-blue-200 text-blue-700 px-2 py-1 rounded hover:bg-blue-50"
+                                        title="Importar polígono desde Google Earth (.kml)"
+                                      >
+                                          <FileUp size={12} className="mr-1"/> Importar KML
+                                      </button>
+                                  </div>
+                              </div>
                               
                               {/* MAP EDITOR COMPONENT */}
                               {formData.locationId ? (
