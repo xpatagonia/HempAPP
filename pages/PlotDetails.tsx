@@ -1,10 +1,45 @@
 
-import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
-import { TrialRecord, Task } from '../types';
-import { ArrowLeft, Activity, Calendar, MapPin, Globe, Plus, Trash2, Droplets, Wind, QrCode, Printer, CheckSquare, Sun, Eye, Loader2, Tractor, FlaskConical, Tag, Clock, DollarSign, Package, Archive, Sprout, X, Map, Camera, FileText, ChevronRight, TrendingUp } from 'lucide-react';
+import { TrialRecord, Task, Plot } from '../types';
+import { ArrowLeft, Activity, Calendar, MapPin, Globe, Plus, Trash2, Droplets, Wind, QrCode, Printer, CheckSquare, Sun, Eye, Loader2, Tractor, FlaskConical, Tag, Clock, DollarSign, Package, Archive, Sprout, X, Map, Camera, FileText, ChevronRight, TrendingUp, Settings, Save, FileUp, Ruler, Edit2 } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
+
+// Helper: Robust KML Parser
+const parseKML = (kmlText: string): { lat: number, lng: number }[] | null => {
+    try {
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(kmlText, "text/xml");
+        const allCoords = Array.from(xmlDoc.getElementsByTagName("coordinates"));
+        
+        if (allCoords.length === 0) return null;
+
+        // Sort desc by length to find polygon first
+        allCoords.sort((a, b) => (b.textContent?.length || 0) - (a.textContent?.length || 0));
+        
+        const targetNode = allCoords[0];
+        const text = targetNode.textContent || "";
+        const rawPoints = text.replace(/\s+/g, ' ').trim().split(' ');
+        
+        const latLngs = rawPoints.map(point => {
+            const parts = point.split(',');
+            if (parts.length >= 2) {
+                const lng = parseFloat(parts[0]);
+                const lat = parseFloat(parts[1]);
+                if (!isNaN(lat) && !isNaN(lng)) {
+                    return { lat, lng };
+                }
+            }
+            return null;
+        }).filter((p): p is { lat: number, lng: number } => p !== null);
+
+        return latLngs.length >= 3 ? latLngs : null;
+    } catch (e) {
+        console.error("Error parsing KML", e);
+        return null;
+    }
+};
 
 // Helper component for KPI Cards (Redesigned)
 const KPI = ({ label, value, icon: Icon, color, subtext }: any) => (
@@ -106,7 +141,8 @@ const CycleGraph = ({ sowingDate, cycleDays }: { sowingDate: string, cycleDays: 
 
 export default function PlotDetails() {
   const { id } = useParams<{ id: string }>();
-  const { plots, locations, varieties, getPlotHistory, addTrialRecord, updateTrialRecord, deleteTrialRecord, logs, addLog, currentUser, tasks, seedBatches, resources, addTask, updateTask, deleteTask } = useAppContext();
+  const navigate = useNavigate();
+  const { plots, locations, varieties, getPlotHistory, addTrialRecord, updateTrialRecord, deleteTrialRecord, logs, addLog, currentUser, tasks, seedBatches, resources, addTask, updateTask, deleteTask, updatePlot, deletePlot } = useAppContext();
   
   const plot = plots.find(p => p.id === id);
   const location = locations.find(l => l.id === plot?.locationId);
@@ -128,6 +164,12 @@ export default function PlotDetails() {
   const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
   const [isViewMode, setIsViewMode] = useState(false); // New: Read-only mode
+
+  // EDIT PLOT MODAL STATE
+  const [isConfigOpen, setIsConfigOpen] = useState(false);
+  const [configTab, setConfigTab] = useState<'general' | 'geo'>('general');
+  const [configForm, setConfigForm] = useState<Partial<Plot>>({});
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Plan/Task Modal
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -155,7 +197,6 @@ export default function PlotDetails() {
   const plotLogs = logs.filter(l => l.plotId === id).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   
   // SMART MAP CENTER LOGIC (Safe Access)
-  // Ensures we don't crash if polygon is null/undefined
   const displayCoordinates = 
       (plot?.coordinates && plot.coordinates.lat !== 0) ? plot.coordinates :
       (plot?.polygon && plot.polygon.length > 0) ? plot.polygon[0] :
@@ -183,6 +224,86 @@ export default function PlotDetails() {
           <Link to="/plots" className="text-hemp-600 hover:underline mt-2">Volver al listado</Link>
       </div>
   );
+
+  // --- PLOT CONFIG / EDIT HANDLERS ---
+  const handleOpenConfig = () => {
+      setConfigForm({ ...plot });
+      setIsConfigOpen(true);
+  };
+
+  const handleKMLUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+          const text = event.target?.result as string;
+          const poly = parseKML(text);
+          
+          if (poly && poly.length > 2) {
+              // Calculate Area & Centroid
+              const R = 6371000;
+              const toRad = (x: number) => x * Math.PI / 180;
+              let area = 0;
+              let perimeter = 0;
+              const lats = poly.map(p => p.lat);
+              const lngs = poly.map(p => p.lng);
+              const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+              const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
+
+              for (let i = 0; i < poly.length; i++) {
+                  const j = (i + 1) % poly.length;
+                  const p1 = poly[i];
+                  const p2 = poly[j];
+                  area += (toRad(p2.lng) - toRad(p1.lng)) * (2 + Math.sin(toRad(p1.lat)) + Math.sin(toRad(p2.lat)));
+                  const dLat = toRad(p2.lat - p1.lat);
+                  const dLon = toRad(p2.lng - p1.lng);
+                  const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(toRad(p1.lat)) * Math.cos(toRad(p2.lat)) * Math.sin(dLon/2) * Math.sin(dLon/2);
+                  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                  perimeter += R * c;
+              }
+              area = Math.abs(area * R * R / 2) / 10000;
+
+              setConfigForm(prev => ({
+                  ...prev,
+                  polygon: poly,
+                  surfaceArea: Number(area.toFixed(2)),
+                  surfaceUnit: 'ha',
+                  perimeter: Math.round(perimeter),
+                  coordinates: { lat: centerLat, lng: centerLng }
+              }));
+              alert("✅ KML Importado y procesado correctamente.");
+          } else {
+              alert("⚠️ No se encontró un polígono válido en el KML.");
+          }
+          if (fileInputRef.current) fileInputRef.current.value = '';
+      };
+      reader.readAsText(file);
+  };
+
+  const handlePolygonChange = (newPoly: { lat: number, lng: number }[], areaHa: number, center: { lat: number, lng: number }, perimeterM: number) => {
+      setConfigForm(prev => ({
+          ...prev,
+          polygon: newPoly,
+          surfaceArea: areaHa > 0 ? Number(areaHa.toFixed(2)) : prev.surfaceArea,
+          perimeter: Math.round(perimeterM),
+          coordinates: center
+      }));
+  };
+
+  const handleSaveConfig = () => {
+      if (configForm.id) {
+          updatePlot(configForm as Plot);
+          setIsConfigOpen(false);
+      }
+  };
+
+  const handleDeletePlot = async () => {
+      if(window.confirm("¡PELIGRO! ¿Eliminar este lote y todos sus registros? Esta acción es irreversible.")) {
+          await deletePlot(plot.id);
+          navigate('/plots');
+      }
+  };
 
   // --- RECORD MANAGEMENT ---
   const handleOpenRecordModal = (existing?: TrialRecord, viewOnly: boolean = false) => {
@@ -227,7 +348,6 @@ export default function PlotDetails() {
       e.preventDefault();
       if(!taskForm.title) return;
       
-      // Calculate Cost
       let cost = 0;
       if (taskForm.resourceId && taskForm.resourceQuantity) {
           const res = resources.find(r => r.id === taskForm.resourceId);
@@ -280,6 +400,14 @@ export default function PlotDetails() {
             <ArrowLeft size={18} className="mr-1" /> Volver a la Planilla
         </Link>
         {!canEdit && <span className="bg-gray-100 text-gray-500 px-3 py-1 rounded-full text-xs font-semibold">Solo Lectura</span>}
+        {canEdit && (
+            <button 
+                onClick={handleOpenConfig} 
+                className="flex items-center bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-sm font-bold shadow-sm transition"
+            >
+                <Settings size={16} className="mr-2 text-gray-500"/> Configurar Lote
+            </button>
+        )}
       </div>
 
       {/* HEADER CARD */}
@@ -324,12 +452,12 @@ export default function PlotDetails() {
                   )}
               </div>
 
-              {/* Cycle Graph (New) */}
+              {/* Cycle Graph */}
               <CycleGraph sowingDate={plot.sowingDate} cycleDays={variety?.cycleDays || 120} />
 
               {/* Main Grid */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  {/* Left: KPIs Grid (Redesigned) */}
+                  {/* Left: KPIs Grid */}
                   <div className="lg:col-span-2 grid grid-cols-2 sm:grid-cols-3 gap-4 auto-rows-min">
                       <KPI 
                         label="Días Ciclo" 
@@ -617,6 +745,122 @@ export default function PlotDetails() {
                                </div>
                            )}
                        </form>
+                   </div>
+               </div>
+           </div>
+       )}
+
+       {/* CONFIG / EDIT MODAL */}
+       {isConfigOpen && (
+           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+               <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto p-0 flex flex-col animate-in zoom-in-95 duration-200">
+                   <div className="px-6 py-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+                       <h2 className="text-xl font-bold text-gray-800 flex items-center"><Edit2 size={20} className="mr-2 text-gray-500"/> Configuración del Lote</h2>
+                       <button onClick={() => setIsConfigOpen(false)} className="text-gray-400 hover:text-gray-600 bg-white p-1 rounded-full shadow-sm"><X size={20}/></button>
+                   </div>
+                   
+                   <div className="flex border-b border-gray-200">
+                       <button onClick={() => setConfigTab('general')} className={`flex-1 py-3 font-bold text-sm ${configTab === 'general' ? 'border-b-2 border-hemp-600 text-hemp-700' : 'text-gray-500 hover:text-gray-700'}`}>Datos Generales</button>
+                       <button onClick={() => setConfigTab('geo')} className={`flex-1 py-3 font-bold text-sm ${configTab === 'geo' ? 'border-b-2 border-hemp-600 text-hemp-700' : 'text-gray-500 hover:text-gray-700'}`}>Geometría y Mapa</button>
+                   </div>
+
+                   <div className="p-6">
+                       {configTab === 'general' && (
+                           <div className="space-y-4 animate-in fade-in">
+                               <div>
+                                   <label className="block text-sm font-bold text-gray-700 mb-1">Nombre del Lote</label>
+                                   <input type="text" className={getInputClass()} value={configForm.name} onChange={e => setConfigForm({...configForm, name: e.target.value})} />
+                               </div>
+                               <div className="grid grid-cols-2 gap-4">
+                                   <div>
+                                       <label className="block text-sm font-bold text-gray-700 mb-1">Fecha de Siembra</label>
+                                       <input type="date" className={getInputClass()} value={configForm.sowingDate} onChange={e => setConfigForm({...configForm, sowingDate: e.target.value})} />
+                                   </div>
+                                   <div>
+                                       <label className="block text-sm font-bold text-gray-700 mb-1">Variedad</label>
+                                       <select className={getInputClass()} value={configForm.varietyId} onChange={e => setConfigForm({...configForm, varietyId: e.target.value})}>
+                                           {varieties.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                                       </select>
+                                   </div>
+                               </div>
+                               <div className="grid grid-cols-2 gap-4">
+                                   <div>
+                                       <label className="block text-sm font-bold text-gray-700 mb-1">Estado</label>
+                                       <select className={getInputClass()} value={configForm.status} onChange={e => setConfigForm({...configForm, status: e.target.value as any})}>
+                                           <option value="Activa">Activa</option>
+                                           <option value="Cosechada">Cosechada</option>
+                                           <option value="Cancelada">Cancelada</option>
+                                       </select>
+                                   </div>
+                                   <div>
+                                       <label className="block text-sm font-bold text-gray-700 mb-1">Tipo</label>
+                                       <select className={getInputClass()} value={configForm.type} onChange={e => setConfigForm({...configForm, type: e.target.value as any})}>
+                                           <option value="Ensayo">Ensayo I+D</option>
+                                           <option value="Producción">Producción</option>
+                                       </select>
+                                   </div>
+                               </div>
+                               <div>
+                                   <label className="block text-sm font-bold text-gray-700 mb-1">Observaciones</label>
+                                   <textarea className={getInputClass()} rows={3} value={configForm.observations || ''} onChange={e => setConfigForm({...configForm, observations: e.target.value})}></textarea>
+                               </div>
+                           </div>
+                       )}
+
+                       {configTab === 'geo' && (
+                           <div className="space-y-4 animate-in fade-in">
+                               <div className="flex justify-between items-center bg-blue-50 p-3 rounded-lg border border-blue-100">
+                                   <div>
+                                       <h4 className="font-bold text-blue-800 text-sm">Importar Polígono (KML)</h4>
+                                       <p className="text-xs text-blue-600">Sube un archivo .kml exportado de Google Earth para delimitar el lote.</p>
+                                   </div>
+                                   <div className="relative">
+                                       <input 
+                                         type="file" 
+                                         accept=".kml" 
+                                         ref={fileInputRef}
+                                         className="hidden"
+                                         onChange={handleKMLUpload}
+                                       />
+                                       <button 
+                                         type="button"
+                                         onClick={() => fileInputRef.current?.click()}
+                                         className="bg-white border border-blue-200 text-blue-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-50 flex items-center"
+                                       >
+                                           <FileUp size={14} className="mr-1"/> Cargar KML
+                                       </button>
+                                   </div>
+                               </div>
+
+                               <div className="border border-gray-300 rounded-xl overflow-hidden">
+                                   <MapEditor 
+                                     initialCenter={configForm.coordinates || displayCoordinates}
+                                     initialPolygon={configForm.polygon || []}
+                                     onPolygonChange={handlePolygonChange}
+                                     height="350px"
+                                   />
+                               </div>
+                               
+                               <div className="grid grid-cols-2 gap-4 text-sm">
+                                   <div className="bg-gray-50 p-2 rounded border border-gray-200">
+                                       <span className="block text-xs font-bold text-gray-500 uppercase">Superficie Calc.</span>
+                                       <div className="font-mono font-bold text-gray-800 flex items-center"><Ruler size={14} className="mr-1"/> {configForm.surfaceArea || 0} ha</div>
+                                   </div>
+                                   <div className="bg-gray-50 p-2 rounded border border-gray-200">
+                                       <span className="block text-xs font-bold text-gray-500 uppercase">Perímetro Calc.</span>
+                                       <div className="font-mono font-bold text-gray-800">{configForm.perimeter || 0} m</div>
+                                   </div>
+                               </div>
+                           </div>
+                       )}
+                   </div>
+
+                   <div className="flex justify-between items-center p-6 border-t border-gray-100 bg-gray-50">
+                       <button onClick={handleDeletePlot} className="text-red-500 hover:text-red-700 text-sm font-bold flex items-center px-3 py-2 hover:bg-red-50 rounded transition"><Trash2 size={16} className="mr-2"/> Eliminar Lote</button>
+                       <div className="flex space-x-3">
+                           <button onClick={() => setIsConfigOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-200 rounded-lg font-bold transition">Cancelar</button>
+                           <button onClick={handleSaveConfig} className="px-6 py-2 bg-hemp-600 text-white rounded-lg hover:bg-hemp-700 shadow-lg font-bold flex items-center transition"><Save size={18} className="mr-2"/> Guardar Cambios</button>
+                       </div>
                    </div>
                </div>
            </div>
