@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { Plot } from '../types';
-import { Plus, ChevronRight, CheckCircle, FileSpreadsheet, Edit2, Calendar, UserCheck, MapPin, Box, Trash2, LayoutGrid, List, Image as ImageIcon, Ruler, Droplets, FlaskConical, Tractor, Tag, Sprout, Map, Navigation, FileUp, AlertTriangle } from 'lucide-react';
+import { Plus, ChevronRight, CheckCircle, FileSpreadsheet, Edit2, Calendar, UserCheck, MapPin, Box, Trash2, LayoutGrid, List, Image as ImageIcon, Ruler, Droplets, FlaskConical, Tractor, Tag, Sprout, Map, Navigation, FileUp, AlertTriangle, X } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import MapEditor from '../components/MapEditor';
 
@@ -98,6 +98,8 @@ export default function Plots() {
   const initialProjectFilter = searchParams.get('project') || 'all';
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isMapModalOpen, setIsMapModalOpen] = useState(false); // Modal for simple visualization
+  const [viewPlot, setViewPlot] = useState<Plot | null>(null); // Plot being visualized
   const [editingId, setEditingId] = useState<string | null>(null);
 
   // View Mode State
@@ -355,6 +357,15 @@ export default function Plots() {
       setIsModalOpen(true);
   };
 
+  const handleViewMap = (p: Plot) => {
+      if (!p.coordinates && (!p.polygon || p.polygon.length === 0)) {
+          alert("Esta parcela no tiene datos geográficos cargados.");
+          return;
+      }
+      setViewPlot(p);
+      setIsMapModalOpen(true);
+  };
+
   const handlePolygonChange = (newPoly: { lat: number, lng: number }[], areaHa: number, center: { lat: number, lng: number }, perimeterM: number) => {
       setFormData(prev => ({
           ...prev,
@@ -532,6 +543,11 @@ export default function Plots() {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right space-x-2">
+                        {/* VIEW MAP BUTTON */}
+                        <button onClick={() => handleViewMap(p)} className="text-gray-400 hover:text-blue-600 inline-block align-middle p-1" title="Visualizar Mapa">
+                            <Map size={16} />
+                        </button>
+                        
                         {canManagePlots && (
                             <>
                                 <button onClick={() => handleEdit(p)} className="text-gray-400 hover:text-hemp-600 inline-block align-middle p-1"><Edit2 size={16} /></button>
@@ -604,6 +620,34 @@ export default function Plots() {
               })}
           </div>
       )}
+
+       {/* --- MAP VISUALIZATION MODAL --- */}
+       {isMapModalOpen && viewPlot && (
+           <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[100] p-4 animate-in fade-in zoom-in duration-200">
+               <div className="bg-white rounded-xl w-full max-w-4xl overflow-hidden shadow-2xl relative">
+                   <div className="bg-gray-50 px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                       <div>
+                           <h3 className="text-lg font-bold text-gray-800 flex items-center">
+                               <MapPin size={18} className="mr-2 text-hemp-600" />
+                               {viewPlot.name}
+                           </h3>
+                           <p className="text-xs text-gray-500">{viewPlot.coordinates ? `${viewPlot.coordinates.lat.toFixed(5)}, ${viewPlot.coordinates.lng.toFixed(5)}` : 'Ubicación'}</p>
+                       </div>
+                       <button onClick={() => {setIsMapModalOpen(false); setViewPlot(null);}} className="text-gray-400 hover:text-gray-700 bg-white rounded-full p-1 border">
+                           <X size={20} />
+                       </button>
+                   </div>
+                   <div className="h-[60vh] bg-gray-100">
+                       <MapEditor 
+                           initialPolygon={viewPlot.polygon}
+                           initialCenter={viewPlot.coordinates || (viewPlot.polygon && viewPlot.polygon.length > 0 ? viewPlot.polygon[0] : undefined)}
+                           readOnly={true}
+                           height="100%"
+                       />
+                   </div>
+               </div>
+           </div>
+       )}
 
        {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
