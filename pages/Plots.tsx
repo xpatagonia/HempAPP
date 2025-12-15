@@ -3,9 +3,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { Plot } from '../types';
-import { Plus, ChevronRight, CheckCircle, FileSpreadsheet, Edit2, Calendar, UserCheck, MapPin, Box, Trash2, LayoutGrid, List, Image as ImageIcon, Ruler, Droplets, FlaskConical, Tractor, Tag, Sprout, Map, Navigation, FileUp, AlertTriangle, X, Eye } from 'lucide-react';
+import { Plus, ChevronRight, CheckCircle, FileSpreadsheet, Edit2, Calendar, UserCheck, MapPin, Box, Trash2, LayoutGrid, List, Image as ImageIcon, Ruler, Droplets, FlaskConical, Tractor, Tag, Sprout, Map as MapIcon, Navigation, FileUp, AlertTriangle, X, Eye, Layers } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import MapEditor from '../components/MapEditor';
+import { MapContainer, TileLayer, Polygon, Marker, Popup, Tooltip as LeafletTooltip, useMap } from 'react-leaflet';
+import L from 'leaflet';
 
 // Helper: Convert DMS (Degrees Minutes Seconds) to Decimal
 const parseCoordinate = (input: string): string => {
@@ -67,16 +69,29 @@ const parseKML = (kmlText: string): { lat: number, lng: number }[] | null => {
     }
 };
 
+// Component to auto-zoom map to fit bounds
+const MapFitter = ({ bounds }: { bounds: L.LatLngBoundsExpression }) => {
+    const map = useMap();
+    useEffect(() => {
+        if (bounds && (bounds as any).length > 0) {
+            map.fitBounds(bounds, { padding: [50, 50] });
+        }
+    }, [bounds, map]);
+    return null;
+};
+
 export default function Plots() {
   const { plots, locations, varieties, projects, usersList, addPlot, updatePlot, deletePlot, currentUser, getLatestRecord, logs, seedBatches } = useAppContext();
   const [searchParams] = useSearchParams();
   const initialProjectFilter = searchParams.get('project') || 'all';
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isMapModalOpen, setIsMapModalOpen] = useState(false);
-  const [viewPlot, setViewPlot] = useState<Plot | null>(null);
+  const [viewPlot, setViewPlot] = useState<Plot | null>(null); // Legacy for modal view
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'table' | 'gallery'>('table');
+  
+  // View Mode: 'map' is default now for Dashboard feel
+  const [viewMode, setViewMode] = useState<'map' | 'table' | 'gallery'>('map');
+  const [mapColorMode, setMapColorMode] = useState<'status' | 'type'>('status');
 
   const [filterLoc, setFilterLoc] = useState('all');
   const [filterProj, setFilterProj] = useState(initialProjectFilter);
@@ -310,15 +325,6 @@ export default function Plots() {
       setIsModalOpen(true);
   };
 
-  const handleViewMap = (p: Plot) => {
-      if (!p.coordinates && (!p.polygon || p.polygon.length === 0)) {
-          alert("Esta parcela no tiene datos geográficos cargados.");
-          return;
-      }
-      setViewPlot(p);
-      setIsMapModalOpen(true);
-  };
-
   const handlePolygonChange = (newPoly: { lat: number, lng: number }[], areaHa: number, center: { lat: number, lng: number }, perimeterM: number) => {
       setFormData(prev => ({
           ...prev,
@@ -409,17 +415,42 @@ export default function Plots() {
   const inputClass = "w-full border border-gray-300 bg-white text-gray-900 p-2 rounded focus:ring-2 focus:ring-hemp-500 focus:border-transparent outline-none transition-colors";
   const assignableUsers = usersList.filter(u => u.role === 'admin' || u.role === 'technician' || u.role === 'viewer');
 
+  // --- MAP DASHBOARD LOGIC ---
+  
+  // Calculate map bounds based on all filtered plots
+  const mapBounds = React.useMemo(() => {
+      if (filteredPlots.length === 0) return null;
+      const latLngs: [number, number][] = [];
+      filteredPlots.forEach(p => {
+          if (p.polygon && p.polygon.length > 0) {
+              p.polygon.forEach(pt => latLngs.push([pt.lat, pt.lng]));
+          } else if (p.coordinates && p.coordinates.lat) {
+              latLngs.push([p.coordinates.lat, p.coordinates.lng]);
+          }
+      });
+      return latLngs.length > 0 ? L.latLngBounds(latLngs) : null;
+  }, [filteredPlots]);
+
+  const getPlotColor = (p: Plot) => {
+      if (mapColorMode === 'status') {
+          return p.status === 'Cosechada' ? '#eab308' : '#22c55e'; // Gold vs Green
+      } else {
+          return p.type === 'Producción' ? '#3b82f6' : '#a855f7'; // Blue vs Purple
+      }
+  };
+
   return (
-    <div>
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+    <div className="flex flex-col h-[calc(100vh-100px)]">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4 flex-shrink-0">
         <div>
-            <h1 className="text-2xl font-bold text-gray-800">Planilla de Cultivo</h1>
-            <p className="text-sm text-gray-500">Gestión de parcelas de ensayo y lotes productivos.</p>
+            <h1 className="text-2xl font-bold text-gray-800">Dashboard de Lotes</h1>
+            <p className="text-sm text-gray-500">Visualización geoespacial y gestión de cultivos.</p>
         </div>
         <div className="flex space-x-2 w-full sm:w-auto">
           <div className="bg-gray-100 p-1 rounded-lg flex mr-2">
+              <button onClick={() => setViewMode('map')} className={`p-2 rounded-md transition ${viewMode === 'map' ? 'bg-white shadow text-hemp-600' : 'text-gray-400 hover:text-gray-600'}`} title="Mapa Interactivo"><MapIcon size={18} /></button>
               <button onClick={() => setViewMode('table')} className={`p-2 rounded-md transition ${viewMode === 'table' ? 'bg-white shadow text-gray-800' : 'text-gray-400 hover:text-gray-600'}`} title="Vista Lista"><List size={18} /></button>
-              <button onClick={() => setViewMode('gallery')} className={`p-2 rounded-md transition ${viewMode === 'gallery' ? 'bg-white shadow text-gray-800' : 'text-gray-400 hover:text-gray-600'}`} title="Vista Recorrida Visual"><LayoutGrid size={18} /></button>
+              <button onClick={() => setViewMode('gallery')} className={`p-2 rounded-md transition ${viewMode === 'gallery' ? 'bg-white shadow text-gray-800' : 'text-gray-400 hover:text-gray-600'}`} title="Vista Galería"><LayoutGrid size={18} /></button>
           </div>
           <button onClick={handleExport} className="border border-gray-300 bg-white text-gray-700 px-3 py-2 rounded-lg text-sm hover:bg-gray-50 flex items-center justify-center transition" title="Exportar Excel"><FileSpreadsheet size={18} /></button>
           {canManagePlots && (
@@ -430,28 +461,105 @@ export default function Plots() {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="mb-6 space-y-3">
-        <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex items-center bg-gray-100 p-1 rounded-lg w-fit">
-                <button onClick={() => setFilterType('all')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition ${filterType === 'all' ? 'bg-white shadow text-gray-800' : 'text-gray-500'}`}>Todos</button>
-                <button onClick={() => setFilterType('Ensayo')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition flex items-center ${filterType === 'Ensayo' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}><FlaskConical size={12} className="mr-1"/> I+D (Ensayos)</button>
-                <button onClick={() => setFilterType('Producción')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition flex items-center ${filterType === 'Producción' ? 'bg-white shadow text-green-600' : 'text-gray-500'}`}><Tractor size={12} className="mr-1"/> Producción</button>
-            </div>
-            <div className="flex items-center space-x-2 overflow-x-auto pb-1 custom-scrollbar flex-1">
-                 <span className="text-sm font-semibold text-gray-500 mr-2 whitespace-nowrap">Proyecto:</span>
-                 <button onClick={() => setFilterProj('all')} className={`px-3 py-1 rounded-full text-xs whitespace-nowrap border transition ${filterProj === 'all' ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>Todos</button>
-                 {projects.map(pr => (
-                     <button key={pr.id} onClick={() => setFilterProj(pr.id)} className={`px-3 py-1 rounded-full text-xs whitespace-nowrap border transition ${filterProj === pr.id ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
-                        {pr.name}
-                     </button>
-                 ))}
-            </div>
-        </div>
-      </div>
+      {/* VIEW MODE: MAP (DASHBOARD) */}
+      {viewMode === 'map' && (
+          <div className="flex-1 bg-gray-100 rounded-xl overflow-hidden shadow-inner border border-gray-200 relative">
+              {/* Map Controls Overlay */}
+              <div className="absolute top-4 right-4 z-[400] flex flex-col gap-2">
+                  <div className="bg-white p-2 rounded-lg shadow-md border border-gray-200">
+                      <label className="text-xs font-bold text-gray-500 uppercase block mb-1 flex items-center">
+                          <Layers size={12} className="mr-1"/> Organizar Por
+                      </label>
+                      <select 
+                        className="text-sm bg-gray-50 border border-gray-200 rounded p-1 w-full outline-none focus:ring-1 focus:ring-hemp-500"
+                        value={mapColorMode}
+                        onChange={(e) => setMapColorMode(e.target.value as any)}
+                      >
+                          <option value="status">Estado (Activo/Cosecha)</option>
+                          <option value="type">Tipo (Prod/Ensayo)</option>
+                      </select>
+                  </div>
+                  
+                  {/* Legend */}
+                  <div className="bg-white/90 backdrop-blur p-3 rounded-lg shadow-md border border-gray-200 text-xs">
+                      {mapColorMode === 'status' ? (
+                          <>
+                              <div className="flex items-center mb-1"><span className="w-3 h-3 bg-green-500 rounded-full mr-2"></span> Activa</div>
+                              <div className="flex items-center"><span className="w-3 h-3 bg-yellow-500 rounded-full mr-2"></span> Cosechada</div>
+                          </>
+                      ) : (
+                          <>
+                              <div className="flex items-center mb-1"><span className="w-3 h-3 bg-blue-500 rounded-full mr-2"></span> Producción</div>
+                              <div className="flex items-center"><span className="w-3 h-3 bg-purple-500 rounded-full mr-2"></span> Ensayo I+D</div>
+                          </>
+                      )}
+                  </div>
+              </div>
 
-      {viewMode === 'table' ? (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden overflow-x-auto">
+              <MapContainer center={[-34.6037, -58.3816]} zoom={5} style={{ height: "100%", width: "100%" }}>
+                  <TileLayer
+                      attribution='&copy; Esri World Imagery'
+                      url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                  />
+                  <TileLayer url="https://stamen-tiles-{s}.a.ssl.fastly.net/toner-labels/{z}/{x}/{y}{r}.png" opacity={0.7} />
+                  
+                  {mapBounds && <MapFitter bounds={mapBounds} />}
+
+                  {filteredPlots.map(p => {
+                      const color = getPlotColor(p);
+                      const loc = locations.find(l => l.id === p.locationId);
+                      const vari = varieties.find(v => v.id === p.varietyId);
+
+                      // Popup Content
+                      const PopupContent = (
+                          <div className="p-1 min-w-[200px]">
+                              <h3 className="font-bold text-gray-800 text-base">{p.name}</h3>
+                              <div className="text-xs text-gray-500 mb-2">{loc?.name}</div>
+                              <div className="grid grid-cols-2 gap-2 text-xs mb-3">
+                                  <div className="bg-gray-50 p-1 rounded border">
+                                      <span className="block text-gray-400">Variedad</span>
+                                      <span className="font-bold text-gray-700">{vari?.name}</span>
+                                  </div>
+                                  <div className="bg-gray-50 p-1 rounded border">
+                                      <span className="block text-gray-400">Sup.</span>
+                                      <span className="font-bold text-gray-700">{p.surfaceArea} {p.surfaceUnit}</span>
+                                  </div>
+                              </div>
+                              <Link to={`/plots/${p.id}`} className="block w-full text-center bg-hemp-600 text-white py-1.5 rounded text-xs font-bold hover:bg-hemp-700">
+                                  Ver Detalle Completo
+                              </Link>
+                          </div>
+                      );
+
+                      if (p.polygon && p.polygon.length > 0) {
+                          return (
+                              <Polygon 
+                                  key={p.id} 
+                                  positions={p.polygon} 
+                                  pathOptions={{ color, fillColor: color, fillOpacity: 0.5, weight: 2 }}
+                              >
+                                  <LeafletTooltip direction="center" opacity={1} permanent>
+                                      <span className="text-xs font-bold">{p.name}</span>
+                                  </LeafletTooltip>
+                                  <Popup>{PopupContent}</Popup>
+                              </Polygon>
+                          );
+                      } else if (p.coordinates) {
+                          return (
+                              <Marker key={p.id} position={p.coordinates}>
+                                  <Popup>{PopupContent}</Popup>
+                              </Marker>
+                          );
+                      }
+                      return null;
+                  })}
+              </MapContainer>
+          </div>
+      )}
+
+      {/* TABLE VIEW */}
+      {viewMode === 'table' && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden overflow-x-auto flex-1">
             <table className="min-w-full divide-y divide-gray-200 text-sm">
               <thead className="bg-gray-50">
                 <tr>
@@ -499,15 +607,6 @@ export default function Plots() {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right space-x-2 whitespace-nowrap">
-                        {/* VIEW MAP BUTTON */}
-                        <button 
-                            onClick={() => handleViewMap(p)} 
-                            className="text-blue-500 hover:text-blue-700 hover:bg-blue-50 inline-block align-middle p-1.5 rounded transition" 
-                            title="Ver Mapa"
-                        >
-                            <Map size={18} />
-                        </button>
-                        
                         {canManagePlots && (
                             <>
                                 <button onClick={() => handleEdit(p)} className="text-gray-400 hover:text-hemp-600 hover:bg-gray-100 inline-block align-middle p-1.5 rounded transition"><Edit2 size={18} /></button>
@@ -522,8 +621,11 @@ export default function Plots() {
               </tbody>
             </table>
           </div>
-      ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+      )}
+
+      {/* GALLERY VIEW */}
+      {viewMode === 'gallery' && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 overflow-y-auto">
               {filteredPlots.map(p => {
                   const loc = locations.find(l => l.id === p.locationId);
                   const vari = varieties.find(v => v.id === p.varietyId);
@@ -545,7 +647,7 @@ export default function Plots() {
                               ) : (
                                   <div className="w-full h-full flex flex-col items-center justify-center text-gray-300 bg-gray-50 pattern-grid-lg">
                                       {p.coordinates || (p.polygon && p.polygon.length > 0) ? (
-                                          <><Map size={32} className="mb-2 opacity-50" /><span className="text-xs font-medium">Ubicada</span></>
+                                          <><MapIcon size={32} className="mb-2 opacity-50" /><span className="text-xs font-medium">Ubicada</span></>
                                       ) : (
                                           <><ImageIcon size={32} className="mb-2 opacity-50" /><span className="text-xs font-medium">Sin datos</span></>
                                       )}
@@ -580,35 +682,6 @@ export default function Plots() {
               })}
           </div>
       )}
-
-       {/* --- MAP VISUALIZATION MODAL --- */}
-       {isMapModalOpen && viewPlot && (
-           <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[100] p-4 animate-in fade-in zoom-in duration-200">
-               <div className="bg-white rounded-xl w-full max-w-4xl overflow-hidden shadow-2xl relative">
-                   <div className="bg-gray-50 px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-                       <div>
-                           <h3 className="text-lg font-bold text-gray-800 flex items-center">
-                               <MapPin size={18} className="mr-2 text-hemp-600" />
-                               {viewPlot.name}
-                           </h3>
-                           <p className="text-xs text-gray-500">{viewPlot.coordinates ? `${viewPlot.coordinates.lat.toFixed(5)}, ${viewPlot.coordinates.lng.toFixed(5)}` : 'Ubicación'}</p>
-                       </div>
-                       <button onClick={() => {setIsMapModalOpen(false); setViewPlot(null);}} className="text-gray-400 hover:text-gray-700 bg-white rounded-full p-1 border">
-                           <X size={20} />
-                       </button>
-                   </div>
-                   <div className="h-[60vh] bg-gray-100">
-                       <MapEditor 
-                           initialPolygon={viewPlot.polygon || []}
-                           // Logic to center map even if only polygon exists (centroid)
-                           initialCenter={viewPlot.coordinates || (viewPlot.polygon && viewPlot.polygon.length > 0 ? viewPlot.polygon[0] : undefined)}
-                           readOnly={true}
-                           height="100%"
-                       />
-                   </div>
-               </div>
-           </div>
-       )}
 
        {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
