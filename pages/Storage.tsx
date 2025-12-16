@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { StoragePoint } from '../types';
-import { Plus, Warehouse, Edit2, Trash2, MapPin, User, Package, Map, Ruler, Maximize } from 'lucide-react';
+import { Plus, Warehouse, Edit2, Trash2, MapPin, User, Maximize } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
 
 export default function Storage() {
@@ -24,8 +24,15 @@ export default function Storage() {
     e.preventDefault();
     if (!formData.name) return;
     
-    // Ensure capacityKg is ignored/zeroed out internally as requested
-    const payload = { ...formData, capacityKg: 0 } as StoragePoint;
+    // Remove capacityKg references completely
+    const payload = { 
+        ...formData,
+        // Ensure surfaceM2 is a number
+        surfaceM2: Number(formData.surfaceM2)
+    } as StoragePoint;
+
+    // Delete deprecated field if it exists in state
+    delete (payload as any).capacityKg;
 
     if (editingId) {
         updateStoragePoint({ ...payload, id: editingId });
@@ -126,7 +133,7 @@ export default function Storage() {
                           </p>
 
                           <div className="mt-auto space-y-2 text-sm">
-                              {/* Capacidad Removed from UI */}
+                              {/* Only Surface M2 shown */}
                               <div className="flex justify-between border-b border-gray-100 pb-1">
                                   <span className="text-gray-500 flex items-center"><Maximize size={14} className="mr-1"/> Superficie</span>
                                   <span className="font-bold text-gray-800">{sp.surfaceM2 ? `${sp.surfaceM2} m²` : '-'}</span>
@@ -176,7 +183,7 @@ export default function Storage() {
                                 <option value="Transitorio">Transitorio (Logística)</option>
                             </select>
                         </div>
-                        {/* REPLACED Capacity with Surface Area */}
+                        {/* Only Surface M2 Input */}
                         <div>
                             <label className="block text-sm font-medium mb-1">Superficie (m²)</label>
                             <input type="number" className={inputClass} value={formData.surfaceM2} onChange={e => setFormData({...formData, surfaceM2: Number(e.target.value)})}/>

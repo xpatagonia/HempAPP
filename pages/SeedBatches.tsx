@@ -117,15 +117,18 @@ export default function SeedBatches() {
       if(!quickStorageForm.name) return;
       
       const newId = Date.now().toString();
-      addStoragePoint({
+      
+      const payload = {
           id: newId,
           name: quickStorageForm.name,
           city: quickStorageForm.city,
           type: quickStorageForm.type as any,
           surfaceM2: Number(quickStorageForm.surfaceM2),
-          address: 'Dirección pendiente',
-          capacityKg: 0, // Hidden from UI but required by type
-      });
+          address: 'Dirección pendiente'
+          // capacityKg REMOVED entirely
+      } as StoragePoint;
+
+      addStoragePoint(payload);
 
       // Auto-select the new storage point
       setBatchFormData(prev => ({ ...prev, storagePointId: newId }));

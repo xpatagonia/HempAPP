@@ -80,7 +80,7 @@ export default function Settings() {
 
   const copySQL = () => {
       navigator.clipboard.writeText(SQL_SCRIPT);
-      alert("SQL copiado al portapapeles.");
+      alert("SQL copiado al portapapeles. Pégalo en el editor SQL de Supabase.");
   };
 
   const clearLocalCache = () => {
@@ -190,67 +190,68 @@ export default function Settings() {
   };
 
   const SQL_SCRIPT = `
--- MIGRACIÓN DE REPARACIÓN (V2.7.2)
--- 1. Crear Tabla si no existe (con todas las columnas correctas)
+-- =========================================================
+-- REPARACIÓN TABLA SEMILLAS Y CACHÉ (V2.7.4)
+-- =========================================================
+
+-- 1. CORREGIR TABLA SEED_BATCHES (Lotes de Semilla)
+CREATE TABLE IF NOT EXISTS public.seed_batches (
+    id TEXT PRIMARY KEY,
+    "varietyId" TEXT,
+    "supplierId" TEXT,
+    "supplierName" TEXT,
+    "batchCode" TEXT,
+    "initialQuantity" NUMERIC,
+    "remainingQuantity" NUMERIC,
+    "purchaseDate" TEXT,
+    "storagePointId" TEXT,
+    "isActive" BOOLEAN DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+
+-- AGREGAR COLUMNAS FALTANTES (Causa del error 'Could not find column')
+ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "analysisDate" TEXT;
+ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "purity" NUMERIC;
+ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "germination" NUMERIC;
+ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "labelSerialNumber" TEXT;
+ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "category" TEXT;
+ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "originCountry" TEXT;
+ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "supplierLegalName" TEXT;
+ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "supplierCuit" TEXT;
+ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "purchaseOrder" TEXT;
+ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "pricePerKg" NUMERIC;
+ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "notes" TEXT;
+ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "gs1Code" TEXT;
+ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "certificationNumber" TEXT;
+
+-- Seguridad Semillas
+ALTER TABLE public.seed_batches ENABLE ROW LEVEL SECURITY;
+GRANT ALL ON TABLE public.seed_batches TO anon;
+GRANT ALL ON TABLE public.seed_batches TO authenticated;
+GRANT ALL ON TABLE public.seed_batches TO service_role;
+DROP POLICY IF EXISTS "Enable all access for all users" ON public.seed_batches;
+CREATE POLICY "Enable all access for all users" ON public.seed_batches FOR ALL USING (true) WITH CHECK (true);
+
+-- 2. ASEGURAR TABLA STORAGE_POINTS (Mantenimiento)
 CREATE TABLE IF NOT EXISTS public.storage_points (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     type TEXT,
     address TEXT,
     city TEXT,
-    province TEXT,
+    "surfaceM2" NUMERIC,
     coordinates JSONB,
     "responsibleUserId" TEXT,
-    "capacityKg" NUMERIC,
-    "surfaceM2" NUMERIC,
-    conditions TEXT,
-    notes TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
-
--- 2. Asegurar que existe la columna surfaceM2 (si la tabla ya existía)
-ALTER TABLE public.storage_points ADD COLUMN IF NOT EXISTS "surfaceM2" NUMERIC;
-
--- 3. Configurar Seguridad (RLS)
-ALTER TABLE public.storage_points ENABLE ROW LEVEL SECURITY;
-
--- 4. Recrear Políticas de Acceso (Evita conflictos si ya existen)
-DROP POLICY IF EXISTS "Enable all access for all users" ON public.storage_points;
-CREATE POLICY "Enable all access for all users" ON public.storage_points FOR ALL USING (true) WITH CHECK (true);
-
--- 5. OTORGAR PERMISOS EXPLÍCITOS (SOLUCIÓN AL ERROR DE CACHÉ)
--- Esto permite que PostgREST vea la tabla inmediatamente.
-GRANT ALL ON TABLE public.storage_points TO postgres;
-GRANT ALL ON TABLE public.storage_points TO service_role;
-GRANT ALL ON TABLE public.storage_points TO authenticated;
+-- Eliminar columna vieja que causaba errores anteriores
+ALTER TABLE public.storage_points DROP COLUMN IF EXISTS "capacityKg";
 GRANT ALL ON TABLE public.storage_points TO anon;
+GRANT ALL ON TABLE public.storage_points TO authenticated;
+GRANT ALL ON TABLE public.storage_points TO service_role;
 
--- 6. OTROS CAMBIOS PENDIENTES (MIGRACIÓN GENERAL)
-ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS polygon JSONB;
-ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS polygon JSONB;
-ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS perimeter NUMERIC; 
-ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS "resourceId" TEXT;
-ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS "resourceQuantity" NUMERIC;
-ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS "resourceCost" NUMERIC;
-ALTER TABLE public.seed_movements ADD COLUMN IF NOT EXISTS "clientId" TEXT;
-
--- 7. TABLA DE RECURSOS
-CREATE TABLE IF NOT EXISTS public.resources (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    type TEXT,
-    unit TEXT,
-    "costPerUnit" NUMERIC,
-    stock NUMERIC,
-    notes TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
-ALTER TABLE public.resources DISABLE ROW LEVEL SECURITY;
-GRANT ALL ON TABLE public.resources TO authenticated;
-GRANT ALL ON TABLE public.resources TO anon;
-
--- 8. IMPORTANTE: RECARGAR EL CACHÉ DE ESQUEMA
--- Este comando le dice a la API que vuelva a leer la estructura de la base de datos.
+-- 3. RECARGA DE CACHÉ DE API (CRÍTICO)
+-- Esto soluciona el error "Could not find column..." actualizando la definición interna de Supabase
 NOTIFY pgrst, 'reload schema';
   `;
 
@@ -354,7 +355,7 @@ NOTIFY pgrst, 'reload schema';
                     <pre>{SQL_SCRIPT}</pre>
                 </div>
                 <p className="text-xs text-slate-500 mt-2">
-                    Instrucciones: Copia este script, ve al <strong>Editor SQL de Supabase</strong> y ejecútalo para solucionar el error de sincronización.
+                    <strong>¡IMPORTANTE!</strong> Copia este código y ejecútalo en el Editor SQL de Supabase para corregir el error de sincronización.
                 </p>
             </div>
         </div>
