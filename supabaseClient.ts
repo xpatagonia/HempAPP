@@ -35,8 +35,8 @@ if (isPlaceholder(SUPABASE_URL) || isPlaceholder(SUPABASE_ANON_KEY)) {
 export const hasPreconfiguredConnection = !isPlaceholder(SUPABASE_URL) && !isPlaceholder(SUPABASE_ANON_KEY);
 
 export const supabase = createClient(
-  SUPABASE_URL || 'https://placeholder-url.supabase.co', 
-  SUPABASE_ANON_KEY || 'placeholder-key',
+  SUPABASE_URL || 'https://vkfgxbsomxzirdezwrxz.supabase.co', 
+  SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZrZmd4YnNvbXh6aXJkZXp3cnh6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU2Njk3NjEsImV4cCI6MjA4MTI0NTc2MX0.TYRwDgGqKSEEwMk4vtQty3FZ65WFWu2yEWbSOP3W4_U',
   {
       auth: {
           persistSession: true,
