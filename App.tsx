@@ -6,6 +6,7 @@ import { Layout } from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import Varieties from './pages/Varieties';
 import Locations from './pages/Locations';
+import LocationDetails from './pages/LocationDetails'; // NEW
 import Plots from './pages/Plots';
 import PlotDetails from './pages/PlotDetails';
 import Projects from './pages/Projects';
@@ -21,7 +22,7 @@ import SeedBatches from './pages/SeedBatches';
 import Suppliers from './pages/Suppliers'; 
 import Clients from './pages/Clients'; 
 import Resources from './pages/Resources'; 
-import Storage from './pages/Storage'; // Nuevo
+import Storage from './pages/Storage'; 
 
 // Componente para proteger rutas
 const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
@@ -96,7 +97,7 @@ export default function App() {
                 <Resources />
               </ProtectedRoute>
             } />
-            <Route path="/storage" element={ // Nueva Ruta
+            <Route path="/storage" element={
               <ProtectedRoute>
                 <Storage />
               </ProtectedRoute>
@@ -106,11 +107,20 @@ export default function App() {
                 <SeedBatches />
               </ProtectedRoute>
             } />
+            
+            {/* Locations & Details */}
             <Route path="/locations" element={
               <ProtectedRoute>
                 <Locations />
               </ProtectedRoute>
             } />
+            <Route path="/locations/:id" element={
+              <ProtectedRoute>
+                <LocationDetails />
+              </ProtectedRoute>
+            } />
+
+            {/* Plots & Details */}
             <Route path="/plots" element={
               <ProtectedRoute>
                 <Plots />
@@ -121,6 +131,7 @@ export default function App() {
                 <PlotDetails />
               </ProtectedRoute>
             } />
+            
             <Route path="/users" element={
               <ProtectedRoute>
                 <Users />

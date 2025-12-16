@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Location, SoilType, RoleType, Plot } from '../types';
-import { Plus, MapPin, User, Globe, Edit2, Trash2, Keyboard, List, Briefcase, Building, Landmark, GraduationCap, Users, Droplets, Ruler, Navigation, ChevronDown, ChevronUp, Sprout, ArrowRight, LayoutDashboard, Search, Filter } from 'lucide-react';
+import { Plus, MapPin, User, Globe, Edit2, Trash2, Keyboard, List, Briefcase, Building, Landmark, GraduationCap, Users, Droplets, Ruler, Navigation, ChevronDown, ChevronUp, Sprout, ArrowRight, LayoutDashboard, Search, Filter, ExternalLink } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import WeatherWidget from '../components/WeatherWidget';
 
@@ -455,10 +455,15 @@ export default function Locations() {
                               </div>
                               {canManage && (
                                   <div className="flex space-x-2">
-                                      <button onClick={() => handleEdit(loc)} className="p-1.5 text-gray-400 hover:text-hemp-600 hover:bg-gray-100 rounded transition">
+                                      {/* LINK TO DETAILS PAGE */}
+                                      <Link to={`/locations/${loc.id}`} className="bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg flex items-center text-xs font-bold transition shadow-sm">
+                                          <ExternalLink size={14} className="mr-1"/> Ver Tablero
+                                      </Link>
+                                      
+                                      <button onClick={() => handleEdit(loc)} className="p-1.5 text-gray-400 hover:text-hemp-600 hover:bg-gray-100 rounded transition border border-transparent hover:border-gray-200">
                                           <Edit2 size={16} />
                                       </button>
-                                      <button onClick={() => handleDelete(loc.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-gray-100 rounded transition">
+                                      <button onClick={() => handleDelete(loc.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-gray-100 rounded transition border border-transparent hover:border-gray-200">
                                           <Trash2 size={16} />
                                       </button>
                                   </div>
@@ -491,7 +496,7 @@ export default function Locations() {
                               )}
                               <button onClick={() => toggleExpand(loc.id)} className="text-xs bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg font-bold hover:bg-gray-200 flex items-center transition">
                                   {isExpanded ? <ChevronUp size={14} className="mr-1"/> : <ChevronDown size={14} className="mr-1"/>}
-                                  {isExpanded ? 'Ocultar' : 'Ver Lotes'}
+                                  {isExpanded ? 'Ocultar' : 'Lista Rápida'}
                               </button>
                           </div>
                       </div>
@@ -538,7 +543,7 @@ export default function Locations() {
         })}
       </div>
 
-       {/* LOCATION MODAL */}
+       {/* LOCATION MODAL (Keep existing modal code here) */}
        {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-2xl w-full p-6 shadow-xl max-h-[90vh] overflow-y-auto">
