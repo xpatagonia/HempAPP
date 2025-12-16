@@ -24,7 +24,8 @@ export default function Storage() {
     e.preventDefault();
     if (!formData.name) return;
     
-    const payload = { ...formData, capacityKg: 0 } as StoragePoint; // Default capacity to 0 as it's removed from UI
+    // Default capacityKg to 0 since we removed it from UI but it might be in type
+    const payload = { ...formData, capacityKg: 0 } as StoragePoint;
 
     if (editingId) {
         updateStoragePoint({ ...payload, id: editingId });
@@ -125,7 +126,6 @@ export default function Storage() {
                           </p>
 
                           <div className="mt-auto space-y-2 text-sm">
-                              {/* Removed Capacity display priority, showing Surface Area */}
                               <div className="flex justify-between border-b border-gray-100 pb-1">
                                   <span className="text-gray-500 flex items-center"><Maximize size={14} className="mr-1"/> Superficie</span>
                                   <span className="font-bold text-gray-800">{sp.surfaceM2 ? `${sp.surfaceM2} m²` : '-'}</span>
