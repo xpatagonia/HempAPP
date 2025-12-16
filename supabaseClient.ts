@@ -40,17 +40,21 @@ export const supabase = createClient(
 );
 
 export const checkConnection = async () => {
-    // Si las URLs son placeholders, fallamos inmediatamente
+    // Si las URLs son placeholders o están vacías, no hay conexión posible
     if (isPlaceholder(SUPABASE_URL) || SUPABASE_URL.includes('placeholder')) return false;
     
     try {
-        // Intentamos una lectura ligera
+        // Intentamos una lectura ligera (HEAD request) a la tabla users
+        // Usamos count: exact y head: true para minimizar transferencia de datos
         const { error } = await supabase.from('users').select('count', { count: 'exact', head: true });
         
-        // Si no hay error, o el error es de tabla (42P01) o permisos (401), asumimos que HAY conexión con el servidor
-        // Solo fallamos si es error de red
-        if (!error) return true;
-        if (error.code === 'PGRST116' || error.code === '42P01') return true; 
+        // Análisis de errores para determinar estado real
+        if (!error) return true; // Éxito total
+        
+        // PGRST116: Returns when data is empty but connection worked (often with .single())
+        // 42P01: Relation does not exist (Conectó a la DB pero falta la tabla -> ESTÁ ONLINE)
+        // 401: Unauthorized (Conectó pero la key es mala o RLS bloquea -> ESTÁ ONLINE PERO SIN PERMISOS)
+        if (error.code === 'PGRST116' || error.code === '42P01' || error.code === '401') return true; 
         
         console.warn("Fallo de conexión Supabase:", error.message);
         return false;

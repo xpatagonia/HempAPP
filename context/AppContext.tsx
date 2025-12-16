@@ -204,10 +204,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
-  // --- STRICT DATA LOADING ---
-  // Si hay conexión, usamos SOLO la base de datos.
-  // Si no hay conexión, usamos SOLO localstorage.
-  // NO MEZCLAMOS. Esto asegura consistencia.
+  // --- CARGA DE DATOS ESTRICTA ---
   const initSystem = async () => {
       setLoading(true);
       try {
@@ -218,7 +215,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               console.warn("⚠️ MODO LOCAL ACTIVADO: No hay conexión a Supabase.");
               setIsEmergencyMode(true);
               
-              // Load everything from LocalStorage
+              // Cargar TODO desde LocalStorage
               setUsersList([...getFromLocal('users'), RESCUE_USER]);
               setProjects(getFromLocal('projects'));
               setVarieties(getFromLocal('varieties'));
@@ -230,18 +227,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               setSeedMovements(getFromLocal('seedMovements'));
               setResources(getFromLocal('resources'));
               setStoragePoints(getFromLocal('storagePoints'));
-              // Trials/Logs/Tasks don't have local backups in this simplified version, would be empty or mocked
+              setTrialRecords(getFromLocal('trialRecords')); // Agregado
+              setLogs(getFromLocal('logs')); // Agregado
+              setTasks(getFromLocal('tasks')); // Agregado
           } else {
-              // ONLINE MODE: Fetch from DB ONLY
+              // MODO ONLINE: Cargar SOLO desde DB
               setIsEmergencyMode(false);
               
-              // Check Schema
+              // Chequear esquema
               const { error: checkError } = await supabase.from('suppliers').select('id').limit(1);
               if (checkError && (checkError.code === '42P01' || checkError.message.includes('does not exist'))) {
                   setDbNeedsMigration(true);
               }
 
-              // Fetch Tables
+              // Función helper para fetch
               const fetchData = async (table: string, setter: any) => {
                   const { data, error } = await supabase.from(table).select('*');
                   if (!error && data) setter(data);
@@ -266,17 +265,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               ]);
           }
 
-          // Restore Session
+          // Restaurar Sesión
           const savedUser = localStorage.getItem('ht_session_user');
           if (savedUser) {
               const parsed = JSON.parse(savedUser);
               if (connected) {
-                  // Verify user exists in DB
+                  // Verificar si el usuario existe en DB
                   const { data } = await supabase.from('users').select('*').eq('id', parsed.id).single();
                   if (data) setCurrentUser(data as User);
                   else localStorage.removeItem('ht_session_user');
               } else {
-                  // Offline trust
+                  // Confianza en offline
                   setCurrentUser(parsed);
               }
           }
@@ -332,7 +331,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   // --- CRUD WRAPPERS ---
-  // If Emergency => LocalStorage. If Online => Supabase.
   
   const genericAdd = async (table: string, item: any, setter: any, localKey: string) => {
       if (isEmergencyMode) {
@@ -345,7 +343,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       } else {
           const { error } = await supabase.from(table).insert([item]);
           if (error) { handleSupabaseError(error, `add ${table}`); return false; }
-          // Optimistic update
           setter((prev: any[]) => [...prev, item]);
           return true;
       }
@@ -379,7 +376,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
   };
 
-  // Explicit implementations
+  // Implementaciones explícitas usando los wrappers genéricos
   const addUser = (u: User) => genericAdd('users', u, setUsersList, 'users');
   const updateUser = (u: User) => genericUpdate('users', u, setUsersList, 'users');
   const deleteUser = (id: string) => genericDelete('users', id, setUsersList, 'users');
@@ -421,7 +418,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const deleteSeedBatch = (id: string) => genericDelete('seed_batches', id, setSeedBatches, 'seedBatches');
 
   const addSeedMovement = (m: SeedMovement) => { 
-      // Special sort for movements (LIFO usually better for UI but genericAdd appends)
       if(isEmergencyMode) {
           setSeedMovements(prev => { const n = [m, ...prev]; saveToLocal('seedMovements', n); return n; });
       } else {
@@ -435,8 +431,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const deleteSeedMovement = (id: string) => genericDelete('seed_movements', id, setSeedMovements, 'seedMovements');
 
   const addTrialRecord = (r: TrialRecord) => {
-      if(isEmergencyMode) setTrialRecords(prev => [...prev, r]);
-      else {
+      if(isEmergencyMode) {
+          setTrialRecords(prev => { const n = [...prev, r]; saveToLocal('trialRecords', n); return n; });
+      } else {
           supabase.from('trial_records').insert([r]).then(({error}) => {
               if(error) handleSupabaseError(error, 'add record');
               else setTrialRecords(prev => [...prev, r]);
@@ -444,8 +441,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
   };
   const updateTrialRecord = (r: TrialRecord) => {
-      if(isEmergencyMode) setTrialRecords(prev => prev.map(i => i.id === r.id ? r : i));
-      else {
+      if(isEmergencyMode) {
+          setTrialRecords(prev => { const n = prev.map(i => i.id === r.id ? r : i); saveToLocal('trialRecords', n); return n; });
+      } else {
           supabase.from('trial_records').update(r).eq('id', r.id).then(({error}) => {
               if(error) handleSupabaseError(error, 'update record');
               else setTrialRecords(prev => prev.map(i => i.id === r.id ? r : i));
@@ -453,8 +451,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
   };
   const deleteTrialRecord = (id: string) => {
-      if(isEmergencyMode) setTrialRecords(prev => prev.filter(i => i.id !== id));
-      else {
+      if(isEmergencyMode) {
+          setTrialRecords(prev => { const n = prev.filter(i => i.id !== id); saveToLocal('trialRecords', n); return n; });
+      } else {
           supabase.from('trial_records').delete().eq('id', id).then(({error}) => {
               if(error) handleSupabaseError(error, 'delete record');
               else setTrialRecords(prev => prev.filter(i => i.id !== id));
@@ -463,21 +462,33 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const addLog = (l: FieldLog) => {
-      if(isEmergencyMode) setLogs(prev => [l, ...prev]);
-      else supabase.from('field_logs').insert([l]).then(({error}) => !error && setLogs(prev => [l, ...prev]));
+      if(isEmergencyMode) {
+          setLogs(prev => { const n = [l, ...prev]; saveToLocal('logs', n); return n; });
+      } else {
+          supabase.from('field_logs').insert([l]).then(({error}) => !error && setLogs(prev => [l, ...prev]));
+      }
   };
 
   const addTask = (t: Task) => {
-      if(isEmergencyMode) setTasks(prev => [t, ...prev]);
-      else supabase.from('tasks').insert([t]).then(({error}) => !error && setTasks(prev => [t, ...prev]));
+      if(isEmergencyMode) {
+          setTasks(prev => { const n = [t, ...prev]; saveToLocal('tasks', n); return n; });
+      } else {
+          supabase.from('tasks').insert([t]).then(({error}) => !error && setTasks(prev => [t, ...prev]));
+      }
   };
   const updateTask = (t: Task) => {
-      if(isEmergencyMode) setTasks(prev => prev.map(i => i.id === t.id ? t : i));
-      else supabase.from('tasks').update(t).eq('id', t.id).then(({error}) => !error && setTasks(prev => prev.map(i => i.id === t.id ? t : i)));
+      if(isEmergencyMode) {
+          setTasks(prev => { const n = prev.map(i => i.id === t.id ? t : i); saveToLocal('tasks', n); return n; });
+      } else {
+          supabase.from('tasks').update(t).eq('id', t.id).then(({error}) => !error && setTasks(prev => prev.map(i => i.id === t.id ? t : i)));
+      }
   };
   const deleteTask = (id: string) => {
-      if(isEmergencyMode) setTasks(prev => prev.filter(i => i.id !== id));
-      else supabase.from('tasks').delete().eq('id', id).then(({error}) => !error && setTasks(prev => prev.filter(i => i.id !== id)));
+      if(isEmergencyMode) {
+          setTasks(prev => { const n = prev.filter(i => i.id !== id); saveToLocal('tasks', n); return n; });
+      } else {
+          supabase.from('tasks').delete().eq('id', id).then(({error}) => !error && setTasks(prev => prev.filter(i => i.id !== id)));
+      }
   };
 
   const getPlotHistory = (plotId: string) => { return trialRecords.filter(r => r.plotId === plotId).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); };

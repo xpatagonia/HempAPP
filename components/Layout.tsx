@@ -95,18 +95,18 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           </div>
       )}
 
-      {/* EMERGENCY MODE WARNING (Huge because this confuses users) */}
+      {/* EMERGENCY MODE WARNING (Visible en todas las pantallas) */}
       {isEmergencyMode && (
           <div className="fixed top-0 left-0 w-full z-[100] bg-amber-500 text-white px-4 py-3 flex justify-between items-center shadow-lg">
               <div className="flex items-center">
                   <CloudOff className="mr-3" size={24} />
                   <div>
                       <p className="font-black text-sm uppercase">Modo Local (Sin Conexión)</p>
-                      <p className="text-xs text-amber-100 hidden md:block">Los datos que guardes ahora SOLO existen en este navegador y no se verán en otros dispositivos.</p>
+                      <p className="text-xs text-amber-100 hidden md:block">Los datos actuales NO se guardan en la nube. Conecta la BD en Configuración.</p>
                   </div>
               </div>
               <Link to="/settings" className="bg-white text-amber-600 text-xs px-4 py-2 rounded-lg font-bold hover:bg-gray-50 shadow-sm border border-amber-200">
-                  CONECTAR BASE DE DATOS
+                  CONECTAR AHORA
               </Link>
           </div>
       )}
