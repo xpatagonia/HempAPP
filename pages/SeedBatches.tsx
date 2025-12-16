@@ -2,12 +2,12 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { SeedBatch, SeedMovement, Supplier, StoragePoint } from '../types';
-import { Plus, ScanBarcode, Edit2, Trash2, Tag, Calendar, Package, Truck, Printer, MapPin, FileText, ArrowRight, Building, FileDigit, Globe, Clock, Box, ShieldCheck, Map, UserCheck, Briefcase, Wand2, AlertCircle, DollarSign, ShoppingCart, Archive, ChevronRight, Warehouse, Route as RouteIcon, ExternalLink } from 'lucide-react';
+import { Plus, ScanBarcode, Edit2, Trash2, Tag, Calendar, Package, Truck, Printer, MapPin, FileText, ArrowRight, Building, FileDigit, Globe, Clock, Box, ShieldCheck, Map, UserCheck, Briefcase, Wand2, AlertCircle, DollarSign, ShoppingCart, Archive, ChevronRight, Warehouse, Route as RouteIcon, ExternalLink, Save, X } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 export default function SeedBatches() {
-  const { seedBatches, seedMovements, addSeedBatch, updateSeedBatch, deleteSeedBatch, addSeedMovement, varieties, locations, currentUser, suppliers, clients, storagePoints } = useAppContext();
+  const { seedBatches, seedMovements, addSeedBatch, updateSeedBatch, deleteSeedBatch, addSeedMovement, varieties, locations, currentUser, suppliers, clients, storagePoints, addStoragePoint } = useAppContext();
   
   const [activeTab, setActiveTab] = useState<'inventory' | 'logistics'>('inventory');
   
@@ -34,6 +34,10 @@ export default function SeedBatches() {
       dispatchTime: new Date().toTimeString().substring(0, 5),
       transportGuideNumber: '', transportType: 'Propio', driverName: '', vehiclePlate: '', vehicleModel: '', transportCompany: '', routeItinerary: '', status: 'En Tránsito'
   });
+
+  // -- QUICK STORAGE STATE --
+  const [isQuickStorageOpen, setIsQuickStorageOpen] = useState(false);
+  const [quickStorageForm, setQuickStorageForm] = useState({ name: '', city: '', type: 'Propio' });
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
 
@@ -106,6 +110,27 @@ export default function SeedBatches() {
   };
   
   const handleDeleteBatch = (id: string) => { if(window.confirm("¿Eliminar este registro de compra/stock?")) deleteSeedBatch(id); };
+
+  // --- QUICK STORAGE HANDLER ---
+  const handleQuickStorageSubmit = (e: React.FormEvent) => {
+      e.preventDefault();
+      if(!quickStorageForm.name) return;
+      
+      const newId = Date.now().toString();
+      addStoragePoint({
+          id: newId,
+          name: quickStorageForm.name,
+          city: quickStorageForm.city,
+          type: quickStorageForm.type as any,
+          address: 'Dirección pendiente',
+          capacityKg: 0,
+      });
+
+      // Auto-select the new storage point
+      setBatchFormData(prev => ({ ...prev, storagePointId: newId }));
+      setIsQuickStorageOpen(false);
+      setQuickStorageForm({ name: '', city: '', type: 'Propio' });
+  };
 
   // --- MOVEMENT HANDLERS & ROUTE PLANNER ---
   const filteredTargetLocations = locations.filter(l => {
@@ -342,9 +367,18 @@ export default function SeedBatches() {
             <form onSubmit={handleBatchSubmit} className="space-y-6">
                 {/* SECTION: STORAGE POINT SELECTION */}
                 <div className="bg-purple-50 p-4 rounded-lg border border-purple-100 mb-4">
-                    <h3 className="text-xs font-bold text-purple-800 uppercase mb-3 flex items-center">
-                        <Warehouse size={12} className="mr-1"/> Destino de Almacenamiento
-                    </h3>
+                    <div className="flex justify-between items-center mb-3">
+                        <h3 className="text-xs font-bold text-purple-800 uppercase flex items-center">
+                            <Warehouse size={12} className="mr-1"/> Destino de Almacenamiento
+                        </h3>
+                        <button 
+                            type="button" 
+                            onClick={() => setIsQuickStorageOpen(true)}
+                            className="text-xs bg-white text-purple-700 px-2 py-1 rounded border border-purple-200 font-bold hover:bg-purple-100 flex items-center shadow-sm"
+                        >
+                            <Plus size={12} className="mr-1"/> Nuevo Depósito
+                        </button>
+                    </div>
                     <select required className={inputClass} value={batchFormData.storagePointId} onChange={e => setBatchFormData({...batchFormData, storagePointId: e.target.value})}>
                         <option value="">Seleccionar Depósito...</option>
                         {storagePoints.map(sp => (
@@ -440,6 +474,39 @@ export default function SeedBatches() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* --- QUICK CREATE STORAGE MODAL --- */}
+      {isQuickStorageOpen && (
+          <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
+              <div className="bg-white rounded-xl max-w-sm w-full p-5 shadow-2xl animate-in zoom-in-95">
+                  <div className="flex justify-between items-center mb-4">
+                      <h3 className="font-bold text-gray-800 flex items-center"><Warehouse size={18} className="mr-2 text-purple-600"/> Nuevo Depósito</h3>
+                      <button onClick={() => setIsQuickStorageOpen(false)} className="text-gray-400 hover:text-gray-600"><X size={20}/></button>
+                  </div>
+                  <form onSubmit={handleQuickStorageSubmit} className="space-y-3">
+                      <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nombre</label>
+                          <input autoFocus type="text" className={inputClass} placeholder="Ej: Galpón Central" value={quickStorageForm.name} onChange={e => setQuickStorageForm({...quickStorageForm, name: e.target.value})} />
+                      </div>
+                      <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Ciudad / Localidad</label>
+                          <input type="text" className={inputClass} placeholder="Ej: Pergamino" value={quickStorageForm.city} onChange={e => setQuickStorageForm({...quickStorageForm, city: e.target.value})} />
+                      </div>
+                      <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Tipo</label>
+                          <select className={inputClass} value={quickStorageForm.type} onChange={e => setQuickStorageForm({...quickStorageForm, type: e.target.value})}>
+                              <option value="Propio">Propio</option>
+                              <option value="Tercerizado">Tercerizado</option>
+                              <option value="Transitorio">Transitorio</option>
+                          </select>
+                      </div>
+                      <button type="submit" className="w-full bg-purple-600 text-white py-2 rounded-lg font-bold hover:bg-purple-700 mt-2 flex justify-center items-center shadow-sm">
+                          <Save size={16} className="mr-2"/> Guardar y Seleccionar
+                      </button>
+                  </form>
+              </div>
+          </div>
       )}
 
       {/* MOVEMENT MODAL: LOGISTICS + ROUTE PLANNER */}
