@@ -59,6 +59,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const { currentUser, logout, isEmergencyMode, dbNeedsMigration, theme, toggleTheme, notifications } = useAppContext();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const location = useLocation();
 
   const toggleMobile = () => setIsMobileOpen(!isMobileOpen);
 
@@ -78,12 +79,13 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const isSuperAdmin = currentUser.role === 'super_admin';
   const isClient = currentUser.role === 'client';
   const unreadCount = notifications.length;
+  const isLoginPage = location.pathname === '/login';
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-dark-bg flex transition-colors duration-300">
       
       {/* DB MIGRATION WARNING */}
-      {dbNeedsMigration && !isEmergencyMode && (
+      {dbNeedsMigration && !isEmergencyMode && !isLoginPage && (
           <div className="fixed top-0 left-0 w-full z-[100] bg-red-600 text-white px-4 py-2 flex justify-between items-center shadow-md animate-pulse">
               <div className="flex items-center text-xs md:text-sm font-bold">
                   <AlertTriangle className="mr-2" size={18}/>
@@ -95,8 +97,8 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           </div>
       )}
 
-      {/* EMERGENCY MODE WARNING (Visible en todas las pantallas) */}
-      {isEmergencyMode && (
+      {/* EMERGENCY MODE WARNING (Hidden on Login) */}
+      {isEmergencyMode && !isLoginPage && (
           <div className="fixed top-0 left-0 w-full z-[100] bg-amber-500 text-white px-4 py-3 flex justify-between items-center shadow-lg">
               <div className="flex items-center">
                   <CloudOff className="mr-3" size={24} />
@@ -112,7 +114,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       )}
 
       {/* Mobile Header */}
-      <div className={`lg:hidden fixed top-0 w-full bg-slate-900 text-white z-50 border-b border-slate-800 px-4 py-3 flex justify-between items-center shadow-md ${dbNeedsMigration || isEmergencyMode ? 'mt-14' : ''}`}>
+      <div className={`lg:hidden fixed top-0 w-full bg-slate-900 text-white z-50 border-b border-slate-800 px-4 py-3 flex justify-between items-center shadow-md ${!isLoginPage && (dbNeedsMigration || isEmergencyMode) ? 'mt-14' : ''}`}>
         <div className="flex items-center space-x-2">
           <Leaf className="w-6 h-6 text-hemp-500" />
           <span className="font-bold text-lg">HempC v2.7</span>
@@ -143,7 +145,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         fixed lg:static inset-y-0 left-0 z-40 w-64 bg-white dark:bg-dark-card border-r dark:border-dark-border transform transition-transform duration-200 ease-in-out flex flex-col
         ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}
         lg:translate-x-0
-        ${dbNeedsMigration || isEmergencyMode ? 'mt-14 lg:mt-14' : ''}
+        ${!isLoginPage && (dbNeedsMigration || isEmergencyMode) ? 'mt-14 lg:mt-14' : ''}
       `}>
         <div className="h-16 flex items-center px-6 border-b dark:border-dark-border justify-between bg-slate-900 text-white lg:bg-white lg:text-gray-800 lg:dark:bg-dark-card lg:dark:text-white">
           <div className="flex items-center">
@@ -227,7 +229,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       </aside>
 
       {/* Main Content */}
-      <main className={`flex-1 lg:ml-0 pt-16 lg:pt-0 overflow-y-auto h-screen bg-gray-50 dark:bg-dark-bg transition-colors duration-300 ${dbNeedsMigration || isEmergencyMode ? 'mt-14 lg:mt-14' : ''}`}>
+      <main className={`flex-1 lg:ml-0 pt-16 lg:pt-0 overflow-y-auto h-screen bg-gray-50 dark:bg-dark-bg transition-colors duration-300 ${!isLoginPage && (dbNeedsMigration || isEmergencyMode) ? 'mt-14 lg:mt-14' : ''}`}>
         <div className="container mx-auto p-4 lg:p-8 max-w-7xl">
           {children}
         </div>

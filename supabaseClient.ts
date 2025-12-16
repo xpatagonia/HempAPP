@@ -50,11 +50,11 @@ export const checkConnection = async () => {
     if (isPlaceholder(SUPABASE_URL) || SUPABASE_URL.includes('placeholder')) return false;
     
     try {
-        // Intentamos una lectura ligera (HEAD request) a la tabla users
-        const { error } = await supabase.from('users').select('count', { count: 'exact', head: true });
+        // Intentamos una lectura simple (Limit 1) en lugar de HEAD para evitar problemas de CORS/Browsers
+        const { data, error } = await supabase.from('users').select('id').limit(1);
         
         // Si no hay error, o el error es de tabla/permisos (significa que conectó), devolvemos true
-        // PGRST116: Returns when data is empty but connection worked
+        // PGRST116: Returns when data is empty but connection worked (Single)
         // 42P01: Relation does not exist (Conectó pero falta tabla)
         // 401: Unauthorized (Conectó pero RLS bloquea)
         if (!error) return true;
@@ -63,6 +63,7 @@ export const checkConnection = async () => {
         console.warn("Fallo de conexión Supabase:", error.message);
         return false;
     } catch (e) {
+        console.error("Error crítico conexión:", e);
         return false;
     }
 };
