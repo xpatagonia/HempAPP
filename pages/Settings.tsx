@@ -190,10 +190,10 @@ export default function Settings() {
   };
 
   const SQL_SCRIPT = `
--- MIGRACIÓN v2.7: AGREGAR POLÍGONO Y PERÍMETRO
+-- MIGRACIÓN v2.7: AGREGAR POLÍGONO Y PERÍMETRO A LOCACIONES Y LOTES
 ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS polygon JSONB;
 ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS polygon JSONB;
-ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS perimeter NUMERIC; -- NUEVO: Fix para error de guardado
+ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS perimeter NUMERIC; 
 
 -- TABLA RECURSOS (PLAN AGRÍCOLA)
 CREATE TABLE IF NOT EXISTS public.resources (
@@ -215,6 +215,10 @@ ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS "resourceCost" NUMERIC;
 
 -- ACTUALIZAR SEED_MOVEMENTS CON CLIENTE
 ALTER TABLE public.seed_movements ADD COLUMN IF NOT EXISTS "clientId" TEXT;
+
+-- IMPORTANTE: FORZAR ACTUALIZACIÓN DE CACHÉ DE API
+-- Esto soluciona el error "Could not find column in schema cache"
+NOTIFY pgrst, 'reload schema';
   `;
 
   return (
