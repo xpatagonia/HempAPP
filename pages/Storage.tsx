@@ -24,7 +24,7 @@ export default function Storage() {
     e.preventDefault();
     if (!formData.name) return;
     
-    // Default capacityKg to 0 since we removed it from UI but it might be in type
+    // Ensure capacityKg is ignored/zeroed out internally as requested
     const payload = { ...formData, capacityKg: 0 } as StoragePoint;
 
     if (editingId) {
@@ -126,6 +126,7 @@ export default function Storage() {
                           </p>
 
                           <div className="mt-auto space-y-2 text-sm">
+                              {/* Capacidad Removed from UI */}
                               <div className="flex justify-between border-b border-gray-100 pb-1">
                                   <span className="text-gray-500 flex items-center"><Maximize size={14} className="mr-1"/> Superficie</span>
                                   <span className="font-bold text-gray-800">{sp.surfaceM2 ? `${sp.surfaceM2} m²` : '-'}</span>
@@ -175,6 +176,7 @@ export default function Storage() {
                                 <option value="Transitorio">Transitorio (Logística)</option>
                             </select>
                         </div>
+                        {/* REPLACED Capacity with Surface Area */}
                         <div>
                             <label className="block text-sm font-medium mb-1">Superficie (m²)</label>
                             <input type="number" className={inputClass} value={formData.surfaceM2} onChange={e => setFormData({...formData, surfaceM2: Number(e.target.value)})}/>

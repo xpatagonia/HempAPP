@@ -190,7 +190,8 @@ export default function Settings() {
   };
 
   const SQL_SCRIPT = `
--- FIX: CREAR TABLA SI NO EXISTE PARA EVITAR ERROR DE SINCRONIZACIÓN
+-- MIGRACIÓN DE REPARACIÓN (V2.7.2)
+-- 1. Crear Tabla si no existe (con todas las columnas correctas)
 CREATE TABLE IF NOT EXISTS public.storage_points (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -207,19 +208,33 @@ CREATE TABLE IF NOT EXISTS public.storage_points (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
--- HABILITAR SEGURIDAD (RLS)
-ALTER TABLE public.storage_points ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Enable all access for all users" ON public.storage_points FOR ALL USING (true);
-
--- MIGRACIÓN v2.7.1: SUPERFICIE ALMACENAMIENTO (Si la tabla ya existía sin esta columna)
+-- 2. Asegurar que existe la columna surfaceM2 (si la tabla ya existía)
 ALTER TABLE public.storage_points ADD COLUMN IF NOT EXISTS "surfaceM2" NUMERIC;
 
--- MIGRACIÓN v2.7: AGREGAR POLÍGONO Y PERÍMETRO A LOCACIONES Y LOTES
+-- 3. Configurar Seguridad (RLS)
+ALTER TABLE public.storage_points ENABLE ROW LEVEL SECURITY;
+
+-- 4. Recrear Políticas de Acceso (Evita conflictos si ya existen)
+DROP POLICY IF EXISTS "Enable all access for all users" ON public.storage_points;
+CREATE POLICY "Enable all access for all users" ON public.storage_points FOR ALL USING (true) WITH CHECK (true);
+
+-- 5. OTORGAR PERMISOS EXPLÍCITOS (SOLUCIÓN AL ERROR DE CACHÉ)
+-- Esto permite que PostgREST vea la tabla inmediatamente.
+GRANT ALL ON TABLE public.storage_points TO postgres;
+GRANT ALL ON TABLE public.storage_points TO service_role;
+GRANT ALL ON TABLE public.storage_points TO authenticated;
+GRANT ALL ON TABLE public.storage_points TO anon;
+
+-- 6. OTROS CAMBIOS PENDIENTES (MIGRACIÓN GENERAL)
 ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS polygon JSONB;
 ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS polygon JSONB;
 ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS perimeter NUMERIC; 
+ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS "resourceId" TEXT;
+ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS "resourceQuantity" NUMERIC;
+ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS "resourceCost" NUMERIC;
+ALTER TABLE public.seed_movements ADD COLUMN IF NOT EXISTS "clientId" TEXT;
 
--- TABLA RECURSOS (PLAN AGRÍCOLA)
+-- 7. TABLA DE RECURSOS
 CREATE TABLE IF NOT EXISTS public.resources (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -231,16 +246,11 @@ CREATE TABLE IF NOT EXISTS public.resources (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 ALTER TABLE public.resources DISABLE ROW LEVEL SECURITY;
+GRANT ALL ON TABLE public.resources TO authenticated;
+GRANT ALL ON TABLE public.resources TO anon;
 
--- ACTUALIZAR TASKS CON RECURSOS
-ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS "resourceId" TEXT;
-ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS "resourceQuantity" NUMERIC;
-ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS "resourceCost" NUMERIC;
-
--- ACTUALIZAR SEED_MOVEMENTS CON CLIENTE
-ALTER TABLE public.seed_movements ADD COLUMN IF NOT EXISTS "clientId" TEXT;
-
--- IMPORTANTE: FORZAR ACTUALIZACIÓN DE CACHÉ DE API
+-- 8. IMPORTANTE: RECARGAR EL CACHÉ DE ESQUEMA
+-- Este comando le dice a la API que vuelva a leer la estructura de la base de datos.
 NOTIFY pgrst, 'reload schema';
   `;
 
@@ -337,12 +347,15 @@ NOTIFY pgrst, 'reload schema';
             {/* SQL Box */}
             <div className="bg-slate-50 rounded-xl border border-slate-200 p-6 mt-8">
                 <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-sm font-bold text-slate-800">Inicialización SQL</h2>
-                    <button onClick={copySQL} className="text-xs bg-white border px-3 py-1 rounded shadow-sm font-bold">Copiar SQL</button>
+                    <h2 className="text-sm font-bold text-slate-800">Script de Reparación SQL</h2>
+                    <button onClick={copySQL} className="text-xs bg-white border px-3 py-1 rounded shadow-sm font-bold hover:bg-slate-50">Copiar SQL</button>
                 </div>
-                <div className="bg-slate-900 p-4 rounded-lg text-xs font-mono text-blue-300 overflow-x-auto h-32 custom-scrollbar">
-                    {SQL_SCRIPT}
+                <div className="bg-slate-900 p-4 rounded-lg text-xs font-mono text-blue-300 overflow-x-auto h-48 custom-scrollbar">
+                    <pre>{SQL_SCRIPT}</pre>
                 </div>
+                <p className="text-xs text-slate-500 mt-2">
+                    Instrucciones: Copia este script, ve al <strong>Editor SQL de Supabase</strong> y ejecútalo para solucionar el error de sincronización.
+                </p>
             </div>
         </div>
       )}

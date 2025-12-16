@@ -124,7 +124,7 @@ export default function SeedBatches() {
           type: quickStorageForm.type as any,
           surfaceM2: Number(quickStorageForm.surfaceM2),
           address: 'Dirección pendiente',
-          capacityKg: 0, // Default to 0 as it is hidden from UI
+          capacityKg: 0, // Hidden from UI but required by type
       });
 
       // Auto-select the new storage point
