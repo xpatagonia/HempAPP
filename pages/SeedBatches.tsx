@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { SeedBatch, SeedMovement, Supplier, StoragePoint } from '../types';
@@ -16,7 +17,8 @@ export default function SeedBatches() {
   
   const [batchFormData, setBatchFormData] = useState<Partial<SeedBatch>>({
     varietyId: '', supplierId: '', supplierName: '', supplierLegalName: '', supplierCuit: '', supplierRenspa: '', supplierAddress: '', originCountry: '',
-    batchCode: '', gs1Code: '', certificationNumber: '', 
+    batchCode: '', labelSerialNumber: '', category: 'C1', analysisDate: '', purity: 99, germination: 90,
+    gs1Code: '', certificationNumber: '', 
     purchaseOrder: '', purchaseDate: new Date().toISOString().split('T')[0], pricePerKg: 0,
     initialQuantity: 0, remainingQuantity: 0, storageConditions: '', storagePointId: '', logisticsResponsible: '', notes: '', isActive: true
   });
@@ -86,7 +88,8 @@ export default function SeedBatches() {
   const resetBatchForm = () => {
     setBatchFormData({ 
         varietyId: '', supplierId: '', supplierName: '', supplierLegalName: '', supplierCuit: '', supplierAddress: '', originCountry: '',
-        batchCode: '', purchaseOrder: '', purchaseDate: new Date().toISOString().split('T')[0],
+        batchCode: '', labelSerialNumber: '', category: 'C1', analysisDate: '',
+        purchaseOrder: '', purchaseDate: new Date().toISOString().split('T')[0],
         initialQuantity: 0, remainingQuantity: 0, storagePointId: '', isActive: true 
     });
     setEditingBatchId(null);
@@ -211,7 +214,7 @@ export default function SeedBatches() {
                           <th className="px-6 py-3 text-left font-medium text-gray-500 uppercase">Orden Compra</th>
                           <th className="px-6 py-3 text-left font-medium text-gray-500 uppercase">Fecha</th>
                           <th className="px-6 py-3 text-left font-medium text-gray-500 uppercase">Variedad (Lote)</th>
-                          <th className="px-6 py-3 text-left font-medium text-gray-500 uppercase">Proveedor</th>
+                          <th className="px-6 py-3 text-left font-medium text-gray-500 uppercase">Etiqueta Oficial</th>
                           <th className="px-6 py-3 text-center font-medium text-gray-500 uppercase">Ubicación</th>
                           <th className="px-6 py-3 text-center font-medium text-gray-500 uppercase">Stock Disp.</th>
                           <th className="px-6 py-3 text-right font-medium text-gray-500 uppercase">Acciones</th>
@@ -236,7 +239,14 @@ export default function SeedBatches() {
                                       <div className="font-bold text-hemp-700">{variety?.name || 'Desc.'}</div>
                                       <div className="text-xs text-gray-500 font-mono">{batch.batchCode}</div>
                                   </td>
-                                  <td className="px-6 py-4 text-gray-600">{batch.supplierName}</td>
+                                  <td className="px-6 py-4">
+                                      <div className="text-xs font-mono text-blue-700 bg-blue-50 px-2 py-1 rounded w-fit border border-blue-100">
+                                          {batch.labelSerialNumber || 'N/A'}
+                                      </div>
+                                      <div className="text-[10px] text-gray-400 mt-1">
+                                          CAT: {batch.category || '-'}
+                                      </div>
+                                  </td>
                                   <td className="px-6 py-4 text-center">
                                       {sp ? (
                                           <div className="text-xs bg-purple-50 text-purple-700 px-2 py-1 rounded border border-purple-100 font-bold inline-block" title={sp.address}>
@@ -371,7 +381,7 @@ export default function SeedBatches() {
 
                 <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
                     <h3 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center">
-                        <Tag size={12} className="mr-1"/> 2. Detalle del Producto
+                        <Tag size={12} className="mr-1"/> 2. Datos de la Etiqueta (Trazabilidad)
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
@@ -388,15 +398,35 @@ export default function SeedBatches() {
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Cantidad Comprada (kg) *</label>
-                            <input required type="number" step="0.1" className={inputClass} value={batchFormData.initialQuantity} onChange={e => setBatchFormData({...batchFormData, initialQuantity: Number(e.target.value), remainingQuantity: Number(e.target.value)})} />
-                        </div>
-                        <div className="col-span-2">
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Lote Proveedor / Etiqueta *</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Lot N° (Ref. Lote) *</label>
                             <div className="flex gap-2">
-                                <input required type="text" className={inputClass} value={batchFormData.batchCode} onChange={e => setBatchFormData({...batchFormData, batchCode: e.target.value})} placeholder="Lote Origen..." />
+                                <input required type="text" className={inputClass} value={batchFormData.batchCode} onChange={e => setBatchFormData({...batchFormData, batchCode: e.target.value})} placeholder="Ej: F 0150 T..." />
                                 <button type="button" onClick={generateBatchCode} className="p-2 bg-gray-100 rounded hover:bg-gray-200" title="Generar ID Interno"><Wand2 size={16}/></button>
                             </div>
+                        </div>
+                        {/* ETIQUETA AZUL FIELDS */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
+                                <ScanBarcode size={14} className="mr-1 text-blue-600"/> N° Serie Etiqueta (Vertical)
+                            </label>
+                            <input type="text" className={inputClass} value={batchFormData.labelSerialNumber || ''} onChange={e => setBatchFormData({...batchFormData, labelSerialNumber: e.target.value})} placeholder="Ej: 999999 WW" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Categoría Semilla</label>
+                            <select className={inputClass} value={batchFormData.category} onChange={e => setBatchFormData({...batchFormData, category: e.target.value as any})}>
+                                <option value="C1">Certificada 1 (C1) - Etiqueta Azul</option>
+                                <option value="C2">Certificada 2 (C2) - Etiqueta Roja</option>
+                                <option value="Base">Base - Etiqueta Blanca</option>
+                                <option value="Original">Original/Breeder</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de Análisis / Cosecha</label>
+                            <input type="text" className={inputClass} value={batchFormData.analysisDate || ''} onChange={e => setBatchFormData({...batchFormData, analysisDate: e.target.value})} placeholder="Ej: 04/2024" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Peso/Cantidad (kg) *</label>
+                            <input required type="number" step="0.1" className={inputClass} value={batchFormData.initialQuantity} onChange={e => setBatchFormData({...batchFormData, initialQuantity: Number(e.target.value), remainingQuantity: Number(e.target.value)})} />
                         </div>
                     </div>
                 </div>

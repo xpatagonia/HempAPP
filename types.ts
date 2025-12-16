@@ -122,13 +122,20 @@ export interface SeedBatch {
   supplierAddress?: string;   // Dirección Fiscal / Origen
   originCountry?: string;     // País de Origen de la Semilla (Nuevo)
   
+  // Datos de Etiqueta (SOC France / INASE)
+  batchCode: string;          // N° de Lote / Lot N° (Ref)
+  labelSerialNumber?: string; // N° de Serie Etiqueta (Vertical único) - NUEVO
+  category?: 'Original' | 'Base' | 'C1' | 'C2' | 'Estándar'; // Categoría Certificación - NUEVO
+  analysisDate?: string;      // Fecha de Análisis/Muestreo (Mes/Año) - NUEVO
+  purity?: number;            // Pureza Física % - NUEVO
+  germination?: number;       // Poder Germinativo % - NUEVO
+
   // Datos de Compra (Nuevo)
   purchaseOrder?: string;   // N° Orden de Compra / Factura
   purchaseDate: string;     // Fecha de adquisición
   pricePerKg?: number;      // Precio por Kg (Opcional)
 
   // Identificación Técnica
-  batchCode: string;        // Número de etiqueta oficial / Lote
   gs1Code?: string;         // Código de Barras GS1 / GTIN (Nuevo)
   certificationNumber?: string; // N° Certificado Fiscalización (INASE/SENASA)
   

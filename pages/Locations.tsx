@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Location, SoilType, RoleType, Plot } from '../types';
-import { Plus, MapPin, User, Globe, Edit2, Trash2, Keyboard, List, Briefcase, Building, Landmark, GraduationCap, Users, Droplets, Ruler, Navigation, ChevronDown, ChevronUp, Sprout, ArrowRight, LayoutDashboard, Search, Filter, ExternalLink, FileUp, X } from 'lucide-react';
+import { Plus, MapPin, User, Globe, Edit2, Trash2, Keyboard, List, Briefcase, Building, Landmark, GraduationCap, Users, Droplets, Ruler, Navigation, ChevronDown, ChevronUp, Sprout, ArrowRight, LayoutDashboard, Search, Filter, ExternalLink, FileUp, X, ScanBarcode } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import WeatherWidget from '../components/WeatherWidget';
 import MapEditor from '../components/MapEditor';
@@ -34,7 +34,7 @@ const ARG_GEO: Record<string, string[]> = {
     "Tucumán": ["San Miguel de Tucumán", "Tafí Viejo", "Concepción", "Yerba Buena", "Banda del Río Salí", "Aguilares", "Monteros", "Famaillá"]
 };
 
-// Helper: Robust KML Parser (Duplicated to avoid circular deps for now)
+// Helper: Robust KML Parser
 const parseKML = (kmlText: string): { lat: number, lng: number }[] | null => {
     try {
         const parser = new DOMParser();
@@ -123,45 +123,38 @@ export default function Locations() {
   });
 
   const [plotFormData, setPlotFormData] = useState<Partial<Plot>>({
-      name: '', type: 'Ensayo', varietyId: '', projectId: '', sowingDate: new Date().toISOString().split('T')[0],
+      name: '', type: 'Ensayo', varietyId: '', projectId: '', seedBatchId: '', sowingDate: new Date().toISOString().split('T')[0],
       block: '1', replicate: 1, surfaceArea: 0, surfaceUnit: 'ha', density: 0, status: 'Activa'
   });
+
+  // Filter seed batches based on selected variety in Plot Modal
+  const availableBatches = seedBatches.filter(b => b.varietyId === plotFormData.varietyId && b.remainingQuantity > 0);
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
   const isClient = currentUser?.role === 'client';
   const canManage = isAdmin || isClient;
 
-  // Filter Locations
+  // Filter Locations Logic ...
   const visibleLocations = locations.filter(l => {
       let matches = true;
-      
-      // Permission check
       if (isClient && currentUser.clientId) {
           matches = (l.clientId === currentUser.clientId || l.responsibleIds?.includes(currentUser.id));
       } else if (!isAdmin) {
           matches = l.responsibleIds?.includes(currentUser?.id || '');
       }
-
-      // Search Filter
       if (searchTerm) {
           const lowerTerm = searchTerm.toLowerCase();
           matches = matches && (l.name.toLowerCase().includes(lowerTerm) || l.city?.toLowerCase().includes(lowerTerm));
       }
-
-      // Province Filter
       if (filterProvince) {
           matches = matches && l.province === filterProvince;
       }
-
       return matches;
   });
 
-  // Calculate Dashboard Stats
   const stats = useMemo(() => {
       const totalLocs = visibleLocations.length;
       const totalHa = visibleLocations.reduce((sum, l) => sum + (l.capacityHa || 0), 0);
-      
-      // Calculate occupied area
       const activePlots = plots.filter(p => p.status === 'Activa' && visibleLocations.some(l => l.id === p.locationId));
       const occupiedHa = activePlots.reduce((sum, p) => {
           let area = p.surfaceArea || 0;
@@ -169,17 +162,12 @@ export default function Locations() {
           if (p.surfaceUnit === 'ac') area = area * 0.404686;
           return sum + area;
       }, 0);
-
       const occupancyRate = totalHa > 0 ? (occupiedHa / totalHa) * 100 : 0;
-
       return { totalLocs, totalHa, occupiedHa, occupancyRate, activePlotsCount: activePlots.length };
   }, [visibleLocations, plots]);
 
-  const toggleExpand = (id: string) => {
-      setExpandedLocations(prev => ({...prev, [id]: !prev[id]}));
-  };
+  const toggleExpand = (id: string) => { setExpandedLocations(prev => ({...prev, [id]: !prev[id]})); };
 
-  // --- LOCATION HANDLERS ---
   const handleCoordinateBlur = (field: 'lat' | 'lng') => {
       if (field === 'lat' && formData.lat) {
           const parsed = parseCoordinate(formData.lat);
@@ -194,14 +182,11 @@ export default function Locations() {
   const handleKMLUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
-
       const reader = new FileReader();
       reader.onload = (event) => {
           const text = event.target?.result as string;
           const poly = parseKML(text);
-          
           if (poly && poly.length > 2) {
-              // Same logic as MapEditor to calculate area and centroid
               const R = 6371000;
               const toRad = (x: number) => x * Math.PI / 180;
               let area = 0;
@@ -209,7 +194,6 @@ export default function Locations() {
               const lngs = poly.map(p => p.lng);
               const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
               const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
-
               for (let i = 0; i < poly.length; i++) {
                   const j = (i + 1) % poly.length;
                   const p1 = poly[i];
@@ -217,14 +201,7 @@ export default function Locations() {
                   area += (toRad(p2.lng) - toRad(p1.lng)) * (2 + Math.sin(toRad(p1.lat)) + Math.sin(toRad(p2.lat)));
               }
               area = Math.abs(area * R * R / 2) / 10000;
-
-              setFormData(prev => ({
-                  ...prev,
-                  polygon: poly,
-                  capacityHa: Number(area.toFixed(2)),
-                  lat: centerLat.toFixed(6),
-                  lng: centerLng.toFixed(6)
-              }));
+              setFormData(prev => ({ ...prev, polygon: poly, capacityHa: Number(area.toFixed(2)), lat: centerLat.toFixed(6), lng: centerLng.toFixed(6) }));
               alert("✅ KML Importado: Perímetro y Superficie calculados automáticamente.");
           } else {
               alert("⚠️ No se encontró un polígono válido en el KML.");
@@ -235,27 +212,16 @@ export default function Locations() {
   };
 
   const handlePolygonChange = (newPoly: { lat: number, lng: number }[], areaHa: number, center: { lat: number, lng: number }) => {
-      setFormData(prev => ({
-          ...prev,
-          polygon: newPoly,
-          capacityHa: areaHa > 0 ? Number(areaHa.toFixed(2)) : prev.capacityHa,
-          lat: center.lat.toFixed(6),
-          lng: center.lng.toFixed(6)
-      }));
+      setFormData(prev => ({ ...prev, polygon: newPoly, capacityHa: areaHa > 0 ? Number(areaHa.toFixed(2)) : prev.capacityHa, lat: center.lat.toFixed(6), lng: center.lng.toFixed(6) }));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name) return;
-    
     const finalLat = parseFloat(parseCoordinate(formData.lat));
     const finalLng = parseFloat(parseCoordinate(formData.lng));
+    const coordinates = (!isNaN(finalLat) && !isNaN(finalLng)) ? { lat: finalLat, lng: finalLng } : undefined;
 
-    const coordinates = (!isNaN(finalLat) && !isNaN(finalLng)) 
-      ? { lat: finalLat, lng: finalLng }
-      : undefined;
-
-    // Resolve client info
     let ownerName = formData.ownerName;
     let ownerType = formData.ownerType;
     let ownerContact = formData.ownerContact;
@@ -287,24 +253,8 @@ export default function Locations() {
     }
 
     const payload: any = {
-      name: formData.name!,
-      province: formData.province || '',
-      city: formData.city || '',
-      address: formData.address || '',
-      soilType: formData.soilType as SoilType,
-      climate: formData.climate || '',
-      responsiblePerson: formData.responsiblePerson || '',
-      coordinates,
-      polygon: formData.polygon, // SAVE POLYGON
-      clientId: clientId || null,
-      ownerName: ownerName || '',
-      ownerLegalName: formData.ownerLegalName || '',
-      ownerCuit: ownerCuit || '',
-      ownerContact: ownerContact || '',
-      ownerType: ownerType as RoleType,
-      capacityHa: Number(formData.capacityHa),
-      irrigationSystem: formData.irrigationSystem || '',
-      responsibleIds: finalResponsibles
+      name: formData.name!, province: formData.province || '', city: formData.city || '', address: formData.address || '', soilType: formData.soilType as SoilType, climate: formData.climate || '', responsiblePerson: formData.responsiblePerson || '',
+      coordinates, polygon: formData.polygon, clientId: clientId || null, ownerName: ownerName || '', ownerLegalName: formData.ownerLegalName || '', ownerCuit: ownerCuit || '', ownerContact: ownerContact || '', ownerType: ownerType as RoleType, capacityHa: Number(formData.capacityHa), irrigationSystem: formData.irrigationSystem || '', responsibleIds: finalResponsibles
     };
 
     if (editingId) updateLocation({ ...payload, id: editingId });
@@ -315,13 +265,7 @@ export default function Locations() {
   };
 
   const resetForm = () => {
-    setFormData({ 
-        name: '', province: '', city: '', address: '', soilType: 'Franco', climate: '', 
-        responsiblePerson: '', lat: '', lng: '',
-        clientId: '', ownerName: '', ownerLegalName: '', ownerCuit: '', ownerContact: '', ownerType: 'Empresa Privada', 
-        capacityHa: 0, irrigationSystem: '',
-        responsibleIds: [], polygon: []
-    });
+    setFormData({ name: '', province: '', city: '', address: '', soilType: 'Franco', climate: '', responsiblePerson: '', lat: '', lng: '', clientId: '', ownerName: '', ownerLegalName: '', ownerCuit: '', ownerContact: '', ownerType: 'Empresa Privada', capacityHa: 0, irrigationSystem: '', responsibleIds: [], polygon: [] });
     setEditingId(null);
     setIsManualCity(false);
   };
@@ -329,38 +273,17 @@ export default function Locations() {
   const handleEdit = (loc: Location) => {
       const provinceCities = loc.province && ARG_GEO[loc.province] ? ARG_GEO[loc.province] : [];
       const isStandardCity = loc.city && provinceCities.includes(loc.city);
-      
-      setFormData({
-          ...loc,
-          lat: loc.coordinates?.lat.toString() || '',
-          lng: loc.coordinates?.lng.toString() || '',
-          polygon: loc.polygon || [],
-          province: loc.province || '',
-          city: loc.city || '',
-          ownerType: loc.ownerType || 'Empresa Privada',
-          ownerLegalName: loc.ownerLegalName || '',
-          ownerCuit: loc.ownerCuit || '',
-          ownerContact: loc.ownerContact || '',
-          clientId: loc.clientId || '',
-          capacityHa: loc.capacityHa || 0,
-          irrigationSystem: loc.irrigationSystem || ''
-      });
+      setFormData({ ...loc, lat: loc.coordinates?.lat.toString() || '', lng: loc.coordinates?.lng.toString() || '', polygon: loc.polygon || [], province: loc.province || '', city: loc.city || '', ownerType: loc.ownerType || 'Empresa Privada', ownerLegalName: loc.ownerLegalName || '', ownerCuit: loc.ownerCuit || '', ownerContact: loc.ownerContact || '', clientId: loc.clientId || '', capacityHa: loc.capacityHa || 0, irrigationSystem: loc.irrigationSystem || '' });
       setEditingId(loc.id);
       setIsManualCity(!isStandardCity && !!loc.city);
       setIsModalOpen(true);
   };
 
-  const handleDelete = (id: string) => {
-      if(window.confirm("¿Estás seguro de eliminar este sitio? Afectará a los ensayos históricos.")) deleteLocation(id);
-  };
+  const handleDelete = (id: string) => { if(window.confirm("¿Estás seguro de eliminar este sitio? Afectará a los ensayos históricos.")) deleteLocation(id); };
 
-  // --- PLOT HANDLERS ---
   const openPlotModal = (locId: string) => {
       setTargetLocationId(locId);
-      setPlotFormData({
-          name: '', type: 'Ensayo', varietyId: '', projectId: '', sowingDate: new Date().toISOString().split('T')[0],
-          block: '1', replicate: 1, surfaceArea: 0, surfaceUnit: 'ha', density: 0, status: 'Activa'
-      });
+      setPlotFormData({ name: '', type: 'Ensayo', varietyId: '', projectId: '', seedBatchId: '', sowingDate: new Date().toISOString().split('T')[0], block: '1', replicate: 1, surfaceArea: 0, surfaceUnit: 'ha', density: 0, status: 'Activa' });
       setIsPlotModalOpen(true);
   };
 
@@ -379,7 +302,6 @@ export default function Locations() {
           autoName = `${varCode}-B${plotFormData.block}-R${plotFormData.replicate}`; 
       }
 
-      // Default project if not selected (for Clients)
       let finalProjectId = plotFormData.projectId;
       if (!finalProjectId && projects.length > 0) {
           finalProjectId = projects[0].id;
@@ -396,13 +318,11 @@ export default function Locations() {
           rowDistance: 0,
           perimeter: 0,
           observations: 'Creado desde gestión de campos.',
-          seedBatchId: null // Optional
+          seedBatchId: plotFormData.seedBatchId || null // Ensure captures batch ID
       };
 
       addPlot(newPlot);
       setIsPlotModalOpen(false);
-      
-      // Auto expand location to show new plot
       setExpandedLocations(prev => ({...prev, [targetLocationId]: true}));
   };
 
@@ -465,34 +385,20 @@ export default function Locations() {
       <div className="flex flex-col sm:flex-row gap-4 mb-6">
           <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-              <input 
-                type="text" 
-                placeholder="Buscar campo, ciudad..." 
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-hemp-500 outline-none text-sm"
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-              />
+              <input type="text" placeholder="Buscar campo, ciudad..." className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-hemp-500 outline-none text-sm" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
           </div>
           <div className="relative w-full sm:w-64">
               <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-              <select 
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-hemp-500 outline-none text-sm appearance-none bg-white"
-                value={filterProvince}
-                onChange={e => setFilterProvince(e.target.value)}
-              >
+              <select className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-hemp-500 outline-none text-sm appearance-none bg-white" value={filterProvince} onChange={e => setFilterProvince(e.target.value)}>
                   <option value="">Todas las Provincias</option>
-                  {Object.keys(ARG_GEO).sort().map(p => (
-                      <option key={p} value={p}>{p}</option>
-                  ))}
+                  {Object.keys(ARG_GEO).sort().map(p => ( <option key={p} value={p}>{p}</option> ))}
               </select>
           </div>
       </div>
 
       <div className="space-y-6">
         {visibleLocations.length === 0 && (
-            <div className="text-center py-10 bg-gray-50 rounded-lg border border-dashed text-gray-500">
-                No se encontraron campos con los filtros actuales.
-            </div>
+            <div className="text-center py-10 bg-gray-50 rounded-lg border border-dashed text-gray-500">No se encontraron campos con los filtros actuales.</div>
         )}
         {visibleLocations.map(loc => {
           const locPlots = plots.filter(p => p.locationId === loc.id);
@@ -506,26 +412,11 @@ export default function Locations() {
                   <div className="w-full md:w-48 h-32 md:h-auto bg-gray-100 relative flex-shrink-0 md:rounded-lg overflow-hidden border-b md:border border-gray-200 group/map">
                     {loc.coordinates ? (
                        <>
-                           <iframe 
-                             width="100%" 
-                             height="100%" 
-                             frameBorder="0" 
-                             scrolling="no" 
-                             marginHeight={0} 
-                             marginWidth={0} 
-                             src={`https://maps.google.com/maps?q=${loc.coordinates.lat},${loc.coordinates.lng}&z=14&output=embed`}
-                             className="absolute inset-0 opacity-80 group-hover/map:opacity-100 transition-opacity"
-                           ></iframe>
-                           {/* WEATHER WIDGET OVERLAY */}
-                           <div className="absolute top-2 left-2 z-10 scale-90 origin-top-left">
-                               <WeatherWidget lat={loc.coordinates.lat} lng={loc.coordinates.lng} compact={true} />
-                           </div>
+                           <iframe width="100%" height="100%" frameBorder="0" scrolling="no" marginHeight={0} marginWidth={0} src={`https://maps.google.com/maps?q=${loc.coordinates.lat},${loc.coordinates.lng}&z=14&output=embed`} className="absolute inset-0 opacity-80 group-hover/map:opacity-100 transition-opacity"></iframe>
+                           <div className="absolute top-2 left-2 z-10 scale-90 origin-top-left"><WeatherWidget lat={loc.coordinates.lat} lng={loc.coordinates.lng} compact={true} /></div>
                        </>
                     ) : (
-                      <div className="flex items-center justify-center h-full text-gray-400 flex-col">
-                        <Globe size={32} className="mb-2 opacity-50" />
-                        <span className="text-[10px]">Sin GPS</span>
-                      </div>
+                      <div className="flex items-center justify-center h-full text-gray-400 flex-col"><Globe size={32} className="mb-2 opacity-50" /><span className="text-[10px]">Sin GPS</span></div>
                     )}
                   </div>
 
@@ -534,52 +425,31 @@ export default function Locations() {
                       <div>
                           <div className="flex justify-between items-start">
                               <div>
-                                  <h3 className="text-xl font-bold text-gray-800 flex items-center">
-                                      <MapPin size={20} className="mr-2 text-hemp-600" />
-                                      {loc.name}
-                                  </h3>
+                                  <h3 className="text-xl font-bold text-gray-800 flex items-center"><MapPin size={20} className="mr-2 text-hemp-600" />{loc.name}</h3>
                                   <p className="text-gray-500 text-sm ml-7">{loc.city ? `${loc.city}, ` : ''}{loc.province} • {loc.address}</p>
                               </div>
                               {canManage && (
                                   <div className="flex space-x-2">
-                                      {/* LINK TO DETAILS PAGE */}
-                                      <Link to={`/locations/${loc.id}`} className="bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg flex items-center text-xs font-bold transition shadow-sm">
-                                          <ExternalLink size={14} className="mr-1"/> Ver Tablero
-                                      </Link>
-                                      
-                                      <button onClick={() => handleEdit(loc)} className="p-1.5 text-gray-400 hover:text-hemp-600 hover:bg-gray-100 rounded transition border border-transparent hover:border-gray-200">
-                                          <Edit2 size={16} />
-                                      </button>
-                                      <button onClick={() => handleDelete(loc.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-gray-100 rounded transition border border-transparent hover:border-gray-200">
-                                          <Trash2 size={16} />
-                                      </button>
+                                      <Link to={`/locations/${loc.id}`} className="bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg flex items-center text-xs font-bold transition shadow-sm"><ExternalLink size={14} className="mr-1"/> Ver Tablero</Link>
+                                      <button onClick={() => handleEdit(loc)} className="p-1.5 text-gray-400 hover:text-hemp-600 hover:bg-gray-100 rounded transition border border-transparent hover:border-gray-200"><Edit2 size={16} /></button>
+                                      <button onClick={() => handleDelete(loc.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-gray-100 rounded transition border border-transparent hover:border-gray-200"><Trash2 size={16} /></button>
                                   </div>
                               )}
                           </div>
                           
                           <div className="mt-3 flex flex-wrap gap-3">
-                              <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded border">
-                                  {loc.capacityHa ? <strong>{loc.capacityHa} Ha</strong> : 'Sup. N/A'}
-                              </span>
-                              <span className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded border border-blue-100 flex items-center">
-                                  <Droplets size={10} className="mr-1"/> {loc.irrigationSystem || 'Secano'}
-                              </span>
-                              <span className="text-xs bg-indigo-50 text-indigo-700 px-2 py-1 rounded border border-indigo-100 flex items-center">
-                                  {getClientIcon(loc.ownerType)} <span className="ml-1">{loc.ownerName}</span>
-                              </span>
+                              <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded border">{loc.capacityHa ? <strong>{loc.capacityHa} Ha</strong> : 'Sup. N/A'}</span>
+                              <span className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded border border-blue-100 flex items-center"><Droplets size={10} className="mr-1"/> {loc.irrigationSystem || 'Secano'}</span>
+                              <span className="text-xs bg-indigo-50 text-indigo-700 px-2 py-1 rounded border border-indigo-100 flex items-center">{getClientIcon(loc.ownerType)} <span className="ml-1">{loc.ownerName}</span></span>
                           </div>
                       </div>
 
                       {/* Expand/Collapse Plots Section */}
                       <div className="mt-4 pt-3 border-t border-gray-100 flex justify-between items-center">
-                          <div className="text-sm font-medium text-gray-600">
-                              {locPlots.length} Cultivos Activos
-                          </div>
+                          <div className="text-sm font-medium text-gray-600">{locPlots.length} Cultivos Activos</div>
                           <div className="flex space-x-2">
                               {canManage && (
-                                  <button onClick={() => openPlotModal(loc.id)} className="text-xs bg-hemp-50 text-hemp-700 px-3 py-1.5 rounded-lg font-bold hover:bg-hemp-100 flex items-center transition">
-                                      <Plus size={14} className="mr-1"/> Agregar Lote
-                                  </button>
+                                  <button onClick={() => openPlotModal(loc.id)} className="text-xs bg-hemp-50 text-hemp-700 px-3 py-1.5 rounded-lg font-bold hover:bg-hemp-100 flex items-center transition"><Plus size={14} className="mr-1"/> Agregar Lote</button>
                               )}
                               <button onClick={() => toggleExpand(loc.id)} className="text-xs bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg font-bold hover:bg-gray-200 flex items-center transition">
                                   {isExpanded ? <ChevronUp size={14} className="mr-1"/> : <ChevronDown size={14} className="mr-1"/>}
@@ -594,9 +464,7 @@ export default function Locations() {
               {isExpanded && (
                   <div className="bg-gray-50 border-t border-gray-200 p-4 animate-in slide-in-from-top-2">
                       {locPlots.length === 0 ? (
-                          <div className="text-center py-4 text-gray-400 text-sm">
-                              No hay cultivos registrados en este campo.
-                          </div>
+                          <div className="text-center py-4 text-gray-400 text-sm">No hay cultivos registrados en este campo.</div>
                       ) : (
                           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                               {locPlots.map(p => {
@@ -611,12 +479,8 @@ export default function Locations() {
                                               <p className="text-xs text-gray-500 mt-0.5">{vari?.name} • {p.surfaceArea} {p.surfaceUnit}</p>
                                           </div>
                                           <div className="text-right">
-                                              <span className={`text-[10px] px-2 py-0.5 rounded-full ${p.status === 'Activa' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>
-                                                  {p.status}
-                                              </span>
-                                              <div className="mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                  <ArrowRight size={14} className="text-gray-400 ml-auto"/>
-                                              </div>
+                                              <span className={`text-[10px] px-2 py-0.5 rounded-full ${p.status === 'Activa' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>{p.status}</span>
+                                              <div className="mt-1 opacity-0 group-hover:opacity-100 transition-opacity"><ArrowRight size={14} className="text-gray-400 ml-auto"/></div>
                                           </div>
                                       </Link>
                                   )
@@ -642,41 +506,28 @@ export default function Locations() {
             <form onSubmit={handleSubmit} className="space-y-4">
               
               <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
-                  <h3 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center">
-                      <MapPin size={12} className="mr-1"/> Datos Generales
-                  </h3>
+                  <h3 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center"><MapPin size={12} className="mr-1"/> Datos Generales</h3>
                   <div className="space-y-3">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Nombre del Establecimiento</label>
                         <input required type="text" placeholder="Ej: Campo La Soledad" className={inputClass} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
                       </div>
-                      
                       <div className="grid grid-cols-2 gap-4">
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Provincia</label>
                             <select className={inputClass} value={formData.province} onChange={e => setFormData({...formData, province: e.target.value, city: ''})}>
                                 <option value="">Seleccionar...</option>
-                                {Object.keys(ARG_GEO).sort().map(p => (
-                                    <option key={p} value={p}>{p}</option>
-                                ))}
+                                {Object.keys(ARG_GEO).sort().map(p => ( <option key={p} value={p}>{p}</option> ))}
                             </select>
                           </div>
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1 flex justify-between">
-                                Ciudad/Localidad
-                                <button type="button" onClick={() => setIsManualCity(!isManualCity)} className="text-hemp-600 text-xs font-semibold hover:underline flex items-center">
-                                    {isManualCity ? <List size={12} className="mr-1"/> : <Keyboard size={12} className="mr-1"/>}
-                                    {isManualCity ? "Lista" : "Manual"}
-                                </button>
-                            </label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1 flex justify-between">Ciudad/Localidad <button type="button" onClick={() => setIsManualCity(!isManualCity)} className="text-hemp-600 text-xs font-semibold hover:underline flex items-center">{isManualCity ? <List size={12} className="mr-1"/> : <Keyboard size={12} className="mr-1"/>}{isManualCity ? "Lista" : "Manual"}</button></label>
                             {isManualCity ? (
                                 <input type="text" className={inputClass} value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})}/>
                             ) : (
                                 <select className={inputClass} value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})} disabled={!formData.province}>
                                     <option value="">Seleccionar...</option>
-                                    {formData.province && ARG_GEO[formData.province]?.map(c => (
-                                        <option key={c} value={c}>{c}</option>
-                                    ))}
+                                    {formData.province && ARG_GEO[formData.province]?.map(c => ( <option key={c} value={c}>{c}</option> ))}
                                 </select>
                             )}
                           </div>
@@ -687,43 +538,18 @@ export default function Locations() {
               {/* MAPA Y GEOMETRÍA */}
               <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
                   <div className="flex justify-between items-center mb-3">
-                      <h3 className="text-xs font-bold text-blue-700 uppercase flex items-center">
-                          <Globe size={12} className="mr-1"/> Delimitación Geográfica
-                      </h3>
-                      
-                      {/* KML UPLOAD BUTTON */}
+                      <h3 className="text-xs font-bold text-blue-700 uppercase flex items-center"><Globe size={12} className="mr-1"/> Delimitación Geográfica</h3>
                       <div className="relative">
-                           <input 
-                             type="file" 
-                             accept=".kml" 
-                             ref={fileInputRef}
-                             className="hidden"
-                             onChange={handleKMLUpload}
-                           />
-                           <button 
-                             type="button"
-                             onClick={() => fileInputRef.current?.click()}
-                             className="bg-white border border-blue-200 text-blue-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-50 flex items-center shadow-sm"
-                           >
-                               <FileUp size={14} className="mr-1"/> Importar KML
-                           </button>
+                           <input type="file" accept=".kml" ref={fileInputRef} className="hidden" onChange={handleKMLUpload} />
+                           <button type="button" onClick={() => fileInputRef.current?.click()} className="bg-white border border-blue-200 text-blue-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-50 flex items-center shadow-sm"><FileUp size={14} className="mr-1"/> Importar KML</button>
                        </div>
                   </div>
-
                   <div className="border border-gray-300 rounded-xl overflow-hidden mb-3">
-                       <MapEditor 
-                         initialCenter={formData.lat && formData.lng ? { lat: parseFloat(formData.lat), lng: parseFloat(formData.lng) } : undefined}
-                         initialPolygon={formData.polygon || []}
-                         onPolygonChange={handlePolygonChange}
-                         height="250px"
-                       />
+                       <MapEditor initialCenter={formData.lat && formData.lng ? { lat: parseFloat(formData.lat), lng: parseFloat(formData.lng) } : undefined} initialPolygon={formData.polygon || []} onPolygonChange={handlePolygonChange} height="250px" />
                   </div>
-
                   <div className="grid grid-cols-2 gap-3 text-xs">
                         <div>
-                            <label className="block font-bold text-blue-900 mb-1 flex items-center">
-                                Latitud / Longitud <Navigation size={10} className="ml-1 text-blue-500" />
-                            </label>
+                            <label className="block font-bold text-blue-900 mb-1 flex items-center">Latitud / Longitud <Navigation size={10} className="ml-1 text-blue-500" /></label>
                             <div className="flex gap-1">
                                 <input type="text" placeholder="-34.5" className={`${inputClass} text-xs h-8`} value={formData.lat} onChange={e => setFormData({...formData, lat: e.target.value})} onBlur={() => handleCoordinateBlur('lat')}/>
                                 <input type="text" placeholder="-58.4" className={`${inputClass} text-xs h-8`} value={formData.lng} onChange={e => setFormData({...formData, lng: e.target.value})} onBlur={() => handleCoordinateBlur('lng')}/>
@@ -737,16 +563,11 @@ export default function Locations() {
                             </div>
                         </div>
                   </div>
-                  <p className="text-[10px] text-blue-500 mt-2">
-                      * Dibuja en el mapa o importa un KML para calcular automáticamente la superficie del campo.
-                  </p>
               </div>
 
               {/* CLIENTE / TITULAR */}
               <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-100">
-                  <h3 className="text-xs font-bold text-indigo-700 uppercase mb-3 flex items-center">
-                      <Briefcase size={12} className="mr-1"/> Titularidad
-                  </h3>
+                  <h3 className="text-xs font-bold text-indigo-700 uppercase mb-3 flex items-center"><Briefcase size={12} className="mr-1"/> Titularidad</h3>
                   {isAdmin && (
                       <div className="mb-3">
                           <label className="block text-sm font-medium text-gray-700 mb-1">Cliente Vinculado</label>
@@ -792,7 +613,7 @@ export default function Locations() {
                           </div>
                           <div>
                               <label className="block text-sm font-medium text-gray-700 mb-1">Variedad</label>
-                              <select required className={inputClass} value={plotFormData.varietyId} onChange={e => setPlotFormData({...plotFormData, varietyId: e.target.value})}>
+                              <select required className={inputClass} value={plotFormData.varietyId} onChange={e => setPlotFormData({...plotFormData, varietyId: e.target.value, seedBatchId: ''})}>
                                   <option value="">Seleccionar...</option>
                                   {varieties.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
                               </select>
@@ -804,6 +625,30 @@ export default function Locations() {
                                   <option value="Producción">Producción</option>
                               </select>
                           </div>
+                          
+                          {/* SEED BATCH SELECTION (TRACEABILITY) */}
+                          <div className="col-span-2 bg-green-50 p-2 rounded border border-green-100">
+                              <label className="block text-xs font-bold text-green-800 mb-1 uppercase flex items-center">
+                                  <ScanBarcode size={12} className="mr-1"/> Lote de Semilla (Trazabilidad)
+                              </label>
+                              <select 
+                                  className={`${inputClass} text-sm`} 
+                                  value={plotFormData.seedBatchId || ''} 
+                                  onChange={e => setPlotFormData({...plotFormData, seedBatchId: e.target.value})}
+                                  disabled={!plotFormData.varietyId}
+                              >
+                                  <option value="">-- Sin especificar / Lote Genérico --</option>
+                                  {availableBatches.map(b => (
+                                      <option key={b.id} value={b.id}>
+                                          {b.batchCode} ({b.remainingQuantity} kg disp.) - {b.labelSerialNumber ? `Etiqueta: ${b.labelSerialNumber}` : ''}
+                                      </option>
+                                  ))}
+                              </select>
+                              {plotFormData.varietyId && availableBatches.length === 0 && (
+                                  <p className="text-[10px] text-orange-600 mt-1">No hay stock registrado para esta variedad.</p>
+                              )}
+                          </div>
+
                           <div>
                               <label className="block text-sm font-medium text-gray-700 mb-1">Superficie</label>
                               <div className="flex">
@@ -820,7 +665,6 @@ export default function Locations() {
                           </div>
                       </div>
                       
-                      {/* Project Context */}
                       {!isClient && (
                           <div>
                               <label className="block text-sm font-medium text-gray-700 mb-1">Proyecto Marco</label>
