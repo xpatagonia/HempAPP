@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Mail, ArrowRight, AlertTriangle, Database, Settings, X, Save, RefreshCw, CloudOff, Leaf, ShieldCheck, CheckCircle } from 'lucide-react';
+import { Lock, Mail, ArrowRight, AlertTriangle, Database, Settings, X, Save, RefreshCw, CloudOff, Leaf, ShieldCheck } from 'lucide-react';
 import { hasPreconfiguredConnection, checkConnection } from '../supabaseClient';
 
 export default function Login() {
@@ -23,7 +23,7 @@ export default function Login() {
 
   useEffect(() => {
     const initLogin = async () => {
-        // Cargar config existente manual
+        // Cargar config existente manual (si existe)
         const storedUrl = localStorage.getItem('hemp_sb_url');
         const storedKey = localStorage.getItem('hemp_sb_key');
         
@@ -37,14 +37,14 @@ export default function Login() {
         
         if (hasPreconfiguredConnection) {
             setIsCloudReady(true);
-            setShowConfig(false);
+            setShowConfig(false); // Forzar cierre si estaba abierto
         } else {
             const connected = await checkConnection();
             if (connected) {
                 setIsCloudReady(true);
                 setShowConfig(false);
             } else if (!storedUrl || !storedKey) {
-                // Solo abrir si no hay NADA configurado
+                // Solo abrir si no hay NADA configurado y no hay hardcode
                 setShowConfig(true);
             }
         }
