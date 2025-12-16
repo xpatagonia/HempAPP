@@ -1,7 +1,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
 import { Variety, Location, Plot, FieldLog, TrialRecord, User, Project, Task, SeedBatch, SeedMovement, Supplier, Client, Resource, StoragePoint } from '../types';
-import { supabase } from '../supabaseClient';
+import { supabase, checkConnection } from '../supabaseClient';
 
 export interface AppNotification {
     id: string;
@@ -25,7 +25,7 @@ interface AppContextType {
   suppliers: Supplier[];
   clients: Client[]; 
   resources: Resource[]; 
-  storagePoints: StoragePoint[]; // NUEVO
+  storagePoints: StoragePoint[]; 
   notifications: AppNotification[]; 
   
   currentUser: User | null;
@@ -53,9 +53,9 @@ interface AppContextType {
   updateResource: (r: Resource) => void; 
   deleteResource: (id: string) => void;
 
-  addStoragePoint: (s: StoragePoint) => void; // NUEVO
-  updateStoragePoint: (s: StoragePoint) => void; // NUEVO
-  deleteStoragePoint: (id: string) => void; // NUEVO
+  addStoragePoint: (s: StoragePoint) => void;
+  updateStoragePoint: (s: StoragePoint) => void;
+  deleteStoragePoint: (id: string) => void;
 
   addLocation: (l: Location) => void;
   updateLocation: (l: Location) => void;
@@ -105,7 +105,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const RESCUE_USER: User = {
     id: 'rescue-admin-001',
-    name: 'Admin Recuperación',
+    name: 'Admin Local (Offline)',
     email: 'admin@demo.com',
     password: 'admin',
     role: 'super_admin'
@@ -133,7 +133,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [seedBatches, setSeedBatches] = useState<SeedBatch[]>([]);
   const [seedMovements, setSeedMovements] = useState<SeedMovement[]>([]);
   const [resources, setResources] = useState<Resource[]>([]); 
-  const [storagePoints, setStoragePoints] = useState<StoragePoint[]>([]); // NUEVO
+  const [storagePoints, setStoragePoints] = useState<StoragePoint[]>([]);
   
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -147,9 +147,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const savedTheme = localStorage.getItem('ht_theme') as 'light' | 'dark';
     if (savedTheme) {
         setTheme(savedTheme);
-        if (savedTheme === 'dark') {
-            document.documentElement.classList.add('dark');
-        }
+        if (savedTheme === 'dark') document.documentElement.classList.add('dark');
     } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
         setTheme('dark');
         document.documentElement.classList.add('dark');
@@ -160,11 +158,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const newTheme = theme === 'light' ? 'dark' : 'light';
       setTheme(newTheme);
       localStorage.setItem('ht_theme', newTheme);
-      if (newTheme === 'dark') {
-          document.documentElement.classList.add('dark');
-      } else {
-          document.documentElement.classList.remove('dark');
-      }
+      if (newTheme === 'dark') document.documentElement.classList.add('dark');
+      else document.documentElement.classList.remove('dark');
   };
 
   const notifications = useMemo(() => {
@@ -189,43 +184,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 link: '/tasks',
                 date: t.dueDate
             });
-        } else if (diffDays <= 2) {
-            notifs.push({
-                id: `task-soon-${t.id}`,
-                type: 'warning',
-                title: 'Tarea Próxima',
-                message: `"${t.title}" vence pronto.`,
-                link: '/tasks',
-                date: t.dueDate
-            });
         }
     });
-
-    if (currentUser.role !== 'viewer') {
-        plots.filter(p => p.status === 'Activa').forEach(p => {
-             const isAssigned = p.responsibleIds?.includes(currentUser.id) || currentUser.role === 'admin' || currentUser.role === 'super_admin';
-             if (!isAssigned) return;
-
-             const history = trialRecords.filter(r => r.plotId === p.id).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-             const lastDate = history.length > 0 ? new Date(history[0].date) : new Date(p.sowingDate);
-             
-             const daysSinceUpdate = Math.floor((today.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
-             
-             if (daysSinceUpdate > 15) {
-                 notifs.push({
-                     id: `plot-stale-${p.id}`,
-                     type: 'info',
-                     title: 'Datos Desactualizados',
-                     message: `Parcela ${p.name} sin registros hace ${daysSinceUpdate} días.`,
-                     link: `/plots/${p.id}`,
-                     date: new Date().toISOString().split('T')[0]
-                 });
-             }
-        });
-    }
-
     return notifs.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [tasks, plots, trialRecords, currentUser]);
+  }, [tasks, currentUser]);
 
   const refreshGlobalConfig = async () => {
     try {
@@ -238,219 +200,129 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
         setGlobalApiKey(keyToUse);
     } catch (e) {
-        console.warn("No se pudo cargar configuración global. Usando local.");
         setGlobalApiKey(localStorage.getItem('hemp_ai_key'));
     }
   };
 
+  // --- STRICT DATA LOADING ---
+  // Si hay conexión, usamos SOLO la base de datos.
+  // Si no hay conexión, usamos SOLO localstorage.
+  // NO MEZCLAMOS. Esto asegura consistencia.
+  const initSystem = async () => {
+      setLoading(true);
+      try {
+          await refreshGlobalConfig();
+          const connected = await checkConnection();
+          
+          if (!connected) {
+              console.warn("⚠️ MODO LOCAL ACTIVADO: No hay conexión a Supabase.");
+              setIsEmergencyMode(true);
+              
+              // Load everything from LocalStorage
+              setUsersList([...getFromLocal('users'), RESCUE_USER]);
+              setProjects(getFromLocal('projects'));
+              setVarieties(getFromLocal('varieties'));
+              setSuppliers(getFromLocal('suppliers'));
+              setClients(getFromLocal('clients'));
+              setLocations(getFromLocal('locations'));
+              setPlots(getFromLocal('plots'));
+              setSeedBatches(getFromLocal('seedBatches'));
+              setSeedMovements(getFromLocal('seedMovements'));
+              setResources(getFromLocal('resources'));
+              setStoragePoints(getFromLocal('storagePoints'));
+              // Trials/Logs/Tasks don't have local backups in this simplified version, would be empty or mocked
+          } else {
+              // ONLINE MODE: Fetch from DB ONLY
+              setIsEmergencyMode(false);
+              
+              // Check Schema
+              const { error: checkError } = await supabase.from('suppliers').select('id').limit(1);
+              if (checkError && (checkError.code === '42P01' || checkError.message.includes('does not exist'))) {
+                  setDbNeedsMigration(true);
+              }
+
+              // Fetch Tables
+              const fetchData = async (table: string, setter: any) => {
+                  const { data, error } = await supabase.from(table).select('*');
+                  if (!error && data) setter(data);
+                  else console.error(`Error fetching ${table}`, error);
+              };
+
+              await Promise.allSettled([
+                  fetchData('users', setUsersList),
+                  fetchData('projects', setProjects),
+                  fetchData('suppliers', setSuppliers),
+                  fetchData('clients', setClients),
+                  fetchData('varieties', setVarieties),
+                  fetchData('locations', setLocations),
+                  fetchData('plots', setPlots),
+                  fetchData('seed_batches', setSeedBatches),
+                  fetchData('seed_movements', setSeedMovements),
+                  fetchData('resources', setResources),
+                  fetchData('storage_points', setStoragePoints),
+                  fetchData('trial_records', setTrialRecords),
+                  fetchData('field_logs', setLogs),
+                  fetchData('tasks', setTasks)
+              ]);
+          }
+
+          // Restore Session
+          const savedUser = localStorage.getItem('ht_session_user');
+          if (savedUser) {
+              const parsed = JSON.parse(savedUser);
+              if (connected) {
+                  // Verify user exists in DB
+                  const { data } = await supabase.from('users').select('*').eq('id', parsed.id).single();
+                  if (data) setCurrentUser(data as User);
+                  else localStorage.removeItem('ht_session_user');
+              } else {
+                  // Offline trust
+                  setCurrentUser(parsed);
+              }
+          }
+
+      } catch (err) {
+          console.error("Critical Init Error:", err);
+          setIsEmergencyMode(true);
+      } finally {
+          setLoading(false);
+      }
+  };
+
   useEffect(() => {
-    let isMounted = true;
-
-    // INCREASED TIMEOUT FOR MOBILE NETWORKS (8 seconds)
-    const safetyTimeout = setTimeout(() => {
-        if (loading && isMounted) {
-            console.warn("Timeout: Activando Modo Híbrido por conexión lenta.");
-            setUsersList([...getFromLocal('users'), RESCUE_USER]);
-            setProjects(getFromLocal('projects'));
-            setVarieties(getFromLocal('varieties'));
-            setSuppliers(getFromLocal('suppliers'));
-            setClients(getFromLocal('clients'));
-            setLocations(getFromLocal('locations'));
-            setPlots(getFromLocal('plots'));
-            setSeedBatches(getFromLocal('seedBatches')); 
-            setSeedMovements(getFromLocal('seedMovements'));
-            setResources(getFromLocal('resources')); // Load Local Resources
-            setStoragePoints(getFromLocal('storagePoints')); // NUEVO
-            setIsEmergencyMode(true);
-            setLoading(false);
-        }
-    }, 8000); 
-
-    const initSystem = async () => {
-        setLoading(true);
-        try {
-            await refreshGlobalConfig();
-
-            // CHECK MIGRATION STATUS
-            const { error: checkError } = await supabase.from('suppliers').select('id').limit(1);
-            if (checkError && (checkError.code === '42P01' || checkError.message.includes('does not exist'))) {
-                setDbNeedsMigration(true);
-            } else {
-                setDbNeedsMigration(false);
-            }
-
-            const localUsers = getFromLocal('users');
-            const localProjects = getFromLocal('projects');
-            const localVarieties = getFromLocal('varieties');
-            const localSuppliers = getFromLocal('suppliers');
-            const localClients = getFromLocal('clients');
-            const localLocations = getFromLocal('locations');
-            const localPlots = getFromLocal('plots');
-            const localSeedBatches = getFromLocal('seedBatches');
-            const localSeedMovements = getFromLocal('seedMovements');
-            const localResources = getFromLocal('resources');
-            const localStoragePoints = getFromLocal('storagePoints'); // NUEVO
-
-            // ATTEMPT TO FETCH USERS (ROBUST STRATEGY)
-            let dbUsers: any[] | null = null;
-            let userError: any = null;
-            
-            try {
-                // Try 1: Fetch ALL columns (Ideal)
-                const resFull = await supabase.from('users').select('*');
-                if (resFull.error) throw resFull.error;
-                dbUsers = resFull.data;
-            } catch (err: any) {
-                console.warn("Full user fetch failed (Schema Issue?):", err.message);
-                
-                // Try 2: Fetch ONLY basic columns (Legacy compatibility) if schema cache is broken
-                if (err.code === 'PGRST204' || err.message?.includes('column') || err.message?.includes('schema')) {
-                    console.log("Attempting fallback fetch for users...");
-                    try {
-                        const resBasic = await supabase.from('users').select('id, name, email, password, role');
-                        if (!resBasic.error) {
-                            dbUsers = resBasic.data;
-                            setDbNeedsMigration(true); // Flag that we are missing columns but app is running
-                        } else {
-                            throw resBasic.error;
-                        }
-                    } catch (e) {
-                        userError = e;
-                    }
-                } else {
-                    userError = err;
-                }
-            }
-            
-            if (!isMounted) return;
-
-            let finalUsers = [...localUsers];
-
-            if (userError || !dbUsers) {
-                console.warn("Error crítico cargando usuarios. Usando rescate.", userError);
-                if (!finalUsers.find((u: User) => u.email === RESCUE_USER.email)) {
-                    finalUsers.push(RESCUE_USER);
-                }
-                setIsEmergencyMode(true);
-            } else {
-                const dbIds = new Set(dbUsers.map((u: any) => u.id));
-                const uniqueLocal = localUsers.filter((u: User) => !dbIds.has(u.id));
-                finalUsers = [...(dbUsers as User[]), ...uniqueLocal];
-                // Do not force emergency false if dbNeedsMigration is true
-            }
-            
-            setUsersList(finalUsers);
-            
-            const fetchOrLocal = async (table: string, setter: any, localData: any[]) => {
-                 const { data, error } = await supabase.from(table).select('*');
-                 if (!error && data) {
-                     setter([...data, ...localData.filter((l: any) => !data.find((d: any) => d.id === l.id))]);
-                 } else {
-                     setter(localData);
-                 }
-            };
-
-            await Promise.allSettled([
-                fetchOrLocal('projects', setProjects, localProjects),
-                fetchOrLocal('suppliers', setSuppliers, localSuppliers),
-                fetchOrLocal('clients', setClients, localClients), 
-                fetchOrLocal('varieties', setVarieties, localVarieties),
-                fetchOrLocal('locations', setLocations, localLocations),
-                fetchOrLocal('plots', setPlots, localPlots),
-                fetchOrLocal('seed_batches', setSeedBatches, localSeedBatches),
-                fetchOrLocal('seed_movements', setSeedMovements, localSeedMovements),
-                fetchOrLocal('resources', setResources, localResources), 
-                fetchOrLocal('storage_points', setStoragePoints, localStoragePoints), // NUEVO
-                supabase.from('trial_records').select('*').then(res => res.data && setTrialRecords(res.data as TrialRecord[])),
-                supabase.from('field_logs').select('*').then(res => res.data && setLogs(res.data as FieldLog[])),
-                supabase.from('tasks').select('*').then(res => res.data && setTasks(res.data as Task[]))
-            ]);
-
-            const savedUser = localStorage.getItem('ht_session_user');
-            if (savedUser) {
-                try {
-                    const parsed = JSON.parse(savedUser);
-                    const isValid = finalUsers.some((u: User) => u.id === parsed.id) || parsed.email === RESCUE_USER.email;
-                    
-                    if (isValid) {
-                        setCurrentUser(parsed);
-                    } else {
-                        // Fallback check
-                        const { data: directUser } = await supabase.from('users').select('id, name, email, role').eq('id', parsed.id).single();
-                        if (directUser) {
-                            setCurrentUser(directUser as User);
-                        }
-                    }
-                } catch (e) { localStorage.removeItem('ht_session_user'); }
-            }
-
-        } catch (err) {
-            console.error("Error crítico en carga general:", err);
-            if(isMounted) {
-                setUsersList([...getFromLocal('users'), RESCUE_USER]);
-                setIsEmergencyMode(true);
-            }
-        } finally {
-            if(isMounted) {
-                clearTimeout(safetyTimeout);
-                setLoading(false);
-            }
-        }
-    };
-
     initSystem();
-    return () => { isMounted = false; };
   }, []);
 
-  // --- HELPER: GENERIC ERROR HANDLER FOR SUPABASE ---
   const handleSupabaseError = (error: any, context: string) => {
       console.error(`Error en ${context}:`, error);
       if (error.message?.includes('does not exist') || error.code === '42703') {
-          // 42703 is Undefined Column
-          alert(`⚠️ ERROR DE BASE DE DATOS: Faltan columnas en la tabla. \n\nPosiblemente falte ejecutar la migración SQL para habilitar los campos nuevos (como 'polygon'). \n\nVe a Configuración -> Inicialización SQL.`);
+          alert(`⚠️ ERROR DE COLUMNAS: La base de datos está desactualizada.\n\nFalta ejecutar el script SQL en Configuración.`);
+          setDbNeedsMigration(true);
       } else {
-          alert(`Error al guardar en la nube: ${error.message}. Verifica tu conexión.`);
+          alert(`Error de sincronización: ${error.message}`);
       }
   };
 
   const login = async (email: string, password: string): Promise<boolean> => {
-    // 1. Intentar con lista en memoria (rápido)
-    let validUser = usersList.find(u => 
-        u.email.toLowerCase().trim() === email.toLowerCase().trim() && 
-        u.password === password
-    );
-
-    // 2. Si no está en memoria, forzar consulta a la base de datos (seguro)
-    if (!validUser) {
-        try {
-            // Intenta seleccionar solo columnas básicas para evitar PGRST204 en login si el schema está roto
-            // Esto permite que el login funcione incluso si faltan las columnas nuevas (jobTitle, etc)
-            const { data, error } = await supabase.from('users')
-                .select('id, name, email, password, role') 
-                .eq('email', email.toLowerCase().trim())
-                .eq('password', password)
-                .single();
-            
-            if (data && !error) {
-                validUser = data as User;
-                setUsersList(prev => [...prev, validUser as User]);
-            }
-        } catch (e) {
-            console.error("Login DB check failed", e);
+    // Modo Offline
+    if (isEmergencyMode) {
+        let u = usersList.find(u => u.email === email && u.password === password);
+        if (email === RESCUE_USER.email && password === RESCUE_USER.password) u = RESCUE_USER;
+        if (u) {
+            setCurrentUser(u);
+            localStorage.setItem('ht_session_user', JSON.stringify(u));
+            return true;
         }
+        return false;
     }
 
-    // 3. Chequeo Admin Rescate
-    if (!validUser && email === RESCUE_USER.email && password === RESCUE_USER.password) {
-        validUser = RESCUE_USER;
+    // Modo Online
+    const { data, error } = await supabase.from('users').select('*').eq('email', email).eq('password', password).single();
+    if (!error && data) {
+        setCurrentUser(data as User);
+        localStorage.setItem('ht_session_user', JSON.stringify(data));
+        return true;
     }
-
-    if (validUser) {
-      setCurrentUser(validUser);
-      localStorage.setItem('ht_session_user', JSON.stringify(validUser));
-      return true;
-    }
-    
     return false;
   };
 
@@ -459,95 +331,154 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     localStorage.removeItem('ht_session_user');
   };
 
-  const addUser = async (u: User): Promise<boolean> => {
-      const { error } = await supabase.from('users').insert([u]);
-      if (error) {
-          handleSupabaseError(error, 'addUser');
-          if(isEmergencyMode) {
-             setUsersList(prev => { const newList = [...prev, u]; saveToLocal('users', newList.filter(user => user.id !== RESCUE_USER.id)); return newList; });
-             return true;
-          }
-          return false;
+  // --- CRUD WRAPPERS ---
+  // If Emergency => LocalStorage. If Online => Supabase.
+  
+  const genericAdd = async (table: string, item: any, setter: any, localKey: string) => {
+      if (isEmergencyMode) {
+          setter((prev: any[]) => {
+              const n = [...prev, item];
+              saveToLocal(localKey, n);
+              return n;
+          });
+          return true;
+      } else {
+          const { error } = await supabase.from(table).insert([item]);
+          if (error) { handleSupabaseError(error, `add ${table}`); return false; }
+          // Optimistic update
+          setter((prev: any[]) => [...prev, item]);
+          return true;
       }
-      setUsersList(prev => { const newList = [...prev, u]; saveToLocal('users', newList.filter(user => user.id !== RESCUE_USER.id)); return newList; });
-      return true; 
-  };
-  const updateUser = async (u: User) => {
-      await supabase.from('users').update(u).eq('id', u.id);
-      setUsersList(prev => { const newList = prev.map(item => item.id === u.id ? u : item); saveToLocal('users', newList.filter(user => user.id !== RESCUE_USER.id)); return newList; });
-  };
-  const deleteUser = async (id: string) => {
-      await supabase.from('users').delete().eq('id', id);
-      setUsersList(prev => { const newList = prev.filter(item => item.id !== id); saveToLocal('users', newList.filter(user => user.id !== RESCUE_USER.id)); return newList; });
   };
 
-  const addSupplier = async (s: Supplier) => { await supabase.from('suppliers').insert([s]); setSuppliers(prev => { const n = [...prev, s]; saveToLocal('suppliers', n); return n; }); return s.id; };
-  const updateSupplier = async (s: Supplier) => { await supabase.from('suppliers').update(s).eq('id', s.id); setSuppliers(prev => { const n = prev.map(item => item.id === s.id ? s : item); saveToLocal('suppliers', n); return n; }); };
-  const deleteSupplier = async (id: string) => { await supabase.from('suppliers').delete().eq('id', id); setSuppliers(prev => { const n = prev.filter(item => item.id !== id); saveToLocal('suppliers', n); return n; }); };
-
-  const addClient = async (c: Client) => { await supabase.from('clients').insert([c]); setClients(prev => { const n = [...prev, c]; saveToLocal('clients', n); return n; }); };
-  const updateClient = async (c: Client) => { await supabase.from('clients').update(c).eq('id', c.id); setClients(prev => { const n = prev.map(item => item.id === c.id ? c : item); saveToLocal('clients', n); return n; }); };
-  const deleteClient = async (id: string) => { await supabase.from('clients').delete().eq('id', id); setClients(prev => { const n = prev.filter(item => item.id !== id); saveToLocal('clients', n); return n; }); };
-
-  const addResource = async (r: Resource) => { await supabase.from('resources').insert([r]); setResources(prev => { const n = [...prev, r]; saveToLocal('resources', n); return n; }); };
-  const updateResource = async (r: Resource) => { await supabase.from('resources').update(r).eq('id', r.id); setResources(prev => { const n = prev.map(item => item.id === r.id ? r : item); saveToLocal('resources', n); return n; }); };
-  const deleteResource = async (id: string) => { await supabase.from('resources').delete().eq('id', id); setResources(prev => { const n = prev.filter(item => item.id !== id); saveToLocal('resources', n); return n; }); };
-
-  const addStoragePoint = async (s: StoragePoint) => { await supabase.from('storage_points').insert([s]); setStoragePoints(prev => { const n = [...prev, s]; saveToLocal('storagePoints', n); return n; }); };
-  const updateStoragePoint = async (s: StoragePoint) => { await supabase.from('storage_points').update(s).eq('id', s.id); setStoragePoints(prev => { const n = prev.map(item => item.id === s.id ? s : item); saveToLocal('storagePoints', n); return n; }); };
-  const deleteStoragePoint = async (id: string) => { await supabase.from('storage_points').delete().eq('id', id); setStoragePoints(prev => { const n = prev.filter(item => item.id !== id); saveToLocal('storagePoints', n); return n; }); };
-
-  const addProject = async (p: Project): Promise<boolean> => { const { error } = await supabase.from('projects').insert([p]); setProjects(prev => { const n = [...prev, p]; saveToLocal('projects', n); return n; }); return !error; };
-  const updateProject = async (p: Project) => { await supabase.from('projects').update(p).eq('id', p.id); setProjects(prev => { const n = prev.map(item => item.id === p.id ? p : item); saveToLocal('projects', n); return n; }); };
-  const deleteProject = async (id: string) => { await supabase.from('projects').delete().eq('id', id); setProjects(prev => { const n = prev.filter(item => item.id !== id); saveToLocal('projects', n); return n; }); };
-
-  const addVariety = async (v: Variety) => { await supabase.from('varieties').insert([v]); setVarieties(prev => { const n = [...prev, v]; saveToLocal('varieties', n); return n; }); };
-  const updateVariety = async (v: Variety) => { await supabase.from('varieties').update(v).eq('id', v.id); setVarieties(prev => { const n = prev.map(item => item.id === v.id ? v : item); saveToLocal('varieties', n); return n; }); };
-  const deleteVariety = async (id: string) => { await supabase.from('varieties').delete().eq('id', id); setVarieties(prev => { const n = prev.filter(item => item.id !== id); saveToLocal('varieties', n); return n; }); };
-
-  // --- UPDATED LOCATION METHODS WITH ERROR HANDLING ---
-  const addLocation = async (l: Location) => { 
-      const { error } = await supabase.from('locations').insert([l]);
-      if (error) handleSupabaseError(error, 'addLocation');
-      setLocations(prev => { const n = [...prev, l]; saveToLocal('locations', n); return n; }); 
+  const genericUpdate = async (table: string, item: any, setter: any, localKey: string) => {
+      if (isEmergencyMode) {
+          setter((prev: any[]) => {
+              const n = prev.map((i: any) => i.id === item.id ? item : i);
+              saveToLocal(localKey, n);
+              return n;
+          });
+      } else {
+          const { error } = await supabase.from(table).update(item).eq('id', item.id);
+          if (error) handleSupabaseError(error, `update ${table}`);
+          setter((prev: any[]) => prev.map((i: any) => i.id === item.id ? item : i));
+      }
   };
-  const updateLocation = async (l: Location) => { 
-      const { error } = await supabase.from('locations').update(l).eq('id', l.id); 
-      if (error) handleSupabaseError(error, 'updateLocation');
-      setLocations(prev => { const n = prev.map(item => item.id === l.id ? l : item); saveToLocal('locations', n); return n; }); 
+
+  const genericDelete = async (table: string, id: string, setter: any, localKey: string) => {
+      if (isEmergencyMode) {
+          setter((prev: any[]) => {
+              const n = prev.filter((i: any) => i.id !== id);
+              saveToLocal(localKey, n);
+              return n;
+          });
+      } else {
+          const { error } = await supabase.from(table).delete().eq('id', id);
+          if (error) handleSupabaseError(error, `delete ${table}`);
+          setter((prev: any[]) => prev.filter((i: any) => i.id !== id));
+      }
   };
-  const deleteLocation = async (id: string) => { await supabase.from('locations').delete().eq('id', id); setLocations(prev => { const n = prev.filter(item => item.id !== id); saveToLocal('locations', n); return n; }); };
 
-  // --- UPDATED PLOT METHODS WITH ERROR HANDLING ---
-  const addPlot = async (p: Plot) => { 
-      const { error } = await supabase.from('plots').insert([p]);
-      if (error) handleSupabaseError(error, 'addPlot');
-      setPlots(prev => { const n = [...prev, p]; saveToLocal('plots', n); return n; }); 
+  // Explicit implementations
+  const addUser = (u: User) => genericAdd('users', u, setUsersList, 'users');
+  const updateUser = (u: User) => genericUpdate('users', u, setUsersList, 'users');
+  const deleteUser = (id: string) => genericDelete('users', id, setUsersList, 'users');
+
+  const addProject = (p: Project) => genericAdd('projects', p, setProjects, 'projects');
+  const updateProject = (p: Project) => genericUpdate('projects', p, setProjects, 'projects');
+  const deleteProject = (id: string) => genericDelete('projects', id, setProjects, 'projects');
+
+  const addLocation = (l: Location) => genericAdd('locations', l, setLocations, 'locations');
+  const updateLocation = (l: Location) => genericUpdate('locations', l, setLocations, 'locations');
+  const deleteLocation = (id: string) => genericDelete('locations', id, setLocations, 'locations');
+
+  const addPlot = (p: Plot) => genericAdd('plots', p, setPlots, 'plots');
+  const updatePlot = (p: Plot) => genericUpdate('plots', p, setPlots, 'plots');
+  const deletePlot = (id: string) => genericDelete('plots', id, setPlots, 'plots');
+
+  const addVariety = (v: Variety) => { genericAdd('varieties', v, setVarieties, 'varieties'); };
+  const updateVariety = (v: Variety) => { genericUpdate('varieties', v, setVarieties, 'varieties'); };
+  const deleteVariety = (id: string) => { genericDelete('varieties', id, setVarieties, 'varieties'); };
+
+  const addSupplier = async (s: Supplier) => { await genericAdd('suppliers', s, setSuppliers, 'suppliers'); return s.id; };
+  const updateSupplier = (s: Supplier) => genericUpdate('suppliers', s, setSuppliers, 'suppliers');
+  const deleteSupplier = (id: string) => genericDelete('suppliers', id, setSuppliers, 'suppliers');
+
+  const addClient = async (c: Client) => { await genericAdd('clients', c, setClients, 'clients'); };
+  const updateClient = (c: Client) => genericUpdate('clients', c, setClients, 'clients');
+  const deleteClient = (id: string) => genericDelete('clients', id, setClients, 'clients');
+
+  const addResource = (r: Resource) => genericAdd('resources', r, setResources, 'resources');
+  const updateResource = (r: Resource) => genericUpdate('resources', r, setResources, 'resources');
+  const deleteResource = (id: string) => genericDelete('resources', id, setResources, 'resources');
+
+  const addStoragePoint = (s: StoragePoint) => genericAdd('storage_points', s, setStoragePoints, 'storagePoints');
+  const updateStoragePoint = (s: StoragePoint) => genericUpdate('storage_points', s, setStoragePoints, 'storagePoints');
+  const deleteStoragePoint = (id: string) => genericDelete('storage_points', id, setStoragePoints, 'storagePoints');
+
+  const addSeedBatch = (s: SeedBatch) => genericAdd('seed_batches', s, setSeedBatches, 'seedBatches');
+  const updateSeedBatch = (s: SeedBatch) => genericUpdate('seed_batches', s, setSeedBatches, 'seedBatches');
+  const deleteSeedBatch = (id: string) => genericDelete('seed_batches', id, setSeedBatches, 'seedBatches');
+
+  const addSeedMovement = (m: SeedMovement) => { 
+      // Special sort for movements (LIFO usually better for UI but genericAdd appends)
+      if(isEmergencyMode) {
+          setSeedMovements(prev => { const n = [m, ...prev]; saveToLocal('seedMovements', n); return n; });
+      } else {
+          supabase.from('seed_movements').insert([m]).then(({error}) => {
+              if(error) handleSupabaseError(error, 'add move');
+              else setSeedMovements(prev => [m, ...prev]);
+          });
+      }
   };
-  const updatePlot = async (p: Plot) => { 
-      const { error } = await supabase.from('plots').update(p).eq('id', p.id); 
-      if (error) handleSupabaseError(error, 'updatePlot');
-      setPlots(prev => { const n = prev.map(item => item.id === p.id ? p : item); saveToLocal('plots', n); return n; }); 
+  const updateSeedMovement = (m: SeedMovement) => genericUpdate('seed_movements', m, setSeedMovements, 'seedMovements');
+  const deleteSeedMovement = (id: string) => genericDelete('seed_movements', id, setSeedMovements, 'seedMovements');
+
+  const addTrialRecord = (r: TrialRecord) => {
+      if(isEmergencyMode) setTrialRecords(prev => [...prev, r]);
+      else {
+          supabase.from('trial_records').insert([r]).then(({error}) => {
+              if(error) handleSupabaseError(error, 'add record');
+              else setTrialRecords(prev => [...prev, r]);
+          });
+      }
   };
-  const deletePlot = async (id: string) => { await supabase.from('plots').delete().eq('id', id); setPlots(prev => { const n = prev.filter(item => item.id !== id); saveToLocal('plots', n); return n; }); };
+  const updateTrialRecord = (r: TrialRecord) => {
+      if(isEmergencyMode) setTrialRecords(prev => prev.map(i => i.id === r.id ? r : i));
+      else {
+          supabase.from('trial_records').update(r).eq('id', r.id).then(({error}) => {
+              if(error) handleSupabaseError(error, 'update record');
+              else setTrialRecords(prev => prev.map(i => i.id === r.id ? r : i));
+          });
+      }
+  };
+  const deleteTrialRecord = (id: string) => {
+      if(isEmergencyMode) setTrialRecords(prev => prev.filter(i => i.id !== id));
+      else {
+          supabase.from('trial_records').delete().eq('id', id).then(({error}) => {
+              if(error) handleSupabaseError(error, 'delete record');
+              else setTrialRecords(prev => prev.filter(i => i.id !== id));
+          });
+      }
+  };
 
-  const addSeedBatch = async (s: SeedBatch) => { await supabase.from('seed_batches').insert([s]); setSeedBatches(prev => { const n = [...prev, s]; saveToLocal('seedBatches', n); return n; }); };
-  const updateSeedBatch = async (s: SeedBatch) => { await supabase.from('seed_batches').update(s).eq('id', s.id); setSeedBatches(prev => { const n = prev.map(item => item.id === s.id ? s : item); saveToLocal('seedBatches', n); return n; }); };
-  const deleteSeedBatch = async (id: string) => { await supabase.from('seed_batches').delete().eq('id', id); setSeedBatches(prev => { const n = prev.filter(item => item.id !== id); saveToLocal('seedBatches', n); return n; }); };
+  const addLog = (l: FieldLog) => {
+      if(isEmergencyMode) setLogs(prev => [l, ...prev]);
+      else supabase.from('field_logs').insert([l]).then(({error}) => !error && setLogs(prev => [l, ...prev]));
+  };
 
-  const addSeedMovement = async (m: SeedMovement) => { await supabase.from('seed_movements').insert([m]); setSeedMovements(prev => { const n = [m, ...prev]; saveToLocal('seedMovements', n); return n; }); };
-  const updateSeedMovement = async (m: SeedMovement) => { await supabase.from('seed_movements').update(m).eq('id', m.id); setSeedMovements(prev => { const n = prev.map(item => item.id === m.id ? m : item); saveToLocal('seedMovements', n); return n; }); };
-  const deleteSeedMovement = async (id: string) => { await supabase.from('seed_movements').delete().eq('id', id); setSeedMovements(prev => { const n = prev.filter(item => item.id !== id); saveToLocal('seedMovements', n); return n; }); };
-
-  const addTrialRecord = async (r: TrialRecord) => { await supabase.from('trial_records').insert([r]); setTrialRecords(prev => [...prev, r]); };
-  const updateTrialRecord = async (r: TrialRecord) => { await supabase.from('trial_records').update(r).eq('id', r.id); setTrialRecords(prev => prev.map(item => item.id === r.id ? r : item)); };
-  const deleteTrialRecord = async (id: string) => { await supabase.from('trial_records').delete().eq('id', id); setTrialRecords(prev => prev.filter(item => item.id !== id)); };
-
-  const addLog = async (l: FieldLog) => { await supabase.from('field_logs').insert([l]); setLogs(prev => [l, ...prev]); };
-
-  const addTask = async (t: Task) => { await supabase.from('tasks').insert([t]); setTasks(prev => [t, ...prev]); };
-  const updateTask = async (t: Task) => { await supabase.from('tasks').update(t).eq('id', t.id); setTasks(prev => prev.map(item => item.id === t.id ? t : item)); };
-  const deleteTask = async (id: string) => { await supabase.from('tasks').delete().eq('id', id); setTasks(prev => prev.filter(item => item.id !== id)); };
+  const addTask = (t: Task) => {
+      if(isEmergencyMode) setTasks(prev => [t, ...prev]);
+      else supabase.from('tasks').insert([t]).then(({error}) => !error && setTasks(prev => [t, ...prev]));
+  };
+  const updateTask = (t: Task) => {
+      if(isEmergencyMode) setTasks(prev => prev.map(i => i.id === t.id ? t : i));
+      else supabase.from('tasks').update(t).eq('id', t.id).then(({error}) => !error && setTasks(prev => prev.map(i => i.id === t.id ? t : i)));
+  };
+  const deleteTask = (id: string) => {
+      if(isEmergencyMode) setTasks(prev => prev.filter(i => i.id !== id));
+      else supabase.from('tasks').delete().eq('id', id).then(({error}) => !error && setTasks(prev => prev.filter(i => i.id !== id)));
+  };
 
   const getPlotHistory = (plotId: string) => { return trialRecords.filter(r => r.plotId === plotId).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); };
   const getLatestRecord = (plotId: string) => { const history = getPlotHistory(plotId); return history.length > 0 ? history[0] : undefined; };

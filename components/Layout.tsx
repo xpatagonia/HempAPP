@@ -82,8 +82,8 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-dark-bg flex transition-colors duration-300">
       
-      {/* DB MIGRATION WARNING BANNER */}
-      {dbNeedsMigration && (
+      {/* DB MIGRATION WARNING */}
+      {dbNeedsMigration && !isEmergencyMode && (
           <div className="fixed top-0 left-0 w-full z-[100] bg-red-600 text-white px-4 py-2 flex justify-between items-center shadow-md animate-pulse">
               <div className="flex items-center text-xs md:text-sm font-bold">
                   <AlertTriangle className="mr-2" size={18}/>
@@ -95,11 +95,27 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           </div>
       )}
 
-      {/* Mobile Header (Dark Style to confirm update) */}
-      <div className={`lg:hidden fixed top-0 w-full bg-slate-900 text-white z-50 border-b border-slate-800 px-4 py-3 flex justify-between items-center shadow-md ${dbNeedsMigration ? 'mt-10' : ''}`}>
+      {/* EMERGENCY MODE WARNING (Huge because this confuses users) */}
+      {isEmergencyMode && (
+          <div className="fixed top-0 left-0 w-full z-[100] bg-amber-500 text-white px-4 py-3 flex justify-between items-center shadow-lg">
+              <div className="flex items-center">
+                  <CloudOff className="mr-3" size={24} />
+                  <div>
+                      <p className="font-black text-sm uppercase">Modo Local (Sin Conexión)</p>
+                      <p className="text-xs text-amber-100 hidden md:block">Los datos que guardes ahora SOLO existen en este navegador y no se verán en otros dispositivos.</p>
+                  </div>
+              </div>
+              <Link to="/settings" className="bg-white text-amber-600 text-xs px-4 py-2 rounded-lg font-bold hover:bg-gray-50 shadow-sm border border-amber-200">
+                  CONECTAR BASE DE DATOS
+              </Link>
+          </div>
+      )}
+
+      {/* Mobile Header */}
+      <div className={`lg:hidden fixed top-0 w-full bg-slate-900 text-white z-50 border-b border-slate-800 px-4 py-3 flex justify-between items-center shadow-md ${dbNeedsMigration || isEmergencyMode ? 'mt-14' : ''}`}>
         <div className="flex items-center space-x-2">
           <Leaf className="w-6 h-6 text-hemp-500" />
-          <span className="font-bold text-lg">HempC v2.6</span>
+          <span className="font-bold text-lg">HempC v2.7</span>
         </div>
         <div className="flex items-center space-x-2">
             <button onClick={() => setIsNotifOpen(!isNotifOpen)} className="p-2 relative text-gray-300 hover:text-white">
@@ -114,7 +130,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         </div>
       </div>
 
-      {/* Sidebar Overlay for Mobile */}
+      {/* Sidebar Overlay */}
       {isMobileOpen && (
         <div 
           className="fixed inset-0 bg-black/50 z-40 lg:hidden"
@@ -122,75 +138,21 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         />
       )}
 
-      {/* Notifications Dropdown */}
-      {isNotifOpen && (
-        <div className={`fixed right-4 lg:right-10 z-50 w-80 bg-white dark:bg-dark-card rounded-xl shadow-2xl border border-gray-100 dark:border-dark-border overflow-hidden animate-in fade-in slide-in-from-top-2 ${dbNeedsMigration ? 'top-24' : 'top-16'}`}>
-            <div className="px-4 py-3 border-b dark:border-dark-border bg-gray-50 dark:bg-slate-900/50 flex justify-between items-center">
-                <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm">Notificaciones ({unreadCount})</h3>
-                <button onClick={() => setIsNotifOpen(false)}><X size={16} className="text-gray-400"/></button>
-            </div>
-            <div className="max-h-80 overflow-y-auto">
-                {unreadCount === 0 ? (
-                    <div className="p-8 text-center text-gray-400 flex flex-col items-center">
-                        <Bell size={32} className="mb-2 opacity-30" />
-                        <p className="text-sm">Todo al día. ¡Buen trabajo!</p>
-                    </div>
-                ) : (
-                    notifications.map(n => (
-                        <Link 
-                            key={n.id} 
-                            to={n.link || '#'} 
-                            onClick={() => setIsNotifOpen(false)}
-                            className="block px-4 py-3 border-b border-gray-50 dark:border-dark-border hover:bg-gray-50 dark:hover:bg-slate-800 transition"
-                        >
-                            <div className="flex items-start">
-                                <div className={`w-2 h-2 mt-1.5 rounded-full mr-3 flex-shrink-0 ${
-                                    n.type === 'alert' ? 'bg-red-500' : 
-                                    n.type === 'warning' ? 'bg-amber-500' : 'bg-blue-500'
-                                }`}></div>
-                                <div>
-                                    <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">{n.title}</p>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{n.message}</p>
-                                    <span className="text-[10px] text-gray-400 mt-1 block">{n.date}</span>
-                                </div>
-                            </div>
-                        </Link>
-                    ))
-                )}
-            </div>
-        </div>
-      )}
-
       {/* Sidebar */}
       <aside className={`
         fixed lg:static inset-y-0 left-0 z-40 w-64 bg-white dark:bg-dark-card border-r dark:border-dark-border transform transition-transform duration-200 ease-in-out flex flex-col
         ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}
         lg:translate-x-0
-        ${dbNeedsMigration ? 'mt-10 lg:mt-10' : ''}
+        ${dbNeedsMigration || isEmergencyMode ? 'mt-14 lg:mt-14' : ''}
       `}>
         <div className="h-16 flex items-center px-6 border-b dark:border-dark-border justify-between bg-slate-900 text-white lg:bg-white lg:text-gray-800 lg:dark:bg-dark-card lg:dark:text-white">
           <div className="flex items-center">
              <Leaf className="w-8 h-8 text-hemp-500 lg:text-hemp-600 mr-2" />
-             <span className="text-xl font-bold">HempC <span className="text-hemp-500 text-sm bg-hemp-900 lg:bg-hemp-100 px-1 rounded ml-1">v2.6</span></span>
+             <span className="text-xl font-bold">HempC <span className="text-hemp-500 text-sm bg-hemp-900 lg:bg-hemp-100 px-1 rounded ml-1">v2.7</span></span>
           </div>
           
           <div className="flex items-center space-x-1">
-              {/* Notification Bell (Desktop) */}
-              <button 
-                onClick={() => setIsNotifOpen(!isNotifOpen)} 
-                className="hidden lg:block p-2 rounded-full text-gray-400 hover:text-hemp-600 hover:bg-gray-100 dark:hover:bg-dark-border transition-colors relative"
-              >
-                  <Bell size={18} />
-                  {unreadCount > 0 && (
-                     <span className="absolute top-1.5 right-1.5 h-2 w-2 bg-red-500 rounded-full"></span>
-                  )}
-              </button>
-
-              {/* Theme Toggle */}
-              <button 
-                onClick={toggleTheme} 
-                className="p-2 rounded-full text-gray-400 hover:text-hemp-600 hover:bg-gray-100 dark:hover:bg-dark-border transition-colors"
-              >
+              <button onClick={toggleTheme} className="p-2 rounded-full text-gray-400 hover:text-hemp-600 hover:bg-gray-100 dark:hover:bg-dark-border transition-colors">
                   {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
               </button>
           </div>
@@ -207,7 +169,6 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           
           <div className="pt-2 pb-2">
               <p className="px-4 text-xs font-semibold text-gray-400 uppercase mb-2">Operativo</p>
-              {/* CAMBIO PRINCIPAL: INTEGRACIÓN */}
               <NavItem to="/locations" icon={Tractor} label="Campos y Cultivos" onClick={() => setIsMobileOpen(false)} />
               <NavItem to="/plots" icon={ClipboardList} label="Planilla Global" onClick={() => setIsMobileOpen(false)} />
               <NavItem to="/tasks" icon={CheckSquare} label="Tareas" onClick={() => setIsMobileOpen(false)} />
@@ -242,65 +203,31 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                 {isSuperAdmin && (
                     <NavItem to="/settings" icon={Database} label="Configuración DB" onClick={() => setIsMobileOpen(false)} />
                 )}
-                {isClient && (
-                    <div className="px-4 text-xs text-gray-400 italic">
-                        Acceso Limitado: Red de Agricultores
-                    </div>
-                )}
             </div>
         </nav>
 
-        {/* User Profile Section & Footer */}
-        <div className="border-t dark:border-dark-border bg-gray-50 dark:bg-dark-card">
-           
-           {/* Connection Status Indicator */}
-           <div className={`px-4 py-2 text-xs font-bold flex items-center justify-between border-b dark:border-dark-border ${isEmergencyMode ? 'bg-amber-100 text-amber-800' : 'bg-green-100 text-green-800'}`}>
-                <div className="flex items-center">
-                    {isEmergencyMode ? <CloudOff size={14} className="mr-2"/> : <Cloud size={14} className="mr-2"/>}
-                    {isEmergencyMode ? 'MODO LOCAL (OFFLINE)' : 'CONECTADO A LA NUBE'}
-                </div>
-                {isEmergencyMode && (
-                    <Link to="/settings" className="underline text-[10px]">Conectar</Link>
-                )}
-           </div>
-
-           <div className="p-4">
-              <div className="flex items-center space-x-3 mb-3">
-                  {currentUser.avatar ? (
-                      <img src={currentUser.avatar} alt="Profile" className="w-10 h-10 rounded-full border-2 border-white shadow-sm object-cover" />
-                  ) : (
-                      <div className={`p-2 rounded-full ${isEmergencyMode ? 'bg-amber-200 text-amber-700' : 'bg-hemp-100 dark:bg-hemp-900 text-hemp-700 dark:text-hemp-300'}`}>
-                          <UserCircle size={24} />
-                      </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">{currentUser.name}</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate capitalize">{currentUser.jobTitle || getRoleLabel(currentUser.role)}</p>
-                  </div>
-              </div>
-              <button 
-                  onClick={logout}
-                  className="w-full flex items-center justify-center space-x-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 p-2 rounded transition"
-              >
-                  <LogOut size={16} />
-                  <span>Cerrar Sesión</span>
-              </button>
-           </div>
-           {/* Developer Footer */}
-           <div className="bg-gray-100 dark:bg-slate-900 py-3 text-center border-t border-gray-200 dark:border-dark-border">
-               <p className="text-[10px] text-gray-400 font-mono leading-tight">Dev gaston.barea.moreno@gmail.com</p>
-               <div className="flex items-center justify-center space-x-2 mt-1">
-                   <span className="text-[10px] bg-green-100 text-green-800 px-1.5 py-0.5 rounded font-bold">v2.6</span>
-                   <a href="https://xpatagonia.com" target="_blank" rel="noopener noreferrer" className="text-[10px] text-hemp-600 dark:text-hemp-500 font-bold font-mono hover:underline">
-                       xpatagonia.com
-                   </a>
+        <div className="border-t dark:border-dark-border bg-gray-50 dark:bg-dark-card p-4">
+           <div className="flex items-center space-x-3 mb-3">
+               <div className={`p-2 rounded-full ${isEmergencyMode ? 'bg-amber-200 text-amber-700' : 'bg-hemp-100 dark:bg-hemp-900 text-hemp-700 dark:text-hemp-300'}`}>
+                   <UserCircle size={24} />
+               </div>
+               <div className="flex-1 min-w-0">
+                   <p className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">{currentUser.name}</p>
+                   <p className="text-xs text-gray-500 dark:text-gray-400 truncate capitalize">{currentUser.jobTitle || getRoleLabel(currentUser.role)}</p>
                </div>
            </div>
+           <button 
+               onClick={logout}
+               className="w-full flex items-center justify-center space-x-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 p-2 rounded transition"
+           >
+               <LogOut size={16} />
+               <span>Cerrar Sesión</span>
+           </button>
         </div>
       </aside>
 
       {/* Main Content */}
-      <main className={`flex-1 lg:ml-0 pt-16 lg:pt-0 overflow-y-auto h-screen bg-gray-50 dark:bg-dark-bg transition-colors duration-300 ${dbNeedsMigration ? 'mt-10 lg:mt-10' : ''}`}>
+      <main className={`flex-1 lg:ml-0 pt-16 lg:pt-0 overflow-y-auto h-screen bg-gray-50 dark:bg-dark-bg transition-colors duration-300 ${dbNeedsMigration || isEmergencyMode ? 'mt-14 lg:mt-14' : ''}`}>
         <div className="container mx-auto p-4 lg:p-8 max-w-7xl">
           {children}
         </div>
