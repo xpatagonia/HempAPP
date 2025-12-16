@@ -2,7 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Mail, ArrowRight, AlertTriangle, Database, Settings, X, Save, RefreshCw, CloudOff, Leaf, ShieldCheck } from 'lucide-react';
+import { Lock, Mail, ArrowRight, AlertTriangle, Database, Settings, X, Save, RefreshCw, CloudOff, Leaf, ShieldCheck, CheckCircle } from 'lucide-react';
+import { hasPreconfiguredConnection, checkConnection } from '../supabaseClient';
 
 export default function Login() {
   const { login, isEmergencyMode } = useAppContext();
@@ -18,23 +19,37 @@ export default function Login() {
   const [configUrl, setConfigUrl] = useState('');
   const [configKey, setConfigKey] = useState('');
   const [isReloading, setIsReloading] = useState(false);
+  const [isCloudReady, setIsCloudReady] = useState(false);
 
   useEffect(() => {
-    // Cargar config existente
-    const storedUrl = localStorage.getItem('hemp_sb_url');
-    const storedKey = localStorage.getItem('hemp_sb_key');
-    
-    if (storedUrl) setConfigUrl(storedUrl);
-    if (storedKey) setConfigKey(storedKey);
+    const initLogin = async () => {
+        // Cargar config existente manual
+        const storedUrl = localStorage.getItem('hemp_sb_url');
+        const storedKey = localStorage.getItem('hemp_sb_key');
+        
+        if (storedUrl) setConfigUrl(storedUrl);
+        if (storedKey) setConfigKey(storedKey);
 
-    // AUTO-OPEN: Si no hay credenciales guardadas, asumir que es un dispositivo nuevo y pedir configuración
-    if (!storedUrl || !storedKey) {
-        setShowConfig(true);
-    }
-
-    if (isEmergencyMode && storedUrl && storedKey) {
-        setError('No se pudo conectar a la nube. Verifica tu internet o las credenciales.');
-    }
+        // CHEQUEO INTELIGENTE:
+        // 1. Si hay credenciales en el código (hardcoded) -> NO mostrar config, estamos listos.
+        // 2. Si ya se configuró manualmente -> NO mostrar config.
+        // 3. Si no hay nada -> Mostrar config.
+        
+        if (hasPreconfiguredConnection) {
+            setIsCloudReady(true);
+            setShowConfig(false);
+        } else {
+            const connected = await checkConnection();
+            if (connected) {
+                setIsCloudReady(true);
+                setShowConfig(false);
+            } else if (!storedUrl || !storedKey) {
+                // Solo abrir si no hay NADA configurado
+                setShowConfig(true);
+            }
+        }
+    };
+    initLogin();
   }, [isEmergencyMode]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -95,15 +110,22 @@ export default function Login() {
             <p className="text-slate-400 text-sm font-medium">Gestión Inteligente de Cultivos & Ensayos</p>
         </div>
 
-        {/* EMERGENCY MODE ALERT */}
-        {isEmergencyMode && (
+        {/* STATUS BADGES */}
+        {isCloudReady ? (
+             <div className="mb-6 flex justify-center">
+                 <div className="bg-green-500/10 border border-green-500/20 backdrop-blur-md px-3 py-1.5 rounded-full flex items-center shadow-lg">
+                     <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse mr-2"></div>
+                     <span className="text-green-400 text-xs font-bold uppercase tracking-wide">Sistema Online</span>
+                 </div>
+             </div>
+        ) : (
             <div className="mb-6 bg-amber-500/10 border border-amber-500/30 backdrop-blur-md p-4 rounded-xl shadow-lg animate-pulse">
                 <div className="flex items-start">
                     <CloudOff className="text-amber-500 mr-3 mt-0.5 flex-shrink-0" size={20} />
                     <div className="w-full">
                         <h3 className="font-bold text-amber-500 text-sm uppercase tracking-wide mb-1">Modo Desconectado</h3>
                         <p className="text-amber-100/80 text-xs mb-3">
-                            Este navegador no está conectado a la base de datos central.
+                            Este dispositivo no tiene acceso configurado a la base de datos.
                         </p>
                         <div className="grid grid-cols-1">
                             <button onClick={() => setShowConfig(true)} className="text-xs bg-amber-600 hover:bg-amber-700 text-white py-2 px-3 rounded transition flex items-center justify-center font-bold shadow-md w-full border border-amber-400">
@@ -183,7 +205,7 @@ export default function Login() {
             <div className="bg-slate-950/30 px-8 py-4 border-t border-white/5 flex items-center justify-between">
                 <div className="flex items-center text-xs text-slate-500">
                     <Database size={12} className="mr-1.5 text-slate-600" />
-                    <span className="font-mono text-hemp-400">v2.7-live</span>
+                    <span className="font-mono text-hemp-400">v2.7-cloud</span>
                 </div>
                 <div className="flex items-center space-x-4">
                      <span className="text-[10px] text-slate-600 font-medium">POWERED BY</span>
@@ -195,7 +217,7 @@ export default function Login() {
         </div>
       </div>
 
-      {/* Config Modal (Overlay) */}
+      {/* Config Modal (Overlay) - Solo visible si NO hay config en código ni manual */}
       {showConfig && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
             <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-gray-200">
