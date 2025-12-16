@@ -37,7 +37,7 @@ export default function SeedBatches() {
 
   // -- QUICK STORAGE STATE --
   const [isQuickStorageOpen, setIsQuickStorageOpen] = useState(false);
-  const [quickStorageForm, setQuickStorageForm] = useState({ name: '', city: '', type: 'Propio' });
+  const [quickStorageForm, setQuickStorageForm] = useState({ name: '', city: '', type: 'Propio', surfaceM2: 0 });
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
 
@@ -122,14 +122,15 @@ export default function SeedBatches() {
           name: quickStorageForm.name,
           city: quickStorageForm.city,
           type: quickStorageForm.type as any,
+          surfaceM2: Number(quickStorageForm.surfaceM2),
           address: 'Dirección pendiente',
-          capacityKg: 0,
+          capacityKg: 0, // Default to 0 as it is hidden from UI
       });
 
       // Auto-select the new storage point
       setBatchFormData(prev => ({ ...prev, storagePointId: newId }));
       setIsQuickStorageOpen(false);
-      setQuickStorageForm({ name: '', city: '', type: 'Propio' });
+      setQuickStorageForm({ name: '', city: '', type: 'Propio', surfaceM2: 0 });
   };
 
   // --- MOVEMENT HANDLERS & ROUTE PLANNER ---
@@ -500,6 +501,10 @@ export default function SeedBatches() {
                               <option value="Tercerizado">Tercerizado</option>
                               <option value="Transitorio">Transitorio</option>
                           </select>
+                      </div>
+                      <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Superficie (m²)</label>
+                          <input type="number" className={inputClass} placeholder="Ej: 500" value={quickStorageForm.surfaceM2} onChange={e => setQuickStorageForm({...quickStorageForm, surfaceM2: Number(e.target.value)})} />
                       </div>
                       <button type="submit" className="w-full bg-purple-600 text-white py-2 rounded-lg font-bold hover:bg-purple-700 mt-2 flex justify-center items-center shadow-sm">
                           <Save size={16} className="mr-2"/> Guardar y Seleccionar

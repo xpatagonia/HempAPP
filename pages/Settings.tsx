@@ -190,6 +190,30 @@ export default function Settings() {
   };
 
   const SQL_SCRIPT = `
+-- FIX: CREAR TABLA SI NO EXISTE PARA EVITAR ERROR DE SINCRONIZACIÓN
+CREATE TABLE IF NOT EXISTS public.storage_points (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    type TEXT,
+    address TEXT,
+    city TEXT,
+    province TEXT,
+    coordinates JSONB,
+    "responsibleUserId" TEXT,
+    "capacityKg" NUMERIC,
+    "surfaceM2" NUMERIC,
+    conditions TEXT,
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+
+-- HABILITAR SEGURIDAD (RLS)
+ALTER TABLE public.storage_points ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Enable all access for all users" ON public.storage_points FOR ALL USING (true);
+
+-- MIGRACIÓN v2.7.1: SUPERFICIE ALMACENAMIENTO (Si la tabla ya existía sin esta columna)
+ALTER TABLE public.storage_points ADD COLUMN IF NOT EXISTS "surfaceM2" NUMERIC;
+
 -- MIGRACIÓN v2.7: AGREGAR POLÍGONO Y PERÍMETRO A LOCACIONES Y LOTES
 ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS polygon JSONB;
 ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS polygon JSONB;
@@ -217,7 +241,6 @@ ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS "resourceCost" NUMERIC;
 ALTER TABLE public.seed_movements ADD COLUMN IF NOT EXISTS "clientId" TEXT;
 
 -- IMPORTANTE: FORZAR ACTUALIZACIÓN DE CACHÉ DE API
--- Esto soluciona el error "Could not find column in schema cache"
 NOTIFY pgrst, 'reload schema';
   `;
 

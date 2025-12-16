@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { StoragePoint } from '../types';
-import { Plus, Warehouse, Edit2, Trash2, MapPin, User, Package, Map } from 'lucide-react';
+import { Plus, Warehouse, Edit2, Trash2, MapPin, User, Package, Map, Ruler, Maximize } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
 
 export default function Storage() {
@@ -12,7 +12,7 @@ export default function Storage() {
 
   const [formData, setFormData] = useState<Partial<StoragePoint>>({
     name: '', type: 'Propio', address: '', city: '', province: '',
-    coordinates: undefined, responsibleUserId: '', capacityKg: 0, conditions: '', notes: ''
+    coordinates: undefined, responsibleUserId: '', surfaceM2: 0, conditions: '', notes: ''
   });
 
   // Helper for map state inside modal
@@ -24,7 +24,7 @@ export default function Storage() {
     e.preventDefault();
     if (!formData.name) return;
     
-    const payload = { ...formData } as StoragePoint;
+    const payload = { ...formData, capacityKg: 0 } as StoragePoint; // Default capacity to 0 as it's removed from UI
 
     if (editingId) {
         updateStoragePoint({ ...payload, id: editingId });
@@ -41,7 +41,7 @@ export default function Storage() {
   const resetForm = () => {
     setFormData({ 
         name: '', type: 'Propio', address: '', city: '', province: '',
-        coordinates: undefined, responsibleUserId: '', capacityKg: 0, conditions: '', notes: '' 
+        coordinates: undefined, responsibleUserId: '', surfaceM2: 0, conditions: '', notes: '' 
     });
     setEditingId(null);
     setMapCenter(undefined);
@@ -125,9 +125,10 @@ export default function Storage() {
                           </p>
 
                           <div className="mt-auto space-y-2 text-sm">
+                              {/* Removed Capacity display priority, showing Surface Area */}
                               <div className="flex justify-between border-b border-gray-100 pb-1">
-                                  <span className="text-gray-500">Capacidad:</span>
-                                  <span className="font-bold">{sp.capacityKg ? `${sp.capacityKg} kg` : '-'}</span>
+                                  <span className="text-gray-500 flex items-center"><Maximize size={14} className="mr-1"/> Superficie</span>
+                                  <span className="font-bold text-gray-800">{sp.surfaceM2 ? `${sp.surfaceM2} m²` : '-'}</span>
                               </div>
                               <div className="flex justify-between items-center">
                                   <span className="text-gray-500">Responsable:</span>
@@ -175,8 +176,8 @@ export default function Storage() {
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium mb-1">Capacidad Estimada (kg)</label>
-                            <input type="number" className={inputClass} value={formData.capacityKg} onChange={e => setFormData({...formData, capacityKg: Number(e.target.value)})}/>
+                            <label className="block text-sm font-medium mb-1">Superficie (m²)</label>
+                            <input type="number" className={inputClass} value={formData.surfaceM2} onChange={e => setFormData({...formData, surfaceM2: Number(e.target.value)})}/>
                         </div>
                     </div>
                 </div>

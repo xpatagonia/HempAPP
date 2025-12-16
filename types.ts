@@ -1,9 +1,20 @@
 
-// Enums and Types
 export type UsageType = 'Fibra' | 'Grano' | 'Dual' | 'Medicinal';
-export type SoilType = 'Franco' | 'Arcilloso' | 'Arenoso' | 'Limoso';
 
-// Redefinición de Roles de Cliente / Entidad
+export type UserRole = 'super_admin' | 'admin' | 'technician' | 'client' | 'viewer';
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  password?: string;
+  jobTitle?: string;
+  phone?: string;
+  avatar?: string;
+  clientId?: string;
+}
+
 export type RoleType = 
   | 'Productor Pequeño (<5 ha)' 
   | 'Productor Mediano (5-15 ha)' 
@@ -13,76 +24,33 @@ export type RoleType =
   | 'Academia' 
   | 'ONG/Cooperativa';
 
-// Auth Types
-export type UserRole = 'super_admin' | 'admin' | 'technician' | 'viewer' | 'client';
+export type SoilType = string;
 
-export interface User {
+export interface Location {
   id: string;
   name: string;
-  email: string;
-  password?: string; // Optional for listing, required for login/creation
-  role: UserRole;
-  avatar?: string; // URL to avatar image
-  jobTitle?: string; // Nuevo: Cargo (ej: Ingeniero Agrónomo, Director)
-  phone?: string;    // Nuevo: Teléfono de contacto
-  clientId?: string; // NUEVO: Vinculación directa a la entidad Cliente
+  province: string;
+  city: string;
+  address: string;
+  soilType: SoilType;
+  climate?: string;
+  responsiblePerson?: string;
+  coordinates?: { lat: number; lng: number };
+  polygon?: { lat: number; lng: number }[];
+  clientId?: string;
+  ownerName?: string;
+  ownerLegalName?: string;
+  ownerCuit?: string;
+  ownerContact?: string;
+  ownerType?: RoleType;
+  capacityHa?: number;
+  irrigationSystem?: string;
+  responsibleIds?: string[];
 }
 
-// Entities
-
-export interface Project {
-  id: string;
-  name: string;
-  description: string;
-  startDate: string;
-  status: 'Planificación' | 'En Curso' | 'Finalizado';
-  directorId?: string; // Nuevo: ID del Director del Proyecto (Líder)
-  responsibleIds?: string[]; // Usuarios operativos a cargo
-}
-
-// NUEVO: Entidad Cliente (Para gestión comercial y Red de Agricultores)
-export interface Client {
-  id: string;
-  name: string; // Nombre Comercial / Razón Social
-  type: RoleType;
-  cuit?: string; // Tax ID
-  
-  // Contacto Principal
-  contactName: string;
-  contactPhone?: string;
-  email?: string;
-  
-  // Red de Agricultores
-  isNetworkMember: boolean; // ¿Pertenece a la Red?
-  
-  notes?: string;
-}
-
-// NUEVO: Entidad Proveedor (Semillero / Breeder)
-export interface Supplier {
-  id: string;
-  name: string; // Nombre Comercial / Fantasía
-  legalName?: string; // Razón Social
-  cuit?: string; // Tax ID
-  
-  // Ubicación Detallada
-  country: string; // País de Origen
-  province?: string; // Nuevo: Provincia / Estado
-  city?: string;     // Nuevo: Ciudad
-  address?: string;  // Nuevo: Dirección específica
-
-  // Contactos
-  commercialContact?: string; // Nuevo: Nombre y Teléfono Comercial
-  logisticsContact?: string;  // Nuevo: Nombre y Teléfono Logística
-  
-  website?: string;
-  notes?: string;
-}
-
-// NUEVO: Puntos de Almacenamiento (Depósitos)
 export interface StoragePoint {
   id: string;
-  name: string; // Ej: Depósito Central BsAs
+  name: string; 
   type: 'Propio' | 'Tercerizado' | 'Transitorio';
   address: string;
   city?: string;
@@ -91,231 +59,106 @@ export interface StoragePoint {
     lat: number;
     lng: number;
   };
-  responsibleUserId?: string; // Encargado de Logística/Llaves
-  capacityKg?: number; // Capacidad máxima estimada
-  conditions?: string; // Ej: Refrigerado, Seco, Control Humedad
+  responsibleUserId?: string; 
+  capacityKg?: number; 
+  surfaceM2?: number; 
+  conditions?: string; 
+  notes?: string;
+}
+
+export interface Supplier {
+  id: string;
+  name: string;
+  legalName?: string;
+  cuit?: string;
+  country?: string;
+  province?: string;
+  city?: string;
+  address?: string;
+  commercialContact?: string;
+  logisticsContact?: string;
+  website?: string;
   notes?: string;
 }
 
 export interface Variety {
   id: string;
-  supplierId: string; // Link estricto a Supplier
+  supplierId: string; 
   name: string;
   usage: UsageType;
-  // genetics: string; // REMOVIDO: Ahora se usa supplierId
   cycleDays: number;
   expectedThc: number;
   notes?: string;
 }
 
-// NUEVO: Gestión de Stock y Trazabilidad de Semillas
-export interface SeedBatch {
-  id: string;
-  varietyId: string;
-  
-  // Datos Comerciales del Proveedor (Compliance)
-  supplierId?: string;        // Link directo al ID del proveedor (Nuevo)
-  supplierName: string;       // Nombre Fantasía (ej: Hemp-it)
-  supplierLegalName?: string; // Razón Social (ej: Hemp-it France SAS)
-  supplierCuit?: string;      // CUIT / Tax ID
-  supplierRenspa?: string;    // N° Registro Semillero / RENSPA Origen
-  supplierAddress?: string;   // Dirección Fiscal / Origen
-  originCountry?: string;     // País de Origen de la Semilla (Nuevo)
-  
-  // Datos de Etiqueta (SOC France / INASE)
-  batchCode: string;          // N° de Lote / Lot N° (Ref)
-  labelSerialNumber?: string; // N° de Serie Etiqueta (Vertical único) - NUEVO
-  category?: 'Original' | 'Base' | 'C1' | 'C2' | 'Estándar'; // Categoría Certificación - NUEVO
-  analysisDate?: string;      // Fecha de Análisis/Muestreo (Mes/Año) - NUEVO
-  purity?: number;            // Pureza Física % - NUEVO
-  germination?: number;       // Poder Germinativo % - NUEVO
-
-  // Datos de Compra (Nuevo)
-  purchaseOrder?: string;   // N° Orden de Compra / Factura
-  purchaseDate: string;     // Fecha de adquisición
-  pricePerKg?: number;      // Precio por Kg (Opcional)
-
-  // Identificación Técnica
-  gs1Code?: string;         // Código de Barras GS1 / GTIN (Nuevo)
-  certificationNumber?: string; // N° Certificado Fiscalización (INASE/SENASA)
-  
-  // Almacenamiento Físico
-  initialQuantity: number;  // Cantidad comprada (kg)
-  remainingQuantity: number; // Stock actual (kg)
-  storagePointId?: string;    // LINK a StoragePoint (Nuevo - Reemplaza storageAddress texto libre)
-  storageAddress?: string;    // Legacy text field (Deprecado visualmente pero mantenido por compatibilidad)
-  storageConditions?: string; // Temp/Humedad (Compliance)
-  
-  logisticsResponsible?: string; // Nombre del responsable de custodia (Nuevo)
-  
-  notes?: string;
-  isActive: boolean;        // Si el lote está disponible para siembra
-}
-
-// NUEVO: Movimientos Logísticos (Hoja de Ruta)
-export interface SeedMovement {
-  id: string;
-  batchId: string;
-  clientId?: string; // NUEVO: Cliente destinatario (para facilitar filtrado)
-  targetLocationId: string; // Destino
-  originStorageId?: string; // Origen (Nuevo)
-  
-  quantity: number; // kg enviados
-  date: string;
-  dispatchTime?: string; // Hora de salida (Compliance)
-  
-  // Datos de Transporte (Compliance)
-  transportGuideNumber: string; // N° Guía / Remito
-  transportType?: 'Propio' | 'Tercerizado'; // Nuevo
-  driverName: string;
-  vehiclePlate: string;
-  vehicleModel?: string; // Modelo del vehiculo (Nuevo)
-  transportCompany?: string;
-  
-  // Ruta
-  routeGoogleLink?: string; // Link generado a GMaps
-  estimatedDistanceKm?: number;
-  
-  status: 'En Tránsito' | 'Recibido' | 'Cancelado';
-  receivedBy?: string; // User ID
-  notes?: string;
-}
-
-// NUEVO: Recursos e Insumos (Plan Agrícola)
-export interface Resource {
-  id: string;
-  name: string; // Urea, Glifosato, Jornal
-  type: 'Fertilizante' | 'Fitosanitario' | 'Labor' | 'Insumo' | 'Maquinaria';
-  unit: 'kg' | 'lts' | 'horas' | 'unidad' | 'ha';
-  costPerUnit: number; // Costo estimado
-  stock?: number; // Stock actual en depósito central
-  notes?: string;
-}
-
-export interface Location {
+export interface Client {
   id: string;
   name: string;
-  province?: string; // Nueva: Provincia
-  city?: string;     // Nueva: Ciudad/Localidad
-  address: string;
-  coordinates?: {
-    lat: number;
-    lng: number;
-  };
-  // NUEVO: Polígono del campo para delimitar superficie total
-  polygon?: { lat: number; lng: number }[];
-  
-  soilType: SoilType;
-  climate: string;
-  responsiblePerson: string; // Deprecated visual field, prefer responsibleIds logic if needed, but keeping for now
-  
-  // CLIENTE / TITULAR
-  clientId?: string; // Nuevo: Link a entidad Client
-  ownerName?: string; // Nombre Comercial / Fantasía del Cliente (Legacy o Display)
-  ownerLegalName?: string; // Razón Social (Nuevo)
-  ownerCuit?: string; // CUIT / Tax ID (Nuevo)
-  ownerType?: RoleType; // Tipo de Cliente (Empresa, Gobierno, etc)
-  ownerContact?: string; // Email o Teléfono de contacto del cliente (Nuevo)
+  type: RoleType;
+  contactName: string;
+  contactPhone?: string;
+  email?: string;
+  isNetworkMember: boolean;
+  cuit?: string;
+  notes?: string;
+}
 
-  // CAPACIDAD & RIEGO (NUEVO REQUERIMIENTO)
-  capacityHa?: number; // Capacidad total en Hectáreas
-  irrigationSystem?: string; // Texto descriptivo o tags (ej: "Goteo, Pivot, Canales")
-
-  responsibleIds?: string[]; // IDs de usuarios asignados a la locación
-  cuie?: string; // Clave Única de Identificación de Establecimiento (Compliance)
+export interface Project {
+  id: string;
+  name: string;
+  description?: string;
+  startDate: string;
+  status: 'Planificación' | 'En Curso' | 'Finalizado';
+  directorId?: string;
+  responsibleIds?: string[];
 }
 
 export interface Plot {
   id: string;
-  name: string; // Generated Name e.g. "VAR-B1-R1"
-  type: 'Ensayo' | 'Producción'; // Nuevo: Diferencia I+D de Lotes Comerciales
-  projectId: string; 
   locationId: string;
+  projectId: string;
   varietyId: string;
-  seedBatchId?: string; // NUEVO: Vinculación para trazabilidad exacta
-  
-  // Experimental Design Identifiers
-  block: string;    // Bloque (o Lote en producción)
-  replicate: number; // Rep (Repetición o Sector)
-  
-  // Ownership
-  ownerName: string; 
-  responsibleIds: string[]; 
-  
-  // Setup
-  sowingDate: string;
-  surfaceArea?: number; // Nueva Superficie
-  surfaceUnit?: 'm2' | 'ha' | 'ac'; // Unidad de medida (Agregado Acres)
-  perimeter?: number; // NUEVO: Perímetro en metros
-  rowDistance: number; // cm
-  density: number; // plants/m2 target
+  seedBatchId?: string;
+  name: string;
+  type: 'Ensayo' | 'Producción';
+  block?: string;
+  replicate?: number;
+  surfaceArea?: number;
+  surfaceUnit?: 'ha' | 'm2' | 'ac';
+  density?: number;
   status: 'Activa' | 'Cosechada' | 'Cancelada';
-  observations?: string; // Notas generales de la parcela
-  irrigationType?: string;
-  
-  // Specific GPS for this plot (overrides Location gps)
-  coordinates?: {
-    lat: number;
-    lng: number;
-  };
-  
-  // NUEVO: Polígono de la parcela (Array de coordenadas para dibujar el mapa)
+  sowingDate: string;
+  ownerName?: string;
+  responsibleIds?: string[];
+  rowDistance?: number;
+  perimeter?: number;
+  observations?: string;
+  coordinates?: { lat: number; lng: number };
   polygon?: { lat: number; lng: number }[];
+  irrigationType?: string;
 }
 
-// The official registry data structure (Hoja de Excel), now historical
 export interface TrialRecord {
   id: string;
   plotId: string;
-  date: string; // Fecha del registro (toma de dato)
-  time?: string; // Hora del registro (HH:MM) - Nuevo
-  createdBy?: string; // ID del ingeniero/técnico - Nuevo
-  createdByName?: string; // Nombre para visualización rápida - Nuevo
-
-  // Expanded stages for better precision
-  stage: 'Emergencia' | 'Vegetativo' | 'Floración' | 'Maduración' | 'Cosecha'; 
-  
-  // Fenología y Desarrollo (Vegetativo)
-  emergenceDate?: string;     // Fecha emergencia
-  plantsPerMeterInit?: number; // N° plantas.m (Inicial)
-  uniformity?: number;        // Uniformidad parcela (1-5 o 1-10)
-  vigor?: number;             // Vigor (1-5)
-  floweringDate?: string;     // Fecha Floración
-  plantHeight?: number;       // Altura de planta (cm) - Durante ciclo o max
-  stemDiameter?: number;      // Nuevo: Diámetro tallo (mm)
-  nodesCount?: number;        // Nuevo: Número de nudos
-  
-  // Estado Reproductivo
-  floweringState?: 'Pre-flor' | 'Floración' | 'Senescencia'; // Nuevo
-  trichomeColor?: 'Transparente' | 'Lechoso' | 'Ambar' | 'Mixto'; // Nuevo
-
-  lodging?: number;           // Vuelco (%)
-  birdDamage?: string;        // Daño por aves (Si/No o Nivel)
-  diseases?: string;          // Enfermedades (Texto/Tipo)
-  pests?: string;             // Plagas (Texto/Tipo)
-  
-  // Aplicaciones (Fertilizantes / Fitosanitarios)
-  applicationType?: 'Fertilizante' | 'Insecticida' | 'Fungicida' | 'Herbicida' | 'Otro';
+  date: string;
+  time?: string;
+  stage: 'Vegetativo' | 'Floración' | 'Maduración' | 'Cosecha';
+  plantHeight?: number;
+  vigor?: number;
+  uniformity?: number;
+  pests?: string;
+  diseases?: string;
+  yield?: number;
+  freshWeight?: number;
+  leafWeight?: number;
+  applicationType?: string;
   applicationProduct?: string;
   applicationDose?: string;
-
-  // Resultados de Cosecha
-  harvestDate?: string;       // Fecha cosecha
-  harvestHeight?: number;     // altura (cm) a cosecha
-  plantsPerMeterFinal?: number; // N° plantas.m (Final)
-  
-  // Métricas de Rendimiento
-  sampleSize?: number;        // Nuevo: Tamaño de muestra (m2)
-  freshWeight?: number;       // Nuevo: Peso Fresco Total (kg)
-  dryWeight?: number;         // Nuevo: Peso Seco Total (kg) - para calcular humedad
-  
-  yield?: number;             // rendimiento (kg/ha o total parcela)
-  stemWeight?: number;        // peso tallo (g/planta o kg total)
-  leafWeight?: number;        // peso hoja (g/planta o kg total)
-  flowerWeight?: number;      // Nuevo: peso flor (g/planta o kg total)
+  createdBy?: string;
+  createdByName?: string;
 }
 
-// Keep generic logs for photos or extra comments not in the official registry
 export interface FieldLog {
   id: string;
   plotId: string;
@@ -324,29 +167,78 @@ export interface FieldLog {
   photoUrl?: string;
 }
 
-// Task Management with Resources
-export interface Task {
+export interface Resource {
   id: string;
-  plotId?: string; // Optional, can be general
-  projectId?: string;
-  title: string;
-  description: string;
-  dueDate: string;
-  status: 'Pendiente' | 'En Progreso' | 'Completada';
-  priority: 'Alta' | 'Media' | 'Baja';
-  assignedToIds: string[]; // User IDs
-  createdBy: string;
-  
-  // NUEVO: Uso de Recursos (Plan Agrícola)
-  resourceId?: string; // ID del recurso (Fertilizante, etc)
-  resourceQuantity?: number; // Cantidad planificada
-  resourceCost?: number; // Costo total estimado
+  name: string;
+  type: 'Fertilizante' | 'Fitosanitario' | 'Labor' | 'Insumo';
+  unit: string;
+  costPerUnit: number;
+  stock?: number;
+  notes?: string;
 }
 
-// Stats Interface
-export interface DashboardStats {
-  totalVarieties: number;
-  activeLocations: number;
-  activePlots: number;
-  pendingTasks: number;
+export interface Task {
+  id: string;
+  title: string;
+  description?: string;
+  status: 'Pendiente' | 'Completada';
+  priority: 'Alta' | 'Media' | 'Baja';
+  assignedToIds: string[];
+  dueDate: string;
+  plotId?: string;
+  createdBy: string;
+  resourceId?: string;
+  resourceQuantity?: number;
+  resourceCost?: number;
+}
+
+export interface SeedBatch {
+  id: string;
+  varietyId: string;
+  supplierId?: string;
+  supplierName?: string;
+  supplierLegalName?: string;
+  supplierCuit?: string;
+  supplierRenspa?: string;
+  supplierAddress?: string;
+  originCountry?: string;
+  batchCode: string;
+  labelSerialNumber?: string;
+  category?: 'C1' | 'C2' | 'Base' | 'Original';
+  analysisDate?: string;
+  purity?: number;
+  germination?: number;
+  gs1Code?: string;
+  certificationNumber?: string;
+  purchaseOrder?: string;
+  purchaseDate?: string;
+  pricePerKg?: number;
+  initialQuantity: number;
+  remainingQuantity: number;
+  storageConditions?: string;
+  storagePointId?: string;
+  logisticsResponsible?: string;
+  notes?: string;
+  isActive: boolean;
+}
+
+export interface SeedMovement {
+  id: string;
+  batchId: string;
+  clientId?: string;
+  targetLocationId: string;
+  quantity: number;
+  date: string;
+  dispatchTime?: string;
+  transportGuideNumber?: string;
+  transportType?: 'Propio' | 'Tercerizado';
+  driverName?: string;
+  vehiclePlate?: string;
+  vehicleModel?: string;
+  transportCompany?: string;
+  routeItinerary?: string;
+  status?: 'En Tránsito' | 'Recibido';
+  originStorageId?: string;
+  routeGoogleLink?: string;
+  estimatedDistanceKm?: number;
 }
