@@ -190,9 +190,10 @@ export default function Settings() {
   };
 
   const SQL_SCRIPT = `
--- MIGRACIÓN v2.7: AGREGAR POLÍGONO A LOCATIONS Y PLOTS
+-- MIGRACIÓN v2.7: AGREGAR POLÍGONO Y PERÍMETRO
 ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS polygon JSONB;
 ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS polygon JSONB;
+ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS perimeter NUMERIC; -- NUEVO: Fix para error de guardado
 
 -- TABLA RECURSOS (PLAN AGRÍCOLA)
 CREATE TABLE IF NOT EXISTS public.resources (
