@@ -88,10 +88,8 @@ export default function LocationDetails() {
                             {location.coordinates ? (
                                 <MapEditor 
                                     initialCenter={location.coordinates}
-                                    // If we had the polygon of the field boundaries, we would pass it here.
-                                    // For now, let's visualize active plots centers if available? 
-                                    // Simpler: Just center the map.
-                                    readOnly={true}
+                                    initialPolygon={location.polygon || []}
+                                    readOnly={true} 
                                     height="100%"
                                 />
                             ) : (

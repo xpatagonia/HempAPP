@@ -1,12 +1,13 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Location, SoilType, RoleType, Plot } from '../types';
-import { Plus, MapPin, User, Globe, Edit2, Trash2, Keyboard, List, Briefcase, Building, Landmark, GraduationCap, Users, Droplets, Ruler, Navigation, ChevronDown, ChevronUp, Sprout, ArrowRight, LayoutDashboard, Search, Filter, ExternalLink } from 'lucide-react';
+import { Plus, MapPin, User, Globe, Edit2, Trash2, Keyboard, List, Briefcase, Building, Landmark, GraduationCap, Users, Droplets, Ruler, Navigation, ChevronDown, ChevronUp, Sprout, ArrowRight, LayoutDashboard, Search, Filter, ExternalLink, FileUp, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import WeatherWidget from '../components/WeatherWidget';
+import MapEditor from '../components/MapEditor';
 
-// Expanded Argentina Database with Rural Hubs (Keep existing list)
+// Expanded Argentina Database with Rural Hubs
 const ARG_GEO: Record<string, string[]> = {
     "Buenos Aires": ["La Plata", "Mar del Plata", "Bahía Blanca", "Tandil", "Pergamino", "Junín", "Olavarría", "San Nicolás", "Balcarce", "Castelar", "CABA", "San Pedro", "Trenque Lauquen", "Pehuajó", "9 de Julio", "Bolívar", "Saladillo", "Lobos", "Chascomús", "Necochea", "Tres Arroyos", "General Villegas", "Lincoln", "Chivilcoy", "Chacabuco", "Bragado", "25 de Mayo", "Azul", "Coronel Suárez", "Pigüé", "Carhué", "San Antonio de Areco", "Arrecifes", "Salto", "Rojas", "Mercedes", "Luján", "Cañuelas", "Las Flores"],
     "Catamarca": ["San Fernando del Valle de Catamarca", "Andalgalá", "Tinogasta", "Belén", "Santa María", "Recreo", "Fiambalá"],
@@ -31,6 +32,35 @@ const ARG_GEO: Record<string, string[]> = {
     "Santiago del Estero": ["Santiago del Estero Capital", "La Banda", "Termas de Río Hondo", "Frías", "Añatuya", "Fernández", "Quimilí", "Loreto"],
     "Tierra del Fuego": ["Ushuaia", "Río Grande", "Tolhuin"],
     "Tucumán": ["San Miguel de Tucumán", "Tafí Viejo", "Concepción", "Yerba Buena", "Banda del Río Salí", "Aguilares", "Monteros", "Famaillá"]
+};
+
+// Helper: Robust KML Parser (Duplicated to avoid circular deps for now)
+const parseKML = (kmlText: string): { lat: number, lng: number }[] | null => {
+    try {
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(kmlText, "text/xml");
+        const allCoords = Array.from(xmlDoc.getElementsByTagName("coordinates"));
+        if (allCoords.length === 0) return null;
+        allCoords.sort((a, b) => (b.textContent?.length || 0) - (a.textContent?.length || 0));
+        const targetNode = allCoords[0];
+        const text = targetNode.textContent || "";
+        const rawPoints = text.replace(/\s+/g, ' ').trim().split(' ');
+        const latLngs = rawPoints.map(point => {
+            const parts = point.split(',');
+            if (parts.length >= 2) {
+                const lng = parseFloat(parts[0]);
+                const lat = parseFloat(parts[1]);
+                if (!isNaN(lat) && !isNaN(lng)) {
+                    return { lat, lng };
+                }
+            }
+            return null;
+        }).filter((p): p is { lat: number, lng: number } => p !== null);
+        return latLngs.length >= 3 ? latLngs : null;
+    } catch (e) {
+        console.error("Error parsing KML", e);
+        return null;
+    }
 };
 
 // Helper: Convert DMS to Decimal
@@ -69,6 +99,7 @@ export default function Locations() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isManualCity, setIsManualCity] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -87,7 +118,8 @@ export default function Locations() {
     responsiblePerson: '', lat: '', lng: '',
     clientId: '', ownerName: '', ownerLegalName: '', ownerCuit: '', ownerContact: '', ownerType: 'Empresa Privada', 
     capacityHa: 0, irrigationSystem: '',
-    responsibleIds: []
+    responsibleIds: [],
+    polygon: []
   });
 
   const [plotFormData, setPlotFormData] = useState<Partial<Plot>>({
@@ -159,6 +191,59 @@ export default function Locations() {
       }
   };
 
+  const handleKMLUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+          const text = event.target?.result as string;
+          const poly = parseKML(text);
+          
+          if (poly && poly.length > 2) {
+              // Same logic as MapEditor to calculate area and centroid
+              const R = 6371000;
+              const toRad = (x: number) => x * Math.PI / 180;
+              let area = 0;
+              const lats = poly.map(p => p.lat);
+              const lngs = poly.map(p => p.lng);
+              const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+              const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
+
+              for (let i = 0; i < poly.length; i++) {
+                  const j = (i + 1) % poly.length;
+                  const p1 = poly[i];
+                  const p2 = poly[j];
+                  area += (toRad(p2.lng) - toRad(p1.lng)) * (2 + Math.sin(toRad(p1.lat)) + Math.sin(toRad(p2.lat)));
+              }
+              area = Math.abs(area * R * R / 2) / 10000;
+
+              setFormData(prev => ({
+                  ...prev,
+                  polygon: poly,
+                  capacityHa: Number(area.toFixed(2)),
+                  lat: centerLat.toFixed(6),
+                  lng: centerLng.toFixed(6)
+              }));
+              alert("✅ KML Importado: Perímetro y Superficie calculados automáticamente.");
+          } else {
+              alert("⚠️ No se encontró un polígono válido en el KML.");
+          }
+          if (fileInputRef.current) fileInputRef.current.value = '';
+      };
+      reader.readAsText(file);
+  };
+
+  const handlePolygonChange = (newPoly: { lat: number, lng: number }[], areaHa: number, center: { lat: number, lng: number }) => {
+      setFormData(prev => ({
+          ...prev,
+          polygon: newPoly,
+          capacityHa: areaHa > 0 ? Number(areaHa.toFixed(2)) : prev.capacityHa,
+          lat: center.lat.toFixed(6),
+          lng: center.lng.toFixed(6)
+      }));
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name) return;
@@ -210,6 +295,7 @@ export default function Locations() {
       climate: formData.climate || '',
       responsiblePerson: formData.responsiblePerson || '',
       coordinates,
+      polygon: formData.polygon, // SAVE POLYGON
       clientId: clientId || null,
       ownerName: ownerName || '',
       ownerLegalName: formData.ownerLegalName || '',
@@ -234,7 +320,7 @@ export default function Locations() {
         responsiblePerson: '', lat: '', lng: '',
         clientId: '', ownerName: '', ownerLegalName: '', ownerCuit: '', ownerContact: '', ownerType: 'Empresa Privada', 
         capacityHa: 0, irrigationSystem: '',
-        responsibleIds: []
+        responsibleIds: [], polygon: []
     });
     setEditingId(null);
     setIsManualCity(false);
@@ -248,6 +334,7 @@ export default function Locations() {
           ...loc,
           lat: loc.coordinates?.lat.toString() || '',
           lng: loc.coordinates?.lng.toString() || '',
+          polygon: loc.polygon || [],
           province: loc.province || '',
           city: loc.city || '',
           ownerType: loc.ownerType || 'Empresa Privada',
@@ -357,7 +444,7 @@ export default function Locations() {
               </div>
               <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
                   <div className="text-xs font-bold text-blue-700 uppercase mb-1">Capacidad Total</div>
-                  <div className="text-2xl font-black text-blue-900">{stats.totalHa} ha</div>
+                  <div className="text-2xl font-black text-blue-900">{stats.totalHa.toFixed(1)} ha</div>
               </div>
               <div className="bg-green-50 rounded-lg p-4 border border-green-100">
                   <div className="flex justify-between items-center mb-1">
@@ -543,16 +630,20 @@ export default function Locations() {
         })}
       </div>
 
-       {/* LOCATION MODAL (Keep existing modal code here) */}
+       {/* LOCATION MODAL */}
        {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-2xl w-full p-6 shadow-xl max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold mb-4 text-gray-900">{editingId ? 'Editar Campo' : 'Nuevo Campo'}</h2>
+            <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold text-gray-900">{editingId ? 'Editar Campo' : 'Nuevo Campo'}</h2>
+                <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600"><X size={24}/></button>
+            </div>
+            
             <form onSubmit={handleSubmit} className="space-y-4">
               
               <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
                   <h3 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center">
-                      <MapPin size={12} className="mr-1"/> Ubicación
+                      <MapPin size={12} className="mr-1"/> Datos Generales
                   </h3>
                   <div className="space-y-3">
                       <div>
@@ -590,23 +681,65 @@ export default function Locations() {
                             )}
                           </div>
                       </div>
-                      <div className="grid grid-cols-2 gap-2">
-                             <div>
-                                <label className="block text-xs font-medium text-blue-900 mb-1 flex items-center justify-between">
-                                    Latitud
-                                    <Navigation size={10} className="text-blue-500" />
-                                </label>
-                                <input type="text" placeholder="-34.5" className={inputClass} value={formData.lat} onChange={e => setFormData({...formData, lat: e.target.value})} onBlur={() => handleCoordinateBlur('lat')}/>
-                             </div>
-                             <div>
-                                <label className="block text-xs font-medium text-blue-900 mb-1 flex items-center justify-between">
-                                    Longitud
-                                    <Navigation size={10} className="text-blue-500" />
-                                </label>
-                                <input type="text" placeholder="-58.4" className={inputClass} value={formData.lng} onChange={e => setFormData({...formData, lng: e.target.value})} onBlur={() => handleCoordinateBlur('lng')}/>
-                             </div>
-                         </div>
                   </div>
+              </div>
+
+              {/* MAPA Y GEOMETRÍA */}
+              <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                  <div className="flex justify-between items-center mb-3">
+                      <h3 className="text-xs font-bold text-blue-700 uppercase flex items-center">
+                          <Globe size={12} className="mr-1"/> Delimitación Geográfica
+                      </h3>
+                      
+                      {/* KML UPLOAD BUTTON */}
+                      <div className="relative">
+                           <input 
+                             type="file" 
+                             accept=".kml" 
+                             ref={fileInputRef}
+                             className="hidden"
+                             onChange={handleKMLUpload}
+                           />
+                           <button 
+                             type="button"
+                             onClick={() => fileInputRef.current?.click()}
+                             className="bg-white border border-blue-200 text-blue-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-50 flex items-center shadow-sm"
+                           >
+                               <FileUp size={14} className="mr-1"/> Importar KML
+                           </button>
+                       </div>
+                  </div>
+
+                  <div className="border border-gray-300 rounded-xl overflow-hidden mb-3">
+                       <MapEditor 
+                         initialCenter={formData.lat && formData.lng ? { lat: parseFloat(formData.lat), lng: parseFloat(formData.lng) } : undefined}
+                         initialPolygon={formData.polygon || []}
+                         onPolygonChange={handlePolygonChange}
+                         height="250px"
+                       />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                        <div>
+                            <label className="block font-bold text-blue-900 mb-1 flex items-center">
+                                Latitud / Longitud <Navigation size={10} className="ml-1 text-blue-500" />
+                            </label>
+                            <div className="flex gap-1">
+                                <input type="text" placeholder="-34.5" className={`${inputClass} text-xs h-8`} value={formData.lat} onChange={e => setFormData({...formData, lat: e.target.value})} onBlur={() => handleCoordinateBlur('lat')}/>
+                                <input type="text" placeholder="-58.4" className={`${inputClass} text-xs h-8`} value={formData.lng} onChange={e => setFormData({...formData, lng: e.target.value})} onBlur={() => handleCoordinateBlur('lng')}/>
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block font-bold text-blue-900 mb-1">Capacidad Total (Calculada)</label>
+                            <div className="flex items-center">
+                                <input type="number" step="0.1" className={`${inputClass} text-xs h-8 font-bold text-blue-800`} value={formData.capacityHa} onChange={e => setFormData({...formData, capacityHa: Number(e.target.value)})} placeholder="0"/>
+                                <span className="ml-2 text-blue-600 font-bold">ha</span>
+                            </div>
+                        </div>
+                  </div>
+                  <p className="text-[10px] text-blue-500 mt-2">
+                      * Dibuja en el mapa o importa un KML para calcular automáticamente la superficie del campo.
+                  </p>
               </div>
 
               {/* CLIENTE / TITULAR */}
@@ -632,11 +765,6 @@ export default function Locations() {
                   {!formData.clientId && (
                       <input type="text" placeholder="Nombre del Propietario" className={inputClass} value={formData.ownerName} onChange={e => setFormData({...formData, ownerName: e.target.value})} disabled={isClient} />
                   )}
-                  
-                  <div className="mt-3 pt-3 border-t border-indigo-200">
-                      <label className="block text-sm font-medium text-indigo-900 mb-1">Capacidad Total (Ha)</label>
-                      <input type="number" step="0.1" className={inputClass} value={formData.capacityHa} onChange={e => setFormData({...formData, capacityHa: Number(e.target.value)})} placeholder="0"/>
-                  </div>
               </div>
 
               <div className="flex justify-end space-x-2 pt-4">

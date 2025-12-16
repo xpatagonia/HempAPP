@@ -195,6 +195,9 @@ export interface Location {
     lat: number;
     lng: number;
   };
+  // NUEVO: Polígono del campo para delimitar superficie total
+  polygon?: { lat: number; lng: number }[];
+  
   soilType: SoilType;
   climate: string;
   responsiblePerson: string; // Deprecated visual field, prefer responsibleIds logic if needed, but keeping for now

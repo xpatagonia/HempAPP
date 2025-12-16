@@ -190,6 +190,9 @@ export default function Settings() {
   };
 
   const SQL_SCRIPT = `
+-- MIGRACIÓN v2.7: AGREGAR POLÍGONO A LOCATIONS
+ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS polygon JSONB;
+
 -- TABLA RECURSOS (PLAN AGRÍCOLA)
 CREATE TABLE IF NOT EXISTS public.resources (
     id TEXT PRIMARY KEY,
@@ -210,8 +213,6 @@ ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS "resourceCost" NUMERIC;
 
 -- ACTUALIZAR SEED_MOVEMENTS CON CLIENTE
 ALTER TABLE public.seed_movements ADD COLUMN IF NOT EXISTS "clientId" TEXT;
-
--- Rest of the tables from previous steps...
   `;
 
   return (
