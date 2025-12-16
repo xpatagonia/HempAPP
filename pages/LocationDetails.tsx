@@ -84,7 +84,7 @@ export default function LocationDetails() {
                     {/* MAP */}
                     <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
                         <div className="px-6 py-4 border-b border-gray-100 font-bold text-gray-800">Ubicación Satelital</div>
-                        <div className="h-[400px] w-full">
+                        <div className="h-72 w-full">
                             {location.coordinates ? (
                                 <MapEditor 
                                     initialCenter={location.coordinates}
