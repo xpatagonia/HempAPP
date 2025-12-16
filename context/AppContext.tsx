@@ -402,6 +402,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return () => { isMounted = false; };
   }, []);
 
+  // --- HELPER: GENERIC ERROR HANDLER FOR SUPABASE ---
+  const handleSupabaseError = (error: any, context: string) => {
+      console.error(`Error en ${context}:`, error);
+      if (error.message?.includes('does not exist') || error.code === '42703') {
+          // 42703 is Undefined Column
+          alert(`⚠️ ERROR DE BASE DE DATOS: Faltan columnas en la tabla. \n\nPosiblemente falte ejecutar la migración SQL para habilitar los campos nuevos (como 'polygon'). \n\nVe a Configuración -> Inicialización SQL.`);
+      } else {
+          alert(`Error al guardar en la nube: ${error.message}. Verifica tu conexión.`);
+      }
+  };
+
   const login = async (email: string, password: string): Promise<boolean> => {
     // 1. Intentar con lista en memoria (rápido)
     let validUser = usersList.find(u => 
@@ -451,8 +462,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const addUser = async (u: User): Promise<boolean> => {
       const { error } = await supabase.from('users').insert([u]);
       if (error) {
-          console.error("Error creando usuario:", error);
-          alert(`Error Base de Datos: ${error.message} (Código: ${error.code})`);
+          handleSupabaseError(error, 'addUser');
           if(isEmergencyMode) {
              setUsersList(prev => { const newList = [...prev, u]; saveToLocal('users', newList.filter(user => user.id !== RESCUE_USER.id)); return newList; });
              return true;
@@ -495,12 +505,30 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const updateVariety = async (v: Variety) => { await supabase.from('varieties').update(v).eq('id', v.id); setVarieties(prev => { const n = prev.map(item => item.id === v.id ? v : item); saveToLocal('varieties', n); return n; }); };
   const deleteVariety = async (id: string) => { await supabase.from('varieties').delete().eq('id', id); setVarieties(prev => { const n = prev.filter(item => item.id !== id); saveToLocal('varieties', n); return n; }); };
 
-  const addLocation = async (l: Location) => { await supabase.from('locations').insert([l]); setLocations(prev => { const n = [...prev, l]; saveToLocal('locations', n); return n; }); };
-  const updateLocation = async (l: Location) => { await supabase.from('locations').update(l).eq('id', l.id); setLocations(prev => { const n = prev.map(item => item.id === l.id ? l : item); saveToLocal('locations', n); return n; }); };
+  // --- UPDATED LOCATION METHODS WITH ERROR HANDLING ---
+  const addLocation = async (l: Location) => { 
+      const { error } = await supabase.from('locations').insert([l]);
+      if (error) handleSupabaseError(error, 'addLocation');
+      setLocations(prev => { const n = [...prev, l]; saveToLocal('locations', n); return n; }); 
+  };
+  const updateLocation = async (l: Location) => { 
+      const { error } = await supabase.from('locations').update(l).eq('id', l.id); 
+      if (error) handleSupabaseError(error, 'updateLocation');
+      setLocations(prev => { const n = prev.map(item => item.id === l.id ? l : item); saveToLocal('locations', n); return n; }); 
+  };
   const deleteLocation = async (id: string) => { await supabase.from('locations').delete().eq('id', id); setLocations(prev => { const n = prev.filter(item => item.id !== id); saveToLocal('locations', n); return n; }); };
 
-  const addPlot = async (p: Plot) => { await supabase.from('plots').insert([p]); setPlots(prev => { const n = [...prev, p]; saveToLocal('plots', n); return n; }); };
-  const updatePlot = async (p: Plot) => { await supabase.from('plots').update(p).eq('id', p.id); setPlots(prev => { const n = prev.map(item => item.id === p.id ? p : item); saveToLocal('plots', n); return n; }); };
+  // --- UPDATED PLOT METHODS WITH ERROR HANDLING ---
+  const addPlot = async (p: Plot) => { 
+      const { error } = await supabase.from('plots').insert([p]);
+      if (error) handleSupabaseError(error, 'addPlot');
+      setPlots(prev => { const n = [...prev, p]; saveToLocal('plots', n); return n; }); 
+  };
+  const updatePlot = async (p: Plot) => { 
+      const { error } = await supabase.from('plots').update(p).eq('id', p.id); 
+      if (error) handleSupabaseError(error, 'updatePlot');
+      setPlots(prev => { const n = prev.map(item => item.id === p.id ? p : item); saveToLocal('plots', n); return n; }); 
+  };
   const deletePlot = async (id: string) => { await supabase.from('plots').delete().eq('id', id); setPlots(prev => { const n = prev.filter(item => item.id !== id); saveToLocal('plots', n); return n; }); };
 
   const addSeedBatch = async (s: SeedBatch) => { await supabase.from('seed_batches').insert([s]); setSeedBatches(prev => { const n = [...prev, s]; saveToLocal('seedBatches', n); return n; }); };
