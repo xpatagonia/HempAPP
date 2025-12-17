@@ -5,9 +5,10 @@ import { SeedBatch, SeedMovement, Supplier, StoragePoint } from '../types';
 import { Plus, ScanBarcode, Edit2, Trash2, Tag, Calendar, Package, Truck, Printer, MapPin, FileText, ArrowRight, Building, FileDigit, Globe, Clock, Box, ShieldCheck, Map, UserCheck, Briefcase, Wand2, AlertCircle, DollarSign, ShoppingCart, Archive, ChevronRight, Warehouse, Route as RouteIcon, ExternalLink, Save, X } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { supabase } from '../supabaseClient'; // Import Supabase directly for custom error handling
 
 export default function SeedBatches() {
-  const { seedBatches, seedMovements, addSeedBatch, updateSeedBatch, deleteSeedBatch, addSeedMovement, varieties, locations, currentUser, suppliers, clients, storagePoints, addStoragePoint } = useAppContext();
+  const { seedBatches, seedMovements, addSeedBatch, updateSeedBatch, deleteSeedBatch, addSeedMovement, varieties, locations, currentUser, suppliers, clients, storagePoints, addStoragePoint, isEmergencyMode } = useAppContext();
   
   const [activeTab, setActiveTab] = useState<'inventory' | 'logistics'>('inventory');
   
@@ -70,7 +71,7 @@ export default function SeedBatches() {
       setBatchFormData(prev => ({ ...prev, batchCode: `L${year}-${random}` }));
   };
 
-  const handleBatchSubmit = (e: React.FormEvent) => {
+  const handleBatchSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!batchFormData.varietyId) { alert("Error: Selecciona una Variedad."); return; }
     if (!batchFormData.supplierName) { alert("Error: El nombre del proveedor es obligatorio."); return; }
@@ -82,11 +83,34 @@ export default function SeedBatches() {
         remainingQuantity: editingBatchId ? batchFormData.remainingQuantity : batchFormData.initialQuantity 
     } as any;
 
-    if (editingBatchId) { updateSeedBatch({ ...payload, id: editingBatchId }); } 
-    else { addSeedBatch({ ...payload, id: Date.now().toString() }); }
-    
-    setIsBatchModalOpen(false); 
-    resetBatchForm();
+    try {
+        if (editingBatchId) { 
+            updateSeedBatch({ ...payload, id: editingBatchId }); 
+        } else { 
+            // Manual Add with specific error catching to guide user to Settings
+            if (!isEmergencyMode) {
+                const { error } = await supabase.from('seed_batches').insert([{ ...payload, id: Date.now().toString() }]);
+                if (error) {
+                    if (error.message.includes('Could not find') || error.code === '42703') {
+                        alert("⚠️ ERROR DE ESQUEMA DETECTADO\n\nLa base de datos no tiene las columnas 'analysisDate', 'purity', etc.\n\nSOLUCIÓN:\n1. Ve a la página de Configuración\n2. Copia el nuevo Script SQL (V2.7.5)\n3. Ejecútalo en Supabase.");
+                        return;
+                    }
+                    throw error;
+                }
+                // If success, refresh context manually (simulated here by calling addSeedBatch for local state update)
+                // In real app, we might rely on subscription or re-fetch, but here we update context:
+                addSeedBatch({ ...payload, id: Date.now().toString() }); // This updates local state
+            } else {
+                addSeedBatch({ ...payload, id: Date.now().toString() });
+            }
+        }
+        
+        setIsBatchModalOpen(false); 
+        resetBatchForm();
+    } catch (err: any) {
+        console.error(err);
+        alert("Error al guardar: " + err.message);
+    }
   };
 
   const resetBatchForm = () => {

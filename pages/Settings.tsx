@@ -191,10 +191,11 @@ export default function Settings() {
 
   const SQL_SCRIPT = `
 -- =========================================================
--- REPARACIÓN TABLA SEMILLAS Y CACHÉ (V2.7.4)
+-- REPARACIÓN DEFINITIVA TABLA SEMILLAS (V2.7.5)
+-- Ejecutar en Supabase SQL Editor
 -- =========================================================
 
--- 1. CORREGIR TABLA SEED_BATCHES (Lotes de Semilla)
+-- 1. TABLA: SEED_BATCHES (Lotes de Semilla)
 CREATE TABLE IF NOT EXISTS public.seed_batches (
     id TEXT PRIMARY KEY,
     "varietyId" TEXT,
@@ -209,7 +210,7 @@ CREATE TABLE IF NOT EXISTS public.seed_batches (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
--- AGREGAR COLUMNAS FALTANTES (Causa del error 'Could not find column')
+-- AGREGAR TODAS LAS COLUMNAS POSIBLES (Fix 'Could not find column')
 ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "analysisDate" TEXT;
 ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "purity" NUMERIC;
 ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "germination" NUMERIC;
@@ -218,40 +219,48 @@ ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "category" TEXT;
 ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "originCountry" TEXT;
 ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "supplierLegalName" TEXT;
 ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "supplierCuit" TEXT;
+ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "supplierRenspa" TEXT;
+ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "supplierAddress" TEXT;
 ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "purchaseOrder" TEXT;
 ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "pricePerKg" NUMERIC;
 ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "notes" TEXT;
 ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "gs1Code" TEXT;
 ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "certificationNumber" TEXT;
+ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "storageConditions" TEXT;
+ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "logisticsResponsible" TEXT;
 
--- Seguridad Semillas
+-- Seguridad Semillas (RLS)
 ALTER TABLE public.seed_batches ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Enable all access for all users" ON public.seed_batches;
+CREATE POLICY "Enable all access for all users" ON public.seed_batches FOR ALL USING (true) WITH CHECK (true);
 GRANT ALL ON TABLE public.seed_batches TO anon;
 GRANT ALL ON TABLE public.seed_batches TO authenticated;
 GRANT ALL ON TABLE public.seed_batches TO service_role;
-DROP POLICY IF EXISTS "Enable all access for all users" ON public.seed_batches;
-CREATE POLICY "Enable all access for all users" ON public.seed_batches FOR ALL USING (true) WITH CHECK (true);
 
--- 2. ASEGURAR TABLA STORAGE_POINTS (Mantenimiento)
+-- 2. TABLA: STORAGE_POINTS (Depósitos)
 CREATE TABLE IF NOT EXISTS public.storage_points (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     type TEXT,
     address TEXT,
     city TEXT,
+    province TEXT,
     "surfaceM2" NUMERIC,
     coordinates JSONB,
     "responsibleUserId" TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
--- Eliminar columna vieja que causaba errores anteriores
-ALTER TABLE public.storage_points DROP COLUMN IF EXISTS "capacityKg";
+ALTER TABLE public.storage_points ADD COLUMN IF NOT EXISTS "surfaceM2" NUMERIC;
+ALTER TABLE public.storage_points DROP COLUMN IF EXISTS "capacityKg"; -- Limpieza
+ALTER TABLE public.storage_points ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Enable all access for all users" ON public.storage_points;
+CREATE POLICY "Enable all access for all users" ON public.storage_points FOR ALL USING (true) WITH CHECK (true);
 GRANT ALL ON TABLE public.storage_points TO anon;
 GRANT ALL ON TABLE public.storage_points TO authenticated;
 GRANT ALL ON TABLE public.storage_points TO service_role;
 
 -- 3. RECARGA DE CACHÉ DE API (CRÍTICO)
--- Esto soluciona el error "Could not find column..." actualizando la definición interna de Supabase
+-- Esto soluciona el error "Could not find column in schema cache"
 NOTIFY pgrst, 'reload schema';
   `;
 
@@ -348,14 +357,14 @@ NOTIFY pgrst, 'reload schema';
             {/* SQL Box */}
             <div className="bg-slate-50 rounded-xl border border-slate-200 p-6 mt-8">
                 <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-sm font-bold text-slate-800">Script de Reparación SQL</h2>
+                    <h2 className="text-sm font-bold text-slate-800">Script de Reparación SQL (V2.7.5)</h2>
                     <button onClick={copySQL} className="text-xs bg-white border px-3 py-1 rounded shadow-sm font-bold hover:bg-slate-50">Copiar SQL</button>
                 </div>
                 <div className="bg-slate-900 p-4 rounded-lg text-xs font-mono text-blue-300 overflow-x-auto h-48 custom-scrollbar">
                     <pre>{SQL_SCRIPT}</pre>
                 </div>
                 <p className="text-xs text-slate-500 mt-2">
-                    <strong>¡IMPORTANTE!</strong> Copia este código y ejecútalo en el Editor SQL de Supabase para corregir el error de sincronización.
+                    <strong>¡INSTRUCCIONES!</strong> Copia este código, ve al Editor SQL de Supabase y ejecútalo para solucionar el error "Could not find the analysisDate column".
                 </p>
             </div>
         </div>
