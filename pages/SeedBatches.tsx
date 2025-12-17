@@ -1,17 +1,33 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { SeedBatch, SeedMovement, Supplier, StoragePoint } from '../types';
-import { Plus, ScanBarcode, Edit2, Trash2, Tag, Calendar, Package, Truck, Printer, MapPin, FileText, ArrowRight, Building, FileDigit, Globe, Clock, Box, ShieldCheck, Map, UserCheck, Briefcase, Wand2, AlertCircle, DollarSign, ShoppingCart, Archive, ChevronRight, Warehouse, Route as RouteIcon, ExternalLink, Save, X } from 'lucide-react';
+import { Plus, ScanBarcode, Edit2, Trash2, Tag, Calendar, Package, Truck, Printer, MapPin, FileText, ArrowRight, Building, FileDigit, Globe, Clock, Box, ShieldCheck, Map, UserCheck, Briefcase, Wand2, AlertCircle, DollarSign, ShoppingCart, Archive, ChevronRight, Warehouse, Route as RouteIcon, ExternalLink, Save, X, Database } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { supabase } from '../supabaseClient'; 
+import { Link } from 'react-router-dom';
 
 export default function SeedBatches() {
   const { seedBatches, seedMovements, addSeedBatch, updateSeedBatch, deleteSeedBatch, addSeedMovement, varieties, locations, currentUser, suppliers, clients, storagePoints, addStoragePoint, isEmergencyMode } = useAppContext();
   
   const [activeTab, setActiveTab] = useState<'inventory' | 'logistics'>('inventory');
   
+  // -- SCHEMA HEALTH CHECK --
+  const [schemaError, setSchemaError] = useState<string | null>(null);
+
+  useEffect(() => {
+      const checkSchema = async () => {
+          if (isEmergencyMode) return;
+          // Intencionalmente buscamos la columna problemática
+          const { error } = await supabase.from('seed_batches').select('storagePointId').limit(1);
+          if (error && (error.code === '42703' || error.message.includes('does not exist'))) {
+              setSchemaError("Falta la columna 'storagePointId' en la base de datos.");
+          }
+      };
+      checkSchema();
+  }, [isEmergencyMode]);
+
   // -- BATCH STATES (PURCHASE FLOW) --
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
   const [editingBatchId, setEditingBatchId] = useState<string | null>(null);
@@ -106,7 +122,6 @@ export default function SeedBatches() {
                     console.warn("Fallo inserción completa, intentando modo seguro...", error.message);
                     
                     // INTENTO 2 (FALLBACK): Insertar SOLO columnas básicas garantizadas (V1)
-                    // Eliminamos storagePointId, analysisDate, etc. del fallback para asegurar que entre.
                     if (error.message.includes('Could not find') || error.code === '42703' || error.message.includes('schema cache')) {
                         const safePayload = {
                             id: Date.now().toString(),
@@ -122,21 +137,18 @@ export default function SeedBatches() {
 
                         const { error: safeError } = await supabase.from('seed_batches').insert([safePayload]);
                         
-                        if (safeError) throw safeError; // Si falla esto, es un error real.
+                        if (safeError) throw safeError; 
 
-                        alert("⚠️ LOTE GUARDADO EN MODO SEGURO\n\nAlgunos datos extra (Ubicación, Análisis) no se guardaron porque la base de datos se está actualizando, pero el stock y la variedad están seguros.");
+                        alert("✅ LOTE GUARDADO (PARCIALMENTE)\n\nSe guardó el stock y la variedad, pero la ubicación no se pudo registrar porque la base de datos necesita actualización.");
                         
-                        // Actualizar contexto local con el payload completo para que el usuario LO VEA aunque no esté en DB completo
                         addSeedBatch({ ...payload, id: safePayload.id });
                     } else {
                         throw error;
                     }
                 } else {
-                    // Éxito total
                     addSeedBatch({ ...payload, id: Date.now().toString() });
                 }
             } else {
-                // Modo Offline
                 addSeedBatch({ ...payload, id: Date.now().toString() });
             }
         }
@@ -260,6 +272,21 @@ export default function SeedBatches() {
   // --- RENDERS ---
   return (
     <div>
+      {schemaError && (
+          <div className="bg-red-50 border border-red-200 p-4 rounded-xl mb-6 flex items-start justify-between shadow-sm animate-pulse">
+              <div className="flex items-start">
+                  <Database className="text-red-500 mr-3 mt-1" size={24}/>
+                  <div>
+                      <h3 className="font-bold text-red-800">Actualización de Base de Datos Necesaria</h3>
+                      <p className="text-red-600 text-sm mt-1">El sistema detectó que faltan columnas en Supabase ({schemaError}). Los datos de ubicación podrían no guardarse.</p>
+                  </div>
+              </div>
+              <Link to="/settings" className="bg-red-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-red-700 shadow">
+                  Ir a Reparar
+              </Link>
+          </div>
+      )}
+
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>
             <h1 className="text-2xl font-bold text-gray-800 flex items-center">
