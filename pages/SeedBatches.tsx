@@ -105,8 +105,8 @@ export default function SeedBatches() {
                 if (error) {
                     console.warn("Fallo inserción completa, intentando modo seguro...", error.message);
                     
-                    // INTENTO 2 (FALLBACK): Insertar SOLO columnas básicas garantizadas
-                    // Si falla por 'analysisDate' u otras columnas nuevas, esto debería funcionar.
+                    // INTENTO 2 (FALLBACK): Insertar SOLO columnas básicas garantizadas (V1)
+                    // Eliminamos storagePointId, analysisDate, etc. del fallback para asegurar que entre.
                     if (error.message.includes('Could not find') || error.code === '42703' || error.message.includes('schema cache')) {
                         const safePayload = {
                             id: Date.now().toString(),
@@ -116,7 +116,7 @@ export default function SeedBatches() {
                             initialQuantity: payload.initialQuantity,
                             remainingQuantity: payload.remainingQuantity,
                             purchaseDate: payload.purchaseDate,
-                            storagePointId: payload.storagePointId,
+                            // storagePointId ELIMINADO para evitar error si falta la columna
                             isActive: true
                         };
 
@@ -124,9 +124,9 @@ export default function SeedBatches() {
                         
                         if (safeError) throw safeError; // Si falla esto, es un error real.
 
-                        alert("⚠️ AVISO: El lote se guardó, pero algunos detalles técnicos (análisis, etiqueta) no se pudieron registrar porque la base de datos se está actualizando. Podrás editarlos luego.");
+                        alert("⚠️ LOTE GUARDADO EN MODO SEGURO\n\nAlgunos datos extra (Ubicación, Análisis) no se guardaron porque la base de datos se está actualizando, pero el stock y la variedad están seguros.");
                         
-                        // Actualizar contexto local con el payload completo para que el usuario LO VEA aunque no esté en DB
+                        // Actualizar contexto local con el payload completo para que el usuario LO VEA aunque no esté en DB completo
                         addSeedBatch({ ...payload, id: safePayload.id });
                     } else {
                         throw error;

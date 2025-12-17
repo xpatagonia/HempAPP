@@ -191,20 +191,22 @@ export default function Settings() {
 
   const SQL_SCRIPT = `
 -- =========================================================
--- FORZAR RECARGA CACHÉ SUPABASE (SIMPLE)
+-- FORZAR RECARGA CACHÉ SUPABASE (V2.7.7)
+-- Agrega soporte para storagePointId
 -- =========================================================
 
 -- 1. Notificar a PostgREST que recargue el esquema
 NOTIFY pgrst, 'reload schema';
 
--- 2. Asegurar que las columnas existan (por si acaso)
+-- 2. Asegurar que las columnas existan
+ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "storagePointId" TEXT;
 ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "analysisDate" TEXT;
 ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "purity" NUMERIC;
 ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "germination" NUMERIC;
 ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "labelSerialNumber" TEXT;
 
 -- 3. Mensaje de éxito
-SELECT 'Cache recargado. Ya deberías poder guardar.' as status;
+SELECT 'Cache recargado y columnas añadidas.' as status;
   `;
 
   return (
@@ -300,7 +302,7 @@ SELECT 'Cache recargado. Ya deberías poder guardar.' as status;
             {/* SQL Box */}
             <div className="bg-slate-50 rounded-xl border border-slate-200 p-6 mt-8">
                 <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-sm font-bold text-slate-800">Script: Forzar Recarga Caché</h2>
+                    <h2 className="text-sm font-bold text-slate-800">Script: Forzar Recarga Caché (V2.7.7)</h2>
                     <button onClick={copySQL} className="text-xs bg-white border px-3 py-1 rounded shadow-sm font-bold hover:bg-slate-50">Copiar SQL</button>
                 </div>
                 <div className="bg-slate-900 p-4 rounded-lg text-xs font-mono text-blue-300 overflow-x-auto h-48 custom-scrollbar">
