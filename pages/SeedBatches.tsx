@@ -1,8 +1,8 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { SeedBatch, SeedMovement, Supplier, StoragePoint } from '../types';
-import { Plus, ScanBarcode, Edit2, Trash2, Tag, Calendar, Package, Truck, Printer, MapPin, FileText, ArrowRight, Building, FileDigit, Globe, Clock, Box, ShieldCheck, Map, UserCheck, Briefcase, Wand2, AlertCircle, DollarSign, ShoppingCart, Archive, ChevronRight, Warehouse, Route as RouteIcon, ExternalLink, Save, X, Database, Coins, Loader2 } from 'lucide-react';
+import { Plus, ScanBarcode, Edit2, Trash2, Tag, Calendar, Package, Truck, Printer, MapPin, FileText, ArrowRight, Building, FileDigit, Globe, Clock, Box, ShieldCheck, Map, UserCheck, Briefcase, Wand2, AlertCircle, DollarSign, ShoppingCart, Archive, ChevronRight, Warehouse, Route as RouteIcon, ExternalLink, Save, X, Database, Coins, Loader2, Search, Filter } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { supabase } from '../supabaseClient'; 
@@ -20,6 +20,11 @@ export default function SeedBatches() {
   const [activeTab, setActiveTab] = useState<'inventory' | 'logistics'>('inventory');
   const [isSubmitting, setIsSubmitting] = useState(false);
   
+  // -- FILTERS STATE --
+  const [invSearch, setInvSearch] = useState('');
+  const [invFilterVariety, setInvFilterVariety] = useState('');
+  const [invFilterStorage, setInvFilterStorage] = useState('');
+
   // -- SCHEMA HEALTH CHECK --
   const [schemaError, setSchemaError] = useState<string | null>(null);
 
@@ -66,7 +71,22 @@ export default function SeedBatches() {
 
   // --- HELPER: FILTER VARIETIES BY SUPPLIER ---
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>('');
-  const filteredVarieties = selectedSupplierId ? varieties.filter(v => v.supplierId === selectedSupplierId) : varieties;
+  const filteredVarietiesForSelect = selectedSupplierId ? varieties.filter(v => v.supplierId === selectedSupplierId) : varieties;
+
+  // --- COMPUTE FILTERED INVENTORY ---
+  const filteredBatches = useMemo(() => {
+      return seedBatches.filter(b => {
+          const variety = varieties.find(v => v.id === b.varietyId);
+          const sp = storagePoints.find(s => s.id === b.storagePointId);
+          
+          const matchesSearch = b.batchCode.toLowerCase().includes(invSearch.toLowerCase()) || 
+                               variety?.name.toLowerCase().includes(invSearch.toLowerCase());
+          const matchesVariety = !invFilterVariety || b.varietyId === invFilterVariety;
+          const matchesStorage = !invFilterStorage || b.storagePointId === invFilterStorage;
+
+          return matchesSearch && matchesVariety && matchesStorage;
+      });
+  }, [seedBatches, invSearch, invFilterVariety, invFilterStorage, varieties, storagePoints]);
 
   // --- BATCH HANDLERS ---
   const handleSupplierChange = (supId: string) => {
@@ -196,7 +216,8 @@ export default function SeedBatches() {
       }
 
       setIsSubmitting(true);
-      const movementId = `MOV-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      // Generate ultra-safe ID with high entropy
+      const movementId = `MOV-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
       
       const movementPayload = {
           ...moveFormData as any,
@@ -208,22 +229,34 @@ export default function SeedBatches() {
       };
 
       try {
-          if (!isEmergencyMode) {
-              const { error } = await supabase.from('seed_movements').insert([movementPayload]);
-              if (error) throw error;
+          // CORRECTED: Don't double insert. AppContext.addSeedMovement handles it.
+          const success = await addSeedMovement(movementPayload);
+          
+          if(success) {
+              if(batch) {
+                  const newQty = batch.remainingQuantity - Number(moveFormData.quantity);
+                  updateSeedBatch({ ...batch, remainingQuantity: newQty });
+              }
+              setIsMoveModalOpen(false);
+              resetMoveForm();
           }
-          addSeedMovement(movementPayload);
-          if(batch) {
-              const newQty = batch.remainingQuantity - Number(moveFormData.quantity);
-              updateSeedBatch({ ...batch, remainingQuantity: newQty });
-          }
-          setIsMoveModalOpen(false);
-          resetMoveForm();
       } catch (err: any) {
           alert("Error al procesar logística: " + err.message);
       } finally {
           setIsSubmitting(false);
       }
+  };
+
+  const handleOpenMoveFromBatch = (batch: SeedBatch) => {
+      setMoveFormData({
+          batchId: batch.id,
+          clientId: '',
+          targetLocationId: '',
+          quantity: 0,
+          date: new Date().toISOString().split('T')[0],
+          status: 'En Tránsito'
+      });
+      setIsMoveModalOpen(true);
   };
 
   const resetMoveForm = () => {
@@ -310,6 +343,34 @@ export default function SeedBatches() {
                   </div>
               </div>
 
+              {/* INVENTORY FILTERS BAR */}
+              <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex flex-wrap gap-4 items-center">
+                  <div className="relative flex-1 min-w-[200px]">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={18}/>
+                      <input 
+                        type="text" 
+                        placeholder="Buscar por lote o variedad..." 
+                        className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-hemp-500"
+                        value={invSearch}
+                        onChange={e => setInvSearch(e.target.value)}
+                      />
+                  </div>
+                  <div className="flex items-center space-x-2">
+                      <Filter className="text-gray-400" size={18}/>
+                      <select className="border rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-hemp-500" value={invFilterVariety} onChange={e => setInvFilterVariety(e.target.value)}>
+                          <option value="">Todas las Variedades</option>
+                          {varieties.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                      </select>
+                      <select className="border rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-hemp-500" value={invFilterStorage} onChange={e => setInvFilterStorage(e.target.value)}>
+                          <option value="">Todas las Ubicaciones</option>
+                          {storagePoints.map(sp => <option key={sp.id} value={sp.id}>{sp.name}</option>)}
+                      </select>
+                  </div>
+                  { (invSearch || invFilterVariety || invFilterStorage) && (
+                      <button onClick={() => { setInvSearch(''); setInvFilterVariety(''); setInvFilterStorage(''); }} className="text-xs font-bold text-red-500 hover:underline">Limpiar</button>
+                  )}
+              </div>
+
               <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                   <table className="min-w-full divide-y divide-gray-200 text-sm">
                       <thead className="bg-gray-50">
@@ -323,18 +384,22 @@ export default function SeedBatches() {
                           </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
-                          {seedBatches.length === 0 ? (
-                              <tr><td colSpan={6} className="p-8 text-center text-gray-400">No hay stock disponible.</td></tr>
-                          ) : seedBatches.map(batch => {
+                          {filteredBatches.length === 0 ? (
+                              <tr><td colSpan={6} className="p-8 text-center text-gray-400">No hay stock que coincida con los filtros.</td></tr>
+                          ) : filteredBatches.map(batch => {
                               const variety = varieties.find(v => v.id === batch.varietyId);
                               const sp = storagePoints.find(s => s.id === batch.storagePointId);
                               const usdValue = (batch.remainingQuantity || 0) * (batch.pricePerKg || 0);
                               const eurValue = usdValue * EXCHANGE_RATES.EUR;
+                              const isLowStock = batch.remainingQuantity > 0 && batch.remainingQuantity < 50;
 
                               return (
-                                  <tr key={batch.id} className="hover:bg-gray-50">
+                                  <tr key={batch.id} className={`hover:bg-gray-50 transition-colors ${isLowStock ? 'bg-amber-50/50' : ''}`}>
                                       <td className="px-6 py-4">
-                                          <div className="font-bold text-gray-700">{batch.batchCode}</div>
+                                          <div className="font-bold text-gray-700 flex items-center">
+                                              {batch.batchCode}
+                                              {isLowStock && <AlertCircle size={14} className="ml-1 text-amber-500" title="Bajo Stock"/>}
+                                          </div>
                                           <div className="text-[10px] text-gray-400 font-mono">PO: {batch.purchaseOrder || 'S/N'}</div>
                                       </td>
                                       <td className="px-6 py-4 font-bold text-hemp-700">{variety?.name || 'Desconocida'}</td>
@@ -344,7 +409,7 @@ export default function SeedBatches() {
                                           </span>
                                       </td>
                                       <td className="px-6 py-4 text-center">
-                                          <span className={`px-2 py-1 rounded font-bold ${batch.remainingQuantity > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                          <span className={`px-2 py-1 rounded font-bold ${batch.remainingQuantity > 50 ? 'bg-green-100 text-green-800' : batch.remainingQuantity > 0 ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800'}`}>
                                               {batch.remainingQuantity} kg
                                           </span>
                                       </td>
@@ -359,8 +424,11 @@ export default function SeedBatches() {
                                       <td className="px-6 py-4 text-right">
                                           {isAdmin && (
                                               <div className="flex justify-end space-x-1">
-                                                  <button onClick={() => handleEditBatch(batch)} className="text-gray-400 hover:text-blue-600 p-1"><Edit2 size={16}/></button>
-                                                  <button onClick={() => handleDeleteBatch(batch.id)} className="text-red-400 hover:text-red-600 p-1"><Trash2 size={16}/></button>
+                                                  <button onClick={() => handleOpenMoveFromBatch(batch)} disabled={batch.remainingQuantity <= 0} className={`p-1.5 rounded transition ${batch.remainingQuantity > 0 ? 'text-blue-600 hover:bg-blue-50' : 'text-gray-300 cursor-not-allowed'}`} title="Enviar material (Logística)">
+                                                      <Truck size={18}/>
+                                                  </button>
+                                                  <button onClick={() => handleEditBatch(batch)} className="text-gray-400 hover:text-hemp-600 p-1.5 hover:bg-gray-100 rounded"><Edit2 size={16}/></button>
+                                                  <button onClick={() => handleDeleteBatch(batch.id)} className="text-red-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded"><Trash2 size={16}/></button>
                                               </div>
                                           )}
                                       </td>
@@ -474,7 +542,7 @@ export default function SeedBatches() {
                             <label className="block text-sm font-medium text-gray-700 mb-1">Variedad *</label>
                             <select required className={inputClass} value={batchFormData.varietyId} onChange={e => handleVarietyChange(e.target.value)} disabled={!selectedSupplierId}>
                                 <option value="">-- Seleccionar --</option>
-                                {filteredVarieties.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                                {filteredVarietiesForSelect.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
                             </select>
                         </div>
                     </div>

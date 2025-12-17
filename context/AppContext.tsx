@@ -84,7 +84,7 @@ interface AppContextType {
   updateSeedBatch: (s: SeedBatch) => void;
   deleteSeedBatch: (id: string) => void;
   
-  addSeedMovement: (m: SeedMovement) => void;
+  addSeedMovement: (m: SeedMovement) => Promise<boolean>;
   updateSeedMovement: (m: SeedMovement) => void;
   deleteSeedMovement: (id: string) => void;
 
@@ -430,15 +430,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const updateSeedBatch = (s: SeedBatch) => genericUpdate('seed_batches', s, setSeedBatches, 'seedBatches');
   const deleteSeedBatch = (id: string) => genericDelete('seed_batches', id, setSeedBatches, 'seedBatches');
 
-  const addSeedMovement = (m: SeedMovement) => { 
-      if(isEmergencyMode) {
-          setSeedMovements(prev => { const n = [m, ...prev]; saveToLocal('seedMovements', n); return n; });
-      } else {
-          supabase.from('seed_movements').insert([m]).then(({error}) => {
-              if(error) handleSupabaseError(error, 'add move');
-              else setSeedMovements(prev => [m, ...prev]);
-          });
-      }
+  const addSeedMovement = async (m: SeedMovement) => { 
+      return await genericAdd('seed_movements', m, setSeedMovements, 'seedMovements');
   };
   const updateSeedMovement = (m: SeedMovement) => genericUpdate('seed_movements', m, setSeedMovements, 'seedMovements');
   const deleteSeedMovement = (id: string) => genericDelete('seed_movements', id, setSeedMovements, 'seedMovements');
