@@ -19,9 +19,9 @@ export default function SeedBatches() {
   useEffect(() => {
       const checkSchema = async () => {
           if (isEmergencyMode) return;
-          const { error } = await supabase.from('seed_batches').select('storagePointId').limit(1);
+          const { error } = await supabase.from('seed_batches').select('pricePerKg').limit(1);
           if (error && (error.code === '42703' || error.message.includes('does not exist'))) {
-              setSchemaError("Falta la columna 'storagePointId' en la base de datos.");
+              setSchemaError("Falta la columna 'pricePerKg' para valorización.");
           }
       };
       checkSchema();
@@ -93,7 +93,6 @@ export default function SeedBatches() {
     if (!batchFormData.initialQuantity || batchFormData.initialQuantity <= 0) { alert("Error: La cantidad debe ser mayor a 0."); return; }
     if (!batchFormData.batchCode) { alert("Error: Falta el código de lote."); return; }
 
-    // 1. SANITIZACIÓN: Convertir strings vacíos a null
     const rawPayload = { 
         ...batchFormData,
         remainingQuantity: editingBatchId ? batchFormData.remainingQuantity : batchFormData.initialQuantity 
@@ -101,7 +100,7 @@ export default function SeedBatches() {
 
     const payload = Object.fromEntries(
         Object.entries(rawPayload).map(([key, value]) => {
-            if (value === '') return [key, null]; // Convertir vacíos a null
+            if (value === '') return [key, null];
             if (['purity', 'germination', 'initialQuantity', 'pricePerKg', 'remainingQuantity'].includes(key)) {
                 return [key, Number(value) || 0];
             }
@@ -113,20 +112,15 @@ export default function SeedBatches() {
         if (editingBatchId) { 
             updateSeedBatch({ ...payload, id: editingBatchId }); 
         } else { 
-            // NUEVO REGISTRO
             const newId = Date.now().toString();
-            // Agregamos timestamp para log de actividad
             const finalPayload = { ...payload, id: newId, createdAt: new Date().toISOString() };
 
             if (!isEmergencyMode) {
-                // INTENTO 1: Insertar TODO
                 const { error } = await supabase.from('seed_batches').insert([finalPayload]);
                 
                 if (error) {
-                    console.warn("Fallo inserción completa, intentando modo seguro...", error.message);
-                    
-                    // INTENTO 2 (FALLBACK): Insertar SOLO columnas básicas garantizadas (V1)
                     if (error.message.includes('Could not find') || error.code === '42703' || error.message.includes('schema cache')) {
+                        // Fallback V1
                         const safePayload = {
                             id: newId,
                             varietyId: payload.varietyId,
@@ -136,33 +130,25 @@ export default function SeedBatches() {
                             remainingQuantity: payload.remainingQuantity,
                             purchaseDate: payload.purchaseDate,
                             isActive: true,
-                            createdAt: new Date().toISOString() // Log básico
+                            createdAt: new Date().toISOString()
                         };
-
                         const { error: safeError } = await supabase.from('seed_batches').insert([safePayload]);
-                        
                         if (safeError) throw safeError; 
-
-                        // Éxito parcial: Actualizar UI localmente con todos los datos para que el usuario no pierda nada visualmente
                         addLocalSeedBatch(finalPayload);
-                        alert("✅ LOTE GUARDADO (PARCIALMENTE)\n\nSe guardó el stock, pero faltan columnas en la DB. Ve a Configuración y ejecuta el script de reparación.");
+                        alert("✅ Lote registrado. Advertencia: No se guardó la valorización por falta de columnas en DB. Ejecuta el script SQL V2.9.0");
                     } else {
                         throw error;
                     }
                 } else {
-                    // Éxito total en DB: Actualizar UI localmente
                     addLocalSeedBatch(finalPayload);
                 }
             } else {
-                // Modo Offline
                 addLocalSeedBatch(finalPayload);
             }
         }
-        
         setIsBatchModalOpen(false); 
         resetBatchForm();
     } catch (err: any) {
-        console.error(err);
         alert("Error crítico al guardar: " + err.message);
     }
   };
@@ -172,8 +158,9 @@ export default function SeedBatches() {
         varietyId: '', supplierId: '', supplierName: '', supplierLegalName: '', supplierCuit: '', supplierAddress: '', originCountry: '',
         batchCode: '', labelSerialNumber: '', category: 'C1', analysisDate: '',
         purchaseOrder: '', purchaseDate: new Date().toISOString().split('T')[0],
-        initialQuantity: 0, remainingQuantity: 0, storagePointId: '', isActive: true 
+        initialQuantity: 0, remainingQuantity: 0, storagePointId: '', isActive: true, pricePerKg: 0
     });
+    // Fix: replaced setEditingId with the correct state setter name setEditingBatchId
     setEditingBatchId(null);
     setSelectedSupplierId('');
   };
@@ -189,52 +176,29 @@ export default function SeedBatches() {
   
   const handleDeleteBatch = (id: string) => { if(window.confirm("¿Eliminar este registro de compra/stock?")) deleteSeedBatch(id); };
 
-  // --- QUICK STORAGE HANDLER ---
   const handleQuickStorageSubmit = (e: React.FormEvent) => {
       e.preventDefault();
       if(!quickStorageForm.name) return;
-      
       const newId = Date.now().toString();
-      
-      const payload = {
-          id: newId,
-          name: quickStorageForm.name,
-          city: quickStorageForm.city,
-          type: quickStorageForm.type as any,
-          surfaceM2: Number(quickStorageForm.surfaceM2),
-          address: 'Dirección pendiente'
-      } as StoragePoint;
-
+      const payload = { id: newId, name: quickStorageForm.name, city: quickStorageForm.city, type: quickStorageForm.type as any, surfaceM2: Number(quickStorageForm.surfaceM2), address: 'Dirección pendiente' } as StoragePoint;
       addStoragePoint(payload);
-
-      // Auto-select the new storage point
       setBatchFormData(prev => ({ ...prev, storagePointId: newId }));
       setIsQuickStorageOpen(false);
       setQuickStorageForm({ name: '', city: '', type: 'Propio', surfaceM2: 0 });
   };
 
-  // --- MOVEMENT HANDLERS & ROUTE PLANNER ---
-  const filteredTargetLocations = locations.filter(l => {
-      if (!moveFormData.clientId) return false;
-      return l.clientId === moveFormData.clientId;
-  });
-
   const getRouteData = () => {
       const batch = seedBatches.find(b => b.id === moveFormData.batchId);
       const originPoint = storagePoints.find(sp => sp.id === batch?.storagePointId);
       const destLocation = locations.find(l => l.id === moveFormData.targetLocationId);
-
       if (originPoint?.coordinates && destLocation?.coordinates) {
           const link = `https://www.google.com/maps/dir/?api=1&origin=${originPoint.coordinates.lat},${originPoint.coordinates.lng}&destination=${destLocation.coordinates.lat},${destLocation.coordinates.lng}&travelmode=driving`;
           const R = 6371; 
           const dLat = (destLocation.coordinates.lat - originPoint.coordinates.lat) * Math.PI / 180;
           const dLon = (destLocation.coordinates.lng - originPoint.coordinates.lng) * Math.PI / 180;
-          const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                    Math.cos(originPoint.coordinates.lat * Math.PI / 180) * Math.cos(destLocation.coordinates.lat * Math.PI / 180) *
-                    Math.sin(dLon/2) * Math.sin(dLon/2);
+          const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(originPoint.coordinates.lat * Math.PI / 180) * Math.cos(destLocation.coordinates.lat * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
           const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
           const dist = R * c;
-
           return { link, dist: dist.toFixed(1), originName: originPoint.name, destName: destLocation.name };
       }
       return null;
@@ -242,7 +206,7 @@ export default function SeedBatches() {
 
   const routeData = getRouteData();
 
-  const handleMoveSubmit = (e: React.FormEvent) => {
+  const handleMoveSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
       if(!moveFormData.batchId || !moveFormData.targetLocationId || !moveFormData.quantity) return;
 
@@ -252,21 +216,50 @@ export default function SeedBatches() {
           return;
       }
 
-      addSeedMovement({
+      const movementPayload = {
           ...moveFormData as any,
           id: Date.now().toString(),
           transportGuideNumber: moveFormData.transportGuideNumber || `G-${Date.now()}`,
-          originStorageId: batch?.storagePointId,
-          routeGoogleLink: routeData?.link,
-          estimatedDistanceKm: routeData ? Number(routeData.dist) : 0
-      });
+          originStorageId: batch?.storagePointId || null,
+          routeGoogleLink: routeData?.link || null,
+          estimatedDistanceKm: routeData ? Number(routeData.dist) : null
+      };
 
-      if(batch) {
-          updateSeedBatch({ ...batch, remainingQuantity: batch.remainingQuantity - Number(moveFormData.quantity) });
+      try {
+          if (!isEmergencyMode) {
+              const { error } = await supabase.from('seed_movements').insert([movementPayload]);
+              if (error) {
+                  if (error.message.includes('estimatedDistanceKm')) {
+                      // Fallback v1 logic
+                      const { error: safeError } = await supabase.from('seed_movements').insert([{
+                          id: movementPayload.id,
+                          batchId: movementPayload.batchId,
+                          targetLocationId: movementPayload.targetLocationId,
+                          quantity: movementPayload.quantity,
+                          date: movementPayload.date,
+                          status: movementPayload.status
+                      }]);
+                      if (safeError) throw safeError;
+                      alert("⚠️ Envío registrado parcialmente. Faltan columnas en DB para distancia/rutas. Ejecuta script SQL V2.9.0");
+                  } else {
+                      throw error;
+                  }
+              }
+          }
+          
+          addSeedMovement(movementPayload);
+
+          // ACTUALIZAR STOCK EXPLÍCITAMENTE
+          if(batch) {
+              const newQty = batch.remainingQuantity - Number(moveFormData.quantity);
+              updateSeedBatch({ ...batch, remainingQuantity: newQty });
+          }
+
+          setIsMoveModalOpen(false);
+          resetMoveForm();
+      } catch (err: any) {
+          alert("Error al procesar logística: " + err.message);
       }
-
-      setIsMoveModalOpen(false);
-      resetMoveForm();
   };
 
   const resetMoveForm = () => {
@@ -279,16 +272,16 @@ export default function SeedBatches() {
   return (
     <div>
       {schemaError && (
-          <div className="bg-red-50 border border-red-200 p-4 rounded-xl mb-6 flex items-start justify-between shadow-sm animate-pulse">
+          <div className="bg-red-50 border border-red-200 p-4 rounded-xl mb-6 flex items-start justify-between shadow-sm">
               <div className="flex items-start">
                   <Database className="text-red-500 mr-3 mt-1" size={24}/>
                   <div>
-                      <h3 className="font-bold text-red-800">Actualización de Base de Datos Necesaria</h3>
-                      <p className="text-red-600 text-sm mt-1">El sistema detectó que faltan columnas en Supabase ({schemaError}). Los datos de ubicación podrían no guardarse.</p>
+                      h3 className="font-bold text-red-800">Actualización de Base de Datos Necesaria (V2.9.0)</h3>
+                      <p className="text-red-600 text-sm mt-1">Faltan columnas de valorización y logística avanzada. Los cálculos de precios y distancias podrían fallar.</p>
                   </div>
               </div>
               <Link to="/settings" className="bg-red-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-red-700 shadow">
-                  Ir a Reparar
+                  Reparar Ahora
               </Link>
           </div>
       )}
@@ -296,17 +289,17 @@ export default function SeedBatches() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>
             <h1 className="text-2xl font-bold text-gray-800 flex items-center">
-                <Archive className="mr-2 text-hemp-600"/> Gestión de Stock y Compras
+                <Archive className="mr-2 text-hemp-600"/> Inventario de Semillas
             </h1>
-            <p className="text-sm text-gray-500">Administración de recepciones, inventario y logística de semillas.</p>
+            <p className="text-sm text-gray-500">Valorización de activos, logística de salida y trazabilidad.</p>
         </div>
         {isAdmin && (
           <div className="flex space-x-2 w-full md:w-auto">
               <button onClick={() => { resetMoveForm(); setIsMoveModalOpen(true); }} className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-blue-700 transition shadow-sm justify-center flex-1 md:flex-none">
-                <Truck size={20} className="mr-2" /> Logística (Salida)
+                <Truck size={20} className="mr-2" /> Logística de Salida
               </button>
               <button onClick={() => { resetBatchForm(); setIsBatchModalOpen(true); }} className="bg-hemp-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-hemp-700 transition shadow-sm justify-center flex-1 md:flex-none">
-                <ShoppingCart size={20} className="mr-2" /> Registrar Compra (Entrada)
+                <ShoppingCart size={20} className="mr-2" /> Registrar Compra
               </button>
           </div>
         )}
@@ -315,78 +308,141 @@ export default function SeedBatches() {
       <div className="border-b border-gray-200 mb-6">
           <nav className="-mb-px flex space-x-8">
               <button onClick={() => setActiveTab('inventory')} className={`${activeTab === 'inventory' ? 'border-hemp-600 text-hemp-600' : 'border-transparent text-gray-500 hover:text-gray-700'} pb-4 px-1 border-b-2 font-medium text-sm flex items-center`}>
-                  <Package size={16} className="mr-2"/> Stock e Ingresos
+                  <Package size={16} className="mr-2"/> Stock Central & Valorización
               </button>
               <button onClick={() => setActiveTab('logistics')} className={`${activeTab === 'logistics' ? 'border-hemp-600 text-hemp-600' : 'border-transparent text-gray-500 hover:text-gray-700'} pb-4 px-1 border-b-2 font-medium text-sm flex items-center`}>
-                  <Truck size={16} className="mr-2"/> Logística y Entregas
+                  <Truck size={16} className="mr-2"/> Historial de Entregas
               </button>
           </nav>
       </div>
 
       {activeTab === 'inventory' && (
+          <div className="space-y-4">
+              {/* Financial Dashboard Summary */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                  <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                      <p className="text-xs font-bold text-gray-400 uppercase">Volumen Total en Stock</p>
+                      <p className="text-2xl font-black text-gray-800">{seedBatches.reduce((sum, b) => sum + (b.remainingQuantity || 0), 0)} kg</p>
+                  </div>
+                  <div className="bg-green-50 p-4 rounded-xl border border-green-100 shadow-sm">
+                      <p className="text-xs font-bold text-green-600 uppercase">Valorización Total (Est.)</p>
+                      <p className="text-2xl font-black text-green-700">
+                        USD {seedBatches.reduce((sum, b) => sum + ((b.remainingQuantity || 0) * (b.pricePerKg || 0)), 0).toLocaleString()}
+                      </p>
+                  </div>
+                  <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 shadow-sm">
+                      <p className="text-xs font-bold text-blue-600 uppercase">Lotes Activos</p>
+                      <p className="text-2xl font-black text-blue-700">{seedBatches.filter(b => b.remainingQuantity > 0).length}</p>
+                  </div>
+              </div>
+
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                  <table className="min-w-full divide-y divide-gray-200 text-sm">
+                      <thead className="bg-gray-50">
+                          <tr>
+                              <th className="px-6 py-3 text-left font-medium text-gray-500 uppercase">Referencia / Lote</th>
+                              <th className="px-6 py-3 text-left font-medium text-gray-500 uppercase">Variedad</th>
+                              <th className="px-6 py-3 text-center font-medium text-gray-500 uppercase">Ubicación</th>
+                              <th className="px-6 py-3 text-center font-medium text-gray-500 uppercase">Stock</th>
+                              <th className="px-6 py-3 text-right font-medium text-gray-500 uppercase">Valor Stock</th>
+                              <th className="px-6 py-3 text-right font-medium text-gray-500 uppercase">Acciones</th>
+                          </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                          {seedBatches.length === 0 ? (
+                              <tr><td colSpan={6} className="p-8 text-center text-gray-400">No hay stock disponible.</td></tr>
+                          ) : seedBatches.map(batch => {
+                              const variety = varieties.find(v => v.id === batch.varietyId);
+                              const sp = storagePoints.find(s => s.id === batch.storagePointId);
+                              const batchValue = (batch.remainingQuantity || 0) * (batch.pricePerKg || 0);
+
+                              return (
+                                  <tr key={batch.id} className="hover:bg-gray-50">
+                                      <td className="px-6 py-4">
+                                          <div className="font-bold text-gray-700">{batch.batchCode}</div>
+                                          <div className="text-[10px] text-gray-400 font-mono">PO: {batch.purchaseOrder || 'S/N'}</div>
+                                      </td>
+                                      <td className="px-6 py-4 font-bold text-hemp-700">{variety?.name || 'Desconocida'}</td>
+                                      <td className="px-6 py-4 text-center">
+                                          <span className="text-xs bg-purple-50 text-purple-700 px-2 py-1 rounded border border-purple-100 font-bold">
+                                              {sp?.name || 'S/D'}
+                                          </span>
+                                      </td>
+                                      <td className="px-6 py-4 text-center">
+                                          <span className={`px-2 py-1 rounded font-bold ${batch.remainingQuantity > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                              {batch.remainingQuantity} kg
+                                          </span>
+                                      </td>
+                                      <td className="px-6 py-4 text-right font-mono font-bold text-gray-700">
+                                          {batchValue > 0 ? `$${batchValue.toLocaleString()}` : '-'}
+                                      </td>
+                                      <td className="px-6 py-4 text-right">
+                                          {isAdmin && (
+                                              <div className="flex justify-end space-x-1">
+                                                  <button onClick={() => handleEditBatch(batch)} className="text-gray-400 hover:text-blue-600 p-1"><Edit2 size={16}/></button>
+                                                  <button onClick={() => handleDeleteBatch(batch.id)} className="text-red-400 hover:text-red-600 p-1"><Trash2 size={16}/></button>
+                                              </div>
+                                          )}
+                                      </td>
+                                  </tr>
+                              );
+                          })}
+                      </tbody>
+                  </table>
+              </div>
+          </div>
+      )}
+
+      {activeTab === 'logistics' && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
               <table className="min-w-full divide-y divide-gray-200 text-sm">
                   <thead className="bg-gray-50">
                       <tr>
-                          <th className="px-6 py-3 text-left font-medium text-gray-500 uppercase">Orden Compra</th>
-                          <th className="px-6 py-3 text-left font-medium text-gray-500 uppercase">Fecha / Hora</th>
-                          <th className="px-6 py-3 text-left font-medium text-gray-500 uppercase">Variedad (Lote)</th>
-                          <th className="px-6 py-3 text-left font-medium text-gray-500 uppercase">Etiqueta Oficial</th>
-                          <th className="px-6 py-3 text-center font-medium text-gray-500 uppercase">Ubicación</th>
-                          <th className="px-6 py-3 text-center font-medium text-gray-500 uppercase">Stock Disp.</th>
-                          <th className="px-6 py-3 text-right font-medium text-gray-500 uppercase">Acciones</th>
+                          <th className="px-6 py-3 text-left font-medium text-gray-500 uppercase">Fecha</th>
+                          <th className="px-6 py-3 text-left font-medium text-gray-500 uppercase">Material</th>
+                          <th className="px-6 py-3 text-left font-medium text-gray-500 uppercase">Destino (Cliente)</th>
+                          <th className="px-6 py-3 text-center font-medium text-gray-500 uppercase">Distancia</th>
+                          <th className="px-6 py-3 text-center font-medium text-gray-500 uppercase">Estado</th>
+                          <th className="px-6 py-3 text-right font-medium text-gray-500 uppercase">Hoja Ruta</th>
                       </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                      {seedBatches.length === 0 ? (
-                          <tr>
-                              <td colSpan={7} className="p-8 text-center text-gray-400">
-                                  <ShoppingCart size={32} className="mx-auto mb-2 opacity-50"/>
-                                  <p>No hay registros de compras/stock.</p>
-                              </td>
-                          </tr>
-                      ) : seedBatches.map(batch => {
-                          const variety = varieties.find(v => v.id === batch.varietyId);
-                          const sp = storagePoints.find(s => s.id === batch.storagePointId);
-                          // Handle creation time display
-                          const displayDate = (batch as any).createdAt 
-                              ? new Date((batch as any).createdAt).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) 
-                              : batch.purchaseDate;
+                      {seedMovements.length === 0 ? (
+                          <tr><td colSpan={6} className="p-8 text-center text-gray-400 italic">No hay envíos registrados.</td></tr>
+                      ) : seedMovements.map(move => {
+                          const batch = seedBatches.find(b => b.id === move.batchId);
+                          const vari = varieties.find(v => v.id === batch?.varietyId);
+                          const client = clients.find(c => c.id === move.clientId);
+                          const loc = locations.find(l => l.id === move.targetLocationId);
 
                           return (
-                              <tr key={batch.id} className="hover:bg-gray-50">
-                                  <td className="px-6 py-4 font-bold text-gray-700">{batch.purchaseOrder || '-'}</td>
-                                  <td className="px-6 py-4 text-gray-500 text-xs">{displayDate}</td>
+                              <tr key={move.id} className="hover:bg-gray-50">
+                                  <td className="px-6 py-4 text-xs">{move.date}</td>
                                   <td className="px-6 py-4">
-                                      <div className="font-bold text-hemp-700">{variety?.name || 'Desc.'}</div>
-                                      <div className="text-xs text-gray-500 font-mono">{batch.batchCode}</div>
+                                      <div className="font-bold text-gray-800">{vari?.name}</div>
+                                      <div className="text-blue-600 font-bold">{move.quantity} kg</div>
                                   </td>
                                   <td className="px-6 py-4">
-                                      <div className="text-xs font-mono text-blue-700 bg-blue-50 px-2 py-1 rounded w-fit border border-blue-100">
-                                          {batch.labelSerialNumber || 'N/A'}
-                                      </div>
-                                      <div className="text-[10px] text-gray-400 mt-1">
-                                          CAT: {batch.category || '-'}
-                                      </div>
+                                      <div className="font-medium text-gray-700">{client?.name || 'S/D'}</div>
+                                      <div className="text-[10px] text-gray-400 flex items-center"><MapPin size={10} className="mr-1"/>{loc?.name}</div>
                                   </td>
                                   <td className="px-6 py-4 text-center">
-                                      {sp ? (
-                                          <div className="text-xs bg-purple-50 text-purple-700 px-2 py-1 rounded border border-purple-100 font-bold inline-block" title={sp.address}>
-                                              <Warehouse size={10} className="inline mr-1"/> {sp.name}
+                                      {move.estimatedDistanceKm ? (
+                                          <div className="text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded-full inline-block">
+                                              {move.estimatedDistanceKm} km
                                           </div>
-                                      ) : <span className="text-gray-400">-</span>}
+                                      ) : <span className="text-gray-300">-</span>}
                                   </td>
                                   <td className="px-6 py-4 text-center">
-                                      <span className={`px-2 py-1 rounded font-bold ${batch.remainingQuantity > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                                          {batch.remainingQuantity} kg
+                                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${move.status === 'Recibido' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700 animate-pulse'}`}>
+                                          {move.status}
                                       </span>
                                   </td>
                                   <td className="px-6 py-4 text-right">
-                                      {isAdmin && (
-                                          <div className="flex justify-end space-x-1">
-                                              <button onClick={() => handleEditBatch(batch)} className="text-gray-400 hover:text-blue-600 p-1"><Edit2 size={16}/></button>
-                                              <button onClick={() => handleDeleteBatch(batch.id)} className="text-red-400 hover:text-red-600 p-1"><Trash2 size={16}/></button>
-                                          </div>
+                                      {move.routeGoogleLink && (
+                                          <a href={move.routeGoogleLink} target="_blank" rel="noopener noreferrer" className="p-2 text-gray-400 hover:text-green-600 inline-block">
+                                              <RouteIcon size={18}/>
+                                          </a>
                                       )}
                                   </td>
                               </tr>
@@ -397,8 +453,6 @@ export default function SeedBatches() {
           </div>
       )}
 
-      {/* ... (Rest of the modals remain unchanged visually, logic sanitized above) ... */}
-      
       {/* --- MODAL 1: PURCHASE / BATCH RECEPTION --- */}
       {isBatchModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -409,17 +463,12 @@ export default function SeedBatches() {
             </h2>
             
             <form onSubmit={handleBatchSubmit} className="space-y-6">
-                {/* SECTION: STORAGE POINT SELECTION */}
-                <div className="bg-purple-50 p-4 rounded-lg border border-purple-100 mb-4">
+                <div className="bg-purple-50 p-4 rounded-lg border border-purple-100">
                     <div className="flex justify-between items-center mb-3">
                         <h3 className="text-xs font-bold text-purple-800 uppercase flex items-center">
                             <Warehouse size={12} className="mr-1"/> Destino de Almacenamiento
                         </h3>
-                        <button 
-                            type="button" 
-                            onClick={() => setIsQuickStorageOpen(true)}
-                            className="text-xs bg-white text-purple-700 px-2 py-1 rounded border border-purple-200 font-bold hover:bg-purple-100 flex items-center shadow-sm"
-                        >
+                        <button type="button" onClick={() => setIsQuickStorageOpen(true)} className="text-xs bg-white text-purple-700 px-2 py-1 rounded border border-purple-200 font-bold hover:bg-purple-100 flex items-center shadow-sm">
                             <Plus size={12} className="mr-1"/> Nuevo Depósito
                         </button>
                     </div>
@@ -429,82 +478,54 @@ export default function SeedBatches() {
                             <option key={sp.id} value={sp.id}>{sp.name} ({sp.city})</option>
                         ))}
                     </select>
-                    {storagePoints.length === 0 && <p className="text-xs text-red-500 mt-1">Crea primero un Punto de Almacenamiento.</p>}
                 </div>
 
-                {/* Rest of the form remains similar but connects to StoragePoint */}
                 <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                    <h3 className="text-xs font-bold text-blue-800 uppercase mb-3 flex items-center">
-                        <Building size={12} className="mr-1"/> 1. Origen del Material (Proveedor)
-                    </h3>
+                    <h3 className="text-xs font-bold text-blue-800 uppercase mb-3 flex items-center"><Building size={12} className="mr-1"/> Proveedor y Variedad</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Seleccionar Proveedor *</label>
-                            <select 
-                                required 
-                                className={inputClass} 
-                                value={selectedSupplierId} 
-                                onChange={e => handleSupplierChange(e.target.value)}
-                            >
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Proveedor *</label>
+                            <select required className={inputClass} value={selectedSupplierId} onChange={e => handleSupplierChange(e.target.value)}>
                                 <option value="">-- Seleccionar --</option>
                                 {suppliers.map(s => <option key={s.id} value={s.id}>{s.name} ({s.country})</option>)}
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Nombre Fantasía</label>
-                            <input type="text" required className={inputClass} value={batchFormData.supplierName} onChange={e => setBatchFormData({...batchFormData, supplierName: e.target.value})} />
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Variedad *</label>
+                            <select required className={inputClass} value={batchFormData.varietyId} onChange={e => handleVarietyChange(e.target.value)} disabled={!selectedSupplierId}>
+                                <option value="">-- Seleccionar --</option>
+                                {filteredVarieties.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                            </select>
                         </div>
                     </div>
                 </div>
 
                 <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
-                    <h3 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center">
-                        <Tag size={12} className="mr-1"/> 2. Datos de la Etiqueta (Trazabilidad)
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Variedad *</label>
-                            <select 
-                                required 
-                                className={inputClass} 
-                                value={batchFormData.varietyId} 
-                                onChange={e => handleVarietyChange(e.target.value)}
-                                disabled={!selectedSupplierId && filteredVarieties.length === 0}
-                            >
-                                <option value="">-- Seleccionar --</option>
-                                {filteredVarieties.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-                            </select>
-                        </div>
+                    <h3 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center"><DollarSign size={12} className="mr-1"/> Datos de Operación y Trazabilidad</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Lot N° (Ref. Lote) *</label>
-                            <div className="flex gap-2">
-                                <input required type="text" className={inputClass} value={batchFormData.batchCode} onChange={e => setBatchFormData({...batchFormData, batchCode: e.target.value})} placeholder="Ej: F 0150 T..." />
-                                <button type="button" onClick={generateBatchCode} className="p-2 bg-gray-100 rounded hover:bg-gray-200" title="Generar ID Interno"><Wand2 size={16}/></button>
-                            </div>
-                        </div>
-                        {/* ETIQUETA AZUL FIELDS */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
-                                <ScanBarcode size={14} className="mr-1 text-blue-600"/> N° Serie Etiqueta (Vertical)
-                            </label>
-                            <input type="text" className={inputClass} value={batchFormData.labelSerialNumber || ''} onChange={e => setBatchFormData({...batchFormData, labelSerialNumber: e.target.value})} placeholder="Ej: 999999 WW" />
+                            <input required type="text" className={inputClass} value={batchFormData.batchCode} onChange={e => setBatchFormData({...batchFormData, batchCode: e.target.value})} placeholder="F 0150 T..." />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Categoría Semilla</label>
-                            <select className={inputClass} value={batchFormData.category} onChange={e => setBatchFormData({...batchFormData, category: e.target.value as any})}>
-                                <option value="C1">Certificada 1 (C1) - Etiqueta Azul</option>
-                                <option value="C2">Certificada 2 (C2) - Etiqueta Roja</option>
-                                <option value="Base">Base - Etiqueta Blanca</option>
-                                <option value="Original">Original/Breeder</option>
-                            </select>
+                            <label className="block text-sm font-medium text-gray-700 mb-1 text-blue-600 font-bold">Serie Etiqueta</label>
+                            <input type="text" className={inputClass} value={batchFormData.labelSerialNumber || ''} onChange={e => setBatchFormData({...batchFormData, labelSerialNumber: e.target.value})} />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de Análisis / Cosecha</label>
-                            <input type="text" className={inputClass} value={batchFormData.analysisDate || ''} onChange={e => setBatchFormData({...batchFormData, analysisDate: e.target.value})} placeholder="Ej: 04/2024" />
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Orden de Compra</label>
+                            <input type="text" className={inputClass} value={batchFormData.purchaseOrder || ''} onChange={e => setBatchFormData({...batchFormData, purchaseOrder: e.target.value})} />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Peso/Cantidad (kg) *</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Cantidad (kg) *</label>
                             <input required type="number" step="0.1" className={inputClass} value={batchFormData.initialQuantity} onChange={e => setBatchFormData({...batchFormData, initialQuantity: Number(e.target.value), remainingQuantity: Number(e.target.value)})} />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1 text-green-700 font-bold">Precio Unit. (USD/kg)</label>
+                            <input required type="number" step="0.01" className={inputClass} value={batchFormData.pricePerKg} onChange={e => setBatchFormData({...batchFormData, pricePerKg: Number(e.target.value)})} />
+                        </div>
+                        <div className="bg-white border p-2 rounded text-center flex flex-col justify-center">
+                            <span className="text-[10px] text-gray-400 uppercase font-bold">Valor Total</span>
+                            <span className="text-sm font-black text-gray-800">USD {(batchFormData.initialQuantity! * batchFormData.pricePerKg!).toLocaleString()}</span>
                         </div>
                     </div>
                 </div>
@@ -512,7 +533,7 @@ export default function SeedBatches() {
                 <div className="flex justify-end space-x-2 pt-4 border-t">
                     <button type="button" onClick={() => setIsBatchModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancelar</button>
                     <button type="submit" className="px-6 py-2 bg-hemp-600 text-white rounded hover:bg-hemp-700 shadow-sm font-bold flex items-center">
-                        <ShoppingCart size={18} className="mr-2"/> Confirmar Ingreso
+                        <Save size={18} className="mr-2"/> Guardar Lote
                     </button>
                 </div>
             </form>
@@ -520,7 +541,7 @@ export default function SeedBatches() {
         </div>
       )}
 
-      {/* --- QUICK CREATE STORAGE MODAL --- */}
+      {/* QUICK CREATE STORAGE MODAL */}
       {isQuickStorageOpen && (
           <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
               <div className="bg-white rounded-xl max-w-sm w-full p-5 shadow-2xl animate-in zoom-in-95">
@@ -533,22 +554,6 @@ export default function SeedBatches() {
                           <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nombre</label>
                           <input autoFocus type="text" className={inputClass} placeholder="Ej: Galpón Central" value={quickStorageForm.name} onChange={e => setQuickStorageForm({...quickStorageForm, name: e.target.value})} />
                       </div>
-                      <div>
-                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Ciudad / Localidad</label>
-                          <input type="text" className={inputClass} placeholder="Ej: Pergamino" value={quickStorageForm.city} onChange={e => setQuickStorageForm({...quickStorageForm, city: e.target.value})} />
-                      </div>
-                      <div>
-                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Tipo</label>
-                          <select className={inputClass} value={quickStorageForm.type} onChange={e => setQuickStorageForm({...quickStorageForm, type: e.target.value})}>
-                              <option value="Propio">Propio</option>
-                              <option value="Tercerizado">Tercerizado</option>
-                              <option value="Transitorio">Transitorio</option>
-                          </select>
-                      </div>
-                      <div>
-                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Superficie (m²)</label>
-                          <input type="number" className={inputClass} placeholder="Ej: 500" value={quickStorageForm.surfaceM2} onChange={e => setQuickStorageForm({...quickStorageForm, surfaceM2: Number(e.target.value)})} />
-                      </div>
                       <button type="submit" className="w-full bg-purple-600 text-white py-2 rounded-lg font-bold hover:bg-purple-700 mt-2 flex justify-center items-center shadow-sm">
                           <Save size={16} className="mr-2"/> Guardar y Seleccionar
                       </button>
@@ -557,14 +562,12 @@ export default function SeedBatches() {
           </div>
       )}
 
-      {/* MOVEMENT MODAL: LOGISTICS + ROUTE PLANNER */}
+      {/* LOGISTICS MODAL */}
       {isMoveModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-lg w-full p-6 shadow-xl max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold mb-4 text-gray-900">Registrar Salida / Envío</h2>
             <form onSubmit={handleMoveSubmit} className="space-y-4">
-                
-                {/* SOURCE */}
                 <div className="bg-gray-50 p-3 rounded border border-gray-200">
                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Lote a Enviar (Origen)</label>
                     <select required className={inputClass} value={moveFormData.batchId} onChange={e => setMoveFormData({...moveFormData, batchId: e.target.value})}>
@@ -578,7 +581,6 @@ export default function SeedBatches() {
                     </select>
                 </div>
 
-                {/* DESTINATION */}
                 <div className="bg-blue-50 p-3 rounded border border-blue-200">
                     <h3 className="text-xs font-bold text-blue-700 uppercase mb-2 flex items-center"><Briefcase size={12} className="mr-1"/> Destino (Cliente)</h3>
                     <div className="space-y-3">
@@ -593,13 +595,12 @@ export default function SeedBatches() {
                             <label className="block text-sm font-medium text-gray-700 mb-1">Locación</label>
                             <select required className={inputClass} value={moveFormData.targetLocationId} onChange={e => setMoveFormData({...moveFormData, targetLocationId: e.target.value})} disabled={!moveFormData.clientId}>
                                 <option value="">Seleccionar Sitio...</option>
-                                {filteredTargetLocations.map(l => <option key={l.id} value={l.id}>{l.name} ({l.city})</option>)}
+                                {locations.filter(l => l.clientId === moveFormData.clientId).map(l => <option key={l.id} value={l.id}>{l.name} ({l.city})</option>)}
                             </select>
                         </div>
                     </div>
                 </div>
 
-                {/* ROUTE PREVIEW */}
                 {routeData && (
                     <div className="bg-green-50 p-3 rounded border border-green-200 flex items-center justify-between animate-in fade-in">
                         <div>
@@ -609,25 +610,19 @@ export default function SeedBatches() {
                             </div>
                             <div className="text-xs font-bold mt-1 text-green-900">{routeData.dist} km aprox.</div>
                         </div>
-                        <a 
-                            href={routeData.link} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="bg-green-600 text-white p-2 rounded shadow hover:bg-green-700 text-xs font-bold flex items-center"
-                        >
-                            <RouteIcon size={14} className="mr-1"/> Ver en Maps
-                        </a>
+                        <a href={routeData.link} target="_blank" rel="noopener noreferrer" className="bg-green-600 text-white p-2 rounded shadow hover:bg-green-700 text-xs font-bold flex items-center"><RouteIcon size={14} className="mr-1"/> Ver en Maps</a>
                     </div>
                 )}
 
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Cantidad (kg)</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Cantidad a Enviar (kg)</label>
                     <input required type="number" step="0.1" className={inputClass} value={moveFormData.quantity} onChange={e => setMoveFormData({...moveFormData, quantity: Number(e.target.value)})} />
+                    <p className="text-[10px] text-gray-400 mt-1 italic">* Al guardar se descontará automáticamente del stock central.</p>
                 </div>
                 
                 <div className="flex justify-end space-x-2 pt-4">
                     <button type="button" onClick={() => setIsMoveModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancelar</button>
-                    <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 shadow-sm font-bold">Registrar Envío</button>
+                    <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 shadow-sm font-bold">Confirmar Envío</button>
                 </div>
             </form>
           </div>

@@ -143,7 +143,7 @@ export default function Settings() {
           await addSeedBatch({
               id: batchId, varietyId: varId, supplierName: 'Hemp-it France', batchCode: 'LOT-DEMO-2024',
               originCountry: 'Francia', initialQuantity: 1000, remainingQuantity: 950, purchaseDate: new Date().toISOString().split('T')[0],
-              isActive: true
+              isActive: true, pricePerKg: 15
           });
 
           // 7. ASIGNAR SEMILLA AL CLIENTE (Movimiento Logístico)
@@ -191,35 +191,29 @@ export default function Settings() {
 
   const SQL_SCRIPT = `
 -- =========================================================
--- SOLUCIÓN CLIENTES + EQUIPO (V2.8.0)
+-- REPARACIÓN LOGÍSTICA + STOCK (V2.9.0)
 -- Ejecuta esto en Supabase -> SQL Editor
 -- =========================================================
 
 -- 1. Forzar recarga del esquema
 NOTIFY pgrst, 'reload schema';
 
--- 2. Agregar columna clientId a tabla users (VINCULACIÓN EQUIPO)
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "clientId" TEXT;
+-- 2. Reparar tabla seed_movements (LOGÍSTICA)
+ALTER TABLE public.seed_movements ADD COLUMN IF NOT EXISTS "estimatedDistanceKm" NUMERIC;
+ALTER TABLE public.seed_movements ADD COLUMN IF NOT EXISTS "routeGoogleLink" TEXT;
+ALTER TABLE public.seed_movements ADD COLUMN IF NOT EXISTS "originStorageId" TEXT;
+ALTER TABLE public.seed_movements ADD COLUMN IF NOT EXISTS "dispatchTime" TEXT;
+ALTER TABLE public.seed_movements ADD COLUMN IF NOT EXISTS "transportGuideNumber" TEXT;
 
--- 3. Agregar columna relatedUserId a tabla clients (CONTACTO PRINCIPAL)
+-- 3. Reparar tabla seed_batches (PRECIO PARA VALORIZACIÓN)
+ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "pricePerKg" NUMERIC DEFAULT 0;
+ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "storagePointId" TEXT;
+
+-- 4. Asegurar columna relatedUserId en clients
 ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS "relatedUserId" TEXT;
 
--- 4. Asegurar columnas de perfil de usuario (por si faltan)
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "jobTitle" TEXT;
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "phone" TEXT;
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "avatar" TEXT;
-
--- 5. Asegurar columnas de auditoría en lotes (V2.7.9)
-ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "supplierId" TEXT;
-ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "storagePointId" TEXT;
-ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW();
-ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "analysisDate" TEXT;
-ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "purity" NUMERIC;
-ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "germination" NUMERIC;
-ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "labelSerialNumber" TEXT;
-
--- 6. Mensaje de éxito
-SELECT 'Base de datos actualizada. Tablas users y clients sincronizadas.' as status;
+-- 5. Mensaje de éxito
+SELECT 'Base de datos reparada (V2.9.0). Logística y Valorización habilitadas.' as status;
   `;
 
   return (
@@ -315,7 +309,7 @@ SELECT 'Base de datos actualizada. Tablas users y clients sincronizadas.' as sta
             {/* SQL Box */}
             <div className="bg-slate-900 rounded-xl border border-slate-700 p-6 mt-8 shadow-xl">
                 <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-sm font-bold text-white flex items-center"><AlertTriangle className="mr-2 text-yellow-400"/> Script de Reparación (V2.8.0)</h2>
+                    <h2 className="text-sm font-bold text-white flex items-center"><AlertTriangle className="mr-2 text-yellow-400"/> Script de Reparación (V2.9.0)</h2>
                     <button onClick={copySQL} className="text-xs bg-hemp-600 text-white border border-hemp-500 px-4 py-2 rounded shadow-sm font-bold hover:bg-hemp-700 transition">Copiar SQL</button>
                 </div>
                 <div className="bg-black p-4 rounded-lg text-xs font-mono text-green-400 overflow-x-auto h-48 custom-scrollbar border border-slate-700">

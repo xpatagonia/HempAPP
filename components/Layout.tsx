@@ -32,7 +32,8 @@ import {
   CloudOff,
   Archive,
   Warehouse,
-  Tractor
+  Tractor,
+  BookOpen
 } from 'lucide-react';
 
 const NavItem = ({ to, icon: Icon, label, onClick }: any) => {
@@ -184,15 +185,15 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           </div>
 
           <div className="pt-2">
-               <p className="px-4 text-xs font-semibold text-gray-400 uppercase mb-2">Base de Datos</p>
+               <p className="px-4 text-xs font-semibold text-gray-400 uppercase mb-2">Suministros & Stock</p>
                {!isClient && (
                    <>
                        <NavItem to="/suppliers" icon={Building} label="Proveedores" onClick={() => setIsMobileOpen(false)} />
-                       <NavItem to="/clients" icon={Briefcase} label="Clientes" onClick={() => setIsMobileOpen(false)} />
-                       <NavItem to="/varieties" icon={Sprout} label="Variedades" onClick={() => setIsMobileOpen(false)} />
-                       <NavItem to="/storage" icon={Warehouse} label="Almacenamiento" onClick={() => setIsMobileOpen(false)} />
-                       <NavItem to="/seed-batches" icon={ScanBarcode} label="Stock Semillas" onClick={() => setIsMobileOpen(false)} />
-                       <NavItem to="/resources" icon={Archive} label="Recursos" onClick={() => setIsMobileOpen(false)} />
+                       <NavItem to="/varieties" icon={BookOpen} label="Catálogo Genético" onClick={() => setIsMobileOpen(false)} />
+                       <NavItem to="/storage" icon={Warehouse} label="Puntos de Acopio" onClick={() => setIsMobileOpen(false)} />
+                       <NavItem to="/seed-batches" icon={ScanBarcode} label="Inventario Semillas" onClick={() => setIsMobileOpen(false)} />
+                       <NavItem to="/resources" icon={Archive} label="Insumos Varios" onClick={() => setIsMobileOpen(false)} />
+                       <NavItem to="/clients" icon={Briefcase} label="Clientes Red" onClick={() => setIsMobileOpen(false)} />
                    </>
                )}
           </div>
