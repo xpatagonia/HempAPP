@@ -32,6 +32,7 @@ interface AppContextType {
   usersList: User[];
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
+  refreshData: () => Promise<void>; // NEW: Method to manually trigger data reload
 
   addProject: (p: Project) => Promise<boolean>;
   updateProject: (p: Project) => void;
@@ -80,7 +81,7 @@ interface AppContextType {
   deleteTask: (id: string) => void;
 
   addSeedBatch: (s: SeedBatch) => void;
-  addLocalSeedBatch: (s: SeedBatch) => void; // NEW: For manual local updates
+  addLocalSeedBatch: (s: SeedBatch) => void; 
   updateSeedBatch: (s: SeedBatch) => void;
   deleteSeedBatch: (id: string) => void;
   
@@ -92,6 +93,7 @@ interface AppContextType {
   getLatestRecord: (plotId: string) => TrialRecord | undefined;
   
   loading: boolean;
+  isRefreshing: boolean; // NEW: Specific loading state for sync
   isEmergencyMode: boolean;
   dbNeedsMigration: boolean; 
 
@@ -138,6 +140,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isEmergencyMode, setIsEmergencyMode] = useState(false);
   const [dbNeedsMigration, setDbNeedsMigration] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
@@ -205,18 +208,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
-  // --- CARGA DE DATOS ESTRICTA ---
-  const initSystem = async () => {
-      setLoading(true);
+  // --- REUSABLE DATA FETCHING LOGIC ---
+  const refreshData = async () => {
+      setIsRefreshing(true);
       try {
           await refreshGlobalConfig();
           const connected = await checkConnection();
           
           if (!connected) {
-              console.warn("⚠️ MODO LOCAL ACTIVADO: No hay conexión a Supabase.");
               setIsEmergencyMode(true);
-              
-              // Cargar TODO desde LocalStorage
               setUsersList([...getFromLocal('users'), RESCUE_USER]);
               setProjects(getFromLocal('projects'));
               setVarieties(getFromLocal('varieties'));
@@ -232,30 +232,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               setLogs(getFromLocal('logs'));
               setTasks(getFromLocal('tasks'));
           } else {
-              // MODO ONLINE: Cargar SOLO desde DB
               setIsEmergencyMode(false);
-              
-              // 1. Chequeo de Esquema: Tablas Básicas
               const { error: tableError } = await supabase.from('suppliers').select('id').limit(1);
-              
-              // 2. Chequeo de Esquema: Columnas Nuevas (Storage/Seeds/Users)
-              const { error: columnError } = await supabase.from('seed_batches').select('storagePointId').limit(1);
-              const { error: userColError } = await supabase.from('users').select('clientId').limit(1);
-
-              if (
-                  (tableError && (tableError.code === '42P01' || tableError.message.includes('does not exist'))) ||
-                  (columnError && columnError.code === '42703') ||
-                  (userColError && userColError.code === '42703')
-              ) {
-                  console.error("⚠️ Esquema de Base de Datos desactualizado.");
+              if (tableError && (tableError.code === '42P01' || tableError.message.includes('does not exist'))) {
                   setDbNeedsMigration(true);
               }
 
-              // Función helper para fetch
               const fetchData = async (table: string, setter: any) => {
                   const { data, error } = await supabase.from(table).select('*');
                   if (!error && data) setter(data);
-                  else console.error(`Error fetching ${table}`, error);
               };
 
               await Promise.allSettled([
@@ -275,38 +260,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                   fetchData('tasks', setTasks)
               ]);
           }
-
-          // Restaurar Sesión
-          const savedUser = localStorage.getItem('ht_session_user');
-          if (savedUser) {
-              const parsed = JSON.parse(savedUser);
-              if (connected) {
-                  // Verificar si el usuario existe en DB
-                  const { data } = await supabase.from('users').select('*').eq('id', parsed.id).single();
-                  if (data) setCurrentUser(data as User);
-                  else localStorage.removeItem('ht_session_user');
-              } else {
-                  // Confianza en offline
-                  setCurrentUser(parsed);
-              }
-          }
-
       } catch (err) {
-          console.error("Critical Init Error:", err);
-          setIsEmergencyMode(true);
+          console.error("Refresh Error:", err);
       } finally {
+          setIsRefreshing(false);
           setLoading(false);
       }
   };
 
   useEffect(() => {
-    initSystem();
+    refreshData();
   }, []);
 
   const handleSupabaseError = (error: any, context: string) => {
       console.error(`Error en ${context}:`, error);
       if (error.message?.includes('does not exist') || error.code === '42703') {
-          // No mostramos alert aquí para no spammear, el banner global se encargará
           setDbNeedsMigration(true);
       } else {
           alert(`Error de sincronización: ${error.message}`);
@@ -314,7 +282,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const login = async (email: string, password: string): Promise<boolean> => {
-    // Modo Offline
     if (isEmergencyMode) {
         let u = usersList.find(u => u.email === email && u.password === password);
         if (email === RESCUE_USER.email && password === RESCUE_USER.password) u = RESCUE_USER;
@@ -326,7 +293,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return false;
     }
 
-    // Modo Online
     const { data, error } = await supabase.from('users').select('*').eq('email', email).eq('password', password).single();
     if (!error && data) {
         setCurrentUser(data as User);
@@ -342,7 +308,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   // --- CRUD WRAPPERS ---
-  
   const genericAdd = async (table: string, item: any, setter: any, localKey: string) => {
       if (isEmergencyMode) {
           setter((prev: any[]) => {
@@ -387,7 +352,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
   };
 
-  // Implementaciones explícitas usando los wrappers genéricos
   const addUser = (u: User) => genericAdd('users', u, setUsersList, 'users');
   const updateUser = (u: User) => genericUpdate('users', u, setUsersList, 'users');
   const deleteUser = (id: string) => genericDelete('users', id, setUsersList, 'users');
@@ -425,7 +389,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const deleteStoragePoint = (id: string) => genericDelete('storage_points', id, setStoragePoints, 'storagePoints');
 
   const addSeedBatch = (s: SeedBatch) => genericAdd('seed_batches', s, setSeedBatches, 'seedBatches');
-  // NEW: Manual local update to prevent double insert loops
   const addLocalSeedBatch = (s: SeedBatch) => setSeedBatches(prev => [...prev, s]);
   const updateSeedBatch = (s: SeedBatch) => genericUpdate('seed_batches', s, setSeedBatches, 'seedBatches');
   const deleteSeedBatch = (id: string) => genericDelete('seed_batches', id, setSeedBatches, 'seedBatches');
@@ -497,14 +460,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
   };
 
-  const getPlotCount = (projectId: string) => plots.filter(p => p.projectId === projectId).length;
   const getPlotHistory = (plotId: string) => { return trialRecords.filter(r => r.plotId === plotId).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); };
   const getLatestRecord = (plotId: string) => { const history = getPlotHistory(plotId); return history.length > 0 ? history[0] : undefined; };
 
   return (
     <AppContext.Provider value={{
       projects, varieties, locations, plots, trialRecords, logs, tasks, seedBatches, seedMovements, suppliers, clients, resources, storagePoints, notifications,
-      currentUser, usersList, login, logout,
+      currentUser, usersList, login, logout, refreshData,
       addProject, updateProject, deleteProject,
       addVariety, updateVariety, deleteVariety,
       addLocation, updateLocation, deleteLocation,
@@ -520,7 +482,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       addResource, updateResource, deleteResource,
       addStoragePoint, updateStoragePoint, deleteStoragePoint,
       getPlotHistory, getLatestRecord,
-      loading, isEmergencyMode, dbNeedsMigration,
+      loading, isRefreshing, isEmergencyMode, dbNeedsMigration,
       globalApiKey, refreshGlobalConfig,
       theme, toggleTheme
     }}>

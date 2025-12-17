@@ -33,7 +33,8 @@ import {
   Archive,
   Warehouse,
   Tractor,
-  BookOpen
+  BookOpen,
+  RefreshCw
 } from 'lucide-react';
 
 const NavItem = ({ to, icon: Icon, label, onClick }: any) => {
@@ -57,7 +58,7 @@ const NavItem = ({ to, icon: Icon, label, onClick }: any) => {
 };
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { currentUser, logout, isEmergencyMode, dbNeedsMigration, theme, toggleTheme, notifications } = useAppContext();
+  const { currentUser, logout, isEmergencyMode, dbNeedsMigration, theme, toggleTheme, notifications, refreshData, isRefreshing } = useAppContext();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const location = useLocation();
@@ -120,9 +121,12 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           <Leaf className="w-6 h-6 text-hemp-500" />
           <span className="font-bold text-lg">HempC v2.7</span>
         </div>
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-1">
+            <button onClick={() => refreshData()} className={`p-2 rounded-lg ${isRefreshing ? 'text-hemp-500 animate-spin' : 'text-gray-400 hover:text-white'}`} title="Sincronizar Datos">
+                <RefreshCw size={22} />
+            </button>
             <button onClick={() => setIsNotifOpen(!isNotifOpen)} className="p-2 relative text-gray-300 hover:text-white">
-                <Bell size={24} />
+                <Bell size={22} />
                 {unreadCount > 0 && (
                     <span className="absolute top-1 right-1 h-3 w-3 bg-red-500 rounded-full border-2 border-slate-900"></span>
                 )}
@@ -155,6 +159,13 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           </div>
           
           <div className="flex items-center space-x-1">
+              <button 
+                onClick={() => refreshData()} 
+                className={`p-2 rounded-full transition-colors ${isRefreshing ? 'text-hemp-600 animate-spin bg-hemp-50' : 'text-gray-400 hover:text-hemp-600 hover:bg-gray-100'}`}
+                title="Sincronizar Nube"
+              >
+                  <RefreshCw size={18} />
+              </button>
               <button onClick={toggleTheme} className="p-2 rounded-full text-gray-400 hover:text-hemp-600 hover:bg-gray-100 dark:hover:bg-dark-border transition-colors">
                   {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
               </button>
