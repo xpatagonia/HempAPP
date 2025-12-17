@@ -1,14 +1,18 @@
 
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Client, RoleType } from '../types';
-import { Plus, Edit2, Trash2, Briefcase, MapPin, Phone, Mail, Globe, Users, Building, AlertCircle, Tractor, Eye, X, Link as LinkIcon, UserCheck } from 'lucide-react';
+import { Client, RoleType, User } from '../types';
+import { Plus, Edit2, Trash2, Briefcase, MapPin, Phone, Mail, Globe, Users, Building, AlertCircle, Tractor, Eye, X, Link as LinkIcon, UserCheck, Key, Shield } from 'lucide-react';
 
 export default function Clients() {
-  const { clients, addClient, updateClient, deleteClient, currentUser, locations, usersList } = useAppContext();
+  const { clients, addClient, updateClient, deleteClient, currentUser, locations, usersList, addUser, deleteUser } = useAppContext();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [viewClient, setViewClient] = useState<Client | null>(null); // For View Mode
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Quick User Add State
+  const [showUserForm, setShowUserForm] = useState(false);
+  const [newUser, setNewUser] = useState({ name: '', email: '', password: '' });
 
   const [formData, setFormData] = useState<Partial<Client>>({
     name: '', type: 'Empresa Privada', contactName: '', contactPhone: '', email: '', isNetworkMember: false, cuit: '', notes: '', relatedUserId: ''
@@ -80,6 +84,35 @@ export default function Clients() {
       }
   };
 
+  // Handle Adding a new User directly to this client
+  const handleQuickAddUser = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!viewClient || !newUser.name || !newUser.email || !newUser.password) return;
+
+      const success = await addUser({
+          id: Date.now().toString(),
+          name: newUser.name,
+          email: newUser.email,
+          password: newUser.password,
+          role: 'client',
+          clientId: viewClient.id,
+          jobTitle: 'Equipo del Cliente',
+          avatar: `https://ui-avatars.com/api/?name=${newUser.name}&background=random`
+      } as User);
+
+      if (success) {
+          alert(`Usuario ${newUser.name} creado y vinculado a ${viewClient.name}.`);
+          setNewUser({ name: '', email: '', password: '' });
+          setShowUserForm(false);
+      }
+  };
+
+  const handleDeleteLinkedUser = (userId: string) => {
+      if (window.confirm("¿Eliminar este usuario? Perderá el acceso al sistema.")) {
+          deleteUser(userId);
+      }
+  };
+
   const inputClass = "w-full border border-gray-300 bg-white text-gray-900 p-2 rounded focus:ring-2 focus:ring-hemp-500 focus:border-transparent outline-none transition-colors";
 
   return (
@@ -108,11 +141,13 @@ export default function Clients() {
             const locCount = locations.filter(l => l.clientId === client.id || l.ownerName === client.name).length;
             const isProducer = client.type.includes('Productor');
             const linkedUser = usersList.find(u => u.id === client.relatedUserId);
+            // Count total users linked to this client ID
+            const totalTeam = usersList.filter(u => u.clientId === client.id).length;
             
             return (
                 <div key={client.id} className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition relative group flex flex-col h-full">
                   <div className="absolute top-4 right-4 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                      <button onClick={() => setViewClient(client)} className="text-gray-400 hover:text-blue-600 p-1 bg-white rounded shadow-sm border border-gray-200" title="Ver Detalles">
+                      <button onClick={() => setViewClient(client)} className="text-gray-400 hover:text-blue-600 p-1 bg-white rounded shadow-sm border border-gray-200" title="Ver Detalles y Equipo">
                           <Eye size={16} />
                       </button>
                       {isAdmin && (
@@ -172,9 +207,14 @@ export default function Clients() {
                   
                   <div className="mt-3 pt-3 border-t border-gray-100 flex justify-between items-center text-xs">
                       <span className="font-bold text-gray-500">CUIT: {client.cuit || '-'}</span>
-                      <span className="bg-gray-100 px-2 py-1 rounded text-gray-600 font-bold flex items-center">
-                          <MapPin size={12} className="mr-1"/> {locCount} Locaciones
-                      </span>
+                      <div className="flex space-x-2">
+                          <span className="bg-purple-50 text-purple-700 px-2 py-1 rounded font-bold flex items-center" title="Usuarios con acceso">
+                              <Users size={12} className="mr-1"/> {totalTeam}
+                          </span>
+                          <span className="bg-gray-100 px-2 py-1 rounded text-gray-600 font-bold flex items-center">
+                              <MapPin size={12} className="mr-1"/> {locCount}
+                          </span>
+                      </div>
                   </div>
                 </div>
             );
@@ -189,7 +229,7 @@ export default function Clients() {
                       <h2 className="text-xl font-bold text-gray-800 flex items-center">
                           <Briefcase className="mr-2 text-hemp-600"/> Ficha de Cliente
                       </h2>
-                      <button onClick={() => setViewClient(null)} className="text-gray-400 hover:text-gray-600 bg-white p-1 rounded-full shadow-sm"><X size={20}/></button>
+                      <button onClick={() => { setViewClient(null); setShowUserForm(false); }} className="text-gray-400 hover:text-gray-600 bg-white p-1 rounded-full shadow-sm"><X size={20}/></button>
                   </div>
                   
                   <div className="p-6 overflow-y-auto">
@@ -205,33 +245,76 @@ export default function Clients() {
                           </div>
                       </div>
 
-                      {/* Linked System User */}
+                      {/* Linked System User (Primary Contact) */}
                       {viewClient.relatedUserId && (() => {
                           const u = usersList.find(usr => usr.id === viewClient.relatedUserId);
                           if(u) return (
-                              <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-6 flex items-center">
+                              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 flex items-center">
                                   <img src={u.avatar} alt={u.name} className="w-12 h-12 rounded-full border-2 border-white shadow-sm mr-4"/>
                                   <div>
-                                      <p className="text-xs font-bold text-green-800 uppercase mb-1 flex items-center">
-                                          <UserCheck size={12} className="mr-1"/> Usuario de Sistema
+                                      <p className="text-xs font-bold text-blue-800 uppercase mb-1 flex items-center">
+                                          <UserCheck size={12} className="mr-1"/> Contacto Principal
                                       </p>
                                       <p className="font-bold text-gray-900">{u.name}</p>
-                                      <p className="text-xs text-green-700">{u.email} • {u.role}</p>
+                                      <p className="text-xs text-blue-700">{u.email}</p>
                                   </div>
                               </div>
                           )
                           return null;
                       })()}
 
-                      {/* Contact Info (if not fully covered by user) */}
-                      {!viewClient.relatedUserId && (
-                          <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 mb-6 space-y-2">
-                              <h4 className="font-bold text-gray-700 text-sm mb-2">Contacto Principal</h4>
-                              <div className="flex items-center text-sm text-gray-600"><Users size={16} className="mr-2"/> {viewClient.contactName}</div>
-                              {viewClient.contactPhone && <div className="flex items-center text-sm text-gray-600"><Phone size={16} className="mr-2"/> {viewClient.contactPhone}</div>}
-                              {viewClient.email && <div className="flex items-center text-sm text-gray-600"><Mail size={16} className="mr-2"/> {viewClient.email}</div>}
+                      {/* Team Section (Multiple Users) */}
+                      <div className="mb-6">
+                          <div className="flex justify-between items-center mb-3">
+                              <h4 className="font-bold text-gray-700 text-sm flex items-center"><Users size={16} className="mr-2"/> Equipo de Trabajo</h4>
+                              {isAdmin && !showUserForm && (
+                                  <button onClick={() => setShowUserForm(true)} className="text-xs bg-green-50 text-green-700 border border-green-200 px-2 py-1 rounded hover:bg-green-100 transition flex items-center">
+                                      <Plus size={12} className="mr-1"/> Agregar Usuario
+                                  </button>
+                              )}
                           </div>
-                      )}
+
+                          {/* Quick Add User Form */}
+                          {showUserForm && (
+                              <form onSubmit={handleQuickAddUser} className="bg-green-50 p-4 rounded-lg border border-green-100 mb-4 animate-in fade-in">
+                                  <div className="flex justify-between items-center mb-2">
+                                      <h5 className="text-xs font-bold text-green-800 uppercase">Nuevo Usuario del Cliente</h5>
+                                      <button type="button" onClick={() => setShowUserForm(false)} className="text-green-600 hover:text-green-800"><X size={14}/></button>
+                                  </div>
+                                  <div className="space-y-2">
+                                      <input required type="text" placeholder="Nombre Completo" className="w-full text-sm border-green-200 rounded p-1.5 focus:ring-green-500" value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} />
+                                      <input required type="email" placeholder="Email Corporativo" className="w-full text-sm border-green-200 rounded p-1.5 focus:ring-green-500" value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} />
+                                      <input required type="password" placeholder="Contraseña Temporal" className="w-full text-sm border-green-200 rounded p-1.5 focus:ring-green-500" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} />
+                                      <button type="submit" className="w-full bg-green-600 text-white text-xs font-bold py-2 rounded shadow-sm hover:bg-green-700 transition">Crear y Vincular</button>
+                                  </div>
+                              </form>
+                          )}
+
+                          {/* Team List */}
+                          <div className="space-y-2">
+                              {usersList.filter(u => u.clientId === viewClient.id).map(u => (
+                                  <div key={u.id} className="flex items-center justify-between bg-white border border-gray-100 p-2 rounded-lg shadow-sm">
+                                      <div className="flex items-center">
+                                          <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-500 mr-2 overflow-hidden">
+                                              {u.avatar ? <img src={u.avatar} alt="av" className="w-full h-full object-cover"/> : u.name.charAt(0)}
+                                          </div>
+                                          <div>
+                                              <p className="text-xs font-bold text-gray-800">{u.name}</p>
+                                              <p className="text-[10px] text-gray-500">{u.email}</p>
+                                          </div>
+                                      </div>
+                                      {isAdmin && (
+                                          <button onClick={() => handleDeleteLinkedUser(u.id)} className="text-gray-400 hover:text-red-500 p-1">
+                                              <Trash2 size={14}/>
+                                          </button>
+                                      )}
+                                  </div>
+                              ))}
+                              {usersList.filter(u => u.clientId === viewClient.id).length === 0 && !showUserForm && (
+                                  <p className="text-xs text-gray-400 italic text-center py-2">No hay otros usuarios asignados.</p>
+                              )}
+                          </div>
+                      </div>
 
                       {/* Stats */}
                       <div className="grid grid-cols-2 gap-4 mb-6">
@@ -245,7 +328,7 @@ export default function Clients() {
                               <span className="block text-2xl font-bold text-purple-800">
                                   {usersList.filter(u => u.clientId === viewClient.id).length}
                               </span>
-                              <span className="text-xs text-purple-600 uppercase font-bold">Usuarios Asoc.</span>
+                              <span className="text-xs text-purple-600 uppercase font-bold">Total Usuarios</span>
                           </div>
                       </div>
 
@@ -323,7 +406,7 @@ export default function Clients() {
                    {/* USER LINK DROPDOWN */}
                    <div className="mb-4 bg-white p-2 rounded border border-blue-200">
                        <label className="block text-xs font-bold text-gray-500 mb-1 flex items-center">
-                           <LinkIcon size={12} className="mr-1"/> Vincular Usuario del Sistema (Opcional)
+                           <LinkIcon size={12} className="mr-1"/> Vincular Usuario Existente (Opcional)
                        </label>
                        <select 
                            className={`${inputClass} text-sm`} 
