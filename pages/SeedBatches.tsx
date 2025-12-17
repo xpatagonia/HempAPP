@@ -2,11 +2,17 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { SeedBatch, SeedMovement, Supplier, StoragePoint } from '../types';
-import { Plus, ScanBarcode, Edit2, Trash2, Tag, Calendar, Package, Truck, Printer, MapPin, FileText, ArrowRight, Building, FileDigit, Globe, Clock, Box, ShieldCheck, Map, UserCheck, Briefcase, Wand2, AlertCircle, DollarSign, ShoppingCart, Archive, ChevronRight, Warehouse, Route as RouteIcon, ExternalLink, Save, X, Database } from 'lucide-react';
+import { Plus, ScanBarcode, Edit2, Trash2, Tag, Calendar, Package, Truck, Printer, MapPin, FileText, ArrowRight, Building, FileDigit, Globe, Clock, Box, ShieldCheck, Map, UserCheck, Briefcase, Wand2, AlertCircle, DollarSign, ShoppingCart, Archive, ChevronRight, Warehouse, Route as RouteIcon, ExternalLink, Save, X, Database, Coins } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { supabase } from '../supabaseClient'; 
 import { Link } from 'react-router-dom';
+
+// Tipos de cambio referenciales (Base USD)
+const EXCHANGE_RATES = {
+    EUR: 0.92, // 1 USD = 0.92 EUR
+    ARS: 880.00 // 1 USD = 880 ARS (Referencial MEP/CCL)
+};
 
 export default function SeedBatches() {
   const { seedBatches, seedMovements, addLocalSeedBatch, updateSeedBatch, deleteSeedBatch, addSeedMovement, varieties, locations, currentUser, suppliers, clients, storagePoints, addStoragePoint, isEmergencyMode } = useAppContext();
@@ -79,13 +85,6 @@ export default function SeedBatches() {
 
   const handleVarietyChange = (varId: string) => { setBatchFormData(prev => ({ ...prev, varietyId: varId })); };
 
-  const generateBatchCode = () => {
-      const date = new Date();
-      const year = date.getFullYear();
-      const random = Math.random().toString(36).substring(2, 6).toUpperCase();
-      setBatchFormData(prev => ({ ...prev, batchCode: `L${year}-${random}` }));
-  };
-
   const handleBatchSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!batchFormData.varietyId) { alert("Error: Selecciona una Variedad."); return; }
@@ -117,31 +116,8 @@ export default function SeedBatches() {
 
             if (!isEmergencyMode) {
                 const { error } = await supabase.from('seed_batches').insert([finalPayload]);
-                
-                if (error) {
-                    if (error.message.includes('Could not find') || error.code === '42703' || error.message.includes('schema cache')) {
-                        // Fallback V1
-                        const safePayload = {
-                            id: newId,
-                            varietyId: payload.varietyId,
-                            supplierName: payload.supplierName,
-                            batchCode: payload.batchCode,
-                            initialQuantity: payload.initialQuantity,
-                            remainingQuantity: payload.remainingQuantity,
-                            purchaseDate: payload.purchaseDate,
-                            isActive: true,
-                            createdAt: new Date().toISOString()
-                        };
-                        const { error: safeError } = await supabase.from('seed_batches').insert([safePayload]);
-                        if (safeError) throw safeError; 
-                        addLocalSeedBatch(finalPayload);
-                        alert("✅ Lote registrado. Advertencia: No se guardó la valorización por falta de columnas en DB. Ejecuta el script SQL V2.9.0");
-                    } else {
-                        throw error;
-                    }
-                } else {
-                    addLocalSeedBatch(finalPayload);
-                }
+                if (error) throw error;
+                addLocalSeedBatch(finalPayload);
             } else {
                 addLocalSeedBatch(finalPayload);
             }
@@ -160,7 +136,6 @@ export default function SeedBatches() {
         purchaseOrder: '', purchaseDate: new Date().toISOString().split('T')[0],
         initialQuantity: 0, remainingQuantity: 0, storagePointId: '', isActive: true, pricePerKg: 0
     });
-    // Fix: replaced setEditingId with the correct state setter name setEditingBatchId
     setEditingBatchId(null);
     setSelectedSupplierId('');
   };
@@ -228,33 +203,13 @@ export default function SeedBatches() {
       try {
           if (!isEmergencyMode) {
               const { error } = await supabase.from('seed_movements').insert([movementPayload]);
-              if (error) {
-                  if (error.message.includes('estimatedDistanceKm')) {
-                      // Fallback v1 logic
-                      const { error: safeError } = await supabase.from('seed_movements').insert([{
-                          id: movementPayload.id,
-                          batchId: movementPayload.batchId,
-                          targetLocationId: movementPayload.targetLocationId,
-                          quantity: movementPayload.quantity,
-                          date: movementPayload.date,
-                          status: movementPayload.status
-                      }]);
-                      if (safeError) throw safeError;
-                      alert("⚠️ Envío registrado parcialmente. Faltan columnas en DB para distancia/rutas. Ejecuta script SQL V2.9.0");
-                  } else {
-                      throw error;
-                  }
-              }
+              if (error) throw error;
           }
-          
           addSeedMovement(movementPayload);
-
-          // ACTUALIZAR STOCK EXPLÍCITAMENTE
           if(batch) {
               const newQty = batch.remainingQuantity - Number(moveFormData.quantity);
               updateSeedBatch({ ...batch, remainingQuantity: newQty });
           }
-
           setIsMoveModalOpen(false);
           resetMoveForm();
       } catch (err: any) {
@@ -268,7 +223,12 @@ export default function SeedBatches() {
 
   const inputClass = "w-full border border-gray-300 bg-white text-gray-900 p-2 rounded focus:ring-2 focus:ring-hemp-500 focus:border-transparent outline-none transition-colors";
 
-  // --- RENDERS ---
+  // --- VALUATION LOGIC ---
+  const totalKg = seedBatches.reduce((sum, b) => sum + (b.remainingQuantity || 0), 0);
+  const totalUsd = seedBatches.reduce((sum, b) => sum + ((b.remainingQuantity || 0) * (b.pricePerKg || 0)), 0);
+  const totalEur = totalUsd * EXCHANGE_RATES.EUR;
+  const totalArs = totalUsd * EXCHANGE_RATES.ARS;
+
   return (
     <div>
       {schemaError && (
@@ -276,8 +236,8 @@ export default function SeedBatches() {
               <div className="flex items-start">
                   <Database className="text-red-500 mr-3 mt-1" size={24}/>
                   <div>
-                      h3 className="font-bold text-red-800">Actualización de Base de Datos Necesaria (V2.9.0)</h3>
-                      <p className="text-red-600 text-sm mt-1">Faltan columnas de valorización y logística avanzada. Los cálculos de precios y distancias podrían fallar.</p>
+                      <h3 className="font-bold text-red-800">Actualización de Base de Datos Necesaria (V2.9.0)</h3>
+                      <p className="text-red-600 text-sm mt-1">Faltan columnas de valorización avanzada. Los cálculos de precios podrían fallar.</p>
                   </div>
               </div>
               <Link to="/settings" className="bg-red-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-red-700 shadow">
@@ -291,7 +251,7 @@ export default function SeedBatches() {
             <h1 className="text-2xl font-bold text-gray-800 flex items-center">
                 <Archive className="mr-2 text-hemp-600"/> Inventario de Semillas
             </h1>
-            <p className="text-sm text-gray-500">Valorización de activos, logística de salida y trazabilidad.</p>
+            <p className="text-sm text-gray-500">Valorización multimoneda (USD/EUR/ARS), logística y trazabilidad.</p>
         </div>
         {isAdmin && (
           <div className="flex space-x-2 w-full md:w-auto">
@@ -318,21 +278,26 @@ export default function SeedBatches() {
 
       {activeTab === 'inventory' && (
           <div className="space-y-4">
-              {/* Financial Dashboard Summary */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              {/* Multicurrency Financial Summary */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                   <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
-                      <p className="text-xs font-bold text-gray-400 uppercase">Volumen Total en Stock</p>
-                      <p className="text-2xl font-black text-gray-800">{seedBatches.reduce((sum, b) => sum + (b.remainingQuantity || 0), 0)} kg</p>
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Volumen en Stock</p>
+                      <p className="text-2xl font-black text-gray-800">{totalKg.toLocaleString()} kg</p>
                   </div>
-                  <div className="bg-green-50 p-4 rounded-xl border border-green-100 shadow-sm">
-                      <p className="text-xs font-bold text-green-600 uppercase">Valorización Total (Est.)</p>
-                      <p className="text-2xl font-black text-green-700">
-                        USD {seedBatches.reduce((sum, b) => sum + ((b.remainingQuantity || 0) * (b.pricePerKg || 0)), 0).toLocaleString()}
-                      </p>
+                  <div className="bg-green-50 p-4 rounded-xl border border-green-100 shadow-sm relative overflow-hidden">
+                      <p className="text-[10px] font-bold text-green-600 uppercase tracking-wider">Valorización USD</p>
+                      <p className="text-2xl font-black text-green-700">USD {totalUsd.toLocaleString()}</p>
+                      <DollarSign className="absolute -right-2 -bottom-2 text-green-200 opacity-20" size={64}/>
                   </div>
-                  <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 shadow-sm">
-                      <p className="text-xs font-bold text-blue-600 uppercase">Lotes Activos</p>
-                      <p className="text-2xl font-black text-blue-700">{seedBatches.filter(b => b.remainingQuantity > 0).length}</p>
+                  <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 shadow-sm relative overflow-hidden">
+                      <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Valorización EUR</p>
+                      <p className="text-2xl font-black text-blue-700">€ {totalEur.toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
+                      <Coins className="absolute -right-2 -bottom-2 text-blue-200 opacity-20" size={64}/>
+                  </div>
+                  <div className="bg-amber-50 p-4 rounded-xl border border-amber-100 shadow-sm relative overflow-hidden">
+                      <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wider">Valorización ARS (Est.)</p>
+                      <p className="text-2xl font-black text-amber-700">$ {totalArs.toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
+                      <div className="absolute right-2 bottom-2 text-[10px] font-bold text-amber-400">1 USD = ${EXCHANGE_RATES.ARS}</div>
                   </div>
               </div>
 
@@ -344,7 +309,7 @@ export default function SeedBatches() {
                               <th className="px-6 py-3 text-left font-medium text-gray-500 uppercase">Variedad</th>
                               <th className="px-6 py-3 text-center font-medium text-gray-500 uppercase">Ubicación</th>
                               <th className="px-6 py-3 text-center font-medium text-gray-500 uppercase">Stock</th>
-                              <th className="px-6 py-3 text-right font-medium text-gray-500 uppercase">Valor Stock</th>
+                              <th className="px-6 py-3 text-right font-medium text-gray-500 uppercase">Valor Stock (USD/EUR)</th>
                               <th className="px-6 py-3 text-right font-medium text-gray-500 uppercase">Acciones</th>
                           </tr>
                       </thead>
@@ -354,7 +319,8 @@ export default function SeedBatches() {
                           ) : seedBatches.map(batch => {
                               const variety = varieties.find(v => v.id === batch.varietyId);
                               const sp = storagePoints.find(s => s.id === batch.storagePointId);
-                              const batchValue = (batch.remainingQuantity || 0) * (batch.pricePerKg || 0);
+                              const usdValue = (batch.remainingQuantity || 0) * (batch.pricePerKg || 0);
+                              const eurValue = usdValue * EXCHANGE_RATES.EUR;
 
                               return (
                                   <tr key={batch.id} className="hover:bg-gray-50">
@@ -373,8 +339,13 @@ export default function SeedBatches() {
                                               {batch.remainingQuantity} kg
                                           </span>
                                       </td>
-                                      <td className="px-6 py-4 text-right font-mono font-bold text-gray-700">
-                                          {batchValue > 0 ? `$${batchValue.toLocaleString()}` : '-'}
+                                      <td className="px-6 py-4 text-right">
+                                          {usdValue > 0 ? (
+                                              <div>
+                                                  <div className="font-mono font-bold text-gray-800">${usdValue.toLocaleString()} <span className="text-[10px] text-gray-400">USD</span></div>
+                                                  <div className="font-mono text-xs text-gray-500">€{eurValue.toLocaleString(undefined, {maximumFractionDigits: 0})} <span className="text-[10px]">EUR</span></div>
+                                              </div>
+                                          ) : <span className="text-gray-300">-</span>}
                                       </td>
                                       <td className="px-6 py-4 text-right">
                                           {isAdmin && (
@@ -524,8 +495,11 @@ export default function SeedBatches() {
                             <input required type="number" step="0.01" className={inputClass} value={batchFormData.pricePerKg} onChange={e => setBatchFormData({...batchFormData, pricePerKg: Number(e.target.value)})} />
                         </div>
                         <div className="bg-white border p-2 rounded text-center flex flex-col justify-center">
-                            <span className="text-[10px] text-gray-400 uppercase font-bold">Valor Total</span>
-                            <span className="text-sm font-black text-gray-800">USD {(batchFormData.initialQuantity! * batchFormData.pricePerKg!).toLocaleString()}</span>
+                            <span className="text-[10px] text-gray-400 uppercase font-bold">Valor Total Est.</span>
+                            <div className="flex flex-col">
+                                <span className="text-sm font-black text-gray-800">USD {(batchFormData.initialQuantity! * batchFormData.pricePerKg!).toLocaleString()}</span>
+                                <span className="text-[10px] text-gray-500 font-bold">EUR {((batchFormData.initialQuantity! * batchFormData.pricePerKg!) * EXCHANGE_RATES.EUR).toLocaleString(undefined, {maximumFractionDigits: 0})}</span>
+                            </div>
                         </div>
                     </div>
                 </div>
