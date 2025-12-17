@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { SeedBatch, SeedMovement, Supplier, StoragePoint } from '../types';
-import { Plus, ScanBarcode, Edit2, Trash2, Tag, Calendar, Package, Truck, Printer, MapPin, FileText, ArrowRight, Building, FileDigit, Globe, Clock, Box, ShieldCheck, Map, UserCheck, Briefcase, Wand2, AlertCircle, DollarSign, ShoppingCart, Archive, ChevronRight, Warehouse, Route as RouteIcon, ExternalLink, Save, X, Database, Coins } from 'lucide-react';
+import { Plus, ScanBarcode, Edit2, Trash2, Tag, Calendar, Package, Truck, Printer, MapPin, FileText, ArrowRight, Building, FileDigit, Globe, Clock, Box, ShieldCheck, Map, UserCheck, Briefcase, Wand2, AlertCircle, DollarSign, ShoppingCart, Archive, ChevronRight, Warehouse, Route as RouteIcon, ExternalLink, Save, X, Database, Coins, Loader2 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { supabase } from '../supabaseClient'; 
@@ -18,6 +18,7 @@ export default function SeedBatches() {
   const { seedBatches, seedMovements, addLocalSeedBatch, updateSeedBatch, deleteSeedBatch, addSeedMovement, varieties, locations, currentUser, suppliers, clients, storagePoints, addStoragePoint, isEmergencyMode } = useAppContext();
   
   const [activeTab, setActiveTab] = useState<'inventory' | 'logistics'>('inventory');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // -- SCHEMA HEALTH CHECK --
   const [schemaError, setSchemaError] = useState<string | null>(null);
@@ -92,6 +93,7 @@ export default function SeedBatches() {
     if (!batchFormData.initialQuantity || batchFormData.initialQuantity <= 0) { alert("Error: La cantidad debe ser mayor a 0."); return; }
     if (!batchFormData.batchCode) { alert("Error: Falta el código de lote."); return; }
 
+    setIsSubmitting(true);
     const rawPayload = { 
         ...batchFormData,
         remainingQuantity: editingBatchId ? batchFormData.remainingQuantity : batchFormData.initialQuantity 
@@ -111,7 +113,7 @@ export default function SeedBatches() {
         if (editingBatchId) { 
             updateSeedBatch({ ...payload, id: editingBatchId }); 
         } else { 
-            const newId = Date.now().toString();
+            const newId = `BATCH-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
             const finalPayload = { ...payload, id: newId, createdAt: new Date().toISOString() };
 
             if (!isEmergencyMode) {
@@ -126,6 +128,8 @@ export default function SeedBatches() {
         resetBatchForm();
     } catch (err: any) {
         alert("Error crítico al guardar: " + err.message);
+    } finally {
+        setIsSubmitting(false);
     }
   };
 
@@ -183,7 +187,7 @@ export default function SeedBatches() {
 
   const handleMoveSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
-      if(!moveFormData.batchId || !moveFormData.targetLocationId || !moveFormData.quantity) return;
+      if(!moveFormData.batchId || !moveFormData.targetLocationId || !moveFormData.quantity || isSubmitting) return;
 
       const batch = seedBatches.find(b => b.id === moveFormData.batchId);
       if(batch && moveFormData.quantity > batch.remainingQuantity) {
@@ -191,9 +195,12 @@ export default function SeedBatches() {
           return;
       }
 
+      setIsSubmitting(true);
+      const movementId = `MOV-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      
       const movementPayload = {
           ...moveFormData as any,
-          id: Date.now().toString(),
+          id: movementId,
           transportGuideNumber: moveFormData.transportGuideNumber || `G-${Date.now()}`,
           originStorageId: batch?.storagePointId || null,
           routeGoogleLink: routeData?.link || null,
@@ -214,6 +221,8 @@ export default function SeedBatches() {
           resetMoveForm();
       } catch (err: any) {
           alert("Error al procesar logística: " + err.message);
+      } finally {
+          setIsSubmitting(false);
       }
   };
 
@@ -506,8 +515,9 @@ export default function SeedBatches() {
 
                 <div className="flex justify-end space-x-2 pt-4 border-t">
                     <button type="button" onClick={() => setIsBatchModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancelar</button>
-                    <button type="submit" className="px-6 py-2 bg-hemp-600 text-white rounded hover:bg-hemp-700 shadow-sm font-bold flex items-center">
-                        <Save size={18} className="mr-2"/> Guardar Lote
+                    <button type="submit" disabled={isSubmitting} className="px-6 py-2 bg-hemp-600 text-white rounded hover:bg-hemp-700 shadow-sm font-bold flex items-center disabled:opacity-50">
+                        {isSubmitting ? <Loader2 className="animate-spin mr-2" size={18}/> : <Save size={18} className="mr-2"/>}
+                        Guardar Lote
                     </button>
                 </div>
             </form>
@@ -548,8 +558,9 @@ export default function SeedBatches() {
                         <option value="">Seleccionar Lote...</option>
                         {seedBatches.filter(b => b.remainingQuantity > 0).map(b => {
                             const sp = storagePoints.find(s => s.id === b.storagePointId);
+                            const vari = varieties.find(v => v.id === b.varietyId);
                             return (
-                                <option key={b.id} value={b.id}>{b.batchCode} @ {sp?.name || 'Depósito'} ({b.remainingQuantity} kg)</option>
+                                <option key={b.id} value={b.id}>[{vari?.name || 'S/V'}] {b.batchCode} @ {sp?.name || 'Depósito'} ({b.remainingQuantity} kg)</option>
                             )
                         })}
                     </select>
@@ -596,7 +607,10 @@ export default function SeedBatches() {
                 
                 <div className="flex justify-end space-x-2 pt-4">
                     <button type="button" onClick={() => setIsMoveModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancelar</button>
-                    <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 shadow-sm font-bold">Confirmar Envío</button>
+                    <button type="submit" disabled={isSubmitting} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 shadow-sm font-bold flex items-center disabled:opacity-50">
+                        {isSubmitting && <Loader2 className="animate-spin mr-2" size={16}/>}
+                        Confirmar Envío
+                    </button>
                 </div>
             </form>
           </div>
