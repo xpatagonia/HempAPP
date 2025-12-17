@@ -228,9 +228,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               setSeedMovements(getFromLocal('seedMovements'));
               setResources(getFromLocal('resources'));
               setStoragePoints(getFromLocal('storagePoints'));
-              setTrialRecords(getFromLocal('trialRecords')); // Agregado
-              setLogs(getFromLocal('logs')); // Agregado
-              setTasks(getFromLocal('tasks')); // Agregado
+              setTrialRecords(getFromLocal('trialRecords')); 
+              setLogs(getFromLocal('logs'));
+              setTasks(getFromLocal('tasks'));
           } else {
               // MODO ONLINE: Cargar SOLO desde DB
               setIsEmergencyMode(false);
@@ -238,13 +238,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               // 1. Chequeo de Esquema: Tablas Básicas
               const { error: tableError } = await supabase.from('suppliers').select('id').limit(1);
               
-              // 2. Chequeo de Esquema: Columnas Nuevas (Storage/Seeds)
-              // Intentamos seleccionar una columna nueva para ver si existe
+              // 2. Chequeo de Esquema: Columnas Nuevas (Storage/Seeds/Users)
               const { error: columnError } = await supabase.from('seed_batches').select('storagePointId').limit(1);
+              const { error: userColError } = await supabase.from('users').select('clientId').limit(1);
 
               if (
                   (tableError && (tableError.code === '42P01' || tableError.message.includes('does not exist'))) ||
-                  (columnError && columnError.code === '42703') // 42703 = Undefined Column
+                  (columnError && columnError.code === '42703') ||
+                  (userColError && userColError.code === '42703')
               ) {
                   console.error("⚠️ Esquema de Base de Datos desactualizado.");
                   setDbNeedsMigration(true);
