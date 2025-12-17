@@ -191,11 +191,14 @@ export default function Settings() {
 
   const SQL_SCRIPT = `
 -- =========================================================
--- REPARACIÓN DEFINITIVA TABLA SEMILLAS (V2.7.5)
--- Ejecutar en Supabase SQL Editor
+-- SCRIPT REPARACIÓN V2.7.6 (EMERGENCY FIX)
 -- =========================================================
 
--- 1. TABLA: SEED_BATCHES (Lotes de Semilla)
+-- 1. FORZAR RECARGA DE CACHÉ INICIAL
+NOTIFY pgrst, 'reload schema';
+
+-- 2. ASEGURAR TABLA SEED_BATCHES Y COLUMNAS
+-- Usamos IF NOT EXISTS para evitar errores si ya existen
 CREATE TABLE IF NOT EXISTS public.seed_batches (
     id TEXT PRIMARY KEY,
     "varietyId" TEXT,
@@ -210,7 +213,6 @@ CREATE TABLE IF NOT EXISTS public.seed_batches (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
--- AGREGAR TODAS LAS COLUMNAS POSIBLES (Fix 'Could not find column')
 ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "analysisDate" TEXT;
 ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "purity" NUMERIC;
 ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "germination" NUMERIC;
@@ -229,39 +231,25 @@ ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "certificationNumber" T
 ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "storageConditions" TEXT;
 ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "logisticsResponsible" TEXT;
 
--- Seguridad Semillas (RLS)
+-- 3. FORZAR PERMISOS (A veces el caché de RLS oculta columnas)
 ALTER TABLE public.seed_batches ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Enable all access for all users" ON public.seed_batches;
-CREATE POLICY "Enable all access for all users" ON public.seed_batches FOR ALL USING (true) WITH CHECK (true);
 GRANT ALL ON TABLE public.seed_batches TO anon;
 GRANT ALL ON TABLE public.seed_batches TO authenticated;
 GRANT ALL ON TABLE public.seed_batches TO service_role;
 
--- 2. TABLA: STORAGE_POINTS (Depósitos)
-CREATE TABLE IF NOT EXISTS public.storage_points (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    type TEXT,
-    address TEXT,
-    city TEXT,
-    province TEXT,
-    "surfaceM2" NUMERIC,
-    coordinates JSONB,
-    "responsibleUserId" TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
-ALTER TABLE public.storage_points ADD COLUMN IF NOT EXISTS "surfaceM2" NUMERIC;
-ALTER TABLE public.storage_points DROP COLUMN IF EXISTS "capacityKg"; -- Limpieza
-ALTER TABLE public.storage_points ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Enable all access for all users" ON public.storage_points;
-CREATE POLICY "Enable all access for all users" ON public.storage_points FOR ALL USING (true) WITH CHECK (true);
-GRANT ALL ON TABLE public.storage_points TO anon;
-GRANT ALL ON TABLE public.storage_points TO authenticated;
-GRANT ALL ON TABLE public.storage_points TO service_role;
+-- Eliminar políticas viejas para limpiar
+DROP POLICY IF EXISTS "Enable all access for all users" ON public.seed_batches;
+DROP POLICY IF EXISTS "Public Access" ON public.seed_batches;
 
--- 3. RECARGA DE CACHÉ DE API (CRÍTICO)
--- Esto soluciona el error "Could not find column in schema cache"
+-- Crear política permisiva nueva
+CREATE POLICY "Public Access" ON public.seed_batches FOR ALL USING (true) WITH CHECK (true);
+
+-- 4. FORZAR RECARGA DE CACHÉ FINAL
+-- Este es el comando crítico para el error 'schema cache'
 NOTIFY pgrst, 'reload schema';
+
+-- 5. VERIFICACIÓN (Mensaje de éxito)
+SELECT 'Base de datos reparada correctamente. Recarga la App.' as status;
   `;
 
   return (
@@ -357,14 +345,14 @@ NOTIFY pgrst, 'reload schema';
             {/* SQL Box */}
             <div className="bg-slate-50 rounded-xl border border-slate-200 p-6 mt-8">
                 <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-sm font-bold text-slate-800">Script de Reparación SQL (V2.7.5)</h2>
+                    <h2 className="text-sm font-bold text-slate-800">Script de Reparación SQL (V2.7.6)</h2>
                     <button onClick={copySQL} className="text-xs bg-white border px-3 py-1 rounded shadow-sm font-bold hover:bg-slate-50">Copiar SQL</button>
                 </div>
                 <div className="bg-slate-900 p-4 rounded-lg text-xs font-mono text-blue-300 overflow-x-auto h-48 custom-scrollbar">
                     <pre>{SQL_SCRIPT}</pre>
                 </div>
                 <p className="text-xs text-slate-500 mt-2">
-                    <strong>¡INSTRUCCIONES!</strong> Copia este código, ve al Editor SQL de Supabase y ejecútalo para solucionar el error "Could not find the analysisDate column".
+                    <strong>¡IMPORTANTE!</strong> Ejecuta este script en Supabase y luego recarga la página para solucionar el error de caché.
                 </p>
             </div>
         </div>
