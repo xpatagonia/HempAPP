@@ -80,7 +80,7 @@ export default function Settings() {
 
   const copySQL = () => {
       navigator.clipboard.writeText(SQL_SCRIPT);
-      alert("SQL copiado al portapapeles. Pégalo en el editor SQL de Supabase.");
+      alert("Script copiado. Ahora ve a Supabase -> SQL Editor y ejecútalo para reparar la base de datos.");
   };
 
   const clearLocalCache = () => {
@@ -191,14 +191,14 @@ export default function Settings() {
 
   const SQL_SCRIPT = `
 -- =========================================================
--- FORZAR RECARGA CACHÉ SUPABASE (V2.7.7)
--- Agrega soporte para storagePointId
+-- SOLUCIÓN ERROR "GUARDADO PARCIAL" (storagePointId)
+-- Ejecuta esto en Supabase -> SQL Editor
 -- =========================================================
 
--- 1. Notificar a PostgREST que recargue el esquema
+-- 1. Forzar recarga del esquema para que la API detecte cambios
 NOTIFY pgrst, 'reload schema';
 
--- 2. Asegurar que las columnas existan
+-- 2. Crear las columnas que faltan
 ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "storagePointId" TEXT;
 ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "analysisDate" TEXT;
 ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "purity" NUMERIC;
@@ -206,7 +206,7 @@ ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "germination" NUMERIC;
 ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "labelSerialNumber" TEXT;
 
 -- 3. Mensaje de éxito
-SELECT 'Cache recargado y columnas añadidas.' as status;
+SELECT 'Base de datos reparada. Ya puedes guardar ubicaciones.' as status;
   `;
 
   return (
@@ -300,16 +300,16 @@ SELECT 'Cache recargado y columnas añadidas.' as status;
             </button>
             
             {/* SQL Box */}
-            <div className="bg-slate-50 rounded-xl border border-slate-200 p-6 mt-8">
+            <div className="bg-slate-900 rounded-xl border border-slate-700 p-6 mt-8 shadow-xl">
                 <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-sm font-bold text-slate-800">Script: Forzar Recarga Caché (V2.7.7)</h2>
-                    <button onClick={copySQL} className="text-xs bg-white border px-3 py-1 rounded shadow-sm font-bold hover:bg-slate-50">Copiar SQL</button>
+                    <h2 className="text-sm font-bold text-white flex items-center"><AlertTriangle className="mr-2 text-yellow-400"/> Script de Reparación (V2.7.7)</h2>
+                    <button onClick={copySQL} className="text-xs bg-hemp-600 text-white border border-hemp-500 px-4 py-2 rounded shadow-sm font-bold hover:bg-hemp-700 transition">Copiar SQL</button>
                 </div>
-                <div className="bg-slate-900 p-4 rounded-lg text-xs font-mono text-blue-300 overflow-x-auto h-48 custom-scrollbar">
+                <div className="bg-black p-4 rounded-lg text-xs font-mono text-green-400 overflow-x-auto h-48 custom-scrollbar border border-slate-700">
                     <pre>{SQL_SCRIPT}</pre>
                 </div>
-                <p className="text-xs text-slate-500 mt-2">
-                    <strong>TIP:</strong> Si el sistema te sigue pidiendo actualizar la BD, ejecuta este script y recarga la página.
+                <p className="text-xs text-slate-400 mt-3 flex items-center">
+                    <strong className="text-white mr-1">Instrucciones:</strong> Copia este código, ve a tu panel de Supabase &rarr; SQL Editor &rarr; Pegar &rarr; Run.
                 </p>
             </div>
         </div>

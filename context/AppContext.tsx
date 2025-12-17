@@ -234,9 +234,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               // MODO ONLINE: Cargar SOLO desde DB
               setIsEmergencyMode(false);
               
-              // Chequear esquema
-              const { error: checkError } = await supabase.from('suppliers').select('id').limit(1);
-              if (checkError && (checkError.code === '42P01' || checkError.message.includes('does not exist'))) {
+              // 1. Chequeo de Esquema: Tablas Básicas
+              const { error: tableError } = await supabase.from('suppliers').select('id').limit(1);
+              
+              // 2. Chequeo de Esquema: Columnas Nuevas (Storage/Seeds)
+              // Intentamos seleccionar una columna nueva para ver si existe
+              const { error: columnError } = await supabase.from('seed_batches').select('storagePointId').limit(1);
+
+              if (
+                  (tableError && (tableError.code === '42P01' || tableError.message.includes('does not exist'))) ||
+                  (columnError && columnError.code === '42703') // 42703 = Undefined Column
+              ) {
+                  console.error("⚠️ Esquema de Base de Datos desactualizado.");
                   setDbNeedsMigration(true);
               }
 
@@ -295,7 +304,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const handleSupabaseError = (error: any, context: string) => {
       console.error(`Error en ${context}:`, error);
       if (error.message?.includes('does not exist') || error.code === '42703') {
-          alert(`⚠️ ERROR DE COLUMNAS: La base de datos está desactualizada.\n\nFalta ejecutar el script SQL en Configuración.`);
+          // No mostramos alert aquí para no spammear, el banner global se encargará
           setDbNeedsMigration(true);
       } else {
           alert(`Error de sincronización: ${error.message}`);
