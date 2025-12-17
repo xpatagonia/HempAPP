@@ -2,23 +2,35 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Client, RoleType, User } from '../types';
-import { Plus, Edit2, Trash2, Briefcase, MapPin, Phone, Mail, Globe, Users, Building, AlertCircle, Tractor, Eye, X, Link as LinkIcon, UserCheck, Key, Shield } from 'lucide-react';
+import { Plus, Edit2, Trash2, Briefcase, MapPin, Phone, Mail, Globe, Users, Building, AlertCircle, Tractor, Eye, X, Link as LinkIcon, UserCheck, Key, Shield, UserPlus, LogOut } from 'lucide-react';
 
 export default function Clients() {
-  const { clients, addClient, updateClient, deleteClient, currentUser, locations, usersList, addUser, deleteUser } = useAppContext();
+  const { clients, addClient, updateClient, deleteClient, currentUser, locations, usersList, addUser, updateUser, deleteUser } = useAppContext();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [viewClient, setViewClient] = useState<Client | null>(null); // For View Mode
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // Quick User Add State
-  const [showUserForm, setShowUserForm] = useState(false);
+  // User Management States
+  const [showCreateUserForm, setShowCreateUserForm] = useState(false);
+  const [showLinkUserForm, setShowLinkUserForm] = useState(false);
+  
+  // Forms
   const [newUser, setNewUser] = useState({ name: '', email: '', password: '' });
+  const [selectedExistingUserId, setSelectedExistingUserId] = useState('');
 
   const [formData, setFormData] = useState<Partial<Client>>({
     name: '', type: 'Empresa Privada', contactName: '', contactPhone: '', email: '', isNetworkMember: false, cuit: '', notes: '', relatedUserId: ''
   });
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
+
+  // Filter users eligible to be linked (Not admins, not already in this team)
+  const availableUsersToLink = viewClient ? usersList.filter(u => 
+      u.role !== 'super_admin' && 
+      u.role !== 'admin' && 
+      u.clientId !== viewClient.id && // Not already in this team
+      u.id !== viewClient.relatedUserId // Not the owner
+  ) : [];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,7 +80,7 @@ export default function Clients() {
       }
   };
 
-  // Helper to link user data
+  // Helper to link user data in Create Form
   const handleUserLink = (userId: string) => {
       const user = usersList.find(u => u.id === userId);
       if (user) {
@@ -84,7 +96,7 @@ export default function Clients() {
       }
   };
 
-  // Handle Adding a new User directly to this client
+  // 1. Create NEW User and Link
   const handleQuickAddUser = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!viewClient || !newUser.name || !newUser.email || !newUser.password) return;
@@ -103,13 +115,39 @@ export default function Clients() {
       if (success) {
           alert(`Usuario ${newUser.name} creado y vinculado a ${viewClient.name}.`);
           setNewUser({ name: '', email: '', password: '' });
-          setShowUserForm(false);
+          setShowCreateUserForm(false);
       }
   };
 
-  const handleDeleteLinkedUser = (userId: string) => {
-      if (window.confirm("¿Eliminar este usuario? Perderá el acceso al sistema.")) {
-          deleteUser(userId);
+  // 2. Link EXISTING User
+  const handleLinkExistingUser = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!viewClient || !selectedExistingUserId) return;
+
+      const user = usersList.find(u => u.id === selectedExistingUserId);
+      if (user) {
+          // If the user was a 'viewer' or 'technician', maybe we upgrade them to 'client' or keep 'technician' but assign clientId.
+          // Let's keep role but assign clientId. If they had no specific role, default to client scope.
+          const newRole = (user.role === 'viewer') ? 'client' : user.role;
+          
+          updateUser({
+              ...user,
+              clientId: viewClient.id,
+              role: newRole
+          });
+          alert(`${user.name} ha sido agregado al equipo de ${viewClient.name}.`);
+          setShowLinkUserForm(false);
+          setSelectedExistingUserId('');
+      }
+  };
+
+  // Remove user from team (unlink)
+  const handleUnlinkUser = (user: User) => {
+      if (window.confirm(`¿Quitar a ${user.name} del equipo? Dejará de tener acceso a los campos de este cliente.`)) {
+          updateUser({
+              ...user,
+              clientId: undefined // Remove link
+          });
       }
   };
 
@@ -208,7 +246,7 @@ export default function Clients() {
                   <div className="mt-3 pt-3 border-t border-gray-100 flex justify-between items-center text-xs">
                       <span className="font-bold text-gray-500">CUIT: {client.cuit || '-'}</span>
                       <div className="flex space-x-2">
-                          <span className="bg-purple-50 text-purple-700 px-2 py-1 rounded font-bold flex items-center" title="Usuarios con acceso">
+                          <span className={`px-2 py-1 rounded font-bold flex items-center ${totalTeam > 0 ? 'bg-purple-50 text-purple-700' : 'bg-gray-50 text-gray-400'}`} title="Usuarios con acceso">
                               <Users size={12} className="mr-1"/> {totalTeam}
                           </span>
                           <span className="bg-gray-100 px-2 py-1 rounded text-gray-600 font-bold flex items-center">
@@ -229,7 +267,7 @@ export default function Clients() {
                       <h2 className="text-xl font-bold text-gray-800 flex items-center">
                           <Briefcase className="mr-2 text-hemp-600"/> Ficha de Cliente
                       </h2>
-                      <button onClick={() => { setViewClient(null); setShowUserForm(false); }} className="text-gray-400 hover:text-gray-600 bg-white p-1 rounded-full shadow-sm"><X size={20}/></button>
+                      <button onClick={() => { setViewClient(null); setShowCreateUserForm(false); setShowLinkUserForm(false); }} className="text-gray-400 hover:text-gray-600 bg-white p-1 rounded-full shadow-sm"><X size={20}/></button>
                   </div>
                   
                   <div className="p-6 overflow-y-auto">
@@ -249,7 +287,8 @@ export default function Clients() {
                       {viewClient.relatedUserId && (() => {
                           const u = usersList.find(usr => usr.id === viewClient.relatedUserId);
                           if(u) return (
-                              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 flex items-center">
+                              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 flex items-center relative">
+                                  <div className="absolute top-2 right-2 bg-blue-200 text-blue-800 text-[10px] font-bold px-2 py-0.5 rounded">TITULAR</div>
                                   <img src={u.avatar} alt={u.name} className="w-12 h-12 rounded-full border-2 border-white shadow-sm mr-4"/>
                                   <div>
                                       <p className="text-xs font-bold text-blue-800 uppercase mb-1 flex items-center">
@@ -267,19 +306,25 @@ export default function Clients() {
                       <div className="mb-6">
                           <div className="flex justify-between items-center mb-3">
                               <h4 className="font-bold text-gray-700 text-sm flex items-center"><Users size={16} className="mr-2"/> Equipo de Trabajo</h4>
-                              {isAdmin && !showUserForm && (
-                                  <button onClick={() => setShowUserForm(true)} className="text-xs bg-green-50 text-green-700 border border-green-200 px-2 py-1 rounded hover:bg-green-100 transition flex items-center">
-                                      <Plus size={12} className="mr-1"/> Agregar Usuario
-                                  </button>
+                              
+                              {isAdmin && !showCreateUserForm && !showLinkUserForm && (
+                                  <div className="flex space-x-1">
+                                      <button onClick={() => setShowLinkUserForm(true)} className="text-xs bg-white text-gray-600 border border-gray-200 px-2 py-1 rounded hover:bg-gray-50 transition flex items-center shadow-sm">
+                                          <LinkIcon size={12} className="mr-1"/> Vincular Existente
+                                      </button>
+                                      <button onClick={() => setShowCreateUserForm(true)} className="text-xs bg-green-50 text-green-700 border border-green-200 px-2 py-1 rounded hover:bg-green-100 transition flex items-center shadow-sm">
+                                          <UserPlus size={12} className="mr-1"/> Crear Nuevo
+                                      </button>
+                                  </div>
                               )}
                           </div>
 
-                          {/* Quick Add User Form */}
-                          {showUserForm && (
+                          {/* FORM 1: Create NEW User */}
+                          {showCreateUserForm && (
                               <form onSubmit={handleQuickAddUser} className="bg-green-50 p-4 rounded-lg border border-green-100 mb-4 animate-in fade-in">
                                   <div className="flex justify-between items-center mb-2">
                                       <h5 className="text-xs font-bold text-green-800 uppercase">Nuevo Usuario del Cliente</h5>
-                                      <button type="button" onClick={() => setShowUserForm(false)} className="text-green-600 hover:text-green-800"><X size={14}/></button>
+                                      <button type="button" onClick={() => setShowCreateUserForm(false)} className="text-green-600 hover:text-green-800"><X size={14}/></button>
                                   </div>
                                   <div className="space-y-2">
                                       <input required type="text" placeholder="Nombre Completo" className="w-full text-sm border-green-200 rounded p-1.5 focus:ring-green-500" value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} />
@@ -290,28 +335,60 @@ export default function Clients() {
                               </form>
                           )}
 
+                          {/* FORM 2: Link EXISTING User */}
+                          {showLinkUserForm && (
+                              <form onSubmit={handleLinkExistingUser} className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-4 animate-in fade-in">
+                                  <div className="flex justify-between items-center mb-2">
+                                      <h5 className="text-xs font-bold text-gray-700 uppercase">Vincular Usuario Existente</h5>
+                                      <button type="button" onClick={() => setShowLinkUserForm(false)} className="text-gray-500 hover:text-gray-700"><X size={14}/></button>
+                                  </div>
+                                  <div className="space-y-2">
+                                      <select 
+                                          required 
+                                          className="w-full text-sm border-gray-300 rounded p-1.5 focus:ring-hemp-500"
+                                          value={selectedExistingUserId}
+                                          onChange={e => setSelectedExistingUserId(e.target.value)}
+                                      >
+                                          <option value="">Seleccionar Usuario...</option>
+                                          {availableUsersToLink.map(u => (
+                                              <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+                                          ))}
+                                      </select>
+                                      {availableUsersToLink.length === 0 && <p className="text-[10px] text-orange-500">No hay usuarios disponibles para vincular.</p>}
+                                      <button type="submit" className="w-full bg-gray-700 text-white text-xs font-bold py-2 rounded shadow-sm hover:bg-gray-800 transition" disabled={!selectedExistingUserId}>
+                                          Asignar al Equipo
+                                      </button>
+                                  </div>
+                              </form>
+                          )}
+
                           {/* Team List */}
                           <div className="space-y-2">
                               {usersList.filter(u => u.clientId === viewClient.id).map(u => (
-                                  <div key={u.id} className="flex items-center justify-between bg-white border border-gray-100 p-2 rounded-lg shadow-sm">
+                                  <div key={u.id} className="flex items-center justify-between bg-white border border-gray-100 p-2 rounded-lg shadow-sm group">
                                       <div className="flex items-center">
-                                          <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-500 mr-2 overflow-hidden">
+                                          <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-500 mr-2 overflow-hidden border border-gray-100">
                                               {u.avatar ? <img src={u.avatar} alt="av" className="w-full h-full object-cover"/> : u.name.charAt(0)}
                                           </div>
                                           <div>
-                                              <p className="text-xs font-bold text-gray-800">{u.name}</p>
-                                              <p className="text-[10px] text-gray-500">{u.email}</p>
+                                              <p className="text-xs font-bold text-gray-800 flex items-center">
+                                                  {u.name}
+                                                  {u.id === viewClient.relatedUserId && <span className="ml-2 text-[9px] bg-blue-100 text-blue-700 px-1 rounded uppercase">Owner</span>}
+                                              </p>
+                                              <p className="text-[10px] text-gray-500">{u.email} • {u.role}</p>
                                           </div>
                                       </div>
-                                      {isAdmin && (
-                                          <button onClick={() => handleDeleteLinkedUser(u.id)} className="text-gray-400 hover:text-red-500 p-1">
-                                              <Trash2 size={14}/>
+                                      {isAdmin && u.id !== viewClient.relatedUserId && (
+                                          <button onClick={() => handleUnlinkUser(u)} className="text-gray-300 hover:text-red-500 p-1 bg-white rounded border border-transparent hover:border-red-100 transition opacity-0 group-hover:opacity-100" title="Quitar del equipo">
+                                              <LogOut size={14}/>
                                           </button>
                                       )}
                                   </div>
                               ))}
-                              {usersList.filter(u => u.clientId === viewClient.id).length === 0 && !showUserForm && (
-                                  <p className="text-xs text-gray-400 italic text-center py-2">No hay otros usuarios asignados.</p>
+                              {usersList.filter(u => u.clientId === viewClient.id).length === 0 && !showCreateUserForm && !showLinkUserForm && (
+                                  <p className="text-xs text-gray-400 italic text-center py-2 bg-gray-50 rounded border border-dashed border-gray-200">
+                                      No hay personal asignado.
+                                  </p>
                               )}
                           </div>
                       </div>
