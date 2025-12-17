@@ -32,7 +32,8 @@ interface AppContextType {
   usersList: User[];
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
-  refreshData: () => Promise<void>; // NEW: Method to manually trigger data reload
+  refreshData: () => Promise<void>;
+  lastSyncTime: Date | null; // NEW: Track when the last sync happened
 
   addProject: (p: Project) => Promise<boolean>;
   updateProject: (p: Project) => void;
@@ -93,7 +94,7 @@ interface AppContextType {
   getLatestRecord: (plotId: string) => TrialRecord | undefined;
   
   loading: boolean;
-  isRefreshing: boolean; // NEW: Specific loading state for sync
+  isRefreshing: boolean;
   isEmergencyMode: boolean;
   dbNeedsMigration: boolean; 
 
@@ -141,6 +142,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null); // NEW
   const [isEmergencyMode, setIsEmergencyMode] = useState(false);
   const [dbNeedsMigration, setDbNeedsMigration] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
@@ -208,7 +210,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
-  // --- REUSABLE DATA FETCHING LOGIC ---
   const refreshData = async () => {
       setIsRefreshing(true);
       try {
@@ -259,6 +260,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                   fetchData('field_logs', setLogs),
                   fetchData('tasks', setTasks)
               ]);
+              setLastSyncTime(new Date());
           }
       } catch (err) {
           console.error("Refresh Error:", err);
@@ -274,11 +276,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const handleSupabaseError = (error: any, context: string) => {
       console.error(`Error en ${context}:`, error);
+      if (error.code === '23505') {
+          // Silent block for duplicate key - usually means it's already there
+          return true;
+      }
       if (error.message?.includes('does not exist') || error.code === '42703') {
           setDbNeedsMigration(true);
       } else {
           alert(`Error de sincronización: ${error.message}`);
       }
+      return false;
   };
 
   const login = async (email: string, password: string): Promise<boolean> => {
@@ -307,7 +314,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     localStorage.removeItem('ht_session_user');
   };
 
-  // --- CRUD WRAPPERS ---
   const genericAdd = async (table: string, item: any, setter: any, localKey: string) => {
       if (isEmergencyMode) {
           setter((prev: any[]) => {
@@ -318,7 +324,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           return true;
       } else {
           const { error } = await supabase.from(table).insert([item]);
-          if (error) { handleSupabaseError(error, `add ${table}`); return false; }
+          if (error) { 
+              const handled = handleSupabaseError(error, `add ${table}`);
+              if (!handled) return false;
+          }
           setter((prev: any[]) => [...prev, item]);
           return true;
       }
@@ -466,7 +475,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   return (
     <AppContext.Provider value={{
       projects, varieties, locations, plots, trialRecords, logs, tasks, seedBatches, seedMovements, suppliers, clients, resources, storagePoints, notifications,
-      currentUser, usersList, login, logout, refreshData,
+      currentUser, usersList, login, logout, refreshData, lastSyncTime,
       addProject, updateProject, deleteProject,
       addVariety, updateVariety, deleteVariety,
       addLocation, updateLocation, deleteLocation,

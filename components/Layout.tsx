@@ -34,7 +34,8 @@ import {
   Warehouse,
   Tractor,
   BookOpen,
-  RefreshCw
+  RefreshCw,
+  Clock
 } from 'lucide-react';
 
 const NavItem = ({ to, icon: Icon, label, onClick }: any) => {
@@ -58,7 +59,7 @@ const NavItem = ({ to, icon: Icon, label, onClick }: any) => {
 };
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { currentUser, logout, isEmergencyMode, dbNeedsMigration, theme, toggleTheme, notifications, refreshData, isRefreshing } = useAppContext();
+  const { currentUser, logout, isEmergencyMode, dbNeedsMigration, theme, toggleTheme, notifications, refreshData, isRefreshing, lastSyncTime } = useAppContext();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const location = useLocation();
@@ -99,7 +100,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           </div>
       )}
 
-      {/* EMERGENCY MODE WARNING (Hidden on Login) */}
+      {/* EMERGENCY MODE WARNING */}
       {isEmergencyMode && !isLoginPage && (
           <div className="fixed top-0 left-0 w-full z-[100] bg-amber-500 text-white px-4 py-3 flex justify-between items-center shadow-lg">
               <div className="flex items-center">
@@ -119,31 +120,17 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       <div className={`lg:hidden fixed top-0 w-full bg-slate-900 text-white z-50 border-b border-slate-800 px-4 py-3 flex justify-between items-center shadow-md ${!isLoginPage && (dbNeedsMigration || isEmergencyMode) ? 'mt-14' : ''}`}>
         <div className="flex items-center space-x-2">
           <Leaf className="w-6 h-6 text-hemp-500" />
-          <span className="font-bold text-lg">HempC v2.7</span>
+          <span className="font-bold text-lg">HempC v2.9</span>
         </div>
         <div className="flex items-center space-x-1">
             <button onClick={() => refreshData()} className={`p-2 rounded-lg ${isRefreshing ? 'text-hemp-500 animate-spin' : 'text-gray-400 hover:text-white'}`} title="Sincronizar Datos">
                 <RefreshCw size={22} />
-            </button>
-            <button onClick={() => setIsNotifOpen(!isNotifOpen)} className="p-2 relative text-gray-300 hover:text-white">
-                <Bell size={22} />
-                {unreadCount > 0 && (
-                    <span className="absolute top-1 right-1 h-3 w-3 bg-red-500 rounded-full border-2 border-slate-900"></span>
-                )}
             </button>
             <button onClick={toggleMobile} className="p-2 text-gray-300 hover:text-white">
               {isMobileOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
         </div>
       </div>
-
-      {/* Sidebar Overlay */}
-      {isMobileOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-          onClick={() => setIsMobileOpen(false)}
-        />
-      )}
 
       {/* Sidebar */}
       <aside className={`
@@ -155,7 +142,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         <div className="h-16 flex items-center px-6 border-b dark:border-dark-border justify-between bg-slate-900 text-white lg:bg-white lg:text-gray-800 lg:dark:bg-dark-card lg:dark:text-white">
           <div className="flex items-center">
              <Leaf className="w-8 h-8 text-hemp-500 lg:text-hemp-600 mr-2" />
-             <span className="text-xl font-bold">HempC <span className="text-hemp-500 text-sm bg-hemp-900 lg:bg-hemp-100 px-1 rounded ml-1">v2.7</span></span>
+             <span className="text-xl font-bold">HempC <span className="text-hemp-500 text-sm bg-hemp-900 lg:bg-hemp-100 px-1 rounded ml-1">v2.9</span></span>
           </div>
           
           <div className="flex items-center space-x-1">
@@ -174,29 +161,25 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
         <nav className="flex-1 p-4 space-y-2 overflow-y-auto custom-scrollbar">
           <NavItem to="/" icon={LayoutDashboard} label="Dashboard" onClick={() => setIsMobileOpen(false)} />
-          
-          {!isClient && (
-              <NavItem to="/projects" icon={FolderOpen} label="Proyectos" onClick={() => setIsMobileOpen(false)} />
-          )}
-          
+          {!isClient && <NavItem to="/projects" icon={FolderOpen} label="Proyectos" onClick={() => setIsMobileOpen(false)} />}
           <NavItem to="/calendar" icon={CalendarIcon} label="Calendario" onClick={() => setIsMobileOpen(false)} />
           
           <div className="pt-2 pb-2">
-              <p className="px-4 text-xs font-semibold text-gray-400 uppercase mb-2">Operativo</p>
+              <p className="px-4 text-[10px] font-black text-gray-400 uppercase mb-2 tracking-widest">Operativo</p>
               <NavItem to="/locations" icon={Tractor} label="Campos y Cultivos" onClick={() => setIsMobileOpen(false)} />
               <NavItem to="/plots" icon={ClipboardList} label="Planilla Global" onClick={() => setIsMobileOpen(false)} />
               <NavItem to="/tasks" icon={CheckSquare} label="Tareas" onClick={() => setIsMobileOpen(false)} />
           </div>
 
           <div className="pt-2 pb-2">
-              <p className="px-4 text-xs font-semibold text-gray-400 uppercase mb-2">Inteligencia</p>
+              <p className="px-4 text-[10px] font-black text-gray-400 uppercase mb-2 tracking-widest">Inteligencia</p>
               <NavItem to="/advisor" icon={Sparkles} label="Asistente IA" onClick={() => setIsMobileOpen(false)} />
               {!isClient && <NavItem to="/analytics" icon={BarChart2} label="Análisis Comparativo" onClick={() => setIsMobileOpen(false)} />}
               <NavItem to="/tools" icon={Calculator} label="Herramientas" onClick={() => setIsMobileOpen(false)} />
           </div>
 
           <div className="pt-2">
-               <p className="px-4 text-xs font-semibold text-gray-400 uppercase mb-2">Suministros & Stock</p>
+               <p className="px-4 text-[10px] font-black text-gray-400 uppercase mb-2 tracking-widest">Suministros & Stock</p>
                {!isClient && (
                    <>
                        <NavItem to="/suppliers" icon={Building} label="Proveedores" onClick={() => setIsMobileOpen(false)} />
@@ -208,17 +191,15 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                    </>
                )}
           </div>
-          
-          <div className="pt-4 mt-4 border-t dark:border-dark-border border-gray-100">
-                <p className="px-4 text-xs font-semibold text-gray-400 uppercase mb-2">Sistema</p>
-                {isAdminOrSuper && (
-                    <NavItem to="/users" icon={Users} label="Gestión Usuarios" onClick={() => setIsMobileOpen(false)} />
-                )}
-                {isSuperAdmin && (
-                    <NavItem to="/settings" icon={Database} label="Configuración DB" onClick={() => setIsMobileOpen(false)} />
-                )}
-            </div>
         </nav>
+
+        {/* Sync Info Footer */}
+        <div className="px-6 py-2 border-t dark:border-dark-border bg-gray-50/50 dark:bg-dark-bg/20">
+            <div className="flex items-center text-[9px] font-bold text-gray-400 uppercase tracking-tighter">
+                <Clock size={10} className="mr-1"/> 
+                Sinc: {lastSyncTime ? lastSyncTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Pendiente'}
+            </div>
+        </div>
 
         <div className="border-t dark:border-dark-border bg-gray-50 dark:bg-dark-card p-4">
            <div className="flex items-center space-x-3 mb-3">
@@ -230,22 +211,34 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate capitalize">{currentUser.jobTitle || getRoleLabel(currentUser.role)}</p>
                </div>
            </div>
-           <button 
-               onClick={logout}
-               className="w-full flex items-center justify-center space-x-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 p-2 rounded transition"
-           >
+           <button onClick={logout} className="w-full flex items-center justify-center space-x-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 p-2 rounded transition font-bold">
                <LogOut size={16} />
                <span>Cerrar Sesión</span>
            </button>
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className={`flex-1 lg:ml-0 pt-16 lg:pt-0 overflow-y-auto h-screen bg-gray-50 dark:bg-dark-bg transition-colors duration-300 ${!isLoginPage && (dbNeedsMigration || isEmergencyMode) ? 'mt-14 lg:mt-14' : ''}`}>
-        <div className="container mx-auto p-4 lg:p-8 max-w-7xl">
+      <main className={`flex-1 pt-16 lg:pt-0 overflow-y-auto h-screen bg-gray-50 dark:bg-dark-bg transition-colors duration-300 ${!isLoginPage && (dbNeedsMigration || isEmergencyMode) ? 'mt-14 lg:mt-14' : ''}`}>
+        <div className="container mx-auto p-4 lg:p-8 max-w-7xl relative">
+          {isRefreshing && (
+              <div className="absolute top-0 left-0 w-full h-1 bg-hemp-100 overflow-hidden">
+                  <div className="h-full bg-hemp-500 animate-progress origin-left"></div>
+              </div>
+          )}
           {children}
         </div>
       </main>
+      
+      <style>{`
+          @keyframes progress {
+              0% { transform: scaleX(0); }
+              50% { transform: scaleX(0.5); }
+              100% { transform: scaleX(1); }
+          }
+          .animate-progress {
+              animation: progress 2s infinite ease-in-out;
+          }
+      `}</style>
     </div>
   );
 }
