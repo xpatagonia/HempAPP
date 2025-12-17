@@ -78,18 +78,17 @@ export default function SeedBatches() {
     if (!batchFormData.initialQuantity || batchFormData.initialQuantity <= 0) { alert("Error: La cantidad debe ser mayor a 0."); return; }
     if (!batchFormData.batchCode) { alert("Error: Falta el código de lote."); return; }
 
-    // SANITIZATION: Convert empty strings to null to prevent Schema Mismatch
+    // 1. SANITIZACIÓN: Convertir strings vacíos a null
     const rawPayload = { 
         ...batchFormData,
         remainingQuantity: editingBatchId ? batchFormData.remainingQuantity : batchFormData.initialQuantity 
     };
 
-    // Helper to sanitize payload
     const payload = Object.fromEntries(
         Object.entries(rawPayload).map(([key, value]) => {
-            if (value === '') return [key, null]; // Convert empty string to null
-            if (key === 'purity' || key === 'germination' || key === 'initialQuantity' || key === 'pricePerKg') {
-                return [key, Number(value) || 0]; // Ensure numbers are numbers
+            if (value === '') return [key, null]; // Convertir vacíos a null
+            if (['purity', 'germination', 'initialQuantity', 'pricePerKg', 'remainingQuantity'].includes(key)) {
+                return [key, Number(value) || 0];
             }
             return [key, value];
         })
@@ -100,21 +99,44 @@ export default function SeedBatches() {
             updateSeedBatch({ ...payload, id: editingBatchId }); 
         } else { 
             if (!isEmergencyMode) {
-                // We use explicit Insert to catch schema errors
+                // INTENTO 1: Insertar TODO
                 const { error } = await supabase.from('seed_batches').insert([{ ...payload, id: Date.now().toString() }]);
                 
                 if (error) {
-                    console.error("Supabase Insert Error:", error);
-                    // Handle Schema Cache Error
+                    console.warn("Fallo inserción completa, intentando modo seguro...", error.message);
+                    
+                    // INTENTO 2 (FALLBACK): Insertar SOLO columnas básicas garantizadas
+                    // Si falla por 'analysisDate' u otras columnas nuevas, esto debería funcionar.
                     if (error.message.includes('Could not find') || error.code === '42703' || error.message.includes('schema cache')) {
-                        alert("⚠️ ERROR DE SINCRONIZACIÓN DE BASE DE DATOS\n\nEl sistema intentó guardar datos en columnas que Supabase no reconoce aún.\n\nSOLUCIÓN:\n1. Ve a Configuración > Copia el Script SQL V2.7.6\n2. Ejecútalo en el Editor SQL de Supabase para forzar la recarga del caché.\n3. Recarga esta página.");
-                        return;
+                        const safePayload = {
+                            id: Date.now().toString(),
+                            varietyId: payload.varietyId,
+                            supplierName: payload.supplierName,
+                            batchCode: payload.batchCode,
+                            initialQuantity: payload.initialQuantity,
+                            remainingQuantity: payload.remainingQuantity,
+                            purchaseDate: payload.purchaseDate,
+                            storagePointId: payload.storagePointId,
+                            isActive: true
+                        };
+
+                        const { error: safeError } = await supabase.from('seed_batches').insert([safePayload]);
+                        
+                        if (safeError) throw safeError; // Si falla esto, es un error real.
+
+                        alert("⚠️ AVISO: El lote se guardó, pero algunos detalles técnicos (análisis, etiqueta) no se pudieron registrar porque la base de datos se está actualizando. Podrás editarlos luego.");
+                        
+                        // Actualizar contexto local con el payload completo para que el usuario LO VEA aunque no esté en DB
+                        addSeedBatch({ ...payload, id: safePayload.id });
+                    } else {
+                        throw error;
                     }
-                    throw error;
+                } else {
+                    // Éxito total
+                    addSeedBatch({ ...payload, id: Date.now().toString() });
                 }
-                // Update local context only if DB success
-                addSeedBatch({ ...payload, id: Date.now().toString() });
             } else {
+                // Modo Offline
                 addSeedBatch({ ...payload, id: Date.now().toString() });
             }
         }
@@ -123,7 +145,7 @@ export default function SeedBatches() {
         resetBatchForm();
     } catch (err: any) {
         console.error(err);
-        alert("Error al guardar: " + err.message);
+        alert("Error crítico al guardar: " + err.message);
     }
   };
 

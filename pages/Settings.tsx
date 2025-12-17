@@ -191,65 +191,20 @@ export default function Settings() {
 
   const SQL_SCRIPT = `
 -- =========================================================
--- SCRIPT REPARACIÓN V2.7.6 (EMERGENCY FIX)
+-- FORZAR RECARGA CACHÉ SUPABASE (SIMPLE)
 -- =========================================================
 
--- 1. FORZAR RECARGA DE CACHÉ INICIAL
+-- 1. Notificar a PostgREST que recargue el esquema
 NOTIFY pgrst, 'reload schema';
 
--- 2. ASEGURAR TABLA SEED_BATCHES Y COLUMNAS
--- Usamos IF NOT EXISTS para evitar errores si ya existen
-CREATE TABLE IF NOT EXISTS public.seed_batches (
-    id TEXT PRIMARY KEY,
-    "varietyId" TEXT,
-    "supplierId" TEXT,
-    "supplierName" TEXT,
-    "batchCode" TEXT,
-    "initialQuantity" NUMERIC,
-    "remainingQuantity" NUMERIC,
-    "purchaseDate" TEXT,
-    "storagePointId" TEXT,
-    "isActive" BOOLEAN DEFAULT true,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
-
+-- 2. Asegurar que las columnas existan (por si acaso)
 ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "analysisDate" TEXT;
 ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "purity" NUMERIC;
 ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "germination" NUMERIC;
 ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "labelSerialNumber" TEXT;
-ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "category" TEXT;
-ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "originCountry" TEXT;
-ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "supplierLegalName" TEXT;
-ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "supplierCuit" TEXT;
-ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "supplierRenspa" TEXT;
-ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "supplierAddress" TEXT;
-ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "purchaseOrder" TEXT;
-ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "pricePerKg" NUMERIC;
-ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "notes" TEXT;
-ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "gs1Code" TEXT;
-ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "certificationNumber" TEXT;
-ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "storageConditions" TEXT;
-ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "logisticsResponsible" TEXT;
 
--- 3. FORZAR PERMISOS (A veces el caché de RLS oculta columnas)
-ALTER TABLE public.seed_batches ENABLE ROW LEVEL SECURITY;
-GRANT ALL ON TABLE public.seed_batches TO anon;
-GRANT ALL ON TABLE public.seed_batches TO authenticated;
-GRANT ALL ON TABLE public.seed_batches TO service_role;
-
--- Eliminar políticas viejas para limpiar
-DROP POLICY IF EXISTS "Enable all access for all users" ON public.seed_batches;
-DROP POLICY IF EXISTS "Public Access" ON public.seed_batches;
-
--- Crear política permisiva nueva
-CREATE POLICY "Public Access" ON public.seed_batches FOR ALL USING (true) WITH CHECK (true);
-
--- 4. FORZAR RECARGA DE CACHÉ FINAL
--- Este es el comando crítico para el error 'schema cache'
-NOTIFY pgrst, 'reload schema';
-
--- 5. VERIFICACIÓN (Mensaje de éxito)
-SELECT 'Base de datos reparada correctamente. Recarga la App.' as status;
+-- 3. Mensaje de éxito
+SELECT 'Cache recargado. Ya deberías poder guardar.' as status;
   `;
 
   return (
@@ -345,14 +300,14 @@ SELECT 'Base de datos reparada correctamente. Recarga la App.' as status;
             {/* SQL Box */}
             <div className="bg-slate-50 rounded-xl border border-slate-200 p-6 mt-8">
                 <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-sm font-bold text-slate-800">Script de Reparación SQL (V2.7.6)</h2>
+                    <h2 className="text-sm font-bold text-slate-800">Script: Forzar Recarga Caché</h2>
                     <button onClick={copySQL} className="text-xs bg-white border px-3 py-1 rounded shadow-sm font-bold hover:bg-slate-50">Copiar SQL</button>
                 </div>
                 <div className="bg-slate-900 p-4 rounded-lg text-xs font-mono text-blue-300 overflow-x-auto h-48 custom-scrollbar">
                     <pre>{SQL_SCRIPT}</pre>
                 </div>
                 <p className="text-xs text-slate-500 mt-2">
-                    <strong>¡IMPORTANTE!</strong> Ejecuta este script en Supabase y luego recarga la página para solucionar el error de caché.
+                    <strong>TIP:</strong> Si el sistema te sigue pidiendo actualizar la BD, ejecuta este script y recarga la página.
                 </p>
             </div>
         </div>
