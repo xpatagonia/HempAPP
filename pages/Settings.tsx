@@ -191,22 +191,26 @@ export default function Settings() {
 
   const SQL_SCRIPT = `
 -- =========================================================
--- SOLUCIÓN ERROR "GUARDADO PARCIAL" (storagePointId)
+-- SOLUCIÓN ERROR "supplierId" + LOG DE ACTIVIDAD (V2.7.8)
 -- Ejecuta esto en Supabase -> SQL Editor
 -- =========================================================
 
--- 1. Forzar recarga del esquema para que la API detecte cambios
+-- 1. Forzar recarga del esquema
 NOTIFY pgrst, 'reload schema';
 
--- 2. Crear las columnas que faltan
+-- 2. Asegurar columnas de relaciones y auditoría
+ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "supplierId" TEXT;
 ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "storagePointId" TEXT;
+ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+
+-- 3. Asegurar columnas de datos técnicos
 ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "analysisDate" TEXT;
 ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "purity" NUMERIC;
 ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "germination" NUMERIC;
 ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "labelSerialNumber" TEXT;
 
 -- 3. Mensaje de éxito
-SELECT 'Base de datos reparada. Ya puedes guardar ubicaciones.' as status;
+SELECT 'Base de datos reparada con éxito. Campos: supplierId, storagePointId, createdAt.' as status;
   `;
 
   return (
@@ -302,7 +306,7 @@ SELECT 'Base de datos reparada. Ya puedes guardar ubicaciones.' as status;
             {/* SQL Box */}
             <div className="bg-slate-900 rounded-xl border border-slate-700 p-6 mt-8 shadow-xl">
                 <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-sm font-bold text-white flex items-center"><AlertTriangle className="mr-2 text-yellow-400"/> Script de Reparación (V2.7.7)</h2>
+                    <h2 className="text-sm font-bold text-white flex items-center"><AlertTriangle className="mr-2 text-yellow-400"/> Script de Reparación (V2.7.8)</h2>
                     <button onClick={copySQL} className="text-xs bg-hemp-600 text-white border border-hemp-500 px-4 py-2 rounded shadow-sm font-bold hover:bg-hemp-700 transition">Copiar SQL</button>
                 </div>
                 <div className="bg-black p-4 rounded-lg text-xs font-mono text-green-400 overflow-x-auto h-48 custom-scrollbar border border-slate-700">

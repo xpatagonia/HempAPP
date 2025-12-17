@@ -9,7 +9,7 @@ import { supabase } from '../supabaseClient';
 import { Link } from 'react-router-dom';
 
 export default function SeedBatches() {
-  const { seedBatches, seedMovements, addSeedBatch, updateSeedBatch, deleteSeedBatch, addSeedMovement, varieties, locations, currentUser, suppliers, clients, storagePoints, addStoragePoint, isEmergencyMode } = useAppContext();
+  const { seedBatches, seedMovements, addLocalSeedBatch, updateSeedBatch, deleteSeedBatch, addSeedMovement, varieties, locations, currentUser, suppliers, clients, storagePoints, addStoragePoint, isEmergencyMode } = useAppContext();
   
   const [activeTab, setActiveTab] = useState<'inventory' | 'logistics'>('inventory');
   
@@ -19,7 +19,6 @@ export default function SeedBatches() {
   useEffect(() => {
       const checkSchema = async () => {
           if (isEmergencyMode) return;
-          // Intencionalmente buscamos la columna problemática
           const { error } = await supabase.from('seed_batches').select('storagePointId').limit(1);
           if (error && (error.code === '42703' || error.message.includes('does not exist'))) {
               setSchemaError("Falta la columna 'storagePointId' en la base de datos.");
@@ -114,9 +113,14 @@ export default function SeedBatches() {
         if (editingBatchId) { 
             updateSeedBatch({ ...payload, id: editingBatchId }); 
         } else { 
+            // NUEVO REGISTRO
+            const newId = Date.now().toString();
+            // Agregamos timestamp para log de actividad
+            const finalPayload = { ...payload, id: newId, createdAt: new Date().toISOString() };
+
             if (!isEmergencyMode) {
                 // INTENTO 1: Insertar TODO
-                const { error } = await supabase.from('seed_batches').insert([{ ...payload, id: Date.now().toString() }]);
+                const { error } = await supabase.from('seed_batches').insert([finalPayload]);
                 
                 if (error) {
                     console.warn("Fallo inserción completa, intentando modo seguro...", error.message);
@@ -124,32 +128,34 @@ export default function SeedBatches() {
                     // INTENTO 2 (FALLBACK): Insertar SOLO columnas básicas garantizadas (V1)
                     if (error.message.includes('Could not find') || error.code === '42703' || error.message.includes('schema cache')) {
                         const safePayload = {
-                            id: Date.now().toString(),
+                            id: newId,
                             varietyId: payload.varietyId,
                             supplierName: payload.supplierName,
                             batchCode: payload.batchCode,
                             initialQuantity: payload.initialQuantity,
                             remainingQuantity: payload.remainingQuantity,
                             purchaseDate: payload.purchaseDate,
-                            // storagePointId ELIMINADO para evitar error si falta la columna
-                            isActive: true
+                            isActive: true,
+                            createdAt: new Date().toISOString() // Log básico
                         };
 
                         const { error: safeError } = await supabase.from('seed_batches').insert([safePayload]);
                         
                         if (safeError) throw safeError; 
 
-                        alert("✅ LOTE GUARDADO (PARCIALMENTE)\n\nSe guardó el stock y la variedad, pero la ubicación no se pudo registrar porque la base de datos necesita actualización.");
-                        
-                        addSeedBatch({ ...payload, id: safePayload.id });
+                        // Éxito parcial: Actualizar UI localmente con todos los datos para que el usuario no pierda nada visualmente
+                        addLocalSeedBatch(finalPayload);
+                        alert("✅ LOTE GUARDADO (PARCIALMENTE)\n\nSe guardó el stock, pero faltan columnas en la DB. Ve a Configuración y ejecuta el script de reparación.");
                     } else {
                         throw error;
                     }
                 } else {
-                    addSeedBatch({ ...payload, id: Date.now().toString() });
+                    // Éxito total en DB: Actualizar UI localmente
+                    addLocalSeedBatch(finalPayload);
                 }
             } else {
-                addSeedBatch({ ...payload, id: Date.now().toString() });
+                // Modo Offline
+                addLocalSeedBatch(finalPayload);
             }
         }
         
@@ -323,7 +329,7 @@ export default function SeedBatches() {
                   <thead className="bg-gray-50">
                       <tr>
                           <th className="px-6 py-3 text-left font-medium text-gray-500 uppercase">Orden Compra</th>
-                          <th className="px-6 py-3 text-left font-medium text-gray-500 uppercase">Fecha</th>
+                          <th className="px-6 py-3 text-left font-medium text-gray-500 uppercase">Fecha / Hora</th>
                           <th className="px-6 py-3 text-left font-medium text-gray-500 uppercase">Variedad (Lote)</th>
                           <th className="px-6 py-3 text-left font-medium text-gray-500 uppercase">Etiqueta Oficial</th>
                           <th className="px-6 py-3 text-center font-medium text-gray-500 uppercase">Ubicación</th>
@@ -342,10 +348,15 @@ export default function SeedBatches() {
                       ) : seedBatches.map(batch => {
                           const variety = varieties.find(v => v.id === batch.varietyId);
                           const sp = storagePoints.find(s => s.id === batch.storagePointId);
+                          // Handle creation time display
+                          const displayDate = (batch as any).createdAt 
+                              ? new Date((batch as any).createdAt).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) 
+                              : batch.purchaseDate;
+
                           return (
                               <tr key={batch.id} className="hover:bg-gray-50">
                                   <td className="px-6 py-4 font-bold text-gray-700">{batch.purchaseOrder || '-'}</td>
-                                  <td className="px-6 py-4 text-gray-500">{batch.purchaseDate}</td>
+                                  <td className="px-6 py-4 text-gray-500 text-xs">{displayDate}</td>
                                   <td className="px-6 py-4">
                                       <div className="font-bold text-hemp-700">{variety?.name || 'Desc.'}</div>
                                       <div className="text-xs text-gray-500 font-mono">{batch.batchCode}</div>

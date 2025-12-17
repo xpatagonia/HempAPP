@@ -80,6 +80,7 @@ interface AppContextType {
   deleteTask: (id: string) => void;
 
   addSeedBatch: (s: SeedBatch) => void;
+  addLocalSeedBatch: (s: SeedBatch) => void; // NEW: For manual local updates
   updateSeedBatch: (s: SeedBatch) => void;
   deleteSeedBatch: (id: string) => void;
   
@@ -423,6 +424,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const deleteStoragePoint = (id: string) => genericDelete('storage_points', id, setStoragePoints, 'storagePoints');
 
   const addSeedBatch = (s: SeedBatch) => genericAdd('seed_batches', s, setSeedBatches, 'seedBatches');
+  // NEW: Manual local update to prevent double insert loops
+  const addLocalSeedBatch = (s: SeedBatch) => setSeedBatches(prev => [...prev, s]);
   const updateSeedBatch = (s: SeedBatch) => genericUpdate('seed_batches', s, setSeedBatches, 'seedBatches');
   const deleteSeedBatch = (id: string) => genericDelete('seed_batches', id, setSeedBatches, 'seedBatches');
 
@@ -500,6 +503,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
   };
 
+  const getPlotCount = (projectId: string) => plots.filter(p => p.projectId === projectId).length;
   const getPlotHistory = (plotId: string) => { return trialRecords.filter(r => r.plotId === plotId).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); };
   const getLatestRecord = (plotId: string) => { const history = getPlotHistory(plotId); return history.length > 0 ? history[0] : undefined; };
 
@@ -515,7 +519,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       addLog,
       addUser, updateUser, deleteUser,
       addTask, updateTask, deleteTask,
-      addSeedBatch, updateSeedBatch, deleteSeedBatch,
+      addSeedBatch, addLocalSeedBatch, updateSeedBatch, deleteSeedBatch,
       addSeedMovement, updateSeedMovement, deleteSeedMovement,
       addSupplier, updateSupplier, deleteSupplier,
       addClient, updateClient, deleteClient,
