@@ -1,4 +1,5 @@
 
+
 export type UsageType = 'Fibra' | 'Grano' | 'Dual' | 'Medicinal';
 
 export type UserRole = 'super_admin' | 'admin' | 'technician' | 'client' | 'viewer';
@@ -101,6 +102,7 @@ export interface Client {
   isNetworkMember: boolean;
   cuit?: string;
   notes?: string;
+  relatedUserId?: string; // Link to system user
 }
 
 export interface Project {
@@ -220,6 +222,7 @@ export interface SeedBatch {
   logisticsResponsible?: string;
   notes?: string;
   isActive: boolean;
+  createdAt?: string;
 }
 
 export interface SeedMovement {

@@ -2,15 +2,16 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Client, RoleType } from '../types';
-import { Plus, Edit2, Trash2, Briefcase, MapPin, Phone, Mail, Globe, Users, Building, AlertCircle, Tractor } from 'lucide-react';
+import { Plus, Edit2, Trash2, Briefcase, MapPin, Phone, Mail, Globe, Users, Building, AlertCircle, Tractor, Eye, X, Link as LinkIcon, UserCheck } from 'lucide-react';
 
 export default function Clients() {
-  const { clients, addClient, updateClient, deleteClient, currentUser, locations } = useAppContext();
+  const { clients, addClient, updateClient, deleteClient, currentUser, locations, usersList } = useAppContext();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [viewClient, setViewClient] = useState<Client | null>(null); // For View Mode
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const [formData, setFormData] = useState<Partial<Client>>({
-    name: '', type: 'Empresa Privada', contactName: '', contactPhone: '', email: '', isNetworkMember: false, cuit: '', notes: ''
+    name: '', type: 'Empresa Privada', contactName: '', contactPhone: '', email: '', isNetworkMember: false, cuit: '', notes: '', relatedUserId: ''
   });
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
@@ -27,7 +28,8 @@ export default function Clients() {
         email: formData.email || '',
         isNetworkMember: formData.isNetworkMember || false,
         cuit: formData.cuit || '',
-        notes: formData.notes || ''
+        notes: formData.notes || '',
+        relatedUserId: formData.relatedUserId || null
     };
 
     if (editingId) {
@@ -45,7 +47,7 @@ export default function Clients() {
 
   const resetForm = () => {
     setFormData({ 
-        name: '', type: 'Empresa Privada', contactName: '', contactPhone: '', email: '', isNetworkMember: false, cuit: '', notes: ''
+        name: '', type: 'Empresa Privada', contactName: '', contactPhone: '', email: '', isNetworkMember: false, cuit: '', notes: '', relatedUserId: ''
     });
     setEditingId(null);
   };
@@ -59,6 +61,22 @@ export default function Clients() {
   const handleDelete = (id: string) => {
       if(window.confirm("¿Eliminar este cliente? Las locaciones asociadas perderán el enlace directo.")) {
           deleteClient(id);
+      }
+  };
+
+  // Helper to link user data
+  const handleUserLink = (userId: string) => {
+      const user = usersList.find(u => u.id === userId);
+      if (user) {
+          setFormData(prev => ({
+              ...prev,
+              relatedUserId: userId,
+              contactName: user.name,
+              contactPhone: user.phone || prev.contactPhone,
+              email: user.email || prev.email
+          }));
+      } else {
+          setFormData(prev => ({ ...prev, relatedUserId: '' }));
       }
   };
 
@@ -89,19 +107,25 @@ export default function Clients() {
         ) : clients.map(client => {
             const locCount = locations.filter(l => l.clientId === client.id || l.ownerName === client.name).length;
             const isProducer = client.type.includes('Productor');
+            const linkedUser = usersList.find(u => u.id === client.relatedUserId);
             
             return (
                 <div key={client.id} className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition relative group flex flex-col h-full">
-                  {isAdmin && (
-                      <div className="absolute top-4 right-4 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                          <button onClick={() => handleEdit(client)} className="text-gray-400 hover:text-hemp-600 p-1 bg-white rounded shadow-sm border">
-                              <Edit2 size={16} />
-                          </button>
-                          <button onClick={() => handleDelete(client.id)} className="text-gray-400 hover:text-red-600 p-1 bg-white rounded shadow-sm border">
-                              <Trash2 size={16} />
-                          </button>
-                      </div>
-                  )}
+                  <div className="absolute top-4 right-4 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                      <button onClick={() => setViewClient(client)} className="text-gray-400 hover:text-blue-600 p-1 bg-white rounded shadow-sm border border-gray-200" title="Ver Detalles">
+                          <Eye size={16} />
+                      </button>
+                      {isAdmin && (
+                          <>
+                            <button onClick={() => handleEdit(client)} className="text-gray-400 hover:text-hemp-600 p-1 bg-white rounded shadow-sm border border-gray-200" title="Editar">
+                                <Edit2 size={16} />
+                            </button>
+                            <button onClick={() => handleDelete(client.id)} className="text-gray-400 hover:text-red-600 p-1 bg-white rounded shadow-sm border border-gray-200" title="Eliminar">
+                                <Trash2 size={16} />
+                            </button>
+                          </>
+                      )}
+                  </div>
 
                   <div className="flex items-center space-x-3 mb-3">
                       <div className={`p-3 rounded-full ${isProducer ? 'bg-amber-100 text-amber-700' : client.isNetworkMember ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
@@ -125,10 +149,12 @@ export default function Clients() {
                       </div>
                   )}
 
-                  <div className="space-y-2 text-sm text-gray-600 bg-gray-50 p-3 rounded-lg flex-1">
-                      <div className="flex items-center">
-                          <Users size={14} className="mr-2 text-gray-400"/>
-                          <span className="font-medium">{client.contactName}</span>
+                  <div className="space-y-2 text-sm text-gray-600 bg-gray-50 p-3 rounded-lg flex-1 border border-gray-100">
+                      <div className="flex items-center justify-between">
+                          <div className="flex items-center">
+                              {linkedUser ? <UserCheck size={14} className="mr-2 text-green-500" title="Usuario Vinculado"/> : <Users size={14} className="mr-2 text-gray-400"/>}
+                              <span className="font-medium">{client.contactName}</span>
+                          </div>
                       </div>
                       {client.contactPhone && (
                           <div className="flex items-center">
@@ -155,6 +181,86 @@ export default function Clients() {
         })}
       </div>
 
+      {/* VIEW CLIENT MODAL */}
+      {viewClient && (
+          <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+              <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden flex flex-col max-h-[90vh]">
+                  <div className="px-6 py-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
+                      <h2 className="text-xl font-bold text-gray-800 flex items-center">
+                          <Briefcase className="mr-2 text-hemp-600"/> Ficha de Cliente
+                      </h2>
+                      <button onClick={() => setViewClient(null)} className="text-gray-400 hover:text-gray-600 bg-white p-1 rounded-full shadow-sm"><X size={20}/></button>
+                  </div>
+                  
+                  <div className="p-6 overflow-y-auto">
+                      {/* Identity Header */}
+                      <div className="flex items-center mb-6">
+                          <div className="bg-blue-100 p-4 rounded-full mr-4 text-blue-700">
+                              <Building size={32}/>
+                          </div>
+                          <div>
+                              <h1 className="text-2xl font-bold text-gray-900">{viewClient.name}</h1>
+                              <p className="text-sm text-gray-500">{viewClient.type}</p>
+                              {viewClient.cuit && <p className="text-xs font-mono text-gray-400 mt-1">CUIT: {viewClient.cuit}</p>}
+                          </div>
+                      </div>
+
+                      {/* Linked System User */}
+                      {viewClient.relatedUserId && (() => {
+                          const u = usersList.find(usr => usr.id === viewClient.relatedUserId);
+                          if(u) return (
+                              <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-6 flex items-center">
+                                  <img src={u.avatar} alt={u.name} className="w-12 h-12 rounded-full border-2 border-white shadow-sm mr-4"/>
+                                  <div>
+                                      <p className="text-xs font-bold text-green-800 uppercase mb-1 flex items-center">
+                                          <UserCheck size={12} className="mr-1"/> Usuario de Sistema
+                                      </p>
+                                      <p className="font-bold text-gray-900">{u.name}</p>
+                                      <p className="text-xs text-green-700">{u.email} • {u.role}</p>
+                                  </div>
+                              </div>
+                          )
+                          return null;
+                      })()}
+
+                      {/* Contact Info (if not fully covered by user) */}
+                      {!viewClient.relatedUserId && (
+                          <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 mb-6 space-y-2">
+                              <h4 className="font-bold text-gray-700 text-sm mb-2">Contacto Principal</h4>
+                              <div className="flex items-center text-sm text-gray-600"><Users size={16} className="mr-2"/> {viewClient.contactName}</div>
+                              {viewClient.contactPhone && <div className="flex items-center text-sm text-gray-600"><Phone size={16} className="mr-2"/> {viewClient.contactPhone}</div>}
+                              {viewClient.email && <div className="flex items-center text-sm text-gray-600"><Mail size={16} className="mr-2"/> {viewClient.email}</div>}
+                          </div>
+                      )}
+
+                      {/* Stats */}
+                      <div className="grid grid-cols-2 gap-4 mb-6">
+                          <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 text-center">
+                              <span className="block text-2xl font-bold text-blue-800">
+                                  {locations.filter(l => l.clientId === viewClient.id).length}
+                              </span>
+                              <span className="text-xs text-blue-600 uppercase font-bold">Campos</span>
+                          </div>
+                          <div className="bg-purple-50 p-3 rounded-lg border border-purple-100 text-center">
+                              <span className="block text-2xl font-bold text-purple-800">
+                                  {usersList.filter(u => u.clientId === viewClient.id).length}
+                              </span>
+                              <span className="text-xs text-purple-600 uppercase font-bold">Usuarios Asoc.</span>
+                          </div>
+                      </div>
+
+                      {/* Notes */}
+                      {viewClient.notes && (
+                          <div className="text-sm text-gray-500 italic bg-gray-50 p-3 rounded border border-gray-100">
+                              "{viewClient.notes}"
+                          </div>
+                      )}
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* CREATE / EDIT MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-xl w-full p-6 shadow-xl max-h-[90vh] overflow-y-auto">
@@ -168,14 +274,13 @@ export default function Clients() {
                           <Briefcase size={12} className="mr-1"/> Identidad y Clasificación
                       </h3>
                       
-                      {/* RED SWITCH */}
                       <label className="flex items-center cursor-pointer">
                           <div className="relative">
                               <input type="checkbox" className="sr-only" checked={formData.isNetworkMember} onChange={e => setFormData({...formData, isNetworkMember: e.target.checked})} />
                               <div className={`block w-10 h-6 rounded-full transition ${formData.isNetworkMember ? 'bg-green-500' : 'bg-gray-300'}`}></div>
                               <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition transform ${formData.isNetworkMember ? 'translate-x-4' : ''}`}></div>
                           </div>
-                          <div className="ml-2 text-xs font-bold text-gray-700">Miembro Red de Agricultores</div>
+                          <div className="ml-2 text-xs font-bold text-gray-700">Red de Agricultores</div>
                       </label>
                   </div>
 
@@ -209,15 +314,44 @@ export default function Clients() {
                   </div>
               </div>
 
-              {/* SECTION 2: CONTACT */}
+              {/* SECTION 2: CONTACT & USER LINKING */}
               <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
                    <h3 className="text-xs font-bold text-blue-700 uppercase mb-3 flex items-center">
                       <Phone size={12} className="mr-1"/> Contacto Principal
                    </h3>
+                   
+                   {/* USER LINK DROPDOWN */}
+                   <div className="mb-4 bg-white p-2 rounded border border-blue-200">
+                       <label className="block text-xs font-bold text-gray-500 mb-1 flex items-center">
+                           <LinkIcon size={12} className="mr-1"/> Vincular Usuario del Sistema (Opcional)
+                       </label>
+                       <select 
+                           className={`${inputClass} text-sm`} 
+                           value={formData.relatedUserId || ''} 
+                           onChange={(e) => handleUserLink(e.target.value)}
+                       >
+                           <option value="">-- Sin vincular / Contacto Externo --</option>
+                           {usersList.map(u => (
+                               <option key={u.id} value={u.id}>
+                                   {u.name} ({u.role}) - {u.email}
+                               </option>
+                           ))}
+                       </select>
+                       {formData.relatedUserId && <p className="text-[10px] text-green-600 mt-1">✓ Datos sincronizados con el perfil de usuario.</p>}
+                   </div>
+
                    <div className="space-y-3">
                        <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Nombre de Contacto</label>
-                            <input required type="text" placeholder="Persona de referencia" className={inputClass} value={formData.contactName} onChange={e => setFormData({...formData, contactName: e.target.value})} />
+                            <input 
+                                required 
+                                type="text" 
+                                placeholder="Persona de referencia" 
+                                className={`${inputClass} ${formData.relatedUserId ? 'bg-gray-100' : ''}`}
+                                value={formData.contactName} 
+                                onChange={e => setFormData({...formData, contactName: e.target.value})} 
+                                readOnly={!!formData.relatedUserId}
+                            />
                        </div>
                        <div className="grid grid-cols-2 gap-4">
                            <div>
