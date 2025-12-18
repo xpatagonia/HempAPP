@@ -67,6 +67,9 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
   if (!currentUser) return <>{children}</>;
 
+  const isAdminOrSuper = currentUser.role === 'admin' || currentUser.role === 'super_admin';
+  const isLoginPage = location.pathname === '/login';
+
   const getRoleLabel = (role: string) => {
     switch(role) {
       case 'super_admin': return 'Super Admin';
@@ -76,9 +79,6 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       default: return 'Visita';
     }
   };
-
-  const isAdminOrSuper = currentUser.role === 'admin' || currentUser.role === 'super_admin';
-  const isLoginPage = location.pathname === '/login';
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-dark-bg flex transition-colors duration-300 font-sans">
@@ -173,6 +173,12 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
           <div className="pt-2">
                <p className="px-4 text-[10px] font-black text-gray-400 uppercase mb-2 tracking-widest">Administración</p>
+               {isAdminOrSuper && (
+                 <>
+                   <NavItem to="/users" icon={Users} label="Usuarios & Roles" onClick={() => setIsMobileOpen(false)} />
+                   <NavItem to="/settings" icon={Settings} label="Configuración" onClick={() => setIsMobileOpen(false)} />
+                 </>
+               )}
                <NavItem to="/suppliers" icon={Building} label="Proveedores" onClick={() => setIsMobileOpen(false)} />
                <NavItem to="/clients" icon={Briefcase} label="Clientes Red" onClick={() => setIsMobileOpen(false)} />
                <NavItem to="/resources" icon={Archive} label="Insumos Varios" onClick={() => setIsMobileOpen(false)} />

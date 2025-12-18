@@ -33,7 +33,7 @@ interface AppContextType {
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
   refreshData: () => Promise<void>;
-  lastSyncTime: Date | null; // NEW: Track when the last sync happened
+  lastSyncTime: Date | null;
 
   addProject: (p: Project) => Promise<boolean>;
   updateProject: (p: Project) => void;
@@ -142,11 +142,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null); // NEW
+  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   const [isEmergencyMode, setIsEmergencyMode] = useState(false);
   const [dbNeedsMigration, setDbNeedsMigration] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
-
   const [globalApiKey, setGlobalApiKey] = useState<string | null>(null);
 
   useEffect(() => {
@@ -154,10 +153,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (savedTheme) {
         setTheme(savedTheme);
         if (savedTheme === 'dark') document.documentElement.classList.add('dark');
-    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        setTheme('dark');
-        document.documentElement.classList.add('dark');
     }
+    const savedUser = localStorage.getItem('ht_session_user');
+    if (savedUser) setCurrentUser(JSON.parse(savedUser));
   }, []);
 
   const toggleTheme = () => {
@@ -171,43 +169,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const notifications = useMemo(() => {
     if (!currentUser) return [];
     const notifs: AppNotification[] = [];
-    const today = new Date();
-
     tasks.forEach(t => {
         if (t.status === 'Completada') return;
         const isAssigned = t.assignedToIds.includes(currentUser.id) || currentUser.role === 'admin' || currentUser.role === 'super_admin';
         if (!isAssigned) return;
-
         const dueDate = new Date(t.dueDate);
-        const diffDays = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-
-        if (diffDays < 0) {
-            notifs.push({
-                id: `task-overdue-${t.id}`,
-                type: 'alert',
-                title: 'Tarea Vencida',
-                message: `"${t.title}" venció hace ${Math.abs(diffDays)} días.`,
-                link: '/tasks',
-                date: t.dueDate
-            });
+        const today = new Date();
+        if (dueDate < today) {
+            notifs.push({ id: `t-${t.id}`, type: 'alert', title: 'Tarea Vencida', message: t.title, link: '/tasks', date: t.dueDate });
         }
     });
-    return notifs.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    return notifs;
   }, [tasks, currentUser]);
 
   const refreshGlobalConfig = async () => {
     try {
         const { data, error } = await supabase.from('system_settings').select('gemini_api_key').eq('id', 'global').single();
-        let keyToUse = null;
-        if (!error && data?.gemini_api_key) {
-            keyToUse = data.gemini_api_key;
-        } else {
-            keyToUse = localStorage.getItem('hemp_ai_key') || (import.meta as any).env.VITE_GEMINI_API_KEY || null;
-        }
-        setGlobalApiKey(keyToUse);
-    } catch (e) {
-        setGlobalApiKey(localStorage.getItem('hemp_ai_key'));
-    }
+        if (!error && data?.gemini_api_key) setGlobalApiKey(data.gemini_api_key);
+        else setGlobalApiKey(localStorage.getItem('hemp_ai_key'));
+    } catch (e) { setGlobalApiKey(localStorage.getItem('hemp_ai_key')); }
   };
 
   const refreshData = async () => {
@@ -215,119 +195,58 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       try {
           await refreshGlobalConfig();
           const connected = await checkConnection();
-          
           if (!connected) {
               setIsEmergencyMode(true);
               setUsersList([...getFromLocal('users'), RESCUE_USER]);
-              setProjects(getFromLocal('projects'));
-              setVarieties(getFromLocal('varieties'));
-              setSuppliers(getFromLocal('suppliers'));
-              setClients(getFromLocal('clients'));
-              setLocations(getFromLocal('locations'));
-              setPlots(getFromLocal('plots'));
-              setSeedBatches(getFromLocal('seedBatches'));
-              setSeedMovements(getFromLocal('seedMovements'));
-              setResources(getFromLocal('resources'));
-              setStoragePoints(getFromLocal('storagePoints'));
-              setTrialRecords(getFromLocal('trialRecords')); 
-              setLogs(getFromLocal('logs'));
-              setTasks(getFromLocal('tasks'));
+              setProjects(getFromLocal('projects')); setVarieties(getFromLocal('varieties'));
+              setSuppliers(getFromLocal('suppliers')); setClients(getFromLocal('clients'));
+              setLocations(getFromLocal('locations')); setPlots(getFromLocal('plots'));
+              setSeedBatches(getFromLocal('seedBatches')); setSeedMovements(getFromLocal('seedMovements'));
+              setResources(getFromLocal('resources')); setStoragePoints(getFromLocal('storagePoints'));
+              setTrialRecords(getFromLocal('trialRecords')); setLogs(getFromLocal('logs')); setTasks(getFromLocal('tasks'));
           } else {
               setIsEmergencyMode(false);
-              const { error: tableError } = await supabase.from('suppliers').select('id').limit(1);
-              if (tableError && (tableError.code === '42P01' || tableError.message.includes('does not exist'))) {
-                  setDbNeedsMigration(true);
-              }
-
               const fetchData = async (table: string, setter: any) => {
                   const { data, error } = await supabase.from(table).select('*');
                   if (!error && data) setter(data);
               };
-
               await Promise.allSettled([
-                  fetchData('users', setUsersList),
-                  fetchData('projects', setProjects),
-                  fetchData('suppliers', setSuppliers),
-                  fetchData('clients', setClients),
-                  fetchData('varieties', setVarieties),
-                  fetchData('locations', setLocations),
-                  fetchData('plots', setPlots),
-                  fetchData('seed_batches', setSeedBatches),
-                  fetchData('seed_movements', setSeedMovements),
-                  fetchData('resources', setResources),
-                  fetchData('storage_points', setStoragePoints),
-                  fetchData('trial_records', setTrialRecords),
-                  fetchData('field_logs', setLogs),
-                  fetchData('tasks', setTasks)
+                  fetchData('users', setUsersList), fetchData('projects', setProjects),
+                  fetchData('suppliers', setSuppliers), fetchData('clients', setClients),
+                  fetchData('varieties', setVarieties), fetchData('locations', setLocations),
+                  fetchData('plots', setPlots), fetchData('seed_batches', setSeedBatches),
+                  fetchData('seed_movements', setSeedMovements), fetchData('resources', setResources),
+                  fetchData('storage_points', setStoragePoints), fetchData('trial_records', setTrialRecords),
+                  fetchData('field_logs', setLogs), fetchData('tasks', setTasks)
               ]);
               setLastSyncTime(new Date());
           }
-      } catch (err) {
-          console.error("Refresh Error:", err);
-      } finally {
-          setIsRefreshing(false);
-          setLoading(false);
-      }
+      } catch (err) { console.error("Refresh Error:", err); } finally { setIsRefreshing(false); setLoading(false); }
   };
 
-  useEffect(() => {
-    refreshData();
-  }, []);
-
-  const handleSupabaseError = (error: any, context: string) => {
-      console.error(`Error en ${context}:`, error);
-      if (error.code === '23505') {
-          // Silent block for duplicate key - usually means it's already there
-          return true;
-      }
-      if (error.message?.includes('does not exist') || error.code === '42703') {
-          setDbNeedsMigration(true);
-      } else {
-          alert(`Error de sincronización: ${error.message}`);
-      }
-      return false;
-  };
+  useEffect(() => { refreshData(); }, []);
 
   const login = async (email: string, password: string): Promise<boolean> => {
     if (isEmergencyMode) {
         let u = usersList.find(u => u.email === email && u.password === password);
         if (email === RESCUE_USER.email && password === RESCUE_USER.password) u = RESCUE_USER;
-        if (u) {
-            setCurrentUser(u);
-            localStorage.setItem('ht_session_user', JSON.stringify(u));
-            return true;
-        }
+        if (u) { setCurrentUser(u); localStorage.setItem('ht_session_user', JSON.stringify(u)); return true; }
         return false;
     }
-
     const { data, error } = await supabase.from('users').select('*').eq('email', email).eq('password', password).single();
-    if (!error && data) {
-        setCurrentUser(data as User);
-        localStorage.setItem('ht_session_user', JSON.stringify(data));
-        return true;
-    }
+    if (!error && data) { setCurrentUser(data as User); localStorage.setItem('ht_session_user', JSON.stringify(data)); return true; }
     return false;
   };
 
-  const logout = () => {
-    setCurrentUser(null);
-    localStorage.removeItem('ht_session_user');
-  };
+  const logout = () => { setCurrentUser(null); localStorage.removeItem('ht_session_user'); };
 
   const genericAdd = async (table: string, item: any, setter: any, localKey: string) => {
       if (isEmergencyMode) {
-          setter((prev: any[]) => {
-              const n = [...prev, item];
-              saveToLocal(localKey, n);
-              return n;
-          });
+          setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
           return true;
       } else {
           const { error } = await supabase.from(table).insert([item]);
-          if (error) { 
-              const handled = handleSupabaseError(error, `add ${table}`);
-              if (!handled) return false;
-          }
+          if (error) { console.error(error); return false; }
           setter((prev: any[]) => [...prev, item]);
           return true;
       }
@@ -335,28 +254,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const genericUpdate = async (table: string, item: any, setter: any, localKey: string) => {
       if (isEmergencyMode) {
-          setter((prev: any[]) => {
-              const n = prev.map((i: any) => i.id === item.id ? item : i);
-              saveToLocal(localKey, n);
-              return n;
-          });
+          setter((prev: any[]) => { const n = prev.map((i: any) => i.id === item.id ? item : i); saveToLocal(localKey, n); return n; });
       } else {
           const { error } = await supabase.from(table).update(item).eq('id', item.id);
-          if (error) handleSupabaseError(error, `update ${table}`);
           setter((prev: any[]) => prev.map((i: any) => i.id === item.id ? item : i));
       }
   };
 
   const genericDelete = async (table: string, id: string, setter: any, localKey: string) => {
       if (isEmergencyMode) {
-          setter((prev: any[]) => {
-              const n = prev.filter((i: any) => i.id !== id);
-              saveToLocal(localKey, n);
-              return n;
-          });
+          setter((prev: any[]) => { const n = prev.filter((i: any) => i.id !== id); saveToLocal(localKey, n); return n; });
       } else {
-          const { error } = await supabase.from(table).delete().eq('id', id);
-          if (error) handleSupabaseError(error, `delete ${table}`);
+          await supabase.from(table).delete().eq('id', id);
           setter((prev: any[]) => prev.filter((i: any) => i.id !== id));
       }
   };
@@ -364,110 +273,44 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const addUser = (u: User) => genericAdd('users', u, setUsersList, 'users');
   const updateUser = (u: User) => genericUpdate('users', u, setUsersList, 'users');
   const deleteUser = (id: string) => genericDelete('users', id, setUsersList, 'users');
-
   const addProject = (p: Project) => genericAdd('projects', p, setProjects, 'projects');
   const updateProject = (p: Project) => genericUpdate('projects', p, setProjects, 'projects');
   const deleteProject = (id: string) => genericDelete('projects', id, setProjects, 'projects');
-
   const addLocation = (l: Location) => genericAdd('locations', l, setLocations, 'locations');
   const updateLocation = (l: Location) => genericUpdate('locations', l, setLocations, 'locations');
   const deleteLocation = (id: string) => genericDelete('locations', id, setLocations, 'locations');
-
-  const addPlot = (p: Plot) => genericAdd('plots', p, setPlots, 'plots');
+  const addPlot = (p: Plot) => genericAdd('plots', p, setPlots, 'plots').then(() => {});
   const updatePlot = (p: Plot) => genericUpdate('plots', p, setPlots, 'plots');
-  const deletePlot = (id: string) => genericDelete('plots', id, setPlots, 'plots');
-
+  const deletePlot = (id: string) => genericDelete('plots', id, setPlots, 'plots').then(() => {});
   const addVariety = (v: Variety) => { genericAdd('varieties', v, setVarieties, 'varieties'); };
   const updateVariety = (v: Variety) => { genericUpdate('varieties', v, setVarieties, 'varieties'); };
   const deleteVariety = (id: string) => { genericDelete('varieties', id, setVarieties, 'varieties'); };
-
   const addSupplier = async (s: Supplier) => { await genericAdd('suppliers', s, setSuppliers, 'suppliers'); return s.id; };
   const updateSupplier = (s: Supplier) => genericUpdate('suppliers', s, setSuppliers, 'suppliers');
   const deleteSupplier = (id: string) => genericDelete('suppliers', id, setSuppliers, 'suppliers');
-
   const addClient = async (c: Client) => { await genericAdd('clients', c, setClients, 'clients'); };
   const updateClient = (c: Client) => genericUpdate('clients', c, setClients, 'clients');
   const deleteClient = (id: string) => genericDelete('clients', id, setClients, 'clients');
-
   const addResource = (r: Resource) => genericAdd('resources', r, setResources, 'resources');
   const updateResource = (r: Resource) => genericUpdate('resources', r, setResources, 'resources');
   const deleteResource = (id: string) => genericDelete('resources', id, setResources, 'resources');
-
   const addStoragePoint = (s: StoragePoint) => genericAdd('storage_points', s, setStoragePoints, 'storagePoints');
   const updateStoragePoint = (s: StoragePoint) => genericUpdate('storage_points', s, setStoragePoints, 'storagePoints');
   const deleteStoragePoint = (id: string) => genericDelete('storage_points', id, setStoragePoints, 'storagePoints');
-
   const addSeedBatch = (s: SeedBatch) => genericAdd('seed_batches', s, setSeedBatches, 'seedBatches');
   const addLocalSeedBatch = (s: SeedBatch) => setSeedBatches(prev => [...prev, s]);
   const updateSeedBatch = (s: SeedBatch) => genericUpdate('seed_batches', s, setSeedBatches, 'seedBatches');
   const deleteSeedBatch = (id: string) => genericDelete('seed_batches', id, setSeedBatches, 'seedBatches');
-
-  const addSeedMovement = async (m: SeedMovement) => { 
-      return await genericAdd('seed_movements', m, setSeedMovements, 'seedMovements');
-  };
+  const addSeedMovement = async (m: SeedMovement) => { return await genericAdd('seed_movements', m, setSeedMovements, 'seedMovements'); };
   const updateSeedMovement = (m: SeedMovement) => genericUpdate('seed_movements', m, setSeedMovements, 'seedMovements');
   const deleteSeedMovement = (id: string) => genericDelete('seed_movements', id, setSeedMovements, 'seedMovements');
-
-  const addTrialRecord = (r: TrialRecord) => {
-      if(isEmergencyMode) {
-          setTrialRecords(prev => { const n = [...prev, r]; saveToLocal('trialRecords', n); return n; });
-      } else {
-          supabase.from('trial_records').insert([r]).then(({error}) => {
-              if(error) handleSupabaseError(error, 'add record');
-              else setTrialRecords(prev => [...prev, r]);
-          });
-      }
-  };
-  const updateTrialRecord = (r: TrialRecord) => {
-      if(isEmergencyMode) {
-          setTrialRecords(prev => { const n = prev.map(i => i.id === r.id ? r : i); saveToLocal('trialRecords', n); return n; });
-      } else {
-          supabase.from('trial_records').update(r).eq('id', r.id).then(({error}) => {
-              if(error) handleSupabaseError(error, 'update record');
-              else setTrialRecords(prev => prev.map(i => i.id === r.id ? r : i));
-          });
-      }
-  };
-  const deleteTrialRecord = (id: string) => {
-      if(isEmergencyMode) {
-          setTrialRecords(prev => { const n = prev.filter(i => i.id !== id); saveToLocal('trialRecords', n); return n; });
-      } else {
-          supabase.from('trial_records').delete().eq('id', id).then(({error}) => {
-              if(error) handleSupabaseError(error, 'delete record');
-              else setTrialRecords(prev => prev.filter(i => i.id !== id));
-          });
-      }
-  };
-
-  const addLog = (l: FieldLog) => {
-      if(isEmergencyMode) {
-          setLogs(prev => { const n = [l, ...prev]; saveToLocal('logs', n); return n; });
-      } else {
-          supabase.from('field_logs').insert([l]).then(({error}) => !error && setLogs(prev => [l, ...prev]));
-      }
-  };
-
-  const addTask = (t: Task) => {
-      if(isEmergencyMode) {
-          setTasks(prev => { const n = [t, ...prev]; saveToLocal('tasks', n); return n; });
-      } else {
-          supabase.from('tasks').insert([t]).then(({error}) => !error && setTasks(prev => [t, ...prev]));
-      }
-  };
-  const updateTask = (t: Task) => {
-      if(isEmergencyMode) {
-          setTasks(prev => { const n = prev.map(i => i.id === t.id ? t : i); saveToLocal('tasks', n); return n; });
-      } else {
-          supabase.from('tasks').update(t).eq('id', t.id).then(({error}) => !error && setTasks(prev => prev.map(i => i.id === t.id ? t : i)));
-      }
-  };
-  const deleteTask = (id: string) => {
-      if(isEmergencyMode) {
-          setTasks(prev => { const n = prev.filter(i => i.id !== id); saveToLocal('tasks', n); return n; });
-      } else {
-          supabase.from('tasks').delete().eq('id', id).then(({error}) => !error && setTasks(prev => prev.filter(i => i.id !== id)));
-      }
-  };
+  const addTrialRecord = (r: TrialRecord) => { genericAdd('trial_records', r, setTrialRecords, 'trialRecords'); };
+  const updateTrialRecord = (r: TrialRecord) => { genericUpdate('trial_records', r, setTrialRecords, 'trialRecords'); };
+  const deleteTrialRecord = (id: string) => { genericDelete('trial_records', id, setTrialRecords, 'trialRecords'); };
+  const addLog = (l: FieldLog) => { genericAdd('field_logs', l, setLogs, 'logs'); };
+  const addTask = (t: Task) => { genericAdd('tasks', t, setTasks, 'tasks'); };
+  const updateTask = (t: Task) => { genericUpdate('tasks', t, setTasks, 'tasks'); };
+  const deleteTask = (id: string) => { genericDelete('tasks', id, setTasks, 'tasks'); };
 
   const getPlotHistory = (plotId: string) => { return trialRecords.filter(r => r.plotId === plotId).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); };
   const getLatestRecord = (plotId: string) => { const history = getPlotHistory(plotId); return history.length > 0 ? history[0] : undefined; };
