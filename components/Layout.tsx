@@ -83,7 +83,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-dark-bg flex transition-colors duration-300 font-sans">
       
-      {/* GLOBAL PROGRESS BAR DURING SYNC */}
+      {/* GLOBAL PROGRESS BAR */}
       {isRefreshing && (
           <div className="fixed top-0 left-0 w-full h-1 z-[200] bg-hemp-100 overflow-hidden">
               <div className="h-full bg-hemp-600 animate-pulse w-full origin-left"></div>
@@ -109,7 +109,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                   disabled={isRefreshing}
                   className={`flex items-center px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-sm border ${
                     isRefreshing 
-                    ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' 
+                    ? 'bg-gray-100 text-gray-400 border-gray-200' 
                     : 'bg-hemp-600 text-white border-hemp-500 hover:bg-hemp-700 hover:shadow-md active:scale-95'
                   }`}
               >

@@ -31,7 +31,7 @@ export default function SeedBatches() {
   // -- FORMS --
   const [batchFormData, setBatchFormData] = useState<Partial<SeedBatch>>({
     varietyId: '', supplierName: '', batchCode: '', initialQuantity: 0, purchaseDate: new Date().toISOString().split('T')[0], pricePerKg: 0, storagePointId: '', isActive: true,
-    labelSerialNumber: '', category: 'C1', certificationNumber: '', gs1Code: '', analysisDate: ''
+    labelSerialNumber: '', category: 'C1', certificationNumber: '', gs1Code: '', analysisDate: '', germination: 90, purity: 99
   });
 
   const [moveFormData, setMoveFormData] = useState<Partial<SeedMovement>>({
@@ -558,8 +558,8 @@ export default function SeedBatches() {
                               <Info size={14} className="mr-1.5"/> Información de Trazabilidad
                           </h4>
                           <div className="grid grid-cols-1 gap-2 text-sm">
-                              <div className="flex justify-between border-b pb-2"><span>N° Serie Etiqueta:</span> <span className="font-bold text-gray-800">{selectedBatchForView.labelSerialNumber || 'N/A'}</span></div>
                               <div className="flex justify-between border-b pb-2"><span>Certificado N°:</span> <span className="font-bold text-gray-800">{selectedBatchForView.certificationNumber || 'N/A'}</span></div>
+                              <div className="flex justify-between border-b pb-2"><span>N° Serie Etiqueta:</span> <span className="font-bold text-gray-800">{selectedBatchForView.labelSerialNumber || 'N/A'}</span></div>
                               <div className="flex justify-between border-b pb-2"><span>Código GS1:</span> <span className="font-mono text-xs">{selectedBatchForView.gs1Code || 'S/D'}</span></div>
                               <div className="flex justify-between border-b pb-2"><span>Fecha Análisis:</span> <span className="font-bold text-gray-800">{selectedBatchForView.analysisDate || '-'}</span></div>
                           </div>

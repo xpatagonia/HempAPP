@@ -5,29 +5,12 @@ import { Variety, UsageType } from '../types';
 import { Plus, Search, Tag, Edit2, Trash2, CloudDownload, Sprout, AlertCircle, Building, Globe, Archive, Truck, ArrowRight } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 
-const HEMP_IT_TEMPLATE = {
-    name: 'Hemp-it France',
-    country: 'Francia',
-    varieties: [
-        { name: 'USO 31', usage: 'Grano', cycleDays: 100, expectedThc: 0.04, notes: 'Monoica. Ciclo Muy Temprano. Referencia histórica en producción de semilla.' },
-        { name: 'EARLINA 8', usage: 'Grano', cycleDays: 100, expectedThc: 0.12, notes: 'Monoica. Ciclo Muy Temprano. Ideal para rotaciones cortas.' },
-        { name: 'OSTARA 9', usage: 'Grano', cycleDays: 105, expectedThc: 0.12, notes: 'Monoica. Ciclo Temprano. Variedad Food & Cosmetic.' },
-        { name: 'ORION 33', usage: 'Grano', cycleDays: 110, expectedThc: 0.12, notes: 'Monoica. Ciclo Temprano. Alta producción de grano.' },
-        { name: 'FEDORA 17', usage: 'Dual', cycleDays: 125, expectedThc: 0.12, notes: 'Monoica. Ciclo Medio-Temprano. Estándar en producción mixta.' },
-        { name: 'FELINA 32', usage: 'Dual', cycleDays: 130, expectedThc: 0.12, notes: 'Monoica. Ciclo Medio. Rústica y adaptable.' },
-        { name: 'FUTURA 75', usage: 'Dual', cycleDays: 140, expectedThc: 0.12, notes: 'Monoica. Ciclo Tardío. La variedad más cultivada para biomasa y grano.' },
-        { name: 'FIBROR 79', usage: 'Fibra', cycleDays: 145, expectedThc: 0.12, notes: 'Monoica. Ciclo Muy Tardío. Específica para producción masiva de fibra textil.' },
-        { name: 'SANTHICA 27', usage: 'Medicinal', cycleDays: 135, expectedThc: 0.00, notes: 'Monoica. Rica en CBG. Libre de THC (0.00%). Ciclo Medio-Tardío.' },
-    ]
-};
-
 export default function Varieties() {
-  const { varieties, addVariety, updateVariety, deleteVariety, currentUser, suppliers, addSupplier } = useAppContext();
+  const { varieties, addVariety, updateVariety, deleteVariety, currentUser, suppliers } = useAppContext();
   const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [isImporting, setIsImporting] = useState(false);
 
   const [formData, setFormData] = useState<Partial<Variety>>({
     name: '', usage: 'Fibra', supplierId: '', cycleDays: 120, expectedThc: 0, notes: ''
@@ -91,19 +74,17 @@ export default function Varieties() {
         </div>
         
         {isAdmin && (
-          <div className="flex space-x-2 w-full md:w-auto">
-              <button 
-                onClick={() => {
-                    setEditingId(null);
-                    setFormData({ name: '', usage: 'Fibra', supplierId: '', cycleDays: 120, expectedThc: 0, notes: '' });
-                    setIsModalOpen(true);
-                }}
-                className="bg-hemp-600 text-white px-5 py-2.5 rounded-xl flex items-center hover:bg-hemp-700 transition w-full md:w-auto justify-center shadow-lg font-bold"
-              >
-                <Plus size={20} className="mr-2" />
-                Nueva Variedad
-              </button>
-          </div>
+          <button 
+            onClick={() => {
+                setEditingId(null);
+                setFormData({ name: '', usage: 'Fibra', supplierId: '', cycleDays: 120, expectedThc: 0, notes: '' });
+                setIsModalOpen(true);
+            }}
+            className="bg-hemp-600 text-white px-5 py-2.5 rounded-xl flex items-center hover:bg-hemp-700 transition w-full md:w-auto justify-center shadow-lg font-bold"
+          >
+            <Plus size={20} className="mr-2" />
+            Nueva Variedad
+          </button>
         )}
       </div>
 
@@ -182,7 +163,7 @@ export default function Varieties() {
                         className="w-full bg-white text-gray-700 border border-gray-200 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center hover:bg-gray-50 transition shadow-sm group"
                     >
                         <Truck size={14} className="mr-2 text-blue-500 group-hover:translate-x-1 transition-transform" />
-                        Trazabilidad
+                        Despachar (Logística)
                     </button>
                 </div>
               </div>

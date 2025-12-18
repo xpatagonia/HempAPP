@@ -157,7 +157,52 @@ export default function PlotDetails() {
             </div>
         </div>
       )}
-      {/* ... rest of component logic (omitted for brevity but functionality preserved) ... */}
+
+      {/* MODAL REGISTRO */}
+      {isRecordModalOpen && (
+           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+               <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+                   <div className="px-6 py-4 border-b flex justify-between items-center bg-gray-50">
+                       <h2 className="font-bold text-gray-800">{isViewMode ? 'Detalle de Inspección' : 'Nuevo Registro de Monitoreo'}</h2>
+                       <button onClick={() => setIsRecordModalOpen(false)}><X size={20} className="text-gray-400"/></button>
+                   </div>
+                   <div className="p-6">
+                       <form onSubmit={handleSaveRecord} className="space-y-4">
+                           <div className="grid grid-cols-2 gap-4">
+                               <div>
+                                   <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Fecha</label>
+                                   <input type="date" disabled={isViewMode} className={getInputClass()} value={recordForm.date} onChange={e => setRecordForm({...recordForm, date: e.target.value})}/>
+                               </div>
+                               <div>
+                                   <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Hora</label>
+                                   <input type="time" disabled={isViewMode} className={getInputClass()} value={recordForm.time} onChange={e => setRecordForm({...recordForm, time: e.target.value})}/>
+                               </div>
+                               <div>
+                                   <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Etapa Fenológica</label>
+                                   <select disabled={isViewMode} className={getInputClass()} value={recordForm.stage} onChange={e => setRecordForm({...recordForm, stage: e.target.value as any})}>
+                                       <option value="Vegetativo">Vegetativo</option>
+                                       <option value="Floración">Floración</option>
+                                       <option value="Maduración">Maduración</option>
+                                       <option value="Cosecha">Cosecha</option>
+                                   </select>
+                               </div>
+                               <div>
+                                   <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Altura Promedio (cm)</label>
+                                   {/* Fixed: Replaced incorrect call to inputClass() with the defined getInputClass() */}
+                                   <input disabled={isViewMode} type="number" className={getInputClass()} value={recordForm.plantHeight} onChange={e => setRecordForm({...recordForm, plantHeight: Number(e.target.value)})}/>
+                               </div>
+                           </div>
+                           
+                           {!isViewMode && (
+                               <div className="flex justify-end pt-4 border-t">
+                                   <button type="submit" className="px-6 py-2 bg-hemp-600 text-white rounded-lg font-bold shadow-md hover:bg-hemp-700 transition">Guardar Registro</button>
+                               </div>
+                           )}
+                       </form>
+                   </div>
+               </div>
+           </div>
+       )}
     </div>
   );
 }
