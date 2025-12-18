@@ -2,11 +2,11 @@
 import React, { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
-import { ChevronRight, FileSpreadsheet, LayoutGrid, List, Tag, FlaskConical, Tractor } from 'lucide-react';
+import { ChevronRight, FileSpreadsheet, LayoutGrid, List, Tag, FlaskConical, Tractor, Trash2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 export default function Plots() {
-  const { plots, locations, varieties, projects, currentUser, getLatestRecord, seedBatches } = useAppContext();
+  const { plots, locations, varieties, projects, currentUser, getLatestRecord, seedBatches, deletePlot } = useAppContext();
   const [searchParams] = useSearchParams();
   
   const [viewMode, setViewMode] = useState<'table' | 'gallery'>('table');
@@ -24,6 +24,12 @@ export default function Plots() {
       let hasAccess = isAdmin || (isClient && locations.find(l => l.id === p.locationId)?.clientId === currentUser.clientId) || p.responsibleIds?.includes(currentUser?.id || '');
       return matchLoc && matchProj && matchType && hasAccess;
   });
+
+  const handleDeletePlot = async (id: string, name: string) => {
+      if (window.confirm(`¿Estás seguro de eliminar el lote "${name}"? Se perderán todos los registros técnicos asociados.`)) {
+          await deletePlot(id);
+      }
+  };
 
   const handleExport = () => {
     const exportData = filteredPlots.map(p => ({
@@ -78,7 +84,9 @@ export default function Plots() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {filteredPlots.map(p => {
+                {filteredPlots.length === 0 ? (
+                  <tr><td colSpan={6} className="p-8 text-center text-gray-400 italic">No se encontraron registros.</td></tr>
+                ) : filteredPlots.map(p => {
                   const batch = seedBatches.find(b => b.id === p.seedBatchId);
                   return (
                     <tr key={p.id} className="hover:bg-gray-50 group transition-colors">
@@ -94,7 +102,14 @@ export default function Plots() {
                         <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${p.status === 'Activa' ? 'bg-green-100 text-green-800' : 'bg-gray-100'}`}>{p.status}</span>
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <Link to={`/plots/${p.id}`} className="text-hemp-600 hover:text-hemp-900 font-black inline-flex items-center group-hover:translate-x-1 transition-transform">Ficha <ChevronRight size={16} /></Link>
+                        <div className="flex justify-end items-center space-x-3">
+                          {isAdmin && (
+                            <button onClick={() => handleDeletePlot(p.id, p.name)} className="p-1 text-gray-300 hover:text-red-600 transition" title="Eliminar Lote">
+                              <Trash2 size={16}/>
+                            </button>
+                          )}
+                          <Link to={`/plots/${p.id}`} className="text-hemp-600 hover:text-hemp-900 font-black inline-flex items-center group-hover:translate-x-1 transition-transform">Ficha <ChevronRight size={16} /></Link>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -105,14 +120,21 @@ export default function Plots() {
       ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredPlots.map(p => (
-                  <Link key={p.id} to={`/plots/${p.id}`} className="bg-white p-6 rounded-2xl shadow-sm border hover:shadow-md transition-shadow block">
-                      <h4 className="font-black text-gray-800 mb-1">{p.name}</h4>
-                      <p className="text-xs text-gray-500 mb-3">{varieties.find(v => v.id === p.varietyId)?.name}</p>
-                      <div className="flex justify-between items-end border-t pt-3">
-                          <span className="text-[10px] text-gray-400 font-black uppercase">{p.type}</span>
-                          <span className="text-[10px] bg-green-50 text-green-700 px-2 py-0.5 rounded font-bold uppercase border border-green-100">{p.status}</span>
-                      </div>
-                  </Link>
+                  <div key={p.id} className="bg-white p-6 rounded-2xl shadow-sm border hover:shadow-md transition-shadow relative group">
+                      {isAdmin && (
+                        <button onClick={() => handleDeletePlot(p.id, p.name)} className="absolute top-4 right-4 p-2 bg-white text-gray-300 hover:text-red-600 opacity-0 group-hover:opacity-100 transition rounded-lg border shadow-sm" title="Eliminar">
+                          <Trash2 size={16}/>
+                        </button>
+                      )}
+                      <Link to={`/plots/${p.id}`} className="block">
+                        <h4 className="font-black text-gray-800 mb-1">{p.name}</h4>
+                        <p className="text-xs text-gray-500 mb-3">{varieties.find(v => v.id === p.varietyId)?.name}</p>
+                        <div className="flex justify-between items-end border-t pt-3">
+                            <span className="text-[10px] text-gray-400 font-black uppercase">{p.type}</span>
+                            <span className="text-[10px] bg-green-50 text-green-700 px-2 py-0.5 rounded font-bold uppercase border border-green-100">{p.status}</span>
+                        </div>
+                      </Link>
+                  </div>
               ))}
           </div>
       )}

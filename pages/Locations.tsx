@@ -93,7 +93,7 @@ const parseCoordinate = (input: string): string => {
 };
 
 export default function Locations() {
-  const { locations, addLocation, updateLocation, deleteLocation, currentUser, usersList, clients, plots, addPlot, varieties, projects, seedBatches } = useAppContext();
+  const { locations, addLocation, updateLocation, deleteLocation, currentUser, usersList, clients, plots, addPlot, varieties, projects, seedBatches, seedMovements } = useAppContext();
   
   // Location States
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -127,15 +127,22 @@ export default function Locations() {
       block: '1', replicate: 1, surfaceArea: 0, surfaceUnit: 'ha', density: 0, status: 'Activa'
   });
 
-  // Filter varieties that have active stock (Registered via administration)
-  const availableVarietiesWithStock = useMemo(() => {
-    return varieties.filter(v => 
-        seedBatches.some(b => b.varietyId === v.id && b.remainingQuantity > 0)
-    );
-  }, [varieties, seedBatches]);
+  // --- NEW LOGIC: Filter only what was received in THIS location ---
+  const receivedBatchesAtThisLocation = useMemo(() => {
+    if (!targetLocationId) return [];
+    // Only batches referenced in movements to this location that are "Recibido"
+    const relevantMoves = seedMovements.filter(m => m.targetLocationId === targetLocationId && m.status === 'Recibido');
+    const batchIds = Array.from(new Set(relevantMoves.map(m => m.batchId)));
+    return seedBatches.filter(b => batchIds.includes(b.id));
+  }, [seedMovements, seedBatches, targetLocationId]);
 
-  // Filter seed batches based on selected variety in Plot Modal
-  const availableBatches = seedBatches.filter(b => b.varietyId === plotFormData.varietyId && b.remainingQuantity > 0);
+  const availableVarietiesAtThisLocation = useMemo(() => {
+    const varIds = Array.from(new Set(receivedBatchesAtThisLocation.map(b => b.varietyId)));
+    return varieties.filter(v => varIds.includes(v.id));
+  }, [receivedBatchesAtThisLocation, varieties]);
+
+  // Specific batches for the selected variety in the modal
+  const availableBatchesForModal = receivedBatchesAtThisLocation.filter(b => b.varietyId === plotFormData.varietyId);
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
   const isClient = currentUser?.role === 'client';
@@ -619,13 +626,13 @@ export default function Locations() {
                               <input type="text" placeholder="Generado autom. si vacío" className={inputClass} value={plotFormData.name} onChange={e => setPlotFormData({...plotFormData, name: e.target.value})} />
                           </div>
                           <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Variedad (Con Stock)</label>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Variedad (Recibida en Campo)</label>
                               <select required className={inputClass} value={plotFormData.varietyId} onChange={e => setPlotFormData({...plotFormData, varietyId: e.target.value, seedBatchId: ''})}>
                                   <option value="">Seleccionar...</option>
-                                  {availableVarietiesWithStock.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                                  {availableVarietiesAtThisLocation.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
                               </select>
-                              {availableVarietiesWithStock.length === 0 && (
-                                  <p className="text-[10px] text-red-500 mt-1 font-bold">Sin variedades con stock disponible.</p>
+                              {availableVarietiesAtThisLocation.length === 0 && (
+                                  <p className="text-[10px] text-red-500 mt-1 font-bold">No se ha registrado recepción de semilla en este campo.</p>
                               )}
                           </div>
                           <div>
@@ -636,10 +643,10 @@ export default function Locations() {
                               </select>
                           </div>
                           
-                          {/* SEED BATCH SELECTION (TRACEABILITY) */}
+                          {/* SEED BATCH SELECTION (TRACEABILITY) - Filtered by Location History */}
                           <div className="col-span-2 bg-green-50 p-2 rounded border border-green-100">
                               <label className="block text-xs font-bold text-green-800 mb-1 uppercase flex items-center">
-                                  <ScanBarcode size={12} className="mr-1"/> Lote de Semilla (Trazabilidad)
+                                  <ScanBarcode size={12} className="mr-1"/> Lote de Semilla Asignado (Trazabilidad)
                               </label>
                               <select 
                                   className={`${inputClass} text-sm`} 
@@ -647,13 +654,16 @@ export default function Locations() {
                                   onChange={e => setPlotFormData({...plotFormData, seedBatchId: e.target.value})}
                                   disabled={!plotFormData.varietyId}
                               >
-                                  <option value="">-- Sin especificar / Lote Genérico --</option>
-                                  {availableBatches.map(b => (
+                                  <option value="">-- Seleccionar Lote Recibido --</option>
+                                  {availableBatchesForModal.map(b => (
                                       <option key={b.id} value={b.id}>
-                                          {b.batchCode} ({b.remainingQuantity} kg disp.) - {b.labelSerialNumber ? `Etiqueta: ${b.labelSerialNumber}` : ''}
+                                          {b.batchCode} - {b.labelSerialNumber ? `Etiqueta: ${b.labelSerialNumber}` : 'Sin Etiqueta'}
                                       </option>
                                   ))}
                               </select>
+                              {plotFormData.varietyId && availableBatchesForModal.length === 0 && (
+                                  <p className="text-[10px] text-amber-600 mt-1">Este campo no tiene remitos 'Recibidos' para esta variedad.</p>
+                              )}
                           </div>
 
                           <div>
@@ -684,7 +694,7 @@ export default function Locations() {
 
                       <div className="pt-4 flex justify-end space-x-3">
                           <button type="button" onClick={() => setIsPlotModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded transition">Cancelar</button>
-                          <button type="submit" className="px-6 py-2 bg-green-600 text-white font-bold rounded shadow hover:bg-green-700 transition" disabled={availableVarietiesWithStock.length === 0}>Crear Lote</button>
+                          <button type="submit" className="px-6 py-2 bg-green-600 text-white font-bold rounded shadow hover:bg-green-700 transition" disabled={availableVarietiesAtThisLocation.length === 0}>Crear Lote</button>
                       </div>
                   </form>
               </div>
