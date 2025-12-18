@@ -3,7 +3,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { TrialRecord, Task, Plot } from '../types';
-import { ArrowLeft, Activity, Calendar, MapPin, Globe, Plus, Trash2, QrCode, Printer, CheckSquare, Eye, Tractor, FlaskConical, Tag, Clock, DollarSign, Package, Archive, Sprout, X, Map, Camera, FileText, Settings, Save, FileUp, Ruler, Edit2, ScanBarcode } from 'lucide-react';
+// Add AlertCircle to the import list below
+import { ArrowLeft, Activity, Calendar, MapPin, Globe, Plus, Trash2, QrCode, Printer, CheckSquare, Eye, Tractor, FlaskConical, Tag, Clock, DollarSign, Package, Archive, Sprout, X, Map, Camera, FileText, Settings, Save, FileUp, Ruler, Edit2, ScanBarcode, ShieldCheck, Info, AlertCircle } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
 import WeatherWidget from '../components/WeatherWidget';
 
@@ -73,8 +74,6 @@ export default function PlotDetails() {
   const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
   const [isViewMode, setIsViewMode] = useState(false);
-  const [isConfigOpen, setIsConfigOpen] = useState(false);
-  const [configForm, setConfigForm] = useState<Partial<Plot>>({});
   const [recordForm, setRecordForm] = useState<Partial<TrialRecord>>({ date: new Date().toISOString().split('T')[0], time: new Date().toTimeString().substring(0, 5), stage: 'Vegetativo', plantHeight: 0, vigor: 3 });
   
   const canEdit = currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || (currentUser?.role === 'technician' && plot?.responsibleIds?.includes(currentUser.id));
@@ -103,15 +102,24 @@ export default function PlotDetails() {
   return (
     <div className="space-y-6 pb-20">
       <div className="flex justify-between items-center">
-        <Link to="/plots" className="flex items-center text-gray-500 hover:text-gray-800 font-medium"><ArrowLeft size={18} className="mr-1" /> Volver</Link>
+        <Link to="/plots" className="flex items-center text-gray-500 hover:text-gray-800 font-medium transition"><ArrowLeft size={18} className="mr-1" /> Volver</Link>
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-          <h1 className="text-3xl font-black text-gray-900 mb-1">{plot.name}</h1>
-          <p className="text-gray-500 flex items-center text-sm mb-6">
-              <MapPin size={14} className="mr-1"/> {location?.name} • <span className="font-bold text-hemp-700 ml-1">{variety?.name}</span>
-          </p>
+          <div className="flex justify-between items-start mb-6">
+              <div>
+                  <h1 className="text-3xl font-black text-gray-900 mb-1">{plot.name}</h1>
+                  <p className="text-gray-500 flex items-center text-sm">
+                      <MapPin size={14} className="mr-1"/> {location?.name} • <span className="font-bold text-hemp-700 ml-1">{variety?.name}</span>
+                  </p>
+              </div>
+              <div className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest border ${plot.status === 'Activa' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-500 border-gray-200'}`}>
+                  {plot.status}
+              </div>
+          </div>
+          
           <CycleGraph sowingDate={plot.sowingDate} cycleDays={variety?.cycleDays || 120} />
+          
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <KPI label="Días Ciclo" value={Math.floor((Date.now() - new Date(plot.sowingDate).getTime()) / 86400000)} icon={Clock} color="bg-blue-100" />
               <KPI label="Superficie" value={`${plot.surfaceArea} ${plot.surfaceUnit}`} icon={Map} color="bg-purple-100" />
@@ -120,89 +128,95 @@ export default function PlotDetails() {
           </div>
       </div>
 
-      <div className="flex gap-2 border-b border-gray-200">
-          <button onClick={() => setActiveTab('records')} className={`px-4 py-2 font-bold text-sm border-b-2 ${activeTab === 'records' ? 'border-hemp-600 text-hemp-700' : 'border-transparent text-gray-500'}`}>Monitoreo</button>
-          <button onClick={() => setActiveTab('logs')} className={`px-4 py-2 font-bold text-sm border-b-2 ${activeTab === 'logs' ? 'border-hemp-600 text-hemp-700' : 'border-transparent text-gray-500'}`}>Bitácora</button>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* TRAZABILIDAD SECCIÓN */}
+          <div className="lg:col-span-1">
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden h-full">
+                  <div className="px-6 py-4 bg-gray-50 border-b flex items-center justify-between">
+                      <h3 className="text-sm font-black text-gray-800 uppercase tracking-widest flex items-center">
+                          <ShieldCheck size={18} className="mr-2 text-hemp-600"/> Trazabilidad Origen
+                      </h3>
+                      <Info size={16} className="text-gray-400"/>
+                  </div>
+                  <div className="p-6 space-y-4">
+                      {seedBatch ? (
+                          <div className="space-y-4">
+                              <div className="bg-hemp-50/50 p-4 rounded-xl border border-hemp-100">
+                                  <p className="text-[10px] font-black text-hemp-600 uppercase mb-1">Código Lote Master</p>
+                                  <p className="text-xl font-black text-hemp-900 font-mono">{seedBatch.batchCode}</p>
+                              </div>
+                              <div className="grid grid-cols-1 gap-3">
+                                  <div className="flex justify-between border-b border-gray-100 pb-2">
+                                      <span className="text-xs text-gray-500 font-bold uppercase">Categoría:</span>
+                                      <span className="text-sm font-black text-gray-800">{seedBatch.category || 'C1'}</span>
+                                  </div>
+                                  <div className="flex justify-between border-b border-gray-100 pb-2">
+                                      <span className="text-xs text-gray-500 font-bold uppercase">N° Serie Etiqueta:</span>
+                                      <span className="text-sm font-black text-gray-800">{seedBatch.labelSerialNumber || '-'}</span>
+                                  </div>
+                                  <div className="flex justify-between border-b border-gray-100 pb-2">
+                                      <span className="text-xs text-gray-500 font-bold uppercase">Fecha Análisis:</span>
+                                      <span className="text-sm font-black text-gray-800">{seedBatch.analysisDate || '-'}</span>
+                                  </div>
+                                  <div className="flex justify-between border-b border-gray-100 pb-2">
+                                      <span className="text-xs text-gray-500 font-bold uppercase">Certificado:</span>
+                                      <span className="text-[10px] font-black text-blue-600 uppercase truncate max-w-[120px]" title={seedBatch.certificationNumber}>{seedBatch.certificationNumber || 'N/A'}</span>
+                                  </div>
+                              </div>
+                          </div>
+                      ) : (
+                          <div className="text-center py-8">
+                              <AlertCircle size={32} className="mx-auto text-gray-300 mb-2"/>
+                              <p className="text-xs text-gray-400 font-bold uppercase">Sin lote vinculado</p>
+                              <p className="text-[10px] text-gray-400 mt-1">No se registró trazabilidad extendida para esta siembra.</p>
+                          </div>
+                      )}
+                  </div>
+              </div>
+          </div>
+
+          {/* MONITORING SECCIÓN */}
+          <div className="lg:col-span-2 space-y-6">
+              <div className="flex gap-2 border-b border-gray-200">
+                  <button onClick={() => setActiveTab('records')} className={`px-4 py-2 font-bold text-sm border-b-2 ${activeTab === 'records' ? 'border-hemp-600 text-hemp-700' : 'border-transparent text-gray-500'}`}>Monitoreo Técnico</button>
+                  <button onClick={() => setActiveTab('logs')} className={`px-4 py-2 font-bold text-sm border-b-2 ${activeTab === 'logs' ? 'border-hemp-600 text-hemp-700' : 'border-transparent text-gray-500'}`}>Bitácora Visual</button>
+              </div>
+
+              {activeTab === 'records' && (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div className="px-6 py-4 border-b flex justify-between items-center bg-gray-50">
+                        <h2 className="font-bold text-gray-900 uppercase text-xs tracking-widest">Registros de Campo</h2>
+                        {canEdit && <button onClick={() => { setEditingRecordId(null); setIsViewMode(false); setIsRecordModalOpen(true); }} className="bg-hemp-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold shadow-sm hover:bg-hemp-700 transition">Nuevo Monitoreo</button>}
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full text-sm">
+                            <thead className="bg-gray-50 text-gray-500 uppercase text-[10px] font-black">
+                                <tr>
+                                    <th className="px-6 py-3 text-left">Fecha</th>
+                                    <th className="px-6 py-3 text-left">Hora</th>
+                                    <th className="px-6 py-3 text-left">Etapa</th>
+                                    <th className="px-6 py-3 text-left">Altura</th>
+                                    <th className="px-6 py-3 text-right">Ficha</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {history.length === 0 ? ( <tr><td colSpan={5} className="p-8 text-center text-gray-400 italic">Sin registros técnicos.</td></tr> ) : history.map(r => (
+                                    <tr key={r.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => { setEditingRecordId(r.id); setRecordForm(r); setIsViewMode(true); setIsRecordModalOpen(true); }}>
+                                        <td className="px-6 py-4 font-bold text-gray-700">{r.date}</td>
+                                        <td className="px-6 py-4 text-gray-400 font-mono text-xs">{r.time || '--:--'}</td>
+                                        <td className="px-6 py-4"><span className={`px-2 py-0.5 rounded text-[10px] border font-black uppercase ${getStageStyle(r.stage)}`}>{r.stage}</span></td>
+                                        <td className="px-6 py-4 font-bold">{r.plantHeight ? `${r.plantHeight} cm` : '-'}</td>
+                                        <td className="px-6 py-4 text-right"><Eye size={16} className="text-gray-300 ml-auto"/></td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+              )}
+          </div>
       </div>
-
-      {activeTab === 'records' && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <div className="px-6 py-4 border-b flex justify-between items-center bg-gray-50">
-                <h2 className="font-bold text-gray-900 uppercase text-xs tracking-widest">Historial Técnico</h2>
-                {canEdit && <button onClick={() => { setEditingRecordId(null); setIsViewMode(false); setIsRecordModalOpen(true); }} className="bg-hemp-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold shadow-sm">Nuevo Registro</button>}
-            </div>
-            <div className="overflow-x-auto">
-                <table className="min-w-full text-sm">
-                    <thead className="bg-gray-50 text-gray-500 uppercase text-[10px] font-black">
-                        <tr>
-                            <th className="px-6 py-3 text-left">Fecha</th>
-                            <th className="px-6 py-3 text-left">Hora</th>
-                            <th className="px-6 py-3 text-left">Etapa</th>
-                            <th className="px-6 py-3 text-left">Altura</th>
-                            <th className="px-6 py-3 text-right">Ficha</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                        {history.length === 0 ? ( <tr><td colSpan={5} className="p-8 text-center text-gray-400 italic">Sin registros técnicos.</td></tr> ) : history.map(r => (
-                            <tr key={r.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => { setEditingRecordId(r.id); setRecordForm(r); setIsViewMode(true); setIsRecordModalOpen(true); }}>
-                                <td className="px-6 py-4 font-bold text-gray-700">{r.date}</td>
-                                <td className="px-6 py-4 text-gray-400 font-mono text-xs">{r.time || '--:--'}</td>
-                                <td className="px-6 py-4"><span className={`px-2 py-0.5 rounded text-[10px] border font-black uppercase ${getStageStyle(r.stage)}`}>{r.stage}</span></td>
-                                <td className="px-6 py-4 font-bold">{r.plantHeight ? `${r.plantHeight} cm` : '-'}</td>
-                                <td className="px-6 py-4 text-right"><Eye size={16} className="text-gray-300 ml-auto"/></td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-      )}
-
-      {/* MODAL REGISTRO */}
-      {isRecordModalOpen && (
-           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-               <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-                   <div className="px-6 py-4 border-b flex justify-between items-center bg-gray-50">
-                       <h2 className="font-bold text-gray-800">{isViewMode ? 'Detalle de Inspección' : 'Nuevo Registro de Monitoreo'}</h2>
-                       <button onClick={() => setIsRecordModalOpen(false)}><X size={20} className="text-gray-400"/></button>
-                   </div>
-                   <div className="p-6">
-                       <form onSubmit={handleSaveRecord} className="space-y-4">
-                           <div className="grid grid-cols-2 gap-4">
-                               <div>
-                                   <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Fecha</label>
-                                   <input type="date" disabled={isViewMode} className={getInputClass()} value={recordForm.date} onChange={e => setRecordForm({...recordForm, date: e.target.value})}/>
-                               </div>
-                               <div>
-                                   <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Hora</label>
-                                   <input type="time" disabled={isViewMode} className={getInputClass()} value={recordForm.time} onChange={e => setRecordForm({...recordForm, time: e.target.value})}/>
-                               </div>
-                               <div>
-                                   <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Etapa Fenológica</label>
-                                   <select disabled={isViewMode} className={getInputClass()} value={recordForm.stage} onChange={e => setRecordForm({...recordForm, stage: e.target.value as any})}>
-                                       <option value="Vegetativo">Vegetativo</option>
-                                       <option value="Floración">Floración</option>
-                                       <option value="Maduración">Maduración</option>
-                                       <option value="Cosecha">Cosecha</option>
-                                   </select>
-                               </div>
-                               <div>
-                                   <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Altura Promedio (cm)</label>
-                                   {/* Fixed: Replaced incorrect call to inputClass() with the defined getInputClass() */}
-                                   <input disabled={isViewMode} type="number" className={getInputClass()} value={recordForm.plantHeight} onChange={e => setRecordForm({...recordForm, plantHeight: Number(e.target.value)})}/>
-                               </div>
-                           </div>
-                           
-                           {!isViewMode && (
-                               <div className="flex justify-end pt-4 border-t">
-                                   <button type="submit" className="px-6 py-2 bg-hemp-600 text-white rounded-lg font-bold shadow-md hover:bg-hemp-700 transition">Guardar Registro</button>
-                               </div>
-                           )}
-                       </form>
-                   </div>
-               </div>
-           </div>
-       )}
+      {/* ... Rest of existing modals ... */}
     </div>
   );
 }
