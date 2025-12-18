@@ -2,18 +2,33 @@
 import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { SeedBatch, SeedMovement } from '../types';
+// Added Building to the lucide-react imports
 import { 
   ScanBarcode, Edit2, Trash2, Tag, Package, Truck, Printer, MapPin, 
   AlertCircle, DollarSign, ShoppingCart, Archive, Save, X, 
-  Loader2, Search, Eye, Info, CheckCircle 
+  Loader2, Search, Eye, Info, CheckCircle, Filter, FilterX, ArrowUpRight, ArrowDownLeft,
+  Building
 } from 'lucide-react';
 import { supabase } from '../supabaseClient'; 
 import { useSearchParams } from 'react-router-dom';
 
+const MetricCard = ({ label, value, subtext, icon: Icon, colorClass }: any) => (
+    <div className="bg-white p-6 rounded-2xl border shadow-sm flex items-start space-x-4">
+        <div className={`p-3 rounded-xl ${colorClass} bg-opacity-10 text-${colorClass.split('-')[1]}-600`}>
+            <Icon size={24} />
+        </div>
+        <div>
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">{label}</p>
+            <p className="text-2xl font-black text-gray-800">{value}</p>
+            {subtext && <p className="text-[10px] text-gray-400 mt-1 font-bold">{subtext}</p>}
+        </div>
+    </div>
+);
+
 export default function SeedBatches() {
   const { 
     seedBatches, seedMovements, addLocalSeedBatch, updateSeedBatch, 
-    deleteSeedBatch, addSeedMovement, updateSeedMovement, varieties, 
+    deleteSeedBatch, addSeedMovement, updateSeedMovement, deleteSeedMovement, varieties, 
     locations, currentUser, clients, storagePoints, isEmergencyMode 
   } = useAppContext();
   
@@ -21,10 +36,11 @@ export default function SeedBatches() {
   const [activeTab, setActiveTab] = useState<'inventory' | 'logistics'>((searchParams.get('tab') as any) || 'inventory');
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  const [invSearch, setInvSearch] = useState(searchParams.get('variety') || '');
-  const [invFilterVariety, setInvFilterVariety] = useState('');
-  const [invFilterStorage, setInvFilterStorage] = useState('');
-  const [logSearch, setLogSearch] = useState('');
+  // Dashboard & Filter States
+  const [searchTerm, setSearchTerm] = useState(searchParams.get('variety') || '');
+  const [filterVariety, setFilterVariety] = useState('');
+  const [filterStorage, setFilterStorage] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
 
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
   const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
@@ -44,11 +60,19 @@ export default function SeedBatches() {
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
 
+  // --- ACTIONS ---
+
   const handleBatchSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!batchFormData.varietyId || !batchFormData.batchCode || batchFormData.initialQuantity! <= 0) return;
       setIsSubmitting(true);
-      const payload = { ...batchFormData, id: editingBatchId || crypto.randomUUID(), remainingQuantity: editingBatchId ? batchFormData.remainingQuantity : batchFormData.initialQuantity, createdAt: new Date().toISOString() } as SeedBatch;
+      const payload = { 
+          ...batchFormData, 
+          id: editingBatchId || crypto.randomUUID(), 
+          remainingQuantity: editingBatchId ? batchFormData.remainingQuantity : batchFormData.initialQuantity, 
+          createdAt: new Date().toISOString() 
+      } as SeedBatch;
+      
       try {
           if (editingBatchId) updateSeedBatch(payload);
           else {
@@ -63,7 +87,7 @@ export default function SeedBatches() {
       e.preventDefault();
       const batch = seedBatches.find(b => b.id === moveFormData.batchId);
       if (!batch || moveFormData.quantity! > batch.remainingQuantity) {
-          alert("Stock insuficiente");
+          alert("Stock insuficiente en el lote seleccionado.");
           return;
       }
       setIsSubmitting(true);
@@ -78,253 +102,401 @@ export default function SeedBatches() {
   };
 
   const handleReceiveShipment = (move: SeedMovement) => {
-      if (window.confirm("¿Confirmar recepción de este material en el destino?")) {
+      if (window.confirm("¿Confirmar recepción física de este material en el destino?")) {
           updateSeedMovement({ ...move, status: 'Recibido' });
       }
   };
 
-  const openQuickDispatch = (batchId: string) => {
-      setMoveFormData({ ...moveFormData, batchId, quantity: 0 });
-      setIsMoveModalOpen(true);
+  const handleDeleteBatch = async (id: string, code: string) => {
+      // Security: Check if batch has movements
+      const hasMovements = seedMovements.some(m => m.batchId === id);
+      if (hasMovements) {
+          alert("No se puede eliminar este lote porque ya registra despachos. Primero elimina o anula los despachos asociados.");
+          return;
+      }
+      if (window.confirm(`¿Seguro que deseas eliminar permanentemente el lote ${code}?`)) {
+          await deleteSeedBatch(id);
+      }
   };
+
+  const handleDeleteMovement = async (id: string, guide: string) => {
+      if (window.confirm(`¿Anular despacho ${guide}? El stock será devuelto al lote original.`)) {
+          await deleteSeedMovement(id);
+      }
+  };
+
+  const clearFilters = () => {
+      setSearchTerm('');
+      setFilterVariety('');
+      setFilterStorage('');
+      setFilterStatus('');
+  };
+
+  // --- LOGIC: DASHBOARD & FILTERING ---
 
   const filteredBatches = useMemo(() => seedBatches.filter(b => {
       const v = varieties.find(v => v.id === b.varietyId);
-      const matchesSearch = b.batchCode.toLowerCase().includes(invSearch.toLowerCase()) || (v?.name || '').toLowerCase().includes(invSearch.toLowerCase());
-      return matchesSearch && (!invFilterVariety || b.varietyId === invFilterVariety) && (!invFilterStorage || b.storagePointId === invFilterStorage);
-  }), [seedBatches, invSearch, invFilterVariety, invFilterStorage, varieties]);
+      const s = storagePoints.find(sp => sp.id === b.storagePointId);
+      const matchesSearch = b.batchCode.toLowerCase().includes(searchTerm.toLowerCase()) || (v?.name || '').toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesVariety = !filterVariety || b.varietyId === filterVariety;
+      const matchesStorage = !filterStorage || b.storagePointId === filterStorage;
+      return matchesSearch && matchesVariety && matchesStorage;
+  }), [seedBatches, searchTerm, filterVariety, filterStorage, varieties, storagePoints]);
 
   const filteredMovements = useMemo(() => seedMovements.filter(m => {
       const b = seedBatches.find(batch => batch.id === m.batchId);
       const v = varieties.find(vari => vari.id === b?.varietyId);
       const c = clients.find(cli => cli.id === m.clientId);
-      const term = logSearch.toLowerCase();
-      return (v?.name || '').toLowerCase().includes(term) || (c?.name || '').toLowerCase().includes(term) || (m.transportGuideNumber || '').toLowerCase().includes(term);
-  }).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()), [seedMovements, seedBatches, varieties, clients, logSearch]);
+      const term = searchTerm.toLowerCase();
+      const matchesSearch = (v?.name || '').toLowerCase().includes(term) || (c?.name || '').toLowerCase().includes(term) || (m.transportGuideNumber || '').toLowerCase().includes(term);
+      const matchesStatus = !filterStatus || m.status === filterStatus;
+      return matchesSearch && matchesStatus;
+  }).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()), [seedMovements, seedBatches, varieties, clients, searchTerm, filterStatus]);
 
-  const totalKg = seedBatches.reduce((sum, b) => sum + (b.remainingQuantity || 0), 0);
-  const totalUsd = seedBatches.reduce((sum, b) => sum + ((b.remainingQuantity || 0) * (b.pricePerKg || 0)), 0);
+  const stats = useMemo(() => {
+      const totalKg = seedBatches.reduce((sum, b) => sum + (b.remainingQuantity || 0), 0);
+      const totalValue = seedBatches.reduce((sum, b) => sum + ((b.remainingQuantity || 0) * (b.pricePerKg || 0)), 0);
+      const lowStockCount = seedBatches.filter(b => b.remainingQuantity > 0 && b.remainingQuantity < 50).length;
+      const activeTransits = seedMovements.filter(m => m.status === 'En Tránsito').length;
+      return { totalKg, totalValue, lowStockCount, activeTransits };
+  }, [seedBatches, seedMovements]);
 
-  const inputClass = "w-full border border-gray-300 bg-white text-gray-900 p-2 rounded-lg focus:ring-2 focus:ring-hemp-500 outline-none";
+  const inputClass = "w-full border border-gray-300 bg-white text-gray-900 p-2 rounded-lg focus:ring-2 focus:ring-hemp-500 outline-none transition-all";
 
   return (
-    <div className="animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+    <div className="animate-in fade-in duration-500 space-y-8">
+      {/* HEADER SECTION */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
             <h1 className="text-3xl font-black text-gray-800 flex items-center">
                 <Archive className="mr-3 text-hemp-600" size={32}/> Inventario & Logística
             </h1>
-            <p className="text-sm text-gray-500">Gestión de stock centralizado y seguimiento de envíos.</p>
+            <p className="text-sm text-gray-500 font-medium">Control de stock centralizado y trazabilidad de remitos.</p>
         </div>
         {isAdmin && (
-          <div className="flex space-x-2">
-              <button onClick={() => setIsMoveModalOpen(true)} className="bg-blue-600 text-white px-5 py-2.5 rounded-xl flex items-center hover:bg-blue-700 transition shadow-lg font-bold text-sm">
-                <Truck size={18} className="mr-2" /> Registrar Salida
+          <div className="flex space-x-2 w-full md:w-auto">
+              <button onClick={() => setIsMoveModalOpen(true)} className="flex-1 md:flex-none bg-blue-600 text-white px-5 py-2.5 rounded-xl flex items-center justify-center hover:bg-blue-700 transition shadow-lg font-bold text-sm">
+                <ArrowUpRight size={18} className="mr-2" /> Despachar
               </button>
-              <button onClick={() => { setEditingBatchId(null); setIsBatchModalOpen(true); }} className="bg-hemp-600 text-white px-5 py-2.5 rounded-xl flex items-center hover:bg-hemp-700 transition shadow-lg font-bold text-sm">
-                <ShoppingCart size={18} className="mr-2" /> Registrar Ingreso
+              <button onClick={() => { setEditingBatchId(null); setIsBatchModalOpen(true); }} className="flex-1 md:flex-none bg-hemp-600 text-white px-5 py-2.5 rounded-xl flex items-center justify-center hover:bg-hemp-700 transition shadow-lg font-bold text-sm">
+                <ArrowDownLeft size={18} className="mr-2" /> Ingresar Lote
               </button>
           </div>
         )}
       </div>
 
-      <div className="flex space-x-8 border-b border-gray-200 mb-8">
-          <button onClick={() => setActiveTab('inventory')} className={`${activeTab === 'inventory' ? 'border-hemp-600 text-hemp-700 font-black' : 'border-transparent text-gray-400 font-bold'} pb-4 border-b-4 text-sm transition-all uppercase tracking-widest`}>Stock Central</button>
-          <button onClick={() => setActiveTab('logistics')} className={`${activeTab === 'logistics' ? 'border-hemp-600 text-hemp-700 font-black' : 'border-transparent text-gray-400 font-bold'} pb-4 border-b-4 text-sm transition-all uppercase tracking-widest`}>Historial de Despachos</button>
+      {/* DASHBOARD SUMMARY */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <MetricCard label="Stock Total" value={`${stats.totalKg.toLocaleString()} kg`} icon={Package} colorClass="bg-blue-500" />
+          <MetricCard label="Valorización" value={`$${stats.totalValue.toLocaleString()}`} subtext="Costo estimado USD" icon={DollarSign} colorClass="bg-green-500" />
+          <MetricCard label="Lotes Críticos" value={stats.lowStockCount} subtext="Menos de 50kg disp." icon={AlertCircle} colorClass="bg-amber-500" />
+          <MetricCard label="En Tránsito" value={stats.activeTransits} subtext="Remitos pendientes de recepción" icon={Truck} colorClass="bg-purple-500" />
       </div>
 
-      {activeTab === 'inventory' ? (
-          <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="bg-white p-6 rounded-2xl border shadow-sm">
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Masa Total</p>
-                      <p className="text-3xl font-black text-gray-800">{totalKg.toLocaleString()} kg</p>
-                  </div>
-                  <div className="bg-green-50 p-6 rounded-2xl border border-green-100 shadow-sm relative overflow-hidden">
-                      <p className="text-[10px] font-black text-green-600 uppercase tracking-widest mb-1">Valorización (USD)</p>
-                      <p className="text-3xl font-black text-green-700">${totalUsd.toLocaleString()}</p>
-                      <DollarSign className="absolute -right-4 -bottom-4 text-green-200 opacity-20" size={80}/>
-                  </div>
+      {/* TABS & FILTERS BAR */}
+      <div className="bg-white rounded-2xl shadow-sm border p-4">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+              <div className="flex space-x-4 border-b md:border-none w-full md:w-auto overflow-x-auto">
+                  <button onClick={() => setActiveTab('inventory')} className={`${activeTab === 'inventory' ? 'border-hemp-600 text-hemp-700 font-black' : 'border-transparent text-gray-400 font-bold'} pb-2 border-b-4 text-xs transition-all uppercase tracking-widest whitespace-nowrap`}>Stock Central</button>
+                  <button onClick={() => setActiveTab('logistics')} className={`${activeTab === 'logistics' ? 'border-hemp-600 text-hemp-700 font-black' : 'border-transparent text-gray-400 font-bold'} pb-2 border-b-4 text-xs transition-all uppercase tracking-widest whitespace-nowrap`}>Historial de Despachos</button>
               </div>
 
-              <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
-                  <table className="min-w-full text-sm text-left">
-                      <thead className="bg-gray-50 text-gray-500 uppercase text-[10px] font-black tracking-widest border-b">
-                          <tr>
-                              <th className="px-6 py-4">Código Lote</th>
-                              <th className="px-6 py-4">Genética</th>
-                              <th className="px-6 py-4">Ubicación</th>
-                              <th className="px-6 py-4 text-center">Stock</th>
-                              <th className="px-6 py-4 text-right">Acciones</th>
-                          </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                          {filteredBatches.map(batch => (
-                              <tr key={batch.id} className="hover:bg-gray-50">
-                                  <td className="px-6 py-4 font-black text-gray-800">{batch.batchCode}</td>
-                                  <td className="px-6 py-4 font-bold text-hemp-700">{varieties.find(v => v.id === batch.varietyId)?.name}</td>
-                                  <td className="px-6 py-4 text-gray-500">{storagePoints.find(s => s.id === batch.storagePointId)?.name}</td>
+              <div className="flex flex-wrap gap-2 w-full md:w-auto justify-end">
+                  <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14}/>
+                      <input type="text" placeholder="Buscar..." className="pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-xs w-full md:w-48 focus:ring-2 focus:ring-hemp-500 outline-none" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                  </div>
+                  
+                  {activeTab === 'inventory' ? (
+                      <>
+                        <select className="px-3 py-2 border border-gray-200 rounded-lg text-[10px] font-bold uppercase outline-none" value={filterVariety} onChange={e => setFilterVariety(e.target.value)}>
+                            <option value="">Todas las Genéticas</option>
+                            {varieties.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                        </select>
+                        <select className="px-3 py-2 border border-gray-200 rounded-lg text-[10px] font-bold uppercase outline-none" value={filterStorage} onChange={e => setFilterStorage(e.target.value)}>
+                            <option value="">Todos los Depósitos</option>
+                            {storagePoints.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+                      </>
+                  ) : (
+                      <select className="px-3 py-2 border border-gray-200 rounded-lg text-[10px] font-bold uppercase outline-none" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+                          <option value="">Todos los Estados</option>
+                          <option value="En Tránsito">En Tránsito</option>
+                          <option value="Recibido">Recibido</option>
+                      </select>
+                  )}
+                  
+                  <button onClick={clearFilters} className="p-2 text-gray-400 hover:text-red-500 transition" title="Limpiar Filtros"><FilterX size={18}/></button>
+              </div>
+          </div>
+      </div>
+
+      {/* CONTENT AREA */}
+      {activeTab === 'inventory' ? (
+          <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
+              <table className="min-w-full text-sm text-left">
+                  <thead className="bg-gray-50 text-gray-500 uppercase text-[10px] font-black tracking-widest border-b">
+                      <tr>
+                          <th className="px-6 py-4">Código Lote</th>
+                          <th className="px-6 py-4">Genética</th>
+                          <th className="px-6 py-4">Ubicación</th>
+                          <th className="px-6 py-4 text-center">Disponible</th>
+                          <th className="px-6 py-4 text-center">Valor Est.</th>
+                          <th className="px-6 py-4 text-right">Acciones</th>
+                      </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                      {filteredBatches.length === 0 ? (
+                          <tr><td colSpan={6} className="p-10 text-center text-gray-400 italic font-medium">No se encontraron lotes con los criterios actuales.</td></tr>
+                      ) : filteredBatches.map(batch => {
+                          const v = varieties.find(v => v.id === batch.varietyId);
+                          const isLow = batch.remainingQuantity > 0 && batch.remainingQuantity < 50;
+                          return (
+                              <tr key={batch.id} className="hover:bg-gray-50 transition-colors group">
+                                  <td className="px-6 py-4 font-black text-gray-800">
+                                      <div className="flex items-center">
+                                          <ScanBarcode size={14} className="mr-2 text-hemp-600 opacity-50"/>
+                                          {batch.batchCode}
+                                      </div>
+                                  </td>
+                                  <td className="px-6 py-4">
+                                      <div className="font-bold text-hemp-800">{v?.name || 'S/D'}</div>
+                                      <div className="text-[10px] text-gray-400 uppercase font-black">{v?.usage || '-'}</div>
+                                  </td>
+                                  <td className="px-6 py-4">
+                                      <div className="text-gray-600 font-medium flex items-center">
+                                          <MapPin size={12} className="mr-1 text-blue-500"/>
+                                          {storagePoints.find(s => s.id === batch.storagePointId)?.name || 'Central'}
+                                      </div>
+                                  </td>
                                   <td className="px-6 py-4 text-center">
-                                      <span className={`px-3 py-1 rounded-full font-black ${batch.remainingQuantity > 50 ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                                      <span className={`px-3 py-1 rounded-full font-black flex items-center justify-center w-fit mx-auto ${
+                                          batch.remainingQuantity === 0 ? 'bg-gray-100 text-gray-400' :
+                                          isLow ? 'bg-amber-100 text-amber-700 animate-pulse' : 
+                                          'bg-green-100 text-green-700'
+                                      }`}>
                                           {batch.remainingQuantity.toLocaleString()} kg
+                                          {isLow && <AlertCircle size={12} className="ml-1"/>}
                                       </span>
                                   </td>
+                                  <td className="px-6 py-4 text-center font-mono font-bold text-gray-500">
+                                      ${((batch.remainingQuantity || 0) * (batch.pricePerKg || 0)).toLocaleString()}
+                                  </td>
                                   <td className="px-6 py-4 text-right">
-                                      <div className="flex justify-end space-x-1">
-                                          <button onClick={() => setSelectedBatchForView(batch)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition" title="Ver Detalles"><Eye size={18}/></button>
+                                      <div className="flex justify-end space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                          <button onClick={() => setSelectedBatchForView(batch)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition" title="Ver Ficha Técnica"><Eye size={18}/></button>
                                           {isAdmin && (
                                               <>
-                                                  <button onClick={() => openQuickDispatch(batch.id)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition" title="Despachar (Camioncito)"><Truck size={18}/></button>
-                                                  <button onClick={() => { setBatchFormData(batch); setEditingBatchId(batch.id); setIsBatchModalOpen(true); }} className="p-2 text-gray-400 hover:text-hemp-600 rounded-lg"><Edit2 size={18}/></button>
+                                                  <button onClick={() => { setBatchFormData(batch); setEditingBatchId(batch.id); setIsBatchModalOpen(true); }} className="p-2 text-gray-400 hover:text-hemp-600 hover:bg-hemp-50 rounded-lg transition"><Edit2 size={18}/></button>
+                                                  <button onClick={() => handleDeleteBatch(batch.id, batch.batchCode)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"><Trash2 size={18}/></button>
                                               </>
                                           )}
                                       </div>
                                   </td>
                               </tr>
-                          ))}
-                      </tbody>
-                  </table>
-              </div>
+                          )
+                      })}
+                  </tbody>
+              </table>
           </div>
       ) : (
-          <div className="space-y-6">
-              <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
-                  <table className="min-w-full text-sm text-left">
-                      <thead className="bg-gray-50 text-gray-500 uppercase text-[10px] font-black tracking-widest border-b">
-                          <tr>
-                              <th className="px-6 py-4">Fecha / Guía</th>
-                              <th className="px-6 py-4">Material & Cantidad</th>
-                              <th className="px-6 py-4">Destino</th>
-                              <th className="px-6 py-4 text-center">Estado</th>
-                              <th className="px-6 py-4 text-right">Acciones</th>
-                          </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                          {filteredMovements.map(move => (
-                              <tr key={move.id} className="hover:bg-gray-50">
+          <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
+              <table className="min-w-full text-sm text-left">
+                  <thead className="bg-gray-50 text-gray-500 uppercase text-[10px] font-black tracking-widest border-b">
+                      <tr>
+                          <th className="px-6 py-4">Remito / Fecha</th>
+                          <th className="px-6 py-4">Material & Cantidad</th>
+                          <th className="px-6 py-4">Destinatario</th>
+                          <th className="px-6 py-4 text-center">Estado</th>
+                          <th className="px-6 py-4 text-right">Acciones</th>
+                      </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                      {filteredMovements.length === 0 ? (
+                          <tr><td colSpan={5} className="p-10 text-center text-gray-400 italic font-medium">Sin registros de movimientos.</td></tr>
+                      ) : filteredMovements.map(move => {
+                          // Fixed undefined variable 'm' to 'move'
+                          const b = seedBatches.find(batch => batch.id === move.batchId);
+                          const v = varieties.find(vari => vari.id === b?.varietyId);
+                          return (
+                              <tr key={move.id} className="hover:bg-gray-50 transition-colors group">
                                   <td className="px-6 py-4">
                                       <div className="font-black text-gray-800">{move.date}</div>
-                                      <div className="text-[10px] text-gray-400 font-mono">#{move.transportGuideNumber}</div>
+                                      <div className="text-[10px] text-blue-600 font-black uppercase tracking-tighter">Guía: {move.transportGuideNumber || 'S/N'}</div>
                                   </td>
                                   <td className="px-6 py-4">
                                       <div className="font-bold text-gray-800">{varieties.find(v => v.id === seedBatches.find(b => b.id === move.batchId)?.varietyId)?.name}</div>
-                                      <div className="text-blue-600 font-black">{move.quantity} kg</div>
+                                      <div className="text-hemp-700 font-black text-base">{move.quantity} <span className="text-xs">kg</span></div>
                                   </td>
                                   <td className="px-6 py-4">
-                                      <div className="font-bold text-gray-700">{clients.find(c => c.id === move.clientId)?.name}</div>
-                                      <div className="text-[10px] text-gray-400 flex items-center uppercase"><MapPin size={10} className="mr-1"/> {locations.find(l => l.id === move.targetLocationId)?.name}</div>
+                                      <div className="font-bold text-gray-700 flex items-center">
+                                          {/* Added Building to imports */}
+                                          <Building size={12} className="mr-1 opacity-50"/>
+                                          {clients.find(c => c.id === move.clientId)?.name || 'Externo'}
+                                      </div>
+                                      <div className="text-[10px] text-gray-400 flex items-center uppercase mt-0.5">
+                                          <MapPin size={10} className="mr-1"/> 
+                                          {locations.find(l => l.id === move.targetLocationId)?.name || 'Sin destino'}
+                                      </div>
                                   </td>
                                   <td className="px-6 py-4 text-center">
-                                      <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${move.status === 'Recibido' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                                      <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase inline-flex items-center ${move.status === 'Recibido' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700 animate-pulse'}`}>
+                                          {move.status === 'Recibido' ? <CheckCircle size={10} className="mr-1"/> : <Truck size={10} className="mr-1"/>}
                                           {move.status || 'En Tránsito'}
                                       </span>
                                   </td>
                                   <td className="px-6 py-4 text-right">
-                                      <div className="flex justify-end space-x-1">
+                                      <div className="flex justify-end space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                           {isAdmin && move.status === 'En Tránsito' && (
                                               <button onClick={() => handleReceiveShipment(move)} className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition" title="Confirmar Recepción"><CheckCircle size={18}/></button>
                                           )}
-                                          <button onClick={() => setSelectedMovementForView(move)} className="p-2 text-gray-400 hover:text-blue-600 rounded-lg"><Eye size={18}/></button>
-                                          <button className="p-2 text-gray-400 hover:text-gray-600 rounded-lg"><Printer size={18}/></button>
+                                          <button onClick={() => setSelectedMovementForView(move)} className="p-2 text-gray-400 hover:text-blue-600 rounded-lg transition"><Eye size={18}/></button>
+                                          {isAdmin && (
+                                              <button onClick={() => handleDeleteMovement(move.id, move.transportGuideNumber || 'S/N')} className="p-2 text-gray-400 hover:text-red-600 rounded-lg transition" title="Anular Remito"><Trash2 size={18}/></button>
+                                          )}
                                       </div>
                                   </td>
                               </tr>
-                          ))}
-                      </tbody>
-                  </table>
-              </div>
+                          )
+                      })}
+                  </tbody>
+              </table>
           </div>
       )}
 
       {/* --- MODALS --- */}
+      
+      {/* BATCH ENTRY MODAL */}
       {isBatchModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-8 overflow-y-auto max-h-[90vh]">
-            <h2 className="text-2xl font-black mb-6">{editingBatchId ? 'Editar Lote' : 'Ingreso de Semilla'}</h2>
+          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-8 overflow-y-auto max-h-[90vh] animate-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-black text-gray-800">{editingBatchId ? 'Editar Lote Master' : 'Nuevo Ingreso de Lote'}</h2>
+                <button onClick={() => setIsBatchModalOpen(false)} className="p-1 hover:bg-gray-100 rounded-full transition"><X size={24}/></button>
+            </div>
             <form onSubmit={handleBatchSubmit} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="col-span-2">
-                        <label className="text-xs font-black text-gray-500 uppercase">Genética</label>
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Variedad Genética *</label>
                         <select required className={inputClass} value={batchFormData.varietyId} onChange={e => setBatchFormData({...batchFormData, varietyId: e.target.value})}>
-                            <option value="">Seleccionar variedad...</option>
-                            {varieties.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                            <option value="">Seleccionar genética autorizada...</option>
+                            {varieties.map(v => <option key={v.id} value={v.id}>{v.name} ({v.usage})</option>)}
                         </select>
                     </div>
                     <div>
-                        <label className="text-xs font-black text-gray-500 uppercase">Código de Lote</label>
-                        <input required type="text" className={inputClass} value={batchFormData.batchCode} onChange={e => setBatchFormData({...batchFormData, batchCode: e.target.value})} />
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Código de Lote Fiscal *</label>
+                        <input required type="text" className={inputClass} placeholder="Ej: LOT-FR-2024" value={batchFormData.batchCode} onChange={e => setBatchFormData({...batchFormData, batchCode: e.target.value})} />
                     </div>
                     <div>
-                        <label className="text-xs font-black text-gray-500 uppercase">Ubicación</label>
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Punto de Almacenamiento *</label>
                         <select required className={inputClass} value={batchFormData.storagePointId} onChange={e => setBatchFormData({...batchFormData, storagePointId: e.target.value})}>
-                            <option value="">Depósito...</option>
+                            <option value="">Elegir depósito...</option>
                             {storagePoints.map(sp => <option key={sp.id} value={sp.id}>{sp.name}</option>)}
                         </select>
                     </div>
-                    <div className="col-span-2 bg-blue-50 p-4 rounded-xl">
-                        <p className="text-xs font-bold text-blue-700 uppercase mb-2">Trazabilidad</p>
-                        <div className="grid grid-cols-2 gap-4">
-                            <input type="text" placeholder="Serie Etiqueta" className={inputClass} value={batchFormData.labelSerialNumber} onChange={e => setBatchFormData({...batchFormData, labelSerialNumber: e.target.value})} />
-                            <select className={inputClass} value={batchFormData.category} onChange={e => setBatchFormData({...batchFormData, category: e.target.value as any})}>
-                                <option value="C1">C1</option><option value="C2">C2</option><option value="Base">Base</option><option value="Original">Original</option>
-                            </select>
+                    
+                    <div className="col-span-2 bg-blue-50 p-4 rounded-2xl border border-blue-100 grid grid-cols-2 gap-4">
+                        <div className="col-span-2 flex items-center text-blue-800 font-bold text-xs uppercase mb-2">
+                            <Tag size={14} className="mr-1"/> Datos de Trazabilidad (Etiqueta INASE/EU)
+                        </div>
+                        <input type="text" placeholder="N° Serie Etiqueta" className={inputClass} value={batchFormData.labelSerialNumber} onChange={e => setBatchFormData({...batchFormData, labelSerialNumber: e.target.value})} />
+                        <select className={inputClass} value={batchFormData.category} onChange={e => setBatchFormData({...batchFormData, category: e.target.value as any})}>
+                            <option value="C1">Categoría C1</option><option value="C2">Categoría C2</option><option value="Base">Categoría Base</option><option value="Original">Categoría Original</option>
+                        </select>
+                        <input type="date" className={inputClass} title="Fecha de Análisis" value={batchFormData.analysisDate} onChange={e => setBatchFormData({...batchFormData, analysisDate: e.target.value})} />
+                        <div className="flex space-x-2">
+                            <input type="number" placeholder="PG%" className={inputClass} value={batchFormData.germination} onChange={e => setBatchFormData({...batchFormData, germination: Number(e.target.value)})} />
+                            <input type="number" placeholder="Pureza%" className={inputClass} value={batchFormData.purity} onChange={e => setBatchFormData({...batchFormData, purity: Number(e.target.value)})} />
                         </div>
                     </div>
+
                     <div>
-                        <label className="text-xs font-black text-gray-500 uppercase">Cantidad (kg)</label>
-                        <input required type="number" step="0.1" className={inputClass} value={batchFormData.initialQuantity} onChange={e => setBatchFormData({...batchFormData, initialQuantity: Number(e.target.value)})} />
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Cantidad Inicial (kg) *</label>
+                        <input required type="number" step="0.1" className={`${inputClass} font-black text-lg`} value={batchFormData.initialQuantity} onChange={e => setBatchFormData({...batchFormData, initialQuantity: Number(e.target.value)})} />
+                    </div>
+                    <div>
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Costo Unitario (USD/kg)</label>
+                        <div className="relative">
+                            <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/>
+                            <input type="number" step="0.01" className={`${inputClass} pl-9`} value={batchFormData.pricePerKg} onChange={e => setBatchFormData({...batchFormData, pricePerKg: Number(e.target.value)})} />
+                        </div>
                     </div>
                 </div>
-                <div className="flex justify-end gap-3 pt-4 border-t">
-                    <button type="button" onClick={() => setIsBatchModalOpen(false)} className="px-5 font-bold">Cancelar</button>
-                    <button type="submit" disabled={isSubmitting} className="px-8 py-2.5 bg-hemp-600 text-white rounded-xl font-black shadow-lg">Confirmar</button>
+                <div className="flex justify-end gap-3 pt-6 border-t mt-8">
+                    <button type="button" onClick={() => setIsBatchModalOpen(false)} className="px-6 py-2.5 text-gray-500 font-bold hover:bg-gray-100 rounded-xl transition">Cancelar</button>
+                    <button type="submit" disabled={isSubmitting} className="px-10 py-2.5 bg-hemp-600 text-white rounded-xl font-black shadow-lg shadow-hemp-900/20 hover:bg-hemp-700 transition flex items-center">
+                        {isSubmitting && <Loader2 className="animate-spin mr-2" size={18}/>}
+                        Confirmar Ingreso
+                    </button>
                 </div>
             </form>
           </div>
         </div>
       )}
 
+      {/* DISPATCH MODAL */}
       {isMoveModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-8 overflow-y-auto max-h-[90vh]">
-            <h2 className="text-2xl font-black mb-6 flex items-center"><Truck size={28} className="mr-3 text-blue-600"/> Registrar Despacho</h2>
+          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-8 overflow-y-auto max-h-[90vh] animate-in slide-in-from-bottom-4 duration-200">
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-black text-gray-800 flex items-center">
+                    <Truck size={32} className="mr-3 text-blue-600"/> 
+                    Registrar Despacho de Material
+                </h2>
+                <button onClick={() => setIsMoveModalOpen(false)} className="p-1 hover:bg-gray-100 rounded-full transition"><X size={24}/></button>
+            </div>
             <form onSubmit={handleMoveSubmit} className="space-y-6">
                 <div>
-                    <label className="text-xs font-black text-gray-500 uppercase">Lote Origen</label>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Lote Origen de Stock</label>
                     <select required className={inputClass} value={moveFormData.batchId} onChange={e => setMoveFormData({...moveFormData, batchId: e.target.value})}>
-                        <option value="">Seleccionar lote...</option>
+                        <option value="">Seleccionar lote master disponible...</option>
                         {seedBatches.filter(b => b.remainingQuantity > 0).map(b => (
-                            <option key={b.id} value={b.id}>[{varieties.find(v => v.id === b.varietyId)?.name}] Lote: {b.batchCode} ({b.remainingQuantity}kg)</option>
+                            <option key={b.id} value={b.id}>
+                                [{varieties.find(v => v.id === b.varietyId)?.name}] Lote: {b.batchCode} ({b.remainingQuantity}kg disponibles)
+                            </option>
                         ))}
                     </select>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                        <label className="text-xs font-black text-gray-500 uppercase">Cliente Receptor</label>
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Cliente Receptor</label>
                         <select required className={inputClass} value={moveFormData.clientId} onChange={e => setMoveFormData({...moveFormData, clientId: e.target.value, targetLocationId: ''})}>
-                            <option value="">Seleccionar cliente...</option>
+                            <option value="">Seleccionar titular...</option>
                             {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                         </select>
                     </div>
                     <div>
-                        <label className="text-xs font-black text-gray-500 uppercase">Campo de Destino</label>
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Campo / Sitio de Destino</label>
                         <select required className={inputClass} value={moveFormData.targetLocationId} onChange={e => setMoveFormData({...moveFormData, targetLocationId: e.target.value})} disabled={!moveFormData.clientId}>
-                            <option value="">Campo...</option>
-                            {locations.filter(l => l.clientId === moveFormData.clientId).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                            <option value="">Elegir establecimiento...</option>
+                            {locations.filter(l => l.clientId === moveFormData.clientId).map(l => (
+                                <option key={l.id} value={l.id}>{l.name} ({l.province})</option>
+                            ))}
                         </select>
                     </div>
                     <div className="md:col-span-2">
-                        <label className="text-xs font-black text-gray-500 uppercase">Cantidad (kg)</label>
-                        <input required type="number" step="0.1" className={inputClass} value={moveFormData.quantity || ''} onChange={e => setMoveFormData({...moveFormData, quantity: Number(e.target.value)})} />
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Cantidad a Despachar (kg) *</label>
+                        <input required type="number" step="0.1" className={`${inputClass} font-black text-xl text-blue-600`} placeholder="0.0" value={moveFormData.quantity || ''} onChange={e => setMoveFormData({...moveFormData, quantity: Number(e.target.value)})} />
                     </div>
-                    <div>
-                        <label className="text-xs font-black text-gray-500 uppercase">N° Guía / Remito</label>
-                        <input type="text" className={inputClass} value={moveFormData.transportGuideNumber} onChange={e => setMoveFormData({...moveFormData, transportGuideNumber: e.target.value})} />
+                    
+                    <div className="col-span-2 bg-gray-50 p-4 rounded-2xl border border-gray-200 grid grid-cols-2 gap-4">
+                        <div className="col-span-2 flex items-center text-gray-500 font-bold text-xs uppercase mb-2">
+                            <Info size={14} className="mr-1"/> Datos Logísticos
+                        </div>
+                        <input type="text" placeholder="N° Guía de Transporte / Remito" className={inputClass} value={moveFormData.transportGuideNumber} onChange={e => setMoveFormData({...moveFormData, transportGuideNumber: e.target.value})} />
+                        <input type="text" placeholder="Nombre Chofer / Responsable" className={inputClass} value={moveFormData.driverName} onChange={e => setMoveFormData({...moveFormData, driverName: e.target.value})} />
+                        <input type="text" placeholder="Patente Vehículo" className={inputClass} value={moveFormData.vehiclePlate} onChange={e => setMoveFormData({...moveFormData, vehiclePlate: e.target.value})} />
+                        <input type="text" placeholder="Empresa Transporte" className={inputClass} value={moveFormData.transportCompany} onChange={e => setMoveFormData({...moveFormData, transportCompany: e.target.value})} />
                     </div>
                 </div>
-                <div className="flex justify-end gap-3 pt-4 border-t">
-                    <button type="button" onClick={() => setIsMoveModalOpen(false)} className="px-5 font-bold">Cancelar</button>
-                    <button type="submit" disabled={isSubmitting} className="px-8 py-2.5 bg-blue-600 text-white rounded-xl font-black shadow-lg">Confirmar Envío</button>
+                
+                <div className="flex justify-end gap-3 pt-6 border-t mt-8">
+                    <button type="button" onClick={() => setIsMoveModalOpen(false)} className="px-6 py-2.5 text-gray-500 font-bold hover:bg-gray-100 rounded-xl transition">Cancelar</button>
+                    <button type="submit" disabled={isSubmitting} className="px-10 py-2.5 bg-blue-600 text-white rounded-xl font-black shadow-lg shadow-blue-900/20 hover:bg-blue-700 transition flex items-center">
+                        {isSubmitting && <Loader2 className="animate-spin mr-2" size={18}/>}
+                        Generar Remito de Salida
+                    </button>
                 </div>
             </form>
           </div>

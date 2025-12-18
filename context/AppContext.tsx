@@ -84,11 +84,11 @@ interface AppContextType {
   addSeedBatch: (s: SeedBatch) => void;
   addLocalSeedBatch: (s: SeedBatch) => void; 
   updateSeedBatch: (s: SeedBatch) => void;
-  deleteSeedBatch: (id: string) => void;
+  deleteSeedBatch: (id: string) => Promise<void>;
   
   addSeedMovement: (m: SeedMovement) => Promise<boolean>;
   updateSeedMovement: (m: SeedMovement) => void;
-  deleteSeedMovement: (id: string) => void;
+  deleteSeedMovement: (id: string) => Promise<void>;
 
   getPlotHistory: (plotId: string) => TrialRecord[];
   getLatestRecord: (plotId: string) => TrialRecord | undefined;
@@ -300,10 +300,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const addSeedBatch = (s: SeedBatch) => genericAdd('seed_batches', s, setSeedBatches, 'seedBatches');
   const addLocalSeedBatch = (s: SeedBatch) => setSeedBatches(prev => [...prev, s]);
   const updateSeedBatch = (s: SeedBatch) => genericUpdate('seed_batches', s, setSeedBatches, 'seedBatches');
-  const deleteSeedBatch = (id: string) => genericDelete('seed_batches', id, setSeedBatches, 'seedBatches');
+  const deleteSeedBatch = async (id: string) => { await genericDelete('seed_batches', id, setSeedBatches, 'seedBatches'); };
+  
   const addSeedMovement = async (m: SeedMovement) => { return await genericAdd('seed_movements', m, setSeedMovements, 'seedMovements'); };
   const updateSeedMovement = (m: SeedMovement) => genericUpdate('seed_movements', m, setSeedMovements, 'seedMovements');
-  const deleteSeedMovement = (id: string) => genericDelete('seed_movements', id, setSeedMovements, 'seedMovements');
+  
+  const deleteSeedMovement = async (id: string) => { 
+      const move = seedMovements.find(m => m.id === id);
+      if (move) {
+          // RESTORE STOCK TO BATCH
+          const batch = seedBatches.find(b => b.id === move.batchId);
+          if (batch) {
+              const updatedBatch = { ...batch, remainingQuantity: batch.remainingQuantity + move.quantity };
+              await genericUpdate('seed_batches', updatedBatch, setSeedBatches, 'seedBatches');
+          }
+      }
+      await genericDelete('seed_movements', id, setSeedMovements, 'seedMovements');
+  };
+
   const addTrialRecord = (r: TrialRecord) => { genericAdd('trial_records', r, setTrialRecords, 'trialRecords'); };
   const updateTrialRecord = (r: TrialRecord) => { genericUpdate('trial_records', r, setTrialRecords, 'trialRecords'); };
   const deleteTrialRecord = (id: string) => { genericDelete('trial_records', id, setTrialRecords, 'trialRecords'); };
