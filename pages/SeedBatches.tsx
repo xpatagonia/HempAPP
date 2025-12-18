@@ -2,7 +2,6 @@
 import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { SeedBatch, SeedMovement } from '../types';
-// Added Building to the lucide-react imports
 import { 
   ScanBarcode, Edit2, Trash2, Tag, Package, Truck, Printer, MapPin, 
   AlertCircle, DollarSign, ShoppingCart, Archive, Save, X, 
@@ -13,13 +12,13 @@ import { supabase } from '../supabaseClient';
 import { useSearchParams } from 'react-router-dom';
 
 const MetricCard = ({ label, value, subtext, icon: Icon, colorClass }: any) => (
-    <div className="bg-white p-6 rounded-2xl border shadow-sm flex items-start space-x-4">
+    <div className="bg-white dark:bg-dark-card p-6 rounded-2xl border dark:border-dark-border shadow-sm flex items-start space-x-4">
         <div className={`p-3 rounded-xl ${colorClass} bg-opacity-10 text-${colorClass.split('-')[1]}-600`}>
             <Icon size={24} />
         </div>
         <div>
             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">{label}</p>
-            <p className="text-2xl font-black text-gray-800">{value}</p>
+            <p className="text-2xl font-black text-gray-800 dark:text-white">{value}</p>
             {subtext && <p className="text-[10px] text-gray-400 mt-1 font-bold">{subtext}</p>}
         </div>
     </div>
@@ -59,6 +58,40 @@ export default function SeedBatches() {
   });
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
+
+  // --- LOGIC: FILTERED DATA ---
+
+  // NUEVO: Solo variedades que tienen al menos un lote registrado
+  const varietiesWithStock = useMemo(() => {
+      const idsWithStock = new Set(seedBatches.map(b => b.varietyId));
+      return varieties.filter(v => idsWithStock.has(v.id));
+  }, [seedBatches, varieties]);
+
+  const filteredBatches = useMemo(() => seedBatches.filter(b => {
+      const v = varieties.find(v => v.id === b.varietyId);
+      const matchesSearch = b.batchCode.toLowerCase().includes(searchTerm.toLowerCase()) || (v?.name || '').toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesVariety = !filterVariety || b.varietyId === filterVariety;
+      const matchesStorage = !filterStorage || b.storagePointId === filterStorage;
+      return matchesSearch && matchesVariety && matchesStorage;
+  }), [seedBatches, searchTerm, filterVariety, filterStorage, varieties]);
+
+  const filteredMovements = useMemo(() => seedMovements.filter(m => {
+      const b = seedBatches.find(batch => batch.id === m.batchId);
+      const v = varieties.find(vari => vari.id === b?.varietyId);
+      const c = clients.find(cli => cli.id === m.clientId);
+      const term = searchTerm.toLowerCase();
+      const matchesSearch = (v?.name || '').toLowerCase().includes(term) || (c?.name || '').toLowerCase().includes(term) || (m.transportGuideNumber || '').toLowerCase().includes(term);
+      const matchesStatus = !filterStatus || m.status === filterStatus;
+      return matchesSearch && matchesStatus;
+  }).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()), [seedMovements, seedBatches, varieties, clients, searchTerm, filterStatus]);
+
+  const stats = useMemo(() => {
+      const totalKg = seedBatches.reduce((sum, b) => sum + (b.remainingQuantity || 0), 0);
+      const totalValue = seedBatches.reduce((sum, b) => sum + ((b.remainingQuantity || 0) * (b.pricePerKg || 0)), 0);
+      const lowStockCount = seedBatches.filter(b => b.remainingQuantity > 0 && b.remainingQuantity < 50).length;
+      const activeTransits = seedMovements.filter(m => m.status === 'En Tránsito').length;
+      return { totalKg, totalValue, lowStockCount, activeTransits };
+  }, [seedBatches, seedMovements]);
 
   // --- ACTIONS ---
 
@@ -108,10 +141,9 @@ export default function SeedBatches() {
   };
 
   const handleDeleteBatch = async (id: string, code: string) => {
-      // Security: Check if batch has movements
       const hasMovements = seedMovements.some(m => m.batchId === id);
       if (hasMovements) {
-          alert("No se puede eliminar este lote porque ya registra despachos. Primero elimina o anula los despachos asociados.");
+          alert("No se puede eliminar este lote porque ya registra despachos. Primero anula los despachos asociados.");
           return;
       }
       if (window.confirm(`¿Seguro que deseas eliminar permanentemente el lote ${code}?`)) {
@@ -120,7 +152,7 @@ export default function SeedBatches() {
   };
 
   const handleDeleteMovement = async (id: string, guide: string) => {
-      if (window.confirm(`¿Anular despacho ${guide}? El stock será devuelto al lote original.`)) {
+      if (window.confirm(`¿Anular despacho ${guide}? El stock será devuelto automáticamente al lote master.`)) {
           await deleteSeedMovement(id);
       }
   };
@@ -132,46 +164,17 @@ export default function SeedBatches() {
       setFilterStatus('');
   };
 
-  // --- LOGIC: DASHBOARD & FILTERING ---
-
-  const filteredBatches = useMemo(() => seedBatches.filter(b => {
-      const v = varieties.find(v => v.id === b.varietyId);
-      const s = storagePoints.find(sp => sp.id === b.storagePointId);
-      const matchesSearch = b.batchCode.toLowerCase().includes(searchTerm.toLowerCase()) || (v?.name || '').toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesVariety = !filterVariety || b.varietyId === filterVariety;
-      const matchesStorage = !filterStorage || b.storagePointId === filterStorage;
-      return matchesSearch && matchesVariety && matchesStorage;
-  }), [seedBatches, searchTerm, filterVariety, filterStorage, varieties, storagePoints]);
-
-  const filteredMovements = useMemo(() => seedMovements.filter(m => {
-      const b = seedBatches.find(batch => batch.id === m.batchId);
-      const v = varieties.find(vari => vari.id === b?.varietyId);
-      const c = clients.find(cli => cli.id === m.clientId);
-      const term = searchTerm.toLowerCase();
-      const matchesSearch = (v?.name || '').toLowerCase().includes(term) || (c?.name || '').toLowerCase().includes(term) || (m.transportGuideNumber || '').toLowerCase().includes(term);
-      const matchesStatus = !filterStatus || m.status === filterStatus;
-      return matchesSearch && matchesStatus;
-  }).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()), [seedMovements, seedBatches, varieties, clients, searchTerm, filterStatus]);
-
-  const stats = useMemo(() => {
-      const totalKg = seedBatches.reduce((sum, b) => sum + (b.remainingQuantity || 0), 0);
-      const totalValue = seedBatches.reduce((sum, b) => sum + ((b.remainingQuantity || 0) * (b.pricePerKg || 0)), 0);
-      const lowStockCount = seedBatches.filter(b => b.remainingQuantity > 0 && b.remainingQuantity < 50).length;
-      const activeTransits = seedMovements.filter(m => m.status === 'En Tránsito').length;
-      return { totalKg, totalValue, lowStockCount, activeTransits };
-  }, [seedBatches, seedMovements]);
-
-  const inputClass = "w-full border border-gray-300 bg-white text-gray-900 p-2 rounded-lg focus:ring-2 focus:ring-hemp-500 outline-none transition-all";
+  const inputClass = "w-full border border-gray-300 dark:border-dark-border bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 p-2 rounded-lg focus:ring-2 focus:ring-hemp-500 outline-none transition-all";
 
   return (
     <div className="animate-in fade-in duration-500 space-y-8">
       {/* HEADER SECTION */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-            <h1 className="text-3xl font-black text-gray-800 flex items-center">
+            <h1 className="text-3xl font-black text-gray-800 dark:text-white flex items-center">
                 <Archive className="mr-3 text-hemp-600" size={32}/> Inventario & Logística
             </h1>
-            <p className="text-sm text-gray-500 font-medium">Control de stock centralizado y trazabilidad de remitos.</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Control de stock centralizado y trazabilidad de remitos.</p>
         </div>
         {isAdmin && (
           <div className="flex space-x-2 w-full md:w-auto">
@@ -194,32 +197,32 @@ export default function SeedBatches() {
       </div>
 
       {/* TABS & FILTERS BAR */}
-      <div className="bg-white rounded-2xl shadow-sm border p-4">
+      <div className="bg-white dark:bg-dark-card rounded-2xl shadow-sm border dark:border-dark-border p-4">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-              <div className="flex space-x-4 border-b md:border-none w-full md:w-auto overflow-x-auto">
-                  <button onClick={() => setActiveTab('inventory')} className={`${activeTab === 'inventory' ? 'border-hemp-600 text-hemp-700 font-black' : 'border-transparent text-gray-400 font-bold'} pb-2 border-b-4 text-xs transition-all uppercase tracking-widest whitespace-nowrap`}>Stock Central</button>
-                  <button onClick={() => setActiveTab('logistics')} className={`${activeTab === 'logistics' ? 'border-hemp-600 text-hemp-700 font-black' : 'border-transparent text-gray-400 font-bold'} pb-2 border-b-4 text-xs transition-all uppercase tracking-widest whitespace-nowrap`}>Historial de Despachos</button>
+              <div className="flex space-x-4 border-b dark:border-dark-border md:border-none w-full md:w-auto overflow-x-auto">
+                  <button onClick={() => setActiveTab('inventory')} className={`${activeTab === 'inventory' ? 'border-hemp-600 text-hemp-700 dark:text-hemp-400 font-black' : 'border-transparent text-gray-400 font-bold'} pb-2 border-b-4 text-xs transition-all uppercase tracking-widest whitespace-nowrap`}>Stock Central</button>
+                  <button onClick={() => setActiveTab('logistics')} className={`${activeTab === 'logistics' ? 'border-hemp-600 text-hemp-700 dark:text-hemp-400 font-black' : 'border-transparent text-gray-400 font-bold'} pb-2 border-b-4 text-xs transition-all uppercase tracking-widest whitespace-nowrap`}>Historial de Despachos</button>
               </div>
 
               <div className="flex flex-wrap gap-2 w-full md:w-auto justify-end">
                   <div className="relative">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14}/>
-                      <input type="text" placeholder="Buscar..." className="pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-xs w-full md:w-48 focus:ring-2 focus:ring-hemp-500 outline-none" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                      <input type="text" placeholder="Buscar..." className="pl-9 pr-4 py-2 border dark:border-dark-border bg-white dark:bg-slate-800 rounded-lg text-xs w-full md:w-48 focus:ring-2 focus:ring-hemp-500 outline-none" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
                   </div>
                   
                   {activeTab === 'inventory' ? (
                       <>
-                        <select className="px-3 py-2 border border-gray-200 rounded-lg text-[10px] font-bold uppercase outline-none" value={filterVariety} onChange={e => setFilterVariety(e.target.value)}>
-                            <option value="">Todas las Genéticas</option>
-                            {varieties.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                        <select className="px-3 py-2 border dark:border-dark-border bg-white dark:bg-slate-800 rounded-lg text-[10px] font-bold uppercase outline-none dark:text-gray-300" value={filterVariety} onChange={e => setFilterVariety(e.target.value)}>
+                            <option value="">Genéticas en Stock</option>
+                            {varietiesWithStock.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
                         </select>
-                        <select className="px-3 py-2 border border-gray-200 rounded-lg text-[10px] font-bold uppercase outline-none" value={filterStorage} onChange={e => setFilterStorage(e.target.value)}>
+                        <select className="px-3 py-2 border dark:border-dark-border bg-white dark:bg-slate-800 rounded-lg text-[10px] font-bold uppercase outline-none dark:text-gray-300" value={filterStorage} onChange={e => setFilterStorage(e.target.value)}>
                             <option value="">Todos los Depósitos</option>
                             {storagePoints.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                         </select>
                       </>
                   ) : (
-                      <select className="px-3 py-2 border border-gray-200 rounded-lg text-[10px] font-bold uppercase outline-none" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+                      <select className="px-3 py-2 border dark:border-dark-border bg-white dark:bg-slate-800 rounded-lg text-[10px] font-bold uppercase outline-none dark:text-gray-300" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
                           <option value="">Todos los Estados</option>
                           <option value="En Tránsito">En Tránsito</option>
                           <option value="Recibido">Recibido</option>
@@ -233,9 +236,9 @@ export default function SeedBatches() {
 
       {/* CONTENT AREA */}
       {activeTab === 'inventory' ? (
-          <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
+          <div className="bg-white dark:bg-dark-card rounded-2xl shadow-sm border dark:border-dark-border overflow-hidden overflow-x-auto">
               <table className="min-w-full text-sm text-left">
-                  <thead className="bg-gray-50 text-gray-500 uppercase text-[10px] font-black tracking-widest border-b">
+                  <thead className="bg-gray-50 dark:bg-slate-900/50 text-gray-500 uppercase text-[10px] font-black tracking-widest border-b dark:border-dark-border">
                       <tr>
                           <th className="px-6 py-4">Código Lote</th>
                           <th className="px-6 py-4">Genética</th>
@@ -245,33 +248,33 @@ export default function SeedBatches() {
                           <th className="px-6 py-4 text-right">Acciones</th>
                       </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
+                  <tbody className="divide-y divide-gray-100 dark:divide-dark-border">
                       {filteredBatches.length === 0 ? (
                           <tr><td colSpan={6} className="p-10 text-center text-gray-400 italic font-medium">No se encontraron lotes con los criterios actuales.</td></tr>
                       ) : filteredBatches.map(batch => {
                           const v = varieties.find(v => v.id === batch.varietyId);
                           const isLow = batch.remainingQuantity > 0 && batch.remainingQuantity < 50;
                           return (
-                              <tr key={batch.id} className="hover:bg-gray-50 transition-colors group">
-                                  <td className="px-6 py-4 font-black text-gray-800">
+                              <tr key={batch.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors group">
+                                  <td className="px-6 py-4 font-black text-gray-800 dark:text-gray-200">
                                       <div className="flex items-center">
                                           <ScanBarcode size={14} className="mr-2 text-hemp-600 opacity-50"/>
                                           {batch.batchCode}
                                       </div>
                                   </td>
                                   <td className="px-6 py-4">
-                                      <div className="font-bold text-hemp-800">{v?.name || 'S/D'}</div>
+                                      <div className="font-bold text-hemp-800 dark:text-hemp-400">{v?.name || 'S/D'}</div>
                                       <div className="text-[10px] text-gray-400 uppercase font-black">{v?.usage || '-'}</div>
                                   </td>
                                   <td className="px-6 py-4">
-                                      <div className="text-gray-600 font-medium flex items-center">
+                                      <div className="text-gray-600 dark:text-gray-400 font-medium flex items-center">
                                           <MapPin size={12} className="mr-1 text-blue-500"/>
                                           {storagePoints.find(s => s.id === batch.storagePointId)?.name || 'Central'}
                                       </div>
                                   </td>
                                   <td className="px-6 py-4 text-center">
                                       <span className={`px-3 py-1 rounded-full font-black flex items-center justify-center w-fit mx-auto ${
-                                          batch.remainingQuantity === 0 ? 'bg-gray-100 text-gray-400' :
+                                          batch.remainingQuantity === 0 ? 'bg-gray-100 dark:bg-gray-800 text-gray-400' :
                                           isLow ? 'bg-amber-100 text-amber-700 animate-pulse' : 
                                           'bg-green-100 text-green-700'
                                       }`}>
@@ -284,11 +287,11 @@ export default function SeedBatches() {
                                   </td>
                                   <td className="px-6 py-4 text-right">
                                       <div className="flex justify-end space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                          <button onClick={() => setSelectedBatchForView(batch)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition" title="Ver Ficha Técnica"><Eye size={18}/></button>
+                                          <button onClick={() => setSelectedBatchForView(batch)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition" title="Ver Ficha Técnica"><Eye size={18}/></button>
                                           {isAdmin && (
                                               <>
-                                                  <button onClick={() => { setBatchFormData(batch); setEditingBatchId(batch.id); setIsBatchModalOpen(true); }} className="p-2 text-gray-400 hover:text-hemp-600 hover:bg-hemp-50 rounded-lg transition"><Edit2 size={18}/></button>
-                                                  <button onClick={() => handleDeleteBatch(batch.id, batch.batchCode)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"><Trash2 size={18}/></button>
+                                                  <button onClick={() => { setBatchFormData(batch); setEditingBatchId(batch.id); setIsBatchModalOpen(true); }} className="p-2 text-gray-400 hover:text-hemp-600 hover:bg-hemp-50 dark:hover:bg-hemp-900/20 rounded-lg transition"><Edit2 size={18}/></button>
+                                                  <button onClick={() => handleDeleteBatch(batch.id, batch.batchCode)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition"><Trash2 size={18}/></button>
                                               </>
                                           )}
                                       </div>
@@ -300,9 +303,9 @@ export default function SeedBatches() {
               </table>
           </div>
       ) : (
-          <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
+          <div className="bg-white dark:bg-dark-card rounded-2xl shadow-sm border dark:border-dark-border overflow-hidden overflow-x-auto">
               <table className="min-w-full text-sm text-left">
-                  <thead className="bg-gray-50 text-gray-500 uppercase text-[10px] font-black tracking-widest border-b">
+                  <thead className="bg-gray-50 dark:bg-slate-900/50 text-gray-500 uppercase text-[10px] font-black tracking-widest border-b dark:border-dark-border">
                       <tr>
                           <th className="px-6 py-4">Remito / Fecha</th>
                           <th className="px-6 py-4">Material & Cantidad</th>
@@ -311,26 +314,24 @@ export default function SeedBatches() {
                           <th className="px-6 py-4 text-right">Acciones</th>
                       </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
+                  <tbody className="divide-y divide-gray-100 dark:divide-dark-border">
                       {filteredMovements.length === 0 ? (
                           <tr><td colSpan={5} className="p-10 text-center text-gray-400 italic font-medium">Sin registros de movimientos.</td></tr>
                       ) : filteredMovements.map(move => {
-                          // Fixed undefined variable 'm' to 'move'
                           const b = seedBatches.find(batch => batch.id === move.batchId);
                           const v = varieties.find(vari => vari.id === b?.varietyId);
                           return (
-                              <tr key={move.id} className="hover:bg-gray-50 transition-colors group">
+                              <tr key={move.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors group">
                                   <td className="px-6 py-4">
-                                      <div className="font-black text-gray-800">{move.date}</div>
+                                      <div className="font-black text-gray-800 dark:text-gray-200">{move.date}</div>
                                       <div className="text-[10px] text-blue-600 font-black uppercase tracking-tighter">Guía: {move.transportGuideNumber || 'S/N'}</div>
                                   </td>
                                   <td className="px-6 py-4">
-                                      <div className="font-bold text-gray-800">{varieties.find(v => v.id === seedBatches.find(b => b.id === move.batchId)?.varietyId)?.name}</div>
-                                      <div className="text-hemp-700 font-black text-base">{move.quantity} <span className="text-xs">kg</span></div>
+                                      <div className="font-bold text-gray-800 dark:text-gray-300">{v?.name || 'S/D'}</div>
+                                      <div className="text-hemp-700 dark:text-hemp-400 font-black text-base">{move.quantity} <span className="text-xs">kg</span></div>
                                   </td>
                                   <td className="px-6 py-4">
-                                      <div className="font-bold text-gray-700 flex items-center">
-                                          {/* Added Building to imports */}
+                                      <div className="font-bold text-gray-700 dark:text-gray-300 flex items-center">
                                           <Building size={12} className="mr-1 opacity-50"/>
                                           {clients.find(c => c.id === move.clientId)?.name || 'Externo'}
                                       </div>
@@ -348,7 +349,7 @@ export default function SeedBatches() {
                                   <td className="px-6 py-4 text-right">
                                       <div className="flex justify-end space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                           {isAdmin && move.status === 'En Tránsito' && (
-                                              <button onClick={() => handleReceiveShipment(move)} className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition" title="Confirmar Recepción"><CheckCircle size={18}/></button>
+                                              <button onClick={() => handleReceiveShipment(move)} className="p-2 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition" title="Confirmar Recepción"><CheckCircle size={18}/></button>
                                           )}
                                           <button onClick={() => setSelectedMovementForView(move)} className="p-2 text-gray-400 hover:text-blue-600 rounded-lg transition"><Eye size={18}/></button>
                                           {isAdmin && (
@@ -369,10 +370,10 @@ export default function SeedBatches() {
       {/* BATCH ENTRY MODAL */}
       {isBatchModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-8 overflow-y-auto max-h-[90vh] animate-in zoom-in-95 duration-200">
+          <div className="bg-white dark:bg-dark-card rounded-3xl shadow-2xl max-w-2xl w-full p-8 overflow-y-auto max-h-[90vh] animate-in zoom-in-95 duration-200">
             <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-black text-gray-800">{editingBatchId ? 'Editar Lote Master' : 'Nuevo Ingreso de Lote'}</h2>
-                <button onClick={() => setIsBatchModalOpen(false)} className="p-1 hover:bg-gray-100 rounded-full transition"><X size={24}/></button>
+                <h2 className="text-2xl font-black text-gray-800 dark:text-white">{editingBatchId ? 'Editar Lote Master' : 'Nuevo Ingreso de Lote'}</h2>
+                <button onClick={() => setIsBatchModalOpen(false)} className="p-1 hover:bg-gray-100 dark:hover:bg-dark-border rounded-full transition dark:text-gray-400"><X size={24}/></button>
             </div>
             <form onSubmit={handleBatchSubmit} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -395,8 +396,8 @@ export default function SeedBatches() {
                         </select>
                     </div>
                     
-                    <div className="col-span-2 bg-blue-50 p-4 rounded-2xl border border-blue-100 grid grid-cols-2 gap-4">
-                        <div className="col-span-2 flex items-center text-blue-800 font-bold text-xs uppercase mb-2">
+                    <div className="col-span-2 bg-blue-50 dark:bg-blue-900/20 p-4 rounded-2xl border border-blue-100 dark:border-blue-800 grid grid-cols-2 gap-4">
+                        <div className="col-span-2 flex items-center text-blue-800 dark:text-blue-300 font-bold text-xs uppercase mb-2">
                             <Tag size={14} className="mr-1"/> Datos de Trazabilidad (Etiqueta INASE/EU)
                         </div>
                         <input type="text" placeholder="N° Serie Etiqueta" className={inputClass} value={batchFormData.labelSerialNumber} onChange={e => setBatchFormData({...batchFormData, labelSerialNumber: e.target.value})} />
@@ -422,8 +423,8 @@ export default function SeedBatches() {
                         </div>
                     </div>
                 </div>
-                <div className="flex justify-end gap-3 pt-6 border-t mt-8">
-                    <button type="button" onClick={() => setIsBatchModalOpen(false)} className="px-6 py-2.5 text-gray-500 font-bold hover:bg-gray-100 rounded-xl transition">Cancelar</button>
+                <div className="flex justify-end gap-3 pt-6 border-t dark:border-dark-border mt-8">
+                    <button type="button" onClick={() => setIsBatchModalOpen(false)} className="px-6 py-2.5 text-gray-500 font-bold hover:bg-gray-100 dark:hover:bg-dark-border rounded-xl transition">Cancelar</button>
                     <button type="submit" disabled={isSubmitting} className="px-10 py-2.5 bg-hemp-600 text-white rounded-xl font-black shadow-lg shadow-hemp-900/20 hover:bg-hemp-700 transition flex items-center">
                         {isSubmitting && <Loader2 className="animate-spin mr-2" size={18}/>}
                         Confirmar Ingreso
@@ -437,13 +438,13 @@ export default function SeedBatches() {
       {/* DISPATCH MODAL */}
       {isMoveModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-8 overflow-y-auto max-h-[90vh] animate-in slide-in-from-bottom-4 duration-200">
+          <div className="bg-white dark:bg-dark-card rounded-3xl shadow-2xl max-w-2xl w-full p-8 overflow-y-auto max-h-[90vh] animate-in slide-in-from-bottom-4 duration-200">
             <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-black text-gray-800 flex items-center">
+                <h2 className="text-2xl font-black text-gray-800 dark:text-white flex items-center">
                     <Truck size={32} className="mr-3 text-blue-600"/> 
                     Registrar Despacho de Material
                 </h2>
-                <button onClick={() => setIsMoveModalOpen(false)} className="p-1 hover:bg-gray-100 rounded-full transition"><X size={24}/></button>
+                <button onClick={() => setIsMoveModalOpen(false)} className="p-1 hover:bg-gray-100 dark:hover:bg-dark-border rounded-full transition dark:text-gray-400"><X size={24}/></button>
             </div>
             <form onSubmit={handleMoveSubmit} className="space-y-6">
                 <div>
@@ -477,10 +478,10 @@ export default function SeedBatches() {
                     </div>
                     <div className="md:col-span-2">
                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Cantidad a Despachar (kg) *</label>
-                        <input required type="number" step="0.1" className={`${inputClass} font-black text-xl text-blue-600`} placeholder="0.0" value={moveFormData.quantity || ''} onChange={e => setMoveFormData({...moveFormData, quantity: Number(e.target.value)})} />
+                        <input required type="number" step="0.1" className={`${inputClass} font-black text-xl text-blue-600 dark:text-blue-400`} placeholder="0.0" value={moveFormData.quantity || ''} onChange={e => setMoveFormData({...moveFormData, quantity: Number(e.target.value)})} />
                     </div>
                     
-                    <div className="col-span-2 bg-gray-50 p-4 rounded-2xl border border-gray-200 grid grid-cols-2 gap-4">
+                    <div className="col-span-2 bg-gray-50 dark:bg-slate-900/50 p-4 rounded-2xl border dark:border-dark-border border-gray-200 grid grid-cols-2 gap-4">
                         <div className="col-span-2 flex items-center text-gray-500 font-bold text-xs uppercase mb-2">
                             <Info size={14} className="mr-1"/> Datos Logísticos
                         </div>
@@ -491,8 +492,8 @@ export default function SeedBatches() {
                     </div>
                 </div>
                 
-                <div className="flex justify-end gap-3 pt-6 border-t mt-8">
-                    <button type="button" onClick={() => setIsMoveModalOpen(false)} className="px-6 py-2.5 text-gray-500 font-bold hover:bg-gray-100 rounded-xl transition">Cancelar</button>
+                <div className="flex justify-end gap-3 pt-6 border-t dark:border-dark-border mt-8">
+                    <button type="button" onClick={() => setIsMoveModalOpen(false)} className="px-6 py-2.5 text-gray-500 font-bold hover:bg-gray-100 dark:hover:bg-dark-border rounded-xl transition">Cancelar</button>
                     <button type="submit" disabled={isSubmitting} className="px-10 py-2.5 bg-blue-600 text-white rounded-xl font-black shadow-lg shadow-blue-900/20 hover:bg-blue-700 transition flex items-center">
                         {isSubmitting && <Loader2 className="animate-spin mr-2" size={18}/>}
                         Generar Remito de Salida
