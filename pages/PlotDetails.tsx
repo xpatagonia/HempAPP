@@ -5,7 +5,7 @@ import { useAppContext } from '../context/AppContext';
 import { TrialRecord, Plot } from '../types';
 import { 
   ArrowLeft, Activity, MapPin, Plus, Eye, Tag, Clock, 
-  Sprout, X, Map, ShieldCheck, Info, AlertCircle 
+  Sprout, X, Map, ShieldCheck, Info, AlertCircle, Trash2, Edit2
 } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
 import WeatherWidget from '../components/WeatherWidget';
@@ -52,7 +52,7 @@ const CycleGraph = ({ sowingDate, cycleDays }: { sowingDate: string, cycleDays: 
 export default function PlotDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { plots, locations, varieties, getPlotHistory, addTrialRecord, updateTrialRecord, currentUser, seedBatches } = useAppContext();
+  const { plots, locations, varieties, getPlotHistory, addTrialRecord, updateTrialRecord, deleteTrialRecord, currentUser, seedBatches } = useAppContext();
   
   const plot = plots.find(p => p.id === id);
   const location = locations.find(l => l.id === plot?.locationId);
@@ -66,7 +66,8 @@ export default function PlotDetails() {
   const [isViewMode, setIsViewMode] = useState(false);
   const [recordForm, setRecordForm] = useState<Partial<TrialRecord>>({ date: new Date().toISOString().split('T')[0], time: new Date().toTimeString().substring(0, 5), stage: 'Vegetativo', plantHeight: 0 });
   
-  const canEdit = currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || (currentUser?.role === 'technician' && plot?.responsibleIds?.includes(currentUser.id));
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
+  const canEdit = isAdmin || (currentUser?.role === 'technician' && plot?.responsibleIds?.includes(currentUser.id));
   
   if (!plot) return <div className="p-10 text-center">Parcela no encontrada.</div>;
 
@@ -78,10 +79,17 @@ export default function PlotDetails() {
       setIsRecordModalOpen(false);
   };
 
+  const handleDeleteRecord = () => {
+      if (editingRecordId && window.confirm("¿Estás seguro de eliminar este registro técnico? Esta acción no se puede deshacer.")) {
+          deleteTrialRecord(editingRecordId);
+          setIsRecordModalOpen(false);
+      }
+  };
+
   return (
     <div className="space-y-6 pb-20">
       <div className="flex justify-between items-center">
-        <Link to="/plots" className="flex items-center text-gray-500 font-medium"><ArrowLeft size={18} className="mr-1" /> Volver</Link>
+        <Link to="/plots" className="flex items-center text-gray-500 font-medium hover:text-gray-800 transition"><ArrowLeft size={18} className="mr-1" /> Volver</Link>
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border p-6">
@@ -106,7 +114,7 @@ export default function PlotDetails() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* BLOQUE DE TRAZABILIDAD DE ORIGEN */}
           <div className="lg:col-span-1">
-              <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
+              <div className="bg-white rounded-2xl shadow-sm border overflow-hidden h-full">
                   <div className="px-6 py-4 bg-gray-50 border-b flex items-center justify-between">
                       <h3 className="text-sm font-black uppercase tracking-widest flex items-center">
                           <ShieldCheck size={18} className="mr-2 text-hemp-600"/> Trazabilidad Origen
@@ -148,43 +156,85 @@ export default function PlotDetails() {
                         <h2 className="font-bold text-gray-900 uppercase text-xs tracking-widest">Historial de Campo</h2>
                         {canEdit && <button onClick={() => { setEditingRecordId(null); setIsViewMode(false); setIsRecordModalOpen(true); }} className="bg-hemp-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold shadow-sm">Nuevo Registro</button>}
                     </div>
-                    <table className="min-w-full text-sm text-left">
-                        <thead className="bg-gray-50 text-gray-500 uppercase text-[10px] font-black">
-                            <tr><th className="px-6 py-3">Fecha</th><th className="px-6 py-3">Hora</th><th className="px-6 py-3">Etapa</th><th className="px-6 py-3">Altura</th><th className="px-6 py-3 text-right">Detalle</th></tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                            {history.length === 0 ? ( <tr><td colSpan={5} className="p-8 text-center text-gray-400 italic">Sin registros técnicos.</td></tr> ) : history.map(r => (
-                                <tr key={r.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => { setEditingRecordId(r.id); setRecordForm(r); setIsViewMode(true); setIsRecordModalOpen(true); }}>
-                                    <td className="px-6 py-4 font-bold">{r.date}</td>
-                                    <td className="px-6 py-4 text-gray-400 font-mono text-xs">{r.time || '--:--'}</td>
-                                    <td className="px-6 py-4"><span className="px-2 py-0.5 rounded text-[10px] border font-black uppercase bg-green-50 text-green-700">{r.stage}</span></td>
-                                    <td className="px-6 py-4 font-bold">{r.plantHeight ? `${r.plantHeight} cm` : '-'}</td>
-                                    <td className="px-6 py-4 text-right"><Eye size={16} className="text-gray-300 ml-auto"/></td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full text-sm text-left">
+                            <thead className="bg-gray-50 text-gray-500 uppercase text-[10px] font-black">
+                                <tr><th className="px-6 py-3">Fecha</th><th className="px-6 py-3">Hora</th><th className="px-6 py-3">Etapa</th><th className="px-6 py-3">Altura</th><th className="px-6 py-3 text-right">Detalle</th></tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {history.length === 0 ? ( <tr><td colSpan={5} className="p-8 text-center text-gray-400 italic">Sin registros técnicos.</td></tr> ) : history.map(r => (
+                                    <tr key={r.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => { setEditingRecordId(r.id); setRecordForm(r); setIsViewMode(true); setIsRecordModalOpen(true); }}>
+                                        <td className="px-6 py-4 font-bold">{r.date}</td>
+                                        <td className="px-6 py-4 text-gray-400 font-mono text-xs">{r.time || '--:--'}</td>
+                                        <td className="px-6 py-4"><span className="px-2 py-0.5 rounded text-[10px] border font-black uppercase bg-green-50 text-green-700">{r.stage}</span></td>
+                                        <td className="px-6 py-4 font-bold">{r.plantHeight ? `${r.plantHeight} cm` : '-'}</td>
+                                        <td className="px-6 py-4 text-right"><Eye size={16} className="text-gray-300 ml-auto"/></td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
               </div>
           </div>
       </div>
 
       {isRecordModalOpen && (
            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-               <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-                   <div className="px-6 py-4 border-b flex justify-between bg-gray-50">
-                       <h2 className="font-bold text-gray-800">{isViewMode ? 'Detalle de Inspección' : 'Nuevo Registro de Monitoreo'}</h2>
-                       <button onClick={() => setIsRecordModalOpen(false)}><X size={20}/></button>
+               <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200">
+                   <div className="px-6 py-4 border-b flex justify-between bg-gray-50 items-center">
+                       <h2 className="font-bold text-gray-800">{isViewMode ? 'Detalle de Inspección' : (editingRecordId ? 'Editar Registro' : 'Nuevo Registro de Monitoreo')}</h2>
+                       <button onClick={() => setIsRecordModalOpen(false)} className="p-1 hover:bg-gray-200 rounded-full transition"><X size={20}/></button>
                    </div>
                    <div className="p-6">
                        <form onSubmit={handleSaveRecord} className="space-y-4">
                            <div className="grid grid-cols-2 gap-4">
-                               <div><label className="text-xs font-bold uppercase mb-1 block">Fecha</label><input type="date" disabled={isViewMode} className="w-full border p-2 rounded" value={recordForm.date} onChange={e => setRecordForm({...recordForm, date: e.target.value})}/></div>
-                               <div><label className="text-xs font-bold uppercase mb-1 block">Hora</label><input type="time" disabled={isViewMode} className="w-full border p-2 rounded" value={recordForm.time} onChange={e => setRecordForm({...recordForm, time: e.target.value})}/></div>
-                               <div><label className="text-xs font-bold uppercase mb-1 block">Etapa</label>
-                               <select disabled={isViewMode} className="w-full border p-2 rounded" value={recordForm.stage} onChange={e => setRecordForm({...recordForm, stage: e.target.value as any})}><option value="Vegetativo">Vegetativo</option><option value="Floración">Floración</option><option value="Maduración">Maduración</option><option value="Cosecha">Cosecha</option></select></div>
-                               <div><label className="text-xs font-bold uppercase mb-1 block">Altura (cm)</label><input disabled={isViewMode} type="number" className="w-full border p-2 rounded" value={recordForm.plantHeight} onChange={e => setRecordForm({...recordForm, plantHeight: Number(e.target.value)})}/></div>
+                               <div><label className="text-xs font-bold uppercase mb-1 block text-gray-500">Fecha</label><input type="date" disabled={isViewMode} className="w-full border border-gray-300 p-2 rounded focus:ring-2 focus:ring-hemp-500 outline-none" value={recordForm.date} onChange={e => setRecordForm({...recordForm, date: e.target.value})}/></div>
+                               <div><label className="text-xs font-bold uppercase mb-1 block text-gray-500">Hora</label><input type="time" disabled={isViewMode} className="w-full border border-gray-300 p-2 rounded focus:ring-2 focus:ring-hemp-500 outline-none" value={recordForm.time} onChange={e => setRecordForm({...recordForm, time: e.target.value})}/></div>
+                               <div><label className="text-xs font-bold uppercase mb-1 block text-gray-500">Etapa</label>
+                               <select disabled={isViewMode} className="w-full border border-gray-300 p-2 rounded focus:ring-2 focus:ring-hemp-500 outline-none" value={recordForm.stage} onChange={e => setRecordForm({...recordForm, stage: e.target.value as any})}><option value="Vegetativo">Vegetativo</option><option value="Floración">Floración</option><option value="Maduración">Maduración</option><option value="Cosecha">Cosecha</option></select></div>
+                               <div><label className="text-xs font-bold uppercase mb-1 block text-gray-500">Altura (cm)</label><input disabled={isViewMode} type="number" className="w-full border border-gray-300 p-2 rounded focus:ring-2 focus:ring-hemp-500 outline-none" value={recordForm.plantHeight} onChange={e => setRecordForm({...recordForm, plantHeight: Number(e.target.value)})}/></div>
                            </div>
-                           {!isViewMode && <div className="flex justify-end pt-4 border-t"><button type="submit" className="px-6 py-2 bg-hemp-600 text-white rounded-lg font-bold shadow-md">Guardar Registro</button></div>}
+                           
+                           <div className="flex justify-between pt-4 border-t mt-6">
+                               {isAdmin && editingRecordId && (
+                                   <button 
+                                       type="button" 
+                                       onClick={handleDeleteRecord}
+                                       className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg font-bold transition flex items-center border border-transparent hover:border-red-100"
+                                   >
+                                       <Trash2 size={18} className="mr-2" /> Eliminar Registro
+                                   </button>
+                               )}
+                               
+                               <div className="flex space-x-2 ml-auto">
+                                   <button 
+                                       type="button" 
+                                       onClick={() => setIsRecordModalOpen(false)}
+                                       className="px-6 py-2 text-gray-500 font-bold hover:bg-gray-100 rounded-lg transition"
+                                   >
+                                       Cerrar
+                                   </button>
+                                   
+                                   {isViewMode ? (
+                                       canEdit && (
+                                           <button 
+                                               type="button" 
+                                               onClick={() => setIsViewMode(false)}
+                                               className="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold shadow-md hover:bg-blue-700 transition flex items-center"
+                                           >
+                                               <Edit2 size={18} className="mr-2" /> Editar
+                                           </button>
+                                       )
+                                   ) : (
+                                       <button 
+                                           type="submit" 
+                                           className="px-6 py-2 bg-hemp-600 text-white rounded-lg font-bold shadow-md hover:bg-hemp-700 transition"
+                                       >
+                                           Guardar Cambios
+                                       </button>
+                                   )}
+                               </div>
+                           </div>
                        </form>
                    </div>
                </div>

@@ -24,7 +24,7 @@ const ARG_GEO: Record<string, string[]> = {
     "Misiones": ["Posadas", "Eldorado", "Oberá", "Puerto Iguazú", "Apóstoles", "Leandro N. Alem", "San Vicente", "Montecarlo", "Puerto Rico"],
     "Neuquén": ["Neuquén Capital", "San Martín de los Andes", "Zapala", "Cutral Có", "Plaza Huincul", "Centenario", "Villa La Angostura", "Junín de los Andes", "Chos Malal"],
     "Río Negro": ["Viedma", "General Roca", "Bariloche", "Cipolletti", "Villa Regina", "Allen", "Cinco Saltos", "Choele Choel", "Río Colorado", "El Bolsón", "San Antonio Oeste"],
-    "Salta": ["Salta Capital", "Orán", "Tartagal", "General Güemes", "Cafayate", "Metán", "Rosario de la Frontera", "Joaquín V. González", "Las Lajitas", "Embarcación"],
+    "Salta": ["Salta Capital", "Orán", "Tartagal", "General Güemes", "Cafayate", "Metán", "Rosario de la Frontier", "Joaquín V. González", "Las Lajitas", "Embarcación"],
     "San Juan": ["San Juan Capital", "Caucete", "Jáchal", "Pocito", "Rawson", "Rivadavia", "Santa Lucía", "Albardón"],
     "San Luis": ["San Luis Capital", "Villa Mercedes", "Merlo", "Justo Daract", "La Punta", "Quines", "Santa Rosa del Conlara"],
     "Santa Cruz": ["Río Gallegos", "Caleta Olivia", "El Calafate", "Pico Truncado", "Las Heras", "Puerto Deseado", "Río Turbio"],
@@ -127,6 +127,13 @@ export default function Locations() {
       block: '1', replicate: 1, surfaceArea: 0, surfaceUnit: 'ha', density: 0, status: 'Activa'
   });
 
+  // Filter varieties that have active stock (Registered via administration)
+  const availableVarietiesWithStock = useMemo(() => {
+    return varieties.filter(v => 
+        seedBatches.some(b => b.varietyId === v.id && b.remainingQuantity > 0)
+    );
+  }, [varieties, seedBatches]);
+
   // Filter seed batches based on selected variety in Plot Modal
   const availableBatches = seedBatches.filter(b => b.varietyId === plotFormData.varietyId && b.remainingQuantity > 0);
 
@@ -134,7 +141,7 @@ export default function Locations() {
   const isClient = currentUser?.role === 'client';
   const canManage = isAdmin || isClient;
 
-  // Filter Locations Logic ...
+  // Filter Locations Logic
   const visibleLocations = locations.filter(l => {
       let matches = true;
       if (isClient && currentUser.clientId) {
@@ -612,11 +619,14 @@ export default function Locations() {
                               <input type="text" placeholder="Generado autom. si vacío" className={inputClass} value={plotFormData.name} onChange={e => setPlotFormData({...plotFormData, name: e.target.value})} />
                           </div>
                           <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Variedad</label>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Variedad (Con Stock)</label>
                               <select required className={inputClass} value={plotFormData.varietyId} onChange={e => setPlotFormData({...plotFormData, varietyId: e.target.value, seedBatchId: ''})}>
                                   <option value="">Seleccionar...</option>
-                                  {varieties.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                                  {availableVarietiesWithStock.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
                               </select>
+                              {availableVarietiesWithStock.length === 0 && (
+                                  <p className="text-[10px] text-red-500 mt-1 font-bold">Sin variedades con stock disponible.</p>
+                              )}
                           </div>
                           <div>
                               <label className="block text-sm font-medium text-gray-700 mb-1">Tipo</label>
@@ -644,9 +654,6 @@ export default function Locations() {
                                       </option>
                                   ))}
                               </select>
-                              {plotFormData.varietyId && availableBatches.length === 0 && (
-                                  <p className="text-[10px] text-orange-600 mt-1">No hay stock registrado para esta variedad.</p>
-                              )}
                           </div>
 
                           <div>
@@ -677,7 +684,7 @@ export default function Locations() {
 
                       <div className="pt-4 flex justify-end space-x-3">
                           <button type="button" onClick={() => setIsPlotModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded transition">Cancelar</button>
-                          <button type="submit" className="px-6 py-2 bg-green-600 text-white font-bold rounded shadow hover:bg-green-700 transition">Crear Lote</button>
+                          <button type="submit" className="px-6 py-2 bg-green-600 text-white font-bold rounded shadow hover:bg-green-700 transition" disabled={availableVarietiesWithStock.length === 0}>Crear Lote</button>
                       </div>
                   </form>
               </div>
