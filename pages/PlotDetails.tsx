@@ -1,14 +1,15 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
-import { TrialRecord, Task, Plot } from '../types';
-// Add AlertCircle to the import list below
-import { ArrowLeft, Activity, Calendar, MapPin, Globe, Plus, Trash2, QrCode, Printer, CheckSquare, Eye, Tractor, FlaskConical, Tag, Clock, DollarSign, Package, Archive, Sprout, X, Map, Camera, FileText, Settings, Save, FileUp, Ruler, Edit2, ScanBarcode, ShieldCheck, Info, AlertCircle } from 'lucide-react';
+import { TrialRecord, Plot } from '../types';
+import { 
+  ArrowLeft, Activity, MapPin, Plus, Eye, Tag, Clock, 
+  Sprout, X, Map, ShieldCheck, Info, AlertCircle 
+} from 'lucide-react';
 import MapEditor from '../components/MapEditor';
 import WeatherWidget from '../components/WeatherWidget';
 
-// Helper component for KPI Cards
 const KPI = ({ label, value, icon: Icon, color, subtext }: any) => (
     <div className="bg-white border border-gray-100 p-4 rounded-xl shadow-sm flex items-start space-x-4 hover:shadow-md transition-shadow relative overflow-hidden group">
         <div className={`p-3 rounded-xl ${color} bg-opacity-10 text-${color.split('-')[1]}-600 group-hover:scale-110 transition-transform`}>
@@ -23,7 +24,6 @@ const KPI = ({ label, value, icon: Icon, color, subtext }: any) => (
     </div>
 );
 
-// Cycle Progress Component
 const CycleGraph = ({ sowingDate, cycleDays }: { sowingDate: string, cycleDays: number }) => {
     if (!sowingDate || !cycleDays) return null;
     const start = new Date(sowingDate).getTime();
@@ -31,29 +31,19 @@ const CycleGraph = ({ sowingDate, cycleDays }: { sowingDate: string, cycleDays: 
     const now = new Date().getTime();
     let progress = now > start ? ((now - start) / (end - start)) * 100 : 0;
     if (progress > 100) progress = 100;
-    if (progress < 0) progress = 0;
     const daysLeft = Math.ceil((end - now) / (1000 * 60 * 60 * 24));
-    const isFinished = daysLeft <= 0;
-
     return (
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 mb-6 relative overflow-hidden">
             <div className="flex justify-between items-end mb-2 relative z-10">
-                <div>
-                    <h3 className="text-lg font-bold text-gray-800 flex items-center">
-                        <Clock size={20} className="mr-2 text-hemp-600"/> Ciclo de Cultivo
-                    </h3>
-                    <p className="text-sm text-gray-500">Progreso biológico estimado.</p>
-                </div>
-                <div className="text-right">
-                    <span className={`text-2xl font-black ${isFinished ? 'text-green-600' : 'text-hemp-600'}`}>{Math.round(progress)}%</span>
-                </div>
+                <div><h3 className="text-lg font-bold text-gray-800">Ciclo de Cultivo</h3><p className="text-sm text-gray-500">Progreso biológico.</p></div>
+                <div className="text-right"><span className="text-2xl font-black text-hemp-600">{Math.round(progress)}%</span></div>
             </div>
-            <div className="h-4 bg-gray-100 rounded-full w-full relative mb-8 mt-4 overflow-hidden border border-gray-200">
-                <div className={`h-full rounded-full transition-all duration-1000 ease-out ${isFinished ? 'bg-green-500' : 'bg-gradient-to-r from-hemp-400 to-hemp-600'}`} style={{ width: `${progress}%` }}></div>
+            <div className="h-4 bg-gray-100 rounded-full w-full relative mb-8 mt-4 overflow-hidden">
+                <div className="h-full rounded-full bg-gradient-to-r from-hemp-400 to-hemp-600" style={{ width: `${progress}%` }}></div>
             </div>
-            <div className="flex justify-between text-xs text-gray-500 font-medium">
-                <div><div className="font-bold text-gray-800">Siembra</div><div>{new Date(sowingDate).toLocaleDateString()}</div></div>
-                <div className="text-right"><div className="font-bold text-gray-800">Cosecha Est.</div><div>{new Date(end).toLocaleDateString()} {!isFinished && `(${daysLeft}d)`}</div></div>
+            <div className="flex justify-between text-xs text-gray-500">
+                <div><strong>Siembra:</strong> {new Date(sowingDate).toLocaleDateString()}</div>
+                <div className="text-right"><strong>Cosecha Est:</strong> {new Date(end).toLocaleDateString()} ({daysLeft}d restantes)</div>
             </div>
         </div>
     );
@@ -62,7 +52,7 @@ const CycleGraph = ({ sowingDate, cycleDays }: { sowingDate: string, cycleDays: 
 export default function PlotDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { plots, locations, varieties, getPlotHistory, addTrialRecord, updateTrialRecord, deleteTrialRecord, logs, addLog, currentUser, tasks, seedBatches, resources, addTask, updateTask, deleteTask, updatePlot, deletePlot } = useAppContext();
+  const { plots, locations, varieties, getPlotHistory, addTrialRecord, updateTrialRecord, currentUser, seedBatches } = useAppContext();
   
   const plot = plots.find(p => p.id === id);
   const location = locations.find(l => l.id === plot?.locationId);
@@ -70,70 +60,55 @@ export default function PlotDetails() {
   const seedBatch = seedBatches.find(b => b.id === plot?.seedBatchId);
   const history = getPlotHistory(id || '');
   
-  const [activeTab, setActiveTab] = useState<'records' | 'logs' | 'planning' | 'qr'>('records');
+  const [activeTab, setActiveTab] = useState<'records' | 'logs'>('records');
   const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
   const [isViewMode, setIsViewMode] = useState(false);
-  const [recordForm, setRecordForm] = useState<Partial<TrialRecord>>({ date: new Date().toISOString().split('T')[0], time: new Date().toTimeString().substring(0, 5), stage: 'Vegetativo', plantHeight: 0, vigor: 3 });
+  const [recordForm, setRecordForm] = useState<Partial<TrialRecord>>({ date: new Date().toISOString().split('T')[0], time: new Date().toTimeString().substring(0, 5), stage: 'Vegetativo', plantHeight: 0 });
   
   const canEdit = currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || (currentUser?.role === 'technician' && plot?.responsibleIds?.includes(currentUser.id));
   
-  if (!plot) return <div className="p-10 text-center text-gray-500">Parcela no encontrada.</div>;
+  if (!plot) return <div className="p-10 text-center">Parcela no encontrada.</div>;
 
   const handleSaveRecord = (e: React.FormEvent) => {
       e.preventDefault();
-      const payload: any = { ...recordForm, plotId: plot.id, createdBy: editingRecordId ? recordForm.createdBy : currentUser?.id, createdByName: editingRecordId ? recordForm.createdByName : currentUser?.name };
+      const payload: any = { ...recordForm, plotId: plot.id, createdBy: currentUser?.id, createdByName: currentUser?.name };
       if (editingRecordId) updateTrialRecord({ ...payload, id: editingRecordId });
       else addTrialRecord({ ...payload, id: Date.now().toString() });
       setIsRecordModalOpen(false);
   };
 
-  const getStageStyle = (stage: string) => {
-    switch(stage) {
-      case 'Vegetativo': return 'bg-green-100 text-green-800 border-green-200';
-      case 'Floración': return 'bg-pink-100 text-pink-800 border-pink-200';
-      case 'Cosecha': return 'bg-gray-100 text-gray-800 border-gray-200';
-      default: return 'bg-blue-100 text-blue-800';
-    }
-  };
-
-  const getInputClass = () => "w-full border border-gray-300 bg-white text-gray-900 p-2 rounded focus:ring-2 focus:ring-hemp-500 outline-none";
-
   return (
     <div className="space-y-6 pb-20">
       <div className="flex justify-between items-center">
-        <Link to="/plots" className="flex items-center text-gray-500 hover:text-gray-800 font-medium transition"><ArrowLeft size={18} className="mr-1" /> Volver</Link>
+        <Link to="/plots" className="flex items-center text-gray-500 font-medium"><ArrowLeft size={18} className="mr-1" /> Volver</Link>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+      <div className="bg-white rounded-2xl shadow-sm border p-6">
           <div className="flex justify-between items-start mb-6">
               <div>
                   <h1 className="text-3xl font-black text-gray-900 mb-1">{plot.name}</h1>
-                  <p className="text-gray-500 flex items-center text-sm">
-                      <MapPin size={14} className="mr-1"/> {location?.name} • <span className="font-bold text-hemp-700 ml-1">{variety?.name}</span>
-                  </p>
+                  <p className="text-gray-500 flex items-center text-sm"><MapPin size={14} className="mr-1"/> {location?.name} • <span className="font-bold text-hemp-700 ml-1">{variety?.name}</span></p>
               </div>
-              <div className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest border ${plot.status === 'Activa' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-500 border-gray-200'}`}>
+              <div className={`px-3 py-1 rounded-full text-xs font-black uppercase border ${plot.status === 'Activa' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-500'}`}>
                   {plot.status}
               </div>
           </div>
-          
           <CycleGraph sowingDate={plot.sowingDate} cycleDays={variety?.cycleDays || 120} />
-          
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <KPI label="Días Ciclo" value={Math.floor((Date.now() - new Date(plot.sowingDate).getTime()) / 86400000)} icon={Clock} color="bg-blue-100" />
               <KPI label="Superficie" value={`${plot.surfaceArea} ${plot.surfaceUnit}`} icon={Map} color="bg-purple-100" />
               <KPI label="Densidad" value={plot.density} subtext="pl/m²" icon={Sprout} color="bg-emerald-100" />
-              <KPI label="Origen Semilla" value={seedBatch?.batchCode || 'GEN'} icon={Tag} color="bg-amber-100" />
+              <KPI label="Lote Semilla" value={seedBatch?.batchCode || 'GEN'} icon={Tag} color="bg-amber-100" />
           </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* TRAZABILIDAD SECCIÓN */}
+          {/* BLOQUE DE TRAZABILIDAD DE ORIGEN */}
           <div className="lg:col-span-1">
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden h-full">
+              <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
                   <div className="px-6 py-4 bg-gray-50 border-b flex items-center justify-between">
-                      <h3 className="text-sm font-black text-gray-800 uppercase tracking-widest flex items-center">
+                      <h3 className="text-sm font-black uppercase tracking-widest flex items-center">
                           <ShieldCheck size={18} className="mr-2 text-hemp-600"/> Trazabilidad Origen
                       </h3>
                       <Info size={16} className="text-gray-400"/>
@@ -141,82 +116,80 @@ export default function PlotDetails() {
                   <div className="p-6 space-y-4">
                       {seedBatch ? (
                           <div className="space-y-4">
-                              <div className="bg-hemp-50/50 p-4 rounded-xl border border-hemp-100">
-                                  <p className="text-[10px] font-black text-hemp-600 uppercase mb-1">Código Lote Master</p>
-                                  <p className="text-xl font-black text-hemp-900 font-mono">{seedBatch.batchCode}</p>
+                              <div className="bg-hemp-50/50 p-4 rounded-xl border border-hemp-100 text-center">
+                                  <p className="text-[10px] font-black text-hemp-600 uppercase mb-1">Cód. Identificación Master</p>
+                                  <p className="text-xl font-black text-hemp-900 font-mono tracking-tighter">{seedBatch.batchCode}</p>
                               </div>
-                              <div className="grid grid-cols-1 gap-3">
-                                  <div className="flex justify-between border-b border-gray-100 pb-2">
-                                      <span className="text-xs text-gray-500 font-bold uppercase">Categoría:</span>
-                                      <span className="text-sm font-black text-gray-800">{seedBatch.category || 'C1'}</span>
-                                  </div>
-                                  <div className="flex justify-between border-b border-gray-100 pb-2">
-                                      <span className="text-xs text-gray-500 font-bold uppercase">N° Serie Etiqueta:</span>
-                                      <span className="text-sm font-black text-gray-800">{seedBatch.labelSerialNumber || '-'}</span>
-                                  </div>
-                                  <div className="flex justify-between border-b border-gray-100 pb-2">
-                                      <span className="text-xs text-gray-500 font-bold uppercase">Fecha Análisis:</span>
-                                      <span className="text-sm font-black text-gray-800">{seedBatch.analysisDate || '-'}</span>
-                                  </div>
-                                  <div className="flex justify-between border-b border-gray-100 pb-2">
-                                      <span className="text-xs text-gray-500 font-bold uppercase">Certificado:</span>
-                                      <span className="text-[10px] font-black text-blue-600 uppercase truncate max-w-[120px]" title={seedBatch.certificationNumber}>{seedBatch.certificationNumber || 'N/A'}</span>
-                                  </div>
+                              <div className="space-y-3">
+                                  <div className="flex justify-between border-b pb-2 text-sm"><span className="text-gray-500">Categoría:</span><span className="font-bold text-gray-800">{seedBatch.category || 'C1'}</span></div>
+                                  <div className="flex justify-between border-b pb-2 text-sm"><span className="text-gray-500">N° Serie Etiqueta:</span><span className="font-bold text-gray-800">{seedBatch.labelSerialNumber || '-'}</span></div>
+                                  <div className="flex justify-between border-b pb-2 text-sm"><span className="text-gray-500">Certificación:</span><span className="font-bold text-blue-600 truncate max-w-[120px]">{seedBatch.certificationNumber || 'N/A'}</span></div>
+                                  <div className="flex justify-between border-b pb-2 text-sm"><span className="text-gray-500">Fecha Análisis:</span><span className="font-bold text-gray-800">{seedBatch.analysisDate || '-'}</span></div>
+                                  <div className="flex justify-between text-sm"><span className="text-gray-500">Calidad:</span><span className="font-bold text-gray-800">{seedBatch.germination}% PG / {seedBatch.purity}% Pur.</span></div>
                               </div>
                           </div>
                       ) : (
                           <div className="text-center py-8">
                               <AlertCircle size={32} className="mx-auto text-gray-300 mb-2"/>
-                              <p className="text-xs text-gray-400 font-bold uppercase">Sin lote vinculado</p>
-                              <p className="text-[10px] text-gray-400 mt-1">No se registró trazabilidad extendida para esta siembra.</p>
+                              <p className="text-xs text-gray-400 font-bold uppercase">Sin lote específico vinculado</p>
                           </div>
                       )}
                   </div>
               </div>
           </div>
 
-          {/* MONITORING SECCIÓN */}
+          {/* REGISTROS Y MONITOREO */}
           <div className="lg:col-span-2 space-y-6">
-              <div className="flex gap-2 border-b border-gray-200">
+              <div className="flex gap-2 border-b">
                   <button onClick={() => setActiveTab('records')} className={`px-4 py-2 font-bold text-sm border-b-2 ${activeTab === 'records' ? 'border-hemp-600 text-hemp-700' : 'border-transparent text-gray-500'}`}>Monitoreo Técnico</button>
-                  <button onClick={() => setActiveTab('logs')} className={`px-4 py-2 font-bold text-sm border-b-2 ${activeTab === 'logs' ? 'border-hemp-600 text-hemp-700' : 'border-transparent text-gray-500'}`}>Bitácora Visual</button>
               </div>
-
-              {activeTab === 'records' && (
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+              <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
                     <div className="px-6 py-4 border-b flex justify-between items-center bg-gray-50">
-                        <h2 className="font-bold text-gray-900 uppercase text-xs tracking-widest">Registros de Campo</h2>
-                        {canEdit && <button onClick={() => { setEditingRecordId(null); setIsViewMode(false); setIsRecordModalOpen(true); }} className="bg-hemp-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold shadow-sm hover:bg-hemp-700 transition">Nuevo Monitoreo</button>}
+                        <h2 className="font-bold text-gray-900 uppercase text-xs tracking-widest">Historial de Campo</h2>
+                        {canEdit && <button onClick={() => { setEditingRecordId(null); setIsViewMode(false); setIsRecordModalOpen(true); }} className="bg-hemp-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold shadow-sm">Nuevo Registro</button>}
                     </div>
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full text-sm">
-                            <thead className="bg-gray-50 text-gray-500 uppercase text-[10px] font-black">
-                                <tr>
-                                    <th className="px-6 py-3 text-left">Fecha</th>
-                                    <th className="px-6 py-3 text-left">Hora</th>
-                                    <th className="px-6 py-3 text-left">Etapa</th>
-                                    <th className="px-6 py-3 text-left">Altura</th>
-                                    <th className="px-6 py-3 text-right">Ficha</th>
+                    <table className="min-w-full text-sm text-left">
+                        <thead className="bg-gray-50 text-gray-500 uppercase text-[10px] font-black">
+                            <tr><th className="px-6 py-3">Fecha</th><th className="px-6 py-3">Hora</th><th className="px-6 py-3">Etapa</th><th className="px-6 py-3">Altura</th><th className="px-6 py-3 text-right">Detalle</th></tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                            {history.length === 0 ? ( <tr><td colSpan={5} className="p-8 text-center text-gray-400 italic">Sin registros técnicos.</td></tr> ) : history.map(r => (
+                                <tr key={r.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => { setEditingRecordId(r.id); setRecordForm(r); setIsViewMode(true); setIsRecordModalOpen(true); }}>
+                                    <td className="px-6 py-4 font-bold">{r.date}</td>
+                                    <td className="px-6 py-4 text-gray-400 font-mono text-xs">{r.time || '--:--'}</td>
+                                    <td className="px-6 py-4"><span className="px-2 py-0.5 rounded text-[10px] border font-black uppercase bg-green-50 text-green-700">{r.stage}</span></td>
+                                    <td className="px-6 py-4 font-bold">{r.plantHeight ? `${r.plantHeight} cm` : '-'}</td>
+                                    <td className="px-6 py-4 text-right"><Eye size={16} className="text-gray-300 ml-auto"/></td>
                                 </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                                {history.length === 0 ? ( <tr><td colSpan={5} className="p-8 text-center text-gray-400 italic">Sin registros técnicos.</td></tr> ) : history.map(r => (
-                                    <tr key={r.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => { setEditingRecordId(r.id); setRecordForm(r); setIsViewMode(true); setIsRecordModalOpen(true); }}>
-                                        <td className="px-6 py-4 font-bold text-gray-700">{r.date}</td>
-                                        <td className="px-6 py-4 text-gray-400 font-mono text-xs">{r.time || '--:--'}</td>
-                                        <td className="px-6 py-4"><span className={`px-2 py-0.5 rounded text-[10px] border font-black uppercase ${getStageStyle(r.stage)}`}>{r.stage}</span></td>
-                                        <td className="px-6 py-4 font-bold">{r.plantHeight ? `${r.plantHeight} cm` : '-'}</td>
-                                        <td className="px-6 py-4 text-right"><Eye size={16} className="text-gray-300 ml-auto"/></td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-              )}
+                            ))}
+                        </tbody>
+                    </table>
+              </div>
           </div>
       </div>
-      {/* ... Rest of existing modals ... */}
+
+      {isRecordModalOpen && (
+           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+               <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+                   <div className="px-6 py-4 border-b flex justify-between bg-gray-50">
+                       <h2 className="font-bold text-gray-800">{isViewMode ? 'Detalle de Inspección' : 'Nuevo Registro de Monitoreo'}</h2>
+                       <button onClick={() => setIsRecordModalOpen(false)}><X size={20}/></button>
+                   </div>
+                   <div className="p-6">
+                       <form onSubmit={handleSaveRecord} className="space-y-4">
+                           <div className="grid grid-cols-2 gap-4">
+                               <div><label className="text-xs font-bold uppercase mb-1 block">Fecha</label><input type="date" disabled={isViewMode} className="w-full border p-2 rounded" value={recordForm.date} onChange={e => setRecordForm({...recordForm, date: e.target.value})}/></div>
+                               <div><label className="text-xs font-bold uppercase mb-1 block">Hora</label><input type="time" disabled={isViewMode} className="w-full border p-2 rounded" value={recordForm.time} onChange={e => setRecordForm({...recordForm, time: e.target.value})}/></div>
+                               <div><label className="text-xs font-bold uppercase mb-1 block">Etapa</label>
+                               <select disabled={isViewMode} className="w-full border p-2 rounded" value={recordForm.stage} onChange={e => setRecordForm({...recordForm, stage: e.target.value as any})}><option value="Vegetativo">Vegetativo</option><option value="Floración">Floración</option><option value="Maduración">Maduración</option><option value="Cosecha">Cosecha</option></select></div>
+                               <div><label className="text-xs font-bold uppercase mb-1 block">Altura (cm)</label><input disabled={isViewMode} type="number" className="w-full border p-2 rounded" value={recordForm.plantHeight} onChange={e => setRecordForm({...recordForm, plantHeight: Number(e.target.value)})}/></div>
+                           </div>
+                           {!isViewMode && <div className="flex justify-end pt-4 border-t"><button type="submit" className="px-6 py-2 bg-hemp-600 text-white rounded-lg font-bold shadow-md">Guardar Registro</button></div>}
+                       </form>
+                   </div>
+               </div>
+           </div>
+       )}
     </div>
   );
 }
