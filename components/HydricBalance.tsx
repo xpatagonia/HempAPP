@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Droplets, CloudRain, Plus, X, Trash2, Info, Loader2, RefreshCw, AlertCircle, TrendingUp, Waves, Check, Sparkles } from 'lucide-react';
+import { Droplets, CloudRain, Plus, X, Trash2, Info, Loader2, RefreshCw, AlertCircle, TrendingUp, Waves, Check, Sparkles, Clock } from 'lucide-react';
 
 interface HydricBalanceProps {
     locationId: string;
@@ -19,6 +19,7 @@ export default function HydricBalance({ locationId, plotId, startDate }: HydricB
     const [autoRain, setAutoRain] = useState(0);
     const [formData, setFormData] = useState({ 
         date: new Date().toISOString().split('T')[0], 
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
         type: 'Lluvia' as 'Lluvia' | 'Riego', 
         amountMm: 0, 
         notes: '' 
@@ -93,7 +94,6 @@ export default function HydricBalance({ locationId, plotId, startDate }: HydricB
         e.preventDefault();
         if (isSaving) return;
         
-        // Validación: Solo prevenir nulos o indefinidos, 0 es válido
         if (formData.amountMm === null || formData.amountMm === undefined) {
             alert("Ingrese una cantidad válida");
             return;
@@ -113,6 +113,7 @@ export default function HydricBalance({ locationId, plotId, startDate }: HydricB
                 setIsModalOpen(false);
                 setFormData({ 
                     date: new Date().toISOString().split('T')[0], 
+                    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
                     type: 'Lluvia', 
                     amountMm: 0, 
                     notes: '' 
@@ -166,7 +167,10 @@ export default function HydricBalance({ locationId, plotId, startDate }: HydricB
                             <span className="text-lg font-bold text-slate-400 mb-1">mm</span>
                         </div>
                     </div>
-                    <button onClick={() => setIsModalOpen(true)} className="mt-6 w-full py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center transition-all border border-slate-200">
+                    <button onClick={() => {
+                        setFormData(prev => ({ ...prev, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) }));
+                        setIsModalOpen(true);
+                    }} className="mt-6 w-full py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center transition-all border border-slate-200">
                         <Plus size={14} className="mr-2" /> Cargar Evento
                     </button>
                 </div>
@@ -196,7 +200,7 @@ export default function HydricBalance({ locationId, plotId, startDate }: HydricB
                 <table className="w-full text-sm text-left">
                     <thead className="bg-slate-50 text-[10px] font-black uppercase tracking-widest text-slate-400 border-b">
                         <tr>
-                            <th className="px-6 py-4">Fecha</th>
+                            <th className="px-6 py-4">Fecha / Hora</th>
                             <th className="px-6 py-4">Tipo</th>
                             <th className="px-6 py-4">Cantidad</th>
                             <th className="px-6 py-4">Notas</th>
@@ -208,7 +212,9 @@ export default function HydricBalance({ locationId, plotId, startDate }: HydricB
                             <tr><td colSpan={5} className="px-6 py-10 text-center text-slate-400 italic">No hay registros manuales de agua.</td></tr>
                         ) : manualRecords.map(r => (
                             <tr key={r.id} className="hover:bg-slate-50 transition-colors">
-                                <td className="px-6 py-4 font-bold text-slate-800">{r.date}</td>
+                                <td className="px-6 py-4 font-bold text-slate-800">
+                                    {r.date} <span className="text-[10px] text-slate-400 font-medium ml-2">{r.time || '--:--'}</span>
+                                </td>
                                 <td className="px-6 py-4">
                                     <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase ${r.type === 'Lluvia' ? 'bg-blue-50 text-blue-600' : 'bg-green-50 text-green-600'}`}>
                                         {r.type}
@@ -227,7 +233,7 @@ export default function HydricBalance({ locationId, plotId, startDate }: HydricB
 
             {isModalOpen && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-                    <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95">
+                    <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95">
                         <div className="px-8 py-6 border-b flex justify-between items-center bg-slate-50">
                             <h2 className="text-sm font-black uppercase tracking-widest text-slate-800 flex items-center">
                                 <Waves size={18} className="mr-2 text-blue-600"/> Registrar Agua
@@ -243,23 +249,33 @@ export default function HydricBalance({ locationId, plotId, startDate }: HydricB
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
-                                <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Fecha</label><input type="date" required className="w-full border border-slate-200 p-2.5 rounded-xl text-sm font-bold bg-slate-50" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} /></div>
                                 <div>
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Cantidad (mm)</label>
-                                    <input type="number" step="0.1" required className="w-full border border-slate-200 p-2.5 rounded-xl text-sm font-bold bg-slate-50" value={formData.amountMm} onChange={e => setFormData({...formData, amountMm: Number(e.target.value)})} />
-                                    
-                                    {formData.type === 'Lluvia' && (
-                                        <div className="mt-2">
-                                            {satelliteSuggestion.status === 'loading' && <div className="flex items-center text-[9px] text-slate-400 animate-pulse font-bold uppercase"><Loader2 size={10} className="animate-spin mr-1"/> Consultando satélite...</div>}
-                                            {satelliteSuggestion.status === 'found' && (
-                                                <button type="button" onClick={applySuggestion} className="flex items-center text-[9px] text-blue-600 font-black uppercase bg-blue-50 px-2 py-1 rounded-lg border border-blue-100 hover:bg-blue-100 transition-all">
-                                                    <Sparkles size={10} className="mr-1"/> Satelital: {satelliteSuggestion.amount} mm <Check size={10} className="ml-1 text-green-500"/>
-                                                </button>
-                                            )}
-                                            {satelliteSuggestion.status === 'not_found' && <div className="text-[9px] text-slate-400 font-bold uppercase italic">Sin datos satelitales hoy</div>}
-                                        </div>
-                                    )}
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Fecha</label>
+                                    <input type="date" required className="w-full border border-slate-200 p-2.5 rounded-xl text-sm font-bold bg-slate-50" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} />
                                 </div>
+                                <div>
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Hora</label>
+                                    <div className="relative">
+                                        <Clock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/>
+                                        <input type="time" required className="w-full border border-slate-200 pl-9 pr-2.5 py-2.5 rounded-xl text-sm font-bold bg-slate-50" value={formData.time} onChange={e => setFormData({...formData, time: e.target.value})} />
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Cantidad (mm)</label>
+                                <input type="number" step="0.1" required className="w-full border border-slate-200 p-2.5 rounded-xl text-sm font-bold bg-slate-50" value={formData.amountMm} onChange={e => setFormData({...formData, amountMm: Number(e.target.value)})} />
+                                
+                                {formData.type === 'Lluvia' && (
+                                    <div className="mt-2">
+                                        {satelliteSuggestion.status === 'loading' && <div className="flex items-center text-[9px] text-slate-400 animate-pulse font-bold uppercase"><Loader2 size={10} className="animate-spin mr-1"/> Consultando satélite...</div>}
+                                        {satelliteSuggestion.status === 'found' && (
+                                            <button type="button" onClick={applySuggestion} className="flex items-center text-[9px] text-blue-600 font-black uppercase bg-blue-50 px-2 py-1 rounded-lg border border-blue-100 hover:bg-blue-100 transition-all">
+                                                <Sparkles size={10} className="mr-1"/> Satelital: {satelliteSuggestion.amount} mm <Check size={10} className="ml-1 text-green-500"/>
+                                            </button>
+                                        )}
+                                        {satelliteSuggestion.status === 'not_found' && <div className="text-[9px] text-slate-400 font-bold uppercase italic">Sin datos satelitales hoy</div>}
+                                    </div>
+                                )}
                             </div>
                             <div>
                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Notas / Observaciones</label>

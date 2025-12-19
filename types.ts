@@ -51,8 +51,9 @@ export interface Location {
 export interface HydricRecord {
   id: string;
   locationId: string;
-  plotId?: string; // Opcional, puede ser riego general de campo o específico de lote
+  plotId?: string; 
   date: string;
+  time?: string;
   type: 'Lluvia' | 'Riego';
   amountMm: number;
   notes?: string;
@@ -156,31 +157,24 @@ export interface TrialRecord {
   date: string;
   time?: string;
   stage: 'Vegetativo' | 'Floración' | 'Maduración' | 'Cosecha';
-  
-  // Clima Automático
   temperature?: number;
   humidity?: number;
-
-  // Datos solicitados para ensayos
   emergenceDate?: string;
-  replicate?: number; // Rep
-  plantsPerMeter?: number; // N° plantas.m
-  uniformity?: number; // Uniformidad parcela (%)
-  vigor?: number; // Vigor (1-10 o %)
-  floweringDate?: string; // Fecha Floración
-  plantHeight?: number; // Altura de planta (cm)
-  lodging?: number; // Vuelco (%)
-  birdDamage?: number; // Daño por aves (%)
-  diseases?: string; // Enfermedades
-  pests?: string; // Plagas
-  harvestDate?: string; // Fecha cosecha
-  
-  // Rendimiento y Biomasa
-  yield?: number; // Rendimiento (kg/ha)
-  stemWeight?: number; // Peso tallo (g)
-  leafWeight?: number; // Peso hoja (g)
+  replicate?: number; 
+  plantsPerMeter?: number; 
+  uniformity?: number; 
+  vigor?: number; 
+  floweringDate?: string; 
+  plantHeight?: number; 
+  lodging?: number; 
+  birdDamage?: number; 
+  diseases?: string; 
+  pests?: string; 
+  harvestDate?: string; 
+  yield?: number; 
+  stemWeight?: number; 
+  leafWeight?: number; 
   freshWeight?: number;
-  
   applicationType?: string;
   applicationProduct?: string;
   applicationDose?: string;
