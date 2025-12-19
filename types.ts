@@ -1,5 +1,4 @@
 
-
 export type UsageType = 'Fibra' | 'Grano' | 'Dual' | 'Medicinal';
 
 export type UserRole = 'super_admin' | 'admin' | 'technician' | 'client' | 'viewer';
@@ -146,14 +145,27 @@ export interface TrialRecord {
   date: string;
   time?: string;
   stage: 'Vegetativo' | 'Floración' | 'Maduración' | 'Cosecha';
-  plantHeight?: number;
-  vigor?: number;
-  uniformity?: number;
-  pests?: string;
-  diseases?: string;
-  yield?: number;
+  
+  // Datos solicitados para ensayos
+  emergenceDate?: string;
+  replicate?: number; // Rep
+  plantsPerMeter?: number; // N° plantas.m
+  uniformity?: number; // Uniformidad parcela (%)
+  vigor?: number; // Vigor (1-10 o %)
+  floweringDate?: string; // Fecha Floración
+  plantHeight?: number; // Altura de planta (cm)
+  lodging?: number; // Vuelco (%)
+  birdDamage?: number; // Daño por aves (%)
+  diseases?: string; // Enfermedades
+  pests?: string; // Plagas
+  harvestDate?: string; // Fecha cosecha
+  
+  // Rendimiento y Biomasa
+  yield?: number; // Rendimiento (kg/ha)
+  stemWeight?: number; // Peso tallo (g)
+  leafWeight?: number; // Peso hoja (g)
   freshWeight?: number;
-  leafWeight?: number;
+  
   applicationType?: string;
   applicationProduct?: string;
   applicationDose?: string;
