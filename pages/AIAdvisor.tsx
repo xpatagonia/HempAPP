@@ -9,7 +9,7 @@ interface Message { id: string; role: 'user' | 'model' | 'error'; text: string; 
 export default function AIAdvisor() {
     const { plots, varieties, appName } = useAppContext();
     const [messages, setMessages] = useState<Message[]>([
-        { id: '1', role: 'model', text: `${appName} AI Intelligence Terminal v5.4.\nSistemas en red: ${plots.length} unidades productivas, ${varieties.length} genéticas.\nNeural processing unit: READY.\n¿Qué datos agronómicos deseas procesar hoy?` }
+        { id: '1', role: 'model', text: `${appName} AI Intelligence Terminal v5.4.1.\nSistemas en red: ${plots.length} unidades productivas, ${varieties.length} genéticas.\nNeural processing unit: READY.\n¿Qué datos agronómicos deseas procesar hoy?` }
     ]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -43,7 +43,12 @@ export default function AIAdvisor() {
         setIsLoading(true);
 
         try {
-            // Inicialización tardía para asegurar acceso a process.env en Vercel
+            // Verificar si la llave está disponible
+            if (!process.env.API_KEY) {
+                throw new Error("La variable de entorno API_KEY no está configurada en el servidor de despliegue (Vercel).");
+            }
+
+            // Inicialización tardía exacta según requerimientos del SDK
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             
             let response;
@@ -87,11 +92,11 @@ export default function AIAdvisor() {
             }
             
         } catch (err: any) {
-            console.error("AI Error:", err);
+            console.error("AI Protocol Failure:", err);
             setMessages(prev => [...prev, { 
                 id: (Date.now() + 1).toString(), 
                 role: 'error', 
-                text: `ERROR DE PROTOCOLO: Fallo de llave de API o conectividad.\nDetalle: ${err.message}` 
+                text: `ERROR DE CONEXIÓN IA: No se pudo conectar con el motor neural.\nDetalle: ${err.message}` 
             }]);
         } finally {
             setIsLoading(false);
@@ -106,7 +111,7 @@ export default function AIAdvisor() {
                     <div>
                         <h1 className="text-4xl font-black text-slate-800 dark:text-white tracking-tighter uppercase italic">{appName} <span className="text-hemp-600">Core</span></h1>
                         <p className="text-[11px] text-slate-400 font-bold uppercase tracking-[0.4em] flex items-center mt-1">
-                            <Terminal size={12} className="mr-2"/> AI Advisor Interface v5.4.0
+                            <Terminal size={12} className="mr-2"/> AI Advisor Interface v5.4.1
                         </p>
                     </div>
                 </div>

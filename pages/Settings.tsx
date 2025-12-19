@@ -185,8 +185,8 @@ export default function Settings() {
                       <Shield className="text-hemp-500" size={24}/>
                       <h3 className="font-black text-white uppercase text-sm tracking-widest">Estructura SQL Obligatoria</h3>
                   </div>
-                  <p className="text-xs text-slate-400 mb-4 leading-relaxed">Ejecute este script en el editor SQL de Supabase para asegurar la persistencia hídrica:</p>
-                  <pre className="bg-black/50 p-6 rounded-2xl text-[10px] text-blue-400 overflow-x-auto border border-white/5 font-mono h-80">
+                  <p className="text-xs text-slate-400 mb-4 leading-relaxed">Ejecute este script en el editor SQL de Supabase para asegurar la persistencia integral:</p>
+                  <pre className="bg-black/50 p-6 rounded-2xl text-[10px] text-blue-400 overflow-x-auto border border-white/5 font-mono h-80 custom-scrollbar">
 {`CREATE TABLE IF NOT EXISTS hydric_records (
   id TEXT PRIMARY KEY,
   location_id TEXT,
@@ -194,7 +194,7 @@ export default function Settings() {
   date DATE,
   time TEXT,
   type TEXT,
-  amount_mm NUMERIC, -- Nombre de columna exacto para mapeo
+  amount_mm NUMERIC, -- Importante: snake_case exacto
   notes TEXT,
   created_by TEXT
 );
@@ -212,8 +212,41 @@ CREATE TABLE IF NOT EXISTS trial_records (
   vigor NUMERIC,
   created_by TEXT,
   created_by_name TEXT
+);
+
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  name TEXT,
+  email TEXT UNIQUE,
+  password TEXT,
+  role TEXT,
+  job_title TEXT,
+  client_id TEXT
+);
+
+CREATE TABLE IF NOT EXISTS plots (
+  id TEXT PRIMARY KEY,
+  location_id TEXT,
+  project_id TEXT,
+  variety_id TEXT,
+  seed_batch_id TEXT,
+  name TEXT,
+  type TEXT,
+  status TEXT,
+  sowing_date DATE,
+  surface_area NUMERIC,
+  surface_unit TEXT,
+  density NUMERIC,
+  responsible_ids TEXT[]
 );`}
                   </pre>
+                  <button onClick={() => {
+                      const sql = `CREATE TABLE IF NOT EXISTS hydric_records (id TEXT PRIMARY KEY, location_id TEXT, plot_id TEXT, date DATE, time TEXT, type TEXT, amount_mm NUMERIC, notes TEXT, created_by TEXT);`;
+                      navigator.clipboard.writeText(sql);
+                      alert("SQL de registros hídricos copiado al portapapeles.");
+                  }} className="mt-4 text-[10px] font-black text-hemp-400 uppercase tracking-widest flex items-center hover:text-white transition">
+                      <Copy size={12} className="mr-1"/> Copiar SQL Básico
+                  </button>
               </div>
           </div>
       )}

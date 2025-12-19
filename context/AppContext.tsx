@@ -114,11 +114,13 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// Motor de conversión robusto
+// Motor de conversión mejorado
 const toSnakeCase = (obj: any) => {
+    if (!obj || typeof obj !== 'object') return obj;
     const newObj: any = {};
     for (const key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
+            // Aseguramos que amountMm sea amount_mm, locationId sea location_id, etc.
             const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
             newObj[snakeKey] = obj[key];
         }
@@ -127,6 +129,7 @@ const toSnakeCase = (obj: any) => {
 };
 
 const toCamelCase = (obj: any) => {
+    if (!obj || typeof obj !== 'object') return obj;
     const newObj: any = {};
     for (const key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
@@ -254,16 +257,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           return true;
       } else {
           try {
-              const { error } = await supabase.from(table).insert([dbItem]);
+              const { error } = await supabase.from(table).insert([dbItem]).select();
               if (error) {
-                  console.error(`Supabase Error (${table}):`, error.message);
+                  console.error(`Supabase Error (${table}):`, error);
                   throw error;
               }
               setter((prev: any[]) => [...prev, item]);
               return true;
           } catch (e: any) {
-              console.warn(`Falling back to local for ${table}:`, e.message || e);
-              setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
+              console.warn(`Fallback to local for ${table} due to error:`, e.message);
+              setter((prev: any[]) => { 
+                  const n = [...prev, item]; 
+                  saveToLocal(localKey, n); 
+                  return n; 
+              });
               return true;
           }
       }
@@ -293,7 +300,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const updateUser = (u: User) => genericUpdate('users', u, setUsersList, 'users');
   const deleteUser = (id: string) => genericDelete('users', id, setUsersList, 'users');
   const addProject = (p: Project) => genericAdd('projects', p, setProjects, 'projects');
-  const updateProject = (p: Project) => genericUpdate('projects', p, setProjects, 'projects');
+  const updateProject = (project: Project) => genericUpdate('projects', project, setProjects, 'projects');
   const deleteProject = (id: string) => genericDelete('projects', id, setProjects, 'projects');
   const addLocation = (l: Location) => genericAdd('locations', l, setLocations, 'locations');
   const updateLocation = (l: Location) => genericUpdate('locations', l, setLocations, 'locations');
