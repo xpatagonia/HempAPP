@@ -48,6 +48,17 @@ export interface Location {
   responsibleIds?: string[];
 }
 
+export interface HydricRecord {
+  id: string;
+  locationId: string;
+  plotId?: string; // Opcional, puede ser riego general de campo o específico de lote
+  date: string;
+  type: 'Lluvia' | 'Riego';
+  amountMm: number;
+  notes?: string;
+  createdBy?: string;
+}
+
 export interface StoragePoint {
   id: string;
   name: string; 

@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
-import { Variety, Location, Plot, FieldLog, TrialRecord, User, Project, Task, SeedBatch, SeedMovement, Supplier, Client, Resource, StoragePoint } from '../types';
+import { Variety, Location, Plot, FieldLog, TrialRecord, User, Project, Task, SeedBatch, SeedMovement, Supplier, Client, Resource, StoragePoint, HydricRecord } from '../types';
 import { supabase, checkConnection } from '../supabaseClient';
 
 export interface AppNotification {
@@ -26,6 +26,7 @@ interface AppContextType {
   clients: Client[]; 
   resources: Resource[]; 
   storagePoints: StoragePoint[]; 
+  hydricRecords: HydricRecord[];
   notifications: AppNotification[]; 
   
   currentUser: User | null;
@@ -75,6 +76,9 @@ interface AppContextType {
   updateLog: (l: FieldLog) => void;
   deleteLog: (id: string) => void;
   
+  addHydricRecord: (h: HydricRecord) => Promise<boolean>;
+  deleteHydricRecord: (id: string) => void;
+
   addUser: (u: User) => Promise<boolean>;
   updateUser: (u: User) => void;
   deleteUser: (id: string) => void;
@@ -137,6 +141,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [seedMovements, setSeedMovements] = useState<SeedMovement[]>([]);
   const [resources, setResources] = useState<Resource[]>([]); 
   const [storagePoints, setStoragePoints] = useState<StoragePoint[]>([]);
+  const [hydricRecords, setHydricRecords] = useState<HydricRecord[]>([]);
   
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -193,6 +198,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               setSeedBatches(getFromLocal('seedBatches')); setSeedMovements(getFromLocal('seedMovements'));
               setResources(getFromLocal('resources')); setStoragePoints(getFromLocal('storagePoints'));
               setTrialRecords(getFromLocal('trialRecords')); setLogs(getFromLocal('logs')); setTasks(getFromLocal('tasks'));
+              setHydricRecords(getFromLocal('hydricRecords'));
           } else {
               setIsEmergencyMode(false);
               const fetchData = async (table: string, setter: any) => {
@@ -206,7 +212,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                   fetchData('plots', setPlots), fetchData('seed_batches', setSeedBatches),
                   fetchData('seed_movements', setSeedMovements), fetchData('resources', setResources),
                   fetchData('storage_points', setStoragePoints), fetchData('trial_records', setTrialRecords),
-                  fetchData('field_logs', setLogs), fetchData('tasks', setTasks)
+                  fetchData('field_logs', setLogs), fetchData('tasks', setTasks),
+                  fetchData('hydric_records', setHydricRecords)
               ]);
               setLastSyncTime(new Date());
           }
@@ -294,7 +301,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const addLocalSeedBatch = (s: SeedBatch) => setSeedBatches(prev => [...prev, s]);
   const updateSeedBatch = (s: SeedBatch) => genericUpdate('seed_batches', s, setSeedBatches, 'seedBatches');
   const deleteSeedBatch = async (id: string) => { await genericDelete('seed_batches', id, setSeedBatches, 'seedBatches'); };
-  
+  const addHydricRecord = (h: HydricRecord) => genericAdd('hydric_records', h, setHydricRecords, 'hydricRecords');
+  const deleteHydricRecord = (id: string) => genericDelete('hydric_records', id, setHydricRecords, 'hydricRecords');
+
   const addSeedMovement = async (m: SeedMovement) => { return await genericAdd('seed_movements', m, setSeedMovements, 'seedMovements'); };
   const updateSeedMovement = (m: SeedMovement) => genericUpdate('seed_movements', m, setSeedMovements, 'seedMovements');
   
@@ -327,7 +336,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   return (
     <AppContext.Provider value={{
-      projects, varieties, locations, plots, trialRecords, logs, tasks, seedBatches, seedMovements, suppliers, clients, resources, storagePoints, notifications,
+      projects, varieties, locations, plots, trialRecords, logs, tasks, seedBatches, seedMovements, suppliers, clients, resources, storagePoints, hydricRecords, notifications,
       currentUser, usersList, login, logout, refreshData, lastSyncTime,
       addProject, updateProject, deleteProject,
       addVariety, updateVariety, deleteVariety,
@@ -343,6 +352,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       addClient, updateClient, deleteClient,
       addResource, updateResource, deleteResource,
       addStoragePoint, updateStoragePoint, deleteStoragePoint,
+      addHydricRecord, deleteHydricRecord,
       getPlotHistory, getLatestRecord,
       loading, isRefreshing, isEmergencyMode, dbNeedsMigration,
       theme, toggleTheme
