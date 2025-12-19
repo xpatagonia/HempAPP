@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Save, Database, Copy, RefreshCw, Lock, Settings as SettingsIcon, ShieldCheck, PlayCircle, CheckCircle2, Layout, Image as ImageIcon, Trash2 } from 'lucide-react';
+import { Save, Database, Copy, RefreshCw, Lock, Settings as SettingsIcon, ShieldCheck, PlayCircle, CheckCircle2, Layout, Image as ImageIcon, Trash2, RotateCcw } from 'lucide-react';
 
 export default function Settings() {
   const { currentUser, appName, appLogo, updateBranding } = useAppContext();
@@ -11,7 +11,6 @@ export default function Settings() {
   const [key, setKey] = useState('');
   const [status, setStatus] = useState<'idle' | 'checking' | 'success' | 'error'>('idle');
 
-  // Local state for branding edits
   const [editAppName, setEditAppName] = useState(appName);
   const [editAppLogo, setEditAppLogo] = useState(appLogo);
 
@@ -20,7 +19,11 @@ export default function Settings() {
       const storedKey = localStorage.getItem('hemp_sb_key');
       if (storedUrl) setUrl(storedUrl);
       if (storedKey) setKey(storedKey);
-  }, []);
+      
+      // Sincronizar estados locales con el contexto al cargar
+      setEditAppName(appName);
+      setEditAppLogo(appLogo);
+  }, [appName, appLogo]);
 
   if (currentUser?.role !== 'super_admin') {
       return (
@@ -34,7 +37,15 @@ export default function Settings() {
 
   const handleSaveBranding = () => {
       updateBranding(editAppName, editAppLogo);
-      alert("✅ Identidad corporativa actualizada correctamente.");
+      alert("✅ Identidad corporativa actualizada correctamente. Los cambios se verán reflejados en todo el sistema.");
+  };
+
+  const handleResetBranding = () => {
+      if (window.confirm("¿Desea restaurar la marca predeterminada (HempC)?")) {
+          updateBranding('HempC', null);
+          setEditAppName('HempC');
+          setEditAppLogo(null);
+      }
   };
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -57,8 +68,6 @@ export default function Settings() {
       }, 800);
   };
 
-  const SQL_REPAIR_ALL = `-- SCRIPT DE REPARACIÓN INTEGRAL v3.5 --`;
-
   return (
     <div className="max-w-4xl mx-auto pb-10">
       <div className="flex items-center mb-6">
@@ -78,9 +87,14 @@ export default function Settings() {
       {activeTab === 'branding' && (
           <div className="space-y-8 animate-in fade-in slide-in-from-top-4">
               <div className="bg-white dark:bg-slate-900 p-8 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-sm">
-                  <h3 className="text-xl font-black text-slate-800 dark:text-white mb-6 flex items-center">
-                    <Layout size={20} className="mr-2 text-hemp-600" /> Marca Blanca (Branding)
-                  </h3>
+                  <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-xl font-black text-slate-800 dark:text-white flex items-center">
+                        <Layout size={20} className="mr-2 text-hemp-600" /> Marca Blanca (Branding)
+                    </h3>
+                    <button onClick={handleResetBranding} className="text-[10px] font-black uppercase text-gray-400 hover:text-red-500 flex items-center transition">
+                        <RotateCcw size={14} className="mr-1"/> Restaurar Original
+                    </button>
+                  </div>
                   
                   <div className="space-y-6">
                       <div>
@@ -97,12 +111,12 @@ export default function Settings() {
                       <div>
                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Logotipo de la Empresa</label>
                           <div className="flex flex-col md:flex-row items-center gap-6 p-6 bg-slate-50 dark:bg-slate-950 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800">
-                              <div className="w-24 h-24 bg-white dark:bg-slate-900 rounded-2xl flex items-center justify-center border border-slate-100 dark:border-slate-800 shadow-inner overflow-hidden">
-                                  {editAppLogo ? <img src={editAppLogo} className="w-full h-full object-contain" /> : <ImageIcon size={32} className="text-slate-300" />}
+                              <div className="w-32 h-32 bg-white dark:bg-slate-900 rounded-2xl flex items-center justify-center border border-slate-100 dark:border-slate-800 shadow-inner overflow-hidden">
+                                  {editAppLogo ? <img src={editAppLogo} className="w-full h-full object-contain p-2" /> : <ImageIcon size={32} className="text-slate-300" />}
                               </div>
                               <div className="flex-1 space-y-3">
                                   <p className="text-xs text-slate-500 font-medium leading-relaxed">
-                                      Formatos recomendados: SVG o PNG con fondo transparente. Tamaño ideal: 512x512px.
+                                      Recomendación: SVG o PNG (Fondo transparente). El logo reemplazará la hoja de cáñamo en Login y Sidebar.
                                   </p>
                                   <div className="flex gap-2">
                                       <label className="bg-hemp-600 hover:bg-hemp-700 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition cursor-pointer flex items-center">
@@ -137,11 +151,21 @@ export default function Settings() {
 
       {activeTab === 'database' && (
           <div className="space-y-6 animate-in fade-in">
-              {/* Contenido SQL previo omitido para brevedad, mantenido igual */}
               <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/20 p-6 rounded-2xl">
                   <h3 className="font-black text-blue-900 dark:text-blue-400 uppercase text-sm mb-4">Reparación Estructural</h3>
-                  <p className="text-xs text-blue-800 dark:text-blue-300 mb-4">Usa estos scripts para asegurar que las tablas de agua y clima existen.</p>
-                  <pre className="bg-slate-900 p-4 rounded-xl text-[10px] text-blue-300 overflow-x-auto h-40">-- SQL Scripts v3.5 --</pre>
+                  <p className="text-xs text-blue-800 dark:text-blue-300 mb-4">Usa estos scripts para asegurar que las tablas de agua y clima existen en tu instancia de Supabase.</p>
+                  <pre className="bg-slate-900 p-4 rounded-xl text-[10px] text-blue-300 overflow-x-auto h-40">
+{`CREATE TABLE IF NOT EXISTS hydric_records (
+  id TEXT PRIMARY KEY,
+  location_id TEXT,
+  plot_id TEXT,
+  date DATE,
+  type TEXT,
+  amount_mm NUMERIC,
+  notes TEXT,
+  created_by TEXT
+);`}
+                  </pre>
               </div>
           </div>
       )}

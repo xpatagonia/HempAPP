@@ -24,13 +24,11 @@ export default function HydricBalance({ locationId, plotId, startDate }: HydricB
         notes: '' 
     });
 
-    // Estado para la sugerencia satelital por día
     const [satelliteSuggestion, setSatelliteSuggestion] = useState<{ amount: number, status: 'idle' | 'loading' | 'found' | 'not_found' }>({ 
         amount: 0, 
         status: 'idle' 
     });
 
-    // Filtrar registros manuales para esta ubicación/lote
     const manualRecords = useMemo(() => {
         return hydricRecords.filter(h => {
             const matchLoc = h.locationId === locationId;
@@ -41,7 +39,6 @@ export default function HydricBalance({ locationId, plotId, startDate }: HydricB
 
     const totalManual = useMemo(() => manualRecords.reduce((sum, r) => sum + r.amountMm, 0), [manualRecords]);
 
-    // FETCH ACUMULADO TOTAL (Dashboard Principal de Agua)
     useEffect(() => {
         const fetchAutoRain = async () => {
             if (!location?.coordinates || !startDate) return;
@@ -63,9 +60,8 @@ export default function HydricBalance({ locationId, plotId, startDate }: HydricB
             }
         };
         fetchAutoRain();
-    }, [location, startDate, isModalOpen]); // Se refresca también al cerrar el modal por si se agregó data
+    }, [location, startDate, isModalOpen]);
 
-    // FETCH SUGERENCIA SATELITAL PARA UNA FECHA ESPECIFICA (Modal)
     useEffect(() => {
         const getDailySuggestion = async () => {
             if (!isModalOpen || formData.type !== 'Lluvia' || !location?.coordinates || !formData.date) {
@@ -89,7 +85,7 @@ export default function HydricBalance({ locationId, plotId, startDate }: HydricB
             }
         };
 
-        const timer = setTimeout(getDailySuggestion, 500); // Debounce
+        const timer = setTimeout(getDailySuggestion, 500); 
         return () => clearTimeout(timer);
     }, [formData.date, formData.type, isModalOpen, location]);
 
@@ -97,6 +93,12 @@ export default function HydricBalance({ locationId, plotId, startDate }: HydricB
         e.preventDefault();
         if (isSaving) return;
         
+        // Validación: Solo prevenir nulos o indefinidos, 0 es válido
+        if (formData.amountMm === null || formData.amountMm === undefined) {
+            alert("Ingrese una cantidad válida");
+            return;
+        }
+
         setIsSaving(true);
         try {
             const success = await addHydricRecord({
@@ -116,10 +118,11 @@ export default function HydricBalance({ locationId, plotId, startDate }: HydricB
                     notes: '' 
                 });
             } else {
-                alert("Error al guardar el registro. Intente nuevamente.");
+                alert("Error técnico al intentar guardar. El sistema intentará guardar localmente.");
             }
         } catch (err) {
-            console.error(err);
+            console.error("Error Saving:", err);
+            alert("No se pudo completar el registro.");
         } finally {
             setIsSaving(false);
         }
@@ -132,7 +135,6 @@ export default function HydricBalance({ locationId, plotId, startDate }: HydricB
     return (
         <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* AUTO ACCUMULATED (SMART) */}
                 <div className="bg-gradient-to-br from-blue-600 to-blue-800 p-6 rounded-3xl text-white shadow-lg relative overflow-hidden group">
                     <div className="relative z-10">
                         <div className="flex justify-between items-center mb-4">
@@ -152,7 +154,6 @@ export default function HydricBalance({ locationId, plotId, startDate }: HydricB
                     <Waves className="absolute -right-4 -bottom-4 text-white opacity-5 w-32 h-32" />
                 </div>
 
-                {/* MANUAL LOGGED */}
                 <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between">
                     <div>
                         <div className="flex justify-between items-center mb-4">
@@ -170,7 +171,6 @@ export default function HydricBalance({ locationId, plotId, startDate }: HydricB
                     </button>
                 </div>
 
-                {/* HYDRIC HEALTH / INFO */}
                 <div className="bg-slate-50 p-6 rounded-3xl border border-slate-200 flex flex-col justify-between">
                     <div>
                         <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Eficiencia Variedad</h4>
@@ -192,7 +192,6 @@ export default function HydricBalance({ locationId, plotId, startDate }: HydricB
                 </div>
             </div>
 
-            {/* LIST OF EVENTS */}
             <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden overflow-x-auto">
                 <table className="w-full text-sm text-left">
                     <thead className="bg-slate-50 text-[10px] font-black uppercase tracking-widest text-slate-400 border-b">
@@ -226,7 +225,6 @@ export default function HydricBalance({ locationId, plotId, startDate }: HydricB
                 </table>
             </div>
 
-            {/* MODAL PARA CARGAR AGUA */}
             {isModalOpen && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
                     <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95">
@@ -248,9 +246,8 @@ export default function HydricBalance({ locationId, plotId, startDate }: HydricB
                                 <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Fecha</label><input type="date" required className="w-full border border-slate-200 p-2.5 rounded-xl text-sm font-bold bg-slate-50" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} /></div>
                                 <div>
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Cantidad (mm)</label>
-                                    <input type="number" step="0.1" required className="w-full border border-slate-200 p-2.5 rounded-xl text-sm font-bold bg-slate-50" value={formData.amountMm || ''} onChange={e => setFormData({...formData, amountMm: Number(e.target.value)})} />
+                                    <input type="number" step="0.1" required className="w-full border border-slate-200 p-2.5 rounded-xl text-sm font-bold bg-slate-50" value={formData.amountMm} onChange={e => setFormData({...formData, amountMm: Number(e.target.value)})} />
                                     
-                                    {/* SUGERENCIA INTELIGENTE */}
                                     {formData.type === 'Lluvia' && (
                                         <div className="mt-2">
                                             {satelliteSuggestion.status === 'loading' && <div className="flex items-center text-[9px] text-slate-400 animate-pulse font-bold uppercase"><Loader2 size={10} className="animate-spin mr-1"/> Consultando satélite...</div>}

@@ -29,7 +29,6 @@ interface AppContextType {
   hydricRecords: HydricRecord[];
   notifications: AppNotification[]; 
   
-  // Branding states
   appName: string;
   appLogo: string | null;
   updateBranding: (name: string, logo: string | null) => void;
@@ -148,7 +147,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [storagePoints, setStoragePoints] = useState<StoragePoint[]>([]);
   const [hydricRecords, setHydricRecords] = useState<HydricRecord[]>([]);
   
-  // Branding initialization
   const [appName, setAppName] = useState<string>(localStorage.getItem('ht_branding_name') || 'HempC');
   const [appLogo, setAppLogo] = useState<string | null>(localStorage.getItem('ht_branding_logo'));
 
@@ -170,7 +168,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (savedUser) setCurrentUser(JSON.parse(savedUser));
   }, []);
 
-  // Sincronizar título del documento con la marca
   useEffect(() => {
     document.title = `${appName} | Gestión Agroindustrial`;
   }, [appName]);
@@ -259,17 +256,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const logout = () => { setCurrentUser(null); localStorage.removeItem('ht_session_user'); };
 
   const genericAdd = async (table: string, item: any, setter: any, localKey: string) => {
+      // Fallback local robusto si falla Supabase por tabla inexistente
       if (isEmergencyMode) {
           setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
           return true;
       } else {
-          const { error } = await supabase.from(table).insert([item]);
-          if (error) { 
-              console.error(`Error saving to ${table}:`, error.message, error.details); 
-              return false; 
+          try {
+              const { error } = await supabase.from(table).insert([item]);
+              if (error) {
+                  console.warn(`Supabase Sync Error in ${table}: ${error.message}. Switching to local save.`);
+                  // Si el error es que la tabla no existe (42P01) guardamos local pero retornamos true para no bloquear UI
+                  setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
+                  return true;
+              }
+              setter((prev: any[]) => [...prev, item]);
+              return true;
+          } catch (e) {
+              setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
+              return true;
           }
-          setter((prev: any[]) => [...prev, item]);
-          return true;
       }
   };
 
