@@ -69,24 +69,29 @@ export default function PlotDetails() {
   const [isViewMode, setIsViewMode] = useState(false);
   const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
   
-  // Record Form con todos los campos técnicos solicitados
-  const [recordForm, setRecordForm] = useState<Partial<TrialRecord>>({ 
-      date: new Date().toISOString().split('T')[0], 
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }), 
-      stage: 'Vegetativo', 
-      plantHeight: 0,
-      replicate: plot?.replicate || 1,
-      plantsPerMeter: 0,
-      uniformity: 100,
-      vigor: 100,
-      lodging: 0,
-      birdDamage: 0,
-      yield: 0,
-      stemWeight: 0,
-      leafWeight: 0
+  // Default values function for resetting form
+  const getDefaultRecordValues = () => ({ 
+    date: new Date().toISOString().split('T')[0], 
+    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }), 
+    stage: 'Vegetativo' as any, 
+    plantHeight: 0,
+    replicate: plot?.replicate || 1,
+    plantsPerMeter: 0,
+    uniformity: 100,
+    vigor: 100,
+    lodging: 0,
+    birdDamage: 0,
+    yield: 0,
+    stemWeight: 0,
+    leafWeight: 0,
+    emergenceDate: '',
+    floweringDate: '',
+    harvestDate: '',
+    diseases: '',
+    pests: ''
   });
-  
-  // Log Form
+
+  const [recordForm, setRecordForm] = useState<Partial<TrialRecord>>(getDefaultRecordValues());
   const [logForm, setLogForm] = useState<Partial<FieldLog>>({ note: '', date: new Date().toISOString().split('T')[0], photoUrl: '' });
   const [isUploading, setIsUploading] = useState(false);
 
@@ -95,11 +100,27 @@ export default function PlotDetails() {
   
   if (!plot) return <div className="p-10 text-center">Parcela no encontrada.</div>;
 
+  const handleOpenNewRecord = () => {
+      setEditingRecordId(null);
+      setIsViewMode(false);
+      setRecordForm(getDefaultRecordValues());
+      setIsRecordModalOpen(true);
+  };
+
   const handleSaveRecord = (e: React.FormEvent) => {
       e.preventDefault();
-      const payload: any = { ...recordForm, plotId: plot.id, createdBy: currentUser?.id, createdByName: currentUser?.name };
-      if (editingRecordId) updateTrialRecord({ ...payload, id: editingRecordId });
-      else addTrialRecord({ ...payload, id: Date.now().toString() });
+      const payload: any = { 
+          ...recordForm, 
+          plotId: plot.id, 
+          createdBy: currentUser?.id, 
+          createdByName: currentUser?.name 
+      };
+      
+      if (editingRecordId) {
+          updateTrialRecord({ ...payload, id: editingRecordId });
+      } else {
+          addTrialRecord({ ...payload, id: Date.now().toString() });
+      }
       setIsRecordModalOpen(false);
   };
 
@@ -126,7 +147,7 @@ export default function PlotDetails() {
   };
 
   const handleDeleteRecord = () => {
-      if (editingRecordId && window.confirm("¿Estás seguro de eliminar este registro técnico? Esta acción no se puede deshacer.")) {
+      if (editingRecordId && window.confirm("¿Estás seguro de eliminar este registro técnico?")) {
           deleteTrialRecord(editingRecordId);
           setIsRecordModalOpen(false);
       }
@@ -171,14 +192,12 @@ export default function PlotDetails() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* TRAZABILIDAD DE ORIGEN */}
           <div className="lg:col-span-1">
               <div className="bg-white rounded-3xl shadow-sm border overflow-hidden h-fit sticky top-6">
                   <div className="px-6 py-5 bg-gray-50 border-b flex items-center justify-between">
                       <h3 className="text-xs font-black uppercase tracking-[0.2em] flex items-center">
                           <ShieldCheck size={18} className="mr-2 text-hemp-600"/> Trazabilidad Fiscal
                       </h3>
-                      <button className="text-gray-300 hover:text-gray-500 transition"><Info size={16}/></button>
                   </div>
                   <div className="p-8 space-y-6">
                       {seedBatch ? (
@@ -203,7 +222,6 @@ export default function PlotDetails() {
               </div>
           </div>
 
-          {/* REGISTROS Y BITÁCORA */}
           <div className="lg:col-span-2 space-y-6">
               <div className="flex bg-white p-1.5 rounded-2xl border shadow-sm w-fit">
                   <button onClick={() => setActiveTab('records')} className={`px-6 py-2.5 font-black text-[10px] uppercase tracking-widest rounded-xl transition-all ${activeTab === 'records' ? 'bg-hemp-600 text-white shadow-lg' : 'text-gray-400 hover:text-gray-600'}`}>Monitoreo Técnico</button>
@@ -216,7 +234,7 @@ export default function PlotDetails() {
                         <h2 className="font-black text-gray-900 uppercase text-[10px] tracking-[0.2em] flex items-center">
                             <Activity size={16} className="mr-2 text-hemp-600"/> Historial de Monitoreo
                         </h2>
-                        {canEdit && <button onClick={() => { setEditingRecordId(null); setIsViewMode(false); setIsRecordModalOpen(true); }} className="bg-hemp-600 text-white px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest shadow-lg hover:bg-hemp-700 transition">Nuevo Registro</button>}
+                        {canEdit && <button onClick={handleOpenNewRecord} className="bg-hemp-600 text-white px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest shadow-lg hover:bg-hemp-700 transition">Nuevo Registro</button>}
                     </div>
                     <div className="overflow-x-auto">
                         <table className="min-w-full text-sm text-left">
@@ -247,22 +265,19 @@ export default function PlotDetails() {
                 <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
                     <div className="bg-white rounded-3xl p-8 border shadow-sm">
                         <div className="flex justify-between items-center mb-8">
-                            <div>
-                                <h2 className="font-black text-gray-900 uppercase text-[10px] tracking-[0.2em] flex items-center">
-                                    <MessageSquare size={16} className="mr-2 text-blue-500"/> Notas de Campo
-                                </h2>
-                            </div>
+                            <h2 className="font-black text-gray-900 uppercase text-[10px] tracking-[0.2em] flex items-center">
+                                <MessageSquare size={16} className="mr-2 text-blue-500"/> Notas de Campo
+                            </h2>
                             <button onClick={() => setIsLogModalOpen(true)} className="bg-blue-600 text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest shadow-lg hover:bg-blue-700 transition flex items-center">
                                 <Camera size={16} className="mr-2"/> Agregar Nota
                             </button>
                         </div>
-                        
                         <div className="relative space-y-8 before:absolute before:inset-0 before:ml-5 before:-translate-x-px before:h-full before:w-0.5 before:bg-gradient-to-b before:from-blue-200 before:via-blue-100 before:to-transparent">
                             {plotLogs.length === 0 ? (
                                 <div className="text-center py-12 text-gray-400 italic bg-gray-50 rounded-2xl border border-dashed">Aún no hay entradas en la bitácora.</div>
                             ) : plotLogs.map(log => (
                                 <div key={log.id} className="relative flex items-start group">
-                                    <div className="absolute left-0 w-10 h-10 bg-white border-4 border-blue-50 rounded-full flex items-center justify-center z-10 shadow-sm group-hover:scale-110 transition-transform">
+                                    <div className="absolute left-0 w-10 h-10 bg-white border-4 border-blue-50 rounded-full flex items-center justify-center z-10 shadow-sm">
                                         <div className="w-2.5 h-2.5 rounded-full bg-blue-600"></div>
                                     </div>
                                     <div className="ml-14 flex-1 bg-gray-50/50 rounded-2xl p-6 border border-gray-100 hover:border-blue-200 hover:bg-white transition-all shadow-sm">
@@ -291,9 +306,7 @@ export default function PlotDetails() {
       {/* PHOTO PREVIEW MODAL */}
       {previewPhoto && (
           <div className="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center p-4 animate-in fade-in" onClick={() => setPreviewPhoto(null)}>
-              <button className="absolute top-6 right-6 text-white bg-white/10 p-2 rounded-full hover:bg-white/20 transition">
-                  <X size={32}/>
-              </button>
+              <button className="absolute top-6 right-6 text-white bg-white/10 p-2 rounded-full hover:bg-white/20 transition"><X size={32}/></button>
               <img src={previewPhoto} className="max-w-full max-h-full object-contain shadow-2xl rounded-lg animate-in zoom-in-95" />
           </div>
       )}
@@ -308,21 +321,18 @@ export default function PlotDetails() {
                    </div>
                    <div className="p-8">
                        <form onSubmit={handleSaveRecord} className="space-y-10">
-                           
-                           {/* SECCIÓN 1: GENERAL & TIEMPO */}
                            <section>
                                <h3 className="text-xs font-black text-hemp-600 uppercase tracking-widest mb-4 flex items-center border-b pb-2">
                                    <Clock size={14} className="mr-2"/> Datos Generales y Temporalidad
                                </h3>
                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                   <div><label className={labelClass}>Fecha de Registro</label><input type="date" disabled={isViewMode} className={inputStyle} value={recordForm.date} onChange={e => setRecordForm({...recordForm, date: e.target.value})}/></div>
-                                   <div><label className={labelClass}>Hora de Registro</label><input type="time" disabled={isViewMode} className={inputStyle} value={recordForm.time} onChange={e => setRecordForm({...recordForm, time: e.target.value})}/></div>
+                                   <div><label className={labelClass}>Fecha de Registro</label><input type="date" required disabled={isViewMode} className={inputStyle} value={recordForm.date} onChange={e => setRecordForm({...recordForm, date: e.target.value})}/></div>
+                                   <div><label className={labelClass}>Hora de Registro</label><input type="time" required disabled={isViewMode} className={inputStyle} value={recordForm.time} onChange={e => setRecordForm({...recordForm, time: e.target.value})}/></div>
                                    <div><label className={labelClass}>Etapa Fenológica</label>
                                    <select disabled={isViewMode} className={inputStyle} value={recordForm.stage} onChange={e => setRecordForm({...recordForm, stage: e.target.value as any})}><option value="Vegetativo">Vegetativo</option><option value="Floración">Floración</option><option value="Maduración">Maduración</option><option value="Cosecha">Cosecha</option></select></div>
                                </div>
                            </section>
 
-                           {/* SECCIÓN 2: FENOLOGÍA Y POBLACIÓN */}
                            <section>
                                <h3 className="text-xs font-black text-blue-600 uppercase tracking-widest mb-4 flex items-center border-b pb-2">
                                    <Sprout size={14} className="mr-2"/> Fenología y Recuento Poblacional
@@ -331,16 +341,13 @@ export default function PlotDetails() {
                                    <div><label className={labelClass}>Fecha Emergencia</label><input type="date" disabled={isViewMode} className={inputStyle} value={recordForm.emergenceDate} onChange={e => setRecordForm({...recordForm, emergenceDate: e.target.value})}/></div>
                                    <div><label className={labelClass}>Fecha Floración</label><input type="date" disabled={isViewMode} className={inputStyle} value={recordForm.floweringDate} onChange={e => setRecordForm({...recordForm, floweringDate: e.target.value})}/></div>
                                    <div><label className={labelClass}>Réplica (Rep)</label><input type="number" disabled={isViewMode} className={inputStyle} value={recordForm.replicate} onChange={e => setRecordForm({...recordForm, replicate: Number(e.target.value)})}/></div>
-                                   
                                    <div><label className={labelClass}>N° plantas/metro lineal</label><input type="number" step="0.1" disabled={isViewMode} className={inputStyle} value={recordForm.plantsPerMeter} onChange={e => setRecordForm({...recordForm, plantsPerMeter: Number(e.target.value)})}/></div>
                                    <div><label className={labelClass}>Uniformidad Parcela (%)</label><input type="number" max="100" disabled={isViewMode} className={inputStyle} value={recordForm.uniformity} onChange={e => setRecordForm({...recordForm, uniformity: Number(e.target.value)})}/></div>
                                    <div><label className={labelClass}>Vigor General (%)</label><input type="number" max="100" disabled={isViewMode} className={inputStyle} value={recordForm.vigor} onChange={e => setRecordForm({...recordForm, vigor: Number(e.target.value)})}/></div>
-                                   
                                    <div><label className={labelClass}>Altura de Planta (cm)</label><input type="number" step="0.1" disabled={isViewMode} className={inputStyle} value={recordForm.plantHeight} onChange={e => setRecordForm({...recordForm, plantHeight: Number(e.target.value)})}/></div>
                                </div>
                            </section>
 
-                           {/* SECCIÓN 3: DAÑOS Y SANIDAD */}
                            <section>
                                <h3 className="text-xs font-black text-red-600 uppercase tracking-widest mb-4 flex items-center border-b pb-2">
                                    <Wind size={14} className="mr-2"/> Sanidad y Daños Adversos
@@ -357,7 +364,6 @@ export default function PlotDetails() {
                                </div>
                            </section>
 
-                           {/* SECCIÓN 4: COSECHA Y RENDIMIENTO */}
                            <section className="bg-amber-50/50 p-6 rounded-[24px] border border-amber-100">
                                <h3 className="text-xs font-black text-amber-700 uppercase tracking-widest mb-4 flex items-center border-b border-amber-200 pb-2">
                                    <Scale size={14} className="mr-2"/> Cosecha y Biomasa Final
@@ -400,7 +406,6 @@ export default function PlotDetails() {
                             <label className="text-[10px] font-black uppercase mb-2 block text-gray-400 tracking-widest">Observación de Campo</label>
                             <textarea required className="w-full border border-gray-200 p-4 rounded-2xl bg-gray-50 font-medium outline-none focus:ring-2 focus:ring-blue-500 min-h-[120px] shadow-inner" placeholder="Describa plagas, anomalías o progresos..." value={logForm.note} onChange={e => setLogForm({...logForm, note: e.target.value})}></textarea>
                         </div>
-                        
                         <div>
                             <label className="text-[10px] font-black uppercase mb-2 block text-gray-400 tracking-widest">Registro Fotográfico</label>
                             <div className="flex items-center gap-4">
@@ -415,13 +420,12 @@ export default function PlotDetails() {
                                 </label>
                                 {logForm.photoUrl && (
                                     <div className="w-24 h-24 rounded-2xl overflow-hidden border-2 border-white shadow-lg relative">
-                                        <img src={logForm.photoUrl} className="w-full h-full object-cover"/>
+                                        <img src={logForm.photoUrl} className="w-full h-full object-cover" alt="preview"/>
                                         <button type="button" onClick={() => setLogForm({...logForm, photoUrl: ''})} className="absolute top-1 right-1 bg-red-500 text-white p-0.5 rounded-full shadow-lg"><X size={12}/></button>
                                     </div>
                                 )}
                             </div>
                         </div>
-
                         <button type="submit" disabled={isUploading} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:bg-blue-700 transition disabled:opacity-50">Registrar en Bitácora</button>
                     </form>
                 </div>

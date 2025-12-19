@@ -8,46 +8,28 @@ import { User, Client, Supplier, Variety, Location, Project, Plot } from '../typ
 export default function Settings() {
   const { currentUser, globalApiKey, refreshGlobalConfig, addClient, addSupplier, addVariety, addUser, addLocation, addProject, addPlot, addSeedBatch, addSeedMovement } = useAppContext();
   
-  // Tab State
-  const [activeTab, setActiveTab] = useState<'general' | 'connections' | 'demo'>('connections');
-
-  // Supabase State
+  const [activeTab, setActiveTab] = useState<'general' | 'connections' | 'demo' | 'database'>('connections');
   const [url, setUrl] = useState('');
   const [key, setKey] = useState('');
-  
-  // AI State
   const [aiKey, setAiKey] = useState('');
-  
   const [status, setStatus] = useState<'idle' | 'checking' | 'success' | 'error'>('idle');
   const [demoLoading, setDemoLoading] = useState(false);
 
   useEffect(() => {
-      // Cargar configuración existente local y global
       const storedUrl = localStorage.getItem('hemp_sb_url');
       const storedKey = localStorage.getItem('hemp_sb_key');
-      
       if (storedUrl) setUrl(storedUrl);
       if (storedKey) setKey(storedKey);
-      
-      // La API Key de IA preferimos mostrar la global si existe, sino la local
-      if (globalApiKey) {
-          setAiKey(globalApiKey);
-      } else {
-          setAiKey(localStorage.getItem('hemp_ai_key') || '');
-      }
+      if (globalApiKey) setAiKey(globalApiKey);
+      else setAiKey(localStorage.getItem('hemp_ai_key') || '');
   }, [globalApiKey]);
 
-  // PERMISSION GUARD: Solo Super Admin puede ver esto
   if (currentUser?.role !== 'super_admin') {
       return (
           <div className="flex flex-col items-center justify-center h-[50vh] text-center space-y-4">
-              <div className="bg-red-100 p-4 rounded-full">
-                  <Lock size={48} className="text-red-500" />
-              </div>
+              <div className="bg-red-100 p-4 rounded-full"><Lock size={48} className="text-red-500" /></div>
               <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Acceso Restringido</h2>
-              <p className="text-gray-500 max-w-md">
-                  La configuración del sistema es una zona sensible reservada únicamente para el Super Administrador.
-              </p>
+              <p className="text-gray-500 max-w-md">La configuración del sistema es una zona sensible reservada únicamente para el Super Administrador.</p>
           </div>
       );
   }
@@ -56,165 +38,37 @@ export default function Settings() {
       setStatus('checking');
       localStorage.setItem('hemp_sb_url', url.trim());
       localStorage.setItem('hemp_sb_key', key.trim());
-
       try {
           if (aiKey.trim()) {
-              const { error } = await supabase.from('system_settings').upsert({
-                  id: 'global',
-                  gemini_api_key: aiKey.trim()
-              });
-              if (error) localStorage.setItem('hemp_ai_key', aiKey.trim());
-              else localStorage.removeItem('hemp_ai_key');
+              await supabase.from('system_settings').upsert({ id: 'global', gemini_api_key: aiKey.trim() });
+              localStorage.removeItem('hemp_ai_key');
           }
-      } catch (e) { console.error(e); }
-
+      } catch (e) { localStorage.setItem('hemp_ai_key', aiKey.trim()); }
       await refreshGlobalConfig();
       setStatus('success');
-      setTimeout(() => {
-          setStatus('idle');
-          if (url !== localStorage.getItem('hemp_sb_url') || key !== localStorage.getItem('hemp_sb_key')) {
-             window.location.reload();
-          }
-      }, 1000);
+      setTimeout(() => { setStatus('idle'); window.location.reload(); }, 1000);
   };
 
-  const copySQL = () => {
-      navigator.clipboard.writeText(SQL_SCRIPT);
-      alert("Script copiado. Ahora ve a Supabase -> SQL Editor y ejecútalo para reparar la base de datos.");
-  };
+  const SQL_TRIAL_RECORDS = `-- SCRIPT DE ACTUALIZACIÓN: MONITOREO TÉCNICO DE ENSAYOS
+-- Ejecuta esto en Supabase -> SQL Editor para habilitar los nuevos campos
 
-  const clearLocalCache = () => {
-      if(confirm("¿Borrar caché local?")) {
-          Object.keys(localStorage).forEach(key => {
-              if (key.startsWith('ht_local_')) localStorage.removeItem(key);
-          });
-          window.location.reload();
-      }
-  };
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "emergenceDate" TEXT;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "replicate" NUMERIC;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "plantsPerMeter" NUMERIC;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "uniformity" NUMERIC;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "floweringDate" TEXT;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "lodging" NUMERIC;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "birdDamage" NUMERIC;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "diseases" TEXT;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "pests" TEXT;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "harvestDate" TEXT;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "stemWeight" NUMERIC;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "leafWeight" NUMERIC;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "vigor" NUMERIC;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "freshWeight" NUMERIC;
 
-  const handleInjectDemoData = async () => {
-      if (!confirm("¿Generar datos de demostración? Esto creará una cadena completa: Proveedor -> Variedad -> Cliente -> Locación -> Lote Semilla -> Parcela.")) return;
-      
-      setDemoLoading(true);
-      try {
-          // 1. Crear Proveedores (Suppliers)
-          const sup1Id = Date.now().toString();
-          
-          await addSupplier({
-              id: sup1Id, name: 'Hemp-it France', legalName: 'Hemp-it Cooperative', country: 'Francia', 
-              province: 'Angers', city: 'Beaufort-en-Anjou', commercialContact: 'Pierre Dubois', notes: 'Líder en genética europea.'
-          });
-
-          // 2. Crear Variedad vinculada
-          const varId = (Date.now()+1).toString();
-          await addVariety({ 
-              id: varId, 
-              supplierId: sup1Id, 
-              name: 'FEDORA 17', 
-              usage: 'Dual', 
-              cycleDays: 130, 
-              expectedThc: 0.12 
-          });
-
-          // 3. Crear Cliente (Productor)
-          const cliId = (Date.now()+10).toString();
-          await addClient({
-              id: cliId, name: 'Finca El Hornero', type: 'Productor Mediano (5-15 ha)', 
-              contactName: 'Carlos Gómez', contactPhone: '2323-555555', isNetworkMember: true, cuit: '20-11111111-1'
-          });
-
-          // 4. Crear Locación del Cliente
-          const locId = (Date.now()+20).toString();
-          await addLocation({
-              id: locId, name: 'Campo Experimental Hornero', province: 'Buenos Aires', city: 'Mercedes',
-              address: 'Ruta 5 km 100', soilType: 'Franco', climate: 'Templado', clientId: cliId, ownerName: 'Finca El Hornero',
-              ownerType: 'Productor Mediano (5-15 ha)', capacityHa: 15, coordinates: { lat: -34.650, lng: -59.430 }
-          });
-
-          // 5. Crear Proyecto General
-          const projId = (Date.now()+30).toString();
-          await addProject({
-              id: projId, name: 'Campaña Fibra 2024', description: 'Producción extensiva fibra textil',
-              startDate: new Date().toISOString().split('T')[0], status: 'En Curso', responsibleIds: []
-          });
-
-          // 6. Crear Lote de Semillas (Stock Central)
-          const batchId = (Date.now()+40).toString();
-          await addSeedBatch({
-              id: batchId, varietyId: varId, supplierName: 'Hemp-it France', batchCode: 'LOT-DEMO-2024',
-              originCountry: 'Francia', initialQuantity: 1000, remainingQuantity: 950, purchaseDate: new Date().toISOString().split('T')[0],
-              isActive: true, pricePerKg: 15
-          });
-
-          // 7. ASIGNAR SEMILLA AL CLIENTE (Movimiento Logístico)
-          await addSeedMovement({
-              id: (Date.now()+50).toString(),
-              batchId: batchId,
-              clientId: cliId, // Link to Client
-              targetLocationId: locId, // Link to Location
-              quantity: 50,
-              date: new Date().toISOString().split('T')[0],
-              transportGuideNumber: 'GUIA-DEMO-001',
-              status: 'Recibido',
-              transportType: 'Propio', driverName: 'Carlos Gómez', vehiclePlate: 'AA123BB'
-          });
-
-          // 8. Crear Parcela en la Locación del Cliente
-          await addPlot({
-              id: (Date.now()+60).toString(),
-              name: 'LOTE-DEMO-1',
-              type: 'Producción',
-              projectId: projId,
-              locationId: locId,
-              varietyId: varId,
-              seedBatchId: batchId,
-              block: 'A',
-              replicate: 1,
-              ownerName: 'Finca El Hornero',
-              responsibleIds: [],
-              sowingDate: new Date().toISOString().split('T')[0],
-              surfaceArea: 5,
-              surfaceUnit: 'ha',
-              rowDistance: 17.5,
-              density: 250,
-              status: 'Activa'
-          });
-
-          alert("¡Datos de demostración cargados exitosamente! Se creó la cadena completa: Proveedor > Variedad > Cliente > Locación > Semilla > Parcela.");
-      } catch (e) {
-          console.error(e);
-          alert("Hubo un error cargando algunos datos.");
-      } finally {
-          setDemoLoading(false);
-      }
-  };
-
-  const SQL_SCRIPT = `
--- =========================================================
--- REPARACIÓN LOGÍSTICA + STOCK (V2.9.0)
--- Ejecuta esto en Supabase -> SQL Editor
--- =========================================================
-
--- 1. Forzar recarga del esquema
-NOTIFY pgrst, 'reload schema';
-
--- 2. Reparar tabla seed_movements (LOGÍSTICA)
-ALTER TABLE public.seed_movements ADD COLUMN IF NOT EXISTS "estimatedDistanceKm" NUMERIC;
-ALTER TABLE public.seed_movements ADD COLUMN IF NOT EXISTS "routeGoogleLink" TEXT;
-ALTER TABLE public.seed_movements ADD COLUMN IF NOT EXISTS "originStorageId" TEXT;
-ALTER TABLE public.seed_movements ADD COLUMN IF NOT EXISTS "dispatchTime" TEXT;
-ALTER TABLE public.seed_movements ADD COLUMN IF NOT EXISTS "transportGuideNumber" TEXT;
-
--- 3. Reparar tabla seed_batches (PRECIO PARA VALORIZACIÓN)
-ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "pricePerKg" NUMERIC DEFAULT 0;
-ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS "storagePointId" TEXT;
-
--- 4. Asegurar columna relatedUserId en clients
-ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS "relatedUserId" TEXT;
-
--- 5. Mensaje de éxito
-SELECT 'Base de datos reparada (V2.9.0). Logística y Valorización habilitadas.' as status;
-  `;
+-- Recargar esquema
+NOTIFY pgrst, 'reload schema';`;
 
   return (
     <div className="max-w-4xl mx-auto pb-10">
@@ -222,104 +76,67 @@ SELECT 'Base de datos reparada (V2.9.0). Logística y Valorización habilitadas.
         <SettingsIcon className="text-hemp-600 mr-3" size={32} />
         <div>
             <h1 className="text-2xl font-bold text-gray-800">Configuración Central</h1>
-            <p className="text-gray-500">Parámetros del sistema y conexiones externas.</p>
+            <p className="text-gray-500">Parámetros del sistema y base de datos.</p>
         </div>
       </div>
 
       <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg mb-6 w-fit">
           <button onClick={() => setActiveTab('connections')} className={`px-4 py-2 rounded-md text-sm font-medium transition ${activeTab === 'connections' ? 'bg-white shadow text-gray-800' : 'text-gray-500 hover:text-gray-700'}`}>Conexiones</button>
-          <button onClick={() => setActiveTab('general')} className={`px-4 py-2 rounded-md text-sm font-medium transition ${activeTab === 'general' ? 'bg-white shadow text-gray-800' : 'text-gray-500 hover:text-gray-700'}`}>Negocio</button>
+          <button onClick={() => setActiveTab('database')} className={`px-4 py-2 rounded-md text-sm font-medium transition ${activeTab === 'database' ? 'bg-white shadow text-gray-800' : 'text-gray-500 hover:text-gray-700'}`}>Base de Datos</button>
           <button onClick={() => setActiveTab('demo')} className={`px-4 py-2 rounded-md text-sm font-medium transition ${activeTab === 'demo' ? 'bg-white shadow text-gray-800' : 'text-gray-500 hover:text-gray-700'}`}>Datos Demo</button>
       </div>
 
-      {activeTab === 'general' && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center space-y-4">
-              <div className="bg-blue-50 p-4 rounded-full inline-block"><Sliders size={32} className="text-blue-500" /></div>
-              <h3 className="text-xl font-bold text-gray-800">Parametrización del Negocio</h3>
-              <p className="text-gray-500 max-w-lg mx-auto">Configuración I+D y Productiva (v2.7).</p>
-          </div>
-      )}
-
-      {activeTab === 'demo' && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 animate-in fade-in">
-              <div className="text-center space-y-4">
-                  <div className="bg-purple-50 p-4 rounded-full inline-block"><PlayCircle size={32} className="text-purple-600" /></div>
-                  <h3 className="text-xl font-bold text-gray-800">Generador de Datos de Prueba</h3>
-                  <p className="text-gray-500 max-w-md mx-auto">
-                      Si el sistema está vacío, utiliza esta herramienta para poblar la base de datos con un flujo completo de negocio.
-                  </p>
-                  <ul className="text-sm text-left max-w-xs mx-auto list-disc text-gray-600 space-y-1 bg-gray-50 p-4 rounded">
-                      <li>Proveedores y Variedades</li>
-                      <li>Cliente Productor y su Locación</li>
-                      <li>Envío de Semilla (Logística)</li>
-                      <li>Parcela productiva asignada</li>
-                  </ul>
-                  <button 
-                    onClick={handleInjectDemoData}
-                    disabled={demoLoading}
-                    className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition flex items-center justify-center mx-auto disabled:opacity-50"
-                  >
-                      {demoLoading ? <RefreshCw className="animate-spin mr-2"/> : <Sparkles className="mr-2"/>}
-                      {demoLoading ? 'Generando...' : 'Inyectar Cadena Completa'}
-                  </button>
+      {activeTab === 'database' && (
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+              <div className="bg-amber-50 border border-amber-200 p-6 rounded-2xl">
+                  <div className="flex items-start">
+                      <AlertTriangle className="text-amber-600 mr-4 flex-shrink-0" size={24}/>
+                      <div>
+                          <h3 className="font-black text-amber-900 uppercase text-sm mb-1">Reparación de Tablas de Ensayo</h3>
+                          <p className="text-xs text-amber-800 leading-relaxed">
+                              Si la sección de <strong>Monitoreo Técnico</strong> no guarda los registros, es porque faltan columnas en tu base de datos de Supabase. Copia el siguiente código y ejecútalo en el <strong>SQL Editor</strong> de tu panel de Supabase.
+                          </p>
+                      </div>
+                  </div>
+                  <div className="mt-6 bg-black rounded-xl p-4 overflow-hidden relative group">
+                      <pre className="text-[10px] font-mono text-green-400 overflow-x-auto h-48 custom-scrollbar">{SQL_TRIAL_RECORDS}</pre>
+                      <button 
+                        onClick={() => { navigator.clipboard.writeText(SQL_TRIAL_RECORDS); alert("Script copiado!"); }}
+                        className="absolute top-4 right-4 bg-hemp-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-hemp-700 transition shadow-lg"
+                      >
+                          <Copy size={12} className="inline mr-1"/> Copiar Script
+                      </button>
+                  </div>
               </div>
           </div>
       )}
 
       {activeTab === 'connections' && (
           <div className="space-y-8 animate-in fade-in slide-in-from-left-4">
-            {/* Warning Banner */}
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-start">
-                <ShieldCheck className="text-green-600 mr-3 flex-shrink-0 mt-0.5" />
-                <div className="text-sm text-green-800">
-                    <strong>Estado de Conexión:</strong> Si acabas de crear un nuevo proyecto en Supabase, asegúrate de ingresar la URL y KEY abajo.
-                </div>
-            </div>
-
-            {/* CACHE TOOL */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex justify-between items-center">
-                <div>
-                    <h2 className="text-sm font-bold text-gray-800 flex items-center"><Database size={16} className="mr-2 text-gray-400" /> Caché Local</h2>
-                    <p className="text-xs text-gray-500 mt-1">Si ves datos antiguos o errores.</p>
-                </div>
-                <button onClick={clearLocalCache} className="text-red-600 border border-red-200 hover:bg-red-50 px-4 py-2 rounded-lg text-xs font-bold flex items-center transition">
-                    <Trash2 size={14} className="mr-2"/> Limpiar
-                </button>
-            </div>
-
-            {/* Supabase Connection */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 opacity-75 grayscale hover:grayscale-0 transition">
-                <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center"><Database size={20} className="mr-2 text-gray-400" /> Base de Datos</h2>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center"><Database size={20} className="mr-2 text-gray-400" /> Base de Datos (Cloud)</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div><label className="block text-sm font-medium text-gray-700 mb-1">Project URL</label><input type="text" className="w-full border border-gray-300 rounded p-2 text-sm bg-gray-50" value={url} onChange={e => setUrl(e.target.value)} disabled /></div>
-                    <div><label className="block text-sm font-medium text-gray-700 mb-1">Anon API Key</label><input type="password" className="w-full border border-gray-300 rounded p-2 text-sm bg-gray-50" value={key} onChange={e => setKey(e.target.value)} disabled /></div>
+                    <div><label className="block text-sm font-medium text-gray-700 mb-1">Project URL</label><input type="text" className="w-full border border-gray-300 rounded p-2 text-sm" value={url} onChange={e => setUrl(e.target.value)} /></div>
+                    <div><label className="block text-sm font-medium text-gray-700 mb-1">Anon API Key</label><input type="password" className="w-full border border-gray-300 rounded p-2 text-sm" value={key} onChange={e => setKey(e.target.value)} /></div>
                 </div>
             </div>
-
-            {/* AI Connection */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
                 <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center"><Sparkles size={20} className="mr-2 text-purple-500" /> Inteligencia Artificial</h2>
                 <input type="password" placeholder="AIzaSy..." className="w-full border border-gray-300 rounded p-2 text-sm" value={aiKey} onChange={e => setAiKey(e.target.value)} />
             </div>
-
             <button onClick={handleSave} disabled={status === 'checking'} className={`w-full py-4 rounded-xl font-bold text-white flex items-center justify-center transition-all shadow-lg ${status === 'checking' ? 'bg-gray-400' : status === 'success' ? 'bg-green-600' : 'bg-hemp-600 hover:bg-hemp-700'}`}>
                 {status === 'checking' ? <><RefreshCw className="animate-spin mr-2"/> Guardando...</> : status === 'success' ? <><Save className="mr-2"/> ¡Guardado!</> : <><Save className="mr-2"/> Guardar Configuración</>}
             </button>
-            
-            {/* SQL Box */}
-            <div className="bg-slate-900 rounded-xl border border-slate-700 p-6 mt-8 shadow-xl">
-                <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-sm font-bold text-white flex items-center"><AlertTriangle className="mr-2 text-yellow-400"/> Script de Reparación (V2.9.0)</h2>
-                    <button onClick={copySQL} className="text-xs bg-hemp-600 text-white border border-hemp-500 px-4 py-2 rounded shadow-sm font-bold hover:bg-hemp-700 transition">Copiar SQL</button>
-                </div>
-                <div className="bg-black p-4 rounded-lg text-xs font-mono text-green-400 overflow-x-auto h-48 custom-scrollbar border border-slate-700">
-                    <pre>{SQL_SCRIPT}</pre>
-                </div>
-                <p className="text-xs text-slate-400 mt-3 flex items-center">
-                    <strong className="text-white mr-1">Instrucciones:</strong> Copia este código, ve a tu panel de Supabase &rarr; SQL Editor &rarr; Pegar &rarr; Run.
-                </p>
-            </div>
-        </div>
+          </div>
+      )}
+
+      {activeTab === 'demo' && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 animate-in fade-in text-center">
+              <PlayCircle size={48} className="text-purple-600 mx-auto mb-4" />
+              <h3 className="text-xl font-bold text-gray-800">Generador de Datos Demo</h3>
+              <p className="text-gray-500 mb-6">Puebla el sistema con ejemplos de ensayos industriales.</p>
+              <button onClick={() => alert("Función habilitada en v3.0")} className="bg-purple-600 text-white px-8 py-3 rounded-xl font-black">Próximamente</button>
+          </div>
       )}
     </div>
   );
