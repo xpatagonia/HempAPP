@@ -72,6 +72,8 @@ interface AppContextType {
   deleteTrialRecord: (id: string) => void;
   
   addLog: (l: FieldLog) => void;
+  updateLog: (l: FieldLog) => void;
+  deleteLog: (id: string) => void;
   
   addUser: (u: User) => Promise<boolean>;
   updateUser: (u: User) => void;
@@ -287,7 +289,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const deleteVariety = (id: string) => { genericDelete('varieties', id, setVarieties, 'varieties'); };
   const addSupplier = async (s: Supplier) => { await genericAdd('suppliers', s, setSuppliers, 'suppliers'); return s.id; };
   const updateSupplier = (s: Supplier) => genericUpdate('suppliers', s, setSuppliers, 'suppliers');
-  const deleteSupplier = (id: string) => genericDelete('suppliers', id, setSuppliers, 'suppliers');
+  const deleteSupplier = (id: string) => { genericDelete('suppliers', id, setSuppliers, 'suppliers'); };
   const addClient = async (c: Client) => { await genericAdd('clients', c, setClients, 'clients'); };
   const updateClient = (c: Client) => genericUpdate('clients', c, setClients, 'clients');
   const deleteClient = (id: string) => genericDelete('clients', id, setClients, 'clients');
@@ -321,7 +323,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const addTrialRecord = (r: TrialRecord) => { genericAdd('trial_records', r, setTrialRecords, 'trialRecords'); };
   const updateTrialRecord = (r: TrialRecord) => { genericUpdate('trial_records', r, setTrialRecords, 'trialRecords'); };
   const deleteTrialRecord = (id: string) => { genericDelete('trial_records', id, setTrialRecords, 'trialRecords'); };
+  
   const addLog = (l: FieldLog) => { genericAdd('field_logs', l, setLogs, 'logs'); };
+  const updateLog = (l: FieldLog) => { genericUpdate('field_logs', l, setLogs, 'logs'); };
+  const deleteLog = (id: string) => { genericDelete('field_logs', id, setLogs, 'logs'); };
+
   const addTask = (t: Task) => { genericAdd('tasks', t, setTasks, 'tasks'); };
   const updateTask = (t: Task) => { genericUpdate('tasks', t, setTasks, 'tasks'); };
   const deleteTask = (id: string) => { genericDelete('tasks', id, setTasks, 'tasks'); };
@@ -338,7 +344,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       addLocation, updateLocation, deleteLocation,
       addPlot, updatePlot, deletePlot,
       addTrialRecord, updateTrialRecord, deleteTrialRecord,
-      addLog,
+      addLog, updateLog, deleteLog,
       addUser, updateUser, deleteUser,
       addTask, updateTask, deleteTask,
       addSeedBatch, addLocalSeedBatch, updateSeedBatch, deleteSeedBatch,
