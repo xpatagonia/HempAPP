@@ -81,7 +81,7 @@ export default function Settings() {
       <div className="flex space-x-1 bg-gray-100 dark:bg-slate-900 p-1 rounded-lg mb-8 w-fit">
           <button onClick={() => setActiveTab('branding')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'branding' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Identidad</button>
           <button onClick={() => setActiveTab('connections')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'connections' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Conectividad</button>
-          <button onClick={() => setActiveTab('database')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'database' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>SQL</button>
+          <button onClick={() => setActiveTab('database')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'database' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>SQL Cloud</button>
       </div>
 
       {activeTab === 'branding' && (
@@ -151,7 +151,7 @@ export default function Settings() {
                       <div className="flex items-center space-x-4">
                           <div className="bg-white/10 px-4 py-2 rounded-xl border border-white/20 flex items-center">
                               <div className="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></div>
-                              <span className="text-[10px] font-black uppercase tracking-widest text-blue-50">Motor IA Conectado</span>
+                              <span className="text-[10px] font-black uppercase tracking-widest text-blue-50">Motor IA Activo</span>
                           </div>
                           <span className="text-[10px] font-bold text-blue-200">v1.34-genai</span>
                       </div>
@@ -185,7 +185,7 @@ export default function Settings() {
                       <Shield className="text-hemp-500" size={24}/>
                       <h3 className="font-black text-white uppercase text-sm tracking-widest">Estructura SQL Obligatoria</h3>
                   </div>
-                  <p className="text-xs text-slate-400 mb-4 leading-relaxed">Ejecute estos scripts en su editor SQL de Supabase para asegurar el guardado de temperatura, altura y agua:</p>
+                  <p className="text-xs text-slate-400 mb-4 leading-relaxed">Ejecute este script en el editor SQL de Supabase para asegurar la persistencia hídrica:</p>
                   <pre className="bg-black/50 p-6 rounded-2xl text-[10px] text-blue-400 overflow-x-auto border border-white/5 font-mono h-80">
 {`CREATE TABLE IF NOT EXISTS hydric_records (
   id TEXT PRIMARY KEY,
@@ -194,7 +194,7 @@ export default function Settings() {
   date DATE,
   time TEXT,
   type TEXT,
-  amount_mm NUMERIC,
+  amount_mm NUMERIC, -- Nombre de columna exacto para mapeo
   notes TEXT,
   created_by TEXT
 );
@@ -212,22 +212,6 @@ CREATE TABLE IF NOT EXISTS trial_records (
   vigor NUMERIC,
   created_by TEXT,
   created_by_name TEXT
-);
-
-CREATE TABLE IF NOT EXISTS plots (
-  id TEXT PRIMARY KEY,
-  location_id TEXT,
-  project_id TEXT,
-  variety_id TEXT,
-  seed_batch_id TEXT,
-  name TEXT,
-  type TEXT, -- 'Ensayo' o 'Producción'
-  status TEXT,
-  sowing_date DATE,
-  surface_area NUMERIC,
-  surface_unit TEXT,
-  density NUMERIC,
-  responsible_ids TEXT[]
 );`}
                   </pre>
               </div>

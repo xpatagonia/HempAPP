@@ -114,12 +114,11 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// Motor de conversión de nomenclatura mejorado (CamelCase <-> snake_case)
+// Motor de conversión robusto
 const toSnakeCase = (obj: any) => {
     const newObj: any = {};
     for (const key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
-            // Convierte amountMm -> amount_mm
             const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
             newObj[snakeKey] = obj[key];
         }
@@ -131,7 +130,6 @@ const toCamelCase = (obj: any) => {
     const newObj: any = {};
     for (const key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
-            // Convierte amount_mm -> amountMm
             const camelKey = key.replace(/(_\w)/g, m => m[1].toUpperCase());
             newObj[camelKey] = obj[key];
         }
@@ -258,18 +256,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           try {
               const { error } = await supabase.from(table).insert([dbItem]);
               if (error) {
-                  console.error(`PostgREST insert error en ${table}:`, error.message);
+                  console.error(`Supabase Error (${table}):`, error.message);
                   throw error;
               }
               setter((prev: any[]) => [...prev, item]);
               return true;
           } catch (e: any) {
-              console.warn(`Sync Fallback: Guardando ${table} en local storage debido a:`, e.message || e);
-              setter((prev: any[]) => { 
-                const n = [...prev, item]; 
-                saveToLocal(localKey, n); 
-                return n; 
-              });
+              console.warn(`Falling back to local for ${table}:`, e.message || e);
+              setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
               return true;
           }
       }
@@ -295,7 +289,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
   };
 
-  // Wrapper funciones...
   const addUser = (u: User) => genericAdd('users', u, setUsersList, 'users');
   const updateUser = (u: User) => genericUpdate('users', u, setUsersList, 'users');
   const deleteUser = (id: string) => genericDelete('users', id, setUsersList, 'users');
