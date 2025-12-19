@@ -2,15 +2,15 @@
 import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, AreaChart, Area } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { 
-  Sprout, MapPin, Activity, CheckCircle, FileText, Download, ArrowRight, 
-  Users, AlertCircle, TrendingUp, Calendar, FileCheck, Printer, X, 
-  Sparkles, Globe, Cpu, Zap, Radio, ShieldCheck, Database, History
+  Sprout, Activity, FileText, ArrowRight, 
+  Users, TrendingUp, Printer, X, 
+  Sparkles, Globe, Cpu, Zap, Radio, ShieldCheck, Database, History, CheckCircle2,
+  Download, Loader2
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import * as XLSX from 'xlsx';
 
 const TechKPI = ({ label, value, icon: Icon, colorClass, trend, status }: any) => (
   <div className="bg-[#0f172a]/40 backdrop-blur-md p-6 rounded-[24px] border border-white/5 flex flex-col justify-between hover:border-white/10 transition-all group overflow-hidden relative">
@@ -37,15 +37,15 @@ const TechKPI = ({ label, value, icon: Icon, colorClass, trend, status }: any) =
 );
 
 export default function Dashboard() {
-  const { varieties, locations, plots, projects, trialRecords, currentUser, theme, getLatestRecord } = useAppContext();
+  const { varieties, locations, plots, projects, trialRecords, currentUser, logs, getLatestRecord } = useAppContext();
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportGenerating, setReportGenerating] = useState(false);
-  const [reportConfig, setReportConfig] = useState({ projectId: 'all', includeFinancials: false, includeLogs: true });
+  const [selectedProjectId, setSelectedProjectId] = useState('all');
 
   const isClient = currentUser?.role === 'client';
   const relevantPlots = isClient ? plots.filter(p => p.responsibleIds?.includes(currentUser?.id || '')) : plots;
 
-  // --- DATA AGGREGATION ---
+  // --- ANALYTICS DATA ---
   const yieldData = useMemo(() => {
     const map = new Map<string, { total: number; count: number }>();
     relevantPlots.forEach(plot => {
@@ -58,12 +58,12 @@ export default function Dashboard() {
       }
     });
     return Array.from(map.entries()).map(([name, d]) => ({ name, yield: Math.round(d.total / d.count) }));
-  }, [relevantPlots, varieties]);
+  }, [relevantPlots, varieties, getLatestRecord]);
 
   const recentActivity = useMemo(() => {
     return [...trialRecords]
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-      .slice(0, 5)
+      .slice(0, 10)
       .map(r => ({
         id: r.id,
         plotName: plots.find(p => p.id === r.plotId)?.name || 'Parcela',
@@ -72,6 +72,45 @@ export default function Dashboard() {
         user: r.createdByName || 'Técnico'
       }));
   }, [trialRecords, plots]);
+
+  // --- REPORT GENERATOR LOGIC ---
+  const generateFullPDF = async () => {
+    setReportGenerating(true);
+    try {
+        const doc = new jsPDF();
+        doc.setFontSize(22);
+        doc.text("HEMPC - REPORTE CONSOLIDADO INDUSTRIAL", 20, 20);
+        doc.setFontSize(12);
+        doc.text(`Fecha de emisión: ${new Date().toLocaleString()}`, 20, 30);
+        doc.text(`Proyecto: ${selectedProjectId === 'all' ? 'Todos los proyectos' : projects.find(p => p.id === selectedProjectId)?.name}`, 20, 37);
+
+        const tableData = relevantPlots
+            .filter(p => selectedProjectId === 'all' || p.projectId === selectedProjectId)
+            .map(p => {
+                const latest = getLatestRecord(p.id);
+                return [
+                    p.name,
+                    varieties.find(v => v.id === p.varietyId)?.name || 'N/A',
+                    locations.find(l => l.id === p.locationId)?.name || 'N/A',
+                    latest?.stage || 'S/D',
+                    latest?.yield ? `${latest.yield} kg/ha` : 'Sin datos'
+                ];
+            });
+
+        autoTable(doc, {
+            startY: 50,
+            head: [['Lote', 'Variedad', 'Ubicación', 'Etapa Actual', 'Rendimiento Est.']],
+            body: tableData,
+            theme: 'striped',
+            headStyles: { fillColor: [22, 163, 74] }
+        });
+
+        doc.save(`HempC_Reporte_${new Date().toISOString().split('T')[0]}.pdf`);
+        setShowReportModal(false);
+    } finally {
+        setReportGenerating(false);
+    }
+  };
 
   const activePlots = relevantPlots.filter(p => p.status === 'Activa').length;
   const chartTextColor = '#64748b';
@@ -86,17 +125,17 @@ export default function Dashboard() {
                 <Zap size={16} className="text-hemp-500 animate-pulse"/>
                 <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em]">System Operational</span>
             </div>
-            <h1 className="text-4xl font-black text-gray-900 dark:text-white tracking-tighter">Control <span className="text-blue-600">Central</span></h1>
+            <h1 className="text-4xl font-black text-gray-900 dark:text-white tracking-tighter uppercase">Dashboard <span className="text-blue-600">Inteligente</span></h1>
         </div>
         
         <div className="flex space-x-3 bg-white dark:bg-[#0f172a]/60 backdrop-blur-xl p-2 rounded-[20px] border dark:border-white/5 shadow-xl">
             <button onClick={() => setShowReportModal(true)} className="flex items-center px-4 py-2 text-xs font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 hover:text-hemp-600 transition">
-                <Printer size={16} className="mr-2" /> Report Generator
+                <Printer size={16} className="mr-2" /> Generar PDF
             </button>
             <div className="w-px bg-slate-800 my-2"></div>
-            <button className="bg-blue-600 text-white px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-blue-900/40 hover:bg-blue-700 transition flex items-center">
-                <Radio size={14} className="mr-2 animate-ping" /> Live Feed
-            </button>
+            <div className="bg-blue-600/10 text-blue-400 px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest border border-blue-600/20 flex items-center cursor-help" title="El sistema está monitoreando entradas técnicas en tiempo real">
+                <Radio size={14} className="mr-2 animate-pulse" /> Actividad Live
+            </div>
         </div>
       </div>
 
@@ -104,7 +143,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <TechKPI label="Ensayos Activos" value={activePlots} icon={Activity} colorClass="bg-hemp-600" trend="+12%" status="online" />
         <TechKPI label="Nodos Geográficos" value={locations.length} icon={Globe} colorClass="bg-blue-600" status="sync" />
-        <TechKPI label="Diversidad Genética" value={varieties.length} icon={Sprout} colorClass="bg-purple-600" />
+        <TechKPI label="Variedades" value={varieties.length} icon={Sprout} colorClass="bg-purple-600" />
         <TechKPI label="Integridad Datos" value="99.8%" icon={ShieldCheck} colorClass="bg-amber-600" status="verified" />
       </div>
 
@@ -114,7 +153,7 @@ export default function Dashboard() {
         <div className="lg:col-span-2 bg-white dark:bg-[#0f172a]/40 backdrop-blur-xl p-8 rounded-[32px] border dark:border-white/5 shadow-2xl relative overflow-hidden">
           <div className="flex justify-between items-center mb-8 relative z-10">
               <div>
-                  <h2 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight">Rendimiento Comparado</h2>
+                  <h2 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight">Rendimiento por Genética</h2>
                   <p className="text-xs text-slate-500 font-bold tracking-widest uppercase">Promedio Industrial (Kg/Ha)</p>
               </div>
               <div className="p-2 bg-slate-900 rounded-lg border border-white/5"><Database size={20} className="text-hemp-500"/></div>
@@ -143,13 +182,12 @@ export default function Dashboard() {
               </div>
             )}
           </div>
-          <div className="absolute -bottom-20 -right-20 w-64 h-64 bg-hemp-500/5 blur-[100px] rounded-full"></div>
         </div>
 
-        {/* REAL-TIME FEED */}
+        {/* REAL-TIME FEED - Clarified for user */}
         <div className="bg-white dark:bg-[#0f172a]/40 backdrop-blur-xl p-8 rounded-[32px] border dark:border-white/5 shadow-2xl flex flex-col">
             <div className="flex items-center justify-between mb-8">
-                <h2 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight">System Log</h2>
+                <h2 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight">Registro de Campo</h2>
                 <span className="text-[10px] font-black text-blue-500 animate-pulse uppercase tracking-widest">Live Updates</span>
             </div>
             
@@ -163,58 +201,59 @@ export default function Dashboard() {
                         </div>
                         <p className="text-sm font-black text-slate-800 dark:text-slate-200 leading-tight mb-1">{act.plotName}</p>
                         <p className="text-[10px] text-slate-500 flex items-center italic">
-                            <Users size={10} className="mr-1"/> Updated by {act.user}
+                            <Users size={10} className="mr-1"/> Cargado por {act.user}
                         </p>
                     </div>
                 )) : (
                     <div className="text-center py-10">
                         <Cpu size={32} className="mx-auto text-slate-800 mb-3"/>
-                        <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">No recent transactions</p>
+                        <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Esperando actividad técnica</p>
                     </div>
                 )}
             </div>
 
             <Link to="/plots" className="mt-8 group flex items-center justify-center w-full py-4 bg-slate-900 border border-white/5 rounded-2xl text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-white transition-all">
-                Access Global Matrix <ArrowRight size={14} className="ml-2 group-hover:translate-x-1 transition-transform"/>
+                Planilla Global <ArrowRight size={14} className="ml-2 group-hover:translate-x-1 transition-transform"/>
             </Link>
         </div>
       </div>
 
-      {/* REPORT MODAL */}
+      {/* REPORT MODAL - Now Functional */}
       {showReportModal && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
               <div className="bg-[#0f172a] rounded-[40px] shadow-2xl max-w-lg w-full overflow-hidden border border-white/10 animate-in zoom-in-95">
                   <div className="px-8 py-6 border-b border-white/5 bg-slate-900 flex justify-between items-center">
                       <h3 className="text-white font-black flex items-center text-xs uppercase tracking-[0.2em]">
-                          <FileText className="mr-3 text-hemp-500" size={20} /> Intelligent Report Engine
+                          <FileText className="mr-3 text-hemp-500" size={20} /> Generador de Reportes Industrial
                       </h3>
                       <button onClick={() => setShowReportModal(false)} className="text-slate-500 hover:text-white transition-colors"><X size={24} /></button>
                   </div>
                   
                   <div className="p-10 space-y-8">
+                      <div className="bg-blue-600/10 border border-blue-600/20 p-4 rounded-2xl text-blue-400 text-[11px] leading-relaxed flex items-start">
+                          <CheckCircle2 className="mr-3 flex-shrink-0" size={18}/>
+                          <p>Esta herramienta exporta el estado actual de todas sus unidades experimentales a un documento PDF de alta fidelidad.</p>
+                      </div>
+
                       <div>
-                          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 ml-1">Scope Selection</label>
-                          <select className="w-full bg-slate-950 border border-slate-800 text-white p-4 rounded-2xl focus:ring-2 focus:ring-hemp-500/30 outline-none font-bold text-sm">
-                              <option value="all">Full Enterprise Consolidated</option>
+                          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 ml-1">Selección de Alcance</label>
+                          <select 
+                            className="w-full bg-slate-950 border border-slate-800 text-white p-4 rounded-2xl focus:ring-2 focus:ring-hemp-500/30 outline-none font-bold text-sm"
+                            value={selectedProjectId}
+                            onChange={(e) => setSelectedProjectId(e.target.value)}
+                          >
+                              <option value="all">Consolidado General (Toda la red)</option>
                               {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                           </select>
                       </div>
 
-                      <div className="space-y-4">
-                          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Advanced Modules</label>
-                          <div className="grid grid-cols-1 gap-3">
-                              <label className="flex items-center justify-between p-5 bg-slate-950 border border-slate-800 rounded-3xl cursor-pointer hover:border-hemp-500/30 transition-all">
-                                  <div className="flex items-center">
-                                      <History size={18} className="mr-3 text-blue-500"/>
-                                      <div><p className="text-xs font-black text-white uppercase tracking-tighter">Event Logs</p><p className="text-[9px] text-slate-500">Include full field log history</p></div>
-                                  </div>
-                                  <input type="checkbox" className="w-5 h-5 rounded-lg border-slate-700 bg-slate-800 text-hemp-600 focus:ring-0" defaultChecked />
-                              </label>
-                          </div>
-                      </div>
-
-                      <button className="w-full bg-white text-black py-5 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-all shadow-xl shadow-white/5 flex items-center justify-center">
-                          <Sparkles size={16} className="mr-2"/> Generate Digital Asset (PDF)
+                      <button 
+                        onClick={generateFullPDF}
+                        disabled={reportGenerating}
+                        className="w-full bg-white text-black py-5 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-all shadow-xl shadow-white/5 flex items-center justify-center disabled:opacity-50"
+                      >
+                          {reportGenerating ? <Loader2 className="animate-spin mr-2"/> : <Sparkles size={16} className="mr-2"/>}
+                          {reportGenerating ? 'Generando Archivo...' : 'Generar PDF Industrial'}
                       </button>
                   </div>
               </div>

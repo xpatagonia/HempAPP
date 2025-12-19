@@ -2,11 +2,11 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Mail, ArrowRight, AlertTriangle, Database, Settings, X, Save, RefreshCw, CloudOff, Leaf, ShieldCheck, Cpu, Code2, Sparkles, User, Info } from 'lucide-react';
+import { Lock, Mail, ArrowRight, AlertTriangle, Database, Settings, X, Save, RefreshCw, Cpu, Sparkles, User, Info } from 'lucide-react';
 import { hasPreconfiguredConnection, checkConnection } from '../supabaseClient';
 
 export default function Login() {
-  const { login, isEmergencyMode } = useAppContext();
+  const { login } = useAppContext();
   const navigate = useNavigate();
   
   const [email, setEmail] = useState('');
@@ -73,16 +73,10 @@ export default function Login() {
 
       <div className="w-full max-w-[440px] z-10 relative animate-in fade-in zoom-in-95 duration-1000">
         
-        {/* BRANDING 4.0 */}
+        {/* BRANDING 4.0 - TYPOGRAPHY STRAIGHTENED */}
         <div className="text-center mb-10">
-            <div className="flex justify-center mb-6 relative group">
-                <div className="absolute inset-0 bg-hemp-500/30 blur-2xl group-hover:bg-hemp-500/50 transition-all duration-700 rounded-full w-20 h-20 mx-auto"></div>
-                <div className="relative z-10 bg-slate-900 border border-hemp-500/30 p-5 rounded-[24px] shadow-2xl group-hover:border-hemp-500/60 transition-all duration-500">
-                    <Leaf size={44} className="text-hemp-500" />
-                </div>
-            </div>
-            <h1 className="text-5xl font-black text-white tracking-tighter mb-2 italic">
-                HEMP<span className="text-hemp-500 not-italic">C</span>
+            <h1 className="text-6xl font-black text-white tracking-tight mb-2 uppercase">
+                HEMP<span className="text-hemp-500">C</span>
             </h1>
             <div className="flex items-center justify-center space-x-2">
                 <div className="h-px w-8 bg-slate-800"></div>
@@ -151,8 +145,7 @@ export default function Login() {
                     <div className="flex flex-col items-center">
                         <span className="text-[9px] text-slate-600 font-black uppercase tracking-tighter mb-2">Lead Developer</span>
                         <div className="flex items-center text-slate-400 font-bold text-[11px] hover:text-white transition-colors cursor-default">
-                            {/* Fixed: User component now correctly imported */}
-                            <User size={12} className="mr-1.5 text-blue-500"/> Usuario 
+                            <User size={12} className="mr-1.5 text-blue-500"/> gaston.barea.moreno@gmail.com 
                         </div>
                     </div>
                     <div className="h-8 w-px bg-slate-800"></div>
@@ -186,7 +179,6 @@ export default function Login() {
                 </div>
                 <div className="p-10 space-y-6">
                     <div className="bg-blue-500/5 border border-blue-500/20 p-5 rounded-3xl text-blue-200 text-[11px] leading-relaxed flex items-start">
-                        {/* Fixed: Info component now correctly imported */}
                         <Info className="mr-3 flex-shrink-0 text-blue-500" size={18}/>
                         <p>Vincule este nodo de acceso con su instancia de producción en Supabase para sincronizar la red de datos industrial.</p>
                     </div>
