@@ -58,7 +58,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           
           <div className="pt-8 pb-3 px-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Manejo Técnico</div>
           <NavItem to="/locations" icon={Tractor} label="Campos & Sitios" />
-          <NavItem to="/plots" icon={Sprout} label="Unidades Exp." />
+          <NavItem to="/plots" icon={Sprout} label="Unidades Prod." />
           <NavItem to="/tasks" icon={CheckSquare} label="Labores" badge={pendingTasksCount > 0 ? pendingTasksCount : null} />
           <NavItem to="/calendar" icon={Calendar} label="Ciclo Biológico" />
           <NavItem to="/projects" icon={FolderKanban} label="Campañas" />

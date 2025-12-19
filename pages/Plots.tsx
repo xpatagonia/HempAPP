@@ -78,9 +78,9 @@ export default function Plots() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
             <h1 className="text-3xl font-black text-gray-800 dark:text-white flex items-center">
-                <LayoutGrid className="mr-3 text-hemp-600" size={32}/> Planilla Global de Cultivos
+                <LayoutGrid className="mr-3 text-hemp-600" size={32}/> Planilla de Unidades Prod.
             </h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 font-medium ml-11">Control centralizado de unidades experimentales y comerciales.</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 font-medium ml-11">Control centralizado de unidades productivas y experimentales.</p>
         </div>
         <div className="flex items-center space-x-2 w-full sm:w-auto">
           <div className="bg-white dark:bg-dark-card p-1 rounded-xl flex border dark:border-dark-border shadow-sm">
@@ -237,13 +237,13 @@ export default function Plots() {
             <div className="bg-white dark:bg-dark-card rounded-3xl shadow-2xl max-w-xl w-full p-8 animate-in zoom-in-95 duration-200">
                 <div className="flex justify-between items-center mb-6">
                     <h2 className="text-2xl font-black text-gray-800 dark:text-white flex items-center">
-                        <Edit2 size={24} className="mr-2 text-hemp-600"/> Editar Metadatos Lote
+                        <Edit2 size={24} className="mr-2 text-hemp-600"/> Editar Registro Prod.
                     </h2>
                     <button onClick={() => setEditingPlot(null)} className="p-1 hover:bg-gray-100 dark:hover:bg-dark-border rounded-full transition dark:text-gray-400"><X size={24}/></button>
                 </div>
                 <form onSubmit={handleUpdatePlot} className="space-y-5">
                     <div>
-                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Identificador del Lote *</label>
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Identificador de Unidad Prod. *</label>
                         <input required className={inputClass} value={editingPlot.name} onChange={e => setEditingPlot({...editingPlot, name: e.target.value})} />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
@@ -269,7 +269,7 @@ export default function Plots() {
                     <div className="bg-amber-50 p-4 rounded-xl border border-amber-100 flex items-start">
                         <AlertCircle className="text-amber-600 mr-3 flex-shrink-0 mt-0.5" size={18}/>
                         <p className="text-xs text-amber-800 leading-relaxed font-medium">
-                            <strong>Nota:</strong> Los cambios en metadatos no alteran los registros de monitoreo histórico. Para modificar mediciones específicas, ingrese a la ficha técnica del lote.
+                            <strong>Nota:</strong> Los cambios en metadatos no alteran los registros de monitoreo histórico. Para modificar mediciones específicas, ingrese a la ficha técnica de la unidad.
                         </p>
                     </div>
                     <div className="flex justify-end gap-3 pt-6 border-t dark:border-dark-border">
@@ -295,7 +295,7 @@ export default function Plots() {
                         </div>
                     </div>
                     <h3 className="text-2xl font-black text-gray-800 mb-1">{qrPlot.name}</h3>
-                    <p className="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em] mb-4">Parcela Industrial</p>
+                    <p className="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em] mb-4">Unidad Prod. Industrial</p>
                     
                     {/* Tag Summary */}
                     <div className="bg-gray-50 rounded-2xl p-4 mb-6 border border-gray-100 text-left space-y-1">
