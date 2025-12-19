@@ -1,6 +1,9 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Send, Bot, User, Image as ImageIcon, Loader2, Sparkles, AlertTriangle, X, Key, ExternalLink } from 'lucide-react';
+import { Send, Bot, User, Image as ImageIcon, Loader2, Sparkles, AlertTriangle, X } from 'lucide-react';
+// Correct import for @google/genai
+import { GoogleGenAI } from "@google/genai";
 
 interface Message {
     id: string;
@@ -10,12 +13,12 @@ interface Message {
 }
 
 export default function AIAdvisor() {
-    const { plots, varieties, locations, trialRecords, globalApiKey, refreshGlobalConfig } = useAppContext();
+    const { plots, varieties, locations, trialRecords } = useAppContext();
     const [messages, setMessages] = useState<Message[]>([
         {
             id: '1',
             role: 'model',
-            text: 'Hola. Soy tu asistente agronómico virtual (v2.5). Tengo acceso a los datos de tus parcelas y variedades cargadas. ¿En qué puedo ayudarte hoy?'
+            text: 'Hola. Soy tu asistente agronómico virtual (v3.0). Tengo acceso a los datos de tus parcelas y variedades cargadas. ¿En qué puedo ayudarte hoy?'
         }
     ]);
     const [input, setInput] = useState('');
@@ -23,33 +26,7 @@ export default function AIAdvisor() {
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     
-    // Estado para gestionar la API Key manualmente si no hay global
-    const [manualKey, setManualKey] = useState('');
-    const [showKeyInput, setShowKeyInput] = useState(false);
-
     const messagesEndRef = useRef<HTMLDivElement>(null);
-
-    // Cargar Key si es necesario
-    useEffect(() => {
-        refreshGlobalConfig();
-    }, []);
-
-    // Si hay key global, ocultamos el input manual
-    useEffect(() => {
-        if (globalApiKey) {
-            setShowKeyInput(false);
-        } else {
-            // Chequear local storage como fallback
-            const localKey = localStorage.getItem('hemp_ai_key');
-            if (localKey) setManualKey(localKey);
-            else setShowKeyInput(true);
-        }
-    }, [globalApiKey]);
-
-    const handleKeyChange = (val: string) => {
-        setManualKey(val);
-        localStorage.setItem('hemp_ai_key', val);
-    };
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -81,15 +58,6 @@ export default function AIAdvisor() {
     const handleSend = async () => {
         if ((!input.trim() && !selectedImage) || isLoading) return;
 
-        // Prioridad: 1. Global Key (Supabase), 2. Manual Key (Storage), 3. Variable Entorno
-        const activeKey = globalApiKey || manualKey || (import.meta as any).env.VITE_GEMINI_API_KEY;
-
-        if (!activeKey) {
-            setError("Falta la API Key de Google Gemini. Contacta al Administrador para que la configure.");
-            setShowKeyInput(true);
-            return;
-        }
-
         const userMsg: Message = {
             id: Date.now().toString(),
             role: 'user',
@@ -115,12 +83,14 @@ export default function AIAdvisor() {
             2. Si te preguntan por una parcela específica, usa los datos provistos.
             3. Si analizas una imagen, busca plagas, deficiencias nutricionales o estados fenológicos.`;
 
-            // Construcción del cuerpo para la API REST
+            // Always initialize GoogleGenAI with process.env.API_KEY directly.
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            
             const parts: any[] = [];
             
             if (userMsg.text) {
                 parts.push({ text: userMsg.text });
-            } else if (selectedImage) {
+            } else if (userMsg.image) {
                  parts.push({ text: "¿Qué observas en esta imagen?" });
             }
 
@@ -134,57 +104,27 @@ export default function AIAdvisor() {
                 });
             }
 
-            const requestBody = {
-                contents: [{
-                    role: "user",
-                    parts: parts
-                }],
-                systemInstruction: {
-                    parts: [{ text: systemContext }]
+            // Using 'gemini-3-flash-preview' for agronomic Q&A task as per task requirements.
+            const response = await ai.models.generateContent({
+                model: 'gemini-3-flash-preview',
+                contents: [{ role: 'user', parts }],
+                config: {
+                    systemInstruction: systemContext
                 }
-            };
+            });
 
-            // Usamos el modelo gemini-2.5-flash según instrucciones
-            const response = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${activeKey}`,
-                {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(requestBody)
-                }
-            );
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                const googleMsg = errorData.error?.message || `Error HTTP ${response.status}`;
-                throw new Error(googleMsg);
-            }
-
-            const data = await response.json();
-            const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
+            // Correct extraction of text output using the .text property
             const aiMsg: Message = {
                 id: (Date.now() + 1).toString(),
                 role: 'model',
-                text: textResponse || 'No pude generar una respuesta.'
+                text: response.text || 'No pude generar una respuesta.'
             };
 
             setMessages(prev => [...prev, aiMsg]);
 
         } catch (err: any) {
-            console.error("Gemini API Error Full:", err);
-            
-            let userFriendlyError = "Error desconocido.";
-            if (err.message.includes('API key not valid') || err.message.includes('400')) {
-                userFriendlyError = "La API Key es inválida o expiró. Verifica la configuración.";
-                if(!globalApiKey) setShowKeyInput(true);
-            } else if (err.message.includes('404')) {
-                userFriendlyError = "Modelo no encontrado o no disponible en tu región.";
-            } else {
-                userFriendlyError = `Respuesta de Google: ${err.message}`;
-            }
-
-            setError(userFriendlyError);
+            console.error("Gemini API Error:", err);
+            setError(err.message || "Error al conectar con la IA.");
             setMessages(prev => [...prev, {
                 id: Date.now().toString(),
                 role: 'model',
@@ -201,50 +141,11 @@ export default function AIAdvisor() {
                 <div className="flex items-center">
                     <Sparkles className="text-purple-600 mr-3" size={32} />
                     <div>
-                        <h1 className="text-2xl font-bold text-gray-800">Asistente IA (v2.5)</h1>
+                        <h1 className="text-2xl font-bold text-gray-800">Asistente IA (v3.0)</h1>
                         <p className="text-gray-500 text-sm">Potenciado por Google Gemini</p>
                     </div>
                 </div>
-                {/* Solo mostramos botón de configuración manual si NO hay key global */}
-                {!globalApiKey && (
-                    <button 
-                        onClick={() => setShowKeyInput(!showKeyInput)}
-                        className={`p-2 rounded-lg transition border ${showKeyInput ? 'bg-purple-50 border-purple-200 text-purple-700' : 'bg-white border-gray-200 text-gray-400 hover:text-gray-600'}`}
-                        title="Configurar API Key Localmente"
-                    >
-                        <Key size={20} />
-                    </button>
-                )}
-                {globalApiKey && (
-                    <div className="flex items-center text-xs text-green-600 bg-green-50 px-2 py-1 rounded border border-green-200">
-                        <Key size={12} className="mr-1"/> Licencia Activa (Global)
-                    </div>
-                )}
             </div>
-
-            {/* Input manual de API Key (Solo si no hay global y el usuario quiere forzar una local) */}
-            {showKeyInput && !globalApiKey && (
-                <div className="bg-purple-50 p-4 rounded-lg border border-purple-100 mb-4 animate-in fade-in slide-in-from-top-2 shadow-sm">
-                    <div className="flex justify-between items-start mb-2">
-                        <label className="block text-xs font-bold text-purple-800 uppercase flex items-center">
-                            <Key size={12} className="mr-1"/> API Key Personal
-                        </label>
-                        <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-xs text-purple-600 hover:text-purple-800 flex items-center underline">
-                            Obtener clave gratis <ExternalLink size={10} className="ml-1"/>
-                        </a>
-                    </div>
-                    <input 
-                        type="password" 
-                        value={manualKey}
-                        onChange={(e) => handleKeyChange(e.target.value)}
-                        placeholder="Pega tu API Key aquí (comienza con AIza...)"
-                        className="w-full border border-purple-200 rounded p-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white"
-                    />
-                    <p className="text-[10px] text-purple-500 mt-2">
-                        Esta clave es solo para tu dispositivo. Pide al admin que configure la global.
-                    </p>
-                </div>
-            )}
 
             <div className="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
                 <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">

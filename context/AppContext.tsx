@@ -100,9 +100,6 @@ interface AppContextType {
   isEmergencyMode: boolean;
   dbNeedsMigration: boolean; 
 
-  globalApiKey: string | null;
-  refreshGlobalConfig: () => Promise<void>;
-
   theme: 'light' | 'dark';
   toggleTheme: () => void;
 }
@@ -148,7 +145,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [isEmergencyMode, setIsEmergencyMode] = useState(false);
   const [dbNeedsMigration, setDbNeedsMigration] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
-  const [globalApiKey, setGlobalApiKey] = useState<string | null>(null);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('ht_theme') as 'light' | 'dark';
@@ -184,18 +180,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return notifs;
   }, [tasks, currentUser]);
 
-  const refreshGlobalConfig = async () => {
-    try {
-        const { data, error } = await supabase.from('system_settings').select('gemini_api_key').eq('id', 'global').single();
-        if (!error && data?.gemini_api_key) setGlobalApiKey(data.gemini_api_key);
-        else setGlobalApiKey(localStorage.getItem('hemp_ai_key'));
-    } catch (e) { setGlobalApiKey(localStorage.getItem('hemp_ai_key')); }
-  };
-
   const refreshData = async () => {
       setIsRefreshing(true);
       try {
-          await refreshGlobalConfig();
           const connected = await checkConnection();
           if (!connected) {
               setIsEmergencyMode(true);
@@ -358,7 +345,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       addStoragePoint, updateStoragePoint, deleteStoragePoint,
       getPlotHistory, getLatestRecord,
       loading, isRefreshing, isEmergencyMode, dbNeedsMigration,
-      globalApiKey, refreshGlobalConfig,
       theme, toggleTheme
     }}>
       {children}

@@ -1,16 +1,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Save, Database, Copy, RefreshCw, AlertTriangle, Lock, Settings as SettingsIcon, Sliders, Sparkles, ExternalLink, Trash2, ShieldCheck, PlayCircle, CheckCircle2 } from 'lucide-react';
-import { supabase } from '../supabaseClient';
+import { Save, Database, Copy, RefreshCw, Lock, Settings as SettingsIcon, ShieldCheck, PlayCircle, CheckCircle2 } from 'lucide-react';
 
 export default function Settings() {
-  const { currentUser, globalApiKey, refreshGlobalConfig } = useAppContext();
+  const { currentUser } = useAppContext();
   
   const [activeTab, setActiveTab] = useState<'connections' | 'demo' | 'database'>('database');
   const [url, setUrl] = useState('');
   const [key, setKey] = useState('');
-  const [aiKey, setAiKey] = useState('');
   const [status, setStatus] = useState<'idle' | 'checking' | 'success' | 'error'>('idle');
 
   useEffect(() => {
@@ -18,9 +16,7 @@ export default function Settings() {
       const storedKey = localStorage.getItem('hemp_sb_key');
       if (storedUrl) setUrl(storedUrl);
       if (storedKey) setKey(storedKey);
-      if (globalApiKey) setAiKey(globalApiKey);
-      else setAiKey(localStorage.getItem('hemp_ai_key') || '');
-  }, [globalApiKey]);
+  }, []);
 
   if (currentUser?.role !== 'super_admin') {
       return (
@@ -36,15 +32,12 @@ export default function Settings() {
       setStatus('checking');
       localStorage.setItem('hemp_sb_url', url.trim());
       localStorage.setItem('hemp_sb_key', key.trim());
-      try {
-          if (aiKey.trim()) {
-              await supabase.from('system_settings').upsert({ id: 'global', gemini_api_key: aiKey.trim() });
-              localStorage.removeItem('hemp_ai_key');
-          }
-      } catch (e) { localStorage.setItem('hemp_ai_key', aiKey.trim()); }
-      await refreshGlobalConfig();
-      setStatus('success');
-      setTimeout(() => { setStatus('idle'); }, 2000);
+      
+      // Simulate connection check for database credentials
+      setTimeout(() => {
+          setStatus('success');
+          setTimeout(() => { setStatus('idle'); }, 2000);
+      }, 800);
   };
 
   const SQL_REPAIR_ALL = `-- SCRIPT DE REPARACIÓN INTEGRAL HEMP-APP v3.5
@@ -132,10 +125,7 @@ NOTIFY pgrst, 'reload schema';`;
                     <div><label className="block text-sm font-medium text-gray-700 mb-1">Anon API Key</label><input type="password" className="w-full border border-gray-300 rounded p-2 text-sm" value={key} onChange={e => setKey(e.target.value)} /></div>
                 </div>
             </div>
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center"><Sparkles size={20} className="mr-2 text-purple-500" /> Inteligencia Artificial (Gemini)</h2>
-                <input type="password" placeholder="AIzaSy..." className="w-full border border-gray-300 rounded p-2 text-sm" value={aiKey} onChange={e => setAiKey(e.target.value)} />
-            </div>
+            
             <button onClick={handleSave} disabled={status === 'checking'} className={`w-full py-4 rounded-xl font-bold text-white flex items-center justify-center transition-all shadow-lg ${status === 'checking' ? 'bg-gray-400' : status === 'success' ? 'bg-green-600' : 'bg-hemp-600 hover:bg-hemp-700'}`}>
                 {status === 'checking' ? <RefreshCw className="animate-spin mr-2"/> : status === 'success' ? <CheckCircle2 className="mr-2"/> : <Save className="mr-2"/>}
                 {status === 'checking' ? 'Guardando...' : status === 'success' ? '¡Configuración Guardada!' : 'Guardar y Vincular Dispositivo'}
