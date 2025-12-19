@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Droplets, CloudRain, Plus, X, Trash2, Info, Loader2, RefreshCw, AlertCircle, TrendingUp, Waves } from 'lucide-react';
+import { Droplets, CloudRain, Plus, X, Trash2, Info, Loader2, RefreshCw, AlertCircle, TrendingUp, Waves, Check, Sparkles } from 'lucide-react';
 
 interface HydricBalanceProps {
     locationId: string;
@@ -16,7 +16,18 @@ export default function HydricBalance({ locationId, plotId, startDate }: HydricB
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isLoadingAuto, setIsLoadingAuto] = useState(false);
     const [autoRain, setAutoRain] = useState(0);
-    const [formData, setFormData] = useState({ date: new Date().toISOString().split('T')[0], type: 'Lluvia' as any, amountMm: 0, notes: '' });
+    const [formData, setFormData] = useState({ 
+        date: new Date().toISOString().split('T')[0], 
+        type: 'Lluvia' as 'Lluvia' | 'Riego', 
+        amountMm: 0, 
+        notes: '' 
+    });
+
+    // Estado para la sugerencia satelital por día
+    const [satelliteSuggestion, setSatelliteSuggestion] = useState<{ amount: number, status: 'idle' | 'loading' | 'found' | 'not_found' }>({ 
+        amount: 0, 
+        status: 'idle' 
+    });
 
     // Filtrar registros manuales para esta ubicación/lote
     const manualRecords = useMemo(() => {
@@ -29,20 +40,17 @@ export default function HydricBalance({ locationId, plotId, startDate }: HydricB
 
     const totalManual = useMemo(() => manualRecords.reduce((sum, r) => sum + r.amountMm, 0), [manualRecords]);
 
-    // FETCH ACUMULADO SATELITAL (OPEN-METEO)
+    // FETCH ACUMULADO TOTAL (Dashboard Principal de Agua)
     useEffect(() => {
         const fetchAutoRain = async () => {
             if (!location?.coordinates || !startDate) return;
             setIsLoadingAuto(true);
             try {
-                // Fetch daily precipitation from sowing/start date to yesterday
                 const end = new Date();
                 end.setDate(end.getDate() - 1);
                 const endStr = end.toISOString().split('T')[0];
-                
                 const res = await fetch(`https://archive-api.open-meteo.com/v1/archive?latitude=${location.coordinates.lat}&longitude=${location.coordinates.lng}&start_date=${startDate}&end_date=${endStr}&daily=precipitation_sum&timezone=auto`);
                 const data = await res.json();
-                
                 if (data.daily?.precipitation_sum) {
                     const sum = data.daily.precipitation_sum.reduce((a: number, b: number) => a + (b || 0), 0);
                     setAutoRain(Number(sum.toFixed(1)));
@@ -56,6 +64,34 @@ export default function HydricBalance({ locationId, plotId, startDate }: HydricB
         fetchAutoRain();
     }, [location, startDate]);
 
+    // FETCH SUGERENCIA SATELITAL PARA UNA FECHA ESPECIFICA (Modal)
+    useEffect(() => {
+        const getDailySuggestion = async () => {
+            if (!isModalOpen || formData.type !== 'Lluvia' || !location?.coordinates || !formData.date) {
+                setSatelliteSuggestion({ amount: 0, status: 'idle' });
+                return;
+            }
+
+            setSatelliteSuggestion(prev => ({ ...prev, status: 'loading' }));
+            try {
+                const res = await fetch(`https://archive-api.open-meteo.com/v1/archive?latitude=${location.coordinates.lat}&longitude=${location.coordinates.lng}&start_date=${formData.date}&end_date=${formData.date}&daily=precipitation_sum&timezone=auto`);
+                const data = await res.json();
+                
+                if (data.daily?.precipitation_sum && data.daily.precipitation_sum[0] !== undefined) {
+                    const val = data.daily.precipitation_sum[0];
+                    setSatelliteSuggestion({ amount: val, status: 'found' });
+                } else {
+                    setSatelliteSuggestion({ amount: 0, status: 'not_found' });
+                }
+            } catch (e) {
+                setSatelliteSuggestion({ amount: 0, status: 'not_found' });
+            }
+        };
+
+        const timer = setTimeout(getDailySuggestion, 500); // Debounce
+        return () => clearTimeout(timer);
+    }, [formData.date, formData.type, isModalOpen, location]);
+
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
         const success = await addHydricRecord({
@@ -66,6 +102,10 @@ export default function HydricBalance({ locationId, plotId, startDate }: HydricB
             createdBy: currentUser?.id
         });
         if (success) setIsModalOpen(false);
+    };
+
+    const applySuggestion = () => {
+        setFormData(prev => ({ ...prev, amountMm: satelliteSuggestion.amount }));
     };
 
     return (
@@ -132,7 +172,7 @@ export default function HydricBalance({ locationId, plotId, startDate }: HydricB
             </div>
 
             {/* LIST OF EVENTS */}
-            <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden">
+            <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden overflow-x-auto">
                 <table className="w-full text-sm text-left">
                     <thead className="bg-slate-50 text-[10px] font-black uppercase tracking-widest text-slate-400 border-b">
                         <tr>
@@ -185,7 +225,23 @@ export default function HydricBalance({ locationId, plotId, startDate }: HydricB
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Fecha</label><input type="date" required className="w-full border border-slate-200 p-2.5 rounded-xl text-sm font-bold bg-slate-50" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} /></div>
-                                <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Cantidad (mm)</label><input type="number" step="0.1" required className="w-full border border-slate-200 p-2.5 rounded-xl text-sm font-bold bg-slate-50" value={formData.amountMm || ''} onChange={e => setFormData({...formData, amountMm: Number(e.target.value)})} /></div>
+                                <div>
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Cantidad (mm)</label>
+                                    <input type="number" step="0.1" required className="w-full border border-slate-200 p-2.5 rounded-xl text-sm font-bold bg-slate-50" value={formData.amountMm || ''} onChange={e => setFormData({...formData, amountMm: Number(e.target.value)})} />
+                                    
+                                    {/* SUGERENCIA INTELIGENTE */}
+                                    {formData.type === 'Lluvia' && (
+                                        <div className="mt-2">
+                                            {satelliteSuggestion.status === 'loading' && <div className="flex items-center text-[9px] text-slate-400 animate-pulse font-bold uppercase"><Loader2 size={10} className="animate-spin mr-1"/> Consultando satélite...</div>}
+                                            {satelliteSuggestion.status === 'found' && (
+                                                <button type="button" onClick={applySuggestion} className="flex items-center text-[9px] text-blue-600 font-black uppercase bg-blue-50 px-2 py-1 rounded-lg border border-blue-100 hover:bg-blue-100 transition-all">
+                                                    <Sparkles size={10} className="mr-1"/> Satelital: {satelliteSuggestion.amount} mm <Check size={10} className="ml-1 text-green-500"/>
+                                                </button>
+                                            )}
+                                            {satelliteSuggestion.status === 'not_found' && <div className="text-[9px] text-slate-400 font-bold uppercase italic">Sin datos satelitales hoy</div>}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                             <div>
                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Notas / Observaciones</label>
