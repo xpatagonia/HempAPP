@@ -170,6 +170,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (savedUser) setCurrentUser(JSON.parse(savedUser));
   }, []);
 
+  // Sincronizar título del documento con la marca
+  useEffect(() => {
+    document.title = `${appName} | Gestión Agroindustrial`;
+  }, [appName]);
+
   const toggleTheme = () => {
       const newTheme = theme === 'light' ? 'dark' : 'light';
       setTheme(newTheme);

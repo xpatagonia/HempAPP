@@ -31,7 +31,7 @@ const MetricCard = ({ label, value, trend, icon: Icon, colorClass, subtext }: an
 );
 
 export default function Dashboard() {
-  const { varieties, locations, plots, currentUser, getLatestRecord, trialRecords, tasks } = useAppContext();
+  const { varieties, locations, plots, currentUser, getLatestRecord, trialRecords, tasks, appName } = useAppContext();
 
   const relevantPlots = currentUser?.role === 'client' ? plots.filter(p => p.responsibleIds?.includes(currentUser?.id || '')) : plots;
   const pendingTasks = tasks.filter(t => t.status === 'Pendiente').length;
@@ -67,7 +67,7 @@ export default function Dashboard() {
         <div>
             <div className="flex items-center space-x-2 mb-2">
                 <span className="bg-hemp-600 w-2 h-2 rounded-full animate-pulse"></span>
-                <span className="text-[10px] font-bold text-hemp-600 uppercase tracking-widest">Sincronización v9.0 Activa</span>
+                <span className="text-[10px] font-bold text-hemp-600 uppercase tracking-widest">Panel {appName}</span>
             </div>
             <h1 className="text-4xl font-black text-slate-900 dark:text-white tracking-tight">
                 Hola, {currentUser?.name.split(' ')[0]} <span className="text-slate-400 font-light">| Resumen Agrónomo</span>

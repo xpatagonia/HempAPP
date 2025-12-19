@@ -15,6 +15,7 @@ export default function HydricBalance({ locationId, plotId, startDate }: HydricB
     
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isLoadingAuto, setIsLoadingAuto] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
     const [autoRain, setAutoRain] = useState(0);
     const [formData, setFormData] = useState({ 
         date: new Date().toISOString().split('T')[0], 
@@ -62,7 +63,7 @@ export default function HydricBalance({ locationId, plotId, startDate }: HydricB
             }
         };
         fetchAutoRain();
-    }, [location, startDate]);
+    }, [location, startDate, isModalOpen]); // Se refresca también al cerrar el modal por si se agregó data
 
     // FETCH SUGERENCIA SATELITAL PARA UNA FECHA ESPECIFICA (Modal)
     useEffect(() => {
@@ -94,14 +95,34 @@ export default function HydricBalance({ locationId, plotId, startDate }: HydricB
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
-        const success = await addHydricRecord({
-            ...formData,
-            id: Date.now().toString(),
-            locationId,
-            plotId,
-            createdBy: currentUser?.id
-        });
-        if (success) setIsModalOpen(false);
+        if (isSaving) return;
+        
+        setIsSaving(true);
+        try {
+            const success = await addHydricRecord({
+                ...formData,
+                id: Date.now().toString(),
+                locationId,
+                plotId,
+                createdBy: currentUser?.id
+            });
+            
+            if (success) {
+                setIsModalOpen(false);
+                setFormData({ 
+                    date: new Date().toISOString().split('T')[0], 
+                    type: 'Lluvia', 
+                    amountMm: 0, 
+                    notes: '' 
+                });
+            } else {
+                alert("Error al guardar el registro. Intente nuevamente.");
+            }
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const applySuggestion = () => {
@@ -247,7 +268,10 @@ export default function HydricBalance({ locationId, plotId, startDate }: HydricB
                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Notas / Observaciones</label>
                                 <textarea className="w-full border border-slate-200 p-3 rounded-xl text-sm font-medium bg-slate-50" rows={2} value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})}></textarea>
                             </div>
-                            <button type="submit" className="w-full bg-slate-900 hover:bg-black text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl transition-all">Confirmar Registro</button>
+                            <button type="submit" disabled={isSaving} className="w-full bg-slate-900 hover:bg-black text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl transition-all flex items-center justify-center">
+                                {isSaving ? <Loader2 className="animate-spin mr-2" size={18}/> : null}
+                                {isSaving ? "Guardando..." : "Confirmar Registro"}
+                            </button>
                         </form>
                     </div>
                 </div>
