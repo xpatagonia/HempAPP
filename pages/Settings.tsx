@@ -47,13 +47,14 @@ export default function Settings() {
       setTimeout(() => { setStatus('idle'); }, 2000);
   };
 
-  const SQL_REPAIR_ALL = `-- SCRIPT DE REPARACIÓN INTEGRAL HEMP-APP v3.2
--- 1. REPARAR TABLA DE PARCELAS (Para Trazabilidad Fiscal)
+  const SQL_REPAIR_ALL = `-- SCRIPT DE REPARACIÓN INTEGRAL HEMP-APP v3.3
+-- 1. REPARAR TABLA DE PARCELAS
 ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS "seedBatchId" TEXT;
 
--- 2. REPARAR TABLA DE BITÁCORA (Para Fotos)
+-- 2. REPARAR TABLA DE BITÁCORA (Fotos y Hora)
 ALTER TABLE public.field_logs ADD COLUMN IF NOT EXISTS "photoUrl" TEXT;
 ALTER TABLE public.field_logs ADD COLUMN IF NOT EXISTS "note" TEXT;
+ALTER TABLE public.field_logs ADD COLUMN IF NOT EXISTS "time" TEXT;
 
 -- 3. REPARAR TABLA DE MONITOREO (Estructura Completa de Ensayo)
 ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "time" TEXT;
@@ -74,7 +75,7 @@ ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "leafWeight" NUMERIC;
 ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "freshWeight" NUMERIC;
 ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "createdByName" TEXT;
 
--- Forzar recarga de esquema para que el API reconozca los cambios
+-- Forzar recarga de esquema
 NOTIFY pgrst, 'reload schema';`;
 
   return (
@@ -99,16 +100,16 @@ NOTIFY pgrst, 'reload schema';`;
                   <div className="flex items-start">
                       <ShieldCheck className="text-blue-600 mr-4 flex-shrink-0" size={32}/>
                       <div>
-                          <h3 className="font-black text-blue-900 uppercase text-sm mb-1">Script de Sincronización Total (v3.2)</h3>
+                          <h3 className="font-black text-blue-900 uppercase text-sm mb-1">Script de Sincronización Total (v3.3)</h3>
                           <p className="text-xs text-blue-800 leading-relaxed">
-                              Este script habilita la <strong>Trazabilidad Fiscal</strong>, el guardado de <strong>Fotos</strong> y todos los campos del <strong>Monitoreo Técnico</strong>. Copia y ejecuta este código en el SQL Editor de Supabase para corregir los errores de guardado.
+                              Este script habilita el campo <strong>Hora</strong> en la bitácora y asegura que todos los módulos de ensayo funcionen correctamente. Copia y ejecuta este código en el SQL Editor de Supabase.
                           </p>
                       </div>
                   </div>
                   <div className="mt-6 bg-slate-900 rounded-xl p-5 overflow-hidden relative group border border-slate-700 shadow-inner">
                       <pre className="text-[11px] font-mono text-blue-300 overflow-x-auto h-64 custom-scrollbar leading-relaxed">{SQL_REPAIR_ALL}</pre>
                       <button 
-                        onClick={() => { navigator.clipboard.writeText(SQL_REPAIR_ALL); alert("✅ Script de reparación copiado. Pégalo en Supabase -> SQL Editor."); }}
+                        onClick={() => { navigator.clipboard.writeText(SQL_REPAIR_ALL); alert("✅ Script de reparación copiado."); }}
                         className="absolute top-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition shadow-lg flex items-center"
                       >
                           <Copy size={14} className="mr-2"/> Copiar Script de Reparación

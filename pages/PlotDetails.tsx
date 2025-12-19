@@ -7,7 +7,6 @@ import {
   ArrowLeft, Activity, MapPin, Plus, Eye, Tag, Clock, 
   Sprout, X, Map, ShieldCheck, Info, AlertCircle, Trash2, Edit2,
   Camera, Image as ImageIcon, MessageSquare, ClipboardList, User, Calendar, Ruler, Maximize2, Download, Scale, Wind, Bird, CheckCircle2,
-  // Added RefreshCw to imports
   RefreshCw
 } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
@@ -96,7 +95,14 @@ export default function PlotDetails() {
   });
 
   const [recordForm, setRecordForm] = useState<Partial<TrialRecord>>(getDefaultRecordValues());
-  const [logForm, setLogForm] = useState<Partial<FieldLog>>({ note: '', date: new Date().toISOString().split('T')[0], photoUrl: '' });
+  
+  // Bitácora Form con Hora
+  const [logForm, setLogForm] = useState<Partial<FieldLog>>({ 
+      note: '', 
+      date: new Date().toISOString().split('T')[0], 
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+      photoUrl: '' 
+  });
   const [isUploading, setIsUploading] = useState(false);
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
@@ -140,7 +146,6 @@ export default function PlotDetails() {
       }
   };
 
-  // Fix: Defined handleDeleteRecord to handle measurement deletion
   const handleDeleteRecord = () => {
     if (editingRecordId && window.confirm("¿Estás seguro de eliminar este registro de monitoreo?")) {
         deleteTrialRecord(editingRecordId);
@@ -158,7 +163,12 @@ export default function PlotDetails() {
           const success = await addLog(payload);
           if (success) {
               setIsLogModalOpen(false);
-              setLogForm({ note: '', date: new Date().toISOString().split('T')[0], photoUrl: '' });
+              setLogForm({ 
+                  note: '', 
+                  date: new Date().toISOString().split('T')[0], 
+                  time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+                  photoUrl: '' 
+              });
           } else {
               alert("No se pudo guardar la nota de campo. Verifica el tamaño de la imagen o script de base de datos.");
           }
@@ -273,7 +283,7 @@ export default function PlotDetails() {
                             <thead className="bg-gray-50/50 text-gray-400 uppercase text-[9px] font-black tracking-widest">
                                 <tr><th className="px-8 py-4">Fecha/Hora</th><th className="px-8 py-4">Etapa</th><th className="px-8 py-4 text-center">Altura</th><th className="px-8 py-4 text-center">Vigor</th><th className="px-8 py-4 text-right">Ver</th></tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-100">
+                            <tbody className="divide-y divide-gray-100 dark:divide-dark-border">
                                 {history.length === 0 ? ( <tr><td colSpan={5} className="p-12 text-center text-gray-300 italic font-medium">No se han registrado monitoreos técnicos aún.</td></tr> ) : history.map(r => (
                                     <tr key={r.id} className="hover:bg-gray-50 cursor-pointer group" onClick={() => { setEditingRecordId(r.id); setRecordForm(r); setIsViewMode(true); setIsRecordModalOpen(true); }}>
                                         <td className="px-8 py-5 font-black text-gray-800">{r.date} <span className="block text-[10px] text-gray-400 font-normal">{r.time || '--:--'}</span></td>
@@ -314,9 +324,15 @@ export default function PlotDetails() {
                                     </div>
                                     <div className="ml-14 flex-1 bg-gray-50/50 rounded-2xl p-6 border border-gray-100 hover:border-blue-200 hover:bg-white transition-all shadow-sm">
                                         <div className="flex justify-between items-start mb-4">
-                                            <div className="flex items-center">
-                                                <Calendar size={12} className="text-blue-500 mr-2"/>
-                                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{log.date}</span>
+                                            <div className="flex flex-col">
+                                                <div className="flex items-center">
+                                                    <Calendar size={12} className="text-blue-500 mr-2"/>
+                                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{log.date}</span>
+                                                </div>
+                                                <div className="flex items-center mt-0.5 opacity-60">
+                                                    <Clock size={10} className="text-gray-400 mr-2"/>
+                                                    <span className="text-[10px] font-bold text-gray-500">{log.time || '--:--'}</span>
+                                                </div>
                                             </div>
                                             {isAdmin && <button onClick={() => window.confirm("¿Borrar nota?") && deleteLog(log.id)} className="p-1 hover:bg-red-50 text-gray-300 hover:text-red-500 rounded transition opacity-0 group-hover:opacity-100"><Trash2 size={14}/></button>}
                                         </div>
@@ -428,7 +444,7 @@ export default function PlotDetails() {
            </div>
        )}
 
-       {/* LOG MODAL */}
+       {/* LOG MODAL ACTUALIZADO CON HORA */}
        {isLogModalOpen && (
            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                 <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95">
@@ -437,6 +453,17 @@ export default function PlotDetails() {
                         <button onClick={() => setIsLogModalOpen(false)} className="hover:bg-blue-700 p-1 rounded-full transition"><X size={24}/></button>
                     </div>
                     <form onSubmit={handleSaveLog} className="p-8 space-y-6">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className={labelClass}>Fecha</label>
+                                <input type="date" required className={inputStyle} value={logForm.date} onChange={e => setLogForm({...logForm, date: e.target.value})} />
+                            </div>
+                            <div>
+                                <label className={labelClass}>Hora</label>
+                                <input type="time" required className={inputStyle} value={logForm.time} onChange={e => setLogForm({...logForm, time: e.target.value})} />
+                            </div>
+                        </div>
+
                         <div>
                             <label className="text-[10px] font-black uppercase mb-2 block text-gray-400 tracking-widest">Observación de Campo</label>
                             <textarea required className="w-full border border-gray-200 p-4 rounded-2xl bg-gray-50 font-medium outline-none focus:ring-2 focus:ring-blue-500 min-h-[120px] shadow-inner" placeholder="Escribe tus observaciones aquí..." value={logForm.note} onChange={e => setLogForm({...logForm, note: e.target.value})}></textarea>

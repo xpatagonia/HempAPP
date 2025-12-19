@@ -177,6 +177,7 @@ export interface FieldLog {
   id: string;
   plotId: string;
   date: string;
+  time?: string; // Nuevo
   note: string;
   photoUrl?: string;
 }
