@@ -29,6 +29,11 @@ interface AppContextType {
   hydricRecords: HydricRecord[];
   notifications: AppNotification[]; 
   
+  // Branding states
+  appName: string;
+  appLogo: string | null;
+  updateBranding: (name: string, logo: string | null) => void;
+
   currentUser: User | null;
   usersList: User[];
   login: (email: string, password: string) => Promise<boolean>;
@@ -143,6 +148,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [storagePoints, setStoragePoints] = useState<StoragePoint[]>([]);
   const [hydricRecords, setHydricRecords] = useState<HydricRecord[]>([]);
   
+  // Branding initialization
+  const [appName, setAppName] = useState<string>(localStorage.getItem('ht_branding_name') || 'HempC');
+  const [appLogo, setAppLogo] = useState<string | null>(localStorage.getItem('ht_branding_logo'));
+
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -167,6 +176,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       localStorage.setItem('ht_theme', newTheme);
       if (newTheme === 'dark') document.documentElement.classList.add('dark');
       else document.documentElement.classList.remove('dark');
+  };
+
+  const updateBranding = (name: string, logo: string | null) => {
+      setAppName(name);
+      setAppLogo(logo);
+      localStorage.setItem('ht_branding_name', name);
+      if (logo) localStorage.setItem('ht_branding_logo', logo);
+      else localStorage.removeItem('ht_branding_logo');
   };
 
   const notifications = useMemo(() => {
@@ -337,6 +354,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   return (
     <AppContext.Provider value={{
       projects, varieties, locations, plots, trialRecords, logs, tasks, seedBatches, seedMovements, suppliers, clients, resources, storagePoints, hydricRecords, notifications,
+      appName, appLogo, updateBranding,
       currentUser, usersList, login, logout, refreshData, lastSyncTime,
       addProject, updateProject, deleteProject,
       addVariety, updateVariety, deleteVariety,

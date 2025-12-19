@@ -28,7 +28,7 @@ const NavItem = ({ to, icon: Icon, label, badge }: any) => {
 };
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { currentUser, logout, theme, toggleTheme, tasks } = useAppContext();
+  const { currentUser, logout, theme, toggleTheme, tasks, appName, appLogo } = useAppContext();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   
   if (!currentUser) return <>{children}</>;
@@ -44,15 +44,17 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col transition-transform duration-300 lg:translate-x-0 ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="h-20 flex items-center justify-between px-8 border-b border-slate-100 dark:border-slate-800">
           <div className="flex items-center space-x-3">
-             <div className="bg-hemp-600 p-2 rounded-xl text-white shadow-lg shadow-hemp-600/30"><Leaf size={22} /></div>
-             <span className="text-2xl font-black tracking-tighter dark:text-white">Hemp<span className="text-hemp-600">C</span></span>
+             <div className="bg-hemp-600 p-2 rounded-xl text-white shadow-lg shadow-hemp-600/30 overflow-hidden flex items-center justify-center min-w-[38px] min-h-[38px]">
+                {appLogo ? <img src={appLogo} alt="Logo" className="w-full h-full object-contain" /> : <Leaf size={22} />}
+             </div>
+             <span className="text-2xl font-black tracking-tighter dark:text-white truncate" title={appName}>{appName}</span>
           </div>
           <button className="lg:hidden" onClick={() => setIsMobileOpen(false)}><X size={20} className="text-slate-400"/></button>
         </div>
 
         <nav className="flex-1 px-4 py-8 space-y-1 overflow-y-auto custom-scrollbar">
           <NavItem to="/" icon={LayoutDashboard} label="Dashboard" />
-          <NavItem to="/advisor" icon={Bot} label="HempAI Core" />
+          <NavItem to="/advisor" icon={Bot} label="AI Terminal" />
           
           <div className="pt-8 pb-3 px-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Manejo Técnico</div>
           <NavItem to="/locations" icon={Tractor} label="Campos & Sitios" />
@@ -65,7 +67,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           <NavItem to="/seed-batches" icon={Package} label="Inventario Fiscal" />
           <NavItem to="/varieties" icon={BookOpen} label="Genética" />
           <NavItem to="/suppliers" icon={Warehouse} label="Semilleros" />
-          <NavItem to="/clients" icon={Users} label="Productores" />
+          <NavItem to="/clients" icon={Users} label="Socios de Red" />
 
           <div className="pt-8 pb-3 px-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Sistema</div>
           <NavItem to="/analytics" icon={BarChart3} label="Analítica Avanzada" />

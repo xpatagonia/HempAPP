@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { Lock, Mail, ArrowRight, AlertCircle, Loader2, Leaf, ShieldCheck } from 'lucide-react';
 
 export default function Login() {
-  const { login } = useAppContext();
+  const { login, appName, appLogo } = useAppContext();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -35,12 +35,14 @@ export default function Login() {
           
           <div className="relative z-10">
               <div className="flex items-center space-x-3 mb-12">
-                  <div className="bg-white p-2 rounded-xl text-hemp-700 shadow-xl"><Leaf size={28} /></div>
-                  <span className="text-3xl font-black text-white tracking-tighter italic">HempC</span>
+                  <div className="bg-white p-2 rounded-xl text-hemp-700 shadow-xl overflow-hidden flex items-center justify-center min-w-[44px] min-h-[44px]">
+                    {appLogo ? <img src={appLogo} alt="Logo" className="w-10 h-10 object-contain" /> : <Leaf size={28} />}
+                  </div>
+                  <span className="text-3xl font-black text-white tracking-tighter italic">{appName}</span>
               </div>
               <h1 className="text-5xl font-extrabold text-white leading-tight mb-6">
                   Inteligencia para el <br />
-                  <span className="text-hemp-400">Cáñamo Industrial.</span>
+                  <span className="text-hemp-400">Desarrollo Agroindustrial.</span>
               </h1>
               <p className="text-hemp-100 text-lg max-w-md leading-relaxed opacity-80">
                   La plataforma líder en gestión de ensayos agronómicos, trazabilidad de genética y análisis de rendimientos.
@@ -53,7 +55,7 @@ export default function Login() {
                   <span className="text-sm font-bold uppercase tracking-widest">Protocolo Seguro</span>
               </div>
               <div className="h-4 w-px bg-hemp-700"></div>
-              <span className="text-sm font-medium">v8.2 Cloud</span>
+              <span className="text-sm font-medium">v11.0 WhiteLabel</span>
           </div>
       </div>
 
@@ -61,8 +63,10 @@ export default function Login() {
       <div className="flex-1 flex flex-col items-center justify-center p-8 md:p-16 bg-white dark:bg-slate-950">
         <div className="w-full max-w-md">
             <div className="lg:hidden flex items-center space-x-2 mb-12 justify-center">
-                <Leaf className="text-hemp-600" size={32} />
-                <span className="text-3xl font-black text-slate-900 dark:text-white italic">HempC</span>
+                <div className="p-2 bg-hemp-600 rounded-xl text-white">
+                    {appLogo ? <img src={appLogo} alt="Logo" className="w-8 h-8 object-contain" /> : <Leaf size={32} />}
+                </div>
+                <span className="text-3xl font-black text-slate-900 dark:text-white italic">{appName}</span>
             </div>
 
             <div className="mb-10 text-center lg:text-left">
@@ -104,7 +108,7 @@ export default function Login() {
             </form>
 
             <div className="mt-12 pt-8 border-t border-slate-100 dark:border-slate-900 text-center">
-                <p className="text-slate-400 text-xs font-medium">¿Necesita acceso? <a href="#" className="text-hemp-600 font-bold hover:underline">Contacte al Administrador</a></p>
+                <p className="text-slate-400 text-xs font-medium">¿Necesita acceso? <a href="#" className="text-hemp-600 font-bold hover:underline">Contacte al Administrador de {appName}</a></p>
             </div>
         </div>
       </div>
