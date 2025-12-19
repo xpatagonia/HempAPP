@@ -63,15 +63,15 @@ interface AppContextType {
   updateLocation: (l: Location) => void;
   deleteLocation: (id: string) => void;
   
-  addPlot: (p: Plot) => Promise<void>;
+  addPlot: (p: Plot) => Promise<boolean>;
   updatePlot: (p: Plot) => void;
   deletePlot: (id: string) => Promise<void>;
   
-  addTrialRecord: (r: TrialRecord) => void;
+  addTrialRecord: (r: TrialRecord) => Promise<boolean>;
   updateTrialRecord: (r: TrialRecord) => void;
   deleteTrialRecord: (id: string) => void;
   
-  addLog: (l: FieldLog) => void;
+  addLog: (l: FieldLog) => Promise<boolean>;
   updateLog: (l: FieldLog) => void;
   deleteLog: (id: string) => void;
   
@@ -248,7 +248,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           return true;
       } else {
           const { error } = await supabase.from(table).insert([item]);
-          if (error) { console.error(error); return false; }
+          if (error) { 
+              console.error(`Error saving to ${table}:`, error.message, error.details); 
+              return false; 
+          }
           setter((prev: any[]) => [...prev, item]);
           return true;
       }
@@ -259,6 +262,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           setter((prev: any[]) => { const n = prev.map((i: any) => i.id === item.id ? item : i); saveToLocal(localKey, n); return n; });
       } else {
           const { error } = await supabase.from(table).update(item).eq('id', item.id);
+          if (error) console.error(`Error updating ${table}:`, error.message);
           setter((prev: any[]) => prev.map((i: any) => i.id === item.id ? item : i));
       }
   };
@@ -281,7 +285,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const addLocation = (l: Location) => genericAdd('locations', l, setLocations, 'locations');
   const updateLocation = (l: Location) => genericUpdate('locations', l, setLocations, 'locations');
   const deleteLocation = (id: string) => genericDelete('locations', id, setLocations, 'locations');
-  const addPlot = (p: Plot) => genericAdd('plots', p, setPlots, 'plots').then(() => {});
+  const addPlot = (p: Plot) => genericAdd('plots', p, setPlots, 'plots');
   const updatePlot = (p: Plot) => genericUpdate('plots', p, setPlots, 'plots');
   const deletePlot = (id: string) => genericDelete('plots', id, setPlots, 'plots').then(() => {});
   const addVariety = (v: Variety) => { genericAdd('varieties', v, setVarieties, 'varieties'); };
@@ -310,7 +314,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const deleteSeedMovement = async (id: string) => { 
       const move = seedMovements.find(m => m.id === id);
       if (move) {
-          // RESTORE STOCK TO BATCH
           const batch = seedBatches.find(b => b.id === move.batchId);
           if (batch) {
               const updatedBatch = { ...batch, remainingQuantity: batch.remainingQuantity + move.quantity };
@@ -320,11 +323,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       await genericDelete('seed_movements', id, setSeedMovements, 'seedMovements');
   };
 
-  const addTrialRecord = (r: TrialRecord) => { genericAdd('trial_records', r, setTrialRecords, 'trialRecords'); };
+  const addTrialRecord = (r: TrialRecord) => genericAdd('trial_records', r, setTrialRecords, 'trialRecords');
   const updateTrialRecord = (r: TrialRecord) => { genericUpdate('trial_records', r, setTrialRecords, 'trialRecords'); };
   const deleteTrialRecord = (id: string) => { genericDelete('trial_records', id, setTrialRecords, 'trialRecords'); };
   
-  const addLog = (l: FieldLog) => { genericAdd('field_logs', l, setLogs, 'logs'); };
+  const addLog = (l: FieldLog) => genericAdd('field_logs', l, setLogs, 'logs');
   const updateLog = (l: FieldLog) => { genericUpdate('field_logs', l, setLogs, 'logs'); };
   const deleteLog = (id: string) => { genericDelete('field_logs', id, setLogs, 'logs'); };
 

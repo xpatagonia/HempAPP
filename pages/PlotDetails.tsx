@@ -6,7 +6,9 @@ import { TrialRecord, Plot, FieldLog } from '../types';
 import { 
   ArrowLeft, Activity, MapPin, Plus, Eye, Tag, Clock, 
   Sprout, X, Map, ShieldCheck, Info, AlertCircle, Trash2, Edit2,
-  Camera, Image as ImageIcon, MessageSquare, ClipboardList, User, Calendar, Ruler, Maximize2, Download, Scale, Wind, Bird
+  Camera, Image as ImageIcon, MessageSquare, ClipboardList, User, Calendar, Ruler, Maximize2, Download, Scale, Wind, Bird, CheckCircle2,
+  // Added RefreshCw to imports
+  RefreshCw
 } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
 import WeatherWidget from '../components/WeatherWidget';
@@ -53,12 +55,13 @@ const CycleGraph = ({ sowingDate, cycleDays }: { sowingDate: string, cycleDays: 
 export default function PlotDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { plots, locations, varieties, getPlotHistory, addTrialRecord, updateTrialRecord, deleteTrialRecord, currentUser, seedBatches, logs, addLog } = useAppContext();
+  const { plots, locations, varieties, getPlotHistory, addTrialRecord, updateTrialRecord, deleteTrialRecord, currentUser, seedBatches, logs, addLog, deleteLog } = useAppContext();
   
   const plot = plots.find(p => p.id === id);
   const location = locations.find(l => l.id === plot?.locationId);
   const variety = varieties.find(v => v.id === plot?.varietyId);
   const seedBatch = seedBatches.find(b => b.id === plot?.seedBatchId);
+  
   const history = getPlotHistory(id || '');
   const plotLogs = useMemo(() => logs.filter(l => l.plotId === id).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()), [logs, id]);
   
@@ -68,8 +71,8 @@ export default function PlotDetails() {
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
   const [isViewMode, setIsViewMode] = useState(false);
   const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   
-  // Default values function for resetting form
   const getDefaultRecordValues = () => ({ 
     date: new Date().toISOString().split('T')[0], 
     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }), 
@@ -84,6 +87,7 @@ export default function PlotDetails() {
     yield: 0,
     stemWeight: 0,
     leafWeight: 0,
+    freshWeight: 0,
     emergenceDate: '',
     floweringDate: '',
     harvestDate: '',
@@ -107,8 +111,9 @@ export default function PlotDetails() {
       setIsRecordModalOpen(true);
   };
 
-  const handleSaveRecord = (e: React.FormEvent) => {
+  const handleSaveRecord = async (e: React.FormEvent) => {
       e.preventDefault();
+      setIsSaving(true);
       const payload: any = { 
           ...recordForm, 
           plotId: plot.id, 
@@ -116,26 +121,59 @@ export default function PlotDetails() {
           createdByName: currentUser?.name 
       };
       
-      if (editingRecordId) {
-          updateTrialRecord({ ...payload, id: editingRecordId });
-      } else {
-          addTrialRecord({ ...payload, id: Date.now().toString() });
+      try {
+          let success = false;
+          if (editingRecordId) {
+              updateTrialRecord({ ...payload, id: editingRecordId });
+              success = true;
+          } else {
+              success = await addTrialRecord({ ...payload, id: Date.now().toString() });
+          }
+          
+          if (success) {
+              setIsRecordModalOpen(false);
+          } else {
+              alert("Error al guardar el monitoreo. Revisa tu conexión o script de base de datos.");
+          }
+      } finally {
+          setIsSaving(false);
       }
-      setIsRecordModalOpen(false);
   };
 
-  const handleSaveLog = (e: React.FormEvent) => {
+  // Fix: Defined handleDeleteRecord to handle measurement deletion
+  const handleDeleteRecord = () => {
+    if (editingRecordId && window.confirm("¿Estás seguro de eliminar este registro de monitoreo?")) {
+        deleteTrialRecord(editingRecordId);
+        setIsRecordModalOpen(false);
+    }
+  };
+
+  const handleSaveLog = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!logForm.note) return;
+      setIsSaving(true);
       const payload = { ...logForm, id: Date.now().toString(), plotId: plot.id } as FieldLog;
-      addLog(payload);
-      setIsLogModalOpen(false);
-      setLogForm({ note: '', date: new Date().toISOString().split('T')[0], photoUrl: '' });
+      
+      try {
+          const success = await addLog(payload);
+          if (success) {
+              setIsLogModalOpen(false);
+              setLogForm({ note: '', date: new Date().toISOString().split('T')[0], photoUrl: '' });
+          } else {
+              alert("No se pudo guardar la nota de campo. Verifica el tamaño de la imagen o script de base de datos.");
+          }
+      } finally {
+          setIsSaving(false);
+      }
   };
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (file) {
+          if (file.size > 2 * 1024 * 1024) {
+              alert("La imagen es demasiado grande. Máximo 2MB.");
+              return;
+          }
           setIsUploading(true);
           const reader = new FileReader();
           reader.onloadend = () => {
@@ -143,13 +181,6 @@ export default function PlotDetails() {
               setIsUploading(false);
           };
           reader.readAsDataURL(file);
-      }
-  };
-
-  const handleDeleteRecord = () => {
-      if (editingRecordId && window.confirm("¿Estás seguro de eliminar este registro técnico?")) {
-          deleteTrialRecord(editingRecordId);
-          setIsRecordModalOpen(false);
       }
   };
 
@@ -187,7 +218,7 @@ export default function PlotDetails() {
               <KPI label="Días Ciclo" value={Math.floor((Date.now() - new Date(plot.sowingDate).getTime()) / 86400000)} icon={Clock} color="bg-blue-100" />
               <KPI label="Superficie" value={`${plot.surfaceArea} ${plot.surfaceUnit}`} icon={Map} color="bg-purple-100" />
               <KPI label="Densidad" value={plot.density} subtext="pl/m²" icon={Sprout} color="bg-emerald-100" />
-              <KPI label="Lote Semilla" value={seedBatch?.batchCode || 'GEN-001'} icon={Tag} color="bg-amber-100" />
+              <KPI label="Lote Semilla" value={seedBatch?.batchCode || 'VINCULANDO...'} icon={Tag} color="bg-amber-100" />
           </div>
       </div>
 
@@ -201,7 +232,7 @@ export default function PlotDetails() {
                   </div>
                   <div className="p-8 space-y-6">
                       {seedBatch ? (
-                          <div className="space-y-6">
+                          <div className="space-y-6 animate-in slide-in-from-left-2">
                               <div className="bg-gradient-to-br from-hemp-50 to-white p-6 rounded-2xl border border-hemp-100 text-center shadow-inner">
                                   <p className="text-[10px] font-black text-hemp-600 uppercase mb-2 tracking-[0.2em]">Cód. Master de Lote</p>
                                   <p className="text-2xl font-black text-hemp-900 font-mono tracking-tighter">{seedBatch.batchCode}</p>
@@ -214,8 +245,9 @@ export default function PlotDetails() {
                           </div>
                       ) : (
                           <div className="text-center py-12">
-                              <AlertCircle size={40} className="mx-auto text-gray-200 mb-3"/>
+                              <AlertCircle size={40} className="mx-auto text-amber-500 mb-3"/>
                               <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Sin lote vinculado</p>
+                              <p className="text-xs text-gray-400 mt-2 px-4 leading-relaxed">Este lote no registra un ID de semilla master. Verifica el guardado de la tabla 'plots'.</p>
                           </div>
                       )}
                   </div>
@@ -266,18 +298,18 @@ export default function PlotDetails() {
                     <div className="bg-white rounded-3xl p-8 border shadow-sm">
                         <div className="flex justify-between items-center mb-8">
                             <h2 className="font-black text-gray-900 uppercase text-[10px] tracking-[0.2em] flex items-center">
-                                <MessageSquare size={16} className="mr-2 text-blue-500"/> Notas de Campo
+                                <MessageSquare size={16} className="mr-2 text-blue-500"/> Notas de Campo Multimedia
                             </h2>
                             <button onClick={() => setIsLogModalOpen(true)} className="bg-blue-600 text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest shadow-lg hover:bg-blue-700 transition flex items-center">
-                                <Camera size={16} className="mr-2"/> Agregar Nota
+                                <Camera size={16} className="mr-2"/> Agregar Nota con Foto
                             </button>
                         </div>
                         <div className="relative space-y-8 before:absolute before:inset-0 before:ml-5 before:-translate-x-px before:h-full before:w-0.5 before:bg-gradient-to-b before:from-blue-200 before:via-blue-100 before:to-transparent">
                             {plotLogs.length === 0 ? (
-                                <div className="text-center py-12 text-gray-400 italic bg-gray-50 rounded-2xl border border-dashed">Aún no hay entradas en la bitácora.</div>
+                                <div className="text-center py-12 text-gray-400 italic bg-gray-50 rounded-2xl border border-dashed">Aún no hay entradas en la bitácora multimedia.</div>
                             ) : plotLogs.map(log => (
                                 <div key={log.id} className="relative flex items-start group">
-                                    <div className="absolute left-0 w-10 h-10 bg-white border-4 border-blue-50 rounded-full flex items-center justify-center z-10 shadow-sm">
+                                    <div className="absolute left-0 w-10 h-10 bg-white border-4 border-blue-50 rounded-full flex items-center justify-center z-10 shadow-sm group-hover:scale-110 transition-transform">
                                         <div className="w-2.5 h-2.5 rounded-full bg-blue-600"></div>
                                     </div>
                                     <div className="ml-14 flex-1 bg-gray-50/50 rounded-2xl p-6 border border-gray-100 hover:border-blue-200 hover:bg-white transition-all shadow-sm">
@@ -286,6 +318,7 @@ export default function PlotDetails() {
                                                 <Calendar size={12} className="text-blue-500 mr-2"/>
                                                 <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{log.date}</span>
                                             </div>
+                                            {isAdmin && <button onClick={() => window.confirm("¿Borrar nota?") && deleteLog(log.id)} className="p-1 hover:bg-red-50 text-gray-300 hover:text-red-500 rounded transition opacity-0 group-hover:opacity-100"><Trash2 size={14}/></button>}
                                         </div>
                                         <p className="text-sm text-gray-700 leading-relaxed font-medium mb-5">{log.note}</p>
                                         {log.photoUrl && (
@@ -311,19 +344,19 @@ export default function PlotDetails() {
           </div>
       )}
 
-      {/* RECORD MODAL EXPANDIDO CON TODOS LOS CAMPOS DE ENSAYO */}
+      {/* RECORD MODAL */}
       {isRecordModalOpen && (
            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-3xl max-h-[95vh] overflow-y-auto animate-in zoom-in-95 duration-200">
                    <div className="px-8 py-6 border-b flex justify-between bg-gray-50 items-center sticky top-0 z-20">
-                       <h2 className="font-black text-gray-800 uppercase text-xs tracking-widest">{isViewMode ? 'Detalle de Inspección' : (editingRecordId ? 'Editar Registro' : 'Nueva Medición Técnica de Ensayo')}</h2>
+                       <h2 className="font-black text-gray-800 uppercase text-xs tracking-widest">{isViewMode ? 'Ficha de Monitoreo' : (editingRecordId ? 'Editar Registro' : 'Nueva Medición Técnica de Ensayo')}</h2>
                        <button onClick={() => setIsRecordModalOpen(false)} className="p-1 hover:bg-gray-200 rounded-full transition"><X size={24}/></button>
                    </div>
                    <div className="p-8">
                        <form onSubmit={handleSaveRecord} className="space-y-10">
                            <section>
                                <h3 className="text-xs font-black text-hemp-600 uppercase tracking-widest mb-4 flex items-center border-b pb-2">
-                                   <Clock size={14} className="mr-2"/> Datos Generales y Temporalidad
+                                   <Clock size={14} className="mr-2"/> Datos Generales y Tiempo
                                </h3>
                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                    <div><label className={labelClass}>Fecha de Registro</label><input type="date" required disabled={isViewMode} className={inputStyle} value={recordForm.date} onChange={e => setRecordForm({...recordForm, date: e.target.value})}/></div>
@@ -335,14 +368,14 @@ export default function PlotDetails() {
 
                            <section>
                                <h3 className="text-xs font-black text-blue-600 uppercase tracking-widest mb-4 flex items-center border-b pb-2">
-                                   <Sprout size={14} className="mr-2"/> Fenología y Recuento Poblacional
+                                   <Sprout size={14} className="mr-2"/> Fenología y Población
                                </h3>
                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                    <div><label className={labelClass}>Fecha Emergencia</label><input type="date" disabled={isViewMode} className={inputStyle} value={recordForm.emergenceDate} onChange={e => setRecordForm({...recordForm, emergenceDate: e.target.value})}/></div>
                                    <div><label className={labelClass}>Fecha Floración</label><input type="date" disabled={isViewMode} className={inputStyle} value={recordForm.floweringDate} onChange={e => setRecordForm({...recordForm, floweringDate: e.target.value})}/></div>
                                    <div><label className={labelClass}>Réplica (Rep)</label><input type="number" disabled={isViewMode} className={inputStyle} value={recordForm.replicate} onChange={e => setRecordForm({...recordForm, replicate: Number(e.target.value)})}/></div>
                                    <div><label className={labelClass}>N° plantas/metro lineal</label><input type="number" step="0.1" disabled={isViewMode} className={inputStyle} value={recordForm.plantsPerMeter} onChange={e => setRecordForm({...recordForm, plantsPerMeter: Number(e.target.value)})}/></div>
-                                   <div><label className={labelClass}>Uniformidad Parcela (%)</label><input type="number" max="100" disabled={isViewMode} className={inputStyle} value={recordForm.uniformity} onChange={e => setRecordForm({...recordForm, uniformity: Number(e.target.value)})}/></div>
+                                   <div><label className={labelClass}>Uniformidad (%)</label><input type="number" max="100" disabled={isViewMode} className={inputStyle} value={recordForm.uniformity} onChange={e => setRecordForm({...recordForm, uniformity: Number(e.target.value)})}/></div>
                                    <div><label className={labelClass}>Vigor General (%)</label><input type="number" max="100" disabled={isViewMode} className={inputStyle} value={recordForm.vigor} onChange={e => setRecordForm({...recordForm, vigor: Number(e.target.value)})}/></div>
                                    <div><label className={labelClass}>Altura de Planta (cm)</label><input type="number" step="0.1" disabled={isViewMode} className={inputStyle} value={recordForm.plantHeight} onChange={e => setRecordForm({...recordForm, plantHeight: Number(e.target.value)})}/></div>
                                </div>
@@ -350,40 +383,42 @@ export default function PlotDetails() {
 
                            <section>
                                <h3 className="text-xs font-black text-red-600 uppercase tracking-widest mb-4 flex items-center border-b pb-2">
-                                   <Wind size={14} className="mr-2"/> Sanidad y Daños Adversos
+                                   <Wind size={14} className="mr-2"/> Daños y Sanidad
                                </h3>
                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                    <div className="grid grid-cols-2 gap-4">
-                                       <div><label className={labelClass}>Vuelco (Lodging %)</label><input type="number" max="100" disabled={isViewMode} className={inputStyle} value={recordForm.lodging} onChange={e => setRecordForm({...recordForm, lodging: Number(e.target.value)})}/></div>
-                                       <div><label className={labelClass}>Daño por Aves (%)</label><div className="relative"><Bird size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300"/><input type="number" max="100" disabled={isViewMode} className={`${inputStyle} pl-8`} value={recordForm.birdDamage} onChange={e => setRecordForm({...recordForm, birdDamage: Number(e.target.value)})}/></div></div>
+                                       <div><label className={labelClass}>Vuelco (%)</label><input type="number" max="100" disabled={isViewMode} className={inputStyle} value={recordForm.lodging} onChange={e => setRecordForm({...recordForm, lodging: Number(e.target.value)})}/></div>
+                                       <div><label className={labelClass}>Daño Aves (%)</label><div className="relative"><Bird size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300"/><input type="number" max="100" disabled={isViewMode} className={`${inputStyle} pl-8`} value={recordForm.birdDamage} onChange={e => setRecordForm({...recordForm, birdDamage: Number(e.target.value)})}/></div></div>
                                    </div>
                                    <div className="grid grid-cols-1 gap-4">
-                                       <div><label className={labelClass}>Enfermedades Observadas</label><input type="text" placeholder="Ej: Oidio, Botrytis..." disabled={isViewMode} className={inputStyle} value={recordForm.diseases} onChange={e => setRecordForm({...recordForm, diseases: e.target.value})}/></div>
-                                       <div><label className={labelClass}>Plagas Observadas</label><input type="text" placeholder="Ej: Arañuela, Pulgón..." disabled={isViewMode} className={inputStyle} value={recordForm.pests} onChange={e => setRecordForm({...recordForm, pests: e.target.value})}/></div>
+                                       <div><label className={labelClass}>Enfermedades</label><input type="text" placeholder="Ej: Oidio..." disabled={isViewMode} className={inputStyle} value={recordForm.diseases} onChange={e => setRecordForm({...recordForm, diseases: e.target.value})}/></div>
+                                       <div><label className={labelClass}>Plagas</label><input type="text" placeholder="Ej: Pulgón..." disabled={isViewMode} className={inputStyle} value={recordForm.pests} onChange={e => setRecordForm({...recordForm, pests: e.target.value})}/></div>
                                    </div>
                                </div>
                            </section>
 
                            <section className="bg-amber-50/50 p-6 rounded-[24px] border border-amber-100">
                                <h3 className="text-xs font-black text-amber-700 uppercase tracking-widest mb-4 flex items-center border-b border-amber-200 pb-2">
-                                   <Scale size={14} className="mr-2"/> Cosecha y Biomasa Final
+                                   <Scale size={14} className="mr-2"/> Rendimiento y Biomasa
                                </h3>
                                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                                   <div className="md:col-span-2"><label className={labelClass}>Fecha de Cosecha</label><input type="date" disabled={isViewMode} className={inputStyle} value={recordForm.harvestDate} onChange={e => setRecordForm({...recordForm, harvestDate: e.target.value})}/></div>
+                                   <div className="md:col-span-2"><label className={labelClass}>Fecha Cosecha</label><input type="date" disabled={isViewMode} className={inputStyle} value={recordForm.harvestDate} onChange={e => setRecordForm({...recordForm, harvestDate: e.target.value})}/></div>
                                    <div><label className={labelClass}>Rendimiento (kg/ha)</label><input type="number" disabled={isViewMode} className={inputStyle} value={recordForm.yield} onChange={e => setRecordForm({...recordForm, yield: Number(e.target.value)})}/></div>
                                    <div><label className={labelClass}>Peso Tallo (g)</label><input type="number" step="0.1" disabled={isViewMode} className={inputStyle} value={recordForm.stemWeight} onChange={e => setRecordForm({...recordForm, stemWeight: Number(e.target.value)})}/></div>
-                                   <div><label className={labelClass}>Peso Hoja (g)</label><input type="number" step="0.1" disabled={isViewMode} className={inputStyle} value={recordForm.leafWeight} onChange={e => setRecordForm({...recordForm, leafWeight: Number(e.target.value)})}/></div>
                                </div>
                            </section>
                            
                            <div className="flex justify-between pt-8 border-t mt-8">
                                {isAdmin && editingRecordId && (
-                                   <button type="button" onClick={handleDeleteRecord} className="px-6 py-2.5 text-red-600 hover:bg-red-50 rounded-xl font-black text-xs uppercase tracking-widest transition">Eliminar Registro</button>
+                                   <button type="button" onClick={handleDeleteRecord} className="px-6 py-2.5 text-red-600 hover:bg-red-50 rounded-xl font-black text-xs uppercase tracking-widest transition">Eliminar</button>
                                )}
                                <div className="flex space-x-3 ml-auto">
                                    <button type="button" onClick={() => setIsRecordModalOpen(false)} className="px-8 py-2.5 text-gray-500 font-black text-xs uppercase tracking-widest hover:bg-gray-100 rounded-xl transition">Cerrar</button>
                                    {!isViewMode && (
-                                       <button type="submit" className="px-10 py-2.5 bg-hemp-600 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-xl hover:bg-hemp-700 transition">Confirmar y Guardar</button>
+                                       <button type="submit" disabled={isSaving} className="px-10 py-2.5 bg-hemp-600 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-xl hover:bg-hemp-700 transition flex items-center">
+                                           {isSaving && <RefreshCw className="animate-spin mr-2" size={16}/>}
+                                           Guardar Registro
+                                       </button>
                                    )}
                                </div>
                            </div>
@@ -404,16 +439,16 @@ export default function PlotDetails() {
                     <form onSubmit={handleSaveLog} className="p-8 space-y-6">
                         <div>
                             <label className="text-[10px] font-black uppercase mb-2 block text-gray-400 tracking-widest">Observación de Campo</label>
-                            <textarea required className="w-full border border-gray-200 p-4 rounded-2xl bg-gray-50 font-medium outline-none focus:ring-2 focus:ring-blue-500 min-h-[120px] shadow-inner" placeholder="Describa plagas, anomalías o progresos..." value={logForm.note} onChange={e => setLogForm({...logForm, note: e.target.value})}></textarea>
+                            <textarea required className="w-full border border-gray-200 p-4 rounded-2xl bg-gray-50 font-medium outline-none focus:ring-2 focus:ring-blue-500 min-h-[120px] shadow-inner" placeholder="Escribe tus observaciones aquí..." value={logForm.note} onChange={e => setLogForm({...logForm, note: e.target.value})}></textarea>
                         </div>
                         <div>
-                            <label className="text-[10px] font-black uppercase mb-2 block text-gray-400 tracking-widest">Registro Fotográfico</label>
+                            <label className="text-[10px] font-black uppercase mb-2 block text-gray-400 tracking-widest">Evidencia Fotográfica</label>
                             <div className="flex items-center gap-4">
                                 <label className={`flex-1 border-2 border-dashed rounded-2xl p-6 flex flex-col items-center justify-center cursor-pointer transition-all ${logForm.photoUrl ? 'border-green-200 bg-green-50' : 'border-gray-200 hover:border-blue-400 bg-gray-50 hover:bg-white'}`}>
-                                    {isUploading ? <Clock className="animate-spin text-blue-500"/> : (
+                                    {isUploading ? <RefreshCw className="animate-spin text-blue-500"/> : (
                                         <>
-                                            {logForm.photoUrl ? <ImageIcon className="text-green-500 mb-2" size={32}/> : <Camera className="text-gray-400 mb-2" size={32}/>}
-                                            <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{logForm.photoUrl ? 'Foto Cargada' : 'Subir Imagen'}</span>
+                                            {logForm.photoUrl ? <CheckCircle2 className="text-green-500 mb-2" size={32}/> : <Camera className="text-gray-400 mb-2" size={32}/>}
+                                            <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{logForm.photoUrl ? 'Imagen Lista' : 'Capturar o Subir'}</span>
                                         </>
                                     )}
                                     <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} disabled={isUploading}/>
@@ -426,7 +461,10 @@ export default function PlotDetails() {
                                 )}
                             </div>
                         </div>
-                        <button type="submit" disabled={isUploading} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:bg-blue-700 transition disabled:opacity-50">Registrar en Bitácora</button>
+                        <button type="submit" disabled={isSaving || isUploading} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:bg-blue-700 transition flex items-center justify-center">
+                            {isSaving && <RefreshCw className="animate-spin mr-2" size={16}/>}
+                            Confirmar Entrada
+                        </button>
                     </form>
                 </div>
            </div>
