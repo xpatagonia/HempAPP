@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Mail, ArrowRight, AlertTriangle, RefreshCw, Sparkles, Shield, Cpu } from 'lucide-react';
+import { Lock, Mail, ArrowRight, AlertCircle, Loader2, Leaf, ShieldCheck } from 'lucide-react';
 
 export default function Login() {
   const { login } = useAppContext();
@@ -18,68 +18,93 @@ export default function Login() {
     try {
         const success = await login(email, password);
         if (success) navigate('/');
-        else { setError('AUTH_FAILURE_403'); setIsLoading(false); }
-    } catch (err) { setError('NODE_SYNC_ERROR'); setIsLoading(false); }
+        else { setError('Credenciales incorrectas. Verifique e intente de nuevo.'); setIsLoading(false); }
+    } catch (err) { setError('Error de conexión con el servidor.'); setIsLoading(false); }
   };
 
   return (
-    <div className="min-h-screen bg-[#000500] flex flex-col items-center justify-center p-6 relative overflow-hidden font-sans">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col md:flex-row items-stretch overflow-hidden font-sans">
       
-      {/* EMERALD v7.0 SCANNER BACKGROUND */}
-      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-hemp-500 to-transparent animate-[scan_3s_linear_infinite] opacity-50"></div>
-      <div className="absolute inset-0 opacity-[0.05] pointer-events-none" style={{ backgroundImage: 'linear-gradient(#22c55e 1px, transparent 1px), linear-gradient(90deg, #22c55e 1px, transparent 1px)', backgroundSize: '80px 80px' }}></div>
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-hemp-500/5 rounded-full blur-[120px]"></div>
+      {/* Lado Izquierdo: Branding y Visual */}
+      <div className="hidden lg:flex lg:w-1/2 bg-hemp-900 relative p-12 flex-col justify-between overflow-hidden">
+          <div className="absolute top-0 right-0 w-full h-full opacity-10 pointer-events-none">
+              <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                  <path d="M0 100 C 20 0 50 0 100 100" fill="white" />
+              </svg>
+          </div>
+          
+          <div className="relative z-10">
+              <div className="flex items-center space-x-3 mb-12">
+                  <div className="bg-white p-2 rounded-xl text-hemp-700 shadow-xl"><Leaf size={28} /></div>
+                  <span className="text-3xl font-black text-white tracking-tighter italic">HempC</span>
+              </div>
+              <h1 className="text-5xl font-extrabold text-white leading-tight mb-6">
+                  Inteligencia para el <br />
+                  <span className="text-hemp-400">Cáñamo Industrial.</span>
+              </h1>
+              <p className="text-hemp-100 text-lg max-w-md leading-relaxed opacity-80">
+                  La plataforma líder en gestión de ensayos agronómicos, trazabilidad de genética y análisis de rendimientos.
+              </p>
+          </div>
 
-      <div className="w-full max-w-[500px] z-10 relative animate-in fade-in slide-in-from-bottom-20 duration-1000">
-        <div className="text-center mb-16">
-            <h1 className="text-[130px] font-black text-white tracking-tighter uppercase mb-0 leading-[0.75] italic drop-shadow-[0_0_50px_rgba(34,197,94,0.6)]">
-                HEMP<span className="text-hemp-500">C</span>
-            </h1>
-            <div className="flex items-center justify-center space-x-8 mt-14 opacity-60">
-                <div className="h-[2px] w-12 bg-hemp-600"></div>
-                <p className="text-hemp-500 text-[11px] font-black uppercase tracking-[1.2em] font-mono">EMERALD_NODE_v7</p>
-                <div className="h-[2px] w-12 bg-hemp-600"></div>
+          <div className="relative z-10 flex items-center space-x-6 text-hemp-200">
+              <div className="flex items-center space-x-2">
+                  <ShieldCheck size={20} />
+                  <span className="text-sm font-bold uppercase tracking-widest">Protocolo Seguro</span>
+              </div>
+              <div className="h-4 w-px bg-hemp-700"></div>
+              <span className="text-sm font-medium">v8.2 Cloud</span>
+          </div>
+      </div>
+
+      {/* Lado Derecho: Formulario */}
+      <div className="flex-1 flex flex-col items-center justify-center p-8 md:p-16 bg-white dark:bg-slate-950">
+        <div className="w-full max-w-md">
+            <div className="lg:hidden flex items-center space-x-2 mb-12 justify-center">
+                <Leaf className="text-hemp-600" size={32} />
+                <span className="text-3xl font-black text-slate-900 dark:text-white italic">HempC</span>
             </div>
-        </div>
 
-        <div className="bg-[#061006] border-2 border-hemp-900/50 rounded-[64px] shadow-[0_0_120px_rgba(0,0,0,1)] overflow-hidden emerald-glow">
-            <div className="p-16">
-                <form onSubmit={handleSubmit} className="space-y-12">
-                    {error && (
-                        <div className="bg-red-500/10 text-red-400 p-6 rounded-3xl text-[10px] font-black uppercase tracking-[0.5em] border-2 border-red-500/20 flex items-center animate-shake font-mono">
-                            <AlertTriangle size={24} className="mr-5 flex-shrink-0"/> <span>{error}</span>
-                        </div>
-                    )}
-                    
-                    <div className="space-y-5">
-                        <label className="block text-[10px] font-black text-hemp-700 uppercase tracking-[1em] ml-8 font-mono">GATEWAY_ID</label>
-                        <div className="relative group">
-                            <div className="absolute inset-y-0 left-0 pl-8 flex items-center text-hemp-900 group-focus-within:text-hemp-500 transition-colors"><Mail size={24} /></div>
-                            <input required type="email" className="w-full pl-22 pr-10 py-7 bg-black border-2 border-hemp-900/40 rounded-[32px] focus:ring-8 focus:ring-hemp-500/10 focus:border-hemp-500 outline-none transition-all text-white placeholder-hemp-950 font-black text-xl" placeholder="ADMIN@CORE" value={email} onChange={e => setEmail(e.target.value)} />
-                        </div>
-                    </div>
-
-                    <div className="space-y-5">
-                        <label className="block text-[10px] font-black text-hemp-700 uppercase tracking-[1em] ml-8 font-mono">CIPHER_KEY</label>
-                        <div className="relative group">
-                            <div className="absolute inset-y-0 left-0 pl-8 flex items-center text-hemp-900 group-focus-within:text-hemp-500 transition-colors"><Lock size={24} /></div>
-                            <input required type="password" className="w-full pl-22 pr-10 py-7 bg-black border-2 border-hemp-900/40 rounded-[32px] focus:ring-8 focus:ring-hemp-500/10 focus:border-hemp-500 outline-none transition-all text-white placeholder-hemp-950 font-black text-xl" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} />
-                        </div>
-                    </div>
-
-                    <button type="submit" disabled={isLoading} className="w-full bg-hemp-600 text-white py-9 rounded-[32px] font-black text-sm uppercase tracking-[1.5em] hover:bg-hemp-500 transition-all flex items-center justify-center shadow-[0_25px_70px_rgba(22,163,74,0.4)] group active:scale-95">
-                        {isLoading ? <RefreshCw className="animate-spin" size={32} /> : (
-                            <><span>ESTABLISH</span> <ArrowRight size={28} className="ml-6 group-hover:translate-x-6 transition-transform duration-500" /></>
-                        )}
-                    </button>
-                </form>
+            <div className="mb-10 text-center lg:text-left">
+                <h2 className="text-3xl font-extrabold text-slate-900 dark:text-white mb-2">Bienvenido</h2>
+                <p className="text-slate-500 dark:text-slate-400 font-medium">Inicie sesión para acceder a la terminal de datos.</p>
             </div>
-            
-            <div className="bg-white/5 px-16 py-12 border-t border-hemp-900/30">
-                <div className="flex justify-center items-center space-x-12 text-[10px] text-hemp-900 font-black tracking-[1em] uppercase font-mono">
-                    <div className="flex items-center"><Shield size={16} className="mr-3 text-hemp-600"/> SECURE</div>
-                    <div className="flex items-center"><Cpu size={16} className="mr-3 text-purple-600"/> CORE</div>
+
+            <form onSubmit={handleSubmit} className="space-y-6">
+                {error && (
+                    <div className="bg-red-50 dark:bg-red-900/10 text-red-600 dark:text-red-400 p-4 rounded-xl text-sm font-bold flex items-center border border-red-100 dark:border-red-900/20">
+                        <AlertCircle size={20} className="mr-3 flex-shrink-0"/> {error}
+                    </div>
+                )}
+                
+                <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">Correo Electrónico</label>
+                    <div className="relative group">
+                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center text-slate-400 group-focus-within:text-hemp-600 transition-colors"><Mail size={18} /></div>
+                        <input required type="email" className="w-full pl-11 pr-4 py-3.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-4 focus:ring-hemp-600/5 focus:border-hemp-600 outline-none transition-all dark:text-white font-medium" placeholder="nombre@empresa.com" value={email} onChange={e => setEmail(e.target.value)} />
+                    </div>
                 </div>
+
+                <div className="space-y-1">
+                    <div className="flex justify-between items-center px-1">
+                        <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Contraseña</label>
+                        <button type="button" className="text-xs font-bold text-hemp-600 hover:text-hemp-700">¿Olvidó su clave?</button>
+                    </div>
+                    <div className="relative group">
+                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center text-slate-400 group-focus-within:text-hemp-600 transition-colors"><Lock size={18} /></div>
+                        <input required type="password" className="w-full pl-11 pr-4 py-3.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-4 focus:ring-hemp-600/5 focus:border-hemp-600 outline-none transition-all dark:text-white font-medium" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} />
+                    </div>
+                </div>
+
+                <button type="submit" disabled={isLoading} className="w-full bg-hemp-600 text-white py-4 rounded-xl font-bold hover:bg-hemp-700 transition-all flex items-center justify-center shadow-lg shadow-hemp-600/20 active:scale-[0.98] disabled:opacity-50">
+                    {isLoading ? <Loader2 className="animate-spin" size={24} /> : (
+                        <span className="flex items-center">Ingresar al Sistema <ArrowRight size={20} className="ml-2" /></span>
+                    )}
+                </button>
+            </form>
+
+            <div className="mt-12 pt-8 border-t border-slate-100 dark:border-slate-900 text-center">
+                <p className="text-slate-400 text-xs font-medium">¿Necesita acceso? <a href="#" className="text-hemp-600 font-bold hover:underline">Contacte al Administrador</a></p>
             </div>
         </div>
       </div>
