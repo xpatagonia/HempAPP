@@ -184,20 +184,34 @@ export default function Settings() {
                       <Shield className="text-hemp-500" size={24}/>
                       <h3 className="font-black text-white uppercase text-sm tracking-widest">Estructura SQL Obligatoria</h3>
                   </div>
-                  <p className="text-xs text-slate-400 mb-4 leading-relaxed">Ejecute este script en el editor SQL de Supabase para asegurar que el sistema pueda guardar los registros hídricos:</p>
+                  <p className="text-xs text-slate-400 mb-4 leading-relaxed">Ejecute este script para corregir fallos de guardado por permisos (RLS):</p>
                   <pre className="bg-black/50 p-6 rounded-2xl text-[10px] text-blue-400 overflow-x-auto border border-white/5 font-mono h-80 custom-scrollbar">
-{`CREATE TABLE IF NOT EXISTS hydric_records (
+{`/* 1. CREAR TABLA SI NO EXISTE */
+CREATE TABLE IF NOT EXISTS hydric_records (
   id TEXT PRIMARY KEY,
   location_id TEXT,
   plot_id TEXT,
   date DATE,
   time TEXT,
   type TEXT,
-  amount_mm NUMERIC, -- Debe ser NUMERIC y llamarse exacto
+  amount_mm NUMERIC,
   notes TEXT,
   created_by TEXT
 );
 
+/* 2. ACTIVAR RLS Y PERMITIR ACCESO PÚBLICO (PARA DEMO) */
+ALTER TABLE hydric_records ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow public insert" ON hydric_records 
+FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Allow public select" ON hydric_records 
+FOR SELECT USING (true);
+
+CREATE POLICY "Allow public delete" ON hydric_records 
+FOR DELETE USING (true);
+
+/* REPETIR LO MISMO PARA trial_records SI FALLA */
 CREATE TABLE IF NOT EXISTS trial_records (
   id TEXT PRIMARY KEY,
   plot_id TEXT,
@@ -213,28 +227,16 @@ CREATE TABLE IF NOT EXISTS trial_records (
   created_by_name TEXT
 );
 
-CREATE TABLE IF NOT EXISTS plots (
-  id TEXT PRIMARY KEY,
-  location_id TEXT,
-  project_id TEXT,
-  variety_id TEXT,
-  seed_batch_id TEXT,
-  name TEXT,
-  type TEXT,
-  status TEXT,
-  sowing_date DATE,
-  surface_area NUMERIC,
-  surface_unit TEXT,
-  density NUMERIC,
-  responsible_ids TEXT[]
-);`}
+ALTER TABLE trial_records ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Public Trial Insert" ON trial_records FOR INSERT WITH CHECK (true);
+CREATE POLICY "Public Trial Select" ON trial_records FOR SELECT USING (true);`}
                   </pre>
                   <button onClick={() => {
-                      const sql = `CREATE TABLE IF NOT EXISTS hydric_records (id TEXT PRIMARY KEY, location_id TEXT, plot_id TEXT, date DATE, time TEXT, type TEXT, amount_mm NUMERIC, notes TEXT, created_by TEXT);`;
+                      const sql = `CREATE TABLE IF NOT EXISTS hydric_records (id TEXT PRIMARY KEY, location_id TEXT, plot_id TEXT, date DATE, time TEXT, type TEXT, amount_mm NUMERIC, notes TEXT, created_by TEXT); ALTER TABLE hydric_records ENABLE ROW LEVEL SECURITY; CREATE POLICY "Allow public insert" ON hydric_records FOR INSERT WITH CHECK (true); CREATE POLICY "Allow public select" ON hydric_records FOR SELECT USING (true);`;
                       navigator.clipboard.writeText(sql);
-                      alert("SQL copiado. Ejecútelo en Supabase SQL Editor.");
+                      alert("SQL Correctivo copiado.");
                   }} className="mt-4 text-[10px] font-black text-hemp-400 uppercase tracking-widest flex items-center hover:text-white transition">
-                      <Copy size={12} className="mr-1"/> Copiar SQL para Registros Hídricos
+                      <Copy size={12} className="mr-1"/> Copiar SQL con Políticas RLS
                   </button>
               </div>
           </div>

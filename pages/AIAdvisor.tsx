@@ -9,7 +9,7 @@ interface Message { id: string; role: 'user' | 'model' | 'error'; text: string; 
 export default function AIAdvisor() {
     const { plots, varieties, appName } = useAppContext();
     const [messages, setMessages] = useState<Message[]>([
-        { id: '1', role: 'model', text: `${appName} AI Intelligence Terminal v5.4.2.\nNeural processing unit: READY.\n¿Qué datos agronómicos deseas procesar hoy?` }
+        { id: '1', role: 'model', text: `${appName} AI Intelligence Terminal v5.4.3.\nNeural processing unit: ONLINE.\n¿En qué puedo asistir hoy?` }
     ]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -43,15 +43,16 @@ export default function AIAdvisor() {
         setIsLoading(true);
 
         try {
-            // Inicialización directa según requerimientos del sistema
+            // Inicialización directa y limpia según directrices
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-            const model = userMsg.image ? 'gemini-3-pro-preview' : 'gemini-3-pro-preview';
+            const modelName = 'gemini-3-pro-preview';
             
-            let result;
+            let response;
+            
             if (userMsg.image) {
                 const base64Data = userMsg.image.split(',')[1];
-                result = await ai.models.generateContent({
-                    model: model,
+                response = await ai.models.generateContent({
+                    model: modelName,
                     contents: {
                         parts: [
                             { text: userMsg.text || "Analiza esta imagen técnica de cultivo." },
@@ -59,30 +60,35 @@ export default function AIAdvisor() {
                         ]
                     },
                     config: {
-                        systemInstruction: `Eres el Asesor Inteligente de ${appName}, experto en Cáñamo Industrial. Responde de forma técnica y concisa.`,
+                        systemInstruction: `Eres el Asesor Inteligente de ${appName}, experto en Cáñamo Industrial. Responde de forma técnica, científica y concisa en Español.`,
                     }
                 });
             } else {
-                result = await ai.models.generateContent({
-                    model: model,
+                response = await ai.models.generateContent({
+                    model: modelName,
                     contents: userMsg.text,
                     config: {
-                        systemInstruction: `Eres el Asesor Inteligente de ${appName}, experto en Cáñamo Industrial. Responde de forma técnica y concisa.`,
+                        systemInstruction: `Eres el Asesor Inteligente de ${appName}, experto en Cáñamo Industrial. Responde de forma técnica y concisa en Español.`,
                     }
                 });
             }
 
-            const responseText = result.text;
-            if (responseText) {
-                setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', text: responseText }]);
+            if (response && response.text) {
+                setMessages(prev => [...prev, { 
+                    id: (Date.now() + 1).toString(), 
+                    role: 'model', 
+                    text: response.text 
+                }]);
+            } else {
+                throw new Error("Respuesta vacía del motor.");
             }
             
         } catch (err: any) {
-            console.error("AI Error:", err);
+            console.error("HempAI Connection Error:", err);
             setMessages(prev => [...prev, { 
-                id: Date.now().toString(), 
+                id: (Date.now() + 1).toString(), 
                 role: 'error', 
-                text: `FALLO DE MOTOR IA: ${err.message || 'Error de comunicación con el servicio de Google.'}` 
+                text: `FALLO DE PROTOCOLO: No se pudo validar la conexión con el motor neural.\nDetalle: ${err.message}` 
             }]);
         } finally {
             setIsLoading(false);
@@ -97,7 +103,7 @@ export default function AIAdvisor() {
                     <div>
                         <h1 className="text-4xl font-black text-slate-800 dark:text-white tracking-tighter uppercase italic">{appName} <span className="text-hemp-600">Core</span></h1>
                         <p className="text-[11px] text-slate-400 font-bold uppercase tracking-[0.4em] flex items-center mt-1">
-                            <Terminal size={12} className="mr-2"/> AI Advisor Interface v5.4.2
+                            <Terminal size={12} className="mr-2"/> AI Advisor Interface v5.4.3
                         </p>
                     </div>
                 </div>
@@ -116,9 +122,9 @@ export default function AIAdvisor() {
                             }`}>
                                 <div className="flex items-center gap-2 mb-4 opacity-50 text-[10px] font-black uppercase tracking-widest">
                                     {msg.role === 'user' ? <User size={12}/> : msg.role === 'error' ? <AlertTriangle size={12}/> : <Bot size={12}/>} 
-                                    {msg.role === 'user' ? 'Técnico' : msg.role === 'error' ? 'System Alert' : `${appName} Engine`}
+                                    {msg.role === 'user' ? 'Personal Técnico' : msg.role === 'error' ? 'System Failure' : `${appName} Advisor`}
                                 </div>
-                                {msg.image && <img src={msg.image} className="mb-4 rounded-2xl max-h-64 w-full object-cover border border-white/10 shadow-lg" alt="Input context" />}
+                                {msg.image && <img src={msg.image} className="mb-4 rounded-2xl max-h-64 w-full object-cover border border-white/10 shadow-lg" alt="Visual context" />}
                                 <div className="text-sm md:text-base leading-relaxed font-medium whitespace-pre-wrap font-mono">{msg.text}</div>
                             </div>
                         </div>
@@ -127,7 +133,7 @@ export default function AIAdvisor() {
                         <div className="flex justify-start">
                             <div className="bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 rounded-[32px] p-6 md:p-8 flex items-center space-x-4">
                                 <RefreshCw className="animate-spin text-hemp-600" size={24} />
-                                <span className="text-[11px] font-black text-slate-400 uppercase tracking-[0.3em]">Neural Processing...</span>
+                                <span className="text-[11px] font-black text-slate-400 uppercase tracking-[0.3em]">Processing Neural Request...</span>
                             </div>
                         </div>
                     )}

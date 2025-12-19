@@ -252,22 +252,29 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const genericAdd = async (table: string, item: any, setter: any, localKey: string) => {
       const dbItem = toSnakeCase(item);
+      console.log(`[SUPABASE] Intentando guardar en ${table}:`, dbItem);
+      
       if (isEmergencyMode) {
           setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
           return true;
       } else {
           try {
-              // Intento de inserción simple para evitar problemas de RLS en el select()
+              // Intento de inserción simple. Importante: no usamos .select() para evitar problemas de permisos de lectura.
               const { error } = await supabase.from(table).insert([dbItem]);
               if (error) {
-                  console.error(`ERROR SUPABASE (Tabla: ${table}):`, error.message, error.details);
+                  console.error(`[SUPABASE ERROR] Tabla: ${table}. Código: ${error.code}. Mensaje: ${error.message}`);
                   throw error;
               }
+              console.log(`[SUPABASE SUCCESS] Registro guardado en ${table}`);
               setter((prev: any[]) => [...prev, item]);
               return true;
           } catch (e: any) {
-              console.warn(`Fallback local activo para ${table} debido a error de servidor.`);
-              setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
+              console.warn(`[LOCAL FALLBACK] Error en ${table}. Guardando solo localmente.`);
+              setter((prev: any[]) => { 
+                  const n = [...prev, item]; 
+                  saveToLocal(localKey, n); 
+                  return n; 
+              });
               return true;
           }
       }
