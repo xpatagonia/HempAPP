@@ -9,7 +9,7 @@ interface Message { id: string; role: 'user' | 'model' | 'error'; text: string; 
 export default function AIAdvisor() {
     const { plots, varieties, appName } = useAppContext();
     const [messages, setMessages] = useState<Message[]>([
-        { id: '1', role: 'model', text: `${appName} AI Intelligence Terminal v5.2.\nSistemas en red: ${plots.length} parcelas, ${varieties.length} genéticas.\nNeural processing unit: READY.\n¿Qué datos agronómicos deseas procesar hoy?` }
+        { id: '1', role: 'model', text: `${appName} AI Intelligence Terminal v5.2.2.\nSistemas en red: ${plots.length} parcelas, ${varieties.length} genéticas.\nNeural processing unit: ONLINE.\n¿Qué datos agronómicos deseas procesar hoy?` }
     ]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -43,33 +43,36 @@ export default function AIAdvisor() {
         setIsLoading(true);
 
         try {
-            // Inicialización usando la variable de entorno segura
+            // Inicialización obligatoria desde el entorno
+            if (!process.env.API_KEY) {
+                throw new Error("API_KEY no configurada en el entorno del sistema.");
+            }
+
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-            
             let response;
             
             if (userMsg.image) {
-                // Caso con Imagen
                 const base64Data = userMsg.image.split(',')[1];
                 response = await ai.models.generateContent({
                     model: 'gemini-3-pro-preview',
                     contents: {
                         parts: [
-                            { text: userMsg.text || "Analiza técnicamente esta imagen de cultivo de cáñamo." },
+                            { text: userMsg.text || "Analiza técnicamente esta imagen de cultivo de cáñamo industrial." },
                             { inlineData: { mimeType: 'image/jpeg', data: base64Data } }
                         ]
                     },
                     config: {
-                        systemInstruction: `Eres el Asesor Inteligente de ${appName}, experto en agronomía de Cáñamo Industrial. Responde de forma técnica y concisa en Español.`,
+                        systemInstruction: `Eres el Asesor Inteligente de ${appName}, experto en agronomía de Cáñamo Industrial (Cannabis Sativa L.). Responde de forma técnica, científica y concisa en Español.`,
+                        temperature: 0.7,
                     }
                 });
             } else {
-                // Caso solo Texto
                 response = await ai.models.generateContent({
                     model: 'gemini-3-pro-preview',
                     contents: userMsg.text,
                     config: {
                         systemInstruction: `Eres el Asesor Inteligente de ${appName}, experto en agronomía de Cáñamo Industrial. Responde de forma técnica y concisa en Español.`,
+                        temperature: 0.7,
                     }
                 });
             }
@@ -83,7 +86,7 @@ export default function AIAdvisor() {
                     text: responseText 
                 }]);
             } else {
-                throw new Error("El modelo no devolvió contenido.");
+                throw new Error("El motor neural no devolvió una respuesta válida.");
             }
             
         } catch (err: any) {
@@ -91,7 +94,7 @@ export default function AIAdvisor() {
             setMessages(prev => [...prev, { 
                 id: (Date.now() + 1).toString(), 
                 role: 'error', 
-                text: `FALLO DE CONEXIÓN: No se pudo procesar la solicitud neural. Verifique que la API KEY esté configurada en el entorno del servidor.\n\nDetalle técnico: ${err.message}` 
+                text: `ERROR DE PROTOCOLO: ${err.message || 'Fallo inesperado de conexión con el motor neural.'}` 
             }]);
         } finally {
             setIsLoading(false);
@@ -106,7 +109,7 @@ export default function AIAdvisor() {
                     <div>
                         <h1 className="text-4xl font-black text-slate-800 dark:text-white tracking-tighter uppercase italic">{appName} <span className="text-hemp-600">Core</span></h1>
                         <p className="text-[11px] text-slate-400 font-bold uppercase tracking-[0.4em] flex items-center mt-1">
-                            <Terminal size={12} className="mr-2"/> AI Advisor Interface v5.2.1
+                            <Terminal size={12} className="mr-2"/> AI Advisor Interface v5.2.2
                         </p>
                     </div>
                 </div>
@@ -120,7 +123,7 @@ export default function AIAdvisor() {
                                 msg.role === 'user' 
                                     ? 'bg-hemp-600 text-white rounded-tr-none' 
                                     : msg.role === 'error'
-                                        ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-100 dark:border-red-900/30'
+                                        ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-100 dark:border-red-900/30 font-mono text-xs'
                                         : 'bg-slate-50 dark:bg-white/5 text-slate-800 dark:text-slate-200 border border-slate-100 dark:border-white/5 rounded-tl-none'
                             }`}>
                                 <div className="flex items-center gap-2 mb-4 opacity-50 text-[10px] font-black uppercase tracking-widest">

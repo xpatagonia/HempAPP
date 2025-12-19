@@ -225,7 +225,8 @@ export default function Clients() {
                   <div className="space-y-2 text-sm text-gray-600 bg-gray-50 p-3 rounded-lg flex-1 border border-gray-100">
                       <div className="flex items-center justify-between">
                           <div className="flex items-center">
-                              {linkedUser ? <UserCheck size={14} className="mr-2 text-green-500" title="Usuario Vinculado"/> : <Users size={14} className="mr-2 text-gray-400"/>}
+                              {/* Fixed: Move title prop from icon to wrapping span */}
+                              {linkedUser ? <span title="Usuario Vinculado"><UserCheck size={14} className="mr-2 text-green-500" /></span> : <Users size={14} className="mr-2 text-gray-400"/>}
                               <span className="font-medium">{client.contactName}</span>
                           </div>
                       </div>

@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Supplier } from '../types';
@@ -98,7 +99,7 @@ export default function Suppliers() {
                 <p className="text-xs text-gray-400 mt-1">Registra un proveedor antes de crear variedades.</p>
             </div>
         ) : suppliers.map(supplier => (
-            <div key={supplier.id} className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition relative group flex flex-col h-full">
+            <div key={supplier.id} className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 hover:shadow-xl transition-all relative group flex flex-col h-full">
               {isAdmin && (
                   <div className="absolute top-4 right-4 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                       <button onClick={() => handleEdit(supplier)} className="text-gray-400 hover:text-hemp-600 p-1 bg-white rounded shadow-sm border">
@@ -141,7 +142,8 @@ export default function Suppliers() {
                       <div className="pt-2 mt-2 border-t border-gray-200 space-y-2">
                           {supplier.commercialContact && (
                               <div className="flex items-start text-xs">
-                                  <UserCheck size={12} className="mr-2 text-blue-500 mt-0.5" title="Comercial"/>
+                                  {/* Fixed: Remove invalid title prop from Lucide icon */}
+                                  <UserCheck size={12} className="mr-2 text-blue-500 mt-0.5" />
                                   <div>
                                       <span className="font-bold block text-gray-700">Comercial:</span>
                                       <span className="text-gray-500">{supplier.commercialContact}</span>
@@ -150,7 +152,8 @@ export default function Suppliers() {
                           )}
                           {supplier.logisticsContact && (
                               <div className="flex items-start text-xs">
-                                  <Truck size={12} className="mr-2 text-green-500 mt-0.5" title="Logística"/>
+                                  {/* Fixed: Remove invalid title prop from Lucide icon */}
+                                  <Truck size={12} className="mr-2 text-green-500 mt-0.5" />
                                   <div>
                                       <span className="font-bold block text-gray-700">Logística:</span>
                                       <span className="text-gray-500">{supplier.logisticsContact}</span>

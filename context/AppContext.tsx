@@ -114,6 +114,25 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+// Utils for persistence
+const toSnakeCase = (obj: any) => {
+    const newObj: any = {};
+    for (const key in obj) {
+        const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+        newObj[snakeKey] = obj[key];
+    }
+    return newObj;
+};
+
+const toCamelCase = (obj: any) => {
+    const newObj: any = {};
+    for (const key in obj) {
+        const camelKey = key.replace(/(_\w)/g, m => m[1].toUpperCase());
+        newObj[camelKey] = obj[key];
+    }
+    return newObj;
+};
+
 const RESCUE_USER: User = {
     id: 'rescue-admin-001',
     name: 'Admin Local (Offline)',
@@ -168,18 +187,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (savedUser) setCurrentUser(JSON.parse(savedUser));
   }, []);
 
-  useEffect(() => {
-    document.title = `${appName} | Gestión Agroindustrial`;
-  }, [appName]);
-
-  const toggleTheme = () => {
-      const newTheme = theme === 'light' ? 'dark' : 'light';
-      setTheme(newTheme);
-      localStorage.setItem('ht_theme', newTheme);
-      if (newTheme === 'dark') document.documentElement.classList.add('dark');
-      else document.documentElement.classList.remove('dark');
-  };
-
   const updateBranding = (name: string, logo: string | null) => {
       setAppName(name);
       setAppLogo(logo);
@@ -187,22 +194,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (logo) localStorage.setItem('ht_branding_logo', logo);
       else localStorage.removeItem('ht_branding_logo');
   };
-
-  const notifications = useMemo(() => {
-    if (!currentUser) return [];
-    const notifs: AppNotification[] = [];
-    tasks.forEach(t => {
-        if (t.status === 'Completada') return;
-        const isAssigned = t.assignedToIds.includes(currentUser.id) || currentUser.role === 'admin' || currentUser.role === 'super_admin';
-        if (!isAssigned) return;
-        const dueDate = new Date(t.dueDate);
-        const today = new Date();
-        if (dueDate < today) {
-            notifs.push({ id: `t-${t.id}`, type: 'alert', title: 'Tarea Vencida', message: t.title, link: '/tasks', date: t.dueDate });
-        }
-    });
-    return notifs;
-  }, [tasks, currentUser]);
 
   const refreshData = async () => {
       setIsRefreshing(true);
@@ -222,7 +213,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               setIsEmergencyMode(false);
               const fetchData = async (table: string, setter: any) => {
                   const { data, error } = await supabase.from(table).select('*');
-                  if (!error && data) setter(data);
+                  if (!error && data) {
+                      // Map back to camelCase for state
+                      setter(data.map(i => toCamelCase(i)));
+                  }
               };
               await Promise.allSettled([
                   fetchData('users', setUsersList), fetchData('projects', setProjects),
@@ -249,23 +243,28 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return false;
     }
     const { data, error } = await supabase.from('users').select('*').eq('email', email).eq('password', password).single();
-    if (!error && data) { setCurrentUser(data as User); localStorage.setItem('ht_session_user', JSON.stringify(data)); return true; }
+    if (!error && data) {
+        const mappedUser = toCamelCase(data) as User;
+        setCurrentUser(mappedUser); 
+        localStorage.setItem('ht_session_user', JSON.stringify(mappedUser)); 
+        return true; 
+    }
     return false;
   };
 
   const logout = () => { setCurrentUser(null); localStorage.removeItem('ht_session_user'); };
 
   const genericAdd = async (table: string, item: any, setter: any, localKey: string) => {
-      // Fallback local robusto si falla Supabase por tabla inexistente
       if (isEmergencyMode) {
           setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
           return true;
       } else {
           try {
-              const { error } = await supabase.from(table).insert([item]);
+              // Convert to snake_case for Supabase
+              const dbItem = toSnakeCase(item);
+              const { error } = await supabase.from(table).insert([dbItem]);
               if (error) {
-                  console.warn(`Supabase Sync Error in ${table}: ${error.message}. Switching to local save.`);
-                  // Si el error es que la tabla no existe (42P01) guardamos local pero retornamos true para no bloquear UI
+                  console.error(`Sync Error in ${table}:`, error);
                   setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
                   return true;
               }
@@ -282,7 +281,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (isEmergencyMode) {
           setter((prev: any[]) => { const n = prev.map((i: any) => i.id === item.id ? item : i); saveToLocal(localKey, n); return n; });
       } else {
-          const { error } = await supabase.from(table).update(item).eq('id', item.id);
+          const dbItem = toSnakeCase(item);
+          const { error } = await supabase.from(table).update(dbItem).eq('id', item.id);
           if (error) console.error(`Error updating ${table}:`, error.message);
           setter((prev: any[]) => prev.map((i: any) => i.id === item.id ? item : i));
       }
@@ -297,6 +297,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
   };
 
+  // Wrapper functions
   const addUser = (u: User) => genericAdd('users', u, setUsersList, 'users');
   const updateUser = (u: User) => genericUpdate('users', u, setUsersList, 'users');
   const deleteUser = (id: string) => genericDelete('users', id, setUsersList, 'users');
@@ -330,10 +331,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const deleteSeedBatch = async (id: string) => { await genericDelete('seed_batches', id, setSeedBatches, 'seedBatches'); };
   const addHydricRecord = (h: HydricRecord) => genericAdd('hydric_records', h, setHydricRecords, 'hydricRecords');
   const deleteHydricRecord = (id: string) => genericDelete('hydric_records', id, setHydricRecords, 'hydricRecords');
-
   const addSeedMovement = async (m: SeedMovement) => { return await genericAdd('seed_movements', m, setSeedMovements, 'seedMovements'); };
   const updateSeedMovement = (m: SeedMovement) => genericUpdate('seed_movements', m, setSeedMovements, 'seedMovements');
-  
   const deleteSeedMovement = async (id: string) => { 
       const move = seedMovements.find(m => m.id === id);
       if (move) {
@@ -345,21 +344,39 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
       await genericDelete('seed_movements', id, setSeedMovements, 'seedMovements');
   };
-
   const addTrialRecord = (r: TrialRecord) => genericAdd('trial_records', r, setTrialRecords, 'trialRecords');
   const updateTrialRecord = (r: TrialRecord) => { genericUpdate('trial_records', r, setTrialRecords, 'trialRecords'); };
   const deleteTrialRecord = (id: string) => { genericDelete('trial_records', id, setTrialRecords, 'trialRecords'); };
-  
   const addLog = (l: FieldLog) => genericAdd('field_logs', l, setLogs, 'logs');
   const updateLog = (l: FieldLog) => { genericUpdate('field_logs', l, setLogs, 'logs'); };
   const deleteLog = (id: string) => { genericDelete('field_logs', id, setLogs, 'logs'); };
-
   const addTask = (t: Task) => { genericAdd('tasks', t, setTasks, 'tasks'); };
   const updateTask = (t: Task) => { genericUpdate('tasks', t, setTasks, 'tasks'); };
   const deleteTask = (id: string) => { genericDelete('tasks', id, setTasks, 'tasks'); };
 
-  const getPlotHistory = (plotId: string) => { return trialRecords.filter(r => r.plotId === plotId).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); };
+  const notifications = useMemo(() => {
+    if (!currentUser) return [];
+    const notifs: AppNotification[] = [];
+    tasks.forEach(t => {
+        if (t.status === 'Completada') return;
+        const isAssigned = t.assignedToIds.includes(currentUser.id) || currentUser.role === 'admin' || currentUser.role === 'super_admin';
+        if (!isAssigned) return;
+        const dueDate = new Date(t.dueDate);
+        if (dueDate < new Date()) notifs.push({ id: `t-${t.id}`, type: 'alert', title: 'Tarea Vencida', message: t.title, link: '/tasks', date: t.dueDate });
+    });
+    return notifs;
+  }, [tasks, currentUser]);
+
+  const getPlotHistory = (plotId: string) => trialRecords.filter(r => r.plotId === plotId).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   const getLatestRecord = (plotId: string) => { const history = getPlotHistory(plotId); return history.length > 0 ? history[0] : undefined; };
+
+  const toggleTheme = () => {
+      const newTheme = theme === 'light' ? 'dark' : 'light';
+      setTheme(newTheme);
+      localStorage.setItem('ht_theme', newTheme);
+      if (newTheme === 'dark') document.documentElement.classList.add('dark');
+      else document.documentElement.classList.remove('dark');
+  };
 
   return (
     <AppContext.Provider value={{
