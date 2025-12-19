@@ -43,48 +43,47 @@ export default function AIAdvisor() {
         setIsLoading(true);
 
         try {
+            // Inicialización usando la variable de entorno segura
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-            const parts: any[] = [];
             
-            // Build parts correctly for Gemini
-            if (userMsg.text) {
-                parts.push({ text: userMsg.text });
-            } else if (userMsg.image) {
-                parts.push({ text: "Analiza técnicamente el estado fenológico de esta planta de cáñamo en la imagen." });
-            }
-
+            let response;
+            
             if (userMsg.image) {
+                // Caso con Imagen
                 const base64Data = userMsg.image.split(',')[1];
-                parts.push({ 
-                    inlineData: { 
-                        mimeType: 'image/jpeg', 
-                        data: base64Data 
-                    } 
+                response = await ai.models.generateContent({
+                    model: 'gemini-3-pro-preview',
+                    contents: {
+                        parts: [
+                            { text: userMsg.text || "Analiza técnicamente esta imagen de cultivo de cáñamo." },
+                            { inlineData: { mimeType: 'image/jpeg', data: base64Data } }
+                        ]
+                    },
+                    config: {
+                        systemInstruction: `Eres el Asesor Inteligente de ${appName}, experto en agronomía de Cáñamo Industrial. Responde de forma técnica y concisa en Español.`,
+                    }
+                });
+            } else {
+                // Caso solo Texto
+                response = await ai.models.generateContent({
+                    model: 'gemini-3-pro-preview',
+                    contents: userMsg.text,
+                    config: {
+                        systemInstruction: `Eres el Asesor Inteligente de ${appName}, experto en agronomía de Cáñamo Industrial. Responde de forma técnica y concisa en Español.`,
+                    }
                 });
             }
 
-            const response = await ai.models.generateContent({
-                model: 'gemini-3-pro-preview', // Upgraded for better reasoning
-                contents: [{ role: 'user', parts }],
-                config: { 
-                    systemInstruction: `Eres el Asesor Inteligente de ${appName}, experto en cultivo industrial de Cáñamo (Cannabis Sativa L.).
-                    - Tu objetivo es ayudar a técnicos y agrónomos con análisis de datos, plagas, nutrición y planificación.
-                    - Tus respuestas deben ser técnicas, basadas en ciencia agrícola moderna y breves.
-                    - Siempre responde en Español.
-                    - Si te preguntan sobre una imagen, describe vigor, deficiencias o síntomas visibles.`,
-                    temperature: 0.7,
-                    topP: 0.95
-                }
-            });
+            const responseText = response.text;
 
-            if (response.text) {
+            if (responseText) {
                 setMessages(prev => [...prev, { 
                     id: (Date.now() + 1).toString(), 
                     role: 'model', 
-                    text: response.text 
+                    text: responseText 
                 }]);
             } else {
-                throw new Error("El motor no devolvió una respuesta válida.");
+                throw new Error("El modelo no devolvió contenido.");
             }
             
         } catch (err: any) {
@@ -92,7 +91,7 @@ export default function AIAdvisor() {
             setMessages(prev => [...prev, { 
                 id: (Date.now() + 1).toString(), 
                 role: 'error', 
-                text: `ERROR TÉCNICO: No se pudo conectar con el motor de inteligencia. Verifique su conexión o llave de API.\nDetalle: ${err.message || 'Error desconocido'}` 
+                text: `FALLO DE CONEXIÓN: No se pudo procesar la solicitud neural. Verifique que la API KEY esté configurada en el entorno del servidor.\n\nDetalle técnico: ${err.message}` 
             }]);
         } finally {
             setIsLoading(false);
@@ -107,7 +106,7 @@ export default function AIAdvisor() {
                     <div>
                         <h1 className="text-4xl font-black text-slate-800 dark:text-white tracking-tighter uppercase italic">{appName} <span className="text-hemp-600">Core</span></h1>
                         <p className="text-[11px] text-slate-400 font-bold uppercase tracking-[0.4em] flex items-center mt-1">
-                            <Terminal size={12} className="mr-2"/> AI Advisor Interface v5.2.0
+                            <Terminal size={12} className="mr-2"/> AI Advisor Interface v5.2.1
                         </p>
                     </div>
                 </div>

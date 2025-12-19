@@ -1,12 +1,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Save, Database, Copy, RefreshCw, Lock, Settings as SettingsIcon, ShieldCheck, PlayCircle, CheckCircle2, Layout, Image as ImageIcon, Trash2, RotateCcw } from 'lucide-react';
+import { Save, Database, Copy, RefreshCw, Lock, Settings as SettingsIcon, ShieldCheck, PlayCircle, CheckCircle2, Layout, Image as ImageIcon, Trash2, RotateCcw, Cpu, Globe } from 'lucide-center';
+import { Shield, Server } from 'lucide-react';
 
 export default function Settings() {
   const { currentUser, appName, appLogo, updateBranding } = useAppContext();
   
-  const [activeTab, setActiveTab] = useState<'branding' | 'database' | 'connections' | 'demo'>('branding');
+  const [activeTab, setActiveTab] = useState<'branding' | 'database' | 'connections'>('branding');
   const [url, setUrl] = useState('');
   const [key, setKey] = useState('');
   const [status, setStatus] = useState<'idle' | 'checking' | 'success' | 'error'>('idle');
@@ -20,7 +21,6 @@ export default function Settings() {
       if (storedUrl) setUrl(storedUrl);
       if (storedKey) setKey(storedKey);
       
-      // Sincronizar estados locales con el contexto al cargar
       setEditAppName(appName);
       setEditAppLogo(appLogo);
   }, [appName, appLogo]);
@@ -37,7 +37,7 @@ export default function Settings() {
 
   const handleSaveBranding = () => {
       updateBranding(editAppName, editAppLogo);
-      alert("✅ Identidad corporativa actualizada correctamente. Los cambios se verán reflejados en todo el sistema.");
+      alert("✅ Identidad corporativa actualizada correctamente.");
   };
 
   const handleResetBranding = () => {
@@ -73,15 +73,15 @@ export default function Settings() {
       <div className="flex items-center mb-6">
         <SettingsIcon className="text-hemp-600 mr-3" size={32} />
         <div>
-            <h1 className="text-2xl font-bold text-gray-800">Configuración de Sistema</h1>
-            <p className="text-gray-500">Mantenimiento de marca, base de datos y llaves de servicio.</p>
+            <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Configuración de Sistema</h1>
+            <p className="text-gray-500">Gestión de identidad, datos y seguridad neural.</p>
         </div>
       </div>
 
       <div className="flex space-x-1 bg-gray-100 dark:bg-slate-900 p-1 rounded-lg mb-8 w-fit">
-          <button onClick={() => setActiveTab('branding')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'branding' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Identidad Visual</button>
-          <button onClick={() => setActiveTab('database')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'database' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Estructura SQL</button>
-          <button onClick={() => setActiveTab('connections')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'connections' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Servidor</button>
+          <button onClick={() => setActiveTab('branding')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'branding' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Identidad</button>
+          <button onClick={() => setActiveTab('connections')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'connections' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Conectividad</button>
+          <button onClick={() => setActiveTab('database')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'database' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>SQL</button>
       </div>
 
       {activeTab === 'branding' && (
@@ -89,7 +89,7 @@ export default function Settings() {
               <div className="bg-white dark:bg-slate-900 p-8 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-sm">
                   <div className="flex justify-between items-center mb-6">
                     <h3 className="text-xl font-black text-slate-800 dark:text-white flex items-center">
-                        <Layout size={20} className="mr-2 text-hemp-600" /> Marca Blanca (Branding)
+                        <Layout className="mr-2 text-hemp-600" size={20} /> Personalización de Marca
                     </h3>
                     <button onClick={handleResetBranding} className="text-[10px] font-black uppercase text-gray-400 hover:text-red-500 flex items-center transition">
                         <RotateCcw size={14} className="mr-1"/> Restaurar Original
@@ -98,25 +98,24 @@ export default function Settings() {
                   
                   <div className="space-y-6">
                       <div>
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Nombre de la Aplicación</label>
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Nombre de la Terminal</label>
                           <input 
                             type="text" 
                             className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl font-bold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-hemp-600"
                             value={editAppName}
                             onChange={e => setEditAppName(e.target.value)}
-                            placeholder="Ej: AgroData"
                           />
                       </div>
 
                       <div>
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Logotipo de la Empresa</label>
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Logotipo Corporativo</label>
                           <div className="flex flex-col md:flex-row items-center gap-6 p-6 bg-slate-50 dark:bg-slate-950 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800">
                               <div className="w-32 h-32 bg-white dark:bg-slate-900 rounded-2xl flex items-center justify-center border border-slate-100 dark:border-slate-800 shadow-inner overflow-hidden">
                                   {editAppLogo ? <img src={editAppLogo} className="w-full h-full object-contain p-2" /> : <ImageIcon size={32} className="text-slate-300" />}
                               </div>
-                              <div className="flex-1 space-y-3">
-                                  <p className="text-xs text-slate-500 font-medium leading-relaxed">
-                                      Recomendación: SVG o PNG (Fondo transparente). El logo reemplazará la hoja de cáñamo en Login y Sidebar.
+                              <div className="flex-1">
+                                  <p className="text-xs text-slate-500 font-medium leading-relaxed mb-4">
+                                      El logo reemplazará el icono predeterminado en Login y Sidebar. Se recomienda formato PNG transparente.
                                   </p>
                                   <div className="flex gap-2">
                                       <label className="bg-hemp-600 hover:bg-hemp-700 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition cursor-pointer flex items-center">
@@ -134,38 +133,32 @@ export default function Settings() {
 
                       <div className="pt-6 border-t dark:border-slate-800">
                           <button onClick={handleSaveBranding} className="w-full md:w-auto px-10 py-4 bg-slate-900 dark:bg-hemp-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all">
-                              Aplicar Cambios de Marca
+                              Guardar Identidad
                           </button>
                       </div>
                   </div>
               </div>
 
-              <div className="bg-amber-50 dark:bg-amber-900/10 p-6 rounded-3xl border border-amber-100 dark:border-amber-900/20 flex items-start">
-                  <ShieldCheck className="text-amber-600 mr-4 flex-shrink-0" size={24}/>
-                  <p className="text-sm text-amber-800 dark:text-amber-400 font-medium leading-relaxed">
-                      La configuración de marca es local para este navegador. Para implementarlo globalmente en todos los usuarios, contacta al administrador del servidor.
-                  </p>
-              </div>
-          </div>
-      )}
-
-      {activeTab === 'database' && (
-          <div className="space-y-6 animate-in fade-in">
-              <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/20 p-6 rounded-2xl">
-                  <h3 className="font-black text-blue-900 dark:text-blue-400 uppercase text-sm mb-4">Reparación Estructural</h3>
-                  <p className="text-xs text-blue-800 dark:text-blue-300 mb-4">Usa estos scripts para asegurar que las tablas de agua y clima existen en tu instancia de Supabase.</p>
-                  <pre className="bg-slate-900 p-4 rounded-xl text-[10px] text-blue-300 overflow-x-auto h-40">
-{`CREATE TABLE IF NOT EXISTS hydric_records (
-  id TEXT PRIMARY KEY,
-  location_id TEXT,
-  plot_id TEXT,
-  date DATE,
-  type TEXT,
-  amount_mm NUMERIC,
-  notes TEXT,
-  created_by TEXT
-);`}
-                  </pre>
+              {/* INFO SOBRE IA API KEY */}
+              <div className="bg-blue-600 p-8 rounded-[32px] text-white shadow-xl relative overflow-hidden">
+                  <div className="relative z-10">
+                      <div className="flex items-center space-x-3 mb-4">
+                        <div className="bg-white/20 p-2 rounded-xl"><Server size={24}/></div>
+                        <h3 className="text-xl font-black uppercase tracking-tighter">Seguridad Neural</h3>
+                      </div>
+                      <p className="text-blue-100 text-sm font-medium leading-relaxed mb-6">
+                        Para cumplir con los protocolos de seguridad industrial, la <strong>API Key de Google Gemini</strong> ya no se ingresa mediante formularios manuales. 
+                        Ahora se gestiona de forma segura a través de variables de entorno de producción (`API_KEY`).
+                      </p>
+                      <div className="flex items-center space-x-4">
+                          <div className="bg-white/10 px-4 py-2 rounded-xl border border-white/20 flex items-center">
+                              <div className="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></div>
+                              <span className="text-[10px] font-black uppercase tracking-widest text-blue-50">Motor IA Conectado</span>
+                          </div>
+                          <span className="text-[10px] font-bold text-blue-200">v1.34-genai</span>
+                      </div>
+                  </div>
+                  <Globe className="absolute -right-20 -bottom-20 text-white opacity-5 w-64 h-64" />
               </div>
           </div>
       )}
@@ -173,9 +166,9 @@ export default function Settings() {
       {activeTab === 'connections' && (
           <div className="space-y-8 animate-in fade-in">
             <div className="bg-white dark:bg-slate-900 rounded-[32px] shadow-sm border dark:border-slate-800 p-8">
-                <h2 className="text-lg font-black text-gray-800 dark:text-white mb-6 flex items-center"><Database size={20} className="mr-2 text-hemp-600" /> Servidor Principal (Supabase)</h2>
+                <h2 className="text-lg font-black text-gray-800 dark:text-white mb-6 flex items-center"><Database size={20} className="mr-2 text-hemp-600" /> Servidor de Datos (Supabase)</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Project URL</label><input type="text" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl font-bold" value={url} onChange={e => setUrl(e.target.value)} /></div>
+                    <div><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Supabase Project URL</label><input type="text" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl font-bold" value={url} onChange={e => setUrl(e.target.value)} /></div>
                     <div><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Anon API Key</label><input type="password" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl font-bold" value={key} onChange={e => setKey(e.target.value)} /></div>
                 </div>
             </div>
@@ -184,6 +177,31 @@ export default function Settings() {
                 {status === 'checking' ? <RefreshCw className="animate-spin mr-2"/> : status === 'success' ? <CheckCircle2 className="mr-2"/> : <Save className="mr-2"/>}
                 {status === 'checking' ? 'Sincronizando...' : status === 'success' ? 'Conexión Exitosa' : 'Vincular Servidor de Producción'}
             </button>
+          </div>
+      )}
+
+      {activeTab === 'database' && (
+          <div className="space-y-6 animate-in fade-in">
+              <div className="bg-slate-900 border border-slate-800 p-8 rounded-[32px] shadow-2xl relative overflow-hidden">
+                  <div className="flex items-center space-x-3 mb-6">
+                      <Shield className="text-hemp-500" size={24}/>
+                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Estructura SQL de Soporte</h3>
+                  </div>
+                  <p className="text-xs text-slate-400 mb-4 leading-relaxed">Si la base de datos no registra los datos hídricos, asegúrese de ejecutar este script en su editor SQL de Supabase:</p>
+                  <pre className="bg-black/50 p-6 rounded-2xl text-[10px] text-blue-400 overflow-x-auto border border-white/5 font-mono">
+{`CREATE TABLE IF NOT EXISTS hydric_records (
+  id TEXT PRIMARY KEY,
+  location_id TEXT,
+  plot_id TEXT,
+  date DATE,
+  time TEXT,
+  type TEXT,
+  amount_mm NUMERIC,
+  notes TEXT,
+  created_by TEXT
+);`}
+                  </pre>
+              </div>
           </div>
       )}
     </div>
