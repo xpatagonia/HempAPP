@@ -1,8 +1,8 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Send, Bot, User, Image as ImageIcon, Loader2, Sparkles, AlertTriangle, X } from 'lucide-react';
-// Correct import for @google/genai
+// Fix: Added missing import for RefreshCw component
+import { Send, Bot, User, Image as ImageIcon, Loader2, Sparkles, AlertTriangle, X, Terminal, ArrowRight, RefreshCw } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 
 interface Message {
@@ -18,7 +18,7 @@ export default function AIAdvisor() {
         {
             id: '1',
             role: 'model',
-            text: 'Hola. Soy tu asistente agronómico virtual (v3.0). Tengo acceso a los datos de tus parcelas y variedades cargadas. ¿En qué puedo ayudarte hoy?'
+            text: 'Hola. Soy HempAI (v4.0). He analizado tus datos actuales: tienes ' + plots.length + ' parcelas registradas y ' + varieties.length + ' variedades en catálogo. ¿En qué decisión técnica puedo asistirte hoy?'
         }
     ]);
     const [input, setInput] = useState('');
@@ -48,9 +48,9 @@ export default function AIAdvisor() {
             parcelas_activas: plots.filter(p => p.status === 'Activa').map(p => {
                 const v = varieties.find(v => v.id === p.varietyId);
                 const l = locations.find(loc => loc.id === p.locationId);
-                return `Parcela ${p.name}: Variedad ${v?.name}, en ${l?.name}. Siembra: ${p.sowingDate}.`;
+                return `Lote ${p.name}: Genética ${v?.name}, en ${l?.name}. Sembrado: ${p.sowingDate}.`;
             }),
-            registros_recientes: trialRecords.slice(0, 5).map(r => `Registro fecha ${r.date}: Etapa ${r.stage}, Altura ${r.plantHeight}cm.`)
+            registros: trialRecords.slice(0, 10).map(r => `Registro ${r.date}: ${r.stage}, Altura ${r.plantHeight}cm.`)
         };
         return JSON.stringify(farmSummary);
     };
@@ -72,112 +72,82 @@ export default function AIAdvisor() {
         setError(null);
 
         try {
-            const systemContext = `Eres un ingeniero agrónomo experto en Cannabis Sativa L. (Cáñamo Industrial). 
-            Tu objetivo es asistir al usuario en la toma de decisiones técnicas.
-            
-            DATOS DE LA GRANJA DEL USUARIO (Contexto Real):
-            ${buildContext()}
-            
-            Reglas:
-            1. Responde de forma concisa y técnica pero accesible.
-            2. Si te preguntan por una parcela específica, usa los datos provistos.
-            3. Si analizas una imagen, busca plagas, deficiencias nutricionales o estados fenológicos.`;
-
-            // Always initialize GoogleGenAI with process.env.API_KEY directly.
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-            
             const parts: any[] = [];
-            
-            if (userMsg.text) {
-                parts.push({ text: userMsg.text });
-            } else if (userMsg.image) {
-                 parts.push({ text: "¿Qué observas en esta imagen?" });
-            }
+            if (userMsg.text) parts.push({ text: userMsg.text });
+            else if (userMsg.image) parts.push({ text: "Analiza esta imagen técnica de campo." });
 
             if (userMsg.image) {
                 const base64Data = userMsg.image.split(',')[1] || userMsg.image;
-                parts.push({
-                    inlineData: {
-                        mimeType: 'image/jpeg',
-                        data: base64Data
-                    }
-                });
+                parts.push({ inlineData: { mimeType: 'image/jpeg', data: base64Data } });
             }
 
-            // Using 'gemini-3-flash-preview' for agronomic Q&A task as per task requirements.
             const response = await ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
                 contents: [{ role: 'user', parts }],
                 config: {
-                    systemInstruction: systemContext
+                    systemInstruction: `Eres HempAI, el núcleo de inteligencia agrónoma de HempC. 
+                    Eres experto en Cannabis Sativa L. (Cáñamo Industrial).
+                    Tu objetivo: decisiones basadas en datos.
+                    
+                    CONTEXTO INDUSTRIAL DEL USUARIO:
+                    ${buildContext()}
+                    
+                    NORMAS:
+                    1. Respuestas de grado ingeniería: precisas, basadas en evidencia.
+                    2. Si detectas plagas en fotos, identifica el patógeno y sugiere manejo.
+                    3. Sé breve. Usa terminología técnica (fenología, grados día, lixiviación, etc).`
                 }
             });
 
-            // Correct extraction of text output using the .text property
             const aiMsg: Message = {
                 id: (Date.now() + 1).toString(),
                 role: 'model',
-                text: response.text || 'No pude generar una respuesta.'
+                text: response.text || 'Sin respuesta del núcleo.'
             };
-
             setMessages(prev => [...prev, aiMsg]);
-
         } catch (err: any) {
-            console.error("Gemini API Error:", err);
-            setError(err.message || "Error al conectar con la IA.");
-            setMessages(prev => [...prev, {
-                id: Date.now().toString(),
-                role: 'model',
-                text: '⚠️ Ocurrió un error de conexión con la IA.'
-            }]);
-        } finally {
-            setIsLoading(false);
-        }
+            setError(err.message || "Fallo en conexión neural.");
+        } finally { setIsLoading(false); }
     };
 
     return (
-        <div className="flex flex-col h-[calc(100vh-100px)]">
-            <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col h-[calc(100vh-140px)] animate-in fade-in duration-700">
+            <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center">
-                    <Sparkles className="text-purple-600 mr-3" size={32} />
+                    <div className="bg-purple-600 p-3 rounded-2xl text-white shadow-lg shadow-purple-900/20 mr-4">
+                        <Bot size={28} />
+                    </div>
                     <div>
-                        <h1 className="text-2xl font-bold text-gray-800">Asistente IA (v3.0)</h1>
-                        <p className="text-gray-500 text-sm">Potenciado por Google Gemini</p>
+                        <h1 className="text-3xl font-black text-slate-800 dark:text-white tracking-tighter uppercase">Asistente <span className="text-purple-600">HempAI</span></h1>
+                        <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-[0.2em] flex items-center">
+                            <Terminal size={10} className="mr-1"/> Industrial Neural Network v4.0
+                        </p>
                     </div>
                 </div>
             </div>
 
-            <div className="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
-                <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
-                    {error && (
-                        <div className="bg-red-50 border border-red-200 text-red-800 p-3 rounded-lg flex items-start text-sm animate-in zoom-in-95">
-                            <AlertTriangle className="mr-2 flex-shrink-0 mt-0.5" size={16} />
-                            <div>
-                                <span className="font-bold block">Error de Conexión:</span>
-                                {error}
-                            </div>
-                        </div>
-                    )}
-
+            <div className="flex-1 bg-white dark:bg-[#0a0f1d] rounded-[32px] shadow-sm border border-slate-200 dark:border-white/5 overflow-hidden flex flex-col relative">
+                <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-slate-50/30 dark:bg-transparent">
                     {messages.map((msg) => (
                         <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                            <div className={`max-w-[80%] md:max-w-[70%] rounded-2xl p-4 shadow-sm ${
+                            <div className={`max-w-[85%] md:max-w-[75%] rounded-3xl p-5 shadow-sm ${
                                 msg.role === 'user' 
-                                ? 'bg-hemp-600 text-white rounded-tr-none' 
-                                : 'bg-white text-gray-800 border border-gray-200 rounded-tl-none'
+                                ? 'bg-slate-900 dark:bg-hemp-600 text-white rounded-tr-none' 
+                                : 'bg-white dark:bg-white/5 text-slate-800 dark:text-slate-200 border border-slate-100 dark:border-white/5 rounded-tl-none'
                             }`}>
-                                <div className="flex items-center gap-2 mb-1 opacity-80 text-xs font-bold uppercase tracking-wider">
-                                    {msg.role === 'user' ? <User size={12}/> : <Bot size={12}/>}
-                                    {msg.role === 'user' ? 'Tú' : 'HempAI'}
+                                <div className="flex items-center gap-2 mb-2 opacity-50 text-[9px] font-black uppercase tracking-widest">
+                                    {msg.role === 'user' ? <User size={10}/> : <Bot size={10}/>}
+                                    {msg.role === 'user' ? 'Terminal' : 'HempAI Engine'}
                                 </div>
                                 
                                 {msg.image && (
-                                    <div className="mb-3 mt-1">
-                                        <img src={msg.image} alt="Upload" className="rounded-lg max-h-48 border border-white/20" />
+                                    <div className="mb-4 rounded-2xl overflow-hidden border border-white/10">
+                                        <img src={msg.image} alt="Technical" className="max-h-64 w-full object-cover" />
                                     </div>
                                 )}
                                 
-                                <div className="whitespace-pre-wrap leading-relaxed text-sm">
+                                <div className="text-sm leading-relaxed font-medium whitespace-pre-wrap">
                                     {msg.text}
                                 </div>
                             </div>
@@ -186,36 +156,36 @@ export default function AIAdvisor() {
                     
                     {isLoading && (
                         <div className="flex justify-start">
-                            <div className="bg-white border border-gray-200 rounded-2xl rounded-tl-none p-4 shadow-sm flex items-center space-x-2">
+                            <div className="bg-white dark:bg-white/5 border border-slate-100 dark:border-white/5 rounded-3xl rounded-tl-none p-5 flex items-center space-x-3">
                                 <Loader2 className="animate-spin text-hemp-600" size={18} />
-                                <span className="text-gray-500 text-sm">Analizando datos...</span>
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Procesando datos técnicos...</span>
                             </div>
                         </div>
                     )}
                     <div ref={messagesEndRef} />
                 </div>
 
-                <div className="p-4 bg-white border-t border-gray-200">
+                <div className="p-6 bg-white dark:bg-[#0a0f1d] border-t border-slate-100 dark:border-white/5">
                     {selectedImage && (
-                        <div className="flex items-center bg-gray-100 p-2 rounded-lg mb-2 w-fit">
-                            <ImageIcon size={16} className="text-gray-500 mr-2" />
-                            <span className="text-xs text-gray-600 mr-2">Imagen seleccionada</span>
-                            <button onClick={() => setSelectedImage(null)} className="text-gray-400 hover:text-red-500">
+                        <div className="flex items-center bg-slate-100 dark:bg-white/5 p-3 rounded-2xl mb-4 w-fit animate-in slide-in-from-bottom-2">
+                            <ImageIcon size={16} className="text-slate-500 mr-2" />
+                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mr-4">Imagen para análisis</span>
+                            <button onClick={() => setSelectedImage(null)} className="text-red-500 hover:bg-red-50 dark:hover:bg-red-950 p-1 rounded-full transition-colors">
                                 <X size={16} />
                             </button>
                         </div>
                     )}
                     
-                    <div className="flex gap-2">
-                        <label className="p-3 text-gray-400 hover:text-hemp-600 hover:bg-gray-50 rounded-lg cursor-pointer transition border border-transparent hover:border-gray-200">
-                            <ImageIcon size={24} />
+                    <div className="flex items-center gap-3">
+                        <label className="p-4 bg-slate-50 dark:bg-white/5 text-slate-400 dark:text-slate-500 hover:text-hemp-600 dark:hover:text-hemp-500 rounded-2xl cursor-pointer transition-all border border-slate-100 dark:border-white/5">
+                            <ImageIcon size={22} />
                             <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={isLoading} />
                         </label>
                         
                         <input 
                             type="text" 
-                            className="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-hemp-500 focus:border-transparent outline-none"
-                            placeholder="Pregunta sobre tus cultivos o sube una foto..."
+                            className="flex-1 bg-slate-50 dark:bg-[#050810] border border-slate-200 dark:border-white/10 rounded-2xl px-6 py-4 focus:ring-2 focus:ring-hemp-500/30 outline-none text-sm dark:text-white placeholder-slate-400 transition-all font-medium"
+                            placeholder="Ingrese comando técnico o consulta de campo..."
                             value={input}
                             onChange={e => setInput(e.target.value)}
                             onKeyDown={e => e.key === 'Enter' && handleSend()}
@@ -225,13 +195,19 @@ export default function AIAdvisor() {
                         <button 
                             onClick={handleSend}
                             disabled={isLoading || (!input && !selectedImage)}
-                            className="bg-hemp-600 text-white p-3 rounded-lg hover:bg-hemp-700 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                            className="bg-slate-900 dark:bg-hemp-600 text-white p-4 rounded-2xl hover:shadow-xl transition-all disabled:opacity-30 flex items-center justify-center group"
                         >
-                            <Send size={24} />
+                            {isLoading ? <RefreshCw className="animate-spin" size={22} /> : <Send size={22} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />}
                         </button>
                     </div>
                 </div>
             </div>
+            
+            {error && (
+                <div className="mt-4 bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center">
+                    <AlertTriangle className="mr-3" size={16}/> {error}
+                </div>
+            )}
         </div>
     );
 }
