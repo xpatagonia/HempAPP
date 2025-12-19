@@ -1,10 +1,11 @@
+
 <!DOCTYPE html>
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     
-    <!-- CACHE CONTROL: FORZAR ACTUALIZACIÓN -->
+    <!-- CACHE CONTROL -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
@@ -14,20 +15,11 @@
      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
      crossorigin=""/>
 
-    <title>HempC App - Sistema v2.6</title>
+    <title>HempC - Sistema Inteligente de Siembra v4.0</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-      // Desactivar Service Workers antiguos si existen para evitar caché persistente
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then(function(registrations) {
-          for(let registration of registrations) {
-            registration.unregister();
-          }
-        });
-      }
-
       tailwind.config = {
-        darkMode: 'class', // Habilitar modo oscuro manual
+        darkMode: 'class',
         theme: {
           extend: {
             colors: {
@@ -39,12 +31,11 @@
                 700: '#15803d',
                 800: '#166534',
                 900: '#14532d',
-              },
-              dark: {
-                bg: '#0f172a', // Slate 900
-                card: '#1e293b', // Slate 800
-                border: '#334155' // Slate 700
               }
+            },
+            borderRadius: {
+              '4xl': '2rem',
+              '5xl': '3rem',
             }
           }
         }
@@ -74,7 +65,7 @@
 }
 </script>
 </head>
-  <body class="bg-slate-50 text-gray-900 dark:bg-dark-bg dark:text-gray-100 transition-colors duration-300">
+  <body class="bg-slate-50 text-slate-900 dark:bg-[#050810] dark:text-slate-100 transition-colors duration-500 selection:bg-hemp-500 selection:text-white">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>
