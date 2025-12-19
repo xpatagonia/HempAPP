@@ -9,7 +9,7 @@ interface Message { id: string; role: 'user' | 'model' | 'error'; text: string; 
 export default function AIAdvisor() {
     const { plots, varieties, appName } = useAppContext();
     const [messages, setMessages] = useState<Message[]>([
-        { id: '1', role: 'model', text: `${appName} AI Intelligence Terminal v5.3.\nSistemas en red: ${plots.length} parcelas, ${varieties.length} genéticas.\nNeural processing unit: READY.\n¿Qué datos agronómicos deseas procesar hoy?` }
+        { id: '1', role: 'model', text: `${appName} AI Intelligence Terminal v5.3.\nSistemas en red: ${plots.length} unidades prod, ${varieties.length} genéticas.\nNeural processing unit: READY.\n¿Qué datos agronómicos deseas procesar hoy?` }
     ]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -43,7 +43,7 @@ export default function AIAdvisor() {
         setIsLoading(true);
 
         try {
-            // Inicialización directa según directrices: se asume que process.env.API_KEY es válida
+            // Inicialización directa asumiendo que process.env.API_KEY está inyectada por el host (Vercel)
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             
             let response;
@@ -91,7 +91,7 @@ export default function AIAdvisor() {
             setMessages(prev => [...prev, { 
                 id: (Date.now() + 1).toString(), 
                 role: 'error', 
-                text: `ERROR TÉCNICO: No se pudo conectar con el motor neural. Verifique la configuración de variables de entorno en el servidor de despliegue.\n\nDetalle: ${err.message}` 
+                text: `ERROR DE CONEXIÓN IA: No se pudo conectar con el motor neural. Verifique la configuración de variables de entorno en Vercel.\n\nDetalle: ${err.message}` 
             }]);
         } finally {
             setIsLoading(false);
@@ -106,7 +106,7 @@ export default function AIAdvisor() {
                     <div>
                         <h1 className="text-4xl font-black text-slate-800 dark:text-white tracking-tighter uppercase italic">{appName} <span className="text-hemp-600">Core</span></h1>
                         <p className="text-[11px] text-slate-400 font-bold uppercase tracking-[0.4em] flex items-center mt-1">
-                            <Terminal size={12} className="mr-2"/> AI Advisor Interface v5.3.0
+                            <Terminal size={12} className="mr-2"/> AI Advisor Interface v5.3.1
                         </p>
                     </div>
                 </div>

@@ -114,12 +114,15 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// Utils for persistence
+// Motor de conversión de nomenclatura mejorado (CamelCase <-> snake_case)
 const toSnakeCase = (obj: any) => {
     const newObj: any = {};
     for (const key in obj) {
-        const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
-        newObj[snakeKey] = obj[key];
+        if (Object.prototype.hasOwnProperty.call(obj, key)) {
+            // Convierte amountMm -> amount_mm
+            const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+            newObj[snakeKey] = obj[key];
+        }
     }
     return newObj;
 };
@@ -127,18 +130,13 @@ const toSnakeCase = (obj: any) => {
 const toCamelCase = (obj: any) => {
     const newObj: any = {};
     for (const key in obj) {
-        const camelKey = key.replace(/(_\w)/g, m => m[1].toUpperCase());
-        newObj[camelKey] = obj[key];
+        if (Object.prototype.hasOwnProperty.call(obj, key)) {
+            // Convierte amount_mm -> amountMm
+            const camelKey = key.replace(/(_\w)/g, m => m[1].toUpperCase());
+            newObj[camelKey] = obj[key];
+        }
     }
     return newObj;
-};
-
-const RESCUE_USER: User = {
-    id: 'rescue-admin-001',
-    name: 'Admin Local (Offline)',
-    email: 'admin@demo.com',
-    password: 'admin',
-    role: 'super_admin'
 };
 
 const saveToLocal = (key: string, data: any[]) => localStorage.setItem(`ht_local_${key}`, JSON.stringify(data));
@@ -174,7 +172,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   const [isEmergencyMode, setIsEmergencyMode] = useState(false);
-  const [dbNeedsMigration, setDbNeedsMigration] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
 
   useEffect(() => {
@@ -201,7 +198,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           const connected = await checkConnection();
           if (!connected) {
               setIsEmergencyMode(true);
-              setUsersList([...getFromLocal('users'), RESCUE_USER]);
+              setUsersList(getFromLocal('users'));
               setProjects(getFromLocal('projects')); setVarieties(getFromLocal('varieties'));
               setSuppliers(getFromLocal('suppliers')); setClients(getFromLocal('clients'));
               setLocations(getFromLocal('locations')); setPlots(getFromLocal('plots'));
@@ -214,7 +211,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               const fetchData = async (table: string, setter: any) => {
                   const { data, error } = await supabase.from(table).select('*');
                   if (!error && data) {
-                      // Map back to camelCase for state
                       setter(data.map(i => toCamelCase(i)));
                   }
               };
@@ -238,7 +234,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const login = async (email: string, password: string): Promise<boolean> => {
     if (isEmergencyMode) {
         let u = usersList.find(u => u.email === email && u.password === password);
-        if (email === RESCUE_USER.email && password === RESCUE_USER.password) u = RESCUE_USER;
         if (u) { setCurrentUser(u); localStorage.setItem('ht_session_user', JSON.stringify(u)); return true; }
         return false;
     }
@@ -255,33 +250,36 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const logout = () => { setCurrentUser(null); localStorage.removeItem('ht_session_user'); };
 
   const genericAdd = async (table: string, item: any, setter: any, localKey: string) => {
+      const dbItem = toSnakeCase(item);
       if (isEmergencyMode) {
           setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
           return true;
       } else {
           try {
-              // Convert to snake_case for Supabase
-              const dbItem = toSnakeCase(item);
               const { error } = await supabase.from(table).insert([dbItem]);
               if (error) {
-                  console.error(`Sync Error in ${table}:`, error);
-                  setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
-                  return true;
+                  console.error(`PostgREST insert error en ${table}:`, error.message);
+                  throw error;
               }
               setter((prev: any[]) => [...prev, item]);
               return true;
-          } catch (e) {
-              setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
+          } catch (e: any) {
+              console.warn(`Sync Fallback: Guardando ${table} en local storage debido a:`, e.message || e);
+              setter((prev: any[]) => { 
+                const n = [...prev, item]; 
+                saveToLocal(localKey, n); 
+                return n; 
+              });
               return true;
           }
       }
   };
 
   const genericUpdate = async (table: string, item: any, setter: any, localKey: string) => {
+      const dbItem = toSnakeCase(item);
       if (isEmergencyMode) {
           setter((prev: any[]) => { const n = prev.map((i: any) => i.id === item.id ? item : i); saveToLocal(localKey, n); return n; });
       } else {
-          const dbItem = toSnakeCase(item);
           const { error } = await supabase.from(table).update(dbItem).eq('id', item.id);
           if (error) console.error(`Error updating ${table}:`, error.message);
           setter((prev: any[]) => prev.map((i: any) => i.id === item.id ? item : i));
@@ -297,7 +295,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
   };
 
-  // Wrapper functions
+  // Wrapper funciones...
   const addUser = (u: User) => genericAdd('users', u, setUsersList, 'users');
   const updateUser = (u: User) => genericUpdate('users', u, setUsersList, 'users');
   const deleteUser = (id: string) => genericDelete('users', id, setUsersList, 'users');
@@ -399,7 +397,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       addStoragePoint, updateStoragePoint, deleteStoragePoint,
       addHydricRecord, deleteHydricRecord,
       getPlotHistory, getLatestRecord,
-      loading, isRefreshing, isEmergencyMode, dbNeedsMigration,
+      loading, isRefreshing, isEmergencyMode, dbNeedsMigration: false,
       theme, toggleTheme
     }}>
       {children}

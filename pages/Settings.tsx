@@ -146,7 +146,7 @@ export default function Settings() {
                         <h3 className="text-xl font-black uppercase tracking-tighter">Seguridad Neural</h3>
                       </div>
                       <p className="text-blue-100 text-sm font-medium leading-relaxed mb-6">
-                        La <strong>API Key de Google Gemini</strong> se gestiona de forma segura mediante variables de entorno del sistema (`API_KEY`). Si experimenta errores de conexión, contacte con el departamento técnico.
+                        La <strong>API Key de Google Gemini</strong> se gestiona de forma segura mediante variables de entorno del sistema (`API_KEY`) en el servidor de despliegue.
                       </p>
                       <div className="flex items-center space-x-4">
                           <div className="bg-white/10 px-4 py-2 rounded-xl border border-white/20 flex items-center">
@@ -183,10 +183,10 @@ export default function Settings() {
               <div className="bg-slate-900 border border-slate-800 p-8 rounded-[32px] shadow-2xl relative overflow-hidden">
                   <div className="flex items-center space-x-3 mb-6">
                       <Shield className="text-hemp-500" size={24}/>
-                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Estructura SQL Requerida</h3>
+                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Estructura SQL Obligatoria</h3>
                   </div>
-                  <p className="text-xs text-slate-400 mb-4 leading-relaxed">Ejecute estos scripts en su editor SQL de Supabase para habilitar el guardado de agua y temperatura:</p>
-                  <pre className="bg-black/50 p-6 rounded-2xl text-[10px] text-blue-400 overflow-x-auto border border-white/5 font-mono h-60">
+                  <p className="text-xs text-slate-400 mb-4 leading-relaxed">Ejecute estos scripts en su editor SQL de Supabase para asegurar el guardado de temperatura, altura y agua:</p>
+                  <pre className="bg-black/50 p-6 rounded-2xl text-[10px] text-blue-400 overflow-x-auto border border-white/5 font-mono h-80">
 {`CREATE TABLE IF NOT EXISTS hydric_records (
   id TEXT PRIMARY KEY,
   location_id TEXT,
@@ -212,6 +212,22 @@ CREATE TABLE IF NOT EXISTS trial_records (
   vigor NUMERIC,
   created_by TEXT,
   created_by_name TEXT
+);
+
+CREATE TABLE IF NOT EXISTS plots (
+  id TEXT PRIMARY KEY,
+  location_id TEXT,
+  project_id TEXT,
+  variety_id TEXT,
+  seed_batch_id TEXT,
+  name TEXT,
+  type TEXT, -- 'Ensayo' o 'Producción'
+  status TEXT,
+  sowing_date DATE,
+  surface_area NUMERIC,
+  surface_unit TEXT,
+  density NUMERIC,
+  responsible_ids TEXT[]
 );`}
                   </pre>
               </div>
