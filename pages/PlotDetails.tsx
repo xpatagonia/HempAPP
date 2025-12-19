@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { TrialRecord, Plot, FieldLog } from '../types';
@@ -7,7 +7,7 @@ import {
   ArrowLeft, Activity, MapPin, Plus, Eye, Tag, Clock, 
   Sprout, X, Map, ShieldCheck, Info, AlertCircle, Trash2, Edit2,
   Camera, Image as ImageIcon, MessageSquare, ClipboardList, User, Calendar, Ruler, Maximize2, Download, Scale, Wind, Bird, CheckCircle2,
-  RefreshCw, Globe, Layers, Save
+  RefreshCw, Globe, Layers, Save, Thermometer, Droplets
 } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
 import WeatherWidget from '../components/WeatherWidget';
@@ -72,8 +72,8 @@ export default function PlotDetails() {
   const [isViewMode, setIsViewMode] = useState(false);
   const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isWeatherLoading, setIsWeatherLoading] = useState(false);
   
-  // Plot Polygon Temporary State
   const [tempPolygon, setTempPolygon] = useState<{lat: number, lng: number}[]>(plot?.polygon || []);
   const [tempArea, setTempArea] = useState(plot?.surfaceArea || 0);
   const [tempCoords, setTempCoords] = useState(plot?.coordinates);
@@ -82,6 +82,8 @@ export default function PlotDetails() {
     date: new Date().toISOString().split('T')[0], 
     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }), 
     stage: 'Vegetativo' as any, 
+    temperature: undefined,
+    humidity: undefined,
     plantHeight: 0,
     replicate: plot?.replicate || 1,
     plantsPerMeter: 0,
@@ -109,11 +111,35 @@ export default function PlotDetails() {
   
   if (!plot) return <div className="p-10 text-center">Parcela no encontrada.</div>;
 
+  // --- AUTOMATIC WEATHER CAPTURE ---
+  const captureLiveWeather = async () => {
+      const coords = plot.coordinates || location?.coordinates;
+      if (!coords) return;
+
+      setIsWeatherLoading(true);
+      try {
+          const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${coords.lat}&longitude=${coords.lng}&current=temperature_2m,relative_humidity_2m`);
+          const data = await res.json();
+          if (data.current) {
+              setRecordForm(prev => ({
+                  ...prev,
+                  temperature: Math.round(data.current.temperature_2m),
+                  humidity: Math.round(data.current.relative_humidity_2m)
+              }));
+          }
+      } catch (e) {
+          console.error("Error capturando clima", e);
+      } finally {
+          setIsWeatherLoading(false);
+      }
+  };
+
   const handleOpenNewRecord = () => {
       setEditingRecordId(null);
       setIsViewMode(false);
       setRecordForm(getDefaultRecordValues());
       setIsRecordModalOpen(true);
+      captureLiveWeather(); // Captura automática al abrir
   };
 
   const handleSaveRecord = async (e: React.FormEvent) => {
@@ -298,7 +324,7 @@ export default function PlotDetails() {
                     <div className="overflow-x-auto">
                         <table className="min-w-full text-sm text-left">
                             <thead className="bg-gray-50/50 text-gray-400 uppercase text-[9px] font-black tracking-widest">
-                                <tr><th className="px-8 py-4">Fecha/Hora</th><th className="px-8 py-4">Etapa</th><th className="px-8 py-4 text-center">Altura</th><th className="px-8 py-4 text-center">Vigor</th><th className="px-8 py-4 text-right">Ver</th></tr>
+                                <tr><th className="px-8 py-4">Fecha/Hora</th><th className="px-8 py-4">Etapa</th><th className="px-8 py-4 text-center">Altura</th><th className="px-8 py-4 text-center">Clima</th><th className="px-8 py-4 text-right">Ver</th></tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
                                 {history.length === 0 ? ( <tr><td colSpan={5} className="p-12 text-center text-gray-300 italic font-medium">No hay monitoreos registrados.</td></tr> ) : history.map(r => (
@@ -306,7 +332,14 @@ export default function PlotDetails() {
                                         <td className="px-8 py-5 font-black text-gray-800">{r.date} <span className="block text-[10px] text-gray-400 font-normal">{r.time || '--:--'}</span></td>
                                         <td className="px-8 py-5"><span className="px-3 py-1 rounded-full text-[9px] font-black uppercase border bg-green-50 text-green-700 border-green-100">{r.stage}</span></td>
                                         <td className="px-8 py-5 font-black text-gray-900 text-center">{r.plantHeight ? `${r.plantHeight} cm` : '-'}</td>
-                                        <td className="px-8 py-5 font-black text-gray-900 text-center">{r.vigor ? `${r.vigor}%` : '-'}</td>
+                                        <td className="px-8 py-5 text-center">
+                                            {r.temperature !== undefined ? (
+                                                <div className="flex flex-col items-center">
+                                                    <span className="text-xs font-bold text-orange-600">{r.temperature}°C</span>
+                                                    <span className="text-[10px] text-blue-500 font-medium">{r.humidity}% HR</span>
+                                                </div>
+                                            ) : '-'}
+                                        </td>
                                         <td className="px-8 py-5 text-right"><Eye size={18} className="text-gray-300 group-hover:text-hemp-600 ml-auto transition"/></td>
                                     </tr>
                                 ))}
@@ -351,7 +384,7 @@ export default function PlotDetails() {
           </div>
       </div>
 
-      {/* MAP MODAL - PARCELA / UNIT EDITOR */}
+      {/* MAP MODAL */}
       {isMapModalOpen && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] flex items-center justify-center p-4">
               <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-5xl h-[85vh] overflow-hidden flex flex-col animate-in zoom-in-95">
@@ -401,7 +434,7 @@ export default function PlotDetails() {
           </div>
       )}
 
-      {/* RECORD MODAL */}
+      {/* RECORD MODAL CON CLIMA AUTOMÁTICO */}
       {isRecordModalOpen && (
            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-3xl max-h-[95vh] overflow-y-auto animate-in zoom-in-95 duration-200">
@@ -412,11 +445,37 @@ export default function PlotDetails() {
                    <div className="p-8">
                        <form onSubmit={handleSaveRecord} className="space-y-10">
                            <section>
-                               <h3 className="text-xs font-black text-hemp-600 uppercase tracking-widest mb-4 flex items-center border-b pb-2"><Clock size={14} className="mr-2"/> Datos Generales</h3>
+                               <div className="flex justify-between items-center mb-4 border-b pb-2">
+                                   <h3 className="text-xs font-black text-hemp-600 uppercase tracking-widest flex items-center"><Clock size={14} className="mr-2"/> Datos Generales</h3>
+                                   {!isViewMode && !editingRecordId && (
+                                       <div className={`flex items-center text-[9px] font-black uppercase tracking-tighter px-2 py-1 rounded-full border ${isWeatherLoading ? 'bg-blue-50 text-blue-600 border-blue-100 animate-pulse' : 'bg-green-50 text-green-600 border-green-100'}`}>
+                                           {isWeatherLoading ? <RefreshCw size={10} className="mr-1 animate-spin"/> : <Thermometer size={10} className="mr-1"/>}
+                                           {isWeatherLoading ? 'Capturando Clima...' : 'Smart Capture Activo'}
+                                       </div>
+                                   )}
+                               </div>
                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                    <div><label className={labelClass}>Fecha</label><input type="date" required disabled={isViewMode} className={inputStyle} value={recordForm.date} onChange={e => setRecordForm({...recordForm, date: e.target.value})}/></div>
                                    <div><label className={labelClass}>Hora</label><input type="time" required disabled={isViewMode} className={inputStyle} value={recordForm.time} onChange={e => setRecordForm({...recordForm, time: e.target.value})}/></div>
                                    <div><label className={labelClass}>Etapa</label><select disabled={isViewMode} className={inputStyle} value={recordForm.stage} onChange={e => setRecordForm({...recordForm, stage: e.target.value as any})}><option value="Vegetativo">Vegetativo</option><option value="Floración">Floración</option><option value="Maduración">Maduración</option><option value="Cosecha">Cosecha</option></select></div>
+                               </div>
+
+                               {/* CLIMA CAPTURADO UI */}
+                               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+                                   <div className="relative group">
+                                       <label className={labelClass}>Temp. Aire (°C)</label>
+                                       <div className="relative">
+                                           <Thermometer size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300"/>
+                                           <input type="number" disabled={isViewMode} placeholder="--" className={`${inputStyle} pl-9`} value={recordForm.temperature || ''} onChange={e => setRecordForm({...recordForm, temperature: Number(e.target.value)})}/>
+                                       </div>
+                                   </div>
+                                   <div className="relative group">
+                                       <label className={labelClass}>Humedad (%)</label>
+                                       <div className="relative">
+                                           <Droplets size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300"/>
+                                           <input type="number" disabled={isViewMode} placeholder="--" className={`${inputStyle} pl-9`} value={recordForm.humidity || ''} onChange={e => setRecordForm({...recordForm, humidity: Number(e.target.value)})}/>
+                                       </div>
+                                   </div>
                                </div>
                            </section>
                            <section>

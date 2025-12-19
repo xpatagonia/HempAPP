@@ -47,7 +47,7 @@ export default function Settings() {
       setTimeout(() => { setStatus('idle'); }, 2000);
   };
 
-  const SQL_REPAIR_ALL = `-- SCRIPT DE REPARACIÓN INTEGRAL HEMP-APP v3.4
+  const SQL_REPAIR_ALL = `-- SCRIPT DE REPARACIÓN INTEGRAL HEMP-APP v3.5
 -- 1. REPARAR TABLA DE PARCELAS (Geometry & Traceability)
 ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS "seedBatchId" TEXT;
 ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS "polygon" JSONB;
@@ -58,7 +58,9 @@ ALTER TABLE public.field_logs ADD COLUMN IF NOT EXISTS "photoUrl" TEXT;
 ALTER TABLE public.field_logs ADD COLUMN IF NOT EXISTS "note" TEXT;
 ALTER TABLE public.field_logs ADD COLUMN IF NOT EXISTS "time" TEXT;
 
--- 3. REPARAR TABLA DE MONITOREO (Estructura Completa de Ensayo)
+-- 3. REPARAR TABLA DE MONITOREO (Clima Automático y Estructura Ensayo)
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "temperature" NUMERIC;
+ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "humidity" NUMERIC;
 ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "time" TEXT;
 ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "emergenceDate" TEXT;
 ALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS "replicate" NUMERIC;
@@ -102,16 +104,16 @@ NOTIFY pgrst, 'reload schema';`;
                   <div className="flex items-start">
                       <ShieldCheck className="text-blue-600 mr-4 flex-shrink-0" size={32}/>
                       <div>
-                          <h3 className="font-black text-blue-900 uppercase text-sm mb-1">Script de Sincronización Total (v3.4)</h3>
+                          <h3 className="font-black text-blue-900 uppercase text-sm mb-1">Script de Sincronización Total (v3.5)</h3>
                           <p className="text-xs text-blue-800 leading-relaxed">
-                              Este script habilita el diseño de <strong>Parcelas Georreferenciadas</strong> dentro de los campos. Copia y ejecuta este código en el SQL Editor de Supabase para habilitar el dibujo de polígonos.
+                              Este script habilita el <strong>Registro Climático Automático</strong> (Temp/Hum) en los monitoreos. Copia y ejecuta este código en el SQL Editor de Supabase.
                           </p>
                       </div>
                   </div>
                   <div className="mt-6 bg-slate-900 rounded-xl p-5 overflow-hidden relative group border border-slate-700 shadow-inner">
                       <pre className="text-[11px] font-mono text-blue-300 overflow-x-auto h-64 custom-scrollbar leading-relaxed">{SQL_REPAIR_ALL}</pre>
                       <button 
-                        onClick={() => { navigator.clipboard.writeText(SQL_REPAIR_ALL); alert("✅ Script v3.4 copiado."); }}
+                        onClick={() => { navigator.clipboard.writeText(SQL_REPAIR_ALL); alert("✅ Script v3.5 copiado."); }}
                         className="absolute top-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition shadow-lg flex items-center"
                       >
                           <Copy size={14} className="mr-2"/> Copiar Script de Reparación

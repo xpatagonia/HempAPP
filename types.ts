@@ -146,6 +146,10 @@ export interface TrialRecord {
   time?: string;
   stage: 'Vegetativo' | 'Floración' | 'Maduración' | 'Cosecha';
   
+  // Clima Automático
+  temperature?: number;
+  humidity?: number;
+
   // Datos solicitados para ensayos
   emergenceDate?: string;
   replicate?: number; // Rep
@@ -177,7 +181,7 @@ export interface FieldLog {
   id: string;
   plotId: string;
   date: string;
-  time?: string; // Nuevo
+  time?: string; 
   note: string;
   photoUrl?: string;
 }
@@ -211,12 +215,6 @@ export interface SeedBatch {
   id: string;
   varietyId: string;
   supplierId?: string;
-  supplierName?: string;
-  supplierLegalName?: string;
-  supplierCuit?: string;
-  supplierRenspa?: string;
-  supplierAddress?: string;
-  originCountry?: string;
   batchCode: string;
   labelSerialNumber?: string;
   category?: 'C1' | 'C2' | 'Base' | 'Original';
