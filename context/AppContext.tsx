@@ -114,13 +114,13 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// Motor de conversión mejorado
+// Motor de conversión robusto
 const toSnakeCase = (obj: any) => {
     if (!obj || typeof obj !== 'object') return obj;
     const newObj: any = {};
     for (const key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
-            // Aseguramos que amountMm sea amount_mm, locationId sea location_id, etc.
+            // Convierte camelCase a snake_case (ej: amountMm -> amount_mm)
             const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
             newObj[snakeKey] = obj[key];
         }
@@ -257,20 +257,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           return true;
       } else {
           try {
-              const { error } = await supabase.from(table).insert([dbItem]).select();
+              // Intento de inserción simple para evitar problemas de RLS en el select()
+              const { error } = await supabase.from(table).insert([dbItem]);
               if (error) {
-                  console.error(`Supabase Error (${table}):`, error);
+                  console.error(`ERROR SUPABASE (Tabla: ${table}):`, error.message, error.details);
                   throw error;
               }
               setter((prev: any[]) => [...prev, item]);
               return true;
           } catch (e: any) {
-              console.warn(`Fallback to local for ${table} due to error:`, e.message);
-              setter((prev: any[]) => { 
-                  const n = [...prev, item]; 
-                  saveToLocal(localKey, n); 
-                  return n; 
-              });
+              console.warn(`Fallback local activo para ${table} debido a error de servidor.`);
+              setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
               return true;
           }
       }

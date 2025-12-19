@@ -146,14 +146,13 @@ export default function Settings() {
                         <h3 className="text-xl font-black uppercase tracking-tighter">Seguridad Neural</h3>
                       </div>
                       <p className="text-blue-100 text-sm font-medium leading-relaxed mb-6">
-                        La <strong>API Key de Google Gemini</strong> se gestiona de forma segura mediante variables de entorno del sistema (`API_KEY`) en el servidor de despliegue.
+                        La <strong>API Key de Google Gemini</strong> se gestiona mediante variables de entorno del sistema (`API_KEY`).
                       </p>
                       <div className="flex items-center space-x-4">
                           <div className="bg-white/10 px-4 py-2 rounded-xl border border-white/20 flex items-center">
                               <div className="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></div>
                               <span className="text-[10px] font-black uppercase tracking-widest text-blue-50">Motor IA Activo</span>
                           </div>
-                          <span className="text-[10px] font-bold text-blue-200">v1.34-genai</span>
                       </div>
                   </div>
                   <Globe className="absolute -right-20 -bottom-20 text-white opacity-5 w-64 h-64" />
@@ -185,7 +184,7 @@ export default function Settings() {
                       <Shield className="text-hemp-500" size={24}/>
                       <h3 className="font-black text-white uppercase text-sm tracking-widest">Estructura SQL Obligatoria</h3>
                   </div>
-                  <p className="text-xs text-slate-400 mb-4 leading-relaxed">Ejecute este script en el editor SQL de Supabase para asegurar la persistencia integral:</p>
+                  <p className="text-xs text-slate-400 mb-4 leading-relaxed">Ejecute este script en el editor SQL de Supabase para asegurar que el sistema pueda guardar los registros hídricos:</p>
                   <pre className="bg-black/50 p-6 rounded-2xl text-[10px] text-blue-400 overflow-x-auto border border-white/5 font-mono h-80 custom-scrollbar">
 {`CREATE TABLE IF NOT EXISTS hydric_records (
   id TEXT PRIMARY KEY,
@@ -194,7 +193,7 @@ export default function Settings() {
   date DATE,
   time TEXT,
   type TEXT,
-  amount_mm NUMERIC, -- Importante: snake_case exacto
+  amount_mm NUMERIC, -- Debe ser NUMERIC y llamarse exacto
   notes TEXT,
   created_by TEXT
 );
@@ -212,16 +211,6 @@ CREATE TABLE IF NOT EXISTS trial_records (
   vigor NUMERIC,
   created_by TEXT,
   created_by_name TEXT
-);
-
-CREATE TABLE IF NOT EXISTS users (
-  id TEXT PRIMARY KEY,
-  name TEXT,
-  email TEXT UNIQUE,
-  password TEXT,
-  role TEXT,
-  job_title TEXT,
-  client_id TEXT
 );
 
 CREATE TABLE IF NOT EXISTS plots (
@@ -243,9 +232,9 @@ CREATE TABLE IF NOT EXISTS plots (
                   <button onClick={() => {
                       const sql = `CREATE TABLE IF NOT EXISTS hydric_records (id TEXT PRIMARY KEY, location_id TEXT, plot_id TEXT, date DATE, time TEXT, type TEXT, amount_mm NUMERIC, notes TEXT, created_by TEXT);`;
                       navigator.clipboard.writeText(sql);
-                      alert("SQL de registros hídricos copiado al portapapeles.");
+                      alert("SQL copiado. Ejecútelo en Supabase SQL Editor.");
                   }} className="mt-4 text-[10px] font-black text-hemp-400 uppercase tracking-widest flex items-center hover:text-white transition">
-                      <Copy size={12} className="mr-1"/> Copiar SQL Básico
+                      <Copy size={12} className="mr-1"/> Copiar SQL para Registros Hídricos
                   </button>
               </div>
           </div>
