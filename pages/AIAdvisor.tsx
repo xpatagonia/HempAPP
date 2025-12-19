@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Send, Bot, User, Image as ImageIcon, Loader2, X, Terminal, RefreshCw, Cpu, AlertTriangle } from 'lucide-center';
+import { Send, Bot, User, Image as ImageIcon, Loader2, X, Terminal, RefreshCw, Cpu, AlertTriangle } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 
 interface Message { id: string; role: 'user' | 'model' | 'error'; text: string; image?: string; }
@@ -9,7 +9,7 @@ interface Message { id: string; role: 'user' | 'model' | 'error'; text: string; 
 export default function AIAdvisor() {
     const { plots, varieties, appName } = useAppContext();
     const [messages, setMessages] = useState<Message[]>([
-        { id: '1', role: 'model', text: `${appName} AI Intelligence Terminal v5.4.4.\nEstado del Motor: STANDBY.\n¿Qué datos agronómicos desea procesar?` }
+        { id: '1', role: 'model', text: `${appName} AI Intelligence Terminal v5.4.5.\nEstado: EN LÍNEA.\nSistemas de cultivo analizados: ${plots.length}.\n¿En qué puedo ayudarle hoy?` }
     ]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -43,37 +43,31 @@ export default function AIAdvisor() {
         setIsLoading(true);
 
         try {
-            // Verificar disponibilidad de la llave antes de instanciar
-            const apiKey = process.env.API_KEY;
-            if (!apiKey || apiKey === "undefined") {
-                throw new Error("API_KEY_MISSING: La llave no está llegando al navegador. Verifique las variables de entorno en su panel de despliegue.");
-            }
-
-            // Inicialización limpia según reglas del SDK
-            const ai = new GoogleGenAI({ apiKey });
-            const model = ai.models.get('gemini-3-pro-preview');
+            // REGLA DE ORO: Inicialización directa con process.env.API_KEY
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const model = 'gemini-3-pro-preview';
             
             let result;
             if (userMsg.image) {
                 const base64Data = userMsg.image.split(',')[1];
                 result = await ai.models.generateContent({
-                    model: 'gemini-3-pro-preview',
+                    model: model,
                     contents: {
                         parts: [
-                            { text: userMsg.text || "Analice técnicamente esta evidencia de cultivo." },
+                            { text: userMsg.text || "Analiza esta imagen de cáñamo industrial y proporciona un diagnóstico técnico." },
                             { inlineData: { mimeType: 'image/jpeg', data: base64Data } }
                         ]
                     },
                     config: {
-                        systemInstruction: `Usted es el consultor agronómico senior de ${appName}. Responda en español, con tecnicismos apropiados para cáñamo industrial.`,
+                        systemInstruction: `Eres el Asesor Senior de ${appName}. Eres una IA experta en agronomía, fisiología del cáñamo y manejo de suelos. Responde de forma científica y técnica en Español.`,
                     }
                 });
             } else {
                 result = await ai.models.generateContent({
-                    model: 'gemini-3-pro-preview',
+                    model: model,
                     contents: userMsg.text,
                     config: {
-                        systemInstruction: `Usted es el consultor agronómico senior de ${appName}. Responda en español, con tecnicismos apropiados para cáñamo industrial.`,
+                        systemInstruction: `Eres el Asesor Senior de ${appName}. Eres una IA experta en agronomía, fisiología del cáñamo y manejo de suelos. Responde de forma científica y técnica en Español.`,
                     }
                 });
             }
@@ -83,15 +77,11 @@ export default function AIAdvisor() {
             }
             
         } catch (err: any) {
-            console.error("AI Advisor Error:", err);
-            let errorMsg = err.message;
-            if (errorMsg.includes("API Key")) {
-                errorMsg = "La API Key no es válida o no está configurada correctamente en el servidor.";
-            }
+            console.error("AI Terminal Critical Error:", err);
             setMessages(prev => [...prev, { 
                 id: Date.now().toString(), 
                 role: 'error', 
-                text: `ERROR DE CONEXIÓN: ${errorMsg}` 
+                text: `ERROR DE PROTOCOLO: El motor IA no responde. Verifique que la variable API_KEY esté correctamente inyectada en el entorno de despliegue.\nDetalle: ${err.message}` 
             }]);
         } finally {
             setIsLoading(false);
@@ -106,7 +96,7 @@ export default function AIAdvisor() {
                     <div>
                         <h1 className="text-4xl font-black text-slate-800 dark:text-white tracking-tighter uppercase italic">{appName} <span className="text-hemp-600">Core</span></h1>
                         <p className="text-[11px] text-slate-400 font-bold uppercase tracking-[0.4em] flex items-center mt-1">
-                            <Terminal size={12} className="mr-2"/> IA Neural Interface v5.4.4
+                            <Terminal size={12} className="mr-2"/> AGRO-AI INTERFACE V.5.4.5
                         </p>
                     </div>
                 </div>
@@ -125,9 +115,9 @@ export default function AIAdvisor() {
                             }`}>
                                 <div className="flex items-center gap-2 mb-4 opacity-50 text-[10px] font-black uppercase tracking-widest">
                                     {msg.role === 'user' ? <User size={12}/> : msg.role === 'error' ? <AlertTriangle size={12}/> : <Bot size={12}/>} 
-                                    {msg.role === 'user' ? 'Personal Autorizado' : msg.role === 'error' ? 'System Error' : `${appName} Advisor`}
+                                    {msg.role === 'user' ? 'Manejo de Campo' : msg.role === 'error' ? 'Fallo de Enlace' : `${appName} Agronomist`}
                                 </div>
-                                {msg.image && <img src={msg.image} className="mb-4 rounded-2xl max-h-64 w-full object-cover border border-white/10 shadow-lg" alt="Visual context" />}
+                                {msg.image && <img src={msg.image} className="mb-4 rounded-2xl max-h-64 w-full object-cover border border-white/10 shadow-lg" alt="Contexto visual" />}
                                 <div className="text-sm md:text-base leading-relaxed font-medium whitespace-pre-wrap font-mono">{msg.text}</div>
                             </div>
                         </div>
@@ -136,7 +126,7 @@ export default function AIAdvisor() {
                         <div className="flex justify-start">
                             <div className="bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 rounded-[32px] p-6 md:p-8 flex items-center space-x-4">
                                 <RefreshCw className="animate-spin text-hemp-600" size={24} />
-                                <span className="text-[11px] font-black text-slate-400 uppercase tracking-[0.3em]">Procesando Petición...</span>
+                                <span className="text-[11px] font-black text-slate-400 uppercase tracking-[0.3em]">Procesando Datos...</span>
                             </div>
                         </div>
                     )}
@@ -145,15 +135,15 @@ export default function AIAdvisor() {
 
                 <div className="p-6 md:p-10 bg-slate-50/50 dark:bg-black/40 border-t border-slate-200 dark:border-white/5">
                     <div className="flex items-center gap-4">
-                        <label className="p-4 md:p-5 bg-white dark:bg-white/5 text-slate-400 hover:text-hemp-600 rounded-[24px] cursor-pointer transition-all border border-slate-200 dark:border-white/5 shadow-inner">
+                        <label className="p-4 md:p-5 bg-white dark:bg-white/5 text-slate-400 hover:text-hemp-600 rounded-[24px] cursor-pointer transition-all border border-slate-200 dark:border-white/5">
                             <ImageIcon size={28} />
                             <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
                         </label>
                         <input 
                             type="text" className="flex-1 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/5 rounded-[24px] px-6 md:px-8 py-4 md:py-5 focus:ring-4 focus:ring-hemp-600/20 outline-none text-base text-slate-800 dark:text-white placeholder-slate-400 font-mono"
-                            placeholder="Consultar HempAI..." value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSend()}
+                            placeholder="Consultar HempAI sobre cultivos, plagas o clima..." value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSend()}
                         />
-                        <button onClick={handleSend} disabled={isLoading} className="bg-hemp-600 text-white p-4 md:p-5 rounded-[24px] shadow-lg disabled:opacity-30 active:scale-95 transition-all">
+                        <button onClick={handleSend} disabled={isLoading} className="bg-hemp-600 text-white p-4 md:p-5 rounded-[24px] shadow-lg disabled:opacity-30 transition-all">
                             <Send size={28} />
                         </button>
                     </div>

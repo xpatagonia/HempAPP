@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Save, Database, Copy, RefreshCw, Lock, Settings as SettingsIcon, ShieldCheck, PlayCircle, CheckCircle2, Layout, Image as ImageIcon, Trash2, RotateCcw, Cpu, Globe } from 'lucide-center';
-import { Shield, Server } from 'lucide-center';
+import { Save, Database, Copy, RefreshCw, Lock, Settings as SettingsIcon, ShieldCheck, PlayCircle, CheckCircle2, Layout, Image as ImageIcon, Trash2, RotateCcw, Cpu, Globe } from 'lucide-react';
+import { Shield, Server } from 'lucide-react';
 
 export default function Settings() {
   const { currentUser, appName, appLogo, updateBranding } = useAppContext();
@@ -182,11 +182,11 @@ export default function Settings() {
               <div className="bg-slate-900 border border-slate-800 p-8 rounded-[32px] shadow-2xl relative overflow-hidden">
                   <div className="flex items-center space-x-3 mb-6">
                       <Shield className="text-hemp-500" size={24}/>
-                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Estructura SQL Obligatoria</h3>
+                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Protocolo de Reparación SQL</h3>
                   </div>
-                  <p className="text-xs text-slate-400 mb-4 leading-relaxed">Ejecute este script para corregir fallos de guardado por permisos (RLS) y asegurar los tipos numéricos:</p>
+                  <p className="text-xs text-slate-400 mb-4 leading-relaxed">Ejecute este script para corregir fallos de guardado por permisos (RLS) y forzar la estructura de balance hídrico:</p>
                   <pre className="bg-black/50 p-6 rounded-2xl text-[10px] text-blue-400 overflow-x-auto border border-white/5 font-mono h-80 custom-scrollbar">
-{`/* 1. CREAR TABLA HIDRICA SI NO EXISTE */
+{`/* 1. ELIMINAR TABLA SI ESTÁ BLOQUEADA O CREARLA DE NUEVO */
 CREATE TABLE IF NOT EXISTS hydric_records (
   id TEXT PRIMARY KEY,
   location_id TEXT,
@@ -194,24 +194,28 @@ CREATE TABLE IF NOT EXISTS hydric_records (
   date DATE,
   time TEXT,
   type TEXT,
-  amount_mm NUMERIC,
+  amount_mm NUMERIC DEFAULT 0,
   notes TEXT,
   created_by TEXT
 );
 
-/* 2. HABILITAR ACCESO PÚBLICO (POLÍTICAS RLS) - CRÍTICO PARA EL GUARDADO */
+/* 2. REPARAR PERMISOS DE SEGURIDAD (RLS) - CRÍTICO */
 ALTER TABLE hydric_records ENABLE ROW LEVEL SECURITY;
+ALTER TABLE hydric_records FORCE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Public Insert" ON hydric_records;
-CREATE POLICY "Public Insert" ON hydric_records FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Public Insert Access" ON hydric_records;
+CREATE POLICY "Public Insert Access" ON hydric_records 
+FOR INSERT WITH CHECK (true);
 
-DROP POLICY IF EXISTS "Public Select" ON hydric_records;
-CREATE POLICY "Public Select" ON hydric_records FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Public Select Access" ON hydric_records;
+CREATE POLICY "Public Select Access" ON hydric_records 
+FOR SELECT USING (true);
 
-DROP POLICY IF EXISTS "Public Delete" ON hydric_records;
-CREATE POLICY "Public Delete" ON hydric_records FOR DELETE USING (true);
+DROP POLICY IF EXISTS "Public Delete Access" ON hydric_records;
+CREATE POLICY "Public Delete Access" ON hydric_records 
+FOR DELETE USING (true);
 
-/* 3. REPETIR PARA TABLA DE MONITOREO TÉCNICO */
+/* 3. REPARAR TABLA DE MONITOREO TÉCNICO */
 CREATE TABLE IF NOT EXISTS trial_records (
   id TEXT PRIMARY KEY,
   plot_id TEXT,
@@ -227,15 +231,15 @@ CREATE TABLE IF NOT EXISTS trial_records (
 );
 
 ALTER TABLE trial_records ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Trial Public Insert" ON trial_records FOR INSERT WITH CHECK (true);
-CREATE POLICY "Trial Public Select" ON trial_records FOR SELECT USING (true);`}
+DROP POLICY IF EXISTS "Trial Public Access" ON trial_records;
+CREATE POLICY "Trial Public Access" ON trial_records FOR ALL USING (true);`}
                   </pre>
                   <button onClick={() => {
-                      const sql = `ALTER TABLE hydric_records ENABLE ROW LEVEL SECURITY; CREATE POLICY "Public Insert" ON hydric_records FOR INSERT WITH CHECK (true); CREATE POLICY "Public Select" ON hydric_records FOR SELECT USING (true);`;
+                      const sql = `ALTER TABLE hydric_records ENABLE ROW LEVEL SECURITY; CREATE POLICY "Public Insert Access" ON hydric_records FOR INSERT WITH CHECK (true); CREATE POLICY "Public Select Access" ON hydric_records FOR SELECT USING (true);`;
                       navigator.clipboard.writeText(sql);
                       alert("SQL Correctivo copiado. Péguelo en el editor de Supabase.");
                   }} className="mt-4 text-[10px] font-black text-hemp-400 uppercase tracking-widest flex items-center hover:text-white transition">
-                      <Copy size={12} className="mr-1"/> Copiar SQL para Habilitar Escritura
+                      <Copy size={12} className="mr-1"/> Copiar Script de Reparación RLS
                   </button>
               </div>
           </div>

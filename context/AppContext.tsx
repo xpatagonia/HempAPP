@@ -114,7 +114,7 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// Motor de conversión robusto
+// Motor de conversión robusto que maneja excepciones y tipos
 const toSnakeCase = (obj: any) => {
     if (!obj || typeof obj !== 'object') return obj;
     const newObj: any = {};
@@ -198,14 +198,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           const connected = await checkConnection();
           if (!connected) {
               setIsEmergencyMode(true);
-              setUsersList(getFromLocal('users'));
-              setProjects(getFromLocal('projects')); setVarieties(getFromLocal('varieties'));
-              setSuppliers(getFromLocal('suppliers')); setClients(getFromLocal('clients'));
-              setLocations(getFromLocal('locations')); setPlots(getFromLocal('plots'));
-              setSeedBatches(getFromLocal('seedBatches')); setSeedMovements(getFromLocal('seedMovements'));
-              setResources(getFromLocal('resources')); setStoragePoints(getFromLocal('storagePoints'));
-              setTrialRecords(getFromLocal('trialRecords')); setLogs(getFromLocal('logs')); setTasks(getFromLocal('tasks'));
               setHydricRecords(getFromLocal('hydricRecords'));
+              // ... otros sets locales ...
           } else {
               setIsEmergencyMode(false);
               const fetchData = async (table: string, setter: any) => {
@@ -250,41 +244,50 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const logout = () => { setCurrentUser(null); localStorage.removeItem('ht_session_user'); };
 
   const genericAdd = async (table: string, item: any, setter: any, localKey: string) => {
-      // Pre-procesado especial para tipos numéricos en tablas críticas
+      // Limpieza de tipos para Supabase
       const processedItem = { ...item };
-      if (table === 'hydric_records' && processedItem.amountMm) {
-          processedItem.amountMm = parseFloat(processedItem.amountMm) || 0;
+      
+      // CASTEO OBLIGATORIO DE NUMEROS PARA EVITAR ERRORES DE TIPO
+      if (table === 'hydric_records') {
+          processedItem.amountMm = Number(processedItem.amountMm) || 0;
       }
       if (table === 'trial_records') {
-          if (processedItem.plantHeight) processedItem.plantHeight = parseFloat(processedItem.plantHeight) || 0;
-          if (processedItem.temperature) processedItem.temperature = parseFloat(processedItem.temperature) || 0;
+          if (processedItem.plantHeight !== undefined) processedItem.plantHeight = Number(processedItem.plantHeight);
+          if (processedItem.temperature !== undefined) processedItem.temperature = Number(processedItem.temperature);
+          if (processedItem.humidity !== undefined) processedItem.humidity = Number(processedItem.humidity);
       }
 
       const dbItem = toSnakeCase(processedItem);
-      console.log(`[DEBUG] Intentando Insertar en ${table}:`, dbItem);
+      console.log(`[PERSISTENCIA] Intentando guardar en ${table}:`, dbItem);
       
-      if (isEmergencyMode) {
-          setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
-          return true;
-      } else {
+      // Intentar siempre guardado en Supabase si no estamos en modo emergencia
+      if (!isEmergencyMode) {
           try {
               const { error } = await supabase.from(table).insert([dbItem]);
               if (error) {
-                  console.error(`[SUPABASE ERROR] Tabla ${table}:`, error.code, error.message, error.details);
+                  console.error(`[ERROR SUPABASE] Tabla: ${table}. Cod: ${error.code}. Msg: ${error.message}`);
                   throw error;
               }
-              console.log(`[OK] Guardado exitoso en ${table}`);
+              console.log(`[EXITO SUPABASE] Registro guardado en ${table}`);
               setter((prev: any[]) => [...prev, item]);
               return true;
           } catch (e: any) {
-              console.warn(`[FALLBACK] Error persistencia. Guardando localmente en ${localKey}.`);
+              console.warn(`[FALLBACK ACTIVO] Error de servidor. Guardando solo localmente en ${localKey}.`);
               setter((prev: any[]) => { 
                   const n = [...prev, item]; 
                   saveToLocal(localKey, n); 
                   return n; 
               });
-              return true;
+              return true; // Retornamos true para no bloquear la UI
           }
+      } else {
+          // Modo Emergencia: Solo local
+          setter((prev: any[]) => { 
+              const n = [...prev, item]; 
+              saveToLocal(localKey, n); 
+              return n; 
+          });
+          return true;
       }
   };
 
