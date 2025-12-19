@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Send, Bot, User, Image as ImageIcon, Loader2, X, Terminal, RefreshCw, Cpu, AlertTriangle } from 'lucide-react';
+import { Send, Bot, User, Image as ImageIcon, Loader2, X, Terminal, RefreshCw, Cpu, AlertTriangle } from 'lucide-center';
 import { GoogleGenAI } from "@google/genai";
 
 interface Message { id: string; role: 'user' | 'model' | 'error'; text: string; image?: string; }
@@ -9,7 +9,7 @@ interface Message { id: string; role: 'user' | 'model' | 'error'; text: string; 
 export default function AIAdvisor() {
     const { plots, varieties, appName } = useAppContext();
     const [messages, setMessages] = useState<Message[]>([
-        { id: '1', role: 'model', text: `${appName} AI Intelligence Terminal v5.4.3.\nNeural processing unit: ONLINE.\n¿En qué puedo asistir hoy?` }
+        { id: '1', role: 'model', text: `${appName} AI Intelligence Terminal v5.4.4.\nEstado del Motor: STANDBY.\n¿Qué datos agronómicos desea procesar?` }
     ]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -43,52 +43,55 @@ export default function AIAdvisor() {
         setIsLoading(true);
 
         try {
-            // Inicialización directa y limpia según directrices
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-            const modelName = 'gemini-3-pro-preview';
+            // Verificar disponibilidad de la llave antes de instanciar
+            const apiKey = process.env.API_KEY;
+            if (!apiKey || apiKey === "undefined") {
+                throw new Error("API_KEY_MISSING: La llave no está llegando al navegador. Verifique las variables de entorno en su panel de despliegue.");
+            }
+
+            // Inicialización limpia según reglas del SDK
+            const ai = new GoogleGenAI({ apiKey });
+            const model = ai.models.get('gemini-3-pro-preview');
             
-            let response;
-            
+            let result;
             if (userMsg.image) {
                 const base64Data = userMsg.image.split(',')[1];
-                response = await ai.models.generateContent({
-                    model: modelName,
+                result = await ai.models.generateContent({
+                    model: 'gemini-3-pro-preview',
                     contents: {
                         parts: [
-                            { text: userMsg.text || "Analiza esta imagen técnica de cultivo." },
+                            { text: userMsg.text || "Analice técnicamente esta evidencia de cultivo." },
                             { inlineData: { mimeType: 'image/jpeg', data: base64Data } }
                         ]
                     },
                     config: {
-                        systemInstruction: `Eres el Asesor Inteligente de ${appName}, experto en Cáñamo Industrial. Responde de forma técnica, científica y concisa en Español.`,
+                        systemInstruction: `Usted es el consultor agronómico senior de ${appName}. Responda en español, con tecnicismos apropiados para cáñamo industrial.`,
                     }
                 });
             } else {
-                response = await ai.models.generateContent({
-                    model: modelName,
+                result = await ai.models.generateContent({
+                    model: 'gemini-3-pro-preview',
                     contents: userMsg.text,
                     config: {
-                        systemInstruction: `Eres el Asesor Inteligente de ${appName}, experto en Cáñamo Industrial. Responde de forma técnica y concisa en Español.`,
+                        systemInstruction: `Usted es el consultor agronómico senior de ${appName}. Responda en español, con tecnicismos apropiados para cáñamo industrial.`,
                     }
                 });
             }
 
-            if (response && response.text) {
-                setMessages(prev => [...prev, { 
-                    id: (Date.now() + 1).toString(), 
-                    role: 'model', 
-                    text: response.text 
-                }]);
-            } else {
-                throw new Error("Respuesta vacía del motor.");
+            if (result && result.text) {
+                setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', text: result.text }]);
             }
             
         } catch (err: any) {
-            console.error("HempAI Connection Error:", err);
+            console.error("AI Advisor Error:", err);
+            let errorMsg = err.message;
+            if (errorMsg.includes("API Key")) {
+                errorMsg = "La API Key no es válida o no está configurada correctamente en el servidor.";
+            }
             setMessages(prev => [...prev, { 
-                id: (Date.now() + 1).toString(), 
+                id: Date.now().toString(), 
                 role: 'error', 
-                text: `FALLO DE PROTOCOLO: No se pudo validar la conexión con el motor neural.\nDetalle: ${err.message}` 
+                text: `ERROR DE CONEXIÓN: ${errorMsg}` 
             }]);
         } finally {
             setIsLoading(false);
@@ -103,7 +106,7 @@ export default function AIAdvisor() {
                     <div>
                         <h1 className="text-4xl font-black text-slate-800 dark:text-white tracking-tighter uppercase italic">{appName} <span className="text-hemp-600">Core</span></h1>
                         <p className="text-[11px] text-slate-400 font-bold uppercase tracking-[0.4em] flex items-center mt-1">
-                            <Terminal size={12} className="mr-2"/> AI Advisor Interface v5.4.3
+                            <Terminal size={12} className="mr-2"/> IA Neural Interface v5.4.4
                         </p>
                     </div>
                 </div>
@@ -122,7 +125,7 @@ export default function AIAdvisor() {
                             }`}>
                                 <div className="flex items-center gap-2 mb-4 opacity-50 text-[10px] font-black uppercase tracking-widest">
                                     {msg.role === 'user' ? <User size={12}/> : msg.role === 'error' ? <AlertTriangle size={12}/> : <Bot size={12}/>} 
-                                    {msg.role === 'user' ? 'Personal Técnico' : msg.role === 'error' ? 'System Failure' : `${appName} Advisor`}
+                                    {msg.role === 'user' ? 'Personal Autorizado' : msg.role === 'error' ? 'System Error' : `${appName} Advisor`}
                                 </div>
                                 {msg.image && <img src={msg.image} className="mb-4 rounded-2xl max-h-64 w-full object-cover border border-white/10 shadow-lg" alt="Visual context" />}
                                 <div className="text-sm md:text-base leading-relaxed font-medium whitespace-pre-wrap font-mono">{msg.text}</div>
@@ -133,7 +136,7 @@ export default function AIAdvisor() {
                         <div className="flex justify-start">
                             <div className="bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 rounded-[32px] p-6 md:p-8 flex items-center space-x-4">
                                 <RefreshCw className="animate-spin text-hemp-600" size={24} />
-                                <span className="text-[11px] font-black text-slate-400 uppercase tracking-[0.3em]">Processing Neural Request...</span>
+                                <span className="text-[11px] font-black text-slate-400 uppercase tracking-[0.3em]">Procesando Petición...</span>
                             </div>
                         </div>
                     )}
@@ -142,7 +145,7 @@ export default function AIAdvisor() {
 
                 <div className="p-6 md:p-10 bg-slate-50/50 dark:bg-black/40 border-t border-slate-200 dark:border-white/5">
                     <div className="flex items-center gap-4">
-                        <label className="p-4 md:p-5 bg-white dark:bg-white/5 text-slate-400 hover:text-hemp-600 rounded-[24px] cursor-pointer transition-all border border-slate-200 dark:border-white/5">
+                        <label className="p-4 md:p-5 bg-white dark:bg-white/5 text-slate-400 hover:text-hemp-600 rounded-[24px] cursor-pointer transition-all border border-slate-200 dark:border-white/5 shadow-inner">
                             <ImageIcon size={28} />
                             <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
                         </label>
@@ -150,7 +153,7 @@ export default function AIAdvisor() {
                             type="text" className="flex-1 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/5 rounded-[24px] px-6 md:px-8 py-4 md:py-5 focus:ring-4 focus:ring-hemp-600/20 outline-none text-base text-slate-800 dark:text-white placeholder-slate-400 font-mono"
                             placeholder="Consultar HempAI..." value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSend()}
                         />
-                        <button onClick={handleSend} disabled={isLoading} className="bg-hemp-600 text-white p-4 md:p-5 rounded-[24px] shadow-lg disabled:opacity-30 transition-all">
+                        <button onClick={handleSend} disabled={isLoading} className="bg-hemp-600 text-white p-4 md:p-5 rounded-[24px] shadow-lg disabled:opacity-30 active:scale-95 transition-all">
                             <Send size={28} />
                         </button>
                     </div>

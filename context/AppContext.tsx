@@ -120,7 +120,6 @@ const toSnakeCase = (obj: any) => {
     const newObj: any = {};
     for (const key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
-            // Convierte camelCase a snake_case (ej: amountMm -> amount_mm)
             const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
             newObj[snakeKey] = obj[key];
         }
@@ -251,25 +250,34 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const logout = () => { setCurrentUser(null); localStorage.removeItem('ht_session_user'); };
 
   const genericAdd = async (table: string, item: any, setter: any, localKey: string) => {
-      const dbItem = toSnakeCase(item);
-      console.log(`[SUPABASE] Intentando guardar en ${table}:`, dbItem);
+      // Pre-procesado especial para tipos numéricos en tablas críticas
+      const processedItem = { ...item };
+      if (table === 'hydric_records' && processedItem.amountMm) {
+          processedItem.amountMm = parseFloat(processedItem.amountMm) || 0;
+      }
+      if (table === 'trial_records') {
+          if (processedItem.plantHeight) processedItem.plantHeight = parseFloat(processedItem.plantHeight) || 0;
+          if (processedItem.temperature) processedItem.temperature = parseFloat(processedItem.temperature) || 0;
+      }
+
+      const dbItem = toSnakeCase(processedItem);
+      console.log(`[DEBUG] Intentando Insertar en ${table}:`, dbItem);
       
       if (isEmergencyMode) {
           setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
           return true;
       } else {
           try {
-              // Intento de inserción simple. Importante: no usamos .select() para evitar problemas de permisos de lectura.
               const { error } = await supabase.from(table).insert([dbItem]);
               if (error) {
-                  console.error(`[SUPABASE ERROR] Tabla: ${table}. Código: ${error.code}. Mensaje: ${error.message}`);
+                  console.error(`[SUPABASE ERROR] Tabla ${table}:`, error.code, error.message, error.details);
                   throw error;
               }
-              console.log(`[SUPABASE SUCCESS] Registro guardado en ${table}`);
+              console.log(`[OK] Guardado exitoso en ${table}`);
               setter((prev: any[]) => [...prev, item]);
               return true;
           } catch (e: any) {
-              console.warn(`[LOCAL FALLBACK] Error en ${table}. Guardando solo localmente.`);
+              console.warn(`[FALLBACK] Error persistencia. Guardando localmente en ${localKey}.`);
               setter((prev: any[]) => { 
                   const n = [...prev, item]; 
                   saveToLocal(localKey, n); 
