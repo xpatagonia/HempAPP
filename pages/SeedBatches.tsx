@@ -94,6 +94,23 @@ export default function SeedBatches() {
 
   // --- ACTIONS ---
 
+  const handleOpenDispatch = (batchId?: string) => {
+      setMoveFormData({
+          batchId: batchId || '',
+          clientId: '',
+          targetLocationId: '',
+          quantity: 0,
+          date: new Date().toISOString().split('T')[0],
+          status: 'En Tránsito',
+          transportType: 'Propio',
+          transportGuideNumber: '',
+          driverName: '',
+          vehiclePlate: '',
+          transportCompany: ''
+      });
+      setIsMoveModalOpen(true);
+  };
+
   const handleBatchSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!batchFormData.varietyId || !batchFormData.batchCode || batchFormData.initialQuantity! <= 0) return;
@@ -177,7 +194,7 @@ export default function SeedBatches() {
         </div>
         {isAdmin && (
           <div className="flex space-x-2 w-full md:w-auto">
-              <button onClick={() => setIsMoveModalOpen(true)} className="flex-1 md:flex-none bg-blue-600 text-white px-5 py-2.5 rounded-xl flex items-center justify-center hover:bg-blue-700 transition shadow-lg font-bold text-sm text-nowrap">
+              <button onClick={() => handleOpenDispatch()} className="flex-1 md:flex-none bg-blue-600 text-white px-5 py-2.5 rounded-xl flex items-center justify-center hover:bg-blue-700 transition shadow-lg font-bold text-sm text-nowrap">
                 <ArrowUpRight size={18} className="mr-2" /> Despachar
               </button>
               <button onClick={() => { setEditingBatchId(null); setBatchFormData({ varietyId: '', batchCode: '', initialQuantity: 0, purchaseDate: new Date().toISOString().split('T')[0], pricePerKg: 0, storagePointId: '', isActive: true, labelSerialNumber: '', category: 'C1', certificationNumber: '', germination: 90, purity: 99 }); setIsBatchModalOpen(true); }} className="flex-1 md:flex-none bg-hemp-600 text-white px-5 py-2.5 rounded-xl flex items-center justify-center hover:bg-hemp-700 transition shadow-lg font-bold text-sm text-nowrap">
@@ -286,6 +303,9 @@ export default function SeedBatches() {
                                   </td>
                                   <td className="px-6 py-4 text-right">
                                       <div className="flex justify-end space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                          {isAdmin && batch.remainingQuantity > 0 && (
+                                              <button onClick={() => handleOpenDispatch(batch.id)} className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition" title="Despachar este material"><Truck size={18}/></button>
+                                          )}
                                           <button onClick={() => setSelectedBatchForView(batch)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition" title="Ver Ficha Técnica"><Eye size={18}/></button>
                                           {isAdmin && (
                                               <>
@@ -447,6 +467,11 @@ export default function SeedBatches() {
                     </div>
 
                     <div className="px-8 py-4 bg-gray-50 dark:bg-slate-900 border-t dark:border-dark-border flex justify-end space-x-3">
+                        {isAdmin && selectedBatchForView.remainingQuantity > 0 && (
+                            <button onClick={() => { handleOpenDispatch(selectedBatchForView.id); setSelectedBatchForView(null); }} className="px-5 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-black uppercase tracking-widest flex items-center hover:bg-blue-700 transition shadow-sm">
+                                <Truck size={16} className="mr-2"/> Despachar Stock
+                            </button>
+                        )}
                         <button onClick={() => window.print()} className="px-5 py-2.5 bg-white dark:bg-dark-border dark:text-white border border-gray-200 dark:border-transparent rounded-xl text-xs font-black uppercase tracking-widest flex items-center hover:bg-gray-100 transition">
                             <Printer size={16} className="mr-2"/> Imprimir Ficha
                         </button>
