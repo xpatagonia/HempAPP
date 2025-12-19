@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Mail, ArrowRight, AlertTriangle, Database, Settings, X, Save, RefreshCw, CloudOff, Leaf, ShieldCheck } from 'lucide-react';
+import { Lock, Mail, ArrowRight, AlertTriangle, Database, Settings, X, Save, RefreshCw, CloudOff, Leaf, ShieldCheck, Cpu, Code2, Sparkles, User, Info } from 'lucide-react';
 import { hasPreconfiguredConnection, checkConnection } from '../supabaseClient';
 
 export default function Login() {
@@ -14,7 +14,6 @@ export default function Login() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  // Config Modal State
   const [showConfig, setShowConfig] = useState(false);
   const [configUrl, setConfigUrl] = useState('');
   const [configKey, setConfigKey] = useState('');
@@ -23,249 +22,185 @@ export default function Login() {
 
   useEffect(() => {
     const initLogin = async () => {
-        // Cargar config existente manual (si existe)
         const storedUrl = localStorage.getItem('hemp_sb_url');
         const storedKey = localStorage.getItem('hemp_sb_key');
-        
         if (storedUrl) setConfigUrl(storedUrl);
         if (storedKey) setConfigKey(storedKey);
 
-        // CHEQUEO INTELIGENTE:
-        // 1. Si hay credenciales en el código (hardcoded) -> NO mostrar config, estamos listos.
-        // 2. Si ya se configuró manualmente -> NO mostrar config.
-        // 3. Si no hay nada -> Mostrar config.
-        
         if (hasPreconfiguredConnection) {
             setIsCloudReady(true);
-            setShowConfig(false); // Forzar cierre si estaba abierto
+            setShowConfig(false);
         } else {
             const connected = await checkConnection();
             if (connected) {
                 setIsCloudReady(true);
                 setShowConfig(false);
             } else if (!storedUrl || !storedKey) {
-                // Solo abrir si no hay NADA configurado y no hay hardcode
                 setShowConfig(true);
             }
         }
     };
     initLogin();
-  }, [isEmergencyMode]);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
-
     try {
-        await new Promise(r => setTimeout(r, 800)); // Pequeña espera visual
+        await new Promise(r => setTimeout(r, 800));
         const success = await login(email, password);
-        
-        if (success) {
-            navigate('/');
-        } else {
-            setError('Credenciales inválidas.');
-            setIsLoading(false);
-        }
-    } catch (err) {
-        setError('Error crítico al iniciar sesión.');
-        setIsLoading(false);
-    }
+        if (success) navigate('/');
+        else { setError('Credenciales inválidas.'); setIsLoading(false); }
+    } catch (err) { setError('Error crítico al iniciar sesión.'); setIsLoading(false); }
   };
 
   const handleSaveConfig = () => {
-      if (!configUrl.includes('https://') || !configKey) {
-          alert("La URL debe empezar con https:// y la Key no puede estar vacía.");
-          return;
-      }
+      if (!configUrl.includes('https://') || !configKey) return;
       setIsReloading(true);
       localStorage.setItem('hemp_sb_url', configUrl.trim());
       localStorage.setItem('hemp_sb_key', configKey.trim());
-      
-      // Forzar recarga para que supabaseClient.ts lea las nuevas credenciales
-      setTimeout(() => { window.location.reload(); }, 1000);
+      setTimeout(() => { window.location.reload(); }, 800);
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 relative overflow-hidden font-sans selection:bg-hemp-500 selection:text-white">
+    <div className="min-h-screen bg-[#050810] flex flex-col items-center justify-center p-4 relative overflow-hidden font-sans selection:bg-hemp-500 selection:text-white">
       
-      {/* --- BACKGROUND EFFECTS --- */}
-      <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-hemp-900/20 via-slate-950 to-slate-950 pointer-events-none"></div>
-      <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none"></div>
-      <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'linear-gradient(#22c55e 1px, transparent 1px), linear-gradient(90deg, #22c55e 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
+      {/* TECH BACKGROUND */}
+      <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_50%,_rgba(22,163,74,0.15),_transparent_50%)] pointer-events-none"></div>
+      <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(#ffffff 1px, transparent 1px)', backgroundSize: '30px 30px' }}></div>
+      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-600/10 blur-[120px] rounded-full animate-pulse"></div>
 
-      <div className="w-full max-w-[420px] z-10 relative animate-in fade-in slide-in-from-bottom-4 duration-700">
+      <div className="w-full max-w-[440px] z-10 relative animate-in fade-in zoom-in-95 duration-1000">
         
-        {/* BRANDING HEADER */}
-        <div className="text-center mb-8 relative">
+        {/* BRANDING 4.0 */}
+        <div className="text-center mb-10">
             <div className="flex justify-center mb-6 relative group">
-                <div className="absolute inset-0 bg-hemp-500 blur-3xl opacity-20 group-hover:opacity-30 transition-opacity duration-500 rounded-full w-2/3 mx-auto"></div>
-                <div className="relative z-10 bg-slate-900/50 p-4 rounded-2xl border border-white/10 shadow-2xl group-hover:scale-110 transition-transform duration-500 backdrop-blur-sm">
-                    <Leaf size={48} className="text-hemp-500" />
+                <div className="absolute inset-0 bg-hemp-500/30 blur-2xl group-hover:bg-hemp-500/50 transition-all duration-700 rounded-full w-20 h-20 mx-auto"></div>
+                <div className="relative z-10 bg-slate-900 border border-hemp-500/30 p-5 rounded-[24px] shadow-2xl group-hover:border-hemp-500/60 transition-all duration-500">
+                    <Leaf size={44} className="text-hemp-500" />
                 </div>
             </div>
-            <h1 className="text-4xl font-black text-white tracking-tight mb-2">
-                HempC <span className="text-hemp-500">App</span>
+            <h1 className="text-5xl font-black text-white tracking-tighter mb-2 italic">
+                HEMP<span className="text-hemp-500 not-italic">C</span>
             </h1>
-            <p className="text-slate-400 text-sm font-medium">Gestión Inteligente de Cultivos & Ensayos</p>
+            <div className="flex items-center justify-center space-x-2">
+                <div className="h-px w-8 bg-slate-800"></div>
+                <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.3em]">Smart Enterprise Core</p>
+                <div className="h-px w-8 bg-slate-800"></div>
+            </div>
         </div>
 
-        {/* STATUS BADGES */}
-        {isCloudReady ? (
-             <div className="mb-6 flex justify-center">
-                 <div className="bg-green-500/10 border border-green-500/20 backdrop-blur-md px-3 py-1.5 rounded-full flex items-center shadow-lg">
-                     <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse mr-2"></div>
-                     <span className="text-green-400 text-xs font-bold uppercase tracking-wide">Sistema Online</span>
-                 </div>
-             </div>
-        ) : (
-            <div className="mb-6 bg-amber-500/10 border border-amber-500/30 backdrop-blur-md p-4 rounded-xl shadow-lg animate-pulse">
-                <div className="flex items-start">
-                    <CloudOff className="text-amber-500 mr-3 mt-0.5 flex-shrink-0" size={20} />
-                    <div className="w-full">
-                        <h3 className="font-bold text-amber-500 text-sm uppercase tracking-wide mb-1">Modo Desconectado</h3>
-                        <p className="text-amber-100/80 text-xs mb-3">
-                            Este dispositivo no tiene acceso configurado a la base de datos.
-                        </p>
-                        <div className="grid grid-cols-1">
-                            <button onClick={() => setShowConfig(true)} className="text-xs bg-amber-600 hover:bg-amber-700 text-white py-2 px-3 rounded transition flex items-center justify-center font-bold shadow-md w-full border border-amber-400">
-                                <Settings size={12} className="mr-1"/> CONECTAR AHORA
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        )}
-
-        {/* LOGIN CARD */}
-        <div className="bg-slate-900/60 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
-            <div className="p-8">
-                <form onSubmit={handleSubmit} className="space-y-5">
+        {/* LOGIN CARD 4.0 */}
+        <div className="bg-slate-900/40 backdrop-blur-2xl border border-white/5 rounded-[32px] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.5)] overflow-hidden">
+            <div className="p-10">
+                <form onSubmit={handleSubmit} className="space-y-6">
                     {error && (
-                        <div className="bg-red-500/10 text-red-400 p-3 rounded-lg text-sm font-medium border border-red-500/20 flex items-center animate-in fade-in">
-                            <AlertTriangle size={16} className="mr-2 flex-shrink-0"/>
+                        <div className="bg-red-500/10 text-red-400 p-4 rounded-2xl text-xs font-bold border border-red-500/20 flex items-center animate-in slide-in-from-top-2">
+                            <AlertTriangle size={16} className="mr-3 flex-shrink-0"/>
                             <span>{error}</span>
                         </div>
                     )}
                     
-                    <div className="space-y-1">
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Email Corporativo</label>
+                    <div className="space-y-2">
+                        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Terminal ID (Email)</label>
                         <div className="relative group">
-                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <Mail className="text-slate-500 group-focus-within:text-hemp-500 transition-colors" size={18} />
+                            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                <Mail className="text-slate-600 group-focus-within:text-hemp-500 transition-colors" size={18} />
                             </div>
                             <input 
-                                type="email" 
-                                required 
-                                className="w-full pl-10 pr-4 py-3 bg-slate-950/50 border border-slate-700 rounded-xl focus:ring-2 focus:ring-hemp-500/50 focus:border-hemp-500 outline-none transition-all text-slate-200 placeholder-slate-600 font-medium"
-                                placeholder="usuario@empresa.com"
-                                value={email}
-                                onChange={e => setEmail(e.target.value)}
+                                type="email" required 
+                                className="w-full pl-12 pr-4 py-4 bg-slate-950/40 border border-slate-800 rounded-2xl focus:ring-2 focus:ring-hemp-500/30 focus:border-hemp-500/50 outline-none transition-all text-slate-200 placeholder-slate-700 font-bold"
+                                placeholder="name@enterprise.com"
+                                value={email} onChange={e => setEmail(e.target.value)}
                             />
                         </div>
                     </div>
 
-                    <div className="space-y-1">
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Contraseña</label>
+                    <div className="space-y-2">
+                        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Access Token (Password)</label>
                         <div className="relative group">
-                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <Lock className="text-slate-500 group-focus-within:text-hemp-500 transition-colors" size={18} />
+                            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                <Lock className="text-slate-600 group-focus-within:text-hemp-500 transition-colors" size={18} />
                             </div>
                             <input 
-                                type="password" 
-                                required 
-                                className="w-full pl-10 pr-4 py-3 bg-slate-950/50 border border-slate-700 rounded-xl focus:ring-2 focus:ring-hemp-500/50 focus:border-hemp-500 outline-none transition-all text-slate-200 placeholder-slate-600 font-medium"
+                                type="password" required 
+                                className="w-full pl-12 pr-4 py-4 bg-slate-950/40 border border-slate-800 rounded-2xl focus:ring-2 focus:ring-hemp-500/30 focus:border-hemp-500/50 outline-none transition-all text-slate-200 placeholder-slate-700 font-bold"
                                 placeholder="••••••••"
-                                value={password}
-                                onChange={e => setPassword(e.target.value)}
+                                value={password} onChange={e => setPassword(e.target.value)}
                             />
                         </div>
                     </div>
 
                     <button 
-                        type="submit" 
-                        disabled={isLoading}
-                        className="w-full bg-gradient-to-r from-hemp-600 to-hemp-500 text-white py-3.5 rounded-xl font-bold text-base shadow-lg shadow-hemp-900/20 hover:shadow-hemp-500/20 hover:scale-[1.01] active:scale-[0.99] transform transition-all flex items-center justify-center disabled:opacity-70 disabled:cursor-not-allowed border border-white/10 mt-2 group"
+                        type="submit" disabled={isLoading}
+                        className="w-full bg-gradient-to-br from-hemp-600 to-hemp-700 text-white py-5 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-hemp-900/40 hover:shadow-hemp-500/20 hover:translate-y-[-2px] active:translate-y-[0px] transform transition-all flex items-center justify-center disabled:opacity-50"
                     >
-                        {isLoading ? (
-                            <div className="flex items-center">
-                                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div>
-                                <span>Conectando...</span>
-                            </div>
-                        ) : (
+                        {isLoading ? <RefreshCw className="animate-spin" size={20} /> : (
                             <>
-                                <span>Acceder al Sistema</span>
-                                <ArrowRight size={18} className="ml-2 group-hover:translate-x-1 transition-transform" />
+                                <span>Initialize Session</span>
+                                <ArrowRight size={18} className="ml-2" />
                             </>
                         )}
                     </button>
                 </form>
             </div>
             
-            <div className="bg-slate-950/30 px-8 py-4 border-t border-white/5 flex items-center justify-between">
-                <div className="flex items-center text-xs text-slate-500">
-                    <Database size={12} className="mr-1.5 text-slate-600" />
-                    <span className="font-mono text-hemp-400">v2.7-cloud</span>
-                </div>
-                <div className="flex items-center space-x-4">
-                     <span className="text-[10px] text-slate-600 font-medium">POWERED BY</span>
-                     <a href="https://xpatagonia.com" target="_blank" rel="noopener noreferrer" className="text-xs text-slate-400 font-bold hover:text-hemp-400 transition-colors">
-                        XPATAGONIA
-                     </a>
+            <div className="bg-white/5 px-10 py-6 flex flex-col items-center border-t border-white/5">
+                <div className="flex items-center space-x-6">
+                    <div className="flex flex-col items-center">
+                        <span className="text-[9px] text-slate-600 font-black uppercase tracking-tighter mb-2">Lead Developer</span>
+                        <div className="flex items-center text-slate-400 font-bold text-[11px] hover:text-white transition-colors cursor-default">
+                            {/* Fixed: User component now correctly imported */}
+                            <User size={12} className="mr-1.5 text-blue-500"/> Usuario 
+                        </div>
+                    </div>
+                    <div className="h-8 w-px bg-slate-800"></div>
+                    <div className="flex flex-col items-center">
+                        <span className="text-[9px] text-slate-600 font-black uppercase tracking-tighter mb-2">Tech Partner (AI)</span>
+                        <div className="flex items-center text-slate-400 font-bold text-[11px] hover:text-hemp-400 transition-colors cursor-default">
+                            <Sparkles size={12} className="mr-1.5 text-hemp-500"/> Gemini Pro
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
+
+        {/* CLOUD CONFIG ACTION */}
+        {!isCloudReady && (
+            <button onClick={() => setShowConfig(true)} className="mt-8 w-full py-3 bg-slate-900/50 border border-slate-800 rounded-2xl text-[10px] font-black text-slate-500 uppercase tracking-widest hover:bg-slate-800 hover:text-white transition-all flex items-center justify-center">
+                <Settings size={14} className="mr-2"/> Configure Cloud Node
+            </button>
+        )}
       </div>
 
-      {/* Config Modal (Overlay) - Solo visible si NO hay config en código ni manual */}
+      {/* CONFIG OVERLAY */}
       {showConfig && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-gray-200">
-                <div className="px-6 py-4 bg-slate-900 border-b border-slate-800 flex justify-between items-center">
-                    <h3 className="text-white font-bold flex items-center text-sm uppercase tracking-wide">
-                        <ShieldCheck className="mr-2 text-hemp-500" size={18} /> Configuración de Dispositivo
+        <div className="fixed inset-0 bg-black/95 backdrop-blur-xl z-50 flex items-center justify-center p-6 animate-in fade-in duration-300">
+            <div className="bg-[#0c1120] rounded-[40px] shadow-2xl max-w-md w-full overflow-hidden border border-white/10">
+                <div className="px-8 py-6 bg-slate-900/50 border-b border-white/5 flex justify-between items-center">
+                    <h3 className="text-white font-black flex items-center text-xs uppercase tracking-[0.2em]">
+                        <Cpu className="mr-3 text-hemp-500" size={20} /> System Initialization
                     </h3>
-                    <button onClick={() => setShowConfig(false)} className="text-slate-400 hover:text-white transition-colors">
-                        <X size={20} />
-                    </button>
+                    <button onClick={() => setShowConfig(false)} className="text-slate-500 hover:text-white transition-colors"><X size={24} /></button>
                 </div>
-                <div className="p-6 space-y-5">
-                    <div className="bg-blue-50 text-blue-800 p-4 rounded-lg text-sm leading-relaxed border border-blue-100 flex items-start">
-                        <AlertTriangle className="mr-2 flex-shrink-0 mt-0.5 text-blue-600" size={16}/>
-                        <div>
-                            <strong>Conexión Requerida</strong>
-                            <p className="mt-1 text-xs text-blue-700">
-                                Para sincronizar datos en la nube, debes ingresar las credenciales de tu proyecto <strong>Supabase</strong>. Esto solo es necesario hacerlo una vez en este dispositivo.
-                            </p>
-                        </div>
+                <div className="p-10 space-y-6">
+                    <div className="bg-blue-500/5 border border-blue-500/20 p-5 rounded-3xl text-blue-200 text-[11px] leading-relaxed flex items-start">
+                        {/* Fixed: Info component now correctly imported */}
+                        <Info className="mr-3 flex-shrink-0 text-blue-500" size={18}/>
+                        <p>Vincule este nodo de acceso con su instancia de producción en Supabase para sincronizar la red de datos industrial.</p>
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-gray-700 uppercase mb-1.5">Project URL</label>
-                        <input 
-                            type="text" 
-                            className="w-full border border-gray-300 rounded-lg p-3 text-sm font-mono text-gray-600 focus:ring-2 focus:ring-hemp-500 outline-none bg-gray-50"
-                            placeholder="https://xyz.supabase.co"
-                            value={configUrl}
-                            onChange={e => setConfigUrl(e.target.value)}
-                        />
+                        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 ml-1">Database Cluster URL</label>
+                        <input type="text" className="w-full border border-slate-800 rounded-2xl p-4 text-xs font-mono text-hemp-400 bg-slate-950 focus:ring-2 focus:ring-hemp-500/50 outline-none" placeholder="https://..." value={configUrl} onChange={e => setConfigUrl(e.target.value)} />
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-gray-700 uppercase mb-1.5">Anon API Key</label>
-                        <input 
-                            type="password" 
-                            className="w-full border border-gray-300 rounded-lg p-3 text-sm font-mono text-gray-600 focus:ring-2 focus:ring-hemp-500 outline-none bg-gray-50"
-                            placeholder="Pegar clave aquí..."
-                            value={configKey}
-                            onChange={e => setConfigKey(e.target.value)}
-                        />
+                        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 ml-1">Secure API Gateway Key</label>
+                        <input type="password" className="w-full border border-slate-800 rounded-2xl p-4 text-xs font-mono text-hemp-400 bg-slate-950 focus:ring-2 focus:ring-hemp-500/50 outline-none" placeholder="Vault Access Key..." value={configKey} onChange={e => setConfigKey(e.target.value)} />
                     </div>
-                    <button 
-                        onClick={handleSaveConfig}
-                        disabled={isReloading}
-                        className="w-full bg-hemp-600 text-white py-3.5 rounded-xl font-bold hover:bg-hemp-700 transition flex justify-center items-center shadow-lg"
-                    >
-                        {isReloading ? <RefreshCw className="animate-spin mr-2" size={18} /> : <Save className="mr-2" size={18} />}
-                        {isReloading ? 'Verificando y Reiniciando...' : 'Guardar y Conectar'}
+                    <button onClick={handleSaveConfig} disabled={isReloading} className="w-full bg-hemp-600 text-white py-5 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-hemp-700 transition shadow-2xl flex justify-center items-center">
+                        {isReloading ? <RefreshCw className="animate-spin mr-2"/> : <Save className="mr-2"/>}
+                        {isReloading ? 'SYNCING...' : 'INITIALIZE CONNECTION'}
                     </button>
                 </div>
             </div>

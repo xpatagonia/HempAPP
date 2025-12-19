@@ -1,571 +1,220 @@
-import React, { useState } from 'react';
+
+import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, AreaChart, Area } from 'recharts';
-import { Sprout, MapPin, Activity, CheckCircle, FileText, Download, ArrowRight, Users, FolderOpen, AlertCircle, TrendingUp, Calendar, FileCheck, CheckSquare, Printer, X, Filter, Sparkles, Building, Globe } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, AreaChart, Area } from 'recharts';
+import { 
+  Sprout, MapPin, Activity, CheckCircle, FileText, Download, ArrowRight, 
+  Users, AlertCircle, TrendingUp, Calendar, FileCheck, Printer, X, 
+  Sparkles, Globe, Cpu, Zap, Radio, ShieldCheck, Database, History
+} from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 
-const StatCard = ({ title, value, icon: Icon, colorClass, trend }: any) => (
-  <div className="bg-white dark:bg-dark-card p-6 rounded-xl shadow-sm border border-gray-100 dark:border-dark-border flex items-center justify-between transition-colors">
-    <div className="flex items-center space-x-4">
-        <div className={`p-3 rounded-full ${colorClass} bg-opacity-10 dark:bg-opacity-20`}>
+const TechKPI = ({ label, value, icon: Icon, colorClass, trend, status }: any) => (
+  <div className="bg-[#0f172a]/40 backdrop-blur-md p-6 rounded-[24px] border border-white/5 flex flex-col justify-between hover:border-white/10 transition-all group overflow-hidden relative">
+    <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${colorClass.includes('green') ? 'from-green-500/10' : 'from-blue-500/10'} to-transparent opacity-0 group-hover:opacity-100 transition-opacity`}></div>
+    <div className="flex items-center justify-between mb-4 relative z-10">
+        <div className={`p-3 rounded-2xl ${colorClass} bg-opacity-10 text-white shadow-inner`}>
              <Icon size={24} className={colorClass.replace('bg-', 'text-')} />
         </div>
-        <div>
-            <p className="text-gray-500 dark:text-gray-400 text-sm font-medium uppercase tracking-wide">{title}</p>
-            <h3 className="text-2xl font-bold text-gray-800 dark:text-gray-100">{value}</h3>
+        {status && (
+            <div className="flex items-center space-x-1.5 bg-slate-900/50 px-2 py-1 rounded-full border border-white/5">
+                <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${status === 'online' ? 'bg-green-500' : 'bg-amber-500'}`}></div>
+                <span className="text-[8px] font-black uppercase text-slate-500 tracking-tighter">{status}</span>
+            </div>
+        )}
+    </div>
+    <div className="relative z-10">
+        <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.2em] mb-1">{label}</p>
+        <div className="flex items-end space-x-2">
+            <h3 className="text-3xl font-black text-white leading-none tracking-tighter">{value}</h3>
+            {trend && <span className="text-green-500 text-[10px] font-bold pb-1">{trend}</span>}
         </div>
     </div>
-    {trend && (
-        <div className="text-green-500 text-xs font-bold bg-green-50 dark:bg-green-900/20 px-2 py-1 rounded flex items-center">
-            <TrendingUp size={12} className="mr-1"/> {trend}
-        </div>
-    )}
   </div>
 );
 
 export default function Dashboard() {
-  const { varieties, locations, plots, projects, usersList, getLatestRecord, currentUser, theme } = useAppContext();
-  
-  // Report Modal State
+  const { varieties, locations, plots, projects, trialRecords, currentUser, theme, getLatestRecord } = useAppContext();
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportGenerating, setReportGenerating] = useState(false);
-  const [reportConfig, setReportConfig] = useState({
-      projectId: 'all',
-      includeFinancials: false,
-      includeLogs: true,
-      includeCharts: false // Placeholder for future chart integration
-  });
+  const [reportConfig, setReportConfig] = useState({ projectId: 'all', includeFinancials: false, includeLogs: true });
 
   const isClient = currentUser?.role === 'client';
+  const relevantPlots = isClient ? plots.filter(p => p.responsibleIds?.includes(currentUser?.id || '')) : plots;
 
-  // --- ONBOARDING LOGIC ---
-  const isSetupMode = varieties.length === 0 && locations.length === 0 && projects.length === 0 && !isClient;
+  // --- DATA AGGREGATION ---
+  const yieldData = useMemo(() => {
+    const map = new Map<string, { total: number; count: number }>();
+    relevantPlots.forEach(plot => {
+      const latest = getLatestRecord(plot.id);
+      if (!latest || !latest.yield) return;
+      const v = varieties.find(v => v.id === plot.varietyId);
+      if (v) {
+        const curr = map.get(v.name) || { total: 0, count: 0 };
+        map.set(v.name, { total: curr.total + latest.yield, count: curr.count + 1 });
+      }
+    });
+    return Array.from(map.entries()).map(([name, d]) => ({ name, yield: Math.round(d.total / d.count) }));
+  }, [relevantPlots, varieties]);
 
-  // 1. Calculate Average Yield by Variety
-  const yieldDataMap = new Map<string, { totalYield: number; count: number }>();
-
-  // Filter plots if client
-  const relevantPlots = isClient 
-    ? plots.filter(p => p.responsibleIds?.includes(currentUser?.id || ''))
-    : plots;
-
-  relevantPlots.forEach(plot => {
-    const latestData = getLatestRecord(plot.id);
-    if (!latestData || !latestData.yield || latestData.yield <= 0) return;
-
-    const variety = varieties.find(v => v.id === plot.varietyId);
-    if (variety) {
-      const current = yieldDataMap.get(variety.name) || { totalYield: 0, count: 0 };
-      yieldDataMap.set(variety.name, {
-        totalYield: current.totalYield + latestData.yield,
-        count: current.count + 1
-      });
-    }
-  });
-
-  const chartData = Array.from(yieldDataMap.entries()).map(([name, data]) => ({
-    name,
-    yield: Math.round(data.totalYield / data.count)
-  }));
-
-  // 2. Data for Usage Pie Chart
-  const usageDataMap = new Map<string, number>();
-  varieties.forEach(v => {
-      const current = usageDataMap.get(v.usage) || 0;
-      usageDataMap.set(v.usage, current + 1);
-  });
-  const pieData = Array.from(usageDataMap.entries()).map(([name, value]) => ({ name, value }));
-  const pieColors = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
-
-  // 3. Data for Height/Vigor Comparison
-  const heightData = relevantPlots.map(p => {
-      const latest = getLatestRecord(p.id);
-      return {
-          name: p.name.split('-')[0],
-          height: latest?.plantHeight || 0,
-          fullName: p.name
-      };
-  }).filter(d => d.height > 0).slice(0, 10);
+  const recentActivity = useMemo(() => {
+    return [...trialRecords]
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 5)
+      .map(r => ({
+        id: r.id,
+        plotName: plots.find(p => p.id === r.plotId)?.name || 'Parcela',
+        stage: r.stage,
+        date: r.date,
+        user: r.createdByName || 'Técnico'
+      }));
+  }, [trialRecords, plots]);
 
   const activePlots = relevantPlots.filter(p => p.status === 'Activa').length;
-  const completedPlots = relevantPlots.filter(p => p.status === 'Cosechada').length;
-  const harvestedDataCount = relevantPlots.filter(p => {
-      const latest = getLatestRecord(p.id);
-      return latest && latest.yield && latest.yield > 0;
-  }).length;
-
-  // --- ADVANCED REPORT GENERATOR ---
-  const generateProfessionalPDF = () => {
-    setReportGenerating(true);
-    const doc = new jsPDF();
-    const today = new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-    const selectedProjectName = reportConfig.projectId === 'all' ? 'Consolidado General' : projects.find(p => p.id === reportConfig.projectId)?.name;
-
-    // Filter Data
-    let filteredPlots = reportConfig.projectId === 'all' 
-        ? plots 
-        : plots.filter(p => p.projectId === reportConfig.projectId);
-    
-    // Apply client filter for report too
-    if (isClient) {
-        filteredPlots = filteredPlots.filter(p => p.responsibleIds?.includes(currentUser?.id || ''));
-    }
-
-    // --- Header ---
-    doc.setFillColor(22, 163, 74); // Hemp Green
-    doc.rect(0, 0, 210, 25, 'F');
-    
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(22);
-    doc.setFont('helvetica', 'bold');
-    doc.text('HempAPP', 14, 16);
-    
-    doc.setFontSize(10);
-    doc.text('REPORTE TÉCNICO', 195, 16, { align: 'right' });
-
-    // --- Metadata ---
-    doc.setTextColor(50, 50, 50);
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    
-    doc.text(`Generado por: ${currentUser?.name || 'Usuario'}`, 14, 35);
-    doc.text(`Fecha: ${today}`, 14, 40);
-    doc.text(`Alcance: ${selectedProjectName}`, 14, 45);
-
-    // --- Stats Summary Block ---
-    doc.setFillColor(248, 250, 252); 
-    doc.rect(14, 50, 182, 25, 'F');
-    doc.setDrawColor(226, 232, 240);
-    doc.rect(14, 50, 182, 25, 'S');
-
-    doc.setFontSize(12);
-    doc.setTextColor(22, 163, 74);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Resumen Ejecutivo', 18, 60);
-
-    doc.setFontSize(10);
-    doc.setTextColor(0, 0, 0);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Parcelas Reportadas: ${filteredPlots.length}`, 18, 68);
-    const harvestCount = filteredPlots.filter(p => p.status === 'Cosechada').length;
-    doc.text(`Cosechadas: ${harvestCount}`, 80, 68);
-    doc.text(`Activas: ${filteredPlots.length - harvestCount}`, 140, 68);
-
-    // --- Main Table ---
-    const tableData = filteredPlots.map(p => {
-        const v = varieties.find(val => val.id === p.varietyId);
-        const l = locations.find(loc => loc.id === p.locationId);
-        const latest = getLatestRecord(p.id);
-        return [
-            p.name,
-            v?.name || '-',
-            l?.name || '-',
-            p.sowingDate,
-            latest?.plantHeight ? `${latest.plantHeight} cm` : '-',
-            latest?.stage || 'Inicial',
-            p.status
-        ];
-    });
-
-    autoTable(doc, {
-        startY: 85,
-        head: [['Parcela', 'Variedad', 'Locación', 'Siembra', 'Altura', 'Etapa', 'Estado']],
-        body: tableData,
-        theme: 'grid',
-        headStyles: { fillColor: [22, 163, 74], textColor: 255, fontStyle: 'bold' },
-        alternateRowStyles: { fillColor: [240, 253, 244] },
-        styles: { fontSize: 9, cellPadding: 3 },
-    });
-
-    // --- Footer ---
-    const pageCount = doc.getNumberOfPages();
-    for(let i = 1; i <= pageCount; i++) {
-        doc.setPage(i);
-        doc.setFontSize(8);
-        doc.setTextColor(150, 150, 150);
-        doc.text(`HempAPP System - Página ${i} de ${pageCount}`, 105, 290, { align: 'center' });
-    }
-
-    doc.save(`HempAPP_Reporte_${new Date().toISOString().split('T')[0]}.pdf`);
-    setReportGenerating(false);
-    setShowReportModal(false);
-  };
-
-  const exportExcel = () => {
-      const data = relevantPlots.map(p => {
-          const v = varieties.find(val => val.id === p.varietyId);
-          const latest = getLatestRecord(p.id);
-          return {
-              Parcela: p.name,
-              Variedad: v?.name,
-              Estado: p.status,
-              'Ultima Actualización': latest?.date || '-',
-              'Altura Actual': latest?.plantHeight || 0,
-              'Rendimiento': latest?.yield || 0
-          };
-      });
-      const ws = XLSX.utils.json_to_sheet(data);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Dashboard");
-      XLSX.writeFile(wb, "dashboard_data.xlsx");
-  };
-
-  if (isSetupMode) {
-      return (
-          <div className="max-w-4xl mx-auto py-10">
-              <div className="bg-white dark:bg-dark-card rounded-2xl shadow-xl overflow-hidden border border-hemp-100 dark:border-dark-border">
-                  <div className="bg-hemp-600 p-8 text-white">
-                      <h1 className="text-3xl font-bold mb-2">¡Bienvenido a HempAPP! 👋</h1>
-                      <p className="text-hemp-100 text-lg">Parece que es tu primera vez aquí. Vamos a configurar el sistema.</p>
-                  </div>
-                  <div className="p-8 dark:text-gray-200">
-                      <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100 mb-6 flex items-center">
-                          <AlertCircle className="mr-2 text-hemp-600"/> Pasos Recomendados
-                      </h2>
-                      
-                      <div className="space-y-4">
-                          {/* Step 1: Create User */}
-                          <div className={`p-4 rounded-xl border flex items-center justify-between ${currentUser?.id === 'rescue-admin-001' ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800' : 'bg-gray-50 dark:bg-dark-bg border-gray-200 dark:border-dark-border opacity-60'}`}>
-                              <div className="flex items-center space-x-4">
-                                  <div className="bg-white dark:bg-dark-card p-3 rounded-full shadow-sm">
-                                      <Users className="text-orange-500" size={24} />
-                                  </div>
-                                  <div>
-                                      <h3 className="font-bold text-gray-800 dark:text-gray-100">1. Crear Usuario Real</h3>
-                                      <p className="text-sm text-gray-600 dark:text-gray-400">Estás usando un usuario temporal. Crea tu administrador definitivo.</p>
-                                  </div>
-                              </div>
-                              <Link to="/users" className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition font-medium text-sm flex items-center">
-                                  Ir a Usuarios <ArrowRight size={16} className="ml-2"/>
-                              </Link>
-                          </div>
-                      </div>
-                  </div>
-              </div>
-          </div>
-      );
-  }
-
-  // Determine chart text color based on theme
-  const chartTextColor = theme === 'dark' ? '#94a3b8' : '#64748b';
+  const chartTextColor = '#64748b';
 
   return (
-    <div className="space-y-6 pb-10">
+    <div className="space-y-8 pb-10 animate-in fade-in duration-700">
       
-      {/* WELCOME BANNER FOR FARMERS NETWORK (Clients) */}
-      {isClient && (
-          <div className="bg-gradient-to-r from-hemp-700 to-hemp-600 text-white rounded-xl p-6 shadow-lg relative overflow-hidden animate-in fade-in slide-in-from-top-4">
-              <div className="relative z-10">
-                  <h1 className="text-2xl font-bold mb-2 flex items-center">
-                      <Globe className="mr-2" size={28}/> Bienvenid@ a la Red de Agricultores
-                  </h1>
-                  <p className="text-hemp-100 max-w-2xl">
-                      Gracias por formar parte de nuestra red productiva. Desde este panel podrás registrar los avances de tus lotes, consultar tareas asignadas y contactar con soporte técnico.
-                  </p>
-                  <div className="mt-4 flex space-x-3">
-                      <Link to="/plots" className="bg-white text-hemp-700 px-4 py-2 rounded-lg font-bold text-sm hover:bg-hemp-50 transition shadow-sm">
-                          Ver Mis Lotes
-                      </Link>
-                      <Link to="/advisor" className="bg-hemp-500/30 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-hemp-500/50 transition border border-white/20">
-                          Consultar Asistente IA
-                      </Link>
-                  </div>
-              </div>
-              {/* Background Pattern */}
-              <div className="absolute right-0 top-0 h-full w-1/3 opacity-10 pointer-events-none">
-                  <Sprout size={200} className="absolute -right-10 -top-10 text-white"/>
-              </div>
-          </div>
-      )}
-
-      {/* Update Banner (Only for admins/internal) */}
-      {!isClient && (
-        <div className="bg-purple-50 border border-purple-200 p-3 rounded-lg flex items-center justify-between animate-in fade-in slide-in-from-top-4">
-            <div className="flex items-center text-purple-900 text-sm">
-                <Sparkles size={16} className="mr-2 text-purple-600"/>
-                <strong>¡Nueva Funcionalidad!</strong>&nbsp; Gestión de Proveedores y Stock de Semillas habilitada.
-            </div>
-            <Link to="/suppliers" className="text-xs bg-white text-purple-700 px-3 py-1 rounded border border-purple-200 font-bold hover:bg-purple-50 transition flex items-center">
-                Ir a Proveedores <ArrowRight size={12} className="ml-1"/>
-            </Link>
-        </div>
-      )}
-
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      {/* HEADER 4.0 */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div>
-            {!isClient && (
-                <>
-                    <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Panel de Control</h1>
-                    <p className="text-gray-500 dark:text-gray-400 text-sm">Resumen general de operaciones.</p>
-                </>
-            )}
+            <div className="flex items-center space-x-3 mb-1">
+                <Zap size={16} className="text-hemp-500 animate-pulse"/>
+                <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em]">System Operational</span>
+            </div>
+            <h1 className="text-4xl font-black text-gray-900 dark:text-white tracking-tighter">Control <span className="text-blue-600">Central</span></h1>
         </div>
         
-        {/* Report Actions */}
-        <div className="flex space-x-2 bg-white dark:bg-dark-card p-1 rounded-lg border border-gray-200 dark:border-dark-border shadow-sm">
-            <button 
-                onClick={() => setShowReportModal(true)} 
-                className="text-gray-700 dark:text-gray-300 px-3 py-1.5 rounded-md text-sm hover:bg-gray-100 dark:hover:bg-dark-border transition flex items-center font-medium"
-            >
-                <Printer size={16} className="mr-2 text-hemp-600" />
-                Centro de Reportes
+        <div className="flex space-x-3 bg-white dark:bg-[#0f172a]/60 backdrop-blur-xl p-2 rounded-[20px] border dark:border-white/5 shadow-xl">
+            <button onClick={() => setShowReportModal(true)} className="flex items-center px-4 py-2 text-xs font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 hover:text-hemp-600 transition">
+                <Printer size={16} className="mr-2" /> Report Generator
             </button>
-            <div className="w-px bg-gray-200 dark:bg-dark-border my-1"></div>
-            <button 
-                onClick={exportExcel} 
-                className="text-gray-700 dark:text-gray-300 px-3 py-1.5 rounded-md text-sm hover:bg-gray-100 dark:hover:bg-dark-border transition flex items-center"
-            >
-                <Download size={16} className="mr-2 text-green-600" /> Excel
+            <div className="w-px bg-slate-800 my-2"></div>
+            <button className="bg-blue-600 text-white px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-blue-900/40 hover:bg-blue-700 transition flex items-center">
+                <Radio size={14} className="mr-2 animate-ping" /> Live Feed
             </button>
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {!isClient && (
-            <>
-                <StatCard 
-                title="Variedades" 
-                value={varieties.length} 
-                icon={Sprout} 
-                colorClass="bg-blue-500 text-blue-500" 
-                />
-                <StatCard 
-                title="Locaciones" 
-                value={locations.length} 
-                icon={MapPin} 
-                colorClass="bg-amber-500 text-amber-500" 
-                />
-            </>
-        )}
-        <StatCard 
-          title={isClient ? "Mis Lotes Activos" : "Ensayos Activos"}
-          value={activePlots} 
-          icon={Activity} 
-          colorClass="bg-hemp-500 text-hemp-500" 
-          trend={isClient ? undefined : "+2 esta sem."}
-        />
-        <StatCard 
-          title="Cosechados" 
-          value={completedPlots} 
-          icon={CheckCircle} 
-          colorClass="bg-purple-500 text-purple-500" 
-        />
+      {/* KPI GRID */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <TechKPI label="Ensayos Activos" value={activePlots} icon={Activity} colorClass="bg-hemp-600" trend="+12%" status="online" />
+        <TechKPI label="Nodos Geográficos" value={locations.length} icon={Globe} colorClass="bg-blue-600" status="sync" />
+        <TechKPI label="Diversidad Genética" value={varieties.length} icon={Sprout} colorClass="bg-purple-600" />
+        <TechKPI label="Integridad Datos" value="99.8%" icon={ShieldCheck} colorClass="bg-amber-600" status="verified" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        {/* MAIN CHART: YIELD */}
-        <div className="lg:col-span-2 bg-white dark:bg-dark-card p-6 rounded-xl shadow-sm border border-gray-100 dark:border-dark-border transition-colors">
-          <div className="flex justify-between items-center mb-6">
-              <h2 className="text-lg font-bold text-gray-800 dark:text-white">Rendimiento Promedio (kg/ha)</h2>
-              <div className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-dark-border px-2 py-1 rounded">Última Campaña</div>
+        {/* ANALYTICS MAIN PANEL */}
+        <div className="lg:col-span-2 bg-white dark:bg-[#0f172a]/40 backdrop-blur-xl p-8 rounded-[32px] border dark:border-white/5 shadow-2xl relative overflow-hidden">
+          <div className="flex justify-between items-center mb-8 relative z-10">
+              <div>
+                  <h2 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight">Rendimiento Comparado</h2>
+                  <p className="text-xs text-slate-500 font-bold tracking-widest uppercase">Promedio Industrial (Kg/Ha)</p>
+              </div>
+              <div className="p-2 bg-slate-900 rounded-lg border border-white/5"><Database size={20} className="text-hemp-500"/></div>
           </div>
           
-          {chartData.length > 0 ? (
-            <div className="h-72">
+          <div className="h-80 relative z-10">
+            {yieldData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme === 'dark' ? '#334155' : '#e2e8f0'} />
-                  <XAxis dataKey="name" tick={{fontSize: 12, fill: chartTextColor}} axisLine={false} tickLine={false} />
-                  <YAxis tick={{fill: chartTextColor}} axisLine={false} tickLine={false} />
+                <BarChart data={yieldData}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e293b" />
+                  <XAxis dataKey="name" tick={{fontSize: 10, fill: chartTextColor, fontWeight: 'bold'}} axisLine={false} />
+                  <YAxis tick={{fontSize: 10, fill: chartTextColor}} axisLine={false} />
                   <Tooltip 
-                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', backgroundColor: theme === 'dark' ? '#1e293b' : '#fff', color: theme === 'dark' ? '#fff' : '#000' }}
-                    cursor={{fill: theme === 'dark' ? '#334155' : '#f1f5f9'}}
+                    cursor={{fill: '#1e293b'}}
+                    contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.5)' }}
                   />
-                  <Bar dataKey="yield" radius={[4, 4, 0, 0]}>
-                    {chartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={['#16a34a', '#0891b2', '#f59e0b'][index % 3]} />
-                    ))}
+                  <Bar dataKey="yield" radius={[8, 8, 0, 0]} barSize={40}>
+                    {yieldData.map((_, i) => <Cell key={i} fill={i % 2 === 0 ? '#16a34a' : '#2563eb'} />)}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
-            </div>
-          ) : (
-            <div className="h-72 flex flex-col items-center justify-center text-gray-400 dark:text-gray-600 bg-gray-50 dark:bg-dark-bg/50 rounded-lg border border-dashed border-gray-200 dark:border-dark-border">
-              <Activity size={48} className="mb-3 opacity-50" />
-              <p>Sin datos de cosecha aún</p>
-            </div>
-          )}
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center text-slate-600">
+                <History size={48} className="mb-4 opacity-20" />
+                <p className="text-xs font-black uppercase tracking-widest">Esperando Telemetría de Cosecha</p>
+              </div>
+            )}
+          </div>
+          <div className="absolute -bottom-20 -right-20 w-64 h-64 bg-hemp-500/5 blur-[100px] rounded-full"></div>
         </div>
 
-        {/* SECONDARY: TASKS / ALERTS */}
-        <div className="bg-white dark:bg-dark-card p-6 rounded-xl shadow-sm border border-gray-100 dark:border-dark-border transition-colors flex flex-col">
-            <h2 className="text-lg font-bold text-gray-800 dark:text-white mb-4">Actividad Reciente</h2>
-            <div className="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar">
-                {harvestedDataCount > 0 ? (
-                    <div className="flex items-start p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-100 dark:border-green-900/30">
-                        <FileCheck className="text-green-600 mt-1 mr-3 flex-shrink-0" size={18}/>
-                        <div>
-                            <p className="text-sm font-bold text-gray-800 dark:text-green-100">Datos Cosecha</p>
-                            <p className="text-xs text-gray-600 dark:text-green-300">{harvestedDataCount} parcelas actualizadas con rendimiento.</p>
+        {/* REAL-TIME FEED */}
+        <div className="bg-white dark:bg-[#0f172a]/40 backdrop-blur-xl p-8 rounded-[32px] border dark:border-white/5 shadow-2xl flex flex-col">
+            <div className="flex items-center justify-between mb-8">
+                <h2 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight">System Log</h2>
+                <span className="text-[10px] font-black text-blue-500 animate-pulse uppercase tracking-widest">Live Updates</span>
+            </div>
+            
+            <div className="flex-1 space-y-6 overflow-y-auto pr-2 custom-scrollbar">
+                {recentActivity.length > 0 ? recentActivity.map(act => (
+                    <div key={act.id} className="relative pl-6 border-l border-slate-800 group">
+                        <div className="absolute -left-[5px] top-1 w-2 h-2 bg-slate-700 rounded-full group-hover:bg-hemp-500 transition-colors"></div>
+                        <div className="flex justify-between items-start mb-1">
+                            <span className="text-[10px] font-black text-hemp-500 uppercase tracking-tighter">{act.stage}</span>
+                            <span className="text-[9px] text-slate-500 font-bold">{act.date}</span>
                         </div>
+                        <p className="text-sm font-black text-slate-800 dark:text-slate-200 leading-tight mb-1">{act.plotName}</p>
+                        <p className="text-[10px] text-slate-500 flex items-center italic">
+                            <Users size={10} className="mr-1"/> Updated by {act.user}
+                        </p>
                     </div>
-                ) : (
-                    <div className="flex items-start p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-100 dark:border-gray-700">
-                         <AlertCircle className="text-gray-400 mt-1 mr-3 flex-shrink-0" size={18}/>
-                         <p className="text-xs text-gray-500 dark:text-gray-400">Esperando primeros datos de cosecha.</p>
+                )) : (
+                    <div className="text-center py-10">
+                        <Cpu size={32} className="mx-auto text-slate-800 mb-3"/>
+                        <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">No recent transactions</p>
                     </div>
                 )}
-
-                <div className="pt-4 border-t dark:border-dark-border">
-                    <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-3">Accesos Directos</h3>
-                    <div className="grid grid-cols-2 gap-2">
-                        <Link to="/tasks" className="p-3 bg-gray-50 dark:bg-dark-bg hover:bg-hemp-50 dark:hover:bg-hemp-900/20 rounded-lg text-center transition group border border-transparent hover:border-hemp-200 dark:hover:border-hemp-800">
-                             <CheckSquare className="mx-auto mb-1 text-gray-400 group-hover:text-hemp-600" size={20}/>
-                             <span className="text-xs font-medium text-gray-600 dark:text-gray-300 group-hover:text-hemp-700">Tareas</span>
-                        </Link>
-                        <Link to="/calendar" className="p-3 bg-gray-50 dark:bg-dark-bg hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg text-center transition group border border-transparent hover:border-blue-200 dark:hover:border-blue-800">
-                             <Calendar className="mx-auto mb-1 text-gray-400 group-hover:text-blue-600" size={20}/>
-                             <span className="text-xs font-medium text-gray-600 dark:text-gray-300 group-hover:text-blue-700">Calendario</span>
-                        </Link>
-                    </div>
-                </div>
             </div>
+
+            <Link to="/plots" className="mt-8 group flex items-center justify-center w-full py-4 bg-slate-900 border border-white/5 rounded-2xl text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-white transition-all">
+                Access Global Matrix <ArrowRight size={14} className="ml-2 group-hover:translate-x-1 transition-transform"/>
+            </Link>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Height Area Chart */}
-        <div className="bg-white dark:bg-dark-card p-6 rounded-xl shadow-sm border border-gray-100 dark:border-dark-border transition-colors">
-            <h2 className="text-lg font-bold text-gray-800 dark:text-white mb-4">Desarrollo Vegetativo (Altura cm)</h2>
-             {heightData.length > 0 ? (
-                <div className="h-64">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={heightData}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme === 'dark' ? '#334155' : '#e2e8f0'} />
-                            <XAxis dataKey="name" tick={{fontSize: 12, fill: chartTextColor}} axisLine={false} tickLine={false} />
-                            <YAxis tick={{fill: chartTextColor}} axisLine={false} tickLine={false} />
-                            <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', backgroundColor: theme === 'dark' ? '#1e293b' : '#fff', color: theme === 'dark' ? '#fff' : '#000' }} />
-                            <Area type="monotone" dataKey="height" stroke="#16a34a" fillOpacity={1} fill="url(#colorHeight)" />
-                            <defs>
-                                <linearGradient id="colorHeight" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="#16a34a" stopOpacity={0.8}/>
-                                    <stop offset="95%" stopColor="#16a34a" stopOpacity={0}/>
-                                </linearGradient>
-                            </defs>
-                        </AreaChart>
-                    </ResponsiveContainer>
-                </div>
-             ) : (
-                <div className="h-64 flex items-center justify-center text-gray-400 dark:text-gray-600 bg-gray-50 dark:bg-dark-bg/50 rounded-lg border border-dashed border-gray-200 dark:border-dark-border">
-                    <p>Sin datos de altura recientes</p>
-                </div>
-             )}
-        </div>
-
-        {/* Pie Chart: Varieties Usage */}
-        <div className="bg-white dark:bg-dark-card p-6 rounded-xl shadow-sm border border-gray-100 dark:border-dark-border transition-colors">
-            <h2 className="text-lg font-bold text-gray-800 dark:text-white mb-4">Distribución por Uso</h2>
-            <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                        <Pie
-                            data={pieData}
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={60}
-                            outerRadius={80}
-                            paddingAngle={5}
-                            dataKey="value"
-                            stroke="none"
-                        >
-                            {pieData.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={pieColors[index % pieColors.length]} />
-                            ))}
-                        </Pie>
-                        <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', backgroundColor: theme === 'dark' ? '#1e293b' : '#fff' }} />
-                    </PieChart>
-                </ResponsiveContainer>
-            </div>
-            <div className="flex justify-center gap-4 text-sm text-gray-600 dark:text-gray-400 flex-wrap">
-                {pieData.map((entry, index) => (
-                    <div key={index} className="flex items-center">
-                        <div className="w-3 h-3 rounded-full mr-1" style={{backgroundColor: pieColors[index % pieColors.length]}}></div>
-                        {entry.name} ({entry.value})
-                    </div>
-                ))}
-            </div>
-        </div>
-      </div>
-
-      {/* REPORT CONFIG MODAL */}
+      {/* REPORT MODAL */}
       {showReportModal && (
-          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
-              <div className="bg-white dark:bg-dark-card rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden flex flex-col">
-                  <div className="px-6 py-4 border-b dark:border-dark-border bg-gray-50 dark:bg-slate-900 flex justify-between items-center">
-                      <h3 className="font-bold text-gray-800 dark:text-white flex items-center">
-                          <Printer className="mr-2 text-hemp-600" size={20} /> Centro de Reportes
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+              <div className="bg-[#0f172a] rounded-[40px] shadow-2xl max-w-lg w-full overflow-hidden border border-white/10 animate-in zoom-in-95">
+                  <div className="px-8 py-6 border-b border-white/5 bg-slate-900 flex justify-between items-center">
+                      <h3 className="text-white font-black flex items-center text-xs uppercase tracking-[0.2em]">
+                          <FileText className="mr-3 text-hemp-500" size={20} /> Intelligent Report Engine
                       </h3>
-                      <button onClick={() => setShowReportModal(false)} className="text-gray-400 hover:text-gray-600">
-                          <X size={20} />
-                      </button>
+                      <button onClick={() => setShowReportModal(false)} className="text-slate-500 hover:text-white transition-colors"><X size={24} /></button>
                   </div>
                   
-                  <div className="p-6 space-y-6">
-                      {!isClient && (
-                          <div>
-                              <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Filtrar por Proyecto</label>
-                              <select 
-                                  className="w-full border border-gray-300 dark:border-dark-border bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 p-2.5 rounded-lg focus:ring-2 focus:ring-hemp-500 outline-none"
-                                  value={reportConfig.projectId}
-                                  onChange={(e) => setReportConfig({...reportConfig, projectId: e.target.value})}
-                              >
-                                  <option value="all">Todos los Proyectos (Consolidado)</option>
-                                  {projects.map(p => (
-                                      <option key={p.id} value={p.id}>{p.name}</option>
-                                  ))}
-                              </select>
-                          </div>
-                      )}
-
-                      <div className="space-y-3">
-                          <label className="block text-sm font-bold text-gray-700 dark:text-gray-300">Contenido Opcional</label>
-                          <label className="flex items-center space-x-3 p-3 border border-gray-200 dark:border-dark-border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800 transition">
-                              <input 
-                                type="checkbox" 
-                                className="w-4 h-4 text-hemp-600 rounded" 
-                                checked={reportConfig.includeLogs}
-                                onChange={e => setReportConfig({...reportConfig, includeLogs: e.target.checked})}
-                              />
-                              <div className="flex-1">
-                                  <span className="block text-sm font-medium text-gray-900 dark:text-white">Incluir Bitácora</span>
-                                  <span className="block text-xs text-gray-500">Agrega resumen de notas de campo al final.</span>
-                              </div>
-                          </label>
-                          
-                          <label className="flex items-center space-x-3 p-3 border border-gray-200 dark:border-dark-border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800 transition">
-                              <input 
-                                type="checkbox" 
-                                className="w-4 h-4 text-hemp-600 rounded" 
-                                checked={reportConfig.includeFinancials}
-                                onChange={e => setReportConfig({...reportConfig, includeFinancials: e.target.checked})}
-                              />
-                              <div className="flex-1">
-                                  <span className="block text-sm font-medium text-gray-900 dark:text-white">Incluir Estimaciones</span>
-                                  <span className="block text-xs text-gray-500">Calcula rendimiento teórico vs real.</span>
-                              </div>
-                          </label>
+                  <div className="p-10 space-y-8">
+                      <div>
+                          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 ml-1">Scope Selection</label>
+                          <select className="w-full bg-slate-950 border border-slate-800 text-white p-4 rounded-2xl focus:ring-2 focus:ring-hemp-500/30 outline-none font-bold text-sm">
+                              <option value="all">Full Enterprise Consolidated</option>
+                              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                          </select>
                       </div>
-                  </div>
 
-                  <div className="px-6 py-4 bg-gray-50 dark:bg-slate-900 border-t dark:border-dark-border flex justify-end space-x-3">
-                      <button 
-                        onClick={() => setShowReportModal(false)}
-                        className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-800 rounded-lg transition"
-                      >
-                          Cancelar
-                      </button>
-                      <button 
-                        onClick={generateProfessionalPDF}
-                        disabled={reportGenerating}
-                        className="px-6 py-2 bg-hemp-600 hover:bg-hemp-700 text-white font-bold rounded-lg shadow-lg flex items-center transition disabled:opacity-70"
-                      >
-                          {reportGenerating ? <span className="animate-spin mr-2">C</span> : <FileText size={18} className="mr-2" />}
-                          Generar PDF
+                      <div className="space-y-4">
+                          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Advanced Modules</label>
+                          <div className="grid grid-cols-1 gap-3">
+                              <label className="flex items-center justify-between p-5 bg-slate-950 border border-slate-800 rounded-3xl cursor-pointer hover:border-hemp-500/30 transition-all">
+                                  <div className="flex items-center">
+                                      <History size={18} className="mr-3 text-blue-500"/>
+                                      <div><p className="text-xs font-black text-white uppercase tracking-tighter">Event Logs</p><p className="text-[9px] text-slate-500">Include full field log history</p></div>
+                                  </div>
+                                  <input type="checkbox" className="w-5 h-5 rounded-lg border-slate-700 bg-slate-800 text-hemp-600 focus:ring-0" defaultChecked />
+                              </label>
+                          </div>
+                      </div>
+
+                      <button className="w-full bg-white text-black py-5 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-all shadow-xl shadow-white/5 flex items-center justify-center">
+                          <Sparkles size={16} className="mr-2"/> Generate Digital Asset (PDF)
                       </button>
                   </div>
               </div>
