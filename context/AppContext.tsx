@@ -52,7 +52,7 @@ interface AppContextType {
   updateSupplier: (s: Supplier) => void;
   deleteSupplier: (id: string) => void;
 
-  addClient: (c: Client) => Promise<void>; 
+  addClient: (c: Client) => Promise<boolean>; 
   updateClient: (c: Client) => void; 
   deleteClient: (id: string) => void; 
 
@@ -64,7 +64,7 @@ interface AppContextType {
   updateStoragePoint: (s: StoragePoint) => void;
   deleteStoragePoint: (id: string) => void;
 
-  addLocation: (l: Location) => void;
+  addLocation: (l: Location) => Promise<boolean>;
   updateLocation: (l: Location) => void;
   deleteLocation: (id: string) => void;
   
@@ -197,25 +197,38 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       try {
           const connected = await checkConnection();
           if (!connected) {
-              setIsEmergencyMode(true);
+              console.warn("[CORE] Supabase no disponible. Usando datos locales persistidos.");
+              // Cargar de localstorage si no hay DB
+              setUsersList(getFromLocal('users'));
+              setClients(getFromLocal('clients'));
+              setLocations(getFromLocal('locations'));
+              setPlots(getFromLocal('plots'));
               setHydricRecords(getFromLocal('hydricRecords'));
+              setIsEmergencyMode(true);
           } else {
               setIsEmergencyMode(false);
-              const fetchData = async (table: string, setter: any) => {
+              const fetchData = async (table: string, setter: any, localKey: string) => {
                   const { data, error } = await supabase.from(table).select('*');
                   if (!error && data) {
-                      setter(data.map(i => toCamelCase(i)));
+                      const camelData = data.map(i => toCamelCase(i));
+                      setter(camelData);
+                      saveToLocal(localKey, camelData);
+                  } else if (error) {
+                      console.error(`[ERROR] Fallo al leer tabla ${table}:`, error.message);
+                      // Si falla el esquema, usamos local
+                      setter(getFromLocal(localKey));
+                      setIsEmergencyMode(true);
                   }
               };
               await Promise.allSettled([
-                  fetchData('users', setUsersList), fetchData('projects', setProjects),
-                  fetchData('suppliers', setSuppliers), fetchData('clients', setClients),
-                  fetchData('varieties', setVarieties), fetchData('locations', setLocations),
-                  fetchData('plots', setPlots), fetchData('seed_batches', setSeedBatches),
-                  fetchData('seed_movements', setSeedMovements), fetchData('resources', setResources),
-                  fetchData('storage_points', setStoragePoints), fetchData('trial_records', setTrialRecords),
-                  fetchData('field_logs', setLogs), fetchData('tasks', setTasks),
-                  fetchData('hydric_records', setHydricRecords)
+                  fetchData('users', setUsersList, 'users'), fetchData('projects', setProjects, 'projects'),
+                  fetchData('suppliers', setSuppliers, 'suppliers'), fetchData('clients', setClients, 'clients'),
+                  fetchData('varieties', setVarieties, 'varieties'), fetchData('locations', setLocations, 'locations'),
+                  fetchData('plots', setPlots, 'plots'), fetchData('seed_batches', setSeedBatches, 'seed_batches'),
+                  fetchData('seed_movements', setSeedMovements, 'seed_movements'), fetchData('resources', setResources, 'resources'),
+                  fetchData('storage_points', setStoragePoints, 'storage_points'), fetchData('trial_records', setTrialRecords, 'trial_records'),
+                  fetchData('field_logs', setLogs, 'field_logs'), fetchData('tasks', setTasks, 'tasks'),
+                  fetchData('hydric_records', setHydricRecords, 'hydric_records')
               ]);
               setLastSyncTime(new Date());
           }
@@ -243,12 +256,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const logout = () => { setCurrentUser(null); localStorage.removeItem('ht_session_user'); };
 
   const genericAdd = async (table: string, item: any, setter: any, localKey: string) => {
-      // Limpieza profunda de datos
       const cleanItem = { ...item };
       
-      // CASTEO OBLIGATORIO PARA SUPABASE
-      if (table === 'hydric_records') {
-          cleanItem.amountMm = Number(cleanItem.amountMm) || 0;
+      // CASTEO OBLIGATORIO PARA SQL
+      if (table === 'hydric_records') cleanItem.amountMm = Number(cleanItem.amountMm) || 0;
+      if (table === 'plots') {
+          cleanItem.surfaceArea = Number(cleanItem.surfaceArea) || 0;
+          cleanItem.density = Number(cleanItem.density) || 0;
       }
       if (table === 'trial_records') {
           if (cleanItem.plantHeight !== undefined) cleanItem.plantHeight = Number(cleanItem.plantHeight);
@@ -256,55 +270,37 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
 
       const dbItem = toSnakeCase(cleanItem);
-      console.log(`[CORE] Guardando en ${table}:`, dbItem);
+      console.log(`[CORE] Intentando guardar en ${table}:`, dbItem);
       
-      if (!isEmergencyMode) {
-          try {
-              const { error } = await supabase.from(table).insert([dbItem]);
-              if (error) {
-                  console.error(`[SUPABASE ERROR] ${table}:`, error.message);
-                  alert(`Error de base de datos en ${table}: ${error.message}`);
-                  throw error;
-              }
-              setter((prev: any[]) => [...prev, item]);
-              return true;
-          } catch (e: any) {
-              console.warn(`[FALLBACK] Servidor no responde. Guardando localmente en ${localKey}.`);
-              setter((prev: any[]) => { 
-                  const n = [...prev, item]; 
-                  saveToLocal(localKey, n); 
-                  return n; 
-              });
+      try {
+          const { error } = await supabase.from(table).insert([dbItem]);
+          if (error) {
+              console.error(`[DATABASE ERROR] ${table}:`, error.message);
+              // Fallback local instantáneo para no romper la UX
+              setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
+              alert(`Aviso: Error en base de datos (${error.message}). El registro se guardó LOCALMENTE.`);
+              setIsEmergencyMode(true);
               return true;
           }
-      } else {
-          setter((prev: any[]) => { 
-              const n = [...prev, item]; 
-              saveToLocal(localKey, n); 
-              return n; 
-          });
+          setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
+          return true;
+      } catch (e: any) {
+          console.warn(`[FALLBACK] Servidor inalcanzable. Guardando localmente en ${localKey}.`);
+          setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
           return true;
       }
   };
 
   const genericUpdate = async (table: string, item: any, setter: any, localKey: string) => {
       const dbItem = toSnakeCase(item);
-      if (isEmergencyMode) {
-          setter((prev: any[]) => { const n = prev.map((i: any) => i.id === item.id ? item : i); saveToLocal(localKey, n); return n; });
-      } else {
-          const { error } = await supabase.from(table).update(dbItem).eq('id', item.id);
-          if (error) console.error(`Error updating ${table}:`, error.message);
-          setter((prev: any[]) => prev.map((i: any) => i.id === item.id ? item : i));
-      }
+      const { error } = await supabase.from(table).update(dbItem).eq('id', item.id);
+      if (error) console.error(`Error updating ${table}:`, error.message);
+      setter((prev: any[]) => { const n = prev.map((i: any) => i.id === item.id ? item : i); saveToLocal(localKey, n); return n; });
   };
 
   const genericDelete = async (table: string, id: string, setter: any, localKey: string) => {
-      if (isEmergencyMode) {
-          setter((prev: any[]) => { const n = prev.filter((i: any) => i.id !== id); saveToLocal(localKey, n); return n; });
-      } else {
-          await supabase.from(table).delete().eq('id', id);
-          setter((prev: any[]) => prev.filter((i: any) => i.id !== id));
-      }
+      await supabase.from(table).delete().eq('id', id);
+      setter((prev: any[]) => { const n = prev.filter((i: any) => i.id !== id); saveToLocal(localKey, n); return n; });
   };
 
   const addUser = (u: User) => genericAdd('users', u, setUsersList, 'users');
@@ -325,40 +321,40 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const addSupplier = async (s: Supplier) => { await genericAdd('suppliers', s, setSuppliers, 'suppliers'); return s.id; };
   const updateSupplier = (s: Supplier) => genericUpdate('suppliers', s, setSuppliers, 'suppliers');
   const deleteSupplier = (id: string) => { genericDelete('suppliers', id, setSuppliers, 'suppliers'); };
-  const addClient = async (c: Client) => { await genericAdd('clients', c, setClients, 'clients'); };
+  const addClient = async (c: Client) => genericAdd('clients', c, setClients, 'clients');
   const updateClient = (c: Client) => genericUpdate('clients', c, setClients, 'clients');
   const deleteClient = (id: string) => genericDelete('clients', id, setClients, 'clients');
   const addResource = (r: Resource) => genericAdd('resources', r, setResources, 'resources');
   const updateResource = (r: Resource) => genericUpdate('resources', r, setResources, 'resources');
   const deleteResource = (id: string) => genericDelete('resources', id, setResources, 'resources');
-  const addStoragePoint = (s: StoragePoint) => genericAdd('storage_points', s, setStoragePoints, 'storagePoints');
-  const updateStoragePoint = (s: StoragePoint) => genericUpdate('storage_points', s, setStoragePoints, 'storagePoints');
-  const deleteStoragePoint = (id: string) => genericDelete('storage_points', id, setStoragePoints, 'storagePoints');
-  const addSeedBatch = (s: SeedBatch) => genericAdd('seed_batches', s, setSeedBatches, 'seedBatches');
+  const addStoragePoint = (sp: StoragePoint) => genericAdd('storage_points', sp, setStoragePoints, 'storage_points');
+  const updateStoragePoint = (sp: StoragePoint) => genericUpdate('storage_points', sp, setStoragePoints, 'storage_points');
+  const deleteStoragePoint = (id: string) => genericDelete('storage_points', id, setStoragePoints, 'storage_points');
+  const addSeedBatch = (s: SeedBatch) => genericAdd('seed_batches', s, setSeedBatches, 'seed_batches');
   const addLocalSeedBatch = (s: SeedBatch) => setSeedBatches(prev => [...prev, s]);
-  const updateSeedBatch = (s: SeedBatch) => genericUpdate('seed_batches', s, setSeedBatches, 'seedBatches');
-  const deleteSeedBatch = async (id: string) => { await genericDelete('seed_batches', id, setSeedBatches, 'seedBatches'); };
-  const addHydricRecord = (h: HydricRecord) => genericAdd('hydric_records', h, setHydricRecords, 'hydricRecords');
-  const deleteHydricRecord = (id: string) => genericDelete('hydric_records', id, setHydricRecords, 'hydricRecords');
-  const addSeedMovement = async (m: SeedMovement) => { return await genericAdd('seed_movements', m, setSeedMovements, 'seedMovements'); };
-  const updateSeedMovement = (m: SeedMovement) => genericUpdate('seed_movements', m, setSeedMovements, 'seedMovements');
+  const updateSeedBatch = (s: SeedBatch) => genericUpdate('seed_batches', s, setSeedBatches, 'seed_batches');
+  const deleteSeedBatch = async (id: string) => { await genericDelete('seed_batches', id, setSeedBatches, 'seed_batches'); };
+  const addHydricRecord = (h: HydricRecord) => genericAdd('hydric_records', h, setHydricRecords, 'hydric_records');
+  const deleteHydricRecord = (id: string) => genericDelete('hydric_records', id, setHydricRecords, 'hydric_records');
+  const addSeedMovement = async (m: SeedMovement) => genericAdd('seed_movements', m, setSeedMovements, 'seed_movements');
+  const updateSeedMovement = (m: SeedMovement) => genericUpdate('seed_movements', m, setSeedMovements, 'seed_movements');
   const deleteSeedMovement = async (id: string) => { 
       const move = seedMovements.find(m => m.id === id);
       if (move) {
           const batch = seedBatches.find(b => b.id === move.batchId);
           if (batch) {
               const updatedBatch = { ...batch, remainingQuantity: batch.remainingQuantity + move.quantity };
-              await genericUpdate('seed_batches', updatedBatch, setSeedBatches, 'seedBatches');
+              await genericUpdate('seed_batches', updatedBatch, setSeedBatches, 'seed_batches');
           }
       }
-      await genericDelete('seed_movements', id, setSeedMovements, 'seedMovements');
+      await genericDelete('seed_movements', id, setSeedMovements, 'seed_movements');
   };
-  const addTrialRecord = (r: TrialRecord) => genericAdd('trial_records', r, setTrialRecords, 'trialRecords');
-  const updateTrialRecord = (r: TrialRecord) => { genericUpdate('trial_records', r, setTrialRecords, 'trialRecords'); };
-  const deleteTrialRecord = (id: string) => { genericDelete('trial_records', id, setTrialRecords, 'trialRecords'); };
-  const addLog = (l: FieldLog) => genericAdd('field_logs', l, setLogs, 'logs');
-  const updateLog = (l: FieldLog) => { genericUpdate('field_logs', l, setLogs, 'logs'); };
-  const deleteLog = (id: string) => { genericDelete('field_logs', id, setLogs, 'logs'); };
+  const addTrialRecord = (r: TrialRecord) => genericAdd('trial_records', r, setTrialRecords, 'trial_records');
+  const updateTrialRecord = (r: TrialRecord) => { genericUpdate('trial_records', r, setTrialRecords, 'trial_records'); };
+  const deleteTrialRecord = (id: string) => { genericDelete('trial_records', id, setTrialRecords, 'trial_records'); };
+  const addLog = (l: FieldLog) => genericAdd('field_logs', l, setLogs, 'field_logs');
+  const updateLog = (l: FieldLog) => { genericUpdate('field_logs', l, setLogs, 'field_logs'); };
+  const deleteLog = (id: string) => { genericDelete('field_logs', id, setLogs, 'field_logs'); };
   const addTask = (t: Task) => { genericAdd('tasks', t, setTasks, 'tasks'); };
   const updateTask = (t: Task) => { genericUpdate('tasks', t, setTasks, 'tasks'); };
   const deleteTask = (id: string) => { genericDelete('tasks', id, setTasks, 'tasks'); };

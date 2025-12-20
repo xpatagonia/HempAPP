@@ -4,7 +4,7 @@ import { useAppContext } from '../context/AppContext';
 import { Save, Database, Copy, RefreshCw, Lock, Settings as SettingsIcon, ShieldCheck, PlayCircle, CheckCircle2, Layout, Image as ImageIcon, Trash2, RotateCcw, Cpu, Globe, Shield, Server } from 'lucide-react';
 
 export default function Settings() {
-  const { currentUser, appName, appLogo, updateBranding } = useAppContext();
+  const { currentUser, appName, appLogo, updateBranding, isEmergencyMode } = useAppContext();
   
   const [activeTab, setActiveTab] = useState<'branding' | 'database' | 'connections'>('branding');
   const [url, setUrl] = useState('');
@@ -63,7 +63,7 @@ export default function Settings() {
       
       setTimeout(() => {
           setStatus('success');
-          setTimeout(() => { setStatus('idle'); }, 2000);
+          setTimeout(() => { setStatus('idle'); window.location.reload(); }, 1500);
       }, 800);
   };
 
@@ -142,15 +142,19 @@ export default function Settings() {
                   <div className="relative z-10">
                       <div className="flex items-center space-x-3 mb-4">
                         <div className="bg-white/20 p-2 rounded-xl"><Server size={24}/></div>
-                        <h3 className="text-xl font-black uppercase tracking-tighter">Seguridad Neural</h3>
+                        <h3 className="text-xl font-black uppercase tracking-tighter">Estado de Sincronización</h3>
                       </div>
                       <p className="text-blue-100 text-sm font-medium leading-relaxed mb-6">
-                        La <strong>API Key de Google Gemini</strong> se inyecta desde Vercel mediante `process.env.API_KEY`.
+                        {isEmergencyMode 
+                          ? '⚠️ Actualmente el sistema está en MODO LOCAL. Los cambios no se guardarán en Supabase hasta que se corrija el esquema.' 
+                          : '✅ El sistema está conectado correctamente a la base de datos cloud.'}
                       </p>
                       <div className="flex items-center space-x-4">
-                          <div className="bg-white/10 px-4 py-2 rounded-xl border border-white/20 flex items-center">
-                              <div className="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></div>
-                              <span className="text-[10px] font-black uppercase tracking-widest text-blue-50">Link de Datos Activo</span>
+                          <div className={`px-4 py-2 rounded-xl border flex items-center ${isEmergencyMode ? 'bg-red-500/20 border-red-500/40' : 'bg-white/10 border-white/20'}`}>
+                              <div className={`w-2 h-2 rounded-full mr-2 ${isEmergencyMode ? 'bg-red-400 animate-pulse' : 'bg-green-400 animate-pulse'}`}></div>
+                              <span className="text-[10px] font-black uppercase tracking-widest text-blue-50">
+                                {isEmergencyMode ? 'Falla de Esquema' : 'Link de Datos Activo'}
+                              </span>
                           </div>
                       </div>
                   </div>
@@ -171,7 +175,7 @@ export default function Settings() {
             
             <button onClick={handleSaveConnections} disabled={status === 'checking'} className={`w-full py-5 rounded-[24px] font-black text-xs uppercase tracking-widest text-white flex items-center justify-center transition-all shadow-xl ${status === 'checking' ? 'bg-gray-400' : status === 'success' ? 'bg-green-600' : 'bg-slate-900 dark:bg-hemp-600 hover:scale-[1.01]'}`}>
                 {status === 'checking' ? <RefreshCw className="animate-spin mr-2"/> : status === 'success' ? <CheckCircle2 className="mr-2"/> : <Save className="mr-2"/>}
-                {status === 'checking' ? 'Sincronizando...' : status === 'success' ? 'Conexión Exitosa' : 'Vincular Servidor de Producción'}
+                {status === 'checking' ? 'Sincronizando...' : status === 'success' ? 'Conexión Exitosa' : 'Actualizar Credenciales del Servidor'}
             </button>
           </div>
       )}
@@ -181,14 +185,14 @@ export default function Settings() {
               <div className="bg-slate-900 border border-slate-800 p-8 rounded-[32px] shadow-2xl relative overflow-hidden">
                   <div className="flex items-center space-x-3 mb-6">
                       <Shield className="text-hemp-500" size={24}/>
-                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Script de Limpieza y Reparación (Supabase)</h3>
+                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Script de Reparación Total (Corrección client_id)</h3>
                   </div>
-                  <p className="text-xs text-slate-400 mb-4 leading-relaxed">Ejecute este script para recrear las tablas y habilitar el guardado total sin restricciones de seguridad (RLS):</p>
+                  <p className="text-xs text-slate-400 mb-4 leading-relaxed">Ejecute este script en el SQL Editor de Supabase para corregir la columna faltante y habilitar el guardado de datos:</p>
                   <pre className="bg-black/50 p-6 rounded-2xl text-[10px] text-green-400 overflow-x-auto border border-white/5 font-mono h-80 custom-scrollbar">
-{`/* 1. LIMPIEZA TOTAL (OPCIONAL - BORRA DATOS) */
-/* DROP TABLE IF EXISTS hydric_records; */
+{`/* 1. ASEGURAR QUE LA COLUMNA client_id EXISTE EN USERS */
+ALTER TABLE users ADD COLUMN IF NOT EXISTS client_id TEXT;
 
-/* 2. CREACIÓN DE TABLAS CLAVE */
+/* 2. CREACIÓN DE TABLAS SI NO EXISTEN */
 CREATE TABLE IF NOT EXISTS hydric_records (
   id TEXT PRIMARY KEY,
   location_id TEXT,
@@ -201,24 +205,37 @@ CREATE TABLE IF NOT EXISTS hydric_records (
   created_by TEXT
 );
 
-/* 3. DESHABILITAR RLS PARA EVITAR ERRORES DE PERMISOS */
-ALTER TABLE hydric_records DISABLE ROW LEVEL SECURITY;
-ALTER TABLE trial_records DISABLE ROW LEVEL SECURITY;
-ALTER TABLE field_logs DISABLE ROW LEVEL SECURITY;
-ALTER TABLE tasks DISABLE ROW LEVEL SECURITY;
+CREATE TABLE IF NOT EXISTS field_logs (
+  id TEXT PRIMARY KEY,
+  plot_id TEXT,
+  date DATE,
+  time TEXT,
+  note TEXT,
+  photo_url TEXT
+);
+
+/* 3. DESHABILITAR RLS PARA ESTE PROTOTIPO (PERMITIR GUARDADO) */
 ALTER TABLE users DISABLE ROW LEVEL SECURITY;
+ALTER TABLE clients DISABLE ROW LEVEL SECURITY;
+ALTER TABLE locations DISABLE ROW LEVEL SECURITY;
+ALTER TABLE plots DISABLE ROW LEVEL SECURITY;
+ALTER TABLE trial_records DISABLE ROW LEVEL SECURITY;
+ALTER TABLE hydric_records DISABLE ROW LEVEL SECURITY;
+ALTER TABLE field_logs DISABLE ROW LEVEL SECURITY;
+ALTER TABLE varieties DISABLE ROW LEVEL SECURITY;
+ALTER TABLE suppliers DISABLE ROW LEVEL SECURITY;
 ALTER TABLE seed_batches DISABLE ROW LEVEL SECURITY;
 ALTER TABLE seed_movements DISABLE ROW LEVEL SECURITY;
+ALTER TABLE tasks DISABLE ROW LEVEL SECURITY;
 
-/* 4. GARANTIZAR ACCESO PÚBLICO */
-GRANT ALL ON TABLE hydric_records TO anon, authenticated, service_role;
-GRANT ALL ON TABLE trial_records TO anon, authenticated, service_role;
-GRANT ALL ON TABLE field_logs TO anon, authenticated, service_role;`}
+/* 4. OTORGAR PERMISOS PÚBLICOS */
+GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;
+`}
                   </pre>
                   <button onClick={() => {
-                      const sql = `ALTER TABLE hydric_records DISABLE ROW LEVEL SECURITY; ALTER TABLE trial_records DISABLE ROW LEVEL SECURITY; GRANT ALL ON TABLE hydric_records TO anon;`;
+                      const sql = `ALTER TABLE users ADD COLUMN IF NOT EXISTS client_id TEXT; ALTER TABLE users DISABLE ROW LEVEL SECURITY; ALTER TABLE clients DISABLE ROW LEVEL SECURITY; ALTER TABLE locations DISABLE ROW LEVEL SECURITY; ALTER TABLE plots DISABLE ROW LEVEL SECURITY; GRANT ALL ON ALL TABLES IN SCHEMA public TO anon;`;
                       navigator.clipboard.writeText(sql);
-                      alert("SQL copiado. Ejecútalo en Supabase > SQL Editor.");
+                      alert("SQL de reparación rápida copiado. Pégalo en Supabase > SQL Editor.");
                   }} className="mt-4 text-[10px] font-black text-hemp-400 uppercase tracking-widest flex items-center hover:text-white transition">
                       <Copy size={12} className="mr-1"/> Copiar SQL de Reparación Rápida
                   </button>
