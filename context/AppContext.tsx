@@ -41,7 +41,7 @@ interface AppContextType {
   lastSyncTime: Date | null;
 
   addProject: (p: Project) => Promise<boolean>;
-  updateProject: (p: Project) => void;
+  updateProject: (p: Project) => Promise<boolean>;
   deleteProject: (id: string) => void; 
   
   addVariety: (v: Variety) => void;
@@ -84,7 +84,7 @@ interface AppContextType {
   deleteHydricRecord: (id: string) => void;
 
   addUser: (u: User) => Promise<boolean>;
-  updateUser: (u: User) => void;
+  updateUser: (u: User) => Promise<boolean>;
   deleteUser: (id: string) => void;
 
   addTask: (t: Task) => void;
@@ -114,16 +114,18 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// Motor de conversión robusto
+// Conversión explícita para evitar errores de Schema Cache
 const toSnakeCase = (obj: any) => {
     if (!obj || typeof obj !== 'object') return obj;
     const newObj: any = {};
     for (const key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
-            // Mapeo explícito para clientId -> client_id
-            if (key === 'clientId') {
-                newObj['client_id'] = obj[key];
-            } else {
+            // Refuerzo manual para campos críticos
+            if (key === 'clientId') newObj['client_id'] = obj[key];
+            else if (key === 'relatedUserId') newObj['related_user_id'] = obj[key];
+            else if (key === 'projectId') newObj['project_id'] = obj[key];
+            else if (key === 'varietyId') newObj['variety_id'] = obj[key];
+            else {
                 const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
                 newObj[snakeKey] = obj[key];
             }
@@ -216,7 +218,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                       setter(camelData);
                       saveToLocal(localKey, camelData);
                   } else if (error) {
-                      console.error(`[ERROR] Table ${table}:`, error.message);
+                      console.error(`[CLOUD ERROR] ${table}:`, error.message);
                       setter(getFromLocal(localKey));
                       if (error.message.includes('column') || error.message.includes('schema')) setIsEmergencyMode(true);
                   }
@@ -271,14 +273,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
 
       const dbItem = toSnakeCase(cleanItem);
+      console.log(`[CLOUD SAVE] Attempting to save to ${table}:`, dbItem);
       
       try {
           const { error } = await supabase.from(table).insert([dbItem]);
           if (error) {
-              console.error(`[DATABASE ERROR] ${table}:`, error.message);
+              console.error(`[DATABASE REJECTED] ${table}:`, error.message);
+              // Actualizar estado local para que el usuario vea su cambio de inmediato
               setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
-              if (error.message.includes('schema') || error.message.includes('column')) setIsEmergencyMode(true);
-              return true;
+              
+              if (error.message.includes('column') || error.message.includes('schema')) {
+                  setIsEmergencyMode(true);
+                  // No lanzamos alerta intrusiva si ya estamos en modo emergencia
+              } else {
+                  alert(`Error de sincronización (${error.message}). Los datos se guardaron solo localmente.`);
+              }
+              return true; 
           }
           setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
           return true;
@@ -291,8 +301,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const genericUpdate = async (table: string, item: any, setter: any, localKey: string) => {
       const dbItem = toSnakeCase(item);
       const { error } = await supabase.from(table).update(dbItem).eq('id', item.id);
-      if (error) console.error(`Error updating ${table}:`, error.message);
+      
+      if (error) {
+          console.error(`Error updating ${table}:`, error.message);
+          setter((prev: any[]) => { const n = prev.map((i: any) => i.id === item.id ? item : i); saveToLocal(localKey, n); return n; });
+          return false;
+      }
       setter((prev: any[]) => { const n = prev.map((i: any) => i.id === item.id ? item : i); saveToLocal(localKey, n); return n; });
+      return true;
   };
 
   const genericDelete = async (table: string, id: string, setter: any, localKey: string) => {

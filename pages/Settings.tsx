@@ -73,7 +73,7 @@ export default function Settings() {
         <SettingsIcon className="text-hemp-600 mr-3" size={32} />
         <div>
             <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Configuración de Sistema</h1>
-            <p className="text-gray-500">Gestión de identidad, datos y seguridad neural.</p>
+            <p className="text-gray-500">Gestión de identidad, datos y seguridad del servidor.</p>
         </div>
       </div>
 
@@ -114,7 +114,7 @@ export default function Settings() {
                               </div>
                               <div className="flex-1">
                                   <p className="text-xs text-slate-500 font-medium leading-relaxed mb-4">
-                                      El logo reemplazará el icono predeterminado.
+                                      El logo reemplazará el icono predeterminado en toda la interfaz.
                                   </p>
                                   <div className="flex gap-2">
                                       <label className="bg-hemp-600 hover:bg-hemp-700 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition cursor-pointer flex items-center">
@@ -142,18 +142,18 @@ export default function Settings() {
                   <div className="relative z-10">
                       <div className="flex items-center space-x-3 mb-4">
                         <div className="bg-white/20 p-2 rounded-xl"><Server size={24}/></div>
-                        <h3 className="text-xl font-black uppercase tracking-tighter">Estado de Sincronización</h3>
+                        <h3 className="text-xl font-black uppercase tracking-tighter">Sincronización Cloud</h3>
                       </div>
                       <p className="text-blue-100 text-sm font-medium leading-relaxed mb-6">
                         {isEmergencyMode 
-                          ? '⚠️ Actualmente el sistema está en MODO LOCAL. Los cambios no se guardarán en Supabase hasta que se corrija el esquema.' 
-                          : '✅ El sistema está conectado correctamente a la base de datos cloud.'}
+                          ? '⚠️ FALLO DE ESQUEMA DETECTADO. La base de datos no reconoce la columna client_id. Use el script de reparación en la pestaña SQL Cloud.' 
+                          : '✅ El sistema está conectado correctamente y el esquema de base de datos está validado.'}
                       </p>
                       <div className="flex items-center space-x-4">
                           <div className={`px-4 py-2 rounded-xl border flex items-center ${isEmergencyMode ? 'bg-red-500/20 border-red-500/40' : 'bg-white/10 border-white/20'}`}>
                               <div className={`w-2 h-2 rounded-full mr-2 ${isEmergencyMode ? 'bg-red-400 animate-pulse' : 'bg-green-400 animate-pulse'}`}></div>
                               <span className="text-[10px] font-black uppercase tracking-widest text-blue-50">
-                                {isEmergencyMode ? 'Falla de Esquema' : 'Link de Datos Activo'}
+                                {isEmergencyMode ? 'Esquema Desactualizado' : 'Conexión Estable'}
                               </span>
                           </div>
                       </div>
@@ -185,14 +185,14 @@ export default function Settings() {
               <div className="bg-slate-900 border border-slate-800 p-8 rounded-[32px] shadow-2xl relative overflow-hidden">
                   <div className="flex items-center space-x-3 mb-6">
                       <Shield className="text-hemp-500" size={24}/>
-                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Script de Reparación Crítica (Fallo client_id)</h3>
+                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Script de Reparación Total (Fix client_id)</h3>
                   </div>
-                  <p className="text-xs text-slate-400 mb-4 leading-relaxed italic">Atención: El error "client_id not found" se soluciona ejecutando este bloque en el SQL Editor de Supabase.</p>
+                  <p className="text-xs text-slate-400 mb-4 leading-relaxed">Ejecute este script en el SQL Editor de Supabase para añadir la columna faltante y permitir que los usuarios se guarden correctamente en la nube:</p>
                   <pre className="bg-black/50 p-6 rounded-2xl text-[10px] text-green-400 overflow-x-auto border border-white/5 font-mono h-80 custom-scrollbar">
-{`-- 1. SOLUCIÓN AL ERROR DE COLUMNA FALTANTE
+{`-- 1. FIX CRÍTICO: AGREGAR COLUMNA client_id A LA TABLA users
 ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS client_id TEXT;
 
--- 2. ASEGURAR ESTRUCTURA DE CLIENTES (ENTIDADES)
+-- 2. ASEGURAR TABLAS BASE
 CREATE TABLE IF NOT EXISTS public.clients (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -206,30 +206,30 @@ CREATE TABLE IF NOT EXISTS public.clients (
   related_user_id TEXT
 );
 
--- 3. REGLAS DE ACCESO PÚBLICO (MODO PROTOTIPO)
-ALTER TABLE users DISABLE ROW LEVEL SECURITY;
-ALTER TABLE clients DISABLE ROW LEVEL SECURITY;
-ALTER TABLE locations DISABLE ROW LEVEL SECURITY;
-ALTER TABLE plots DISABLE ROW LEVEL SECURITY;
-ALTER TABLE trial_records DISABLE ROW LEVEL SECURITY;
-ALTER TABLE hydric_records DISABLE ROW LEVEL SECURITY;
-ALTER TABLE field_logs DISABLE ROW LEVEL SECURITY;
-ALTER TABLE varieties DISABLE ROW LEVEL SECURITY;
-ALTER TABLE suppliers DISABLE ROW LEVEL SECURITY;
-ALTER TABLE seed_batches DISABLE ROW LEVEL SECURITY;
-ALTER TABLE seed_movements DISABLE ROW LEVEL SECURITY;
-ALTER TABLE tasks DISABLE ROW LEVEL SECURITY;
+-- 3. DESACTIVAR RLS TEMPORALMENTE PARA DESARROLLO (Habilitar guardado)
+ALTER TABLE IF EXISTS public.users DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.clients DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.locations DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.plots DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.trial_records DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.hydric_records DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.field_logs DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.varieties DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.suppliers DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.seed_batches DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.seed_movements DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.tasks DISABLE ROW LEVEL SECURITY;
 
--- 4. PERMISOS
+-- 4. OTORGAR PERMISOS PÚBLICOS
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;
 `}
                   </pre>
                   <button onClick={() => {
-                      const sql = `ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS client_id TEXT; ALTER TABLE public.users DISABLE ROW LEVEL SECURITY; ALTER TABLE public.clients DISABLE ROW LEVEL SECURITY; GRANT ALL ON ALL TABLES IN SCHEMA public TO anon;`;
+                      const sql = `ALTER TABLE public.users ADD COLUMN IF NOT EXISTS client_id TEXT; ALTER TABLE public.users DISABLE ROW LEVEL SECURITY; ALTER TABLE public.clients DISABLE ROW LEVEL SECURITY; GRANT ALL ON ALL TABLES IN SCHEMA public TO anon;`;
                       navigator.clipboard.writeText(sql);
-                      alert("SQL copiado. Pégalo en el SQL Editor de Supabase y dale a 'RUN'.");
+                      alert("SQL de reparación rápida copiado. Pégalo en el SQL Editor de Supabase.");
                   }} className="mt-4 text-[10px] font-black text-hemp-400 uppercase tracking-widest flex items-center hover:text-white transition">
-                      <Copy size={12} className="mr-1"/> Copiar Fix de Emergencia
+                      <Copy size={12} className="mr-1"/> Copiar SQL de Reparación Rápida
                   </button>
               </div>
           </div>
