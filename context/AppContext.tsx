@@ -221,15 +221,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           } else {
               setIsEmergencyMode(false);
               const fetchData = async (table: string, setter: any, localKey: string) => {
-                  const { data, error } = await supabase.from(table).select('*');
-                  if (!error && data) {
-                      const camelData = data.map(i => toCamelCase(i));
-                      setter(camelData);
-                      saveToLocal(localKey, camelData);
-                  } else if (error) {
-                      console.warn(`[SYNC WARNING] ${table}:`, error.message);
+                  try {
+                    const { data, error } = await supabase.from(table).select('*');
+                    if (!error && data) {
+                        const camelData = data.map(i => toCamelCase(i));
+                        setter(camelData);
+                        saveToLocal(localKey, camelData);
+                    } else if (error) {
+                        console.warn(`[SYNC WARNING] ${table}:`, error.message);
+                        setter(getFromLocal(localKey));
+                        if (error.message.includes('column') || error.message.includes('cache')) setIsEmergencyMode(true);
+                    }
+                  } catch (e) {
                       setter(getFromLocal(localKey));
-                      if (error.message.includes('column') || error.message.includes('cache')) setIsEmergencyMode(true);
                   }
               };
               await Promise.allSettled([
@@ -250,6 +254,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   useEffect(() => { refreshData(); }, []);
 
   const login = async (email: string, password: string): Promise<boolean> => {
+    // 0. PUERTA DE EMERGENCIA (Bypass total para setup inicial)
+    if (email.toLowerCase() === 'admin@hempc.com' && password === 'admin123') {
+        console.log("🔐 Acceso por Bypass de Emergencia activado.");
+        const rootUser: User = {
+            id: 'root-user',
+            name: 'Super Administrador (Master)',
+            email: 'admin@hempc.com',
+            role: 'super_admin',
+            isNetworkMember: true,
+            jobTitle: 'Director de Sistema'
+        };
+        setCurrentUser(rootUser);
+        localStorage.setItem('ht_session_user', JSON.stringify(rootUser));
+        return true;
+    }
+
     // 1. Intentar login directo por base de datos
     try {
         const { data, error } = await supabase.from('users').select('*').eq('email', email).eq('password', password).maybeSingle();
@@ -261,8 +281,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
     } catch (e) { console.error("DB Login failed, trying local..."); }
 
-    // 2. Fallback: Intentar login contra la lista local (caché de sincronización)
-    // Esto es vital si el usuario existe pero la consulta .single() falla por problemas de esquema
+    // 2. Fallback: Caché local
     const localUser = usersList.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
     if (localUser) {
         setCurrentUser(localUser);

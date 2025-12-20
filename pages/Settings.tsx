@@ -227,6 +227,20 @@ CREATE TABLE public.storage_points (
   notes TEXT
 );
 
+CREATE TABLE public.trial_records (
+  id TEXT PRIMARY KEY,
+  plot_id TEXT,
+  date TEXT NOT NULL,
+  time TEXT,
+  stage TEXT,
+  temperature NUMERIC,
+  humidity NUMERIC,
+  plant_height NUMERIC,
+  "yield" NUMERIC,
+  created_by TEXT,
+  created_by_name TEXT
+);
+
 -- 3. PERMISOS TOTALES
 ALTER TABLE public.users DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.clients DISABLE ROW LEVEL SECURITY;
@@ -234,9 +248,11 @@ ALTER TABLE public.locations DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.varieties DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.suppliers DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.storage_points DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.trial_records DISABLE ROW LEVEL SECURITY;
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;
 
 -- 4. INSERTAR USUARIO ADMIN INICIAL
+DELETE FROM public.users WHERE email = 'admin@hempc.com';
 INSERT INTO public.users (id, name, email, role, password, job_title, is_network_member)
 VALUES ('root-user', 'Super Administrador', 'admin@hempc.com', 'super_admin', 'admin123', 'Director de Sistema', true);
 
