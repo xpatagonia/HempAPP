@@ -64,6 +64,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           <NavItem to="/projects" icon={FolderKanban} label="Campañas" />
 
           <div className="pt-8 pb-3 px-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Cadena de Valor</div>
+          <NavItem to="/storage" icon={Warehouse} label="Almacenes" />
           <NavItem to="/seed-batches" icon={Package} label="Inventario" />
           <NavItem to="/varieties" icon={BookOpen} label="Genética" />
           <NavItem to="/suppliers" icon={Warehouse} label="Proveedores" />

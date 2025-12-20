@@ -44,8 +44,8 @@ interface AppContextType {
   updateProject: (p: Project) => Promise<boolean>;
   deleteProject: (id: string) => void; 
   
-  addVariety: (v: Variety) => void;
-  updateVariety: (v: Variety) => void;
+  addVariety: (v: Variety) => Promise<boolean>;
+  updateVariety: (v: Variety) => Promise<boolean>;
   deleteVariety: (id: string) => void;
 
   addSupplier: (s: Supplier) => Promise<string | null>;
@@ -60,8 +60,8 @@ interface AppContextType {
   updateResource: (r: Resource) => void; 
   deleteResource: (id: string) => void;
 
-  addStoragePoint: (s: StoragePoint) => void;
-  updateStoragePoint: (s: StoragePoint) => void;
+  addStoragePoint: (s: StoragePoint) => Promise<boolean>;
+  updateStoragePoint: (s: StoragePoint) => Promise<boolean>;
   deleteStoragePoint: (id: string) => void;
 
   addLocation: (l: Location) => Promise<boolean>;
@@ -118,6 +118,7 @@ const toSnakeCase = (obj: any) => {
     const newObj: any = {};
     const manualMap: Record<string, string> = {
         clientId: 'client_id',
+        supplierId: 'supplier_id',
         isNetworkMember: 'is_network_member',
         relatedUserId: 'related_user_id',
         projectId: 'project_id',
@@ -150,7 +151,7 @@ const toSnakeCase = (obj: any) => {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
             const snakeKey = manualMap[key] || key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
             let val = obj[key];
-            if ((key === 'relatedUserId' || key === 'clientId') && val === '') val = null;
+            if ((key === 'relatedUserId' || key === 'clientId' || key === 'supplierId' || key === 'storagePointId') && val === '') val = null;
             if (val !== undefined) {
                 newObj[snakeKey] = val;
             }
@@ -165,6 +166,7 @@ const toCamelCase = (obj: any) => {
     const manualMap: Record<string, string> = {
         job_title: 'jobTitle',
         client_id: 'clientId',
+        supplier_id: 'supplierId',
         is_network_member: 'isNetworkMember',
         related_user_id: 'relatedUserId',
         project_id: 'projectId',
@@ -270,6 +272,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                         setter(camelData);
                         saveToLocal(localKey, camelData);
                     } else if (error) {
+                        console.error(`Error fetching ${table}:`, error);
                         setter(getFromLocal(localKey));
                     }
                   } catch (e) { setter(getFromLocal(localKey)); }
@@ -323,6 +326,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       try {
           const { error } = await supabase.from(table).insert([dbItem]);
           if (error) { console.error(`[DB INSERT ERROR] ${table}:`, error.message); return false; }
+          // Actualizamos localmente de inmediato para mejorar UX
           setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
           return true;
       } catch (e: any) { console.error(`[RUNTIME INSERT ERROR] ${table}:`, e); return false; }
@@ -347,9 +351,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const syncTeam = async (clientId: string, teamUserIds: string[]) => {
       if (!clientId) return;
-      // 1. Limpiamos usuarios vinculados a este cliente para sobreescribir con los nuevos (excepto si son dueños de otro cliente por error)
       await supabase.from('users').update({ client_id: null }).eq('client_id', clientId);
-      // 2. Asignamos a los nuevos seleccionados
       if (teamUserIds.length > 0) {
           await supabase.from('users').update({ client_id: clientId }).in('id', teamUserIds);
       }
@@ -372,12 +374,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const addPlot = (p: Plot) => genericAdd('plots', p, setPlots, 'plots');
   const updatePlot = (p: Plot) => genericUpdate('plots', p, setPlots, 'plots');
   const deletePlot = (id: string) => genericDelete('plots', id, setPlots, 'plots').then(() => {});
-  const addVariety = (v: Variety) => { genericAdd('varieties', v, setVarieties, 'varieties'); };
-  const updateVariety = (v: Variety) => { genericUpdate('varieties', v, setVarieties, 'varieties'); };
+  
+  const addVariety = async (v: Variety) => { 
+      const success = await genericAdd('varieties', v, setVarieties, 'varieties'); 
+      if (success) await refreshData();
+      return success;
+  };
+  const updateVariety = async (v: Variety) => { 
+      const success = await genericUpdate('varieties', v, setVarieties, 'varieties'); 
+      if (success) await refreshData();
+      return success;
+  };
   const deleteVariety = (id: string) => { genericDelete('varieties', id, setVarieties, 'varieties'); };
   
   const addSupplier = async (s: Supplier) => { 
       const success = await genericAdd('suppliers', s, setSuppliers, 'suppliers'); 
+      if (success) await refreshData();
       return success ? s.id : null; 
   };
   const updateSupplier = (s: Supplier) => genericUpdate('suppliers', s, setSuppliers, 'suppliers');
@@ -404,9 +416,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const addResource = (r: Resource) => genericAdd('resources', r, setResources, 'resources');
   const updateResource = (r: Resource) => genericUpdate('resources', r, setResources, 'resources');
   const deleteResource = (id: string) => genericDelete('resources', id, setResources, 'resources');
-  const addStoragePoint = (sp: StoragePoint) => genericAdd('storage_points', sp, setStoragePoints, 'storage_points');
-  const updateStoragePoint = (sp: StoragePoint) => genericUpdate('storage_points', sp, setStoragePoints, 'storage_points');
+  
+  const addStoragePoint = async (sp: StoragePoint) => {
+      const success = await genericAdd('storage_points', sp, setStoragePoints, 'storage_points');
+      if (success) await refreshData();
+      return success;
+  };
+  const updateStoragePoint = async (sp: StoragePoint) => {
+      const success = await genericUpdate('storage_points', sp, setStoragePoints, 'storage_points');
+      if (success) await refreshData();
+      return success;
+  };
   const deleteStoragePoint = (id: string) => genericDelete('storage_points', id, setStoragePoints, 'storage_points');
+  
   const addSeedBatch = (s: SeedBatch) => genericAdd('seed_batches', s, setSeedBatches, 'seed_batches');
   const addLocalSeedBatch = (s: SeedBatch) => setSeedBatches(prev => [...prev, s]);
   const updateSeedBatch = (s: SeedBatch) => genericUpdate('seed_batches', s, setSeedBatches, 'seed_batches');
