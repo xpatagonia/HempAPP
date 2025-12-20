@@ -1,8 +1,8 @@
-
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { StoragePoint } from '../types';
-import { Plus, Warehouse, Edit2, Trash2, MapPin, User, Maximize } from 'lucide-react';
+// Added missing X import
+import { Plus, Warehouse, Edit2, Trash2, MapPin, User, Maximize, X } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
 
 export default function Storage() {
@@ -166,7 +166,10 @@ export default function Storage() {
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-2xl w-full p-6 shadow-xl max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold mb-4">{editingId ? 'Editar Depósito' : 'Nuevo Depósito'}</h2>
+            <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold mb-4">{editingId ? 'Editar Depósito' : 'Nuevo Depósito'}</h2>
+                <button onClick={() => setIsModalOpen(false)} className="p-1 hover:bg-gray-100 dark:hover:bg-dark-border rounded-full transition dark:text-gray-400"><X size={24}/></button>
+            </div>
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
                     <h3 className="text-xs font-bold text-gray-500 uppercase mb-3">Información General</h3>

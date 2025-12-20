@@ -25,6 +25,8 @@ export type RoleType =
   | 'Academia' 
   | 'ONG/Cooperativa';
 
+export type SupplierCategory = 'Semillas' | 'Insumos' | 'Servicios' | 'Recursos Humanos';
+
 export type SoilType = string;
 
 export interface Location {
@@ -82,6 +84,7 @@ export interface StoragePoint {
 export interface Supplier {
   id: string;
   name: string;
+  category: SupplierCategory;
   legalName?: string;
   cuit?: string;
   country?: string;
