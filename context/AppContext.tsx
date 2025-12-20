@@ -114,14 +114,14 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// Conversión ultra-estricta para Supabase
+// Conversión Ultra-Estricta: Mapea nombres de JS a Snake Case (SQL)
 const toSnakeCase = (obj: any) => {
     if (!obj || typeof obj !== 'object') return obj;
     const newObj: any = {};
     for (const key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
-            // Mapeo explícito de campos críticos para evitar errores de Schema Cache
             let snakeKey = key;
+            // Mapeos Manuales para asegurar compatibilidad con Schema de Supabase
             if (key === 'clientId') snakeKey = 'client_id';
             else if (key === 'relatedUserId') snakeKey = 'related_user_id';
             else if (key === 'projectId') snakeKey = 'project_id';
@@ -130,6 +130,7 @@ const toSnakeCase = (obj: any) => {
             else if (key === 'seedBatchId') snakeKey = 'seed_batch_id';
             else if (key === 'jobTitle') snakeKey = 'job_title';
             else {
+                // Caso general camelCase a snake_case
                 snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
             }
             newObj[snakeKey] = obj[key];
@@ -208,10 +209,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       try {
           const connected = await checkConnection();
           if (!connected) {
+              setIsEmergencyMode(true);
               setUsersList(getFromLocal('users'));
               setClients(getFromLocal('clients'));
               setLocations(getFromLocal('locations'));
-              setIsEmergencyMode(true);
           } else {
               setIsEmergencyMode(false);
               const fetchData = async (table: string, setter: any, localKey: string) => {
@@ -221,9 +222,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                       setter(camelData);
                       saveToLocal(localKey, camelData);
                   } else if (error) {
-                      console.error(`[CLOUD LOAD ERROR] ${table}:`, error.message);
+                      console.error(`[LOAD ERROR] ${table}:`, error.message);
                       setter(getFromLocal(localKey));
-                      // Si falla por columna, activamos modo emergencia local
                       if (error.message.includes('column') || error.message.includes('cache')) setIsEmergencyMode(true);
                   }
               };
@@ -264,19 +264,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const genericAdd = async (table: string, item: any, setter: any, localKey: string) => {
       const dbItem = toSnakeCase({ ...item });
-      console.log(`[PERSISTENCE] Guardando en ${table}:`, dbItem);
-      
       try {
           const { error } = await supabase.from(table).insert([dbItem]);
           if (error) {
-              console.error(`[DATABASE ERROR] ${table}:`, error.message);
-              // Fallback Local Inmediato
+              console.error(`[DB ERROR] ${table}:`, error.message);
               setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
-              
-              if (error.message.includes('column') || error.message.includes('cache')) {
-                  setIsEmergencyMode(true);
-                  alert(`⚠️ Error de Servidor detectado. \n\nPor favor, vaya a Configuración > SQL Cloud y ejecute el script de reconstrucción de esquema.`);
-              }
+              if (error.message.includes('column') || error.message.includes('cache')) setIsEmergencyMode(true);
               return true; 
           }
           setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
@@ -290,10 +283,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const genericUpdate = async (table: string, item: any, setter: any, localKey: string) => {
       const dbItem = toSnakeCase(item);
       const { error } = await supabase.from(table).update(dbItem).eq('id', item.id);
-      if (error) {
-          console.error(`Error actualizando ${table}:`, error.message);
-          return false;
-      }
+      if (error) { console.error(`Error actualizando ${table}:`, error.message); return false; }
       setter((prev: any[]) => { const n = prev.map((i: any) => i.id === item.id ? item : i); saveToLocal(localKey, n); return n; });
       return true;
   };
@@ -305,7 +295,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const addUser = async (u: User) => {
     const success = await genericAdd('users', u, setUsersList, 'users');
-    if (success) await refreshData(); // Forzamos carga tras creación
+    if (success) await refreshData(); 
     return success;
   };
   const updateUser = (u: User) => genericUpdate('users', u, setUsersList, 'users');

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Save, Database, Copy, RefreshCw, Lock, Settings as SettingsIcon, ShieldCheck, PlayCircle, CheckCircle2, Layout, Image as ImageIcon, Trash2, RotateCcw, Cpu, Globe, Shield, Server, AlertTriangle } from 'lucide-center';
+import { Save, Database, Copy, RefreshCw, Lock, Settings as SettingsIcon, ShieldCheck, PlayCircle, CheckCircle2, Layout, Image as ImageIcon, Trash2, RotateCcw, Cpu, Globe, Shield, Server, AlertTriangle } from 'lucide-react';
 
 export default function Settings() {
   const { currentUser, appName, appLogo, updateBranding, isEmergencyMode, refreshData } = useAppContext();
@@ -98,7 +98,7 @@ export default function Settings() {
             </div>
             <button onClick={handleSaveConnections} disabled={status === 'checking'} className={`w-full py-5 rounded-[24px] font-black text-xs uppercase tracking-widest text-white flex items-center justify-center transition-all shadow-xl ${status === 'checking' ? 'bg-gray-400' : status === 'success' ? 'bg-green-600' : 'bg-slate-900 dark:bg-hemp-600 hover:scale-[1.01]'}`}>
                 {status === 'checking' ? <RefreshCw className="animate-spin mr-2"/> : status === 'success' ? <CheckCircle2 className="mr-2"/> : <Save className="mr-2"/>}
-                {status === 'checking' ? 'Verificando...' : status === 'success' ? 'Conexión Exitosa' : 'Guardar Credenciales'}
+                {status === 'checking' ? 'Sincronizando...' : status === 'success' ? 'Conexión Exitosa' : 'Actualizar Credenciales'}
             </button>
           </div>
       )}
@@ -108,18 +108,50 @@ export default function Settings() {
               <div className="bg-slate-900 border border-slate-800 p-8 rounded-[32px] shadow-2xl relative overflow-hidden">
                   <div className="flex items-center space-x-3 mb-6">
                       <Shield className="text-hemp-500" size={24}/>
-                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Script Maestre de Reparación</h3>
+                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Protocolo de Reconstrucción Total</h3>
                   </div>
-                  <div className="bg-red-900/20 border border-red-500/30 p-4 rounded-2xl mb-6 flex items-start">
-                      <AlertTriangle className="text-red-500 mr-3 flex-shrink-0" size={20}/>
-                      <p className="text-xs text-red-200 leading-relaxed font-medium">Este script es la solución definitiva al error de columna faltante. Agrega el campo y <strong>fuerza la recarga de la caché del servidor (PostgREST)</strong>.</p>
+                  <div className="bg-amber-900/20 border border-amber-500/30 p-4 rounded-2xl mb-6 flex items-start text-amber-200">
+                      <AlertTriangle className="text-amber-500 mr-3 flex-shrink-0" size={20}/>
+                      <div className="text-xs space-y-2 leading-relaxed">
+                        <p className="font-bold">⚠️ ADVERTENCIA: Este script ELIMINARÁ todos los datos para limpiar el caché de Supabase.</p>
+                        <p>Úsalo para solucionar el error <code className="bg-black/40 px-1 rounded">client_id</code> de forma definitiva.</p>
+                      </div>
                   </div>
-                  <pre className="bg-black/50 p-6 rounded-2xl text-[10px] text-green-400 overflow-x-auto border border-white/5 font-mono h-96 custom-scrollbar">
-{`-- 1. ASEGURAR COLUMNA client_id EN users
-ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS client_id TEXT;
 
--- 2. ASEGURAR TABLA DE CLIENTES/ENTIDADES
-CREATE TABLE IF NOT EXISTS public.clients (
+                  <div className="space-y-4">
+                    <button onClick={() => {
+                      const sql = `
+-- 1. LIMPIEZA NUCLEAR
+DROP TABLE IF EXISTS public.tasks CASCADE;
+DROP TABLE IF EXISTS public.seed_movements CASCADE;
+DROP TABLE IF EXISTS public.seed_batches CASCADE;
+DROP TABLE IF EXISTS public.hydric_records CASCADE;
+DROP TABLE IF EXISTS public.trial_records CASCADE;
+DROP TABLE IF EXISTS public.field_logs CASCADE;
+DROP TABLE IF EXISTS public.plots CASCADE;
+DROP TABLE IF EXISTS public.locations CASCADE;
+DROP TABLE IF EXISTS public.clients CASCADE;
+DROP TABLE IF EXISTS public.users CASCADE;
+DROP TABLE IF EXISTS public.varieties CASCADE;
+DROP TABLE IF EXISTS public.suppliers CASCADE;
+DROP TABLE IF EXISTS public.resources CASCADE;
+DROP TABLE IF EXISTS public.storage_points CASCADE;
+DROP TABLE IF EXISTS public.projects CASCADE;
+
+-- 2. RECREACIÓN DE ESTRUCTURA (CON COLUMNAS CORRECTAS)
+CREATE TABLE public.users (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  email TEXT UNIQUE NOT NULL,
+  role TEXT NOT NULL,
+  password TEXT,
+  job_title TEXT,
+  phone TEXT,
+  avatar TEXT,
+  client_id TEXT
+);
+
+CREATE TABLE public.clients (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   type TEXT,
@@ -132,34 +164,82 @@ CREATE TABLE IF NOT EXISTS public.clients (
   related_user_id TEXT
 );
 
--- 3. PERMISOS TOTALES PARA EL PROTOTIPO (EVITA BLOQUEOS RLS)
+CREATE TABLE public.locations (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  province TEXT,
+  city TEXT,
+  address TEXT,
+  soil_type TEXT,
+  climate TEXT,
+  responsible_person TEXT,
+  coordinates JSONB,
+  polygon JSONB,
+  client_id TEXT,
+  owner_name TEXT,
+  owner_legal_name TEXT,
+  owner_cuit TEXT,
+  owner_contact TEXT,
+  owner_type TEXT,
+  capacity_ha NUMERIC,
+  irrigation_system TEXT,
+  responsible_ids TEXT[]
+);
+
+CREATE TABLE public.plots (
+  id TEXT PRIMARY KEY,
+  location_id TEXT REFERENCES public.locations(id),
+  project_id TEXT,
+  variety_id TEXT,
+  seed_batch_id TEXT,
+  name TEXT NOT NULL,
+  type TEXT,
+  block TEXT,
+  replicate INTEGER,
+  surface_area NUMERIC,
+  surface_unit TEXT,
+  density NUMERIC,
+  status TEXT,
+  sowing_date TEXT,
+  owner_name TEXT,
+  responsible_ids TEXT[],
+  row_distance NUMERIC,
+  perimeter NUMERIC,
+  observations TEXT,
+  coordinates JSONB,
+  polygon JSONB,
+  irrigation_type TEXT
+);
+
+-- 3. SEGURIDAD Y ACCESO
 ALTER TABLE public.users DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.clients DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.locations DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.plots DISABLE ROW LEVEL SECURITY;
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;
 
--- 4. !!! COMANDO CRÍTICO: RECARGAR CACHÉ DE ESQUEMA !!!
--- Esto obliga a Supabase a reconocer la columna client_id inmediatamente.
+-- 4. !!! COMANDO CLAVE: PURGAR CACHÉ DE ESQUEMA !!!
+-- Esto obliga a Supabase a reconocer la nueva estructura al instante.
 NOTIFY pgrst, 'reload schema';
-`}
-                  </pre>
-                  <div className="mt-6 flex flex-col sm:flex-row gap-4">
-                      <button onClick={() => {
-                          const sql = `ALTER TABLE public.users ADD COLUMN IF NOT EXISTS client_id TEXT; ALTER TABLE public.users DISABLE ROW LEVEL SECURITY; ALTER TABLE public.clients DISABLE ROW LEVEL SECURITY; GRANT ALL ON ALL TABLES IN SCHEMA public TO anon; NOTIFY pgrst, 'reload schema';`;
-                          navigator.clipboard.writeText(sql);
-                          alert("SQL copiado. Pégalo en el SQL Editor de Supabase y presiona RUN.");
-                      }} className="bg-hemp-600 text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center hover:bg-hemp-700 transition">
-                          <Copy size={14} className="mr-2"/> Copiar Script Fix
-                      </button>
-                      
-                      <button onClick={async () => {
-                          if(window.confirm("¿Intentar forzar sincronización ahora?")) {
-                              await refreshData();
-                              alert("Sincronización re-intentada.");
-                          }
-                      }} className="bg-slate-800 text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center hover:bg-slate-700 transition">
-                          <RefreshCw size={14} className="mr-2"/> Forzar Refresh App
-                      </button>
+                      `;
+                      navigator.clipboard.writeText(sql.trim());
+                      alert("Script de Reconstrucción Copiado. Pégalo en el SQL Editor de Supabase y presiona RUN.");
+                    }} className="w-full bg-red-600 hover:bg-red-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center transition-all shadow-xl">
+                        <RotateCcw size={18} className="mr-2"/> Copiar Script de Reconstrucción Total
+                    </button>
+
+                    <button onClick={() => {
+                      const sql = `ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS client_id TEXT; NOTIFY pgrst, 'reload schema';`;
+                      navigator.clipboard.writeText(sql);
+                      alert("Script de Reparación Rápida Copiado.");
+                    }} className="w-full bg-slate-800 hover:bg-slate-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center transition-all border border-slate-700">
+                        <RefreshCw size={18} className="mr-2"/> Reparación Rápida (Solo client_id + Cache)
+                    </button>
                   </div>
+
+                  <p className="mt-6 text-[10px] text-slate-500 text-center font-bold uppercase tracking-tighter">
+                    Tras ejecutar el script, la aplicación se sincronizará automáticamente con la nueva estructura.
+                  </p>
               </div>
           </div>
       )}
