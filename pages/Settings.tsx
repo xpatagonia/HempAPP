@@ -113,8 +113,9 @@ export default function Settings() {
                   <div className="bg-amber-900/20 border border-amber-500/30 p-4 rounded-2xl mb-6 flex items-start text-amber-200">
                       <AlertTriangle className="text-amber-500 mr-3 flex-shrink-0" size={20}/>
                       <div className="text-xs space-y-2 leading-relaxed">
-                        <p className="font-bold">⚠️ ADVERTENCIA NUCLEAR: Este script ELIMINARÁ todas las tablas para corregir errores de estructura.</p>
+                        <p className="font-bold">⚠️ ADVERTENCIA: Este script ELIMINARÁ todas las tablas para corregir errores de estructura.</p>
                         <p>Úsalo para asegurar que <code className="bg-black/40 px-1 rounded">client_id</code> e <code className="bg-black/40 px-1 rounded">is_network_member</code> existan correctamente.</p>
+                        <p className="font-black text-white underline">EL SCRIPT CREARÁ UN USUARIO: admin@hempc.com / admin123</p>
                       </div>
                   </div>
 
@@ -138,7 +139,7 @@ DROP TABLE IF EXISTS public.resources CASCADE;
 DROP TABLE IF EXISTS public.storage_points CASCADE;
 DROP TABLE IF EXISTS public.projects CASCADE;
 
--- 2. RECREACIÓN CON ESTRUCTURA V11 (IDENTIFICADOR DE RED)
+-- 2. RECREACIÓN CON ESTRUCTURA V12
 CREATE TABLE public.users (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -212,21 +213,40 @@ CREATE TABLE public.suppliers (
   notes TEXT
 );
 
--- 3. PERMISOS TOTALES (DESARROLLO)
+CREATE TABLE public.storage_points (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  type TEXT,
+  address TEXT,
+  city TEXT,
+  province TEXT,
+  coordinates JSONB,
+  responsible_user_id TEXT,
+  surface_m2 NUMERIC,
+  conditions TEXT,
+  notes TEXT
+);
+
+-- 3. PERMISOS TOTALES
 ALTER TABLE public.users DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.clients DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.locations DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.varieties DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.suppliers DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.storage_points DISABLE ROW LEVEL SECURITY;
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;
 
--- 4. FORZAR RECARGA DE CACHÉ
+-- 4. INSERTAR USUARIO ADMIN INICIAL
+INSERT INTO public.users (id, name, email, role, password, job_title, is_network_member)
+VALUES ('root-user', 'Super Administrador', 'admin@hempc.com', 'super_admin', 'admin123', 'Director de Sistema', true);
+
+-- 5. FORZAR RECARGA DE CACHÉ
 NOTIFY pgrst, 'reload schema';
                       `;
                       navigator.clipboard.writeText(sql.trim());
                       alert("Script Nuclear Copiado. Pégalo en el SQL Editor de Supabase y dale a RUN.");
                     }} className="w-full bg-red-600 hover:bg-red-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center transition-all shadow-xl">
-                        <RotateCcw size={18} className="mr-2"/> Copiar Script de Reconstrucción Total
+                        <RotateCcw size={18} className="mr-2"/> Copiar Script + Crear Admin Inicial
                     </button>
 
                     <button onClick={() => {

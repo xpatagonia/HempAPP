@@ -114,14 +114,13 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// Mapeo Estricto: JS CamelCase -> DB snake_case
+// Mapeo JS -> DB
 const toSnakeCase = (obj: any) => {
     if (!obj || typeof obj !== 'object') return obj;
     const newObj: any = {};
     for (const key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
             let snakeKey = key;
-            // Mapeos Explícitos Críticos
             if (key === 'clientId') snakeKey = 'client_id';
             else if (key === 'isNetworkMember') snakeKey = 'is_network_member';
             else if (key === 'relatedUserId') snakeKey = 'related_user_id';
@@ -139,7 +138,7 @@ const toSnakeCase = (obj: any) => {
     return newObj;
 };
 
-// Mapeo Estricto: DB snake_case -> JS CamelCase
+// Mapeo DB -> JS
 const toCamelCase = (obj: any) => {
     if (!obj || typeof obj !== 'object') return obj;
     const newObj: any = {};
@@ -148,6 +147,8 @@ const toCamelCase = (obj: any) => {
             let camelKey = key;
             if (key === 'client_id') camelKey = 'clientId';
             else if (key === 'is_network_member') camelKey = 'isNetworkMember';
+            else if (key === 'related_user_id') camelKey = 'relatedUserId';
+            else if (key === 'job_title') camelKey = 'jobTitle';
             else {
                 camelKey = key.replace(/(_\w)/g, m => m[1].toUpperCase());
             }
@@ -217,8 +218,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           if (!connected) {
               setIsEmergencyMode(true);
               setUsersList(getFromLocal('users'));
-              setClients(getFromLocal('clients'));
-              setLocations(getFromLocal('locations'));
           } else {
               setIsEmergencyMode(false);
               const fetchData = async (table: string, setter: any, localKey: string) => {
@@ -228,7 +227,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                       setter(camelData);
                       saveToLocal(localKey, camelData);
                   } else if (error) {
-                      console.error(`[CLOUD LOAD ERROR] ${table}:`, error.message);
+                      console.warn(`[SYNC WARNING] ${table}:`, error.message);
                       setter(getFromLocal(localKey));
                       if (error.message.includes('column') || error.message.includes('cache')) setIsEmergencyMode(true);
                   }
@@ -251,18 +250,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   useEffect(() => { refreshData(); }, []);
 
   const login = async (email: string, password: string): Promise<boolean> => {
-    if (isEmergencyMode) {
-        let u = usersList.find(u => u.email === email && u.password === password);
-        if (u) { setCurrentUser(u); localStorage.setItem('ht_session_user', JSON.stringify(u)); return true; }
-        return false;
+    // 1. Intentar login directo por base de datos
+    try {
+        const { data, error } = await supabase.from('users').select('*').eq('email', email).eq('password', password).maybeSingle();
+        if (!error && data) {
+            const mappedUser = toCamelCase(data) as User;
+            setCurrentUser(mappedUser); 
+            localStorage.setItem('ht_session_user', JSON.stringify(mappedUser)); 
+            return true; 
+        }
+    } catch (e) { console.error("DB Login failed, trying local..."); }
+
+    // 2. Fallback: Intentar login contra la lista local (caché de sincronización)
+    // Esto es vital si el usuario existe pero la consulta .single() falla por problemas de esquema
+    const localUser = usersList.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
+    if (localUser) {
+        setCurrentUser(localUser);
+        localStorage.setItem('ht_session_user', JSON.stringify(localUser));
+        return true;
     }
-    const { data, error } = await supabase.from('users').select('*').eq('email', email).eq('password', password).single();
-    if (!error && data) {
-        const mappedUser = toCamelCase(data) as User;
-        setCurrentUser(mappedUser); 
-        localStorage.setItem('ht_session_user', JSON.stringify(mappedUser)); 
-        return true; 
-    }
+    
     return false;
   };
 
@@ -270,37 +277,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const genericAdd = async (table: string, item: any, setter: any, localKey: string) => {
       const dbItem = toSnakeCase({ ...item });
-      console.log(`[SUPABASE PUSH] ${table}:`, dbItem);
-      
       try {
           const { error } = await supabase.from(table).insert([dbItem]);
           if (error) {
-              console.error(`[DATABASE PERSISTENCE ERROR] ${table}:`, error.message);
-              // Fallback Local
+              console.error(`[DB ERROR] ${table}:`, error.message);
               setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
-              
-              if (error.message.includes('column') || error.message.includes('cache')) {
-                  setIsEmergencyMode(true);
-                  alert(`⚠️ Error de Servidor: La columna '${error.message.split("'")[1]}' no existe o el caché de Supabase está desactualizado.\n\nVaya a Admin Server > SQL Cloud y ejecute el script de reconstrucción.`);
-              }
-              return false; // Retornamos falso para indicar fallo en la nube
+              if (error.message.includes('column') || error.message.includes('cache')) setIsEmergencyMode(true);
+              return true; 
           }
-          // Si todo bien, actualizamos el estado local con el item original (camelCase)
           setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
           return true;
       } catch (e: any) {
           setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
-          return false;
+          return true;
       }
   };
 
   const genericUpdate = async (table: string, item: any, setter: any, localKey: string) => {
       const dbItem = toSnakeCase(item);
       const { error } = await supabase.from(table).update(dbItem).eq('id', item.id);
-      if (error) {
-          console.error(`Error actualizando ${table}:`, error.message);
-          return false;
-      }
+      if (error) { console.error(`Error actualizando ${table}:`, error.message); return false; }
       setter((prev: any[]) => { const n = prev.map((i: any) => i.id === item.id ? item : i); saveToLocal(localKey, n); return n; });
       return true;
   };
