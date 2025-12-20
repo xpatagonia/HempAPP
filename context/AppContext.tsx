@@ -113,60 +113,65 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// Mapeo JS (CamelCase) -> DB (SnakeCase) - REFORZADO TOTAL PARA PROVEEDORES Y SOCIOS
+// Mapeo JS (CamelCase) -> DB (SnakeCase) - EXPLICITO PARA EVITAR ERRORES
 const toSnakeCase = (obj: any) => {
     if (!obj || typeof obj !== 'object') return obj;
     const newObj: any = {};
+    const manualMap: Record<string, string> = {
+        id: 'id',
+        name: 'name',
+        email: 'email',
+        role: 'role',
+        password: 'password',
+        jobTitle: 'job_title',
+        phone: 'phone',
+        avatar: 'avatar',
+        clientId: 'client_id',
+        isNetworkMember: 'is_network_member',
+        relatedUserId: 'related_user_id',
+        projectId: 'project_id',
+        varietyId: 'variety_id',
+        locationId: 'location_id',
+        seedBatchId: 'seed_batch_id',
+        isOfficialPartner: 'is_official_partner',
+        postalCode: 'postal_code',
+        commercialContact: 'commercial_contact',
+        logisticsContact: 'logistics_contact',
+        legalName: 'legal_name',
+        membershipLevel: 'membership_level',
+        contractDate: 'contract_date',
+        storagePointId: 'storage_point_id',
+        contactName: 'contact_name',
+        contactPhone: 'contact_phone',
+        expectedThc: 'expected_thc',
+        cycleDays: 'cycle_days',
+        knowledgeBase: 'knowledge_base',
+        pricePerKg: 'price_per_kg',
+        initialQuantity: 'initial_quantity',
+        remainingQuantity: 'remaining_quantity',
+        coordinates: 'coordinates',
+        polygon: 'polygon',
+        analysisDate: 'analysis_date',
+        germination: 'germination',
+        purity: 'purity',
+        labelSerialNumber: 'label_serial_number',
+        certificationNumber: 'certification_number',
+        gs1Code: 'gs1_code',
+        status: 'status',
+        type: 'type',
+        cuit: 'cuit',
+        notes: 'notes',
+        address: 'address',
+        city: 'city',
+        province: 'province',
+        country: 'country',
+        whatsapp: 'whatsapp',
+        website: 'website'
+    };
+
     for (const key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
-            // Campos que NO deben ser alterados (JSONB)
-            if (key === 'coordinates' || key === 'polygon') {
-                newObj[key] = obj[key];
-                continue;
-            }
-
-            let snakeKey = key;
-            const manualMap: Record<string, string> = {
-                clientId: 'client_id',
-                isNetworkMember: 'is_network_member',
-                relatedUserId: 'related_user_id',
-                projectId: 'project_id',
-                varietyId: 'variety_id',
-                locationId: 'location_id',
-                seedBatchId: 'seed_batch_id',
-                jobTitle: 'job_title',
-                isOfficialPartner: 'is_official_partner',
-                postalCode: 'postal_code',
-                commercialContact: 'commercial_contact',
-                logisticsContact: 'logistics_contact',
-                legalName: 'legal_name',
-                membershipLevel: 'membership_level',
-                contractDate: 'contract_date',
-                storagePointId: 'storage_point_id',
-                contactName: 'contact_name',
-                contactPhone: 'contact_phone',
-                expectedThc: 'expected_thc',
-                cycleDays: 'cycle_days',
-                knowledgeBase: 'knowledge_base',
-                pricePerKg: 'price_per_kg',
-                initialQuantity: 'initial_quantity',
-                remainingQuantity: 'remaining_quantity',
-                storageConditions: 'storage_conditions',
-                logisticsResponsible: 'logistics_responsible',
-                analysisDate: 'analysis_date',
-                gs1Code: 'gs1_code',
-                certificationNumber: 'certification_number',
-                purchaseDate: 'purchase_date',
-                purchaseOrder: 'purchase_order',
-                labelSerialNumber: 'label_serial_number'
-            };
-            
-            if (manualMap[key]) {
-                snakeKey = manualMap[key];
-            } else {
-                snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
-            }
-
+            const snakeKey = manualMap[key] || key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
             if (obj[key] !== undefined) {
                 newObj[snakeKey] = obj[key];
             }
@@ -175,53 +180,43 @@ const toSnakeCase = (obj: any) => {
     return newObj;
 };
 
-// Mapeo DB -> JS
 const toCamelCase = (obj: any) => {
     if (!obj || typeof obj !== 'object') return obj;
     const newObj: any = {};
+    const manualMap: Record<string, string> = {
+        job_title: 'jobTitle',
+        client_id: 'clientId',
+        is_network_member: 'isNetworkMember',
+        related_user_id: 'relatedUserId',
+        project_id: 'projectId',
+        variety_id: 'varietyId',
+        location_id: 'locationId',
+        seed_batch_id: 'seedBatchId',
+        is_official_partner: 'isOfficialPartner',
+        postal_code: 'postalCode',
+        commercial_contact: 'commercialContact',
+        logistics_contact: 'logisticsContact',
+        legal_name: 'legalName',
+        membership_level: 'membershipLevel',
+        contract_date: 'contractDate',
+        storage_point_id: 'storagePointId',
+        contact_name: 'contactName',
+        contact_phone: 'contactPhone',
+        expected_thc: 'expectedThc',
+        cycle_days: 'cycleDays',
+        knowledge_base: 'knowledgeBase',
+        price_per_kg: 'pricePerKg',
+        initial_quantity: 'initialQuantity',
+        remaining_quantity: 'remainingQuantity',
+        analysis_date: 'analysisDate',
+        label_serial_number: 'labelSerialNumber',
+        certification_number: 'certificationNumber',
+        gs1_code: 'gs1Code'
+    };
+
     for (const key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
-            let camelKey = key;
-            const manualMap: Record<string, string> = {
-                client_id: 'clientId',
-                is_network_member: 'isNetworkMember',
-                related_user_id: 'relatedUserId',
-                job_title: 'jobTitle',
-                project_id: 'projectId',
-                variety_id: 'varietyId',
-                location_id: 'locationId',
-                seed_batch_id: 'seedBatchId',
-                is_official_partner: 'isOfficialPartner',
-                postal_code: 'postalCode',
-                commercial_contact: 'commercialContact',
-                logistics_contact: 'logisticsContact',
-                legal_name: 'legalName',
-                membership_level: 'membershipLevel',
-                contract_date: 'contractDate',
-                storage_point_id: 'storagePointId',
-                contact_name: 'contactName',
-                contact_phone: 'contactPhone',
-                expected_thc: 'expectedThc',
-                cycle_days: 'cycleDays',
-                knowledge_base: 'knowledgeBase',
-                price_per_kg: 'pricePerKg',
-                initial_quantity: 'initialQuantity',
-                remaining_quantity: 'remainingQuantity',
-                storage_conditions: 'storageConditions',
-                logistics_responsible: 'logisticsResponsible',
-                analysis_date: 'analysisDate',
-                gs1_code: 'gs1Code',
-                certification_number: 'certificationNumber',
-                purchase_date: 'purchaseDate',
-                purchase_order: 'purchaseOrder',
-                label_serial_number: 'labelSerialNumber'
-            };
-            
-            if (manualMap[key]) {
-                camelKey = manualMap[key];
-            } else {
-                camelKey = key.replace(/(_\w)/g, m => m[1].toUpperCase());
-            }
+            const camelKey = manualMap[key] || key.replace(/(_\w)/g, m => m[1].toUpperCase());
             newObj[camelKey] = obj[key];
         }
     }
@@ -287,8 +282,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           const connected = await checkConnection();
           if (!connected) {
               setIsEmergencyMode(true);
-              setUsersList(getFromLocal('users'));
-              setClients(getFromLocal('clients'));
           } else {
               setIsEmergencyMode(false);
               const fetchData = async (table: string, setter: any, localKey: string) => {
@@ -301,7 +294,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     } else if (error) {
                         console.warn(`[SYNC WARNING] ${table}:`, error.message);
                         setter(getFromLocal(localKey));
-                        if (error.message.includes('column') || error.message.includes('cache')) setIsEmergencyMode(true);
                     }
                   } catch (e) {
                       setter(getFromLocal(localKey));
@@ -339,7 +331,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             localStorage.setItem('ht_session_user', JSON.stringify(mappedUser)); 
             return true; 
         }
-    } catch (e) { console.error("DB Login failed, trying local..."); }
+    } catch (e) { console.error("DB Login failed"); }
     const localUser = usersList.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
     if (localUser) {
         setCurrentUser(localUser);
@@ -421,9 +413,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   
   const addClient = async (c: Client) => {
       const success = await genericAdd('clients', c, setClients, 'clients');
+      if (success && c.relatedUserId) {
+          // Actualizamos al usuario vinculado para que tenga el client_id
+          const user = usersList.find(u => u.id === c.relatedUserId);
+          if (user) {
+              await genericUpdate('users', { ...user, clientId: c.id }, setUsersList, 'users');
+          }
+      }
       return success;
   };
-  const updateClient = (c: Client) => genericUpdate('clients', c, setClients, 'clients');
+  const updateClient = async (c: Client) => {
+      const success = await genericUpdate('clients', c, setClients, 'clients');
+      if (success && c.relatedUserId) {
+          const user = usersList.find(u => u.id === c.relatedUserId);
+          if (user) {
+              await genericUpdate('users', { ...user, clientId: c.id }, setUsersList, 'users');
+          }
+      }
+      return success;
+  };
   const deleteClient = (id: string) => genericDelete('clients', id, setClients, 'clients');
   
   const addResource = (r: Resource) => genericAdd('resources', r, setResources, 'resources');

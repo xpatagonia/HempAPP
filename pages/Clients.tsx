@@ -14,8 +14,7 @@ import MapEditor from '../components/MapEditor';
 export default function Clients() {
   const { 
     clients, addClient, updateClient, deleteClient, currentUser, 
-    locations, usersList, addUser, updateUser, deleteUser,
-    seedMovements, seedBatches, varieties, plots
+    locations, usersList, seedMovements, seedBatches, varieties, plots
   } = useAppContext();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -32,14 +31,14 @@ export default function Clients() {
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
 
-  // --- CALCULATIONS ---
-  const assignedMovements = useMemo(() => 
-    viewClient ? seedMovements.filter(m => m.clientId === viewClient.id) : []
-  , [viewClient, seedMovements]);
-
-  const teamMembers = useMemo(() => 
-    viewClient ? usersList.filter(u => u.clientId === viewClient.id) : []
-  , [viewClient, usersList]);
+  // --- FILTROS DE USUARIOS PARA VINCULACIÓN ---
+  const eligibleUsers = useMemo(() => {
+      // Usuarios con rol de cliente o técnico que NO estén vinculados ya (o que sean el actual editado)
+      return usersList.filter(u => 
+        (u.role === 'client' || u.role === 'technician') && 
+        (!clients.find(c => c.relatedUserId === u.id) || formData.relatedUserId === u.id)
+      );
+  }, [usersList, clients, formData.relatedUserId]);
 
   // --- HANDLERS ---
   const handleSubmit = async (e: React.FormEvent) => {
@@ -64,7 +63,7 @@ export default function Clients() {
             contractDate: formData.contractDate,
             cuit: formData.cuit?.trim(),
             notes: formData.notes,
-            relatedUserId: formData.relatedUserId,
+            relatedUserId: formData.relatedUserId || null,
             coordinates
         } as Client;
 
@@ -79,10 +78,10 @@ export default function Clients() {
             setIsModalOpen(false);
             resetForm();
         } else {
-            throw new Error("El servidor rechazó la operación. Verifique esquema SQL V19.");
+            throw new Error("El servidor rechazó la operación.");
         }
     } catch (err: any) {
-        alert("FALLO EN REGISTRO: " + err.message);
+        alert("ERROR EN REGISTRO: " + err.message);
     } finally {
         setIsSaving(false);
     }
@@ -115,7 +114,7 @@ export default function Clients() {
       <div className="flex justify-between items-center mb-6">
         <div>
             <h1 className="text-2xl font-black text-gray-800 dark:text-white uppercase tracking-tight italic">Panel de <span className="text-hemp-600">Socios Cooperativos</span></h1>
-            <p className="text-sm text-gray-500">Control de red industrial y distribución de recursos.</p>
+            <p className="text-sm text-gray-500">Control de red industrial y acceso de usuarios.</p>
         </div>
         {isAdmin && (
           <button onClick={() => { resetForm(); setIsModalOpen(true); }} className="bg-hemp-600 text-white px-6 py-3 rounded-2xl flex items-center hover:bg-hemp-700 transition shadow-xl font-black text-xs uppercase tracking-widest">
@@ -128,8 +127,8 @@ export default function Clients() {
         {clients.map(client => (
             <div key={client.id} className="bg-white dark:bg-slate-900 p-6 rounded-[32px] shadow-sm border border-gray-100 dark:border-slate-800 hover:shadow-xl transition-all relative group flex flex-col h-full overflow-hidden">
                 <div className={`absolute top-0 left-0 px-4 py-1 rounded-br-2xl text-[9px] font-black uppercase tracking-widest border-b border-r shadow-sm z-10 ${
-                    client.membershipLevel === 'Premium' ? 'bg-amber-500 text-white' : 
-                    client.membershipLevel === 'En Observación' ? 'bg-red-500 text-white' : 'bg-hemp-600 text-white'
+                    client.membershipLevel === 'Premium' ? 'bg-amber-50 text-white' : 
+                    client.membershipLevel === 'En Observación' ? 'bg-red-50 text-white' : 'bg-hemp-600 text-white'
                   }`}>
                     {client.membershipLevel || 'SOCIO'}
                 </div>
@@ -140,6 +139,7 @@ export default function Clients() {
                         <button onClick={() => { 
                             setFormData({
                                 ...client,
+                                relatedUserId: client.relatedUserId || '',
                                 lat: client.coordinates?.lat.toString() || '',
                                 lng: client.coordinates?.lng.toString() || ''
                             }); 
@@ -159,22 +159,22 @@ export default function Clients() {
                     </div>
                 </div>
 
-                <div className="h-24 bg-gray-50 dark:bg-slate-950 mb-6 rounded-2xl overflow-hidden relative border dark:border-slate-800">
-                    {client.coordinates && client.coordinates.lat ? (
-                        <iframe width="100%" height="100%" frameBorder="0" scrolling="no" src={`https://maps.google.com/maps?q=${client.coordinates.lat},${client.coordinates.lng}&z=10&output=embed`} className="opacity-50 group-hover:opacity-80 transition-opacity grayscale"></iframe>
-                    ) : (
-                        <div className="flex items-center justify-center h-full text-slate-300 text-[8px] font-black uppercase tracking-[0.2em] italic">Sin Georreferencia Central</div>
-                    )}
-                </div>
-
                 <div className="space-y-2 text-sm bg-blue-50/30 dark:bg-blue-900/10 p-4 rounded-2xl border border-blue-50 dark:border-blue-900/20 mt-auto">
                     <div className="flex items-center justify-between text-xs">
                         <span className="font-bold text-gray-400 uppercase text-[9px]">Titular</span>
                         <span className="font-black text-gray-800 dark:text-gray-200 uppercase truncate max-w-[120px]">{client.contactName}</span>
                     </div>
                     <div className="flex items-center justify-between text-xs pt-2">
-                        <span className="font-bold text-gray-400 uppercase text-[9px]">Ingreso</span>
-                        <span className="font-mono font-bold text-gray-600 dark:text-gray-400">{client.contractDate || 'S/D'}</span>
+                        <span className="font-bold text-gray-400 uppercase text-[9px]">Vínculo Digital</span>
+                        {client.relatedUserId ? (
+                            <span className="font-black text-blue-600 dark:text-blue-400 uppercase text-[9px] flex items-center">
+                                <UserCheck size={10} className="mr-1"/> Perfil Activo
+                            </span>
+                        ) : (
+                            <span className="font-black text-amber-500 uppercase text-[9px] flex items-center">
+                                <UserMinus size={10} className="mr-1"/> Sin Cuenta
+                            </span>
+                        )}
                     </div>
                 </div>
             </div>
@@ -196,6 +196,7 @@ export default function Clients() {
                         <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Perfil Cooperativo</h3>
                         <div className="grid grid-cols-1 gap-4">
                             <input required type="text" placeholder="Razón Social / Nombre Comercial" className={inputClass} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                            
                             <div className="grid grid-cols-2 gap-4">
                                 <select className={inputClass} value={formData.membershipLevel} onChange={e => setFormData({...formData, membershipLevel: e.target.value as MembershipLevel})}>
                                     <option value="Activo">Estado: Activo</option>
@@ -204,14 +205,29 @@ export default function Clients() {
                                 </select>
                                 <input type="date" className={inputClass} value={formData.contractDate} onChange={e => setFormData({...formData, contractDate: e.target.value})} />
                             </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <select className={inputClass} value={formData.type} onChange={e => setFormData({...formData, type: e.target.value as RoleType})}>
-                                    <option value="Productor Pequeño (<5 ha)">Escala: Pequeño</option>
-                                    <option value="Productor Mediano (5-15 ha)">Escala: Mediano</option>
-                                    <option value="Productor Grande (>15 ha)">Escala: Grande</option>
-                                    <option value="Empresa Privada">Empresa Privada</option>
+
+                            <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-2xl border border-amber-100 dark:border-amber-800">
+                                <label className="block text-[10px] font-black text-amber-700 dark:text-amber-400 uppercase mb-2">Vincular a Perfil de Usuario *</label>
+                                <select 
+                                    className={inputClass} 
+                                    value={formData.relatedUserId || ''} 
+                                    onChange={e => {
+                                        const userId = e.target.value;
+                                        const user = usersList.find(u => u.id === userId);
+                                        setFormData({
+                                            ...formData, 
+                                            relatedUserId: userId,
+                                            contactName: user ? user.name : formData.contactName,
+                                            email: user ? user.email : formData.email
+                                        });
+                                    }}
+                                >
+                                    <option value="">-- Sin cuenta asignada --</option>
+                                    {eligibleUsers.map(u => (
+                                        <option key={u.id} value={u.id}>{u.name} ({u.role === 'client' ? 'Productor' : 'Técnico'})</option>
+                                    ))}
                                 </select>
-                                <input type="text" placeholder="CUIT / ID Fiscal" className={inputClass} value={formData.cuit} onChange={e => setFormData({...formData, cuit: e.target.value})} />
+                                <p className="text-[9px] text-amber-600 mt-2 font-bold italic">Importante: El socio debe tener un usuario creado previamente para poder vincularlo.</p>
                             </div>
                         </div>
                     </div>
