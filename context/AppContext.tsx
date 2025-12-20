@@ -116,6 +116,7 @@ const toSnakeCase = (obj: any) => {
     if (!obj || typeof obj !== 'object') return obj;
     const newObj: any = {};
     const manualMap: Record<string, string> = {
+        nodeCode: 'node_code',
         clientId: 'client_id',
         supplierId: 'supplier_id',
         storagePointId: 'storage_point_id',
@@ -155,7 +156,6 @@ const toSnakeCase = (obj: any) => {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
             const snakeKey = manualMap[key] || key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
             let val = obj[key];
-            // Convertir vacíos a null para que Supabase no falle por restricciones de FK
             if ((key === 'relatedUserId' || key === 'clientId' || key === 'supplierId' || key === 'storagePointId' || key === 'varietyId' || key === 'projectId' || key === 'seedBatchId' || key === 'locationId') && val === '') {
                 val = null;
             }
@@ -171,12 +171,13 @@ const toCamelCase = (obj: any) => {
     if (!obj || typeof obj !== 'object') return obj;
     const newObj: any = {};
     const manualMap: Record<string, string> = {
+        node_code: 'nodeCode',
         job_title: 'jobTitle',
         client_id: 'clientId',
         supplier_id: 'supplierId',
         storage_point_id: 'storagePointId',
         variety_id: 'varietyId',
-        location_id: 'locationId',
+        location_id: 'location_id',
         project_id: 'projectId',
         seed_batch_id: 'seedBatchId',
         is_network_member: 'isNetworkMember',

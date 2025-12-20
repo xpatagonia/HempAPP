@@ -1,11 +1,11 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { StoragePoint } from '../types';
 import { 
   Plus, Warehouse, Edit2, Trash2, MapPin, User, 
   Maximize, X, Building, ShieldCheck, Truck, 
-  Package, Search, Filter, FilterX, Save, Loader2, Info, ChevronRight
+  Package, Search, Filter, FilterX, Save, Loader2, Info, ChevronRight, ScanBarcode, RefreshCw
 } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
 
@@ -16,6 +16,7 @@ export default function Storage() {
   } = useAppContext();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [renderMap, setRenderMap] = useState(false); // Para asegurar que el mapa se monte tras el modal
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   
@@ -24,17 +25,33 @@ export default function Storage() {
   const [filterOwner, setFilterOwner] = useState<'all' | 'central' | 'client'>('all');
 
   const [formData, setFormData] = useState<Partial<StoragePoint> & { lat: string, lng: string }>({
-    name: '', type: 'Propio', address: '', city: '', province: '',
+    name: '', nodeCode: '', type: 'Propio', address: '', city: '', province: '',
     clientId: '', responsibleUserId: '', surfaceM2: 0, conditions: '', notes: '',
     lat: '', lng: ''
   });
 
+  // Delay map rendering until modal is shown
+  useEffect(() => {
+    if (isModalOpen) {
+      const timer = setTimeout(() => setRenderMap(true), 300);
+      return () => clearTimeout(timer);
+    } else {
+      setRenderMap(false);
+    }
+  }, [isModalOpen]);
+
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
+
+  const generateAutoCode = () => {
+      const prefix = "HNC";
+      const random = Math.floor(1000 + Math.random() * 9000);
+      setFormData(prev => ({ ...prev, nodeCode: `${prefix}-${random}` }));
+  };
 
   // --- LOGIC ---
   const filteredPoints = useMemo(() => {
     return storagePoints.filter(sp => {
-        const matchesSearch = sp.name.toLowerCase().includes(searchTerm.toLowerCase()) || sp.city?.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesSearch = sp.name.toLowerCase().includes(searchTerm.toLowerCase()) || sp.city?.toLowerCase().includes(searchTerm.toLowerCase()) || (sp.nodeCode || '').toLowerCase().includes(searchTerm.toLowerCase());
         let matchesOwner = true;
         if (filterOwner === 'central') matchesOwner = !sp.clientId;
         if (filterOwner === 'client') matchesOwner = !!sp.clientId;
@@ -44,7 +61,7 @@ export default function Storage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name || isSaving) return;
+    if (!formData.name || !formData.nodeCode || isSaving) return;
     
     setIsSaving(true);
     try {
@@ -55,6 +72,7 @@ export default function Storage() {
         const payload = { 
             id: editingId || crypto.randomUUID(),
             name: formData.name.trim(),
+            nodeCode: formData.nodeCode.trim().toUpperCase(),
             type: formData.type,
             address: formData.address || '',
             city: formData.city || '',
@@ -83,7 +101,7 @@ export default function Storage() {
 
   const resetForm = () => {
     setFormData({ 
-        name: '', type: 'Propio', address: '', city: '', province: '',
+        name: '', nodeCode: '', type: 'Propio', address: '', city: '', province: '',
         clientId: '', responsibleUserId: '', surfaceM2: 0, conditions: '', notes: '',
         lat: '', lng: ''
     });
@@ -118,45 +136,13 @@ export default function Storage() {
         )}
       </div>
 
-      {/* DASHBOARD BAR */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border dark:border-slate-800 flex items-center gap-4">
-              <div className="bg-hemp-50 dark:bg-hemp-900/20 p-3 rounded-xl text-hemp-600"><Warehouse size={24}/></div>
-              <div>
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Nodos</p>
-                  <p className="text-xl font-black text-gray-800 dark:text-white">{storagePoints.length}</p>
-              </div>
-          </div>
-          <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border dark:border-slate-800 flex items-center gap-4">
-              <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-xl text-blue-600"><Building size={24}/></div>
-              <div>
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">En Socios</p>
-                  <p className="text-xl font-black text-gray-800 dark:text-white">{storagePoints.filter(s => s.clientId).length}</p>
-              </div>
-          </div>
-          <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border dark:border-slate-800 flex items-center gap-4 text-emerald-600">
-              <div className="bg-emerald-50 dark:bg-emerald-900/20 p-3 rounded-xl text-emerald-600"><Package size={24}/></div>
-              <div>
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Capacidad Total</p>
-                  <p className="text-xl font-black text-gray-800 dark:text-white">{storagePoints.reduce((s,p) => s + (p.surfaceM2 || 0), 0)} m²</p>
-              </div>
-          </div>
-          <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border dark:border-slate-800 flex items-center gap-4">
-              <div className="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-xl text-purple-600"><Truck size={24}/></div>
-              <div>
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Nodos Logísticos</p>
-                  <p className="text-xl font-black text-gray-800 dark:text-white">{storagePoints.filter(s => s.type === 'Transitorio').length}</p>
-              </div>
-          </div>
-      </div>
-
       {/* FILTERS */}
       <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl shadow-sm border dark:border-slate-800 flex flex-col md:flex-row gap-4 mb-8">
           <div className="relative flex-1">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18}/>
               <input 
                 type="text" 
-                placeholder="Buscar por nombre de depósito o ciudad..." 
+                placeholder="Buscar por código, nombre o ciudad..." 
                 className="w-full pl-12 pr-4 py-3 bg-gray-50 dark:bg-slate-950 border-none rounded-xl text-sm outline-none focus:ring-2 focus:ring-hemp-500 transition-all font-medium"
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
@@ -183,8 +169,13 @@ export default function Storage() {
                           ) : (
                               <div className="flex items-center justify-center h-full text-gray-400 flex-col"><MapPin size={32} className="mb-2 opacity-30"/><span className="text-[10px] font-black uppercase tracking-widest">Sin GPS</span></div>
                           )}
-                          <div className={`absolute top-4 left-4 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest shadow-lg border border-white/20 text-white ${sp.clientId ? 'bg-blue-600' : 'bg-hemp-600'}`}>
-                              {sp.clientId ? 'Nodo de Socio' : 'Nodo Central'}
+                          <div className="absolute top-4 left-4 flex gap-2">
+                             <div className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest shadow-lg border border-white/20 text-white ${sp.clientId ? 'bg-blue-600' : 'bg-hemp-600'}`}>
+                                 {sp.clientId ? 'Socio' : 'Central'}
+                             </div>
+                             <div className="px-3 py-1 rounded-full text-[9px] font-black bg-slate-900/80 text-white border border-white/20 flex items-center gap-1.5">
+                                 <ScanBarcode size={10}/> {sp.nodeCode}
+                             </div>
                           </div>
                       </div>
 
@@ -214,46 +205,27 @@ export default function Storage() {
                                       <div className="bg-hemp-600 h-full" style={{ width: `${Math.min((stockKg / 5000) * 100, 100)}%` }}></div>
                                   </div>
                               </div>
-
-                              <div className="grid grid-cols-2 gap-2">
-                                  <div className="bg-blue-50/50 dark:bg-blue-900/10 p-3 rounded-2xl border border-blue-50 dark:border-blue-900/20 text-center">
-                                      <span className="text-[8px] font-black text-blue-400 uppercase block mb-1">Superficie</span>
-                                      <span className="text-xs font-black text-blue-900 dark:text-blue-100">{sp.surfaceM2 || 0} m²</span>
-                                  </div>
-                                  <div className="bg-emerald-50/50 dark:bg-emerald-900/10 p-3 rounded-2xl border border-emerald-50 dark:border-emerald-900/20 text-center">
-                                      <span className="text-[8px] font-black text-emerald-400 uppercase block mb-1">Estado</span>
-                                      <span className="text-xs font-black text-emerald-900 dark:text-emerald-100">Operativo</span>
-                                  </div>
-                              </div>
                           </div>
 
                           <div className="pt-4 border-t dark:border-slate-800 space-y-2">
                              {client && (
                                 <div className="flex items-center text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-tighter">
-                                    <Building size={12} className="mr-2 opacity-50"/> Pertenece a: {client.name}
+                                    <Building size={12} className="mr-2 opacity-50"/> {client.name}
                                 </div>
                              )}
                              <div className="flex items-center text-[10px] font-black text-gray-400 uppercase tracking-tighter">
-                                <User size={12} className="mr-2 opacity-50"/> Responsable: {responsible?.name || 'Sin asignar'}
+                                <User size={12} className="mr-2 opacity-50"/> {responsible?.name || 'Sin responsable'}
                              </div>
                           </div>
                       </div>
                   </div>
               );
           })}
-          
-          {filteredPoints.length === 0 && (
-              <div className="col-span-full py-20 text-center bg-white dark:bg-slate-900 rounded-[40px] border border-dashed dark:border-slate-800">
-                  <Warehouse size={64} className="mx-auto text-slate-200 dark:text-slate-800 mb-6"/>
-                  <h3 className="text-xl font-black text-slate-400 uppercase tracking-widest">Sin Depósitos Registrados</h3>
-                  <p className="text-sm text-slate-500 mt-2">Cree puntos de almacenamiento para iniciar el flujo de trazabilidad.</p>
-              </div>
-          )}
       </div>
 
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-5xl w-full p-10 shadow-2xl max-h-[95vh] overflow-y-auto animate-in zoom-in-95">
+          <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-6xl w-full p-10 shadow-2xl max-h-[95vh] overflow-y-auto animate-in zoom-in-95">
             <div className="flex justify-between items-center mb-8">
                 <h2 className="text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tighter italic">Configurar <span className="text-hemp-600">Nodo Logístico</span></h2>
                 <button onClick={() => { if(!isSaving) setIsModalOpen(false); }} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition text-slate-400"><X size={28}/></button>
@@ -263,9 +235,21 @@ export default function Storage() {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
                     <div className="space-y-6">
                         <div className="bg-gray-50 dark:bg-slate-950 p-6 rounded-[32px] border dark:border-slate-800">
-                            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 flex items-center"><Info size={14} className="mr-2"/> Identificación del Punto</h3>
+                            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 flex items-center"><ScanBarcode size={14} className="mr-2"/> Identificación y Trace</h3>
                             <div className="space-y-4">
-                                <input required type="text" className={inputClass} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Nombre del Depósito / Silo / Galpón" />
+                                <div className="flex gap-3">
+                                    <div className="flex-1">
+                                        <label className="text-[9px] font-black text-gray-400 uppercase ml-1 mb-1 block">Código Identificador *</label>
+                                        <div className="flex gap-2">
+                                            <input required type="text" className={`${inputClass} font-mono uppercase`} value={formData.nodeCode} onChange={e => setFormData({...formData, nodeCode: e.target.value})} placeholder="HNC-XXXX" />
+                                            <button type="button" onClick={generateAutoCode} className="p-2.5 bg-slate-200 dark:bg-slate-800 rounded-xl hover:bg-slate-300 transition" title="Generar Código Automático"><RefreshCw size={18}/></button>
+                                        </div>
+                                    </div>
+                                    <div className="flex-[2]">
+                                        <label className="text-[9px] font-black text-gray-400 uppercase ml-1 mb-1 block">Nombre del Depósito *</label>
+                                        <input required type="text" className={inputClass} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Ej: Silo Central A1" />
+                                    </div>
+                                </div>
                                 
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
@@ -287,21 +271,14 @@ export default function Storage() {
                         <div className="bg-blue-50/50 dark:bg-blue-900/10 p-6 rounded-[32px] border border-blue-100 dark:border-blue-900/30">
                             <h3 className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-[0.2em] mb-4 flex items-center"><Building size={14} className="mr-2"/> Vínculo Organizacional</h3>
                             <div className="space-y-4">
-                                <div>
-                                    <label className="text-[9px] font-black text-blue-800 dark:text-blue-300 uppercase ml-1 mb-1 block">Socio Propietario (Opcional)</label>
-                                    <select className={inputClass} value={formData.clientId || ''} onChange={e => setFormData({...formData, clientId: e.target.value})}>
-                                        <option value="">-- Nodo de Gestión Central --</option>
-                                        {clients.map(c => <option key={c.id} value={c.id}>{c.name} {c.isNetworkMember ? '(SOCIO RED)' : ''}</option>)}
-                                    </select>
-                                    <p className="text-[9px] text-blue-500 mt-2 italic font-medium">* Vincular a un socio permite que el productor vea su stock local de semillas.</p>
-                                </div>
-                                <div>
-                                    <label className="text-[9px] font-black text-blue-800 dark:text-blue-300 uppercase ml-1 mb-1 block">Responsable de Llaves/Acceso</label>
-                                    <select className={inputClass} value={formData.responsibleUserId || ''} onChange={e => setFormData({...formData, responsibleUserId: e.target.value})}>
-                                        <option value="">Sin responsable asignado</option>
-                                        {usersList.map(u => <option key={u.id} value={u.id}>{u.name} ({u.jobTitle || u.role})</option>)}
-                                    </select>
-                                </div>
+                                <select className={inputClass} value={formData.clientId || ''} onChange={e => setFormData({...formData, clientId: e.target.value})}>
+                                    <option value="">-- Nodo de Gestión Central --</option>
+                                    {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                </select>
+                                <select className={inputClass} value={formData.responsibleUserId || ''} onChange={e => setFormData({...formData, responsibleUserId: e.target.value})}>
+                                    <option value="">Sin responsable asignado</option>
+                                    {usersList.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                                </select>
                             </div>
                         </div>
                     </div>
@@ -309,34 +286,30 @@ export default function Storage() {
                     <div className="bg-emerald-50/50 dark:bg-emerald-900/10 p-6 rounded-[32px] border border-emerald-100 dark:border-emerald-900/30 flex flex-col">
                         <h3 className="text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-[0.2em] mb-4 flex items-center"><MapPin size={14} className="mr-2"/> Localización Geográfica</h3>
                         <div className="space-y-4 flex-1">
-                            <div className="grid grid-cols-2 gap-4">
-                                <input type="text" className={inputClass} value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})} placeholder="Ciudad" />
-                                <input type="text" className={inputClass} value={formData.province} onChange={e => setFormData({...formData, province: e.target.value})} placeholder="Provincia" />
-                            </div>
                             <input type="text" className={inputClass} value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} placeholder="Dirección Postal Exacta" />
                             
-                            <div className="flex-1 min-h-[250px] rounded-2xl overflow-hidden border dark:border-slate-800 shadow-inner group/map relative">
-                                <MapEditor 
-                                    initialCenter={formData.lat && formData.lng ? { lat: parseFloat(formData.lat.replace(',','.')), lng: parseFloat(formData.lng.replace(',','.')) } : undefined} 
-                                    initialPolygon={formData.lat && formData.lng ? [{ lat: parseFloat(formData.lat.replace(',','.')), lng: parseFloat(formData.lng.replace(',','.')) }] : []} 
-                                    onPolygonChange={(poly) => {
-                                        if (poly.length > 0) {
-                                            setFormData(prev => ({ ...prev, lat: poly[0].lat.toFixed(7), lng: poly[0].lng.toFixed(7) }));
-                                        }
-                                    }} 
-                                    height="100%" 
-                                />
+                            <div className="flex-1 min-h-[300px] rounded-2xl overflow-hidden border dark:border-slate-800 shadow-inner group/map relative bg-slate-100 dark:bg-slate-950">
+                                {renderMap ? (
+                                    <MapEditor 
+                                        initialCenter={formData.lat && formData.lng ? { lat: parseFloat(formData.lat.replace(',','.')), lng: parseFloat(formData.lng.replace(',','.')) } : undefined} 
+                                        initialPolygon={formData.lat && formData.lng ? [{ lat: parseFloat(formData.lat.replace(',','.')), lng: parseFloat(formData.lng.replace(',','.')) }] : []} 
+                                        onPolygonChange={(poly) => {
+                                            if (poly.length > 0) {
+                                                setFormData(prev => ({ ...prev, lat: poly[0].lat.toFixed(7), lng: poly[0].lng.toFixed(7) }));
+                                            }
+                                        }} 
+                                        height="100%" 
+                                    />
+                                ) : (
+                                    <div className="h-full flex items-center justify-center text-slate-400 animate-pulse uppercase text-[10px] font-black tracking-widest">
+                                        Inicializando Cartografía...
+                                    </div>
+                                )}
                             </div>
                             
                             <div className="grid grid-cols-2 gap-3 mt-4">
-                                <div>
-                                    <label className="block text-[9px] font-black text-emerald-900 dark:text-emerald-400 mb-1 flex items-center uppercase tracking-widest">Latitud</label>
-                                    <input type="text" className={`${inputClass} text-xs h-9 bg-white/50`} value={formData.lat} onChange={e => setFormData({...formData, lat: e.target.value})} placeholder="-34.0000" />
-                                </div>
-                                <div>
-                                    <label className="block text-[9px] font-black text-emerald-900 dark:text-emerald-400 mb-1 flex items-center uppercase tracking-widest">Longitud</label>
-                                    <input type="text" className={`${inputClass} text-xs h-9 bg-white/50`} value={formData.lng} onChange={e => setFormData({...formData, lng: e.target.value})} placeholder="-58.0000" />
-                                </div>
+                                <input type="text" className={`${inputClass} text-xs h-9 bg-white/50`} value={formData.lat} onChange={e => setFormData({...formData, lat: e.target.value})} placeholder="Latitud (-34.0000)" />
+                                <input type="text" className={`${inputClass} text-xs h-9 bg-white/50`} value={formData.lng} onChange={e => setFormData({...formData, lng: e.target.value})} placeholder="Longitud (-58.0000)" />
                             </div>
                         </div>
                     </div>

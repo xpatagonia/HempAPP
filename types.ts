@@ -68,6 +68,7 @@ export interface HydricRecord {
 export interface StoragePoint {
   id: string;
   name: string; 
+  nodeCode: string; // Nuevo: Código de trazabilidad único
   type: 'Propio' | 'Tercerizado' | 'Transitorio';
   address: string;
   city?: string;
@@ -77,7 +78,7 @@ export interface StoragePoint {
     lng: number;
   };
   responsibleUserId?: string; 
-  clientId?: string; // Socio propietario del punto de almacenamiento
+  clientId?: string; 
   surfaceM2?: number; 
   conditions?: string; 
   notes?: string;
@@ -128,7 +129,7 @@ export interface Client {
   cuit?: string;
   notes?: string;
   relatedUserId?: string; 
-  coordinates?: { lat: number; lng: number }; // Geolocalización del socio
+  coordinates?: { lat: number; lng: number }; 
 }
 
 export interface Project {

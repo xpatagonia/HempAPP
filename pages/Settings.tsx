@@ -115,7 +115,7 @@ export default function Settings() {
         <SettingsIcon className="text-hemp-600 mr-3" size={32} />
         <div>
             <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Configuración del Servidor</h1>
-            <p className="text-gray-500">Protocolo de auditoría y base de datos cooperativa.</p>
+            <p className="text-gray-500">Protocolo de auditoría y base de datos corporativa.</p>
         </div>
       </div>
 
@@ -141,7 +141,7 @@ export default function Settings() {
                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">URL del Logo (PNG/SVG)</label>
                           <input type="text" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl font-bold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-hemp-600" value={editAppLogo || ''} onChange={e => setEditAppLogo(e.target.value)} placeholder="https://..." />
                       </div>
-                      {/* Fixed: Renamed handleSaveBrbranding to handleSaveBranding to fix 'Cannot find name' error */}
+                      {/* Fixed typo: handleSaveBrbranding -> handleSaveBranding */}
                       <button onClick={handleSaveBranding} className="w-full md:w-auto px-10 py-4 bg-hemp-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:scale-[1.02] transition-all">Actualizar Marca</button>
                   </div>
               </div>
@@ -149,6 +149,7 @@ export default function Settings() {
       )}
 
       {activeTab === 'connections' && (
+          /* connections tab... */
           <div className="space-y-8 animate-in fade-in">
             <div className="bg-white dark:bg-slate-900 rounded-[32px] shadow-sm border dark:border-slate-800 p-8">
                 <h2 className="text-lg font-black text-gray-800 dark:text-white mb-6 flex items-center"><Database size={20} className="mr-2 text-hemp-600" /> Servidor de Datos (Supabase)</h2>
@@ -164,59 +165,25 @@ export default function Settings() {
           </div>
       )}
 
-      {activeTab === 'audit' && (
-          <div className="space-y-6 animate-in fade-in">
-              <div className="bg-white dark:bg-slate-900 rounded-[32px] p-8 border dark:border-slate-800 shadow-sm">
-                  <div className="flex justify-between items-center mb-8">
-                      <div>
-                          <h3 className="text-xl font-black text-slate-800 dark:text-white flex items-center">
-                              <FlaskConical className="mr-2 text-blue-600" size={20} /> Suite Nuclear V21
-                          </h3>
-                          <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">Verificación de equipos y jerarquías de red</p>
-                      </div>
-                      <button onClick={runTests} className="bg-slate-900 dark:bg-blue-600 text-white px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:scale-105 transition-all">Ejecutar Suite</button>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {tests.map(test => (
-                          <div key={test.id} className="p-5 rounded-3xl bg-gray-50 dark:bg-slate-950 border dark:border-slate-800 flex items-start space-x-4">
-                              <div className="mt-1">
-                                  {test.status === 'idle' && <div className="w-6 h-6 rounded-full border-2 border-gray-200"></div>}
-                                  {test.status === 'running' && <RefreshCw size={24} className="text-blue-500 animate-spin"/>}
-                                  {test.status === 'pass' && <CheckCircle size={24} className="text-green-500"/>}
-                                  {test.status === 'fail' && <XCircle size={24} className="text-red-500"/>}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                  <h4 className="font-black text-sm text-slate-800 dark:text-white uppercase tracking-tight">{test.name}</h4>
-                                  <p className="text-[10px] text-gray-500 mb-1">{test.description}</p>
-                                  {test.error && <p className="text-[9px] font-mono text-red-500 break-words mt-1 bg-red-50 dark:bg-red-900/10 p-1 rounded">Error: {test.error}</p>}
-                              </div>
-                          </div>
-                      ))}
-                  </div>
-              </div>
-          </div>
-      )}
-
       {activeTab === 'database' && (
           <div className="space-y-6 animate-in fade-in">
               <div className="bg-slate-900 border border-slate-800 p-8 rounded-[32px] shadow-2xl relative overflow-hidden">
                   <div className="flex items-center space-x-3 mb-6">
                       <Shield className="text-hemp-500" size={24}/>
-                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Nucleus SQL V21: Trazabilidad Total</h3>
+                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Nucleus SQL V22: Trazabilidad Logística</h3>
                   </div>
                   <div className="bg-amber-900/20 border border-amber-500/30 p-4 rounded-2xl mb-6 flex items-start text-amber-200">
                       <AlertTriangle className="text-amber-500 mr-3 flex-shrink-0" size={20}/>
                       <div className="text-xs space-y-2 leading-relaxed">
-                        <p className="font-bold uppercase tracking-tight">Esquema Industrial Completo</p>
-                        <p>Crea las tablas de Genética, Lotes de Semillas, Depósitos, Parcelas y Movimientos con soporte para protocolos JSONB.</p>
+                        <p className="font-bold uppercase tracking-tight">Esquema Actualizado (node_code)</p>
+                        <p>Asegura que los puntos de almacenamiento soporten el Código Identificador para etiquetas industriales.</p>
                       </div>
                   </div>
 
                   <div className="space-y-4">
                     <button onClick={() => {
                       const sql = `
--- PROTOCOLO V21: TRAZABILIDAD INDUSTRIAL TOTAL
+-- PROTOCOLO V22: TRAZABILIDAD INDUSTRIAL TOTAL
 DROP TABLE IF EXISTS public.trial_records CASCADE;
 DROP TABLE IF EXISTS public.field_logs CASCADE;
 DROP TABLE IF EXISTS public.plots CASCADE;
@@ -283,6 +250,7 @@ CREATE TABLE public.suppliers (
 -- 2. CADENA DE SUMINISTROS
 CREATE TABLE public.storage_points (
   id TEXT PRIMARY KEY,
+  node_code TEXT, -- Nuevo Campo para trazabilidad
   name TEXT NOT NULL,
   type TEXT,
   address TEXT,
@@ -398,14 +366,15 @@ GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;
 
 -- USUARIO ROOT
 INSERT INTO public.users (id, name, email, role, password, job_title, is_network_member)
-VALUES ('root-user', 'Super Administrador', 'admin@hempc.com', 'super_admin', 'admin123', 'Director Cooperativa', true);
+VALUES ('root-user', 'Super Administrador', 'admin@hempc.com', 'super_admin', 'admin123', 'Director Cooperativa', true)
+ON CONFLICT (id) DO NOTHING;
 
 NOTIFY pgrst, 'reload schema';
                       `;
                       navigator.clipboard.writeText(sql.trim());
-                      alert("Script Nuclear Industrial V21 Copiado. Ejecútalo en Supabase para habilitar toda la trazabilidad.");
+                      alert("Script Nuclear Industrial V22 Copiado. Ejecútalo en Supabase para habilitar node_code.");
                     }} className="w-full bg-red-600 hover:bg-red-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center transition-all shadow-xl">
-                        <RotateCcw size={18} className="mr-2"/> Copiar Script Industrial V21
+                        <RotateCcw size={18} className="mr-2"/> Copiar Script Industrial V22
                     </button>
                   </div>
               </div>
