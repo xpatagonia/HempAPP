@@ -67,7 +67,7 @@ export default function Settings() {
       // 2. Tables Test
       updateTest('tables', { status: 'running' });
       try {
-          const { error } = await supabase.from('suppliers').select('id').limit(1);
+          const { error } = await supabase.from('seed_batches').select('id').limit(1);
           if (error) throw error;
           updateTest('tables', { status: 'pass' });
       } catch (e: any) {
@@ -77,7 +77,7 @@ export default function Settings() {
       // 3. GEO JSONB Test
       updateTest('geo', { status: 'running' });
       try {
-          const { data, error } = await supabase.from('suppliers').select('coordinates').limit(1);
+          const { data, error } = await supabase.from('locations').select('coordinates').limit(1);
           if (error) throw error;
           updateTest('geo', { status: 'pass' });
       } catch (e: any) {
@@ -141,6 +141,7 @@ export default function Settings() {
                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">URL del Logo (PNG/SVG)</label>
                           <input type="text" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl font-bold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-hemp-600" value={editAppLogo || ''} onChange={e => setEditAppLogo(e.target.value)} placeholder="https://..." />
                       </div>
+                      {/* Fixed: Renamed handleSaveBrbranding to handleSaveBranding to fix 'Cannot find name' error */}
                       <button onClick={handleSaveBranding} className="w-full md:w-auto px-10 py-4 bg-hemp-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:scale-[1.02] transition-all">Actualizar Marca</button>
                   </div>
               </div>
@@ -153,7 +154,7 @@ export default function Settings() {
                 <h2 className="text-lg font-black text-gray-800 dark:text-white mb-6 flex items-center"><Database size={20} className="mr-2 text-hemp-600" /> Servidor de Datos (Supabase)</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Supabase URL</label><input type="text" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl font-bold text-slate-800 dark:text-white" value={url} onChange={e => setUrl(e.target.value)} /></div>
-                    <div><label className="text-[10px) font-black text-gray-400 uppercase tracking-widest block mb-2">Anon API Key</label><input type="password" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl font-bold text-slate-800 dark:text-white" value={key} onChange={e => setKey(e.target.value)} /></div>
+                    <div><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Anon API Key</label><input type="password" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl font-bold text-slate-800 dark:text-white" value={key} onChange={e => setKey(e.target.value)} /></div>
                 </div>
             </div>
             <button onClick={handleSaveConnections} disabled={status === 'checking'} className={`w-full py-5 rounded-[24px] font-black text-xs uppercase tracking-widest text-white flex items-center justify-center transition-all shadow-xl ${status === 'checking' ? 'bg-gray-400' : status === 'success' ? 'bg-green-600' : 'bg-slate-900 dark:bg-hemp-600 hover:scale-[1.01]'}`}>
@@ -202,24 +203,33 @@ export default function Settings() {
               <div className="bg-slate-900 border border-slate-800 p-8 rounded-[32px] shadow-2xl relative overflow-hidden">
                   <div className="flex items-center space-x-3 mb-6">
                       <Shield className="text-hemp-500" size={24}/>
-                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Nucleus SQL V21</h3>
+                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Nucleus SQL V21: Trazabilidad Total</h3>
                   </div>
                   <div className="bg-amber-900/20 border border-amber-500/30 p-4 rounded-2xl mb-6 flex items-start text-amber-200">
                       <AlertTriangle className="text-amber-500 mr-3 flex-shrink-0" size={20}/>
                       <div className="text-xs space-y-2 leading-relaxed">
-                        <p className="font-bold uppercase tracking-tight">Estructura Organizacional</p>
-                        <p>Garantiza que la gestión de equipos de trabajo funcione correctamente permitiendo la actualización masiva de usuarios bajo un mismo CUIT/Socio.</p>
+                        <p className="font-bold uppercase tracking-tight">Esquema Industrial Completo</p>
+                        <p>Crea las tablas de Genética, Lotes de Semillas, Depósitos, Parcelas y Movimientos con soporte para protocolos JSONB.</p>
                       </div>
                   </div>
 
                   <div className="space-y-4">
                     <button onClick={() => {
                       const sql = `
--- PROTOCOLO V21: ESTRUCTURA ORGANIZACIONAL TOTAL
+-- PROTOCOLO V21: TRAZABILIDAD INDUSTRIAL TOTAL
+DROP TABLE IF EXISTS public.trial_records CASCADE;
+DROP TABLE IF EXISTS public.field_logs CASCADE;
+DROP TABLE IF EXISTS public.plots CASCADE;
+DROP TABLE IF EXISTS public.locations CASCADE;
+DROP TABLE IF EXISTS public.seed_movements CASCADE;
+DROP TABLE IF EXISTS public.seed_batches CASCADE;
+DROP TABLE IF EXISTS public.varieties CASCADE;
+DROP TABLE IF EXISTS public.storage_points CASCADE;
 DROP TABLE IF EXISTS public.suppliers CASCADE;
 DROP TABLE IF EXISTS public.clients CASCADE;
 DROP TABLE IF EXISTS public.users CASCADE;
 
+-- 1. ENTIDADES MAESTRAS
 CREATE TABLE public.users (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -270,30 +280,132 @@ CREATE TABLE public.suppliers (
   is_official_partner BOOLEAN DEFAULT false
 );
 
--- PERMISOS TOTALES V21
-ALTER TABLE public.suppliers DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.clients DISABLE ROW LEVEL SECURITY;
+-- 2. CADENA DE SUMINISTROS
+CREATE TABLE public.storage_points (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  type TEXT,
+  address TEXT,
+  city TEXT,
+  province TEXT,
+  coordinates JSONB,
+  responsible_user_id TEXT,
+  client_id TEXT,
+  surface_m2 NUMERIC,
+  conditions TEXT,
+  notes TEXT
+);
+
+CREATE TABLE public.varieties (
+  id TEXT PRIMARY KEY,
+  supplier_id TEXT REFERENCES public.suppliers(id),
+  name TEXT NOT NULL,
+  usage TEXT,
+  cycle_days INTEGER,
+  expected_thc NUMERIC,
+  knowledge_base TEXT,
+  notes TEXT
+);
+
+CREATE TABLE public.seed_batches (
+  id TEXT PRIMARY KEY,
+  variety_id TEXT REFERENCES public.varieties(id),
+  supplier_id TEXT REFERENCES public.suppliers(id),
+  batch_code TEXT NOT NULL,
+  label_serial_number TEXT,
+  category TEXT,
+  analysis_date TEXT,
+  purity NUMERIC,
+  germination NUMERIC,
+  gs1_code TEXT,
+  certification_number TEXT,
+  purchase_order TEXT,
+  purchase_date TEXT,
+  price_per_kg NUMERIC,
+  initial_quantity NUMERIC,
+  remaining_quantity NUMERIC,
+  storage_conditions TEXT,
+  storage_point_id TEXT REFERENCES public.storage_points(id),
+  logistics_responsible TEXT,
+  notes TEXT,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- 3. GESTIÓN AGRONÓMICA
+CREATE TABLE public.locations (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  province TEXT,
+  city TEXT,
+  address TEXT,
+  soil_type TEXT,
+  climate TEXT,
+  coordinates JSONB,
+  polygon JSONB,
+  client_id TEXT REFERENCES public.clients(id),
+  capacity_ha NUMERIC,
+  irrigation_system TEXT,
+  responsible_ids TEXT[]
+);
+
+CREATE TABLE public.plots (
+  id TEXT PRIMARY KEY,
+  location_id TEXT REFERENCES public.locations(id),
+  project_id TEXT,
+  variety_id TEXT REFERENCES public.varieties(id),
+  seed_batch_id TEXT REFERENCES public.seed_batches(id),
+  name TEXT NOT NULL,
+  type TEXT,
+  block TEXT,
+  replicate INTEGER,
+  surface_area NUMERIC,
+  surface_unit TEXT,
+  density NUMERIC,
+  status TEXT DEFAULT 'Activa',
+  sowing_date TEXT,
+  responsible_ids TEXT[],
+  coordinates JSONB,
+  polygon JSONB,
+  irrigation_type TEXT
+);
+
+CREATE TABLE public.trial_records (
+  id TEXT PRIMARY KEY,
+  plot_id TEXT REFERENCES public.plots(id),
+  date TEXT NOT NULL,
+  time TEXT,
+  stage TEXT,
+  temperature NUMERIC,
+  humidity NUMERIC,
+  plant_height NUMERIC,
+  yield NUMERIC,
+  created_by TEXT,
+  created_by_name TEXT
+);
+
+-- PERMISOS TOTALES
 ALTER TABLE public.users DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.clients DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.suppliers DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.storage_points DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.varieties DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.seed_batches DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.locations DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.plots DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.trial_records DISABLE ROW LEVEL SECURITY;
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;
 
--- USUARIO ROOT INICIAL
+-- USUARIO ROOT
 INSERT INTO public.users (id, name, email, role, password, job_title, is_network_member)
 VALUES ('root-user', 'Super Administrador', 'admin@hempc.com', 'super_admin', 'admin123', 'Director Cooperativa', true);
 
 NOTIFY pgrst, 'reload schema';
                       `;
                       navigator.clipboard.writeText(sql.trim());
-                      alert("Script Nuclear V21 Copiado. Ejecútalo en Supabase para habilitar la gestión de equipos.");
+                      alert("Script Nuclear Industrial V21 Copiado. Ejecútalo en Supabase para habilitar toda la trazabilidad.");
                     }} className="w-full bg-red-600 hover:bg-red-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center transition-all shadow-xl">
-                        <RotateCcw size={18} className="mr-2"/> Copiar Script SQL V21 (Recomendado)
-                    </button>
-                    
-                    <button onClick={() => {
-                        const sql = `ALTER TABLE public.users DROP CONSTRAINT IF EXISTS users_client_id_fkey; NOTIFY pgrst, 'reload schema';`;
-                        navigator.clipboard.writeText(sql);
-                        alert("Parche V21 (Flexibilidad de Vínculos) copiado.");
-                    }} className="w-full bg-slate-800 hover:bg-slate-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center transition-all border border-slate-700">
-                        <RefreshCw size={18} className="mr-2"/> Parche V21: Solo Permisos de Vínculo
+                        <RotateCcw size={18} className="mr-2"/> Copiar Script Industrial V21
                     </button>
                   </div>
               </div>

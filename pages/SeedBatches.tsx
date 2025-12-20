@@ -8,7 +8,6 @@ import {
   Loader2, Search, Eye, Info, CheckCircle, Filter, FilterX, ArrowUpRight, ArrowDownLeft,
   Building, User, Calendar, FileText, Globe, ClipboardList, ShieldCheck
 } from 'lucide-react';
-import { supabase } from '../supabaseClient'; 
 import { useSearchParams } from 'react-router-dom';
 
 const MetricCard = ({ label, value, subtext, icon: Icon, colorClass }: any) => (
@@ -26,7 +25,7 @@ const MetricCard = ({ label, value, subtext, icon: Icon, colorClass }: any) => (
 
 export default function SeedBatches() {
   const { 
-    seedBatches, seedMovements, addLocalSeedBatch, updateSeedBatch, 
+    seedBatches, seedMovements, addSeedBatch, updateSeedBatch, 
     deleteSeedBatch, addSeedMovement, updateSeedMovement, deleteSeedMovement, varieties, 
     locations, currentUser, clients, storagePoints, isEmergencyMode 
   } = useAppContext();
@@ -115,20 +114,27 @@ export default function SeedBatches() {
       e.preventDefault();
       if (!batchFormData.varietyId || !batchFormData.batchCode || batchFormData.initialQuantity! <= 0) return;
       setIsSubmitting(true);
+      
       const payload = { 
           ...batchFormData, 
           id: editingBatchId || crypto.randomUUID(), 
           remainingQuantity: editingBatchId ? batchFormData.remainingQuantity : batchFormData.initialQuantity, 
-          createdAt: new Date().toISOString() 
+          createdAt: batchFormData.createdAt || new Date().toISOString() 
       } as SeedBatch;
       
       try {
-          if (editingBatchId) updateSeedBatch(payload);
-          else {
-              if (!isEmergencyMode) await supabase.from('seed_batches').insert([payload]);
-              addLocalSeedBatch(payload);
+          let success = false;
+          if (editingBatchId) {
+              success = await updateSeedBatch(payload);
+          } else {
+              success = await addSeedBatch(payload);
           }
-          setIsBatchModalOpen(false);
+          
+          if (success) {
+            setIsBatchModalOpen(false);
+          } else {
+            alert("Error al sincronizar con el servidor de inventario.");
+          }
       } catch (err: any) { alert(err.message); } finally { setIsSubmitting(false); }
   };
 
@@ -144,7 +150,7 @@ export default function SeedBatches() {
       try {
           const success = await addSeedMovement(movePayload);
           if (success) {
-              updateSeedBatch({ ...batch, remainingQuantity: batch.remainingQuantity - moveFormData.quantity! });
+              await updateSeedBatch({ ...batch, remainingQuantity: batch.remainingQuantity - moveFormData.quantity! });
               setIsMoveModalOpen(false);
           }
       } finally { setIsSubmitting(false); }
@@ -386,193 +392,6 @@ export default function SeedBatches() {
 
       {/* --- MODALS --- */}
 
-      {/* VIEW BATCH MODAL (FICHA TÉCNICA LOTE) */}
-      {selectedBatchForView && (() => {
-          const v = varieties.find(varObj => varObj.id === selectedBatchForView.varietyId);
-          const s = storagePoints.find(sp => sp.id === selectedBatchForView.storagePointId);
-          const totalValue = (selectedBatchForView.remainingQuantity || 0) * (selectedBatchForView.pricePerKg || 0);
-          return (
-            <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
-                <div className="bg-white dark:bg-dark-card rounded-3xl shadow-2xl max-w-2xl w-full overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95">
-                    <div className="px-8 py-6 bg-gray-50 dark:bg-slate-900 border-b dark:border-dark-border flex justify-between items-center">
-                        <div className="flex items-center space-x-3">
-                            <div className="bg-hemp-100 dark:bg-hemp-900/40 p-3 rounded-2xl">
-                                <ScanBarcode size={24} className="text-hemp-600"/>
-                            </div>
-                            <div>
-                                <h2 className="text-xl font-black text-gray-800 dark:text-white uppercase tracking-tight">Ficha Técnica: Lote {selectedBatchForView.batchCode}</h2>
-                                <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">{v?.name || 'Variedad S/D'}</p>
-                            </div>
-                        </div>
-                        <button onClick={() => setSelectedBatchForView(null)} className="p-2 hover:bg-gray-200 dark:hover:bg-dark-border rounded-full transition dark:text-gray-400"><X size={24}/></button>
-                    </div>
-
-                    <div className="p-8 overflow-y-auto space-y-8 custom-scrollbar">
-                        {/* Highlights Grid */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-2xl border border-blue-100 dark:border-blue-800">
-                                <p className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase mb-1">Stock Actual</p>
-                                <p className="text-2xl font-black text-blue-900 dark:text-blue-100">{selectedBatchForView.remainingQuantity} <span className="text-xs">kg</span></p>
-                            </div>
-                            <div className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-2xl border border-amber-100 dark:border-amber-800">
-                                <p className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase mb-1">Pureza Física</p>
-                                <p className="text-2xl font-black text-amber-900 dark:text-amber-100">{selectedBatchForView.purity}%</p>
-                            </div>
-                            <div className="bg-emerald-50 dark:bg-emerald-900/20 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-800">
-                                <p className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase mb-1">Germinación</p>
-                                <p className="text-2xl font-black text-emerald-900 dark:text-emerald-100">{selectedBatchForView.germination}%</p>
-                            </div>
-                            <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-2xl border border-purple-100 dark:border-purple-800">
-                                <p className="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase mb-1">Valorización</p>
-                                <p className="text-2xl font-black text-purple-900 dark:text-purple-100">${totalValue.toLocaleString()}</p>
-                            </div>
-                        </div>
-
-                        {/* Detailed Specs */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                            <div className="space-y-4">
-                                <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center"><ShieldCheck size={14} className="mr-2"/> Trazabilidad Fiscal</h3>
-                                <div className="space-y-2 text-sm">
-                                    <div className="flex justify-between border-b dark:border-dark-border pb-2"><span className="text-gray-500">Categoría INASE:</span><span className="font-bold dark:text-white">{selectedBatchForView.category || 'C1'}</span></div>
-                                    <div className="flex justify-between border-b dark:border-dark-border pb-2"><span className="text-gray-500">N° Serie Etiqueta:</span><span className="font-bold dark:text-white">{selectedBatchForView.labelSerialNumber || '-'}</span></div>
-                                    <div className="flex justify-between border-b dark:border-dark-border pb-2"><span className="text-gray-500">Certificación:</span><span className="font-mono font-bold text-blue-600">{selectedBatchForView.certificationNumber || 'N/A'}</span></div>
-                                    <div className="flex justify-between border-b dark:border-dark-border pb-2"><span className="text-gray-500">Fecha Análisis:</span><span className="font-bold dark:text-white">{selectedBatchForView.analysisDate || '-'}</span></div>
-                                </div>
-                            </div>
-                            <div className="space-y-4">
-                                <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center"><MapPin size={14} className="mr-2"/> Almacenamiento</h3>
-                                <div className="space-y-2 text-sm">
-                                    <div className="flex justify-between border-b dark:border-dark-border pb-2"><span className="text-gray-500">Depósito Actual:</span><span className="font-bold text-hemp-600">{s?.name || 'S/D'}</span></div>
-                                    <div className="flex justify-between border-b dark:border-dark-border pb-2"><span className="text-gray-500">Dirección:</span><span className="font-medium text-gray-600 dark:text-gray-400">{s?.address || '-'}</span></div>
-                                    <div className="flex justify-between border-b dark:border-dark-border pb-2"><span className="text-gray-500">Ubicación:</span><span className="font-medium text-gray-600 dark:text-gray-400">{s?.city}, {s?.province}</span></div>
-                                    <div className="flex justify-between border-b dark:border-dark-border pb-2"><span className="text-gray-500">Ingreso Original:</span><span className="font-bold dark:text-white">{selectedBatchForView.initialQuantity} kg</span></div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Inventory Consumption Status */}
-                        <div className="bg-gray-50 dark:bg-slate-900/50 p-6 rounded-2xl border dark:border-dark-border">
-                            <div className="flex justify-between items-end mb-4">
-                                <div><h4 className="font-black text-gray-800 dark:text-white text-sm">Consumo de Stock</h4><p className="text-xs text-gray-500">Evolución del lote en campo.</p></div>
-                                <span className="text-xs font-black text-hemp-600 uppercase tracking-wider">{Math.round(((selectedBatchForView.initialQuantity - selectedBatchForView.remainingQuantity) / selectedBatchForView.initialQuantity) * 100)}% Consumido</span>
-                            </div>
-                            <div className="h-4 bg-gray-200 dark:bg-dark-border rounded-full overflow-hidden flex">
-                                <div className="h-full bg-hemp-600" style={{width: `${((selectedBatchForView.initialQuantity - selectedBatchForView.remainingQuantity) / selectedBatchForView.initialQuantity) * 100}%`}}></div>
-                            </div>
-                            <div className="flex justify-between mt-3 text-[10px] font-bold text-gray-400 uppercase">
-                                <span>Ingreso: {selectedBatchForView.initialQuantity} kg</span>
-                                <span>Saldo: {selectedBatchForView.remainingQuantity} kg</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="px-8 py-4 bg-gray-50 dark:bg-slate-900 border-t dark:border-dark-border flex justify-end space-x-3">
-                        {isAdmin && selectedBatchForView.remainingQuantity > 0 && (
-                            <button onClick={() => { handleOpenDispatch(selectedBatchForView.id); setSelectedBatchForView(null); }} className="px-5 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-black uppercase tracking-widest flex items-center hover:bg-blue-700 transition shadow-sm">
-                                <Truck size={16} className="mr-2"/> Despachar Stock
-                            </button>
-                        )}
-                        <button onClick={() => window.print()} className="px-5 py-2.5 bg-white dark:bg-dark-border dark:text-white border border-gray-200 dark:border-transparent rounded-xl text-xs font-black uppercase tracking-widest flex items-center hover:bg-gray-100 transition">
-                            <Printer size={16} className="mr-2"/> Imprimir Ficha
-                        </button>
-                        <button onClick={() => setSelectedBatchForView(null)} className="px-6 py-2.5 bg-slate-900 dark:bg-hemp-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-black transition">Cerrar</button>
-                    </div>
-                </div>
-            </div>
-          )
-      })()}
-
-      {/* VIEW MOVEMENT MODAL (FICHA TÉCNICA DESPACHO) */}
-      {selectedMovementForView && (() => {
-          const b = seedBatches.find(batch => batch.id === selectedMovementForView.batchId);
-          const v = varieties.find(vari => vari.id === b?.varietyId);
-          const c = clients.find(cli => cli.id === selectedMovementForView.clientId);
-          const l = locations.find(loc => loc.id === selectedMovementForView.targetLocationId);
-          return (
-            <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
-                <div className="bg-white dark:bg-dark-card rounded-3xl shadow-2xl max-w-2xl w-full overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95">
-                    <div className="px-8 py-6 bg-gray-50 dark:bg-slate-900 border-b dark:border-dark-border flex justify-between items-center">
-                        <div className="flex items-center space-x-3">
-                            <div className="bg-blue-100 dark:bg-blue-900/40 p-3 rounded-2xl text-blue-600">
-                                <Truck size={24}/>
-                            </div>
-                            <div>
-                                <h2 className="text-xl font-black text-gray-800 dark:text-white uppercase tracking-tight">Remito Logístico</h2>
-                                <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">Guía: {selectedMovementForView.transportGuideNumber || 'S/N'}</p>
-                            </div>
-                        </div>
-                        <button onClick={() => setSelectedMovementForView(null)} className="p-2 hover:bg-gray-200 dark:hover:bg-dark-border rounded-full transition dark:text-gray-400"><X size={24}/></button>
-                    </div>
-
-                    <div className="p-8 overflow-y-auto space-y-8 custom-scrollbar">
-                        {/* Status Alert */}
-                        <div className={`p-4 rounded-2xl border flex items-center justify-between ${selectedMovementForView.status === 'Recibido' ? 'bg-green-50 border-green-100 text-green-800' : 'bg-blue-50 border-blue-100 text-blue-800 animate-pulse'}`}>
-                            <div className="flex items-center">
-                                {selectedMovementForView.status === 'Recibido' ? <CheckCircle className="mr-3" size={24}/> : <Truck className="mr-3" size={24}/>}
-                                <div>
-                                    <p className="text-sm font-black uppercase">Estado del Envío: {selectedMovementForView.status || 'En Tránsito'}</p>
-                                    <p className="text-xs opacity-75">{selectedMovementForView.status === 'Recibido' ? 'Material confirmado en destino final.' : 'En viaje hacia el establecimiento de destino.'}</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Dispatch Core Data */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                            <div className="space-y-6">
-                                <section>
-                                    <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center"><Package size={12} className="mr-1"/> Detalle del Material</h3>
-                                    <div className="bg-gray-50 dark:bg-slate-800/50 p-4 rounded-2xl border dark:border-dark-border">
-                                        <p className="text-lg font-black text-gray-800 dark:text-white">{v?.name || 'Genética S/D'}</p>
-                                        <p className="text-xs text-gray-500 font-bold uppercase">Lote Fiscal: {b?.batchCode}</p>
-                                        <div className="mt-3 text-3xl font-black text-blue-600">{selectedMovementForView.quantity} <span className="text-sm">kg</span></div>
-                                    </div>
-                                </section>
-
-                                <section>
-                                    <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center"><MapPin size={12} className="mr-1"/> Destino de Entrega</h3>
-                                    <div className="space-y-1">
-                                        <p className="font-black text-gray-800 dark:text-white text-base">{c?.name || 'Cliente Externo'}</p>
-                                        <p className="text-sm text-gray-600 dark:text-gray-400 font-bold">{l?.name || 'Establecimiento S/D'}</p>
-                                        <p className="text-xs text-gray-500 uppercase">{l?.address}, {l?.city}, {l?.province}</p>
-                                    </div>
-                                </section>
-                            </div>
-
-                            <div className="space-y-6">
-                                <section>
-                                    <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center"><Truck size={12} className="mr-1"/> Logística y Transporte</h3>
-                                    <div className="space-y-3 text-sm">
-                                        <div className="flex justify-between border-b dark:border-dark-border pb-2"><span className="text-gray-500">Transporte:</span><span className="font-bold dark:text-white">{selectedMovementForView.transportType}</span></div>
-                                        <div className="flex justify-between border-b dark:border-dark-border pb-2"><span className="text-gray-500">Empresa:</span><span className="font-bold dark:text-white">{selectedMovementForView.transportCompany || '-'}</span></div>
-                                        <div className="flex justify-between border-b dark:border-dark-border pb-2"><span className="text-gray-500">Chofer:</span><span className="font-bold dark:text-white">{selectedMovementForView.driverName || '-'}</span></div>
-                                        <div className="flex justify-between border-b dark:border-dark-border pb-2"><span className="text-gray-500">Patente:</span><span className="font-mono font-bold dark:text-white uppercase">{selectedMovementForView.vehiclePlate || '-'}</span></div>
-                                        <div className="flex justify-between pt-1"><span className="text-gray-500">Fecha Despacho:</span><span className="font-bold dark:text-white">{selectedMovementForView.date} {selectedMovementForView.dispatchTime}</span></div>
-                                    </div>
-                                </section>
-
-                                {selectedMovementForView.estimatedDistanceKm && (
-                                    <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-2xl border border-blue-100 dark:border-blue-800 flex items-center justify-between">
-                                        <div className="flex items-center text-blue-700 dark:text-blue-300 font-black text-xs uppercase tracking-tighter">
-                                            <Globe size={14} className="mr-2"/> Distancia Est.
-                                        </div>
-                                        <span className="text-lg font-black text-blue-900 dark:text-blue-100">{selectedMovementForView.estimatedDistanceKm} km</span>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="px-8 py-4 bg-gray-50 dark:bg-slate-900 border-t dark:border-dark-border flex justify-end space-x-3">
-                        <button className="px-5 py-2.5 bg-white dark:bg-dark-border dark:text-white border border-gray-200 dark:border-transparent rounded-xl text-xs font-black uppercase tracking-widest flex items-center hover:bg-gray-100 transition">
-                            <FileText size={16} className="mr-2"/> Generar Remito PDF
-                        </button>
-                        <button onClick={() => setSelectedMovementForView(null)} className="px-6 py-2.5 bg-slate-900 dark:bg-blue-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-black transition">Cerrar</button>
-                    </div>
-                </div>
-            </div>
-          )
-      })()}
-      
       {/* BATCH ENTRY MODAL */}
       {isBatchModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -634,75 +453,6 @@ export default function SeedBatches() {
                     <button type="submit" disabled={isSubmitting} className="px-10 py-2.5 bg-hemp-600 text-white rounded-xl font-black shadow-lg shadow-hemp-900/20 hover:bg-hemp-700 transition flex items-center">
                         {isSubmitting && <Loader2 className="animate-spin mr-2" size={18}/>}
                         Confirmar Ingreso
-                    </button>
-                </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* DISPATCH MODAL */}
-      {isMoveModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-dark-card rounded-3xl shadow-2xl max-w-2xl w-full p-8 overflow-y-auto max-h-[90vh] animate-in slide-in-from-bottom-4 duration-200">
-            <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-black text-gray-800 dark:text-white flex items-center">
-                    <Truck size={32} className="mr-3 text-blue-600"/> 
-                    Registrar Despacho de Material
-                </h2>
-                <button onClick={() => setIsMoveModalOpen(false)} className="p-1 hover:bg-gray-100 dark:hover:bg-dark-border rounded-full transition dark:text-gray-400"><X size={24}/></button>
-            </div>
-            <form onSubmit={handleMoveSubmit} className="space-y-6">
-                <div>
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Lote Origen de Stock</label>
-                    <select required className={inputClass} value={moveFormData.batchId} onChange={e => setMoveFormData({...moveFormData, batchId: e.target.value})}>
-                        <option value="">Seleccionar lote master disponible...</option>
-                        {seedBatches.filter(b => b.remainingQuantity > 0).map(b => (
-                            <option key={b.id} value={b.id}>
-                                [{varieties.find(v => v.id === b.varietyId)?.name}] Lote: {b.batchCode} ({b.remainingQuantity}kg disponibles)
-                            </option>
-                        ))}
-                    </select>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Cliente Receptor</label>
-                        <select required className={inputClass} value={moveFormData.clientId} onChange={e => setMoveFormData({...moveFormData, clientId: e.target.value, targetLocationId: ''})}>
-                            <option value="">Seleccionar titular...</option>
-                            {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                        </select>
-                    </div>
-                    <div>
-                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Campo / Sitio de Destino</label>
-                        <select required className={inputClass} value={moveFormData.targetLocationId} onChange={e => setMoveFormData({...moveFormData, targetLocationId: e.target.value})} disabled={!moveFormData.clientId}>
-                            <option value="">Elegir establecimiento...</option>
-                            {locations.filter(l => l.clientId === moveFormData.clientId).map(l => (
-                                <option key={l.id} value={l.id}>{l.name} ({l.province})</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div className="md:col-span-2">
-                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Cantidad a Despachar (kg) *</label>
-                        <input required type="number" step="0.1" className={`${inputClass} font-black text-xl text-blue-600 dark:text-blue-400`} placeholder="0.0" value={moveFormData.quantity || ''} onChange={e => setMoveFormData({...moveFormData, quantity: Number(e.target.value)})} />
-                    </div>
-                    
-                    <div className="col-span-2 bg-gray-50 dark:bg-slate-900/50 p-4 rounded-2xl border dark:border-dark-border border-gray-200 grid grid-cols-2 gap-4">
-                        <div className="col-span-2 flex items-center text-gray-500 font-bold text-xs uppercase mb-2">
-                            <Info size={14} className="mr-1"/> Datos Logísticos
-                        </div>
-                        <input type="text" placeholder="N° Guía de Transporte / Remito" className={inputClass} value={moveFormData.transportGuideNumber} onChange={e => setMoveFormData({...moveFormData, transportGuideNumber: e.target.value})} />
-                        <input type="text" placeholder="Nombre Chofer / Responsable" className={inputClass} value={moveFormData.driverName} onChange={e => setMoveFormData({...moveFormData, driverName: e.target.value})} />
-                        <input type="text" placeholder="Patente Vehículo" className={inputClass} value={moveFormData.vehiclePlate} onChange={e => setMoveFormData({...moveFormData, vehiclePlate: e.target.value})} />
-                        <input type="text" placeholder="Empresa Transporte" className={inputClass} value={moveFormData.transportCompany} onChange={e => setMoveFormData({...moveFormData, transportCompany: e.target.value})} />
-                    </div>
-                </div>
-                
-                <div className="flex justify-end gap-3 pt-6 border-t dark:border-dark-border mt-8">
-                    <button type="button" onClick={() => setIsMoveModalOpen(false)} className="px-6 py-2.5 text-gray-500 font-bold hover:bg-gray-100 dark:hover:bg-dark-border rounded-xl transition">Cancelar</button>
-                    <button type="submit" disabled={isSubmitting} className="px-10 py-2.5 bg-blue-600 text-white rounded-xl font-black shadow-lg shadow-blue-900/20 hover:bg-blue-700 transition flex items-center">
-                        {isSubmitting && <Loader2 className="animate-spin mr-2" size={18}/>}
-                        Generar Remito de Salida
                     </button>
                 </div>
             </form>

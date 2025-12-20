@@ -91,9 +91,8 @@ interface AppContextType {
   updateTask: (t: Task) => void;
   deleteTask: (id: string) => void;
 
-  addSeedBatch: (s: SeedBatch) => void;
-  addLocalSeedBatch: (s: SeedBatch) => void; 
-  updateSeedBatch: (s: SeedBatch) => void;
+  addSeedBatch: (s: SeedBatch) => Promise<boolean>;
+  updateSeedBatch: (s: SeedBatch) => Promise<boolean>;
   deleteSeedBatch: (id: string) => Promise<void>;
   
   addSeedMovement: (m: SeedMovement) => Promise<boolean>;
@@ -119,12 +118,13 @@ const toSnakeCase = (obj: any) => {
     const manualMap: Record<string, string> = {
         clientId: 'client_id',
         supplierId: 'supplier_id',
-        isNetworkMember: 'is_network_member',
-        relatedUserId: 'related_user_id',
-        projectId: 'project_id',
+        storagePointId: 'storage_point_id',
         varietyId: 'variety_id',
         locationId: 'location_id',
+        projectId: 'project_id',
         seedBatchId: 'seed_batch_id',
+        isNetworkMember: 'is_network_member',
+        relatedUserId: 'related_user_id',
         isOfficialPartner: 'is_official_partner',
         postalCode: 'postal_code',
         commercialContact: 'commercial_contact',
@@ -132,7 +132,6 @@ const toSnakeCase = (obj: any) => {
         legalName: 'legal_name',
         membershipLevel: 'membership_level',
         contractDate: 'contract_date',
-        storagePointId: 'storage_point_id',
         contactName: 'contact_name',
         contactPhone: 'contact_phone',
         expectedThc: 'expected_thc',
@@ -144,14 +143,19 @@ const toSnakeCase = (obj: any) => {
         labelSerialNumber: 'label_serial_number',
         certificationNumber: 'certification_number',
         gs1Code: 'gs1_code',
-        jobTitle: 'job_title'
+        jobTitle: 'job_title',
+        analysisDate: 'analysis_date',
+        purchaseDate: 'purchase_date',
+        purchaseOrder: 'purchase_order',
+        isActive: 'is_active',
+        createdAt: 'created_at'
     };
 
     for (const key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
             const snakeKey = manualMap[key] || key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
             let val = obj[key];
-            if ((key === 'relatedUserId' || key === 'clientId' || key === 'supplierId' || key === 'storagePointId') && val === '') val = null;
+            if ((key === 'relatedUserId' || key === 'clientId' || key === 'supplierId' || key === 'storagePointId' || key === 'varietyId' || key === 'projectId' || key === 'seedBatchId' || key === 'locationId') && val === '') val = null;
             if (val !== undefined) {
                 newObj[snakeKey] = val;
             }
@@ -167,12 +171,13 @@ const toCamelCase = (obj: any) => {
         job_title: 'jobTitle',
         client_id: 'clientId',
         supplier_id: 'supplierId',
-        is_network_member: 'isNetworkMember',
-        related_user_id: 'relatedUserId',
-        project_id: 'projectId',
+        storage_point_id: 'storagePointId',
         variety_id: 'varietyId',
         location_id: 'locationId',
+        project_id: 'projectId',
         seed_batch_id: 'seedBatchId',
+        is_network_member: 'isNetworkMember',
+        related_user_id: 'relatedUserId',
         is_official_partner: 'isOfficialPartner',
         postal_code: 'postalCode',
         commercial_contact: 'commercialContact',
@@ -180,7 +185,6 @@ const toCamelCase = (obj: any) => {
         legal_name: 'legalName',
         membership_level: 'membershipLevel',
         contract_date: 'contractDate',
-        storage_point_id: 'storagePointId',
         contact_name: 'contactName',
         contact_phone: 'contactPhone',
         expected_thc: 'expectedThc',
@@ -190,9 +194,13 @@ const toCamelCase = (obj: any) => {
         initial_quantity: 'initialQuantity',
         remaining_quantity: 'remainingQuantity',
         analysis_date: 'analysisDate',
+        purchase_date: 'purchaseDate',
+        purchase_order: 'purchaseOrder',
         label_serial_number: 'labelSerialNumber',
         certification_number: 'certificationNumber',
-        gs1_code: 'gs1Code'
+        gs1_code: 'gs1Code',
+        is_active: 'isActive',
+        created_at: 'createdAt'
     };
 
     for (const key in obj) {
@@ -272,7 +280,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                         setter(camelData);
                         saveToLocal(localKey, camelData);
                     } else if (error) {
-                        console.error(`Error fetching ${table}:`, error);
                         setter(getFromLocal(localKey));
                     }
                   } catch (e) { setter(getFromLocal(localKey)); }
@@ -326,8 +333,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       try {
           const { error } = await supabase.from(table).insert([dbItem]);
           if (error) { console.error(`[DB INSERT ERROR] ${table}:`, error.message); return false; }
-          // Actualizamos localmente de inmediato para mejorar UX
-          setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
+          await refreshData();
           return true;
       } catch (e: any) { console.error(`[RUNTIME INSERT ERROR] ${table}:`, e); return false; }
   };
@@ -337,7 +343,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       try {
           const { error } = await supabase.from(table).update(dbItem).eq('id', item.id);
           if (error) { console.error(`[DB UPDATE ERROR] ${table}:`, error.message); return false; }
-          setter((prev: any[]) => { const n = prev.map((i: any) => i.id === item.id ? item : i); saveToLocal(localKey, n); return n; });
+          await refreshData();
           return true;
       } catch (e) { console.error(`[RUNTIME UPDATE ERROR] ${table}:`, e); return false; }
   };
@@ -345,7 +351,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const genericDelete = async (table: string, id: string, setter: any, localKey: string) => {
       try {
           const { error } = await supabase.from(table).delete().eq('id', id);
-          if (!error) setter((prev: any[]) => { const n = prev.filter((i: any) => i.id !== id); saveToLocal(localKey, n); return n; });
+          if (!error) await refreshData();
       } catch (e) { console.error("Delete Error:", e); }
   };
 
@@ -360,7 +366,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const addUser = async (u: User) => {
       const success = await genericAdd('users', u, setUsersList, 'users');
-      if (success) await refreshData();
       return success;
   };
   const updateUser = (u: User) => genericUpdate('users', u, setUsersList, 'users');
@@ -377,19 +382,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   
   const addVariety = async (v: Variety) => { 
       const success = await genericAdd('varieties', v, setVarieties, 'varieties'); 
-      if (success) await refreshData();
       return success;
   };
   const updateVariety = async (v: Variety) => { 
       const success = await genericUpdate('varieties', v, setVarieties, 'varieties'); 
-      if (success) await refreshData();
       return success;
   };
   const deleteVariety = (id: string) => { genericDelete('varieties', id, setVarieties, 'varieties'); };
   
   const addSupplier = async (s: Supplier) => { 
       const success = await genericAdd('suppliers', s, setSuppliers, 'suppliers'); 
-      if (success) await refreshData();
       return success ? s.id : null; 
   };
   const updateSupplier = (s: Supplier) => genericUpdate('suppliers', s, setSuppliers, 'suppliers');
@@ -419,20 +421,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   
   const addStoragePoint = async (sp: StoragePoint) => {
       const success = await genericAdd('storage_points', sp, setStoragePoints, 'storage_points');
-      if (success) await refreshData();
       return success;
   };
   const updateStoragePoint = async (sp: StoragePoint) => {
       const success = await genericUpdate('storage_points', sp, setStoragePoints, 'storage_points');
-      if (success) await refreshData();
       return success;
   };
   const deleteStoragePoint = (id: string) => genericDelete('storage_points', id, setStoragePoints, 'storage_points');
   
   const addSeedBatch = (s: SeedBatch) => genericAdd('seed_batches', s, setSeedBatches, 'seed_batches');
-  const addLocalSeedBatch = (s: SeedBatch) => setSeedBatches(prev => [...prev, s]);
   const updateSeedBatch = (s: SeedBatch) => genericUpdate('seed_batches', s, setSeedBatches, 'seed_batches');
   const deleteSeedBatch = async (id: string) => { await genericDelete('seed_batches', id, setSeedBatches, 'seed_batches'); };
+  
   const addHydricRecord = (h: HydricRecord) => genericAdd('hydric_records', h, setHydricRecords, 'hydric_records');
   const deleteHydricRecord = (id: string) => genericDelete('hydric_records', id, setHydricRecords, 'hydric_records');
   const addSeedMovement = async (m: SeedMovement) => genericAdd('seed_movements', m, setSeedMovements, 'seed_movements');
@@ -495,7 +495,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       addLog, updateLog, deleteLog,
       addUser, updateUser, deleteUser,
       addTask, updateTask, deleteTask,
-      addSeedBatch, addLocalSeedBatch, updateSeedBatch, deleteSeedBatch,
+      addSeedBatch, updateSeedBatch, deleteSeedBatch,
       addSeedMovement, updateSeedMovement, deleteSeedMovement,
       addSupplier, updateSupplier, deleteSupplier,
       addClient, updateClient, deleteClient,
