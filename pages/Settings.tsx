@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Save, Database, Copy, RefreshCw, Lock, Settings as SettingsIcon, ShieldCheck, PlayCircle, CheckCircle2, Layout, Image as ImageIcon, Trash2, RotateCcw, Cpu, Globe, Shield, Server } from 'lucide-react';
+import { Save, Database, Copy, RefreshCw, Lock, Settings as SettingsIcon, ShieldCheck, PlayCircle, CheckCircle2, Layout, Image as ImageIcon, Trash2, RotateCcw, Cpu, Globe, Shield, Server, AlertTriangle } from 'lucide-react';
 
 export default function Settings() {
   const { currentUser, appName, appLogo, updateBranding, isEmergencyMode } = useAppContext();
@@ -36,23 +36,14 @@ export default function Settings() {
 
   const handleSaveBranding = () => {
       updateBranding(editAppName, editAppLogo);
-      alert("✅ Identidad corporativa actualizada correctamente.");
+      alert("✅ Identidad corporativa actualizada.");
   };
 
   const handleResetBranding = () => {
-      if (window.confirm("¿Desea restaurar la marca predeterminada (HempC)?")) {
+      if (window.confirm("¿Restaurar marca original?")) {
           updateBranding('HempC', null);
           setEditAppName('HempC');
           setEditAppLogo(null);
-      }
-  };
-
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (file) {
-          const reader = new FileReader();
-          reader.onloadend = () => setEditAppLogo(reader.result as string);
-          reader.readAsDataURL(file);
       }
   };
 
@@ -63,7 +54,7 @@ export default function Settings() {
       
       setTimeout(() => {
           setStatus('success');
-          setTimeout(() => { setStatus('idle'); window.location.reload(); }, 1500);
+          setTimeout(() => { setStatus('idle'); window.location.reload(); }, 1000);
       }, 800);
   };
 
@@ -72,93 +63,34 @@ export default function Settings() {
       <div className="flex items-center mb-6">
         <SettingsIcon className="text-hemp-600 mr-3" size={32} />
         <div>
-            <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Configuración de Sistema</h1>
-            <p className="text-gray-500">Gestión de identidad, datos y seguridad del servidor.</p>
+            <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Configuración Maestra</h1>
+            <p className="text-gray-500">Gestión de identidad y estructura de datos cloud.</p>
         </div>
       </div>
 
       <div className="flex space-x-1 bg-gray-100 dark:bg-slate-900 p-1 rounded-lg mb-8 w-fit">
           <button onClick={() => setActiveTab('branding')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'branding' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Identidad</button>
           <button onClick={() => setActiveTab('connections')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'connections' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Conectividad</button>
-          <button onClick={() => setActiveTab('database')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'database' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>SQL Cloud</button>
+          <button onClick={() => setActiveTab('database')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'database' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>SQL Cloud (Reparación)</button>
       </div>
 
       {activeTab === 'branding' && (
           <div className="space-y-8 animate-in fade-in slide-in-from-top-4">
               <div className="bg-white dark:bg-slate-900 p-8 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-sm">
-                  <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-xl font-black text-slate-800 dark:text-white flex items-center">
-                        <Layout className="mr-2 text-hemp-600" size={20} /> Personalización de Marca
-                    </h3>
-                    <button onClick={handleResetBranding} className="text-[10px] font-black uppercase text-gray-400 hover:text-red-500 flex items-center transition">
-                        <RotateCcw size={14} className="mr-1"/> Restaurar Original
-                    </button>
-                  </div>
-                  
+                  <h3 className="text-xl font-black text-slate-800 dark:text-white flex items-center mb-6">
+                      <Layout className="mr-2 text-hemp-600" size={20} /> Personalización Visual
+                  </h3>
                   <div className="space-y-6">
                       <div>
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Nombre de la Terminal</label>
-                          <input 
-                            type="text" 
-                            className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl font-bold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-hemp-600"
-                            value={editAppName}
-                            onChange={e => setEditAppName(e.target.value)}
-                          />
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Nombre del Sistema</label>
+                          <input type="text" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl font-bold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-hemp-600" value={editAppName} onChange={e => setEditAppName(e.target.value)} />
                       </div>
-
                       <div>
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Logotipo Corporativo</label>
-                          <div className="flex flex-col md:flex-row items-center gap-6 p-6 bg-slate-50 dark:bg-slate-950 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800">
-                              <div className="w-32 h-32 bg-white dark:bg-slate-900 rounded-2xl flex items-center justify-center border border-slate-100 dark:border-slate-800 shadow-inner overflow-hidden">
-                                  {editAppLogo ? <img src={editAppLogo} className="w-full h-full object-contain p-2" /> : <ImageIcon size={32} className="text-slate-300" />}
-                              </div>
-                              <div className="flex-1">
-                                  <p className="text-xs text-slate-500 font-medium leading-relaxed mb-4">
-                                      El logo reemplazará el icono predeterminado en toda la interfaz.
-                                  </p>
-                                  <div className="flex gap-2">
-                                      <label className="bg-hemp-600 hover:bg-hemp-700 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition cursor-pointer flex items-center">
-                                          Subir Archivo <input type="file" className="hidden" accept="image/*" onChange={handleLogoUpload} />
-                                      </label>
-                                      {editAppLogo && (
-                                          <button onClick={() => setEditAppLogo(null)} className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition">
-                                              <Trash2 size={18}/>
-                                          </button>
-                                      )}
-                                  </div>
-                              </div>
-                          </div>
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Logo URL</label>
+                          <input type="text" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl font-bold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-hemp-600" value={editAppLogo || ''} onChange={e => setEditAppLogo(e.target.value)} placeholder="https://..." />
                       </div>
-
-                      <div className="pt-6 border-t dark:border-slate-800">
-                          <button onClick={handleSaveBranding} className="w-full md:w-auto px-10 py-4 bg-slate-900 dark:bg-hemp-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all">
-                              Guardar Identidad
-                          </button>
-                      </div>
+                      <button onClick={handleSaveBranding} className="w-full md:w-auto px-10 py-4 bg-hemp-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:scale-[1.02] transition-all">Guardar Cambios</button>
                   </div>
-              </div>
-
-              <div className="bg-blue-600 p-8 rounded-[32px] text-white shadow-xl relative overflow-hidden">
-                  <div className="relative z-10">
-                      <div className="flex items-center space-x-3 mb-4">
-                        <div className="bg-white/20 p-2 rounded-xl"><Server size={24}/></div>
-                        <h3 className="text-xl font-black uppercase tracking-tighter">Sincronización Cloud</h3>
-                      </div>
-                      <p className="text-blue-100 text-sm font-medium leading-relaxed mb-6">
-                        {isEmergencyMode 
-                          ? '⚠️ FALLO DE ESQUEMA DETECTADO. La base de datos no reconoce la columna client_id. Use el script de reparación en la pestaña SQL Cloud.' 
-                          : '✅ El sistema está conectado correctamente y el esquema de base de datos está validado.'}
-                      </p>
-                      <div className="flex items-center space-x-4">
-                          <div className={`px-4 py-2 rounded-xl border flex items-center ${isEmergencyMode ? 'bg-red-500/20 border-red-500/40' : 'bg-white/10 border-white/20'}`}>
-                              <div className={`w-2 h-2 rounded-full mr-2 ${isEmergencyMode ? 'bg-red-400 animate-pulse' : 'bg-green-400 animate-pulse'}`}></div>
-                              <span className="text-[10px] font-black uppercase tracking-widest text-blue-50">
-                                {isEmergencyMode ? 'Esquema Desactualizado' : 'Conexión Estable'}
-                              </span>
-                          </div>
-                      </div>
-                  </div>
-                  <Globe className="absolute -right-20 -bottom-20 text-white opacity-5 w-64 h-64" />
               </div>
           </div>
       )}
@@ -172,10 +104,9 @@ export default function Settings() {
                     <div><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Anon API Key</label><input type="password" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl font-bold text-slate-800 dark:text-white" value={key} onChange={e => setKey(e.target.value)} /></div>
                 </div>
             </div>
-            
             <button onClick={handleSaveConnections} disabled={status === 'checking'} className={`w-full py-5 rounded-[24px] font-black text-xs uppercase tracking-widest text-white flex items-center justify-center transition-all shadow-xl ${status === 'checking' ? 'bg-gray-400' : status === 'success' ? 'bg-green-600' : 'bg-slate-900 dark:bg-hemp-600 hover:scale-[1.01]'}`}>
                 {status === 'checking' ? <RefreshCw className="animate-spin mr-2"/> : status === 'success' ? <CheckCircle2 className="mr-2"/> : <Save className="mr-2"/>}
-                {status === 'checking' ? 'Sincronizando...' : status === 'success' ? 'Conexión Exitosa' : 'Actualizar Credenciales del Servidor'}
+                {status === 'checking' ? 'Sincronizando...' : status === 'success' ? 'Conexión Exitosa' : 'Actualizar Credenciales'}
             </button>
           </div>
       )}
@@ -185,14 +116,18 @@ export default function Settings() {
               <div className="bg-slate-900 border border-slate-800 p-8 rounded-[32px] shadow-2xl relative overflow-hidden">
                   <div className="flex items-center space-x-3 mb-6">
                       <Shield className="text-hemp-500" size={24}/>
-                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Script de Reparación Total (Fix client_id)</h3>
+                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Script de Reconstrucción Total</h3>
                   </div>
-                  <p className="text-xs text-slate-400 mb-4 leading-relaxed">Ejecute este script en el SQL Editor de Supabase para añadir la columna faltante y permitir que los usuarios se guarden correctamente en la nube:</p>
+                  <div className="bg-amber-900/20 border border-amber-500/30 p-4 rounded-2xl mb-6 flex items-start">
+                      <AlertTriangle className="text-amber-500 mr-3 flex-shrink-0" size={20}/>
+                      <p className="text-xs text-amber-200 leading-relaxed font-medium">Este script solucionará el error de la columna <code className="bg-black/40 px-1 rounded text-white">client_id</code>. Copia el código y ejecútalo en el <strong>SQL Editor</strong> de Supabase.</p>
+                  </div>
                   <pre className="bg-black/50 p-6 rounded-2xl text-[10px] text-green-400 overflow-x-auto border border-white/5 font-mono h-80 custom-scrollbar">
-{`-- 1. FIX CRÍTICO: AGREGAR COLUMNA client_id A LA TABLA users
+{`-- 1. ASEGURAR QUE LA TABLA users TIENE LA COLUMNA client_id
+-- Si la tabla existe, agregamos la columna si falta
 ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS client_id TEXT;
 
--- 2. ASEGURAR TABLAS BASE
+-- 2. ASEGURAR TABLAS BASE (SI NO EXISTEN)
 CREATE TABLE IF NOT EXISTS public.clients (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -206,30 +141,43 @@ CREATE TABLE IF NOT EXISTS public.clients (
   related_user_id TEXT
 );
 
--- 3. DESACTIVAR RLS TEMPORALMENTE PARA DESARROLLO (Habilitar guardado)
-ALTER TABLE IF EXISTS public.users DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS public.clients DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS public.locations DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS public.plots DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS public.trial_records DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS public.hydric_records DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS public.field_logs DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS public.varieties DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS public.suppliers DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS public.seed_batches DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS public.seed_movements DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS public.tasks DISABLE ROW LEVEL SECURITY;
+CREATE TABLE IF NOT EXISTS public.locations (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  province TEXT,
+  city TEXT,
+  address TEXT,
+  soil_type TEXT,
+  climate TEXT,
+  responsible_person TEXT,
+  coordinates JSONB,
+  polygon JSONB,
+  client_id TEXT,
+  owner_name TEXT,
+  owner_legal_name TEXT,
+  owner_cuit TEXT,
+  owner_contact TEXT,
+  owner_type TEXT,
+  capacity_ha NUMERIC,
+  irrigation_system TEXT,
+  responsible_ids TEXT[]
+);
+
+-- 3. ACTUALIZAR CACHÉ DE ESQUEMA (DISABLE/ENABLE RLS)
+ALTER TABLE public.users DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.clients DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.locations DISABLE ROW LEVEL SECURITY;
 
 -- 4. OTORGAR PERMISOS PÚBLICOS
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;
 `}
                   </pre>
                   <button onClick={() => {
-                      const sql = `ALTER TABLE public.users ADD COLUMN IF NOT EXISTS client_id TEXT; ALTER TABLE public.users DISABLE ROW LEVEL SECURITY; ALTER TABLE public.clients DISABLE ROW LEVEL SECURITY; GRANT ALL ON ALL TABLES IN SCHEMA public TO anon;`;
+                      const sql = `ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS client_id TEXT; ALTER TABLE public.users DISABLE ROW LEVEL SECURITY; ALTER TABLE public.clients DISABLE ROW LEVEL SECURITY; GRANT ALL ON ALL TABLES IN SCHEMA public TO anon;`;
                       navigator.clipboard.writeText(sql);
-                      alert("SQL de reparación rápida copiado. Pégalo en el SQL Editor de Supabase.");
+                      alert("SQL de reparación rápida copiado.");
                   }} className="mt-4 text-[10px] font-black text-hemp-400 uppercase tracking-widest flex items-center hover:text-white transition">
-                      <Copy size={12} className="mr-1"/> Copiar SQL de Reparación Rápida
+                      <Copy size={12} className="mr-1"/> Copiar Fix Rápido
                   </button>
               </div>
           </div>
