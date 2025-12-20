@@ -30,7 +30,7 @@ export default function Storage() {
     lat: '', lng: ''
   });
 
-  // Delay map rendering until modal is shown
+  // Delay map rendering until modal is fully shown to avoid Leaflet gray tiles
   useEffect(() => {
     if (isModalOpen) {
       const timer = setTimeout(() => setRenderMap(true), 300);
@@ -51,7 +51,9 @@ export default function Storage() {
   // --- LOGIC ---
   const filteredPoints = useMemo(() => {
     return storagePoints.filter(sp => {
-        const matchesSearch = sp.name.toLowerCase().includes(searchTerm.toLowerCase()) || sp.city?.toLowerCase().includes(searchTerm.toLowerCase()) || (sp.nodeCode || '').toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesSearch = sp.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                             sp.city?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                             (sp.nodeCode || '').toLowerCase().includes(searchTerm.toLowerCase());
         let matchesOwner = true;
         if (filterOwner === 'central') matchesOwner = !sp.clientId;
         if (filterOwner === 'client') matchesOwner = !!sp.clientId;
@@ -124,14 +126,14 @@ export default function Storage() {
 
   return (
     <div className="animate-in fade-in duration-500">
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>
-            <h1 className="text-2xl font-black text-gray-800 dark:text-white uppercase tracking-tight italic">Nodos de <span className="text-hemp-600">Almacenamiento</span></h1>
-            <p className="text-sm text-gray-500">Gestión de silos, galpones y centros de distribución de red.</p>
+            <h1 className="text-2xl font-black text-gray-800 dark:text-white uppercase tracking-tight italic">Nodos <span className="text-hemp-600">Logísticos</span></h1>
+            <p className="text-sm text-gray-500">Centros de acopio, distribución y trazabilidad de materiales.</p>
         </div>
         {isAdmin && (
           <button onClick={() => { resetForm(); setIsModalOpen(true); }} className="bg-hemp-600 text-white px-6 py-3 rounded-2xl flex items-center hover:bg-hemp-700 transition shadow-xl font-black text-xs uppercase tracking-widest">
-            <Plus size={18} className="mr-2" /> Nuevo Depósito
+            <Plus size={18} className="mr-2" /> Nuevo Nodo
           </button>
         )}
       </div>
@@ -150,7 +152,7 @@ export default function Storage() {
           </div>
           <div className="flex gap-2">
               <button onClick={() => setFilterOwner('all')} className={`px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${filterOwner === 'all' ? 'bg-hemp-600 text-white shadow-lg' : 'bg-gray-100 dark:bg-slate-800 text-gray-400 hover:text-gray-600'}`}>Todos</button>
-              <button onClick={() => setFilterOwner('central')} className={`px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${filterOwner === 'central' ? 'bg-hemp-600 text-white shadow-lg' : 'bg-gray-100 dark:bg-slate-800 text-gray-400 hover:text-gray-600'}`}>Empresa</button>
+              <button onClick={() => setFilterOwner('central')} className={`px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${filterOwner === 'central' ? 'bg-hemp-600 text-white shadow-lg' : 'bg-gray-100 dark:bg-slate-800 text-gray-400 hover:text-gray-600'}`}>Propios</button>
               <button onClick={() => setFilterOwner('client')} className={`px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${filterOwner === 'client' ? 'bg-hemp-600 text-white shadow-lg' : 'bg-gray-100 dark:bg-slate-800 text-gray-400 hover:text-gray-600'}`}>Socios</button>
           </div>
       </div>
@@ -165,7 +167,7 @@ export default function Storage() {
                   <div key={sp.id} className="bg-white dark:bg-slate-900 rounded-[32px] shadow-sm border border-gray-100 dark:border-slate-800 overflow-hidden relative group flex flex-col h-full hover:shadow-xl transition-all">
                       <div className="h-40 bg-gray-100 dark:bg-slate-800 relative">
                           {sp.coordinates ? (
-                              <iframe width="100%" height="100%" frameBorder="0" scrolling="no" src={`https://maps.google.com/maps?q=${sp.coordinates.lat},${sp.coordinates.lng}&z=14&output=embed`} className="absolute inset-0 opacity-80 group-hover:opacity-100 transition-opacity"></iframe>
+                              <iframe width="100%" height="100%" frameBorder="0" scrolling="no" src={`https://maps.google.com/maps?q=${sp.coordinates.lat},${sp.coordinates.lng}&z=14&output=embed`} className="absolute inset-0 opacity-80 group-hover:opacity-100 transition-opacity pointer-events-none"></iframe>
                           ) : (
                               <div className="flex items-center justify-center h-full text-gray-400 flex-col"><MapPin size={32} className="mb-2 opacity-30"/><span className="text-[10px] font-black uppercase tracking-widest">Sin GPS</span></div>
                           )}
@@ -173,8 +175,8 @@ export default function Storage() {
                              <div className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest shadow-lg border border-white/20 text-white ${sp.clientId ? 'bg-blue-600' : 'bg-hemp-600'}`}>
                                  {sp.clientId ? 'Socio' : 'Central'}
                              </div>
-                             <div className="px-3 py-1 rounded-full text-[9px] font-black bg-slate-900/80 text-white border border-white/20 flex items-center gap-1.5">
-                                 <ScanBarcode size={10}/> {sp.nodeCode}
+                             <div className="px-3 py-1 rounded-full text-[9px] font-black bg-slate-900/80 text-white border border-white/20 flex items-center gap-1.5 shadow-sm">
+                                 <ScanBarcode size={10} className="text-hemp-400"/> {sp.nodeCode}
                              </div>
                           </div>
                       </div>
@@ -198,10 +200,10 @@ export default function Storage() {
                           <div className="space-y-3 mb-6 flex-1">
                               <div className="bg-gray-50 dark:bg-slate-950 p-4 rounded-2xl border dark:border-slate-800">
                                   <div className="flex justify-between items-center mb-1">
-                                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Inventario Actual</span>
+                                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Stock Disponible</span>
                                       <span className="text-xs font-black text-hemp-600">{stockKg.toLocaleString()} kg</span>
                                   </div>
-                                  <div className="w-full bg-gray-200 dark:bg-slate-800 h-1 rounded-full overflow-hidden">
+                                  <div className="w-full bg-gray-200 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
                                       <div className="bg-hemp-600 h-full" style={{ width: `${Math.min((stockKg / 5000) * 100, 100)}%` }}></div>
                                   </div>
                               </div>
@@ -214,7 +216,7 @@ export default function Storage() {
                                 </div>
                              )}
                              <div className="flex items-center text-[10px] font-black text-gray-400 uppercase tracking-tighter">
-                                <User size={12} className="mr-2 opacity-50"/> {responsible?.name || 'Sin responsable'}
+                                <User size={12} className="mr-2 opacity-50"/> {responsible?.name || 'Sin responsable asignado'}
                              </div>
                           </div>
                       </div>
@@ -239,21 +241,21 @@ export default function Storage() {
                             <div className="space-y-4">
                                 <div className="flex gap-3">
                                     <div className="flex-1">
-                                        <label className="text-[9px] font-black text-gray-400 uppercase ml-1 mb-1 block">Código Identificador *</label>
+                                        <label className="text-[9px] font-black text-gray-400 uppercase ml-1 mb-1 block">Código Estándar HNC *</label>
                                         <div className="flex gap-2">
-                                            <input required type="text" className={`${inputClass} font-mono uppercase`} value={formData.nodeCode} onChange={e => setFormData({...formData, nodeCode: e.target.value})} placeholder="HNC-XXXX" />
-                                            <button type="button" onClick={generateAutoCode} className="p-2.5 bg-slate-200 dark:bg-slate-800 rounded-xl hover:bg-slate-300 transition" title="Generar Código Automático"><RefreshCw size={18}/></button>
+                                            <input required type="text" className={`${inputClass} font-mono uppercase text-hemp-600`} value={formData.nodeCode} onChange={e => setFormData({...formData, nodeCode: e.target.value})} placeholder="HNC-XXXX" />
+                                            <button type="button" onClick={generateAutoCode} className="p-2.5 bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-xl hover:bg-hemp-50 dark:hover:bg-hemp-900/20 transition shadow-sm" title="Generar Código Único"><RefreshCw size={18} className="text-hemp-600"/></button>
                                         </div>
                                     </div>
                                     <div className="flex-[2]">
-                                        <label className="text-[9px] font-black text-gray-400 uppercase ml-1 mb-1 block">Nombre del Depósito *</label>
-                                        <input required type="text" className={inputClass} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Ej: Silo Central A1" />
+                                        <label className="text-[9px] font-black text-gray-400 uppercase ml-1 mb-1 block">Nombre Comercial del Nodo *</label>
+                                        <input required type="text" className={inputClass} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Ej: Silo Central Rosario A1" />
                                     </div>
                                 </div>
                                 
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="text-[9px] font-black text-gray-400 uppercase ml-1 mb-1 block">Tipo de Almacenamiento</label>
+                                        <label className="text-[9px] font-black text-gray-400 uppercase ml-1 mb-1 block">Tipo de Gestión</label>
                                         <select className={inputClass} value={formData.type} onChange={e => setFormData({...formData, type: e.target.value as any})}>
                                             <option value="Propio">Instalación Propia</option>
                                             <option value="Tercerizado">Logística Tercerizada</option>
@@ -261,7 +263,7 @@ export default function Storage() {
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="text-[9px] font-black text-gray-400 uppercase ml-1 mb-1 block">Superficie (m²)</label>
+                                        <label className="text-[9px] font-black text-gray-400 uppercase ml-1 mb-1 block">Área de Carga (m²)</label>
                                         <input type="number" className={inputClass} value={formData.surfaceM2} onChange={e => setFormData({...formData, surfaceM2: Number(e.target.value)})} placeholder="0" />
                                     </div>
                                 </div>
@@ -277,7 +279,7 @@ export default function Storage() {
                                 </select>
                                 <select className={inputClass} value={formData.responsibleUserId || ''} onChange={e => setFormData({...formData, responsibleUserId: e.target.value})}>
                                     <option value="">Sin responsable asignado</option>
-                                    {usersList.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                                    {usersList.map(u => <option key={u.id} value={u.id}>{u.name} ({u.jobTitle || u.role})</option>)}
                                 </select>
                             </div>
                         </div>
@@ -286,7 +288,7 @@ export default function Storage() {
                     <div className="bg-emerald-50/50 dark:bg-emerald-900/10 p-6 rounded-[32px] border border-emerald-100 dark:border-emerald-900/30 flex flex-col">
                         <h3 className="text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-[0.2em] mb-4 flex items-center"><MapPin size={14} className="mr-2"/> Localización Geográfica</h3>
                         <div className="space-y-4 flex-1">
-                            <input type="text" className={inputClass} value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} placeholder="Dirección Postal Exacta" />
+                            <input type="text" className={inputClass} value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} placeholder="Dirección Postal de Despacho" />
                             
                             <div className="flex-1 min-h-[300px] rounded-2xl overflow-hidden border dark:border-slate-800 shadow-inner group/map relative bg-slate-100 dark:bg-slate-950">
                                 {renderMap ? (
@@ -301,21 +303,22 @@ export default function Storage() {
                                         height="100%" 
                                     />
                                 ) : (
-                                    <div className="h-full flex items-center justify-center text-slate-400 animate-pulse uppercase text-[10px] font-black tracking-widest">
+                                    <div className="h-full flex items-center justify-center text-slate-400 animate-pulse uppercase text-[10px] font-black tracking-widest flex-col gap-3">
+                                        <RefreshCw className="animate-spin" size={32}/>
                                         Inicializando Cartografía...
                                     </div>
                                 )}
                             </div>
                             
                             <div className="grid grid-cols-2 gap-3 mt-4">
-                                <input type="text" className={`${inputClass} text-xs h-9 bg-white/50`} value={formData.lat} onChange={e => setFormData({...formData, lat: e.target.value})} placeholder="Latitud (-34.0000)" />
-                                <input type="text" className={`${inputClass} text-xs h-9 bg-white/50`} value={formData.lng} onChange={e => setFormData({...formData, lng: e.target.value})} placeholder="Longitud (-58.0000)" />
+                                <input type="text" className={`${inputClass} text-xs h-9 bg-white/50 dark:bg-slate-800/50`} value={formData.lat} onChange={e => setFormData({...formData, lat: e.target.value})} placeholder="Latitud (-34.0000)" />
+                                <input type="text" className={`${inputClass} text-xs h-9 bg-white/50 dark:bg-slate-800/50`} value={formData.lng} onChange={e => setFormData({...formData, lng: e.target.value})} placeholder="Longitud (-58.0000)" />
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div className="flex justify-end space-x-3 pt-8 border-t dark:border-slate-800">
+                <div className="flex justify-end space-x-3 pt-8 border-t dark:border-slate-800 mt-4">
                     <button type="button" disabled={isSaving} onClick={() => setIsModalOpen(false)} className="px-8 py-3 text-slate-400 font-black uppercase text-[10px] tracking-widest hover:text-slate-600 transition">Cancelar</button>
                     <button type="submit" disabled={isSaving} className="bg-slate-900 dark:bg-hemp-600 text-white px-10 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl flex items-center hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50">
                         {isSaving ? <Loader2 className="animate-spin mr-2" size={18}/> : <Save className="mr-2" size={18}/>}

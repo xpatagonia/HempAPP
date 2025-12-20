@@ -30,7 +30,7 @@ export default function Settings() {
   // Unit Test State
   const [tests, setTests] = useState<UnitTest[]>([
       { id: 'conn', name: 'Conexión Supabase', description: 'Verifica alcance de URL y Key.', status: 'idle' },
-      { id: 'tables', name: 'Esquema de Tablas', description: 'Valida existencia de todas las entidades V21.', status: 'idle' },
+      { id: 'tables', name: 'Esquema de Tablas', description: 'Valida existencia de todas las entidades V22.', status: 'idle' },
       { id: 'geo', name: 'Protocolo JSONB GPS', description: 'Verifica compatibilidad de georreferencia.', status: 'idle' },
       { id: 'auth', name: 'Vínculo Organizacional', description: 'Valida FK de equipos de trabajo.', status: 'idle' }
   ]);
@@ -67,7 +67,7 @@ export default function Settings() {
       // 2. Tables Test
       updateTest('tables', { status: 'running' });
       try {
-          const { error } = await supabase.from('seed_batches').select('id').limit(1);
+          const { error } = await supabase.from('storage_points').select('node_code').limit(1);
           if (error) throw error;
           updateTest('tables', { status: 'pass' });
       } catch (e: any) {
@@ -115,7 +115,7 @@ export default function Settings() {
         <SettingsIcon className="text-hemp-600 mr-3" size={32} />
         <div>
             <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Configuración del Servidor</h1>
-            <p className="text-gray-500">Protocolo de auditoría y base de datos corporativa.</p>
+            <p className="text-gray-500">Protocolo de auditoría y base de datos cooperativa.</p>
         </div>
       </div>
 
@@ -123,7 +123,7 @@ export default function Settings() {
           <button onClick={() => setActiveTab('branding')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'branding' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Identidad</button>
           <button onClick={() => setActiveTab('connections')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'connections' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Conectividad</button>
           <button onClick={() => setActiveTab('audit')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'audit' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Protocolo & Pruebas</button>
-          <button onClick={() => setActiveTab('database')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'database' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>SQL Nucleus V21</button>
+          <button onClick={() => setActiveTab('database')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'database' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>SQL Nucleus V22</button>
       </div>
 
       {activeTab === 'branding' && (
@@ -141,7 +141,7 @@ export default function Settings() {
                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">URL del Logo (PNG/SVG)</label>
                           <input type="text" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl font-bold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-hemp-600" value={editAppLogo || ''} onChange={e => setEditAppLogo(e.target.value)} placeholder="https://..." />
                       </div>
-                      {/* Fixed typo: handleSaveBrbranding -> handleSaveBranding */}
+                      {/* Fixed typo in onClick handler from handleSaveBrbranding to handleSaveBranding */}
                       <button onClick={handleSaveBranding} className="w-full md:w-auto px-10 py-4 bg-hemp-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:scale-[1.02] transition-all">Actualizar Marca</button>
                   </div>
               </div>
@@ -149,7 +149,6 @@ export default function Settings() {
       )}
 
       {activeTab === 'connections' && (
-          /* connections tab... */
           <div className="space-y-8 animate-in fade-in">
             <div className="bg-white dark:bg-slate-900 rounded-[32px] shadow-sm border dark:border-slate-800 p-8">
                 <h2 className="text-lg font-black text-gray-800 dark:text-white mb-6 flex items-center"><Database size={20} className="mr-2 text-hemp-600" /> Servidor de Datos (Supabase)</h2>
@@ -165,9 +164,43 @@ export default function Settings() {
           </div>
       )}
 
+      {activeTab === 'audit' && (
+          <div className="space-y-6 animate-in fade-in">
+              <div className="bg-white dark:bg-slate-900 rounded-[40px] p-8 border dark:border-slate-800 shadow-sm">
+                  <div className="flex justify-between items-center mb-8">
+                      <div>
+                          <h3 className="text-xl font-black text-slate-800 dark:text-white flex items-center">
+                              <FlaskConical className="mr-2 text-blue-600" size={20} /> Suite Nuclear V22
+                          </h3>
+                          <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">Verificación de trazabilidad y nodos logísticos</p>
+                      </div>
+                      <button onClick={runTests} className="bg-slate-900 dark:bg-blue-600 text-white px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:scale-105 transition-all">Ejecutar Suite</button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {tests.map(test => (
+                          <div key={test.id} className="p-5 rounded-3xl bg-gray-50 dark:bg-slate-950 border dark:border-slate-800 flex items-start space-x-4">
+                              <div className="mt-1">
+                                  {test.status === 'idle' && <div className="w-6 h-6 rounded-full border-2 border-gray-200"></div>}
+                                  {test.status === 'running' && <RefreshCw size={24} className="text-blue-500 animate-spin"/>}
+                                  {test.status === 'pass' && <CheckCircle size={24} className="text-green-500"/>}
+                                  {test.status === 'fail' && <XCircle size={24} className="text-red-500"/>}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                  <h4 className="font-black text-sm text-slate-800 dark:text-white uppercase tracking-tight">{test.name}</h4>
+                                  <p className="text-[10px] text-gray-500 mb-1">{test.description}</p>
+                                  {test.error && <p className="text-[9px] font-mono text-red-500 break-words mt-1 bg-red-50 dark:bg-red-900/10 p-1 rounded">Error: {test.error}</p>}
+                              </div>
+                          </div>
+                      ))}
+                  </div>
+              </div>
+          </div>
+      )}
+
       {activeTab === 'database' && (
           <div className="space-y-6 animate-in fade-in">
-              <div className="bg-slate-900 border border-slate-800 p-8 rounded-[32px] shadow-2xl relative overflow-hidden">
+              <div className="bg-slate-900 border border-slate-800 p-8 rounded-[40px] shadow-2xl relative overflow-hidden">
                   <div className="flex items-center space-x-3 mb-6">
                       <Shield className="text-hemp-500" size={24}/>
                       <h3 className="font-black text-white uppercase text-sm tracking-widest">Nucleus SQL V22: Trazabilidad Logística</h3>
@@ -175,8 +208,8 @@ export default function Settings() {
                   <div className="bg-amber-900/20 border border-amber-500/30 p-4 rounded-2xl mb-6 flex items-start text-amber-200">
                       <AlertTriangle className="text-amber-500 mr-3 flex-shrink-0" size={20}/>
                       <div className="text-xs space-y-2 leading-relaxed">
-                        <p className="font-bold uppercase tracking-tight">Esquema Actualizado (node_code)</p>
-                        <p>Asegura que los puntos de almacenamiento soporten el Código Identificador para etiquetas industriales.</p>
+                        <p className="font-bold uppercase tracking-tight">Esquema Industrial Actualizado</p>
+                        <p>Crea las tablas con soporte para `node_code` en almacenes, esencial para la trazabilidad de etiquetas HNC.</p>
                       </div>
                   </div>
 
@@ -250,7 +283,7 @@ CREATE TABLE public.suppliers (
 -- 2. CADENA DE SUMINISTROS
 CREATE TABLE public.storage_points (
   id TEXT PRIMARY KEY,
-  node_code TEXT, -- Nuevo Campo para trazabilidad
+  node_code TEXT, -- NUEVO CAMPO TRAZABILIDAD HNC
   name TEXT NOT NULL,
   type TEXT,
   address TEXT,
@@ -372,7 +405,7 @@ ON CONFLICT (id) DO NOTHING;
 NOTIFY pgrst, 'reload schema';
                       `;
                       navigator.clipboard.writeText(sql.trim());
-                      alert("Script Nuclear Industrial V22 Copiado. Ejecútalo en Supabase para habilitar node_code.");
+                      alert("Script Nuclear Industrial V22 Copiado. Ejecútalo en Supabase para habilitar toda la trazabilidad.");
                     }} className="w-full bg-red-600 hover:bg-red-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center transition-all shadow-xl">
                         <RotateCcw size={18} className="mr-2"/> Copiar Script Industrial V22
                     </button>

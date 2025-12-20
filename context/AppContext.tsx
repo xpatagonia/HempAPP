@@ -177,7 +177,7 @@ const toCamelCase = (obj: any) => {
         supplier_id: 'supplierId',
         storage_point_id: 'storagePointId',
         variety_id: 'varietyId',
-        location_id: 'location_id',
+        location_id: 'locationId',
         project_id: 'projectId',
         seed_batch_id: 'seedBatchId',
         is_network_member: 'isNetworkMember',

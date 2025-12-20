@@ -68,7 +68,7 @@ export interface HydricRecord {
 export interface StoragePoint {
   id: string;
   name: string; 
-  nodeCode: string; // Nuevo: Código de trazabilidad único
+  nodeCode: string; // Nuevo: Código de trazabilidad único estándar HNC
   type: 'Propio' | 'Tercerizado' | 'Transitorio';
   address: string;
   city?: string;
