@@ -113,19 +113,15 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// Mapeo JS (CamelCase) -> DB (SnakeCase) - REFORZADO PARA PERSISTENCIA
+// Mapeo JS (CamelCase) -> DB (SnakeCase) - REFORZADO TOTAL PARA PROVEEDORES Y SOCIOS
 const toSnakeCase = (obj: any) => {
     if (!obj || typeof obj !== 'object') return obj;
     const newObj: any = {};
     for (const key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
-            // Especiales: no queremos que se mapeen mal
-            if (key === 'coordinates' && obj[key]) {
-                newObj['coordinates'] = obj[key];
-                continue;
-            }
-            if (key === 'polygon' && obj[key]) {
-                newObj['polygon'] = obj[key];
+            // Campos que NO deben ser alterados (JSONB)
+            if (key === 'coordinates' || key === 'polygon') {
+                newObj[key] = obj[key];
                 continue;
             }
 
@@ -146,7 +142,23 @@ const toSnakeCase = (obj: any) => {
                 legalName: 'legal_name',
                 membershipLevel: 'membership_level',
                 contractDate: 'contract_date',
-                storagePointId: 'storage_point_id'
+                storagePointId: 'storage_point_id',
+                contactName: 'contact_name',
+                contactPhone: 'contact_phone',
+                expectedThc: 'expected_thc',
+                cycleDays: 'cycle_days',
+                knowledgeBase: 'knowledge_base',
+                pricePerKg: 'price_per_kg',
+                initialQuantity: 'initial_quantity',
+                remainingQuantity: 'remaining_quantity',
+                storageConditions: 'storage_conditions',
+                logisticsResponsible: 'logistics_responsible',
+                analysisDate: 'analysis_date',
+                gs1Code: 'gs1_code',
+                certificationNumber: 'certification_number',
+                purchaseDate: 'purchase_date',
+                purchaseOrder: 'purchase_order',
+                labelSerialNumber: 'label_serial_number'
             };
             
             if (manualMap[key]) {
@@ -154,7 +166,7 @@ const toSnakeCase = (obj: any) => {
             } else {
                 snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
             }
-            // Evitamos enviar undefined a la DB
+
             if (obj[key] !== undefined) {
                 newObj[snakeKey] = obj[key];
             }
@@ -186,7 +198,23 @@ const toCamelCase = (obj: any) => {
                 legal_name: 'legalName',
                 membership_level: 'membershipLevel',
                 contract_date: 'contractDate',
-                storage_point_id: 'storagePointId'
+                storage_point_id: 'storagePointId',
+                contact_name: 'contactName',
+                contact_phone: 'contactPhone',
+                expected_thc: 'expectedThc',
+                cycle_days: 'cycleDays',
+                knowledge_base: 'knowledgeBase',
+                price_per_kg: 'pricePerKg',
+                initial_quantity: 'initialQuantity',
+                remaining_quantity: 'remainingQuantity',
+                storage_conditions: 'storageConditions',
+                logistics_responsible: 'logisticsResponsible',
+                analysis_date: 'analysisDate',
+                gs1_code: 'gs1Code',
+                certification_number: 'certificationNumber',
+                purchase_date: 'purchaseDate',
+                purchase_order: 'purchaseOrder',
+                label_serial_number: 'labelSerialNumber'
             };
             
             if (manualMap[key]) {

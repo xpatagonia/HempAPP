@@ -30,7 +30,7 @@ export default function Settings() {
   // Unit Test State
   const [tests, setTests] = useState<UnitTest[]>([
       { id: 'conn', name: 'Conexión Supabase', description: 'Verifica alcance de URL y Key.', status: 'idle' },
-      { id: 'tables', name: 'Esquema de Tablas', description: 'Valida existencia de todas las entidades V18.', status: 'idle' },
+      { id: 'tables', name: 'Esquema de Tablas', description: 'Valida existencia de todas las entidades V19.', status: 'idle' },
       { id: 'geo', name: 'Protocolo JSONB GPS', description: 'Verifica compatibilidad de georreferencia.', status: 'idle' },
       { id: 'auth', name: 'Permisos RLS', description: 'Chequea privilegios de escritura.', status: 'idle' }
   ]);
@@ -109,10 +109,6 @@ export default function Settings() {
       }, 800);
   };
 
-  // Consistency Audits
-  const orphanVarieties = varieties.filter(v => !suppliers.find(s => s.id === v.supplierId));
-  const orphanBatches = seedBatches.filter(b => !varieties.find(v => v.id === b.varietyId));
-
   return (
     <div className="max-w-4xl mx-auto pb-10 animate-in fade-in">
       <div className="flex items-center mb-6">
@@ -127,7 +123,7 @@ export default function Settings() {
           <button onClick={() => setActiveTab('branding')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'branding' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Identidad</button>
           <button onClick={() => setActiveTab('connections')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'connections' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Conectividad</button>
           <button onClick={() => setActiveTab('audit')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'audit' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Protocolo & Pruebas</button>
-          <button onClick={() => setActiveTab('database')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'database' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>SQL Nucleus V18</button>
+          <button onClick={() => setActiveTab('database')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'database' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>SQL Nucleus V19</button>
       </div>
 
       {activeTab === 'branding' && (
@@ -173,9 +169,9 @@ export default function Settings() {
                   <div className="flex justify-between items-center mb-8">
                       <div>
                           <h3 className="text-xl font-black text-slate-800 dark:text-white flex items-center">
-                              <FlaskConical className="mr-2 text-blue-600" size={20} /> Terminal de Pruebas Unitarias
+                              <FlaskConical className="mr-2 text-blue-600" size={20} /> Suite de Sincronización V19
                           </h3>
-                          <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">Verificación de integridad del protocolo V18</p>
+                          <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">Verificación técnica de persistencia</p>
                       </div>
                       <button onClick={runTests} className="bg-slate-900 dark:bg-blue-600 text-white px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:scale-105 transition-all">Ejecutar Suite</button>
                   </div>
@@ -198,28 +194,6 @@ export default function Settings() {
                       ))}
                   </div>
               </div>
-
-              <div className="bg-white dark:bg-slate-900 rounded-[32px] p-8 border dark:border-slate-800 shadow-sm">
-                   <h3 className="text-xl font-black text-slate-800 dark:text-white flex items-center mb-6">
-                      <Shield className="mr-2 text-hemp-600" size={20} /> Auditor de Consistencia
-                  </h3>
-                  <div className="space-y-4">
-                      <div className={`p-4 rounded-2xl border flex items-center justify-between ${orphanVarieties.length > 0 ? 'bg-red-50 border-red-100 text-red-700' : 'bg-green-50 border-green-100 text-green-700'}`}>
-                          <div className="flex items-center">
-                              {orphanVarieties.length > 0 ? <AlertTriangle className="mr-3"/> : <CheckCircle className="mr-3"/>}
-                              <span className="text-xs font-black uppercase tracking-tight">Variedades Huérfanas (Sin Proveedor)</span>
-                          </div>
-                          <span className="font-black text-lg">{orphanVarieties.length}</span>
-                      </div>
-                      <div className={`p-4 rounded-2xl border flex items-center justify-between ${orphanBatches.length > 0 ? 'bg-amber-50 border-amber-100 text-amber-700' : 'bg-green-50 border-green-100 text-green-700'}`}>
-                          <div className="flex items-center">
-                              {orphanBatches.length > 0 ? <AlertTriangle className="mr-3"/> : <CheckCircle className="mr-3"/>}
-                              <span className="text-xs font-black uppercase tracking-tight">Lotes Huérfanos (Sin Genética)</span>
-                          </div>
-                          <span className="font-black text-lg">{orphanBatches.length}</span>
-                      </div>
-                  </div>
-              </div>
           </div>
       )}
 
@@ -228,98 +202,22 @@ export default function Settings() {
               <div className="bg-slate-900 border border-slate-800 p-8 rounded-[32px] shadow-2xl relative overflow-hidden">
                   <div className="flex items-center space-x-3 mb-6">
                       <Shield className="text-hemp-500" size={24}/>
-                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Nucleus SQL V18</h3>
+                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Protocolo Nuclear V19</h3>
                   </div>
                   <div className="bg-amber-900/20 border border-amber-500/30 p-4 rounded-2xl mb-6 flex items-start text-amber-200">
                       <AlertTriangle className="text-amber-500 mr-3 flex-shrink-0" size={20}/>
                       <div className="text-xs space-y-2 leading-relaxed">
-                        <p className="font-bold uppercase tracking-tight">Protocolo Nuclear de Datos</p>
-                        <p>Asegura que los campos <code className="bg-black/40 px-1 rounded text-white">coordinates</code> sean de tipo JSONB y todos los mapeos de proveedores estén normalizados.</p>
+                        <p className="font-bold uppercase tracking-tight">Sincronización Total de Red</p>
+                        <p>Este script recrea las tablas `suppliers` y `clients` con los nombres de columna exactos para asegurar el guardado de registros.</p>
                       </div>
                   </div>
 
                   <div className="space-y-4">
                     <button onClick={() => {
                       const sql = `
--- 1. LIMPIEZA TOTAL
-DROP TABLE IF EXISTS public.tasks CASCADE;
-DROP TABLE IF EXISTS public.seed_movements CASCADE;
-DROP TABLE IF EXISTS public.seed_batches CASCADE;
-DROP TABLE IF EXISTS public.hydric_records CASCADE;
-DROP TABLE IF EXISTS public.trial_records CASCADE;
-DROP TABLE IF EXISTS public.field_logs CASCADE;
-DROP TABLE IF EXISTS public.plots CASCADE;
-DROP TABLE IF EXISTS public.locations CASCADE;
-DROP TABLE IF EXISTS public.clients CASCADE;
-DROP TABLE IF EXISTS public.users CASCADE;
-DROP TABLE IF EXISTS public.varieties CASCADE;
+-- PROTOCOLO V19: SINCRONIZACIÓN MAESTRA DE RED
 DROP TABLE IF EXISTS public.suppliers CASCADE;
-DROP TABLE IF EXISTS public.resources CASCADE;
-DROP TABLE IF EXISTS public.storage_points CASCADE;
-DROP TABLE IF EXISTS public.projects CASCADE;
-
--- 2. RECREACIÓN ESTRUCTURA V18
-CREATE TABLE public.users (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  email TEXT UNIQUE NOT NULL,
-  role TEXT NOT NULL,
-  password TEXT,
-  job_title TEXT,
-  phone TEXT,
-  avatar TEXT,
-  client_id TEXT,
-  is_network_member BOOLEAN DEFAULT false
-);
-
-CREATE TABLE public.clients (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  type TEXT,
-  contact_name TEXT,
-  contact_phone TEXT,
-  email TEXT,
-  is_network_member BOOLEAN DEFAULT true,
-  membership_level TEXT DEFAULT 'Activo',
-  contract_date TEXT,
-  cuit TEXT,
-  notes TEXT,
-  related_user_id TEXT,
-  coordinates JSONB
-);
-
-CREATE TABLE public.locations (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  province TEXT,
-  city TEXT,
-  address TEXT,
-  soil_type TEXT,
-  climate TEXT,
-  responsible_person TEXT,
-  coordinates JSONB,
-  polygon JSONB,
-  client_id TEXT,
-  owner_name TEXT,
-  owner_legal_name TEXT,
-  owner_cuit TEXT,
-  owner_contact TEXT,
-  owner_type TEXT,
-  capacity_ha NUMERIC,
-  irrigation_system TEXT,
-  responsible_ids TEXT[]
-);
-
-CREATE TABLE public.varieties (
-  id TEXT PRIMARY KEY,
-  supplier_id TEXT,
-  name TEXT NOT NULL,
-  usage TEXT,
-  cycle_days INTEGER,
-  expected_thc NUMERIC,
-  knowledge_base TEXT,
-  notes TEXT
-);
+DROP TABLE IF EXISTS public.clients CASCADE;
 
 CREATE TABLE public.suppliers (
   id TEXT PRIMARY KEY,
@@ -342,69 +240,41 @@ CREATE TABLE public.suppliers (
   is_official_partner BOOLEAN DEFAULT false
 );
 
-CREATE TABLE public.seed_batches (
+CREATE TABLE public.clients (
   id TEXT PRIMARY KEY,
-  variety_id TEXT,
-  supplier_id TEXT,
-  batch_code TEXT,
-  label_serial_number TEXT,
-  category TEXT,
-  initial_quantity NUMERIC,
-  remaining_quantity NUMERIC,
-  storage_point_id TEXT,
-  is_active BOOLEAN DEFAULT true,
-  purchase_date TEXT,
-  price_per_kg NUMERIC,
-  germination NUMERIC,
-  purity NUMERIC,
-  analysis_date TEXT,
-  certification_number TEXT,
-  gs1_code TEXT,
-  created_at TEXT
+  name TEXT NOT NULL,
+  type TEXT,
+  contact_name TEXT,
+  contact_phone TEXT,
+  email TEXT,
+  is_network_member BOOLEAN DEFAULT true,
+  membership_level TEXT DEFAULT 'Activo',
+  contract_date TEXT,
+  cuit TEXT,
+  notes TEXT,
+  related_user_id TEXT,
+  coordinates JSONB
 );
 
-CREATE TABLE public.seed_movements (
-  id TEXT PRIMARY KEY,
-  batch_id TEXT,
-  client_id TEXT,
-  target_location_id TEXT,
-  quantity NUMERIC,
-  date TEXT,
-  status TEXT DEFAULT 'En Tránsito',
-  transport_guide_number TEXT,
-  driver_name TEXT,
-  vehicle_plate TEXT
-);
-
--- 3. PERMISOS TOTALES
-ALTER TABLE public.users DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.clients DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.locations DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.varieties DISABLE ROW LEVEL SECURITY;
+-- PERMISOS TOTALES V19
 ALTER TABLE public.suppliers DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.seed_batches DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.seed_movements DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.clients DISABLE ROW LEVEL SECURITY;
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;
-
--- 4. USUARIO ROOT
-DELETE FROM public.users WHERE email = 'admin@hempc.com';
-INSERT INTO public.users (id, name, email, role, password, job_title, is_network_member)
-VALUES ('root-user', 'Super Administrador', 'admin@hempc.com', 'super_admin', 'admin123', 'Director Cooperativa', true);
 
 NOTIFY pgrst, 'reload schema';
                       `;
                       navigator.clipboard.writeText(sql.trim());
-                      alert("Script Nuclear V18 Copiado. Ejecútalo en el SQL Editor de Supabase.");
+                      alert("Script Nuclear V19 Copiado. Ejecútalo en Supabase para resolver fallos de persistencia.");
                     }} className="w-full bg-red-600 hover:bg-red-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center transition-all shadow-xl">
-                        <RotateCcw size={18} className="mr-2"/> Reconstrucción Nuclear (V18)
+                        <RotateCcw size={18} className="mr-2"/> Copiar Script SQL V19
                     </button>
                     
                     <button onClick={() => {
-                        const sql = `ALTER TABLE public.suppliers ADD COLUMN IF NOT EXISTS coordinates JSONB; ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS coordinates JSONB; NOTIFY pgrst, 'reload schema';`;
+                        const sql = `ALTER TABLE public.suppliers ADD COLUMN IF NOT EXISTS is_official_partner BOOLEAN DEFAULT false; ALTER TABLE public.suppliers ADD COLUMN IF NOT EXISTS commercial_contact TEXT; ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS membership_level TEXT; NOTIFY pgrst, 'reload schema';`;
                         navigator.clipboard.writeText(sql);
-                        alert("Parche V18 (GPS Fix) copiado.");
+                        alert("Parche V19 (Columnas faltantes) copiado.");
                     }} className="w-full bg-slate-800 hover:bg-slate-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center transition-all border border-slate-700">
-                        <RefreshCw size={18} className="mr-2"/> Parche V18: Solo GPS JSONB
+                        <RefreshCw size={18} className="mr-2"/> Parche V19: Solo Columnas
                     </button>
                   </div>
               </div>

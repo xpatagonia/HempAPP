@@ -1,12 +1,11 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Supplier, SupplierCategory } from '../types';
 import { 
-  Plus, Edit2, Trash2, Building, MapPin, Globe, Phone, Mail, 
-  UserCheck, Truck, Tag, Wrench, Users, X, MessageCircle, 
-  Hash, CheckCircle2, ShieldCheck, ShoppingBag, ArrowRight, Eye,
-  Sprout, Navigation, Save, Loader2, AlertCircle, Copy
+  Plus, Edit2, Trash2, Building, MapPin, Phone, Mail, 
+  Tag, X, MessageCircle, ShieldCheck, ShoppingBag, Eye,
+  Sprout, Navigation, Save, Loader2
 } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
 
@@ -43,14 +42,13 @@ export default function Suppliers() {
     
     setIsSaving(true);
     try {
-        const cleanLat = formData.lat.toString().replace(',', '.').trim();
-        const cleanLng = formData.lng.toString().replace(',', '.').trim();
-        const finalLat = parseFloat(cleanLat);
-        const finalLng = parseFloat(cleanLng);
-        
+        const finalLat = parseFloat(formData.lat.replace(',', '.'));
+        const finalLng = parseFloat(formData.lng.replace(',', '.'));
         const coordinates = (!isNaN(finalLat) && !isNaN(finalLng)) ? { lat: finalLat, lng: finalLng } : null;
 
+        // Limpiamos los datos para enviar solo lo que la DB espera
         const payload = {
+            id: editingId || crypto.randomUUID(),
             name: formData.name!.trim(),
             category: formData.category,
             legalName: formData.legalName?.trim(),
@@ -65,8 +63,7 @@ export default function Suppliers() {
             commercialContact: formData.commercialContact,
             website: formData.website,
             isOfficialPartner: formData.isOfficialPartner,
-            coordinates,
-            id: editingId || Date.now().toString(),
+            coordinates
         } as Supplier;
 
         let success = false;
@@ -81,10 +78,10 @@ export default function Suppliers() {
             setIsModalOpen(false);
             resetForm();
         } else {
-            alert("El servidor rechazó el registro. Por favor, revise los campos obligatorios.");
+            throw new Error("El servidor de datos rechazó el registro. Verifique el esquema SQL V19.");
         }
     } catch (err: any) {
-        alert("Fallo crítico en el alta: " + err.message);
+        alert("ERROR CRÍTICO: " + err.message);
     } finally {
         setIsSaving(false);
     }
@@ -207,15 +204,8 @@ export default function Suppliers() {
               </div>
             </div>
         ))}
-        {suppliers.length === 0 && (
-            <div className="col-span-full py-20 text-center bg-white dark:bg-slate-900 rounded-[40px] border border-dashed border-gray-300 dark:border-slate-800">
-                <Building size={48} className="mx-auto mb-4 text-gray-300"/>
-                <p className="text-gray-500 font-bold uppercase tracking-widest">No hay proveedores registrados</p>
-            </div>
-        )}
       </div>
 
-      {/* CREATE / EDIT MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-5xl w-full p-10 shadow-2xl max-h-[95vh] overflow-y-auto animate-in zoom-in-95">
@@ -229,7 +219,7 @@ export default function Suppliers() {
                 <div className="lg:col-span-2 space-y-6">
                     <div className="bg-gray-50 dark:bg-slate-950 p-6 rounded-[32px] border dark:border-slate-800">
                         <div className="flex justify-between items-center mb-4">
-                            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] flex items-center"><Building size={14} className="mr-2"/> Datos Jurídicos</h3>
+                            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center"><Building size={14} className="mr-2"/> Datos Jurídicos</h3>
                             <label className="flex items-center space-x-2 cursor-pointer bg-blue-50 dark:bg-blue-900/20 px-3 py-1.5 rounded-full border border-blue-100 dark:border-blue-800">
                                 <input type="checkbox" className="rounded text-blue-500 focus:ring-blue-400" checked={formData.isOfficialPartner} onChange={e => setFormData({...formData, isOfficialPartner: e.target.checked})} />
                                 <span className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-tighter">Socio Certificado</span>
@@ -311,7 +301,6 @@ export default function Suppliers() {
                                 <input type="text" className={`${inputClass} text-xs h-9 bg-white/50`} value={formData.lng} onChange={e => setFormData({...formData, lng: e.target.value})} placeholder="-58.0000" />
                             </div>
                         </div>
-                        <p className="text-[9px] font-black text-blue-400 uppercase mt-4 text-center italic leading-tight">Mueva el pin en el mapa para sincronizar el GPS</p>
                     </div>
                 </div>
               </div>
@@ -326,69 +315,6 @@ export default function Suppliers() {
             </form>
           </div>
         </div>
-      )}
-
-      {/* --- SUPPLIER DETAIL MODAL --- */}
-      {viewSupplier && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[60] flex items-center justify-center p-4">
-              <div className="bg-white dark:bg-slate-900 rounded-[40px] shadow-2xl max-w-4xl w-full flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95">
-                  <div className="px-10 py-8 bg-gray-50 dark:bg-slate-950 border-b dark:border-slate-800 flex justify-between items-center">
-                      <div className="flex items-center space-x-4">
-                          <div className="bg-blue-600 p-4 rounded-3xl text-white shadow-xl shadow-blue-600/20"><Building size={32}/></div>
-                          <div>
-                              <h2 className="text-3xl font-black text-gray-800 dark:text-white uppercase tracking-tighter">{viewSupplier.name}</h2>
-                              <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">Auditado bajo protocolo industrial</p>
-                          </div>
-                      </div>
-                      <button onClick={() => setViewSupplier(null)} className="p-2 hover:bg-gray-200 dark:hover:bg-slate-800 rounded-full transition text-slate-400"><X size={32}/></button>
-                  </div>
-
-                  <div className="flex-1 overflow-y-auto p-10 custom-scrollbar grid grid-cols-1 md:grid-cols-2 gap-10">
-                      <section>
-                          <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-6 flex items-center"><Tag size={14} className="mr-2 text-hemp-600"/> Catálogo de Suministros</h4>
-                          <div className="space-y-3">
-                              {providedVarieties.length === 0 ? (
-                                  <div className="py-10 text-center text-slate-400 italic bg-slate-50 dark:bg-slate-950 rounded-3xl border border-dashed">Sin variedades registradas de este origen.</div>
-                              ) : providedVarieties.map(v => (
-                                  <div key={v.id} className="bg-white dark:bg-slate-800 p-4 rounded-2xl border dark:border-slate-700 flex items-center justify-between shadow-sm">
-                                      <div className="flex items-center gap-3">
-                                          <div className="bg-hemp-50 dark:bg-hemp-900/30 p-2 rounded-xl text-hemp-600"><Sprout size={18}/></div>
-                                          <p className="font-black text-slate-800 dark:text-white uppercase text-sm tracking-tight">{v.name}</p>
-                                      </div>
-                                      <span className="text-[10px] font-black uppercase text-slate-400 bg-slate-50 dark:bg-slate-900 px-2 py-1 rounded-lg border dark:border-slate-700">{v.usage}</span>
-                                  </div>
-                              ))}
-                          </div>
-                      </section>
-
-                      <section className="space-y-8">
-                          <div>
-                            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 flex items-center"><ShoppingBag size={14} className="mr-2 text-blue-600"/> Estadísticas de Entrega</h4>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="bg-blue-50 dark:bg-blue-900/20 p-5 rounded-3xl border border-blue-100 dark:border-blue-900/30">
-                                    <p className="text-[9px] font-black text-blue-600 dark:text-blue-400 uppercase mb-1">Volumen Histórico</p>
-                                    <p className="text-2xl font-black text-blue-900 dark:text-blue-100">{totalStockProvided} kg</p>
-                                </div>
-                                <div className="bg-emerald-50 dark:bg-emerald-900/20 p-5 rounded-3xl border border-emerald-100 dark:border-emerald-900/30">
-                                    <p className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase mb-1">Estatus</p>
-                                    <p className="text-xl font-black text-emerald-900 dark:text-emerald-100">Certificado</p>
-                                </div>
-                            </div>
-                          </div>
-
-                          <div className="bg-slate-900 rounded-3xl p-6 text-white overflow-hidden relative">
-                                <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">Punto Logístico de Origen</h4>
-                                <div className="h-40 rounded-2xl overflow-hidden border border-white/10 mb-4">
-                                    {viewSupplier.coordinates ? (
-                                        <iframe width="100%" height="100%" frameBorder="0" scrolling="no" src={`https://maps.google.com/maps?q=${viewSupplier.coordinates.lat},${viewSupplier.coordinates.lng}&z=14&output=embed`} className="grayscale"></iframe>
-                                    ) : <div className="h-full bg-slate-800 flex items-center justify-center text-xs text-slate-500 uppercase font-black">Sin coordenadas</div>}
-                                </div>
-                                <p className="text-xs text-slate-300 font-medium"><MapPin size={12} className="inline mr-1 text-red-500"/> {viewSupplier.address}, {viewSupplier.city}, {viewSupplier.province}</p>
-                          </div>
-                      </section>
-                  </div>
-              </div>
-          </div>
       )}
     </div>
   );
