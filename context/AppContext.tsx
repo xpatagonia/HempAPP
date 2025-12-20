@@ -114,7 +114,7 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// Motor de conversión camelCase -> snake_case
+// Motor de conversión camelCase -> snake_case mejorado
 const toSnakeCase = (obj: any) => {
     if (!obj || typeof obj !== 'object') return obj;
     const newObj: any = {};
@@ -127,7 +127,7 @@ const toSnakeCase = (obj: any) => {
     return newObj;
 };
 
-// Motor de conversión snake_case -> camelCase
+// Motor de conversión snake_case -> camelCase mejorado
 const toCamelCase = (obj: any) => {
     if (!obj || typeof obj !== 'object') return obj;
     const newObj: any = {};
@@ -199,6 +199,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           const connected = await checkConnection();
           if (!connected) {
               setIsEmergencyMode(true);
+              setUsersList(getFromLocal('users'));
+              setProjects(getFromLocal('projects')); setVarieties(getFromLocal('varieties'));
+              setSuppliers(getFromLocal('suppliers')); setClients(getFromLocal('clients'));
+              setLocations(getFromLocal('locations')); setPlots(getFromLocal('plots'));
+              setSeedBatches(getFromLocal('seedBatches')); setSeedMovements(getFromLocal('seedMovements'));
+              setResources(getFromLocal('resources')); setStoragePoints(getFromLocal('storagePoints'));
+              setTrialRecords(getFromLocal('trialRecords')); setLogs(getFromLocal('logs')); setTasks(getFromLocal('tasks'));
               setHydricRecords(getFromLocal('hydricRecords'));
           } else {
               setIsEmergencyMode(false);
@@ -244,30 +251,32 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const logout = () => { setCurrentUser(null); localStorage.removeItem('ht_session_user'); };
 
   const genericAdd = async (table: string, item: any, setter: any, localKey: string) => {
-      const dbItem = toSnakeCase(item);
+      // Limpieza de datos antes de enviar a Supabase
+      const processedItem = { ...item };
       
-      // Limpieza específica para campos numéricos en tablas críticas
-      if (table === 'hydric_records' || table === 'hydric_records') {
-          dbItem.amount_mm = Number(dbItem.amount_mm) || 0;
+      // Forzar tipos numéricos para tablas específicas
+      if (table === 'hydric_records') {
+          processedItem.amountMm = Number(processedItem.amountMm) || 0;
+      }
+      if (table === 'trial_records') {
+          if (processedItem.plantHeight !== undefined) processedItem.plantHeight = Number(processedItem.plantHeight);
+          if (processedItem.temperature !== undefined) processedItem.temperature = Number(processedItem.temperature);
       }
 
-      console.log(`[SUPABASE] Intentando insertar en ${table}:`, dbItem);
+      const dbItem = toSnakeCase(processedItem);
+      console.log(`[PERSISTENCIA] Insertando en ${table}:`, dbItem);
       
-      if (isEmergencyMode) {
-          setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
-          return true;
-      } else {
+      if (!isEmergencyMode) {
           try {
               const { error } = await supabase.from(table).insert([dbItem]);
               if (error) {
-                  console.error(`[SUPABASE ERROR] ${table}:`, error.message, error.details);
-                  alert(`Error en Supabase (${table}): ${error.message}`);
+                  console.error(`[ERROR SUPABASE] en ${table}:`, error.message, error.details);
                   throw error;
               }
               setter((prev: any[]) => [...prev, item]);
               return true;
           } catch (e: any) {
-              console.warn(`[FALLBACK LOCAL] Guardando en ${localKey} debido a error en servidor.`);
+              console.warn(`[FALLBACK] Error en servidor. Guardando localmente en ${localKey}.`);
               setter((prev: any[]) => { 
                   const n = [...prev, item]; 
                   saveToLocal(localKey, n); 
@@ -275,6 +284,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               });
               return true;
           }
+      } else {
+          setter((prev: any[]) => { 
+              const n = [...prev, item]; 
+              saveToLocal(localKey, n); 
+              return n; 
+          });
+          return true;
       }
   };
 
@@ -329,11 +345,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const addLocalSeedBatch = (s: SeedBatch) => setSeedBatches(prev => [...prev, s]);
   const updateSeedBatch = (s: SeedBatch) => genericUpdate('seed_batches', s, setSeedBatches, 'seedBatches');
   const deleteSeedBatch = async (id: string) => { await genericDelete('seed_batches', id, setSeedBatches, 'seedBatches'); };
-  
-  // FUNCIÓN CRÍTICA DE BALANCE HÍDRICO
   const addHydricRecord = (h: HydricRecord) => genericAdd('hydric_records', h, setHydricRecords, 'hydricRecords');
   const deleteHydricRecord = (id: string) => genericDelete('hydric_records', id, setHydricRecords, 'hydricRecords');
-
   const addSeedMovement = async (m: SeedMovement) => { return await genericAdd('seed_movements', m, setSeedMovements, 'seedMovements'); };
   const updateSeedMovement = (m: SeedMovement) => genericUpdate('seed_movements', m, setSeedMovements, 'seedMovements');
   const deleteSeedMovement = async (id: string) => { 
