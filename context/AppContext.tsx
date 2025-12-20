@@ -155,7 +155,10 @@ const toSnakeCase = (obj: any) => {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
             const snakeKey = manualMap[key] || key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
             let val = obj[key];
-            if ((key === 'relatedUserId' || key === 'clientId' || key === 'supplierId' || key === 'storagePointId' || key === 'varietyId' || key === 'projectId' || key === 'seedBatchId' || key === 'locationId') && val === '') val = null;
+            // Convertir vacíos a null para que Supabase no falle por restricciones de FK
+            if ((key === 'relatedUserId' || key === 'clientId' || key === 'supplierId' || key === 'storagePointId' || key === 'varietyId' || key === 'projectId' || key === 'seedBatchId' || key === 'locationId') && val === '') {
+                val = null;
+            }
             if (val !== undefined) {
                 newObj[snakeKey] = val;
             }

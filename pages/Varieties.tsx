@@ -1,9 +1,11 @@
-
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Variety, UsageType } from '../types';
-import { Plus, Search, Tag, Edit2, Trash2, CloudDownload, Sprout, AlertCircle, Building, Globe, Archive, Truck, ArrowRight, X, Sparkles, BookOpen, Info } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { 
+  Plus, Search, Tag, Edit2, Trash2, Sprout, AlertCircle, 
+  X, Sparkles, BookOpen, Info, Loader2, Save, Archive 
+} from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const HEMPIT_CATALOG = [
     { name: 'Fedora 17', usage: 'Fibra' as UsageType, cycleDays: 135, expectedThc: 0.12, knowledgeBase: 'Variedad monoica precoz. Excelente para fibra y grano. Sensible a la humedad excesiva en maduración.' },
@@ -22,6 +24,7 @@ export default function Varieties() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSupplierForImport, setSelectedSupplierForImport] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
   const [formData, setFormData] = useState<Partial<Variety>>({
     name: '', usage: 'Fibra', supplierId: '', cycleDays: 120, expectedThc: 0, notes: '', knowledgeBase: ''
@@ -29,49 +32,67 @@ export default function Varieties() {
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name || !formData.supplierId) return;
+    if (!formData.name || !formData.supplierId || isSaving) return;
     
-    const payload = {
-        name: formData.name!,
-        usage: formData.usage as UsageType,
-        supplierId: formData.supplierId!, 
-        cycleDays: Number(formData.cycleDays),
-        expectedThc: Number(formData.expectedThc),
-        notes: formData.notes || '',
-        knowledgeBase: formData.knowledgeBase || ''
-    };
+    setIsSaving(true);
+    try {
+        const payload = {
+            name: formData.name!.trim(),
+            usage: formData.usage as UsageType,
+            supplierId: formData.supplierId!, 
+            cycleDays: Number(formData.cycleDays),
+            expectedThc: Number(formData.expectedThc),
+            notes: formData.notes || '',
+            knowledgeBase: formData.knowledgeBase || ''
+        };
 
-    if (editingId) {
-      updateVariety({ ...payload, id: editingId } as Variety);
-    } else {
-      addVariety({ ...payload, id: Date.now().toString() } as Variety);
+        let success = false;
+        if (editingId) {
+            success = await updateVariety({ ...payload, id: editingId } as Variety);
+        } else {
+            success = await addVariety({ ...payload, id: crypto.randomUUID() } as Variety);
+        }
+        
+        if (success) {
+            closeModal();
+        } else {
+            alert("⚠️ Error: No se pudo grabar en el servidor. Verifique si ejecutó el Script SQL en Configuración.");
+        }
+    } catch (err) {
+        alert("Fallo de conexión con el servidor de datos.");
+    } finally {
+        setIsSaving(false);
     }
-    
-    closeModal();
   };
 
-  const handleHempITImport = () => {
-    if (!selectedSupplierForImport) {
+  const handleHempITImport = async () => {
+    if (!selectedSupplierForImport || isSaving) {
         alert("Selecciona un proveedor para asignar el catálogo.");
         return;
     }
     
-    HEMPIT_CATALOG.forEach(v => {
-        const exists = varieties.find(ex => ex.name.toLowerCase() === v.name.toLowerCase());
-        if (!exists) {
-            addVariety({
-                ...v,
-                id: `hempit-${v.name.toLowerCase().replace(' ', '-')}`,
-                supplierId: selectedSupplierForImport,
-                notes: 'Importado de catálogo oficial HempIT France.'
-            } as Variety);
+    setIsSaving(true);
+    let count = 0;
+    try {
+        for (const v of HEMPIT_CATALOG) {
+            const exists = varieties.find(ex => ex.name.toLowerCase() === v.name.toLowerCase());
+            if (!exists) {
+                const success = await addVariety({
+                    ...v,
+                    id: crypto.randomUUID(),
+                    supplierId: selectedSupplierForImport,
+                    notes: 'Importado de catálogo oficial HempIT France.'
+                } as Variety);
+                if (success) count++;
+            }
         }
-    });
-    
-    setIsImportModalOpen(false);
-    alert("✅ Catálogo HempIT France importado exitosamente.");
+        setIsImportModalOpen(false);
+        alert(`✅ Importación finalizada: ${count} nuevas variedades añadidas.`);
+    } finally {
+        setIsSaving(false);
+    }
   };
 
   const closeModal = () => {
@@ -102,7 +123,7 @@ export default function Varieties() {
       return v.name.toLowerCase().includes(searchTerm.toLowerCase()) || supplierName.toLowerCase().includes(searchTerm.toLowerCase());
   });
 
-  const inputClass = "w-full border border-gray-300 dark:border-slate-800 bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 p-2.5 rounded-xl focus:ring-2 focus:ring-hemp-500 outline-none transition-all";
+  const inputClass = "w-full border border-gray-300 dark:border-slate-800 bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 p-2.5 rounded-xl focus:ring-2 focus:ring-hemp-500 outline-none transition-all disabled:opacity-50";
 
   return (
     <div className="animate-in fade-in duration-500">
@@ -190,6 +211,7 @@ export default function Varieties() {
                         onClick={() => navigate(`/seed-batches?variety=${v.name}`)}
                         className="w-full bg-slate-900 dark:bg-hemp-600 text-white py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center hover:scale-[1.02] transition-all shadow-md group"
                     >
+                        {/* Fixed: Added Archive to lucide-react imports */}
                         <Archive size={14} className="mr-2 text-hemp-400 group-hover:scale-110 transition-transform" />
                         Ver Inventario Lotes
                     </button>
@@ -211,7 +233,7 @@ export default function Varieties() {
                               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Importador de Catálogo Oficial</p>
                           </div>
                       </div>
-                      <button onClick={() => setIsImportModalOpen(false)} className="text-slate-400 hover:text-slate-600"><X size={28}/></button>
+                      <button onClick={() => !isSaving && setIsImportModalOpen(false)} className="text-slate-400 hover:text-slate-600 disabled:opacity-50" disabled={isSaving}><X size={28}/></button>
                   </div>
 
                   <div className="space-y-6">
@@ -221,6 +243,7 @@ export default function Varieties() {
                             className={inputClass} 
                             value={selectedSupplierForImport} 
                             onChange={e => setSelectedSupplierForImport(e.target.value)}
+                            disabled={isSaving}
                           >
                               <option value="">-- Seleccionar Proveedor --</option>
                               {suppliers.filter(s => s.category === 'Semillas').map(s => (
@@ -232,9 +255,10 @@ export default function Varieties() {
                       
                       <button 
                         onClick={handleHempITImport}
-                        disabled={!selectedSupplierForImport}
-                        className="w-full bg-blue-600 text-white py-4 rounded-3xl font-black text-xs uppercase tracking-[0.2em] shadow-xl hover:scale-[1.02] transition-all disabled:opacity-30"
+                        disabled={!selectedSupplierForImport || isSaving}
+                        className="w-full bg-blue-600 text-white py-4 rounded-3xl font-black text-xs uppercase tracking-[0.2em] shadow-xl hover:scale-[1.02] transition-all disabled:opacity-30 flex items-center justify-center"
                       >
+                          {isSaving ? <Loader2 className="animate-spin mr-2"/> : null}
                           Confirmar Importación
                       </button>
                   </div>
@@ -246,7 +270,10 @@ export default function Varieties() {
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-2xl w-full p-10 shadow-2xl animate-in zoom-in-95 max-h-[95vh] overflow-y-auto">
-            <h2 className="text-3xl font-black mb-8 text-gray-900 dark:text-white uppercase tracking-tighter italic">Gestionar <span className="text-hemp-600">Genética</span></h2>
+            <div className="flex justify-between items-center mb-8">
+              <h2 className="text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tighter italic">Gestionar <span className="text-hemp-600">Genética</span></h2>
+              <button onClick={() => !isSaving && closeModal()} disabled={isSaving} className="text-slate-400 hover:text-slate-600"><X size={28}/></button>
+            </div>
             
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="bg-gray-50 dark:bg-slate-950 p-6 rounded-[32px] border dark:border-slate-800">
@@ -254,12 +281,12 @@ export default function Varieties() {
                   <div className="space-y-4">
                     <div>
                       <label className="block text-[10px] font-black text-gray-500 uppercase mb-1.5 tracking-widest ml-1">Nombre Comercial *</label>
-                      <input required type="text" className={inputClass} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Ej: Fedora 17" />
+                      <input required disabled={isSaving} type="text" className={inputClass} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Ej: Fedora 17" />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="block text-[10px] font-black text-gray-500 uppercase mb-1.5 tracking-widest ml-1">Uso Principal</label>
-                        <select className={inputClass} value={formData.usage} onChange={e => setFormData({...formData, usage: e.target.value as UsageType})}>
+                        <select disabled={isSaving} className={inputClass} value={formData.usage} onChange={e => setFormData({...formData, usage: e.target.value as UsageType})}>
                           <option value="Fibra">Fibra</option>
                           <option value="Grano">Grano</option>
                           <option value="Dual">Dual</option>
@@ -268,7 +295,7 @@ export default function Varieties() {
                       </div>
                       <div>
                         <label className="block text-[10px] font-black text-gray-500 uppercase mb-1.5 tracking-widest ml-1">Proveedor *</label>
-                        <select required className={inputClass} value={formData.supplierId} onChange={e => setFormData({...formData, supplierId: e.target.value})}>
+                        <select required disabled={isSaving} className={inputClass} value={formData.supplierId} onChange={e => setFormData({...formData, supplierId: e.target.value})}>
                             <option value="">Seleccionar...</option>
                             {suppliers.map(s => <option key={s.id} value={s.id}>{s.name} ({s.country})</option>)}
                         </select>
@@ -277,11 +304,11 @@ export default function Varieties() {
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="block text-[10px] font-black text-gray-500 uppercase mb-1.5 tracking-widest ml-1">Días de Ciclo</label>
-                        <input type="number" className={inputClass} value={formData.cycleDays} onChange={e => setFormData({...formData, cycleDays: Number(e.target.value)})} />
+                        <input disabled={isSaving} type="number" className={inputClass} value={formData.cycleDays} onChange={e => setFormData({...formData, cycleDays: Number(e.target.value)})} />
                       </div>
                       <div>
                         <label className="block text-[10px] font-black text-gray-500 uppercase mb-1.5 tracking-widest ml-1">% THC Esperado</label>
-                        <input type="number" step="0.01" className={inputClass} value={formData.expectedThc} onChange={e => setFormData({...formData, expectedThc: Number(e.target.value)})} />
+                        <input disabled={isSaving} type="number" step="0.01" className={inputClass} value={formData.expectedThc} onChange={e => setFormData({...formData, expectedThc: Number(e.target.value)})} />
                       </div>
                     </div>
                   </div>
@@ -289,12 +316,15 @@ export default function Varieties() {
 
               <div className="bg-blue-50/50 dark:bg-blue-900/10 p-6 rounded-[32px] border border-blue-100 dark:border-blue-900/20">
                    <h3 className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-4 flex items-center"><BookOpen size={14} className="mr-2"/> Base de Conocimiento (Protocolos)</h3>
-                   <textarea className={`${inputClass} border-blue-100`} rows={4} value={formData.knowledgeBase || ''} onChange={e => setFormData({...formData, knowledgeBase: e.target.value})} placeholder="Instrucciones especiales de siembra, fertilización o cosecha para esta variedad..."></textarea>
+                   <textarea disabled={isSaving} className={`${inputClass} border-blue-100`} rows={4} value={formData.knowledgeBase || ''} onChange={e => setFormData({...formData, knowledgeBase: e.target.value})} placeholder="Instrucciones especiales de siembra, fertilización o cosecha para esta variedad..."></textarea>
               </div>
 
               <div className="flex justify-end space-x-3 pt-6 border-t dark:border-slate-800">
-                <button type="button" onClick={closeModal} className="px-8 py-3 text-slate-400 font-black uppercase text-[10px] tracking-widest hover:text-slate-600 transition">Cancelar</button>
-                <button type="submit" className="bg-slate-900 dark:bg-hemp-600 text-white px-10 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl flex items-center hover:scale-[1.02] active:scale-[0.98] transition-all">Guardar Genética</button>
+                <button type="button" disabled={isSaving} onClick={closeModal} className="px-8 py-3 text-slate-400 font-black uppercase text-[10px] tracking-widest hover:text-slate-600 transition disabled:opacity-50">Cancelar</button>
+                <button type="submit" disabled={isSaving} className="bg-slate-900 dark:bg-hemp-600 text-white px-10 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl flex items-center hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50">
+                    {isSaving ? <Loader2 className="animate-spin mr-2" size={18}/> : <Save className="mr-2" size={18}/>}
+                    {isSaving ? 'Guardando...' : 'Guardar Genética'}
+                </button>
               </div>
             </form>
           </div>
