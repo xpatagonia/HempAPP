@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Sprout, Menu, Leaf, LogOut, 
   UserCircle, Calendar, Sun, Moon, 
   Tractor, BookOpen, Bot, Settings, 
-  FolderKanban, CheckSquare, BarChart3, Users, Warehouse, Package, X, Bell
+  FolderKanban, CheckSquare, BarChart3, Users, Warehouse, Package, X, Bell, Globe
 } from 'lucide-react';
 
 const NavItem = ({ to, icon: Icon, label, badge }: any) => {
@@ -64,6 +64,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           <NavItem to="/projects" icon={FolderKanban} label="Campañas" />
 
           <div className="pt-8 pb-3 px-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Cadena de Valor</div>
+          <NavItem to="/logistics-map" icon={Globe} label="Torre de Control" />
           <NavItem to="/storage" icon={Warehouse} label="Almacenes" />
           <NavItem to="/seed-batches" icon={Package} label="Inventario" />
           <NavItem to="/varieties" icon={BookOpen} label="Genética" />

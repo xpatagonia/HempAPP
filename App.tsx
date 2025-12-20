@@ -6,7 +6,7 @@ import { Layout } from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import Varieties from './pages/Varieties';
 import Locations from './pages/Locations';
-import LocationDetails from './pages/LocationDetails'; // NEW
+import LocationDetails from './pages/LocationDetails';
 import Plots from './pages/Plots';
 import PlotDetails from './pages/PlotDetails';
 import Projects from './pages/Projects';
@@ -23,6 +23,7 @@ import Suppliers from './pages/Suppliers';
 import Clients from './pages/Clients'; 
 import Resources from './pages/Resources'; 
 import Storage from './pages/Storage'; 
+import LogisticsMap from './pages/LogisticsMap';
 
 // Componente para proteger rutas
 const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
@@ -102,13 +103,17 @@ export default function App() {
                 <Storage />
               </ProtectedRoute>
             } />
+            <Route path="/logistics-map" element={
+              <ProtectedRoute>
+                <LogisticsMap />
+              </ProtectedRoute>
+            } />
             <Route path="/seed-batches" element={
               <ProtectedRoute>
                 <SeedBatches />
               </ProtectedRoute>
             } />
             
-            {/* Locations & Details */}
             <Route path="/locations" element={
               <ProtectedRoute>
                 <Locations />
@@ -120,7 +125,6 @@ export default function App() {
               </ProtectedRoute>
             } />
 
-            {/* Plots & Details */}
             <Route path="/plots" element={
               <ProtectedRoute>
                 <Plots />

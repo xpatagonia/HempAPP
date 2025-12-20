@@ -25,14 +25,35 @@ interface MapEditorProps {
     height?: string;
 }
 
-// FIX: Resizer component to handle modal transitions
+// FIX DEFINITIVO: Componente que observa el tamaño del contenedor
 const MapResizer = () => {
     const map = useMap();
+    const container = map.getContainer();
+
     useEffect(() => {
-        setTimeout(() => {
-            map.invalidateSize();
-        }, 400);
-    }, [map]);
+        if (!container) return;
+
+        // Invalidate size immediately
+        map.invalidateSize();
+
+        // Observer for when the modal animation finishes or container changes
+        const observer = new ResizeObserver(() => {
+            setTimeout(() => {
+                map.invalidateSize();
+            }, 100);
+        });
+
+        observer.observe(container);
+        
+        // Safety timeout
+        const timer = setTimeout(() => map.invalidateSize(), 500);
+
+        return () => {
+            observer.disconnect();
+            clearTimeout(timer);
+        };
+    }, [map, container]);
+
     return null;
 };
 
@@ -47,7 +68,7 @@ const MapRecenter = ({ center }: { center: { lat: number, lng: number } }) => {
     const map = useMap();
     useEffect(() => {
         if (center && center.lat !== 0 && center.lng !== 0) {
-            map.flyTo(center, 15, { duration: 1.5 });
+            map.flyTo(center, map.getZoom() || 15, { duration: 1.5 });
         }
     }, [center, map]);
     return null;
@@ -124,21 +145,18 @@ export default function MapEditor({ initialPolygon = [], initialCenter, referenc
     };
 
     return (
-        <div className="relative rounded-2xl overflow-hidden border border-gray-300 dark:border-slate-800 shadow-inner z-0" style={{ height }}>
+        <div className="relative rounded-2xl overflow-hidden border border-gray-300 dark:border-slate-800 shadow-inner z-0 w-full" style={{ height }}>
             {!readOnly && (
-                <div className="absolute top-2 right-2 z-[400] bg-white dark:bg-slate-900 p-2 rounded-xl shadow-lg flex flex-col gap-2 border dark:border-slate-700">
-                    <button onClick={() => setPolygon([])} className="flex items-center text-[10px] text-red-600 font-black uppercase tracking-widest bg-red-50 dark:bg-red-900/20 p-2 rounded-lg hover:bg-red-100" type="button">
-                        <Trash2 size={12} className="mr-1"/> Borrar
+                <div className="absolute top-2 right-2 z-[1000] bg-white dark:bg-slate-900 p-2 rounded-xl shadow-lg flex flex-col gap-2 border dark:border-slate-700">
+                    <button onClick={() => { setPolygon([]); if(onPolygonChange) onPolygonChange([], 0, center, 0); }} className="flex items-center text-[10px] text-red-600 font-black uppercase tracking-widest bg-red-50 dark:bg-red-900/20 p-2 rounded-lg hover:bg-red-100" type="button">
+                        <Trash2 size={12} className="mr-1"/> Borrar Marcadores
                     </button>
-                    <div className="text-[10px] font-black text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-slate-800 p-2 rounded-lg border dark:border-slate-700">
-                        <div className="flex items-center uppercase tracking-tighter"><Maximize size={10} className="mr-1 text-hemp-600"/> Lat: {center.lat.toFixed(4)}</div>
-                    </div>
                 </div>
             )}
 
-            <MapContainer center={center} zoom={15} style={{ height: "100%", width: "100%" }}>
+            <MapContainer center={center} zoom={15} style={{ height: "100%", width: "100%" }} scrollWheelZoom={!readOnly}>
                 <MapResizer />
-                <TileLayer attribution='&copy; OpenStreetMap contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                <TileLayer attribution='&copy; OSM' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                 {!readOnly && <MapEvents onAddPoint={handleAddPoint} />}
                 <MapRecenter center={center} />
 
@@ -146,17 +164,22 @@ export default function MapEditor({ initialPolygon = [], initialCenter, referenc
                     <Polygon positions={referencePolygon} pathOptions={{ color: '#ef4444', fillColor: 'transparent', weight: 2, dashArray: '5, 10' }} />
                 )}
 
-                {polygon.length > 0 && (
-                    <Polygon positions={polygon} pathOptions={{ color: '#22c55e', fillColor: '#22c55e', fillOpacity: 0.5, weight: 3 }} />
+                {polygon.length > 1 && !readOnly && (
+                    <Polygon positions={polygon} pathOptions={{ color: '#16a34a', fillColor: '#16a34a', fillOpacity: 0.3, weight: 3 }} />
                 )}
 
-                {!readOnly && polygon.map((pos, idx) => ( <Marker key={idx} position={pos} opacity={0.8} /> ))}
-                {(readOnly || (polygon.length === 0)) && center.lat !== 0 && ( <Marker position={center} opacity={1.0} /> )}
+                {polygon.length > 0 && polygon.map((pos, idx) => ( 
+                    <Marker key={idx} position={pos} interactive={!readOnly} /> 
+                ))}
+                
+                {readOnly && polygon.length === 0 && center.lat !== 0 && ( 
+                    <Marker position={center} /> 
+                )}
             </MapContainer>
             
             {!readOnly && polygon.length === 0 && (
-                <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-[400] bg-black/70 text-white px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest pointer-events-none flex items-center shadow-2xl border border-white/20 backdrop-blur-sm">
-                    <MousePointer size={12} className="mr-2 animate-pulse"/> Haz clic para marcar ubicación exacta
+                <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-[1000] bg-slate-900/80 text-white px-4 py-2 rounded-full text-[9px] font-black uppercase tracking-[0.2em] pointer-events-none flex items-center shadow-2xl border border-white/20 backdrop-blur-md">
+                    <MousePointer size={12} className="mr-2 animate-pulse text-hemp-400"/> Marcar ubicación en el mapa
                 </div>
             )}
         </div>
