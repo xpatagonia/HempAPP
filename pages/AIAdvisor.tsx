@@ -9,7 +9,7 @@ interface Message { id: string; role: 'user' | 'model' | 'error'; text: string; 
 export default function AIAdvisor() {
     const { appName } = useAppContext();
     const [messages, setMessages] = useState<Message[]>([
-        { id: '1', role: 'model', text: `Terminal de Inteligencia ${appName} v5.8.0.\nMotor: Gemini-3-Pro.\n\nEstatus: Enlace de datos establecido.` }
+        { id: '1', role: 'model', text: `Terminal de Inteligencia ${appName} v5.9.0.\nMotor: Gemini-3-Flash (Alta Velocidad).\n\nEstatus: Enlace de datos establecido. Listo para consultas.` }
     ]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -45,10 +45,11 @@ export default function AIAdvisor() {
         setIsLoading(true);
 
         try {
-            // El SDK requiere que apiKey se pase como un objeto con nombre
-            // Se asume que process.env.API_KEY está disponible por la configuración de Vite
+            // El API_KEY se inyecta desde vite.config.ts
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-            const modelName = 'gemini-3-pro-preview';
+            
+            // CAMBIO A FLASH: Resuelve el error 429 de cuota limit: 0 en Pro
+            const modelName = 'gemini-3-flash-preview';
             
             let response;
             if (userMsg.image) {
@@ -57,12 +58,12 @@ export default function AIAdvisor() {
                     model: modelName,
                     contents: {
                         parts: [
-                            { text: userMsg.text || "Realiza un análisis agronómico de esta muestra." },
+                            { text: userMsg.text || "Realiza un análisis agronómico detallado de esta muestra de cáñamo." },
                             { inlineData: { mimeType: 'image/jpeg', data: base64Data } }
                         ]
                     },
                     config: { 
-                        systemInstruction: `Eres el consultor experto senior de ${appName}. Analiza con precisión científica y responde en español.` 
+                        systemInstruction: `Eres el consultor experto senior de ${appName}. Analiza con precisión científica, fisiología vegetal y agronomía aplicada. Responde siempre en español de forma profesional.` 
                     }
                 });
             } else {
@@ -70,27 +71,28 @@ export default function AIAdvisor() {
                     model: modelName,
                     contents: userMsg.text,
                     config: { 
-                        systemInstruction: `Eres el consultor experto senior de ${appName}. Responde con lenguaje técnico y profesional en español.` 
+                        systemInstruction: `Eres el consultor experto senior de ${appName}. Responde con lenguaje técnico agrónomo, enfocado en cáñamo industrial y gestión de cultivos. Idioma: Español.` 
                     }
                 });
             }
 
-            // Acceso directo a la propiedad .text según las reglas del SDK
             const responseText = response.text;
             if (responseText) {
                 setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', text: responseText }]);
             } else {
-                throw new Error("El modelo no devolvió una respuesta válida.");
+                throw new Error("El motor neuronal no generó una respuesta válida.");
             }
             
         } catch (err: any) {
             console.error("AI Runtime Error:", err);
             
-            // Mensaje de error más genérico pero útil para depuración
             let errorMessage = `ERROR DE PROTOCOLO: ${err.message}`;
             
-            if (err.message && err.message.includes("API key")) {
-              errorMessage = "FALLO DE IDENTIDAD: La API_KEY no ha sido reconocida.\n\n1. Revisa que en Vercel el nombre sea 'API_KEY'.\n2. Asegúrate de haber hecho un 'Redeploy' manual (Deployment > Redeploy).";
+            // Manejo específico de cuotas para el usuario
+            if (err.message && (err.message.includes("429") || err.message.includes("quota"))) {
+              errorMessage = "CUOTA AGOTADA: Has excedido el límite de consultas gratuitas de Google para hoy.\n\nSolución:\n1. Espera unos minutos y reintenta.\n2. Revisa tu consola de Google AI Studio para verificar los límites de tu API Key.";
+            } else if (err.message && err.message.includes("API key")) {
+              errorMessage = "FALLO DE IDENTIDAD: La API_KEY no ha sido reconocida o no está configurada en Vercel.";
             }
 
             setMessages(prev => [...prev, { 
@@ -111,7 +113,7 @@ export default function AIAdvisor() {
                     <div>
                         <h1 className="text-4xl font-black text-slate-800 dark:text-white tracking-tighter uppercase italic">{appName} <span className="text-hemp-600">Core</span></h1>
                         <p className="text-[11px] text-slate-400 font-bold uppercase tracking-[0.4em] flex items-center mt-1">
-                            <Terminal size={12} className="mr-2"/> NEURAL-LINK ACTIVE
+                            <Terminal size={12} className="mr-2"/> ENGINE: GEMINI-3-FLASH
                         </p>
                     </div>
                 </div>
@@ -130,9 +132,9 @@ export default function AIAdvisor() {
                             }`}>
                                 <div className="flex items-center gap-2 mb-4 opacity-50 text-[10px] font-black uppercase tracking-widest">
                                     {msg.role === 'user' ? <User size={12}/> : msg.role === 'error' ? <AlertTriangle size={12}/> : <Bot size={12}/>} 
-                                    {msg.role === 'user' ? 'Técnico de Campo' : msg.role === 'error' ? 'Fallo Neural' : `${appName} Advisor`}
+                                    {msg.role === 'user' ? 'Técnico de Campo' : msg.role === 'error' ? 'Fallo de Red' : `${appName} Advisor`}
                                 </div>
-                                {msg.image && <img src={msg.image} className="mb-4 rounded-2xl max-h-64 w-full object-cover border border-white/10 shadow-lg" alt="Captura" />}
+                                {msg.image && <img src={msg.image} className="mb-4 rounded-2xl max-h-64 w-full object-cover border border-white/10 shadow-lg" alt="Captura de Ensayo" />}
                                 <div className="text-sm md:text-base leading-relaxed font-medium whitespace-pre-wrap font-mono">{msg.text}</div>
                             </div>
                         </div>
@@ -156,7 +158,7 @@ export default function AIAdvisor() {
                         </label>
                         <input 
                             type="text" className="flex-1 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/5 rounded-[24px] px-6 md:px-8 py-4 md:py-5 focus:ring-4 focus:ring-hemp-600/20 outline-none text-base text-slate-800 dark:text-white placeholder-slate-400 font-mono"
-                            placeholder="Ingrese su consulta técnica..." value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSend()}
+                            placeholder="Consultar al experto sobre el cultivo..." value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSend()}
                         />
                         <button onClick={handleSend} disabled={isLoading} className="bg-hemp-600 text-white p-4 md:p-5 rounded-[24px] shadow-lg disabled:opacity-30 active:scale-95 transition-all">
                             <Send size={28} />
