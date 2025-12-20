@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Save, Database, Copy, RefreshCw, Lock, Settings as SettingsIcon, ShieldCheck, PlayCircle, CheckCircle2, Layout, Image as ImageIcon, Trash2, RotateCcw, Cpu, Globe, Shield, Server, AlertTriangle } from 'lucide-react';
+import { Save, Database, Copy, RefreshCw, Lock, Settings as SettingsIcon, ShieldCheck, PlayCircle, CheckCircle2, Layout, Image as ImageIcon, Trash2, RotateCcw, Cpu, Globe, Shield, Server, AlertTriangle, Eraser } from 'lucide-react';
 
 export default function Settings() {
   const { currentUser, appName, appLogo, updateBranding, isEmergencyMode, refreshData } = useAppContext();
@@ -108,18 +108,36 @@ export default function Settings() {
               <div className="bg-slate-900 border border-slate-800 p-8 rounded-[32px] shadow-2xl relative overflow-hidden">
                   <div className="flex items-center space-x-3 mb-6">
                       <Shield className="text-hemp-500" size={24}/>
-                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Protocolo de Reconstrucción Total</h3>
+                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Protocolo de Base de Datos</h3>
                   </div>
                   <div className="bg-amber-900/20 border border-amber-500/30 p-4 rounded-2xl mb-6 flex items-start text-amber-200">
                       <AlertTriangle className="text-amber-500 mr-3 flex-shrink-0" size={20}/>
                       <div className="text-xs space-y-2 leading-relaxed">
-                        <p className="font-bold">⚠️ ADVERTENCIA: Este script ELIMINARÁ todas las tablas para corregir errores de estructura.</p>
-                        <p>Úsalo para asegurar que <code className="bg-black/40 px-1 rounded">client_id</code> e <code className="bg-black/40 px-1 rounded">is_network_member</code> existan correctamente.</p>
-                        <p className="font-black text-white underline">EL SCRIPT CREARÁ UN USUARIO: admin@hempc.com / admin123</p>
+                        <p className="font-bold uppercase tracking-tight">Zona de Mantenimiento Crítico</p>
+                        <p>Utilice estos comandos para resetear el sistema o reparar errores de esquema en la nube.</p>
                       </div>
                   </div>
 
                   <div className="space-y-4">
+                    <button onClick={() => {
+                      const sql = `
+-- LIMPIEZA TOTAL SIN BORRAR USUARIOS
+TRUNCATE TABLE public.tasks, public.seed_movements, public.seed_batches, public.hydric_records, public.trial_records, public.field_logs, public.plots, public.locations, public.clients, public.varieties, public.suppliers, public.resources, public.storage_points, public.projects RESTART IDENTITY CASCADE;
+
+-- DESVINCULAR USUARIOS DE EMPRESAS QUE YA NO EXISTEN
+UPDATE public.users SET client_id = NULL;
+
+-- RECARGAR CACHE
+NOTIFY pgrst, 'reload schema';
+                      `;
+                      navigator.clipboard.writeText(sql.trim());
+                      alert("Script de Depuración Copiado. Pégalo en el SQL Editor de Supabase y dale a RUN. Esto borrará todo excepto los usuarios.");
+                    }} className="w-full bg-amber-600 hover:bg-amber-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center transition-all shadow-xl">
+                        <Eraser size={18} className="mr-2"/> Copiar Script: Limpiar Todo (Preservar Usuarios)
+                    </button>
+
+                    <div className="h-px bg-slate-800 my-4"></div>
+
                     <button onClick={() => {
                       const sql = `
 -- 1. LIMPIEZA DE TABLAS
@@ -260,17 +278,9 @@ VALUES ('root-user', 'Super Administrador', 'admin@hempc.com', 'super_admin', 'a
 NOTIFY pgrst, 'reload schema';
                       `;
                       navigator.clipboard.writeText(sql.trim());
-                      alert("Script Nuclear Copiado. Pégalo en el SQL Editor de Supabase y dale a RUN.");
+                      alert("Script Nuclear Copiado. Pégalo en el SQL Editor de Supabase y dale a RUN. Esto BORRARÁ TODOS los datos incluyendo usuarios.");
                     }} className="w-full bg-red-600 hover:bg-red-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center transition-all shadow-xl">
-                        <RotateCcw size={18} className="mr-2"/> Copiar Script + Crear Admin Inicial
-                    </button>
-
-                    <button onClick={() => {
-                      const sql = `ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS is_network_member BOOLEAN DEFAULT false; ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS client_id TEXT; NOTIFY pgrst, 'reload schema';`;
-                      navigator.clipboard.writeText(sql);
-                      alert("Script de Reparación Rápida Copiado.");
-                    }} className="w-full bg-slate-800 hover:bg-slate-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center transition-all border border-slate-700">
-                        <RefreshCw size={18} className="mr-2"/> Reparación Rápida (Solo Columnas + Cache)
+                        <RotateCcw size={18} className="mr-2"/> Reconstrucción Total (Borra Usuarios)
                     </button>
                   </div>
               </div>

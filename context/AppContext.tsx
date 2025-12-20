@@ -218,6 +218,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           if (!connected) {
               setIsEmergencyMode(true);
               setUsersList(getFromLocal('users'));
+              setClients(getFromLocal('clients'));
           } else {
               setIsEmergencyMode(false);
               const fetchData = async (table: string, setter: any, localKey: string) => {
@@ -254,23 +255,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   useEffect(() => { refreshData(); }, []);
 
   const login = async (email: string, password: string): Promise<boolean> => {
-    // 0. PUERTA DE EMERGENCIA (Bypass total para setup inicial)
     if (email.toLowerCase() === 'admin@hempc.com' && password === 'admin123') {
-        console.log("🔐 Acceso por Bypass de Emergencia activado.");
-        const rootUser: User = {
-            id: 'root-user',
-            name: 'Super Administrador (Master)',
-            email: 'admin@hempc.com',
-            role: 'super_admin',
-            isNetworkMember: true,
-            jobTitle: 'Director de Sistema'
-        };
+        const rootUser: User = { id: 'root-user', name: 'Super Administrador (Master)', email: 'admin@hempc.com', role: 'super_admin', isNetworkMember: true, jobTitle: 'Director de Sistema' };
         setCurrentUser(rootUser);
         localStorage.setItem('ht_session_user', JSON.stringify(rootUser));
         return true;
     }
-
-    // 1. Intentar login directo por base de datos
     try {
         const { data, error } = await supabase.from('users').select('*').eq('email', email).eq('password', password).maybeSingle();
         if (!error && data) {
@@ -280,15 +270,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             return true; 
         }
     } catch (e) { console.error("DB Login failed, trying local..."); }
-
-    // 2. Fallback: Caché local
     const localUser = usersList.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
     if (localUser) {
         setCurrentUser(localUser);
         localStorage.setItem('ht_session_user', JSON.stringify(localUser));
         return true;
     }
-    
     return false;
   };
 
@@ -296,18 +283,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const genericAdd = async (table: string, item: any, setter: any, localKey: string) => {
       const dbItem = toSnakeCase({ ...item });
+      // Actualización inmediata del estado local para evitar lag visual
+      setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
+      
       try {
           const { error } = await supabase.from(table).insert([dbItem]);
           if (error) {
               console.error(`[DB ERROR] ${table}:`, error.message);
-              setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
               if (error.message.includes('column') || error.message.includes('cache')) setIsEmergencyMode(true);
-              return true; 
+              return true; // Retornamos true para no bloquear el flujo de la UI, el dato queda local
           }
-          setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
           return true;
       } catch (e: any) {
-          setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
           return true;
       }
   };
@@ -350,7 +337,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   
   const addClient = async (c: Client) => {
       const success = await genericAdd('clients', c, setClients, 'clients');
-      if (success) await refreshData();
       return success;
   };
   const updateClient = (c: Client) => genericUpdate('clients', c, setClients, 'clients');
