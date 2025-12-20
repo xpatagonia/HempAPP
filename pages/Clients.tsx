@@ -55,7 +55,6 @@ export default function Clients() {
             id: Date.now().toString(),
         });
         if (success && payload.relatedUserId) {
-            // Actualizar el usuario para que tenga este clientId automáticamente
             const user = usersList.find(u => u.id === payload.relatedUserId);
             if (user) updateUser({ ...user, clientId: payload.relatedUserId });
         }
@@ -153,7 +152,7 @@ export default function Clients() {
             <h1 className="text-2xl font-bold text-gray-800 dark:text-white flex items-center">
                 <Briefcase className="mr-2 text-hemp-600"/> Gestión de Clientes
             </h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Orden Sugerido: 1. Crear Usuario -> 2. Vincular a Entidad.</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Orden Sugerido: 1. Crear Usuario &rarr; 2. Vincular a Entidad.</p>
         </div>
         {isAdmin && (
           <button onClick={() => { resetForm(); setIsModalOpen(true); }} className="bg-hemp-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-hemp-700 transition shadow-lg font-bold">

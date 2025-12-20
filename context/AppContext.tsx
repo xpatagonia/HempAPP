@@ -223,6 +223,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                   } else if (error) {
                       console.error(`[CLOUD LOAD ERROR] ${table}:`, error.message);
                       setter(getFromLocal(localKey));
+                      // Si falla por columna, activamos modo emergencia local
                       if (error.message.includes('column') || error.message.includes('cache')) setIsEmergencyMode(true);
                   }
               };
@@ -269,7 +270,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           const { error } = await supabase.from(table).insert([dbItem]);
           if (error) {
               console.error(`[DATABASE ERROR] ${table}:`, error.message);
-              // Fallback Local
+              // Fallback Local Inmediato
               setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
               
               if (error.message.includes('column') || error.message.includes('cache')) {
@@ -302,7 +303,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setter((prev: any[]) => { const n = prev.filter((i: any) => i.id !== id); saveToLocal(localKey, n); return n; });
   };
 
-  const addUser = (u: User) => genericAdd('users', u, setUsersList, 'users');
+  const addUser = async (u: User) => {
+    const success = await genericAdd('users', u, setUsersList, 'users');
+    if (success) await refreshData(); // Forzamos carga tras creación
+    return success;
+  };
   const updateUser = (u: User) => genericUpdate('users', u, setUsersList, 'users');
   const deleteUser = (id: string) => genericDelete('users', id, setUsersList, 'users');
   const addProject = (p: Project) => genericAdd('projects', p, setProjects, 'projects');
