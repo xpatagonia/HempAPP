@@ -185,36 +185,28 @@ export default function Settings() {
               <div className="bg-slate-900 border border-slate-800 p-8 rounded-[32px] shadow-2xl relative overflow-hidden">
                   <div className="flex items-center space-x-3 mb-6">
                       <Shield className="text-hemp-500" size={24}/>
-                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Script de Reparación Total (Corrección client_id)</h3>
+                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Script de Reparación Crítica (Fallo client_id)</h3>
                   </div>
-                  <p className="text-xs text-slate-400 mb-4 leading-relaxed">Ejecute este script en el SQL Editor de Supabase para corregir la columna faltante y habilitar el guardado de datos:</p>
+                  <p className="text-xs text-slate-400 mb-4 leading-relaxed italic">Atención: El error "client_id not found" se soluciona ejecutando este bloque en el SQL Editor de Supabase.</p>
                   <pre className="bg-black/50 p-6 rounded-2xl text-[10px] text-green-400 overflow-x-auto border border-white/5 font-mono h-80 custom-scrollbar">
-{`/* 1. ASEGURAR QUE LA COLUMNA client_id EXISTE EN USERS */
-ALTER TABLE users ADD COLUMN IF NOT EXISTS client_id TEXT;
+{`-- 1. SOLUCIÓN AL ERROR DE COLUMNA FALTANTE
+ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS client_id TEXT;
 
-/* 2. CREACIÓN DE TABLAS SI NO EXISTEN */
-CREATE TABLE IF NOT EXISTS hydric_records (
+-- 2. ASEGURAR ESTRUCTURA DE CLIENTES (ENTIDADES)
+CREATE TABLE IF NOT EXISTS public.clients (
   id TEXT PRIMARY KEY,
-  location_id TEXT,
-  plot_id TEXT,
-  date DATE,
-  time TEXT,
+  name TEXT NOT NULL,
   type TEXT,
-  amount_mm NUMERIC,
+  contact_name TEXT,
+  contact_phone TEXT,
+  email TEXT,
+  is_network_member BOOLEAN DEFAULT false,
+  cuit TEXT,
   notes TEXT,
-  created_by TEXT
+  related_user_id TEXT
 );
 
-CREATE TABLE IF NOT EXISTS field_logs (
-  id TEXT PRIMARY KEY,
-  plot_id TEXT,
-  date DATE,
-  time TEXT,
-  note TEXT,
-  photo_url TEXT
-);
-
-/* 3. DESHABILITAR RLS PARA ESTE PROTOTIPO (PERMITIR GUARDADO) */
+-- 3. REGLAS DE ACCESO PÚBLICO (MODO PROTOTIPO)
 ALTER TABLE users DISABLE ROW LEVEL SECURITY;
 ALTER TABLE clients DISABLE ROW LEVEL SECURITY;
 ALTER TABLE locations DISABLE ROW LEVEL SECURITY;
@@ -228,16 +220,16 @@ ALTER TABLE seed_batches DISABLE ROW LEVEL SECURITY;
 ALTER TABLE seed_movements DISABLE ROW LEVEL SECURITY;
 ALTER TABLE tasks DISABLE ROW LEVEL SECURITY;
 
-/* 4. OTORGAR PERMISOS PÚBLICOS */
+-- 4. PERMISOS
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;
 `}
                   </pre>
                   <button onClick={() => {
-                      const sql = `ALTER TABLE users ADD COLUMN IF NOT EXISTS client_id TEXT; ALTER TABLE users DISABLE ROW LEVEL SECURITY; ALTER TABLE clients DISABLE ROW LEVEL SECURITY; ALTER TABLE locations DISABLE ROW LEVEL SECURITY; ALTER TABLE plots DISABLE ROW LEVEL SECURITY; GRANT ALL ON ALL TABLES IN SCHEMA public TO anon;`;
+                      const sql = `ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS client_id TEXT; ALTER TABLE public.users DISABLE ROW LEVEL SECURITY; ALTER TABLE public.clients DISABLE ROW LEVEL SECURITY; GRANT ALL ON ALL TABLES IN SCHEMA public TO anon;`;
                       navigator.clipboard.writeText(sql);
-                      alert("SQL de reparación rápida copiado. Pégalo en Supabase > SQL Editor.");
+                      alert("SQL copiado. Pégalo en el SQL Editor de Supabase y dale a 'RUN'.");
                   }} className="mt-4 text-[10px] font-black text-hemp-400 uppercase tracking-widest flex items-center hover:text-white transition">
-                      <Copy size={12} className="mr-1"/> Copiar SQL de Reparación Rápida
+                      <Copy size={12} className="mr-1"/> Copiar Fix de Emergencia
                   </button>
               </div>
           </div>

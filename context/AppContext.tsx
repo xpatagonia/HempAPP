@@ -120,8 +120,13 @@ const toSnakeCase = (obj: any) => {
     const newObj: any = {};
     for (const key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
-            const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
-            newObj[snakeKey] = obj[key];
+            // Mapeo explícito para clientId -> client_id
+            if (key === 'clientId') {
+                newObj['client_id'] = obj[key];
+            } else {
+                const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+                newObj[snakeKey] = obj[key];
+            }
         }
     }
     return newObj;
@@ -197,13 +202,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       try {
           const connected = await checkConnection();
           if (!connected) {
-              console.warn("[CORE] Supabase no disponible. Usando datos locales persistidos.");
-              // Cargar de localstorage si no hay DB
               setUsersList(getFromLocal('users'));
               setClients(getFromLocal('clients'));
               setLocations(getFromLocal('locations'));
               setPlots(getFromLocal('plots'));
-              setHydricRecords(getFromLocal('hydricRecords'));
               setIsEmergencyMode(true);
           } else {
               setIsEmergencyMode(false);
@@ -214,10 +216,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                       setter(camelData);
                       saveToLocal(localKey, camelData);
                   } else if (error) {
-                      console.error(`[ERROR] Fallo al leer tabla ${table}:`, error.message);
-                      // Si falla el esquema, usamos local
+                      console.error(`[ERROR] Table ${table}:`, error.message);
                       setter(getFromLocal(localKey));
-                      setIsEmergencyMode(true);
+                      if (error.message.includes('column') || error.message.includes('schema')) setIsEmergencyMode(true);
                   }
               };
               await Promise.allSettled([
@@ -270,22 +271,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
 
       const dbItem = toSnakeCase(cleanItem);
-      console.log(`[CORE] Intentando guardar en ${table}:`, dbItem);
       
       try {
           const { error } = await supabase.from(table).insert([dbItem]);
           if (error) {
               console.error(`[DATABASE ERROR] ${table}:`, error.message);
-              // Fallback local instantáneo para no romper la UX
               setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
-              alert(`Aviso: Error en base de datos (${error.message}). El registro se guardó LOCALMENTE.`);
-              setIsEmergencyMode(true);
+              if (error.message.includes('schema') || error.message.includes('column')) setIsEmergencyMode(true);
               return true;
           }
           setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
           return true;
       } catch (e: any) {
-          console.warn(`[FALLBACK] Servidor inalcanzable. Guardando localmente en ${localKey}.`);
           setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
           return true;
       }
