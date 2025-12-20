@@ -274,7 +274,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               
               if (error.message.includes('column') || error.message.includes('cache')) {
                   setIsEmergencyMode(true);
-                  alert(`⚠️ Error de Servidor: La columna 'client_id' no fue reconocida. \n\nPor favor, vaya a Configuración > SQL Cloud y ejecute el script de reconstrucción.`);
+                  alert(`⚠️ Error de Servidor detectado. \n\nPor favor, vaya a Configuración > SQL Cloud y ejecute el script de reconstrucción de esquema.`);
               }
               return true; 
           }

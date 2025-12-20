@@ -55,8 +55,8 @@ export default function Settings() {
       <div className="flex items-center mb-6">
         <SettingsIcon className="text-hemp-600 mr-3" size={32} />
         <div>
-            <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Configuración del Servidor</h1>
-            <p className="text-gray-500">Mantenimiento de base de datos e identidad visual.</p>
+            <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Configuración Maestra</h1>
+            <p className="text-gray-500">Gestión de identidad y reconstrucción de base de datos.</p>
         </div>
       </div>
 
@@ -70,15 +70,15 @@ export default function Settings() {
           <div className="space-y-8 animate-in fade-in slide-in-from-top-4">
               <div className="bg-white dark:bg-slate-900 p-8 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-sm">
                   <h3 className="text-xl font-black text-slate-800 dark:text-white flex items-center mb-6">
-                      <Layout className="mr-2 text-hemp-600" size={20} /> Marca Blanca
+                      <Layout className="mr-2 text-hemp-600" size={20} /> Personalización Visual
                   </h3>
                   <div className="space-y-6">
                       <div>
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Nombre de la App</label>
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Nombre del Sistema</label>
                           <input type="text" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl font-bold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-hemp-600" value={editAppName} onChange={e => setEditAppName(e.target.value)} />
                       </div>
                       <div>
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">URL del Logo (PNG/SVG)</label>
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Logo URL</label>
                           <input type="text" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl font-bold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-hemp-600" value={editAppLogo || ''} onChange={e => setEditAppLogo(e.target.value)} placeholder="https://..." />
                       </div>
                       <button onClick={handleSaveBranding} className="w-full md:w-auto px-10 py-4 bg-hemp-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:scale-[1.02] transition-all">Actualizar Marca</button>
@@ -108,20 +108,20 @@ export default function Settings() {
               <div className="bg-slate-900 border border-slate-800 p-8 rounded-[32px] shadow-2xl relative overflow-hidden">
                   <div className="flex items-center space-x-3 mb-6">
                       <Shield className="text-hemp-500" size={24}/>
-                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Protocolo de Reconstrucción de Esquema</h3>
+                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Protocolo de Reconstrucción</h3>
                   </div>
-                  <div className="bg-amber-900/20 border border-amber-500/30 p-4 rounded-2xl mb-6 flex items-start text-amber-200">
+                  <div className="bg-amber-900/20 border border-amber-500/30 p-4 rounded-2xl mb-6 flex items-start">
                       <AlertTriangle className="text-amber-500 mr-3 flex-shrink-0" size={20}/>
-                      <div className="text-xs space-y-2">
-                        <p className="font-bold">⚠️ ATENCIÓN: La reconstrucción total eliminará todos los registros actuales para limpiar el caché de Supabase.</p>
-                        <p>Este proceso es necesario para corregir el error <code className="bg-black/40 px-1 rounded">client_id</code> permanentemente.</p>
+                      <div className="text-xs text-amber-200 leading-relaxed font-medium">
+                        <p className="font-bold mb-2">Esta acción borrará todas las tablas actuales y las recreará con la estructura correcta.</p>
+                        <p>Esto solucionará definitivamente el error <code className="bg-black/40 px-1 rounded text-white">client_id</code> al forzar la recarga del caché de Supabase.</p>
                       </div>
                   </div>
-
+                  
                   <div className="space-y-4">
-                    <button onClick={() => {
-                      const sql = `
--- 1. LIMPIEZA TOTAL
+                      <button onClick={() => {
+                        const sql = `
+-- 1. ELIMINAR TABLAS EXISTENTES (ORDEN DE DEPENDENCIAS)
 DROP TABLE IF EXISTS public.tasks CASCADE;
 DROP TABLE IF EXISTS public.seed_movements CASCADE;
 DROP TABLE IF EXISTS public.seed_batches CASCADE;
@@ -138,7 +138,7 @@ DROP TABLE IF EXISTS public.resources CASCADE;
 DROP TABLE IF EXISTS public.storage_points CASCADE;
 DROP TABLE IF EXISTS public.projects CASCADE;
 
--- 2. CREACIÓN DE TABLAS (ORDEN JERÁRQUICO)
+-- 2. CREAR TABLAS CON ESTRUCTURA CORRECTA
 CREATE TABLE public.users (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -186,62 +186,32 @@ CREATE TABLE public.locations (
   responsible_ids TEXT[]
 );
 
-CREATE TABLE public.plots (
-  id TEXT PRIMARY KEY,
-  location_id TEXT REFERENCES public.locations(id),
-  project_id TEXT,
-  variety_id TEXT,
-  seed_batch_id TEXT,
-  name TEXT NOT NULL,
-  type TEXT,
-  block TEXT,
-  replicate INTEGER,
-  surface_area NUMERIC,
-  surface_unit TEXT,
-  density NUMERIC,
-  status TEXT,
-  sowing_date TEXT,
-  owner_name TEXT,
-  responsible_ids TEXT[],
-  row_distance NUMERIC,
-  perimeter NUMERIC,
-  observations TEXT,
-  coordinates JSONB,
-  polygon JSONB,
-  irrigation_type TEXT
-);
-
--- 3. PERMISOS
+-- 3. PERMISOS Y SEGURIDAD
 ALTER TABLE public.users DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.clients DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.locations DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.plots DISABLE ROW LEVEL SECURITY;
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;
 
--- 4. RECARGA DE CACHÉ POSTGREST (REPARA EL ERROR DEFINITIVAMENTE)
+-- 4. !!! COMANDO CLAVE: RECARGAR CACHÉ DE ESQUEMA !!!
 NOTIFY pgrst, 'reload schema';
+                        `;
+                        navigator.clipboard.writeText(sql.trim());
+                        alert("🚀 Script de Reconstrucción Total copiado. Pégalo en el SQL Editor de Supabase.");
+                      }} className="w-full bg-red-600 hover:bg-red-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center transition-all shadow-xl">
+                          <RotateCcw size={18} className="mr-2"/> Copiar Script de Reconstrucción Total
+                      </button>
 
--- 5. USUARIO MAESTRO INICIAL (Opcional: puedes borrar esto si prefieres crear el tuyo)
--- INSERT INTO public.users (id, name, email, role, password) 
--- VALUES ('admin', 'Super Admin', 'admin@hempc.com', 'super_admin', 'admin123');
-                      `;
-                      navigator.clipboard.writeText(sql.trim());
-                      alert("Script de Reconstrucción Copiado. Pégalo en el SQL Editor de Supabase y dale a RUN.");
-                    }} className="w-full bg-red-600 hover:bg-red-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] flex items-center justify-center transition-all shadow-xl">
-                        <RotateCcw size={18} className="mr-2"/> Copiar Script de Reconstrucción Total
-                    </button>
-
-                    <button onClick={() => {
-                      const sql = `ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS client_id TEXT; NOTIFY pgrst, 'reload schema';`;
-                      navigator.clipboard.writeText(sql);
-                      alert("Script de Reparación Rápida Copiado.");
-                    }} className="w-full bg-slate-800 hover:bg-slate-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] flex items-center justify-center transition-all border border-slate-700">
-                        <RefreshCw size={18} className="mr-2"/> Copiar Script de Reparación Rápida (Solo client_id)
-                    </button>
+                      <button onClick={() => {
+                        const sql = `ALTER TABLE public.users ADD COLUMN IF NOT EXISTS client_id TEXT; NOTIFY pgrst, 'reload schema';`;
+                        navigator.clipboard.writeText(sql);
+                        alert("⚡ Script de Reparación Rápida copiado.");
+                      }} className="w-full bg-slate-800 hover:bg-slate-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center transition-all border border-slate-700">
+                          <RefreshCw size={18} className="mr-2"/> Reparación Rápida (Solo Columna + Caché)
+                      </button>
                   </div>
 
-                  <p className="mt-6 text-[10px] text-slate-500 text-center font-bold uppercase">
-                    Tras ejecutar el script, el servidor tardará unos segundos en actualizar el "Schema Cache".
+                  <p className="mt-6 text-[10px] text-slate-500 text-center font-bold uppercase tracking-tighter">
+                    Recomendado: Usar la reconstrucción total si el proyecto está en fase de desarrollo.
                   </p>
               </div>
           </div>
