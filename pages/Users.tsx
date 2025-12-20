@@ -1,22 +1,27 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { User, UserRole, RoleType, Client } from '../types';
-import { Plus, Trash2, Edit2, Shield, Wrench, Eye, AlertCircle, Lock, Key, Save, Loader2, Phone, Briefcase, User as UserIcon, CloudOff, Link as LinkIcon, UserCheck, Building, X, Sparkles, PlusCircle, Star } from 'lucide-react';
+import { Plus, Trash2, Edit2, Shield, Wrench, Eye, AlertCircle, Lock, Key, Save, Loader2, Phone, Briefcase, User as UserIcon, CloudOff, Link as LinkIcon, UserCheck, Building, X, Sparkles, PlusCircle, Star, Search, Filter, FilterX } from 'lucide-react';
 
 const PRESET_AVATARS = [
-    "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix",
-    "https://api.dicebear.com/7.x/avataaars/svg?seed=Aneka",
-    "https://api.dicebear.com/7.x/avataaars/svg?seed=Bob",
-    "https://api.dicebear.com/7.x/avataaars/svg?seed=Callie",
-    "https://api.dicebear.com/7.x/avataaars/svg?seed=Dante",
-    "https://api.dicebear.com/7.x/avataaars/svg?seed=Eliza",
-    "https://api.dicebear.com/7.x/avataaars/svg?seed=Gizmo",
-    "https://api.dicebear.com/7.x/avataaars/svg?seed=Harley"
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=AgriManager&backgroundColor=b6e3f4",
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=TechnicalField&backgroundColor=c0aede",
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=Producer&backgroundColor=d1d4f9",
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=Director&backgroundColor=ffdfbf",
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=Researcher&backgroundColor=ffd5dc",
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=Agronomist&backgroundColor=c0aede",
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=Operator&backgroundColor=b6e3f4",
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=Consultant&backgroundColor=d1d4f9"
 ];
 
 export default function Users() {
   const { usersList, addUser, updateUser, deleteUser, currentUser, clients, addClient } = useAppContext();
+  
+  // States for search and filter
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterRole, setFilterRole] = useState('all');
+  
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -33,9 +38,17 @@ export default function Users() {
   const isSuperAdmin = currentUser?.role === 'super_admin';
   const isAdmin = currentUser?.role === 'admin' || isSuperAdmin;
 
+  const filteredUsers = useMemo(() => {
+      return usersList.filter(u => {
+          const matchSearch = u.name.toLowerCase().includes(searchTerm.toLowerCase()) || u.email.toLowerCase().includes(searchTerm.toLowerCase());
+          const matchRole = filterRole === 'all' || u.role === filterRole;
+          return matchSearch && matchRole;
+      });
+  }, [usersList, searchTerm, filterRole]);
+
   const handleEdit = (user: User) => {
     if (!isSuperAdmin && user.role === 'super_admin') {
-        alert("Permisos insuficientes.");
+        alert("Permisos insuficientes para editar un Super Administrador.");
         return;
     }
     setFormData({ ...user, password: '' }); 
@@ -91,11 +104,11 @@ export default function Users() {
             const oldUser = usersList.find(u => u.id === editingId);
             const finalPassword = formData.password ? formData.password : oldUser?.password;
             const success = await updateUser({ ...payload, id: editingId, password: finalPassword } as User);
-            if (!success) throw new Error("Error en servidor. ¿Se ejecutó el script de reparación?");
+            if (!success) throw new Error("Error en servidor al actualizar.");
         } else {
             if (!formData.password) { alert("Asigne una clave."); setIsSaving(false); return; }
             const success = await addUser({ ...payload, id: Date.now().toString(), password: formData.password } as User);
-            if (!success) throw new Error("Error al crear usuario en la nube. Verifique el SQL Cloud.");
+            if (!success) throw new Error("Error al crear usuario en la nube.");
         }
         setIsModalOpen(false);
     } catch (err: any) {
@@ -107,99 +120,145 @@ export default function Users() {
 
   return (
     <div className="animate-in fade-in duration-500">
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>
-            <h1 className="text-2xl font-black text-gray-800 dark:text-white uppercase tracking-tight italic">Control de <span className="text-hemp-600">Acceso</span></h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Gestión de personal operativo y socios de la red.</p>
+            <h1 className="text-2xl font-black text-gray-800 dark:text-white uppercase tracking-tight italic">Equipo & <span className="text-hemp-600">Roles</span></h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Gestión de personal corporativo, técnicos de campo y productores.</p>
         </div>
-        <button onClick={() => { setEditingId(null); setFormData({ name: '', email: '', role: 'technician', password: '', avatar: PRESET_AVATARS[0], clientId: '', isNetworkMember: false }); setIsModalOpen(true); }} className="bg-hemp-600 text-white px-6 py-3 rounded-[20px] flex items-center hover:bg-hemp-700 transition shadow-xl font-black text-xs uppercase tracking-widest">
-          <Plus size={18} className="mr-2" /> Nuevo Usuario
+        <button onClick={() => { setEditingId(null); setFormData({ name: '', email: '', role: 'technician', password: '', avatar: PRESET_AVATARS[0], clientId: '', isNetworkMember: false }); setIsModalOpen(true); }} className="w-full md:w-auto bg-hemp-600 text-white px-6 py-3 rounded-[20px] flex items-center justify-center hover:bg-hemp-700 transition shadow-xl font-black text-xs uppercase tracking-widest">
+          <Plus size={18} className="mr-2" /> Nuevo Perfil
         </button>
       </div>
 
-      <div className="bg-white dark:bg-slate-900 rounded-[32px] shadow-sm border dark:border-slate-800 overflow-hidden overflow-x-auto">
-        <table className="min-w-full text-sm text-left">
-          <thead className="bg-gray-50 dark:bg-slate-950/50 text-gray-500 dark:text-slate-400 uppercase text-[10px] font-black tracking-widest border-b dark:border-slate-800">
-            <tr>
-              <th className="px-8 py-5">Perfil</th>
-              <th className="px-8 py-5">Identificación</th>
-              <th className="px-8 py-5">Entidad Vinculada</th>
-              <th className="px-8 py-5 text-right">Acciones</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
-            {usersList.map((user) => (
-              <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-white/5 group transition-colors">
-                <td className="px-8 py-5">
-                  <div className="flex items-center">
-                    <img className="h-10 w-10 rounded-2xl border-2 border-white dark:border-slate-800 shadow-sm mr-4" src={user.avatar || PRESET_AVATARS[0]} alt="" />
-                    <div>
-                      <div className="font-black text-gray-900 dark:text-white uppercase text-xs tracking-tight flex items-center">
-                          {user.name}
-                          {user.isNetworkMember && <Star size={12} className="ml-1.5 text-amber-500 fill-amber-500" title="Socio de la Red"/>}
+      {/* FILTERS BAR */}
+      <div className="bg-white dark:bg-slate-900 p-4 rounded-[24px] shadow-sm border dark:border-slate-800 flex flex-col md:flex-row gap-4 mb-6">
+          <div className="relative flex-1">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18}/>
+              <input 
+                type="text" 
+                placeholder="Buscar por nombre o correo electrónico..." 
+                className="w-full pl-12 pr-4 py-3 bg-gray-50 dark:bg-slate-950 border border-transparent focus:bg-white dark:focus:bg-slate-900 border-slate-100 dark:border-slate-800 rounded-xl outline-none focus:ring-2 focus:ring-hemp-500 transition-all text-sm font-medium"
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+              />
+          </div>
+          <div className="flex gap-2">
+              <select className="px-4 py-3 bg-gray-50 dark:bg-slate-950 border-slate-100 dark:border-slate-800 rounded-xl text-[10px] font-black uppercase tracking-widest outline-none dark:text-white" value={filterRole} onChange={e => setFilterRole(e.target.value)}>
+                  <option value="all">Todos los Roles</option>
+                  <option value="admin">Administrador</option>
+                  <option value="technician">Técnico de Campo</option>
+                  <option value="client">Productor / Socio</option>
+                  <option value="viewer">Visor Externo</option>
+              </select>
+              <button onClick={() => { setSearchTerm(''); setFilterRole('all'); }} className="p-3 bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-red-500 rounded-xl transition-all" title="Limpiar Filtros"><FilterX size={20}/></button>
+          </div>
+      </div>
+
+      <div className="bg-white dark:bg-slate-900 rounded-[32px] shadow-sm border dark:border-slate-800 overflow-hidden">
+        <div className="overflow-x-auto">
+            <table className="min-w-full text-sm text-left">
+              <thead className="bg-gray-50 dark:bg-slate-950/50 text-gray-500 dark:text-slate-400 uppercase text-[10px] font-black tracking-widest border-b dark:border-slate-800">
+                <tr>
+                  <th className="px-8 py-5">Perfil</th>
+                  <th className="px-8 py-5">Rol / Jerarquía</th>
+                  <th className="px-8 py-5">Entidad / Organización</th>
+                  <th className="px-8 py-5 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
+                {filteredUsers.length === 0 ? (
+                    <tr><td colSpan={4} className="p-10 text-center text-gray-400 italic font-medium">No se encontraron usuarios con los filtros aplicados.</td></tr>
+                ) : filteredUsers.map((user) => (
+                  <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-white/5 group transition-colors">
+                    <td className="px-8 py-5">
+                      <div className="flex items-center">
+                        <div className="relative">
+                            <img className="h-11 w-11 rounded-2xl border-2 border-white dark:border-slate-800 shadow-sm mr-4 object-cover bg-slate-100" src={user.avatar || PRESET_AVATARS[0]} alt="" />
+                            {user.isNetworkMember && <div className="absolute -bottom-1 -right-0.5 bg-amber-500 p-0.5 rounded-full border border-white dark:border-slate-900"><Star size={8} className="text-white fill-current"/></div>}
+                        </div>
+                        <div>
+                          <div className="font-black text-gray-900 dark:text-white uppercase text-xs tracking-tight">{user.name}</div>
+                          <div className="text-[10px] text-gray-400 font-bold lowercase tracking-normal">{user.email}</div>
+                        </div>
                       </div>
-                      <div className="text-[10px] text-gray-400 font-mono">{user.email}</div>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-8 py-5">
-                  <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest border ${
-                    user.role === 'super_admin' ? 'bg-red-50 text-red-700 border-red-100' :
-                    user.role === 'admin' ? 'bg-purple-50 text-purple-700 border-purple-100' :
-                    user.role === 'client' ? 'bg-green-50 text-green-700 border-green-100' : 
-                    'bg-blue-50 text-blue-700 border-blue-100'
-                  }`}>
-                    {user.role === 'client' ? 'Productor' : user.role.replace('_', ' ')}
-                  </span>
-                  {user.isNetworkMember && <div className="text-[9px] text-amber-600 font-black uppercase mt-1 tracking-tighter">Miembro de la Red</div>}
-                </td>
-                <td className="px-8 py-5">
-                   {(user.role === 'client' || user.role === 'technician') && user.clientId ? (
-                       <div className="flex items-center text-gray-600 dark:text-gray-300 font-bold text-xs uppercase tracking-tight">
-                           <Building size={14} className="mr-2 text-hemp-600 opacity-50"/>
-                           {clients.find(c => c.id === user.clientId)?.name || 'Cargando...'}
-                       </div>
-                   ) : <span className="text-gray-300 dark:text-slate-600 italic text-xs">Administración Interna</span>}
-                </td>
-                <td className="px-8 py-5 text-right">
-                    <div className="flex justify-end space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => handleEdit(user)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl transition"><Edit2 size={18} /></button>
-                        <button onClick={() => { if(window.confirm("¿Eliminar usuario?")) deleteUser(user.id); }} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition"><Trash2 size={18} /></button>
-                    </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                    </td>
+                    <td className="px-8 py-5">
+                      <div className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border inline-block ${
+                        user.role === 'super_admin' ? 'bg-red-50 text-red-700 border-red-100' :
+                        user.role === 'admin' ? 'bg-purple-50 text-purple-700 border-purple-100' :
+                        user.role === 'client' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 
+                        'bg-blue-50 text-blue-700 border-blue-100'
+                      }`}>
+                        {user.role === 'client' ? 'Productor/Socio' : user.role.replace('_', ' ')}
+                      </div>
+                      <div className="text-[9px] text-gray-400 mt-1 font-bold uppercase tracking-tighter">{user.jobTitle || 'Sin Especialidad'}</div>
+                    </td>
+                    <td className="px-8 py-5">
+                       {(user.role === 'client' || user.role === 'technician') && user.clientId ? (
+                           <div className="flex items-center text-gray-600 dark:text-gray-300 font-black text-xs uppercase tracking-tight italic">
+                               <Building size={14} className="mr-2 text-hemp-600 opacity-50"/>
+                               {clients.find(c => c.id === user.clientId)?.name || 'Empresa No Encontrada'}
+                           </div>
+                       ) : <span className="text-gray-300 dark:text-slate-600 italic text-[10px] uppercase font-black tracking-widest">Sede Central</span>}
+                    </td>
+                    <td className="px-8 py-5 text-right">
+                        <div className="flex justify-end space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={() => handleEdit(user)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl transition shadow-sm border border-transparent hover:border-blue-100"><Edit2 size={16} /></button>
+                            <button onClick={() => { if(window.confirm("¿Confirma la eliminación permanente de este perfil de usuario?")) deleteUser(user.id); }} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition shadow-sm border border-transparent hover:border-red-100"><Trash2 size={16} /></button>
+                        </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+        </div>
       </div>
 
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 rounded-[40px] shadow-2xl max-w-2xl w-full p-10 overflow-y-auto max-h-[95vh] animate-in zoom-in-95">
             <div className="flex justify-between items-center mb-8">
-                <h2 className="text-3xl font-black text-slate-800 dark:text-white uppercase tracking-tighter italic">Gestionar <span className="text-hemp-600">Usuario</span></h2>
+                <div className="flex items-center gap-4">
+                    <div className="bg-hemp-600 p-3 rounded-2xl text-white shadow-lg"><UserIcon size={24}/></div>
+                    <div>
+                        <h2 className="text-2xl font-black text-slate-800 dark:text-white uppercase tracking-tighter">Gestionar Perfil</h2>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Configuración de acceso y membresía</p>
+                    </div>
+                </div>
                 <button onClick={() => { setIsModalOpen(false); setShowQuickClient(false); }} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition text-slate-400"><X size={28}/></button>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="bg-slate-50 dark:bg-slate-950 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 space-y-4">
+                <div className="bg-slate-50 dark:bg-slate-950 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 space-y-6">
                     <div className="flex justify-between items-center mb-2">
-                        <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center"><UserIcon size={14} className="mr-2"/> Identidad del Perfil</h3>
+                        <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center"><Shield size={14} className="mr-2 text-blue-500"/> Seguridad & Identidad</h3>
                         <label className="flex items-center space-x-2 cursor-pointer bg-amber-50 dark:bg-amber-900/20 px-3 py-1.5 rounded-full border border-amber-100 dark:border-amber-800">
                             <input type="checkbox" className="rounded text-amber-500 focus:ring-amber-400" checked={formData.isNetworkMember} onChange={e => setFormData({...formData, isNetworkMember: e.target.checked})} />
                             <span className="text-[10px] font-black text-amber-700 dark:text-amber-400 uppercase tracking-tighter">Miembro de la Red</span>
                         </label>
                     </div>
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="md:col-span-2">
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 block mb-2">Seleccionar Avatar Visual</label>
+                            <div className="flex flex-wrap gap-2 mb-4 p-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800">
+                                {PRESET_AVATARS.map((av, idx) => (
+                                    <button key={idx} type="button" onClick={() => setFormData({...formData, avatar: av})} className={`w-12 h-12 rounded-xl overflow-hidden transition-all border-2 ${formData.avatar === av ? 'border-hemp-600 scale-110 shadow-md' : 'border-transparent opacity-60 hover:opacity-100'}`}>
+                                        <img src={av} alt={`Avatar ${idx}`} className="w-full h-full object-cover" />
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
                         <div><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 block mb-2">Nombre Completo *</label><input required className={inputClass} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} /></div>
-                        <div><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 block mb-2">Especialidad</label><input className={inputClass} value={formData.jobTitle} onChange={e => setFormData({...formData, jobTitle: e.target.value})} placeholder="Ej: Ing. Agrónomo"/></div>
-                        <div><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 block mb-2">Email Laboral *</label><input required type="email" className={inputClass} value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} /></div>
-                        <div><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 block mb-2">{editingId ? 'Nueva Clave' : 'Clave de Acceso *'}</label><input type="text" className={inputClass} value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} placeholder={editingId ? 'Mantener actual' : 'Mínimo 6 caracteres'}/></div>
+                        <div><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 block mb-2">Especialidad / Cargo</label><input className={inputClass} value={formData.jobTitle} onChange={e => setFormData({...formData, jobTitle: e.target.value})} placeholder="Ej: Ing. Agrónomo Senior"/></div>
+                        <div><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 block mb-2">Email de Acceso *</label><input required type="email" className={inputClass} value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} /></div>
+                        <div><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 block mb-2">{editingId ? 'Nueva Contraseña' : 'Clave Inicial *'}</label><input type="text" className={inputClass} value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} placeholder={editingId ? 'Sin cambios si está vacío' : 'Mínimo 6 caracteres'}/></div>
                     </div>
                 </div>
 
                 <div className="space-y-4">
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 block">Rango Jerárquico</label>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 block">Rango de Responsabilidad</label>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                         {[
                           { val: 'viewer', lab: 'Visor' },
@@ -232,10 +291,10 @@ export default function Users() {
                             <button 
                                 type="button" 
                                 onClick={() => { setShowQuickClient(!showQuickClient); setQuickClientName(''); }} 
-                                className="text-[10px] font-black text-hemp-600 uppercase tracking-widest flex items-center hover:bg-white dark:hover:bg-slate-800 px-2 py-1 rounded-lg transition"
+                                className="text-[10px] font-black text-hemp-600 uppercase tracking-widest flex items-center hover:bg-white dark:hover:bg-slate-800 px-2 py-1 rounded-lg transition shadow-sm border border-transparent hover:border-hemp-100"
                             >
                                 {showQuickClient ? <X size={12} className="mr-1"/> : <PlusCircle size={12} className="mr-1"/>}
-                                {showQuickClient ? 'Cancelar' : 'Nueva Entidad'}
+                                {showQuickClient ? 'Cancelar' : 'Crear Nueva Entidad'}
                             </button>
                         </div>
                         
@@ -245,7 +304,7 @@ export default function Users() {
                                     <input 
                                         autoFocus
                                         className={`${inputClass} border-blue-200 focus:ring-blue-500/20`} 
-                                        placeholder="Nombre de la nueva empresa..." 
+                                        placeholder="Razón social o Nombre fantasía..." 
                                         value={quickClientName}
                                         onChange={e => setQuickClientName(e.target.value)}
                                     />
@@ -260,7 +319,7 @@ export default function Users() {
                                 <div className="flex items-center space-x-4">
                                     <label className="flex items-center space-x-2 cursor-pointer">
                                         <input type="checkbox" className="rounded text-hemp-600" checked={quickClientIsRed} onChange={e => setQuickClientIsRed(e.target.checked)} />
-                                        <span className="text-[10px] font-black text-slate-500 uppercase">¿Esta entidad pertenece a la RED?</span>
+                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-tight">Vincular directamente a la Red Industrial</span>
                                     </label>
                                 </div>
                             </div>

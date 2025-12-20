@@ -91,6 +91,9 @@ export interface Supplier {
   province?: string;
   city?: string;
   address?: string;
+  postalCode?: string;
+  whatsapp?: string;
+  email?: string;
   coordinates?: { lat: number; lng: number };
   commercialContact?: string;
   logisticsContact?: string;
@@ -105,7 +108,7 @@ export interface Variety {
   usage: UsageType;
   cycleDays: number;
   expectedThc: number;
-  knowledgeBase?: string; // Protocolos de manejo
+  knowledgeBase?: string; 
   notes?: string;
 }
 

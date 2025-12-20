@@ -63,7 +63,7 @@ export default function Settings() {
       <div className="flex space-x-1 bg-gray-100 dark:bg-slate-900 p-1 rounded-lg mb-8 w-fit">
           <button onClick={() => setActiveTab('branding')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'branding' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Identidad</button>
           <button onClick={() => setActiveTab('connections')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'connections' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Conectividad</button>
-          <button onClick={() => setActiveTab('database')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'database' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>SQL Cloud (V13)</button>
+          <button onClick={() => setActiveTab('database')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'database' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>SQL Cloud (V14)</button>
       </div>
 
       {activeTab === 'branding' && (
@@ -108,13 +108,13 @@ export default function Settings() {
               <div className="bg-slate-900 border border-slate-800 p-8 rounded-[32px] shadow-2xl relative overflow-hidden">
                   <div className="flex items-center space-x-3 mb-6">
                       <Shield className="text-hemp-500" size={24}/>
-                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Protocolo de Base de Datos V13</h3>
+                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Protocolo de Base de Datos V14</h3>
                   </div>
                   <div className="bg-amber-900/20 border border-amber-500/30 p-4 rounded-2xl mb-6 flex items-start text-amber-200">
                       <AlertTriangle className="text-amber-500 mr-3 flex-shrink-0" size={20}/>
                       <div className="text-xs space-y-2 leading-relaxed">
-                        <p className="font-bold uppercase tracking-tight">Actualización de Infraestructura</p>
-                        <p>Este script habilita <code className="bg-black/40 px-1 rounded text-white">knowledge_base</code> en genéticas y <code className="bg-black/40 px-1 rounded text-white">coordinates</code> en proveedores.</p>
+                        <p className="font-bold uppercase tracking-tight">Optimización Logística & Contactos</p>
+                        <p>Este script integra <code className="bg-black/40 px-1 rounded text-white">whatsapp</code>, <code className="bg-black/40 px-1 rounded text-white">email</code> y <code className="bg-black/40 px-1 rounded text-white">postal_code</code> en proveedores.</p>
                       </div>
                   </div>
 
@@ -138,7 +138,7 @@ DROP TABLE IF EXISTS public.resources CASCADE;
 DROP TABLE IF EXISTS public.storage_points CASCADE;
 DROP TABLE IF EXISTS public.projects CASCADE;
 
--- 2. RECREACIÓN CON ESTRUCTURA V13 (Coordenadas & Conocimiento)
+-- 2. RECREACIÓN CON ESTRUCTURA V14
 CREATE TABLE public.users (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -208,6 +208,9 @@ CREATE TABLE public.suppliers (
   province TEXT,
   city TEXT,
   address TEXT,
+  postal_code TEXT,
+  whatsapp TEXT,
+  email TEXT,
   coordinates JSONB,
   commercial_contact TEXT,
   logistics_contact TEXT,
@@ -254,17 +257,17 @@ VALUES ('root-user', 'Super Administrador', 'admin@hempc.com', 'super_admin', 'a
 NOTIFY pgrst, 'reload schema';
                       `;
                       navigator.clipboard.writeText(sql.trim());
-                      alert("Script Nuclear V13 Copiado. Ejecútalo en Supabase para habilitar coordenadas y conocimientos.");
+                      alert("Script Nuclear V14 Copiado. Ejecútalo en Supabase para habilitar geolocalización postal y contactos.");
                     }} className="w-full bg-red-600 hover:bg-red-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center transition-all shadow-xl">
-                        <RotateCcw size={18} className="mr-2"/> Reconstrucción Nuclear (V13)
+                        <RotateCcw size={18} className="mr-2"/> Reconstrucción Nuclear (V14)
                     </button>
                     
                     <button onClick={() => {
-                        const sql = `ALTER TABLE public.suppliers ADD COLUMN IF NOT EXISTS coordinates JSONB; ALTER TABLE public.varieties ADD COLUMN IF NOT EXISTS knowledge_base TEXT; NOTIFY pgrst, 'reload schema';`;
+                        const sql = `ALTER TABLE public.suppliers ADD COLUMN IF NOT EXISTS whatsapp TEXT; ALTER TABLE public.suppliers ADD COLUMN IF NOT EXISTS email TEXT; ALTER TABLE public.suppliers ADD COLUMN IF NOT EXISTS postal_code TEXT; NOTIFY pgrst, 'reload schema';`;
                         navigator.clipboard.writeText(sql);
-                        alert("Parche de compatibilidad copiado.");
+                        alert("Parche de compatibilidad V14 copiado.");
                     }} className="w-full bg-slate-800 hover:bg-slate-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center transition-all border border-slate-700">
-                        <RefreshCw size={18} className="mr-2"/> Parche: Solo Columnas Nuevas
+                        <RefreshCw size={18} className="mr-2"/> Parche V14: Solo Columnas de Contacto
                     </button>
                   </div>
               </div>
