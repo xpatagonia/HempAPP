@@ -27,6 +27,8 @@ export type RoleType =
 
 export type SupplierCategory = 'Semillas' | 'Insumos' | 'Servicios' | 'Recursos Humanos';
 
+export type MembershipLevel = 'Activo' | 'En Observación' | 'Premium' | 'Baja Temporal';
+
 export type SoilType = string;
 
 export interface Location {
@@ -99,6 +101,7 @@ export interface Supplier {
   logisticsContact?: string;
   website?: string;
   notes?: string;
+  isOfficialPartner?: boolean;
 }
 
 export interface Variety {
@@ -120,6 +123,8 @@ export interface Client {
   contactPhone?: string;
   email?: string;
   isNetworkMember: boolean;
+  membershipLevel?: MembershipLevel;
+  contractDate?: string;
   cuit?: string;
   notes?: string;
   relatedUserId?: string; 

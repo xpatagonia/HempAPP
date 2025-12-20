@@ -1,66 +1,75 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Client, RoleType, User } from '../types';
-import { Plus, Edit2, Trash2, Briefcase, MapPin, Phone, Mail, Globe, Users, Building, AlertCircle, Tractor, Eye, X, Link as LinkIcon, UserCheck, Key, Shield, UserPlus, LogOut, Star, Loader2, Save, UserMinus } from 'lucide-react';
+import { Client, RoleType, User, MembershipLevel } from '../types';
+import { 
+  Plus, Edit2, Trash2, Briefcase, MapPin, Phone, Mail, Globe, 
+  Users, Building, Eye, X, Link as LinkIcon, UserCheck, 
+  Shield, UserPlus, Star, Loader2, Save, UserMinus, 
+  Archive, Sprout, BookOpen, Clock, ClipboardCheck, ArrowUpRight,
+  // Added Info icon
+  Info
+} from 'lucide-react';
 
 export default function Clients() {
-  const { clients, addClient, updateClient, deleteClient, currentUser, locations, usersList, addUser, updateUser, deleteUser } = useAppContext();
+  const { 
+    clients, addClient, updateClient, deleteClient, currentUser, 
+    locations, usersList, addUser, updateUser, deleteUser,
+    seedMovements, seedBatches, varieties, plots
+  } = useAppContext();
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [viewClient, setViewClient] = useState<Client | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [activeSubTab, setActiveSubTab] = useState<'team' | 'resources' | 'knowledge'>('team');
 
   // User Management States
   const [showCreateUserForm, setShowCreateUserForm] = useState(false);
-  const [showLinkUserForm, setShowLinkUserForm] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  
-  // Forms
   const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'technician' as 'technician' | 'viewer' });
-  const [selectedExistingUserId, setSelectedExistingUserId] = useState('');
 
   const [formData, setFormData] = useState<Partial<Client>>({
-    name: '', type: 'Empresa Privada', contactName: '', contactPhone: '', email: '', isNetworkMember: false, cuit: '', notes: '', relatedUserId: ''
+    name: '', type: 'Empresa Privada', contactName: '', contactPhone: '', email: '', 
+    isNetworkMember: true, cuit: '', notes: '', relatedUserId: '', 
+    membershipLevel: 'Activo', contractDate: new Date().toISOString().split('T')[0]
   });
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
 
-  const teamMembers = viewClient ? usersList.filter(u => u.clientId === viewClient.id) : [];
+  // --- CALCULATIONS FOR DETAIL VIEW ---
+  
+  const assignedMovements = useMemo(() => 
+    viewClient ? seedMovements.filter(m => m.clientId === viewClient.id) : []
+  , [viewClient, seedMovements]);
 
-  const availableUsersToLink = viewClient ? usersList.filter(u => 
-      u.role !== 'super_admin' && 
-      u.role !== 'admin' && 
-      u.clientId !== viewClient.id && 
-      u.id !== viewClient.relatedUserId
-  ) : [];
+  const activeGenetics = useMemo(() => {
+    if (!viewClient) return [];
+    const clientLocations = locations.filter(l => l.clientId === viewClient.id).map(l => l.id);
+    const clientPlots = plots.filter(p => clientLocations.includes(p.locationId) && p.status === 'Activa');
+    const varIds = Array.from(new Set(clientPlots.map(p => p.varietyId)));
+    return varieties.filter(v => varIds.includes(v.id));
+  }, [viewClient, plots, locations, varieties]);
+
+  const teamMembers = useMemo(() => 
+    viewClient ? usersList.filter(u => u.clientId === viewClient.id) : []
+  , [viewClient, usersList]);
+
+  // --- HANDLERS ---
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name) return;
     
     const payload = {
+        ...formData,
         name: formData.name!.trim(),
-        type: formData.type as RoleType,
-        contactName: formData.contactName || '',
-        contactPhone: formData.contactPhone || '',
-        email: formData.email || '',
-        isNetworkMember: formData.isNetworkMember || false,
-        cuit: formData.cuit || '',
-        notes: formData.notes || '',
-        relatedUserId: formData.relatedUserId || null
-    };
+        id: editingId || Date.now().toString(),
+    } as Client;
 
     if (editingId) {
-        updateClient({ ...payload, id: editingId } as Client);
+        updateClient(payload);
     } else {
-        const success = await addClient({
-            ...payload,
-            id: Date.now().toString(),
-        });
-        if (success && payload.relatedUserId) {
-            const user = usersList.find(u => u.id === payload.relatedUserId);
-            if (user) updateUser({ ...user, clientId: payload.relatedUserId, isNetworkMember: payload.isNetworkMember });
-        }
+        await addClient(payload);
     }
 
     setIsModalOpen(false);
@@ -69,7 +78,9 @@ export default function Clients() {
 
   const resetForm = () => {
     setFormData({ 
-        name: '', type: 'Empresa Privada', contactName: '', contactPhone: '', email: '', isNetworkMember: false, cuit: '', notes: '', relatedUserId: ''
+        name: '', type: 'Empresa Privada', contactName: '', contactPhone: '', email: '', 
+        isNetworkMember: true, cuit: '', notes: '', relatedUserId: '', 
+        membershipLevel: 'Activo', contractDate: new Date().toISOString().split('T')[0]
     });
     setEditingId(null);
   };
@@ -86,7 +97,7 @@ export default function Clients() {
           password: newUser.password,
           role: newUser.role,
           clientId: viewClient.id,
-          jobTitle: 'Equipo Operativo',
+          jobTitle: 'Personal de Socio',
           isNetworkMember: viewClient.isNetworkMember,
           avatar: `https://ui-avatars.com/api/?name=${newUser.name}&background=random`
       } as User);
@@ -98,195 +109,247 @@ export default function Clients() {
       setIsSaving(false);
   };
 
-  const handleLinkExistingUser = async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!viewClient || !selectedExistingUserId) return;
-
-      setIsSaving(true);
-      const user = usersList.find(u => u.id === selectedExistingUserId);
-      if (user) {
-          updateUser({
-              ...user,
-              clientId: viewClient.id,
-              isNetworkMember: viewClient.isNetworkMember,
-              role: user.role === 'viewer' ? 'viewer' : 'technician'
-          });
-          setShowLinkUserForm(false);
-          setSelectedExistingUserId('');
-      }
-      setIsSaving(false);
-  };
-
-  const handleUnlinkUser = (user: User) => {
-      if (window.confirm(`¿Quitar a ${user.name} del equipo de trabajo?`)) {
-          updateUser({ ...user, clientId: undefined });
-      }
-  };
-
-  const inputClass = "w-full border border-gray-300 dark:border-slate-800 bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 p-2 rounded focus:ring-2 focus:ring-hemp-500 outline-none";
+  const inputClass = "w-full border border-gray-300 dark:border-slate-800 bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 p-2.5 rounded-xl focus:ring-2 focus:ring-hemp-500 outline-none";
 
   return (
     <div className="animate-in fade-in duration-500">
       <div className="flex justify-between items-center mb-6">
         <div>
-            <h1 className="text-2xl font-black text-gray-800 dark:text-white uppercase tracking-tight italic">Socios de la <span className="text-hemp-600">Red</span></h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Gestión de establecimientos y sus equipos operativos.</p>
+            <h1 className="text-2xl font-black text-gray-800 dark:text-white uppercase tracking-tight italic">Panel de <span className="text-hemp-600">Socios Cooperativos</span></h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Control de red industrial y distribución de recursos.</p>
         </div>
         {isAdmin && (
           <button onClick={() => { resetForm(); setIsModalOpen(true); }} className="bg-hemp-600 text-white px-6 py-3 rounded-2xl flex items-center hover:bg-hemp-700 transition shadow-xl font-black text-xs uppercase tracking-widest">
-            <Plus size={18} className="mr-2" /> Nuevo Socio
+            <Plus size={18} className="mr-2" /> Alta de Socio
           </button>
         )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {clients.map(client => {
-            const totalTeam = usersList.filter(u => u.clientId === client.id).length;
             const locCount = locations.filter(l => l.clientId === client.id).length;
+            const activePlots = plots.filter(p => locations.filter(l => l.clientId === client.id).map(lx => lx.id).includes(p.locationId) && p.status === 'Activa').length;
             
             return (
                 <div key={client.id} className="bg-white dark:bg-slate-900 p-6 rounded-[32px] shadow-sm border border-gray-100 dark:border-slate-800 hover:shadow-xl transition-all relative group flex flex-col h-full overflow-hidden">
-                  {client.isNetworkMember && (
-                      <div className="absolute top-0 left-0 bg-amber-500 text-white text-[9px] font-black uppercase px-8 py-1 -rotate-45 -translate-x-8 translate-y-2 shadow-sm z-10">
-                          SOCIO RED
-                      </div>
-                  )}
+                  <div className={`absolute top-0 left-0 px-4 py-1 rounded-br-2xl text-[9px] font-black uppercase tracking-widest border-b border-r shadow-sm z-10 ${
+                    client.membershipLevel === 'Premium' ? 'bg-amber-500 text-white' : 
+                    client.membershipLevel === 'En Observación' ? 'bg-red-500 text-white' : 'bg-hemp-600 text-white'
+                  }`}>
+                      {client.membershipLevel || 'SOCIO'}
+                  </div>
                   
                   <div className="absolute top-6 right-6 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity z-20">
-                      <button onClick={() => setViewClient(client)} className="p-2 text-gray-400 hover:text-blue-600 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 transition" title="Ver Detalles y Equipo"><Eye size={18} /></button>
+                      <button onClick={() => setViewClient(client)} className="p-2 text-gray-400 hover:text-blue-600 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 transition"><Eye size={18} /></button>
                       {isAdmin && (
                           <button onClick={() => { setFormData(client); setEditingId(client.id); setIsModalOpen(true); }} className="p-2 text-gray-400 hover:text-hemp-600 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 transition"><Edit2 size={18} /></button>
                       )}
                   </div>
 
-                  <div className="flex items-center space-x-4 mb-4">
-                      <div className={`p-4 rounded-2xl ${client.isNetworkMember ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
-                          {client.isNetworkMember ? <Star size={24} className="fill-current" /> : <Building size={24} />}
+                  <div className="flex items-center space-x-4 mb-6 mt-4">
+                      <div className="bg-slate-100 dark:bg-slate-800 p-4 rounded-2xl text-slate-600 dark:text-slate-400">
+                          <Building size={24} />
                       </div>
-                      <div>
-                          <h3 className="text-xl font-black text-gray-800 dark:text-white leading-none uppercase tracking-tighter">{client.name}</h3>
-                          <span className="text-[10px] uppercase font-black text-gray-400 mt-1 block tracking-widest">{client.type}</span>
+                      <div className="min-w-0">
+                          <h3 className="text-xl font-black text-gray-800 dark:text-white leading-none uppercase tracking-tighter truncate">{client.name}</h3>
+                          <span className="text-[10px] uppercase font-black text-gray-400 mt-2 block tracking-widest">{client.type}</span>
                       </div>
                   </div>
 
-                  <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-slate-950 p-4 rounded-2xl flex-1 border border-gray-100 dark:border-slate-800">
-                      <div className="flex items-center justify-between border-b dark:border-slate-800 border-gray-200 pb-2">
-                          <span className="font-bold text-gray-400 text-[10px] uppercase">Titular</span>
-                          <span className="font-black text-xs text-gray-800 dark:text-gray-200 uppercase">{client.contactName}</span>
+                  <div className="grid grid-cols-2 gap-2 mb-6">
+                      <div className="bg-gray-50 dark:bg-slate-950 p-3 rounded-2xl border dark:border-slate-800 text-center">
+                          <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Campos</p>
+                          <p className="text-lg font-black text-gray-800 dark:text-white">{locCount}</p>
                       </div>
-                      <div className="flex items-center text-xs py-1">
-                          <Mail size={14} className="mr-2 text-gray-400"/>
-                          <span className="truncate font-medium">{client.email || 'Sin correo'}</span>
+                      <div className="bg-gray-50 dark:bg-slate-950 p-3 rounded-2xl border dark:border-slate-800 text-center">
+                          <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Ensayos</p>
+                          <p className="text-lg font-black text-hemp-600">{activePlots}</p>
+                      </div>
+                  </div>
+
+                  <div className="space-y-2 text-sm bg-blue-50/30 dark:bg-blue-900/10 p-4 rounded-2xl border border-blue-50 dark:border-blue-900/20">
+                      <div className="flex items-center justify-between text-xs">
+                          <span className="font-bold text-gray-400 uppercase text-[9px]">Titular</span>
+                          <span className="font-black text-gray-800 dark:text-gray-200 uppercase truncate max-w-[120px]">{client.contactName}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs pt-2">
+                          <span className="font-bold text-gray-400 uppercase text-[9px]">Ingreso</span>
+                          <span className="font-mono font-bold text-gray-600 dark:text-gray-400">{client.contractDate || 'S/D'}</span>
                       </div>
                   </div>
                   
-                  <div className="mt-4 pt-4 border-t border-gray-100 dark:border-slate-800 flex justify-between items-center">
-                      <div className="flex space-x-3">
-                          <div className="flex items-center" title="Personal de Trabajo">
-                              <Users size={16} className="mr-1.5 text-purple-500"/>
-                              <span className="text-xs font-black text-gray-700 dark:text-gray-300">{totalTeam}</span>
-                          </div>
-                          <div className="flex items-center" title="Establecimientos">
-                              <MapPin size={16} className="mr-1.5 text-blue-500"/>
-                              <span className="text-xs font-black text-gray-700 dark:text-gray-300">{locCount}</span>
-                          </div>
-                      </div>
-                      <button onClick={() => setViewClient(client)} className="text-[10px] font-black uppercase text-hemp-600 hover:underline tracking-widest">Gestionar Equipo &rarr;</button>
-                  </div>
+                  <button onClick={() => setViewClient(client)} className="mt-auto pt-6 flex items-center justify-center w-full text-[10px] font-black uppercase text-hemp-600 hover:text-hemp-700 tracking-[0.2em] group/btn">
+                      Gestionar Recursos <ArrowUpRight size={14} className="ml-1 group-hover/btn:translate-x-0.5 group-hover/btn:-translate-y-0.5 transition-transform" />
+                  </button>
                 </div>
             );
         })}
       </div>
 
-      {/* VIEW / MANAGE TEAM MODAL */}
+      {/* --- MASTER DETAIL MODAL --- */}
       {viewClient && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[60] flex items-center justify-center p-4">
-              <div className="bg-white dark:bg-slate-900 rounded-[40px] shadow-2xl max-w-4xl w-full flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95">
-                  <div className="px-10 py-8 bg-gray-50 dark:bg-slate-950 border-b dark:border-slate-800 flex justify-between items-center">
-                      <div className="flex items-center space-x-4">
-                          <div className="bg-hemp-600 p-3 rounded-2xl text-white shadow-lg"><Users size={28}/></div>
+              <div className="bg-white dark:bg-slate-900 rounded-[40px] shadow-2xl max-w-5xl w-full flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95">
+                  <div className="px-10 py-8 bg-slate-50 dark:bg-slate-950 border-b dark:border-slate-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                      <div className="flex items-center space-x-5">
+                          <div className="bg-hemp-600 p-4 rounded-3xl text-white shadow-xl shadow-hemp-600/20"><Building size={32}/></div>
                           <div>
-                              <h2 className="text-2xl font-black text-gray-800 dark:text-white uppercase tracking-tighter">Equipo de Trabajo: {viewClient.name}</h2>
-                              <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">Gestión de roles operativos y técnicos</p>
+                              <div className="flex items-center gap-2">
+                                  <h2 className="text-3xl font-black text-gray-800 dark:text-white uppercase tracking-tighter">{viewClient.name}</h2>
+                                  <span className="px-3 py-1 bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-full text-[9px] font-black uppercase tracking-widest text-hemp-600 shadow-sm">{viewClient.membershipLevel}</span>
+                              </div>
+                              <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1 flex items-center">
+                                  <Shield size={12} className="mr-1.5 text-blue-500"/> Auditoría de Socio • Miembro desde {viewClient.contractDate}
+                              </p>
                           </div>
                       </div>
-                      <button onClick={() => { setViewClient(null); setShowCreateUserForm(false); setShowLinkUserForm(false); }} className="p-2 hover:bg-gray-200 dark:hover:bg-slate-800 rounded-full transition"><X size={28}/></button>
+                      <button onClick={() => setViewClient(null)} className="p-2 hover:bg-gray-200 dark:hover:bg-slate-800 rounded-full transition text-slate-400 self-start md:self-center"><X size={32}/></button>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto p-10 custom-scrollbar">
-                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-                          {/* Sidebar: Add Team Member */}
-                          <div className="space-y-6">
-                              <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Acciones de Personal</h3>
-                              <button onClick={() => { setShowCreateUserForm(true); setShowLinkUserForm(false); }} className="w-full bg-hemp-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl flex items-center justify-center hover:scale-[1.02] transition-all">
-                                  <UserPlus size={18} className="mr-2"/> Crear Nuevo Técnico
-                              </button>
-                              <button onClick={() => { setShowLinkUserForm(true); setShowCreateUserForm(false); }} className="w-full bg-white dark:bg-slate-800 text-gray-700 dark:text-white border border-gray-200 dark:border-slate-700 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-sm flex items-center justify-center hover:bg-gray-50 transition-all">
-                                  <LinkIcon size={18} className="mr-2"/> Vincular Existente
-                              </button>
+                  <div className="flex-1 flex flex-col overflow-hidden">
+                      {/* Sub-Tabs */}
+                      <div className="px-10 py-4 bg-white dark:bg-slate-900 border-b dark:border-slate-800 flex space-x-8 overflow-x-auto custom-scrollbar">
+                          <button onClick={() => setActiveSubTab('resources')} className={`pb-2 text-xs font-black uppercase tracking-widest border-b-2 transition-all flex items-center whitespace-nowrap ${activeSubTab === 'resources' ? 'border-hemp-600 text-hemp-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>
+                              <Archive size={14} className="mr-2"/> Recursos Asignados
+                          </button>
+                          <button onClick={() => setActiveSubTab('team')} className={`pb-2 text-xs font-black uppercase tracking-widest border-b-2 transition-all flex items-center whitespace-nowrap ${activeSubTab === 'team' ? 'border-hemp-600 text-hemp-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>
+                              <Users size={14} className="mr-2"/> Equipo de Trabajo
+                          </button>
+                          <button onClick={() => setActiveSubTab('knowledge')} className={`pb-2 text-xs font-black uppercase tracking-widest border-b-2 transition-all flex items-center whitespace-nowrap ${activeSubTab === 'knowledge' ? 'border-hemp-600 text-hemp-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>
+                              <BookOpen size={14} className="mr-2"/> Base de Conocimientos
+                          </button>
+                      </div>
 
-                              {/* Form: Create User */}
-                              {showCreateUserForm && (
-                                  <form onSubmit={handleQuickAddUser} className="bg-gray-50 dark:bg-slate-950 p-6 rounded-3xl border border-gray-200 dark:border-slate-800 space-y-4 animate-in fade-in">
-                                      <h4 className="font-black text-xs uppercase tracking-tight text-gray-800 dark:text-white">Alta de Técnico/Visor</h4>
-                                      <input required className={inputClass} placeholder="Nombre Completo" value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} />
-                                      <input required type="email" className={inputClass} placeholder="Email" value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} />
-                                      <input required type="text" className={inputClass} placeholder="Contraseña Temporal" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} />
-                                      <select className={inputClass} value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value as any})}>
-                                          <option value="technician">Rol: Técnico (Carga datos)</option>
-                                          <option value="viewer">Rol: Visor (Solo lectura)</option>
-                                      </select>
-                                      <button type="submit" disabled={isSaving} className="w-full bg-slate-900 dark:bg-hemp-600 text-white py-3 rounded-xl font-bold text-xs uppercase tracking-widest flex items-center justify-center">
-                                          {isSaving ? <Loader2 size={16} className="animate-spin mr-2"/> : <Save size={16} className="mr-2"/>}
-                                          Registrar
-                                      </button>
-                                  </form>
-                              )}
-
-                              {/* Form: Link User */}
-                              {showLinkUserForm && (
-                                  <form onSubmit={handleLinkExistingUser} className="bg-gray-50 dark:bg-slate-950 p-6 rounded-3xl border border-gray-200 dark:border-slate-800 space-y-4 animate-in fade-in">
-                                      <h4 className="font-black text-xs uppercase tracking-tight text-gray-800 dark:text-white">Asignar a este socio</h4>
-                                      <select required className={inputClass} value={selectedExistingUserId} onChange={e => setSelectedExistingUserId(e.target.value)}>
-                                          <option value="">Seleccionar usuario...</option>
-                                          {availableUsersToLink.map(u => <option key={u.id} value={u.id}>{u.name} ({u.role})</option>)}
-                                      </select>
-                                      <button type="submit" disabled={isSaving} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold text-xs uppercase tracking-widest flex items-center justify-center">
-                                          {isSaving ? <Loader2 size={16} className="animate-spin mr-2"/> : <LinkIcon size={16} className="mr-2"/>}
-                                          Vincular
-                                      </button>
-                                  </form>
-                              )}
-                          </div>
-
-                          {/* Team List */}
-                          <div className="lg:col-span-2 space-y-4">
-                              <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Miembros Activos ({teamMembers.length})</h3>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                  {teamMembers.length === 0 ? (
-                                      <div className="col-span-full py-10 text-center text-gray-400 italic bg-gray-50 dark:bg-slate-950 rounded-3xl border border-dashed">Aún no hay miembros asignados a este equipo.</div>
-                                  ) : teamMembers.map(member => (
-                                      <div key={member.id} className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-gray-100 dark:border-slate-700 flex items-center justify-between group">
-                                          <div className="flex items-center space-x-3">
-                                              <img src={member.avatar} className="w-10 h-10 rounded-xl border-2 border-white dark:border-slate-700 shadow-sm"/>
-                                              <div>
-                                                  <p className="text-sm font-black text-gray-800 dark:text-white uppercase tracking-tight">{member.name}</p>
-                                                  <span className="text-[9px] font-black uppercase text-hemp-600 tracking-widest">{member.role === 'client' ? 'Titular Secundario' : member.role}</span>
-                                              </div>
-                                          </div>
-                                          <button onClick={() => handleUnlinkUser(member)} className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-lg transition opacity-0 group-hover:opacity-100"><UserMinus size={18}/></button>
+                      <div className="flex-1 overflow-y-auto p-10 custom-scrollbar">
+                          {/* TAB: RESOURCES (CONTROL ESTRICTO) */}
+                          {activeSubTab === 'resources' && (
+                              <div className="space-y-8 animate-in fade-in">
+                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                      <div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-3xl border dark:border-slate-800">
+                                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Semillas</p>
+                                          <p className="text-2xl font-black text-gray-800 dark:text-white">{assignedMovements.reduce((s,m) => s + m.quantity, 0)} kg</p>
                                       </div>
-                                  ))}
-                              </div>
+                                      <div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-3xl border dark:border-slate-800">
+                                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Remitos Activos</p>
+                                          <p className="text-2xl font-black text-blue-600">{assignedMovements.filter(m => m.status === 'En Tránsito').length}</p>
+                                      </div>
+                                  </div>
 
-                              <div className="mt-8 bg-amber-50 dark:bg-amber-900/10 p-5 rounded-3xl border border-amber-100 dark:border-amber-900/30 flex items-start">
-                                  <Shield size={24} className="text-amber-600 mr-4 mt-1 flex-shrink-0"/>
-                                  <div className="text-xs text-amber-800 dark:text-amber-400 leading-relaxed">
-                                      <p className="font-black uppercase tracking-widest mb-1">Nota de Privacidad</p>
-                                      <p>Los miembros del equipo solo podrán visualizar y editar datos vinculados exclusivamente a <strong>{viewClient.name}</strong>. No tienen acceso a la configuración global del sistema ni a otros socios de la red.</p>
+                                  <section>
+                                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 flex items-center">
+                                          <ClipboardCheck size={14} className="mr-2 text-hemp-600"/> Historial de Entrega de Suministros
+                                      </h4>
+                                      <div className="bg-white dark:bg-slate-950 rounded-3xl border dark:border-slate-800 overflow-hidden">
+                                          <table className="min-w-full text-xs text-left">
+                                              <thead className="bg-slate-50 dark:bg-slate-900 text-gray-500 uppercase font-black text-[9px] tracking-widest border-b dark:border-slate-800">
+                                                  <tr>
+                                                      <th className="px-6 py-4">Fecha</th>
+                                                      <th className="px-6 py-4">Material / Lote</th>
+                                                      <th className="px-6 py-4">Cantidad</th>
+                                                      <th className="px-6 py-4">Estado</th>
+                                                      <th className="px-6 py-4">Guía</th>
+                                                  </tr>
+                                              </thead>
+                                              <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
+                                                  {assignedMovements.length === 0 ? (
+                                                      <tr><td colSpan={5} className="p-8 text-center text-gray-400 italic">No se han asignado recursos aún.</td></tr>
+                                                  ) : assignedMovements.map(m => {
+                                                      const b = seedBatches.find(bx => bx.id === m.batchId);
+                                                      const v = varieties.find(vx => vx.id === b?.varietyId);
+                                                      return (
+                                                          <tr key={m.id} className="hover:bg-gray-50 dark:hover:bg-white/5">
+                                                              <td className="px-6 py-4 font-bold text-slate-500">{m.date}</td>
+                                                              <td className="px-6 py-4">
+                                                                  <div className="font-black text-slate-800 dark:text-white uppercase">{v?.name || 'Insumo'}</div>
+                                                                  <div className="text-[10px] text-slate-400 font-bold">{b?.batchCode || 'REF-GEN'}</div>
+                                                              </td>
+                                                              <td className="px-6 py-4 font-black text-hemp-700">{m.quantity} kg</td>
+                                                              <td className="px-6 py-4">
+                                                                  <span className={`px-2 py-1 rounded-full text-[9px] font-black uppercase ${m.status === 'Recibido' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{m.status}</span>
+                                                              </td>
+                                                              <td className="px-6 py-4 font-mono font-bold text-blue-500">{m.transportGuideNumber || '-'}</td>
+                                                          </tr>
+                                                      )
+                                                  })}
+                                              </tbody>
+                                          </table>
+                                      </div>
+                                  </section>
+                              </div>
+                          )}
+
+                          {/* TAB: TEAM */}
+                          {activeSubTab === 'team' && (
+                              <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 animate-in fade-in">
+                                  <div className="space-y-6">
+                                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Personal Operativo</h4>
+                                      <button onClick={() => setShowCreateUserForm(true)} className="w-full bg-hemp-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl flex items-center justify-center hover:scale-[1.02] transition-all">
+                                          <UserPlus size={18} className="mr-2"/> Alta de Técnico
+                                      </button>
+                                      {showCreateUserForm && (
+                                          <form onSubmit={handleQuickAddUser} className="bg-slate-50 dark:bg-slate-950 p-6 rounded-3xl border dark:border-slate-800 space-y-4 animate-in slide-in-from-top-2">
+                                              <input required className={inputClass} placeholder="Nombre Completo" value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} />
+                                              <input required type="email" className={inputClass} placeholder="Email corporativo" value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} />
+                                              <input required type="text" className={inputClass} placeholder="Clave temporal" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} />
+                                              <button type="submit" disabled={isSaving} className="w-full bg-slate-900 dark:bg-hemp-600 text-white py-3 rounded-xl font-bold text-xs uppercase tracking-widest flex items-center justify-center">
+                                                  {isSaving ? <Loader2 size={16} className="animate-spin mr-2"/> : <Save size={16} className="mr-2"/>}
+                                                  Registrar Técnico
+                                              </button>
+                                          </form>
+                                      )}
+                                  </div>
+                                  <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                      {teamMembers.map(member => (
+                                          <div key={member.id} className="bg-white dark:bg-slate-800 p-4 rounded-2xl border dark:border-slate-700 flex items-center justify-between group shadow-sm">
+                                              <div className="flex items-center space-x-4">
+                                                  <img src={member.avatar} className="w-12 h-12 rounded-2xl border-2 border-white dark:border-slate-700 shadow-sm"/>
+                                                  <div>
+                                                      <p className="text-sm font-black text-gray-800 dark:text-white uppercase tracking-tight">{member.name}</p>
+                                                      <span className="text-[9px] font-black uppercase text-hemp-600 tracking-widest">{member.role}</span>
+                                                  </div>
+                                              </div>
+                                              <button onClick={() => window.confirm("Quitar?") && updateUser({ ...member, clientId: undefined })} className="p-2 text-gray-300 hover:text-red-500 transition opacity-0 group-hover:opacity-100"><UserMinus size={18}/></button>
+                                          </div>
+                                      ))}
                                   </div>
                               </div>
-                          </div>
+                          )}
+
+                          {/* TAB: KNOWLEDGE (ACCESO ESTRATÉGICO) */}
+                          {activeSubTab === 'knowledge' && (
+                              <div className="space-y-6 animate-in fade-in">
+                                  <div className="flex items-start gap-4 p-6 bg-blue-50 dark:bg-blue-900/20 rounded-3xl border border-blue-100 dark:border-blue-900/30">
+                                      <Info size={24} className="text-blue-600 mt-1 flex-shrink-0"/>
+                                      <div>
+                                          <h4 className="text-sm font-black text-blue-900 dark:text-blue-100 uppercase mb-1">Centro de Asistencia Técnica</h4>
+                                          <p className="text-xs text-blue-700 dark:text-blue-300 leading-relaxed">Mostrando protocolos exclusivos para las genéticas currently assigned to your fields. This knowledge base is property of the cooperative and restricted for members.</p>
+                                      </div>
+                                  </div>
+
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                      {activeGenetics.length === 0 ? (
+                                          <div className="col-span-full py-20 text-center text-gray-400 italic">No hay cultivos activos vinculados para mostrar protocolos.</div>
+                                      ) : activeGenetics.map(v => (
+                                          <div key={v.id} className="bg-white dark:bg-slate-800 p-8 rounded-[32px] border dark:border-slate-700 shadow-sm flex flex-col h-full">
+                                              <div className="flex items-center gap-3 mb-6">
+                                                  <div className="bg-hemp-50 dark:bg-hemp-900/30 p-3 rounded-2xl text-hemp-600"><Sprout size={24}/></div>
+                                                  <div>
+                                                      <h5 className="text-lg font-black text-slate-800 dark:text-white uppercase tracking-tighter">{v.name}</h5>
+                                                      <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Protocolo Agronómico {v.usage}</p>
+                                                  </div>
+                                              </div>
+                                              <div className="flex-1 bg-slate-50 dark:bg-slate-950 p-5 rounded-2xl text-sm text-slate-600 dark:text-slate-300 leading-relaxed italic border dark:border-slate-800">
+                                                  {v.knowledgeBase || "Solicitar protocolos específicos a la central cooperativa."}
+                                              </div>
+                                              <div className="mt-6 flex justify-between items-center text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                                  <span className="flex items-center"><Clock size={12} className="mr-1.5"/> Ciclo: {v.cycleDays} días</span>
+                                                  <button className="text-hemp-600 hover:underline">Descargar PDF →</button>
+                                              </div>
+                                          </div>
+                                      ))}
+                                  </div>
+                              </div>
+                          )}
                       </div>
                   </div>
               </div>
@@ -296,52 +359,41 @@ export default function Clients() {
       {/* CREATE / EDIT CLIENT MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-xl w-full p-10 shadow-2xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95">
-            <h2 className="text-3xl font-black mb-8 text-gray-900 dark:text-white uppercase tracking-tighter italic">Gestionar <span className="text-hemp-600">Socio de Red</span></h2>
+          <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-xl w-full p-10 shadow-2xl max-h-[95vh] overflow-y-auto animate-in zoom-in-95">
+            <h2 className="text-3xl font-black mb-8 text-gray-900 dark:text-white uppercase tracking-tighter italic">Gestión de <span className="text-hemp-600">Socio de Red</span></h2>
             <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="bg-gray-50 dark:bg-slate-950 p-6 rounded-[32px] border border-gray-100 dark:border-slate-800">
-                  <div className="flex justify-between items-center mb-4">
-                      <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest">Identidad del Socio</label>
-                      <label className="flex items-center space-x-2 cursor-pointer bg-amber-50 dark:bg-amber-900/20 px-3 py-1.5 rounded-full border border-amber-100 dark:border-amber-800">
-                          <input type="checkbox" className="rounded text-amber-500" checked={formData.isNetworkMember} onChange={e => setFormData({...formData, isNetworkMember: e.target.checked})} />
-                          <span className="text-[10px] font-black text-amber-700 dark:text-amber-400 uppercase tracking-tighter">Miembro de la Red</span>
-                      </label>
-                  </div>
-                  <input required type="text" placeholder="Razón Social / Nombre Comercial" className={inputClass} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-                  <div className="grid grid-cols-2 gap-4 mt-4">
-                      <div>
-                          <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5 ml-1">Escala / Tipo</label>
-                          <select className={inputClass} value={formData.type} onChange={e => setFormData({...formData, type: e.target.value as RoleType})}>
-                              <option value="Productor Pequeño (<5 ha)">Productor Pequeño</option>
-                              <option value="Productor Mediano (5-15 ha)">Productor Mediano</option>
-                              <option value="Productor Grande (>15 ha)">Productor Grande</option>
-                              <option value="Empresa Privada">Empresa Privada</option>
-                              <option value="Gobierno">Gobierno</option>
-                              <option value="Academia">Universidad/Academia</option>
-                          </select>
-                      </div>
-                      <div>
-                          <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5 ml-1">CUIT / ID Fiscal</label>
-                          <input type="text" className={inputClass} value={formData.cuit} onChange={e => setFormData({...formData, cuit: e.target.value})} />
-                      </div>
+              <div className="bg-gray-50 dark:bg-slate-950 p-6 rounded-[32px] border dark:border-slate-800">
+                  <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Perfil Cooperativo</h3>
+                  <div className="grid grid-cols-1 gap-4">
+                    <input required type="text" placeholder="Razón Social / Nombre Comercial" className={inputClass} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                    <div className="grid grid-cols-2 gap-4">
+                        <select className={inputClass} value={formData.membershipLevel} onChange={e => setFormData({...formData, membershipLevel: e.target.value as MembershipLevel})}>
+                            <option value="Activo">Estado: Activo</option>
+                            <option value="Premium">Estado: Premium (I+D)</option>
+                            <option value="En Observación">En Observación</option>
+                        </select>
+                        <input type="date" title="Fecha Alta Contrato" className={inputClass} value={formData.contractDate} onChange={e => setFormData({...formData, contractDate: e.target.value})} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <select className={inputClass} value={formData.type} onChange={e => setFormData({...formData, type: e.target.value as RoleType})}>
+                            <option value="Productor Pequeño (<5 ha)">Escala: Pequeño</option>
+                            <option value="Productor Mediano (5-15 ha)">Escala: Mediano</option>
+                            <option value="Productor Grande (>15 ha)">Escala: Grande</option>
+                            <option value="Empresa Privada">Empresa Privada</option>
+                        </select>
+                        <input type="text" placeholder="CUIT / ID Fiscal" className={inputClass} value={formData.cuit} onChange={e => setFormData({...formData, cuit: e.target.value})} />
+                    </div>
                   </div>
               </div>
 
               <div className="bg-blue-50/50 dark:bg-blue-900/10 p-6 rounded-[32px] border border-blue-100 dark:border-blue-900/30">
-                   <label className="block text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-[0.2em] mb-4 flex items-center">
-                      <LinkIcon size={14} className="mr-2"/> Vinculación con Usuario Maestro
-                   </label>
-                   <select className={`${inputClass} mb-4`} value={formData.relatedUserId || ''} onChange={(e) => {
-                       const user = usersList.find(u => u.id === e.target.value);
-                       if (user) setFormData({ ...formData, relatedUserId: user.id, contactName: user.name, email: user.email });
-                       else setFormData({...formData, relatedUserId: ''});
-                   }}>
-                       <option value="">-- Sin vinculación / Usuario nuevo --</option>
-                       {usersList.filter(u => !u.clientId || u.clientId === editingId).map(u => <option key={u.id} value={u.id}>{u.name} ({u.role})</option>)}
-                   </select>
+                   <h3 className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest mb-4">Información de Contacto</h3>
                    <div className="space-y-4">
                        <input required type="text" placeholder="Nombre de Persona de Contacto" className={inputClass} value={formData.contactName} onChange={e => setFormData({...formData, contactName: e.target.value})} />
-                       <input type="email" placeholder="Email de Contacto" className={inputClass} value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+                       <div className="grid grid-cols-2 gap-4">
+                            <input type="email" placeholder="Email corporativo" className={inputClass} value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+                            <input type="text" placeholder="WhatsApp / Teléfono" className={inputClass} value={formData.contactPhone} onChange={e => setFormData({...formData, contactPhone: e.target.value})} />
+                       </div>
                    </div>
               </div>
 

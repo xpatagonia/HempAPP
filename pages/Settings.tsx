@@ -1,10 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Save, Database, Copy, RefreshCw, Lock, Settings as SettingsIcon, ShieldCheck, PlayCircle, CheckCircle2, Layout, Image as ImageIcon, Trash2, RotateCcw, Cpu, Globe, Shield, Server, AlertTriangle, Eraser } from 'lucide-react';
+import { Save, Database, RefreshCw, Lock, Settings as SettingsIcon, CheckCircle2, Layout, Trash2, RotateCcw, Shield, AlertTriangle } from 'lucide-react';
 
 export default function Settings() {
-  const { currentUser, appName, appLogo, updateBranding, isEmergencyMode, refreshData } = useAppContext();
+  const { currentUser, appName, appLogo, updateBranding, refreshData } = useAppContext();
   
   const [activeTab, setActiveTab] = useState<'branding' | 'database' | 'connections'>('branding');
   const [url, setUrl] = useState('');
@@ -19,7 +19,6 @@ export default function Settings() {
       const storedKey = localStorage.getItem('hemp_sb_key');
       if (storedUrl) setUrl(storedUrl);
       if (storedKey) setKey(storedKey);
-      
       setEditAppName(appName);
       setEditAppLogo(appLogo);
   }, [appName, appLogo]);
@@ -43,7 +42,6 @@ export default function Settings() {
       setStatus('checking');
       localStorage.setItem('hemp_sb_url', url.trim());
       localStorage.setItem('hemp_sb_key', key.trim());
-      
       setTimeout(() => {
           setStatus('success');
           setTimeout(() => { setStatus('idle'); window.location.reload(); }, 1000);
@@ -51,30 +49,30 @@ export default function Settings() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto pb-10">
+    <div className="max-w-4xl mx-auto pb-10 animate-in fade-in">
       <div className="flex items-center mb-6">
         <SettingsIcon className="text-hemp-600 mr-3" size={32} />
         <div>
             <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Configuración del Servidor</h1>
-            <p className="text-gray-500">Mantenimiento de base de datos e identidad visual.</p>
+            <p className="text-gray-500">Protocolo de auditoría y base de datos cooperativa.</p>
         </div>
       </div>
 
       <div className="flex space-x-1 bg-gray-100 dark:bg-slate-900 p-1 rounded-lg mb-8 w-fit">
           <button onClick={() => setActiveTab('branding')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'branding' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Identidad</button>
           <button onClick={() => setActiveTab('connections')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'connections' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Conectividad</button>
-          <button onClick={() => setActiveTab('database')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'database' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>SQL Cloud (V14)</button>
+          <button onClick={() => setActiveTab('database')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'database' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>SQL Cloud (V15)</button>
       </div>
 
       {activeTab === 'branding' && (
-          <div className="space-y-8 animate-in fade-in slide-in-from-top-4">
+          <div className="space-y-8 animate-in slide-in-from-top-4">
               <div className="bg-white dark:bg-slate-900 p-8 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-sm">
                   <h3 className="text-xl font-black text-slate-800 dark:text-white flex items-center mb-6">
-                      <Layout className="mr-2 text-hemp-600" size={20} /> Marca Blanca
+                      <Layout className="mr-2 text-hemp-600" size={20} /> Personalización de Red
                   </h3>
                   <div className="space-y-6">
                       <div>
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Nombre de la App</label>
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Nombre de la Plataforma</label>
                           <input type="text" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl font-bold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-hemp-600" value={editAppName} onChange={e => setEditAppName(e.target.value)} />
                       </div>
                       <div>
@@ -108,20 +106,20 @@ export default function Settings() {
               <div className="bg-slate-900 border border-slate-800 p-8 rounded-[32px] shadow-2xl relative overflow-hidden">
                   <div className="flex items-center space-x-3 mb-6">
                       <Shield className="text-hemp-500" size={24}/>
-                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Protocolo de Base de Datos V14</h3>
+                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Protocolo Cooperativo V15</h3>
                   </div>
                   <div className="bg-amber-900/20 border border-amber-500/30 p-4 rounded-2xl mb-6 flex items-start text-amber-200">
                       <AlertTriangle className="text-amber-500 mr-3 flex-shrink-0" size={20}/>
                       <div className="text-xs space-y-2 leading-relaxed">
-                        <p className="font-bold uppercase tracking-tight">Optimización Logística & Contactos</p>
-                        <p>Este script integra <code className="bg-black/40 px-1 rounded text-white">whatsapp</code>, <code className="bg-black/40 px-1 rounded text-white">email</code> y <code className="bg-black/40 px-1 rounded text-white">postal_code</code> en proveedores.</p>
+                        <p className="font-bold uppercase tracking-tight">Consistencia de Recursos & Socios</p>
+                        <p>Este script integra <code className="bg-black/40 px-1 rounded text-white">membership_level</code> y <code className="bg-black/40 px-1 rounded text-white">is_official_partner</code> para control de red.</p>
                       </div>
                   </div>
 
                   <div className="space-y-4">
                     <button onClick={() => {
                       const sql = `
--- 1. LIMPIEZA DE TABLAS
+-- 1. LIMPIEZA TOTAL
 DROP TABLE IF EXISTS public.tasks CASCADE;
 DROP TABLE IF EXISTS public.seed_movements CASCADE;
 DROP TABLE IF EXISTS public.seed_batches CASCADE;
@@ -138,7 +136,7 @@ DROP TABLE IF EXISTS public.resources CASCADE;
 DROP TABLE IF EXISTS public.storage_points CASCADE;
 DROP TABLE IF EXISTS public.projects CASCADE;
 
--- 2. RECREACIÓN CON ESTRUCTURA V14
+-- 2. RECREACIÓN ESTRUCTURA V15
 CREATE TABLE public.users (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -159,7 +157,9 @@ CREATE TABLE public.clients (
   contact_name TEXT,
   contact_phone TEXT,
   email TEXT,
-  is_network_member BOOLEAN DEFAULT false,
+  is_network_member BOOLEAN DEFAULT true,
+  membership_level TEXT DEFAULT 'Activo',
+  contract_date TEXT,
   cuit TEXT,
   notes TEXT,
   related_user_id TEXT
@@ -215,7 +215,8 @@ CREATE TABLE public.suppliers (
   commercial_contact TEXT,
   logistics_contact TEXT,
   website TEXT,
-  notes TEXT
+  notes TEXT,
+  is_official_partner BOOLEAN DEFAULT false
 );
 
 CREATE TABLE public.seed_batches (
@@ -239,35 +240,48 @@ CREATE TABLE public.seed_batches (
   created_at TEXT
 );
 
--- 3. PERMISOS TOTALES
+CREATE TABLE public.seed_movements (
+  id TEXT PRIMARY KEY,
+  batch_id TEXT,
+  client_id TEXT,
+  target_location_id TEXT,
+  quantity NUMERIC,
+  date TEXT,
+  status TEXT DEFAULT 'En Tránsito',
+  transport_guide_number TEXT,
+  driver_name TEXT,
+  vehicle_plate TEXT
+);
+
+-- 3. PERMISOS
 ALTER TABLE public.users DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.clients DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.locations DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.varieties DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.suppliers DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.seed_batches DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.seed_movements DISABLE ROW LEVEL SECURITY;
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;
 
--- 4. INSERTAR USUARIO ADMIN INICIAL
+-- 4. USUARIO ROOT
 DELETE FROM public.users WHERE email = 'admin@hempc.com';
 INSERT INTO public.users (id, name, email, role, password, job_title, is_network_member)
-VALUES ('root-user', 'Super Administrador', 'admin@hempc.com', 'super_admin', 'admin123', 'Director de Sistema', true);
+VALUES ('root-user', 'Super Administrador', 'admin@hempc.com', 'super_admin', 'admin123', 'Director Cooperativa', true);
 
--- 5. FORZAR RECARGA DE CACHÉ
 NOTIFY pgrst, 'reload schema';
                       `;
                       navigator.clipboard.writeText(sql.trim());
-                      alert("Script Nuclear V14 Copiado. Ejecútalo en Supabase para habilitar geolocalización postal y contactos.");
+                      alert("Script Nuclear V15 Copiado. Ejecútalo para habilitar el control estricto de socios y proveedores.");
                     }} className="w-full bg-red-600 hover:bg-red-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center transition-all shadow-xl">
-                        <RotateCcw size={18} className="mr-2"/> Reconstrucción Nuclear (V14)
+                        <RotateCcw size={18} className="mr-2"/> Reconstrucción Nuclear (V15)
                     </button>
                     
                     <button onClick={() => {
-                        const sql = `ALTER TABLE public.suppliers ADD COLUMN IF NOT EXISTS whatsapp TEXT; ALTER TABLE public.suppliers ADD COLUMN IF NOT EXISTS email TEXT; ALTER TABLE public.suppliers ADD COLUMN IF NOT EXISTS postal_code TEXT; NOTIFY pgrst, 'reload schema';`;
+                        const sql = `ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS membership_level TEXT DEFAULT 'Activo'; ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS contract_date TEXT; ALTER TABLE public.suppliers ADD COLUMN IF NOT EXISTS is_official_partner BOOLEAN DEFAULT false; NOTIFY pgrst, 'reload schema';`;
                         navigator.clipboard.writeText(sql);
-                        alert("Parche de compatibilidad V14 copiado.");
+                        alert("Parche V15 (Membresías) copiado.");
                     }} className="w-full bg-slate-800 hover:bg-slate-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center transition-all border border-slate-700">
-                        <RefreshCw size={18} className="mr-2"/> Parche V14: Solo Columnas de Contacto
+                        <RefreshCw size={18} className="mr-2"/> Parche V15: Solo Columnas de Auditoría
                     </button>
                   </div>
               </div>
