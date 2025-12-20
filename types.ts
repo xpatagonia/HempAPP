@@ -13,7 +13,7 @@ export interface User {
   phone?: string;
   avatar?: string;
   clientId?: string;
-  isNetworkMember: boolean; // Identificador de Red
+  isNetworkMember: boolean; 
 }
 
 export type RoleType = 
@@ -91,6 +91,7 @@ export interface Supplier {
   province?: string;
   city?: string;
   address?: string;
+  coordinates?: { lat: number; lng: number };
   commercialContact?: string;
   logisticsContact?: string;
   website?: string;
@@ -104,6 +105,7 @@ export interface Variety {
   usage: UsageType;
   cycleDays: number;
   expectedThc: number;
+  knowledgeBase?: string; // Protocolos de manejo
   notes?: string;
 }
 
@@ -117,7 +119,7 @@ export interface Client {
   isNetworkMember: boolean;
   cuit?: string;
   notes?: string;
-  relatedUserId?: string; // Link to system user
+  relatedUserId?: string; 
 }
 
 export interface Project {

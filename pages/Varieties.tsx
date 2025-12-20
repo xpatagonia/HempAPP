@@ -2,18 +2,29 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Variety, UsageType } from '../types';
-import { Plus, Search, Tag, Edit2, Trash2, CloudDownload, Sprout, AlertCircle, Building, Globe, Archive, Truck, ArrowRight } from 'lucide-react';
+import { Plus, Search, Tag, Edit2, Trash2, CloudDownload, Sprout, AlertCircle, Building, Globe, Archive, Truck, ArrowRight, X, Sparkles, BookOpen, Info } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 
+const HEMPIT_CATALOG = [
+    { name: 'Fedora 17', usage: 'Fibra' as UsageType, cycleDays: 135, expectedThc: 0.12, knowledgeBase: 'Variedad monoica precoz. Excelente para fibra y grano. Sensible a la humedad excesiva en maduración.' },
+    { name: 'Felina 32', usage: 'Dual' as UsageType, cycleDays: 140, expectedThc: 0.15, knowledgeBase: 'Variedad monoica. Muy equilibrada. Altamente valorada por la calidad de su fibra textil.' },
+    { name: 'Ferimon', usage: 'Grano' as UsageType, cycleDays: 130, expectedThc: 0.10, knowledgeBase: 'Especializada en producción de semilla. Porte medio, fácil cosecha mecánica.' },
+    { name: 'Futura 75', usage: 'Fibra' as UsageType, cycleDays: 155, expectedThc: 0.18, knowledgeBase: 'Variedad de ciclo tardío. Máximo potencial de biomasa y fibra técnica. Requiere suelos profundos.' },
+    { name: 'Santhica 27', usage: 'Fibra' as UsageType, cycleDays: 145, expectedThc: 0.05, knowledgeBase: 'Variedad libre de THC (solo CBG). Ideal para aplicaciones industriales sin restricciones psicoactivas.' },
+    { name: 'Fedrina 74', usage: 'Fibra' as UsageType, cycleDays: 150, expectedThc: 0.15, knowledgeBase: 'Alta densidad foliar. Excelente supresora de malezas.' }
+];
+
 export default function Varieties() {
-  const { varieties, addVariety, updateVariety, deleteVariety, currentUser, suppliers } = useAppContext();
+  const { varieties, addVariety, updateVariety, deleteVariety, currentUser, suppliers, seedBatches } = useAppContext();
   const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedSupplierForImport, setSelectedSupplierForImport] = useState('');
 
   const [formData, setFormData] = useState<Partial<Variety>>({
-    name: '', usage: 'Fibra', supplierId: '', cycleDays: 120, expectedThc: 0, notes: ''
+    name: '', usage: 'Fibra', supplierId: '', cycleDays: 120, expectedThc: 0, notes: '', knowledgeBase: ''
   });
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
@@ -25,10 +36,11 @@ export default function Varieties() {
     const payload = {
         name: formData.name!,
         usage: formData.usage as UsageType,
-        supplierId: formData.supplierId || null, 
+        supplierId: formData.supplierId!, 
         cycleDays: Number(formData.cycleDays),
         expectedThc: Number(formData.expectedThc),
-        notes: formData.notes
+        notes: formData.notes || '',
+        knowledgeBase: formData.knowledgeBase || ''
     };
 
     if (editingId) {
@@ -40,9 +52,31 @@ export default function Varieties() {
     closeModal();
   };
 
+  const handleHempITImport = () => {
+    if (!selectedSupplierForImport) {
+        alert("Selecciona un proveedor para asignar el catálogo.");
+        return;
+    }
+    
+    HEMPIT_CATALOG.forEach(v => {
+        const exists = varieties.find(ex => ex.name.toLowerCase() === v.name.toLowerCase());
+        if (!exists) {
+            addVariety({
+                ...v,
+                id: `hempit-${v.name.toLowerCase().replace(' ', '-')}`,
+                supplierId: selectedSupplierForImport,
+                notes: 'Importado de catálogo oficial HempIT France.'
+            } as Variety);
+        }
+    });
+    
+    setIsImportModalOpen(false);
+    alert("✅ Catálogo HempIT France importado exitosamente.");
+  };
+
   const closeModal = () => {
     setIsModalOpen(false);
-    setFormData({ name: '', usage: 'Fibra', supplierId: '', cycleDays: 120, expectedThc: 0, notes: '' });
+    setFormData({ name: '', usage: 'Fibra', supplierId: '', cycleDays: 120, expectedThc: 0, notes: '', knowledgeBase: '' });
     setEditingId(null);
   };
 
@@ -53,6 +87,11 @@ export default function Varieties() {
   };
 
   const handleDelete = (id: string) => {
+    const hasStock = seedBatches.some(b => b.varietyId === id);
+    if (hasStock) {
+        alert("No se puede eliminar esta variedad porque existen lotes de semillas en inventario vinculados.");
+        return;
+    }
     if (window.confirm('¿Estás seguro de eliminar esta variedad? Esto podría afectar parcelas existentes.')) {
       deleteVariety(id);
     }
@@ -63,28 +102,25 @@ export default function Varieties() {
       return v.name.toLowerCase().includes(searchTerm.toLowerCase()) || supplierName.toLowerCase().includes(searchTerm.toLowerCase());
   });
 
-  const inputClass = "w-full border border-gray-300 bg-white text-gray-900 p-2 rounded-lg focus:ring-2 focus:ring-hemp-500 outline-none transition-colors";
+  const inputClass = "w-full border border-gray-300 dark:border-slate-800 bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 p-2.5 rounded-xl focus:ring-2 focus:ring-hemp-500 outline-none transition-all";
 
   return (
     <div className="animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>
-            <h1 className="text-3xl font-black text-gray-800">Catálogo Genético</h1>
-            <p className="text-sm text-gray-500">Gestión de variedades autorizadas y trazabilidad de origen.</p>
+            <h1 className="text-3xl font-black text-gray-800 dark:text-white uppercase tracking-tighter italic">Genética <span className="text-hemp-600">& Biodiversidad</span></h1>
+            <p className="text-sm text-gray-500">Gestión de variedades autorizadas y protocolos de manejo.</p>
         </div>
         
         {isAdmin && (
-          <button 
-            onClick={() => {
-                setEditingId(null);
-                setFormData({ name: '', usage: 'Fibra', supplierId: '', cycleDays: 120, expectedThc: 0, notes: '' });
-                setIsModalOpen(true);
-            }}
-            className="bg-hemp-600 text-white px-5 py-2.5 rounded-xl flex items-center hover:bg-hemp-700 transition w-full md:w-auto justify-center shadow-lg font-bold"
-          >
-            <Plus size={20} className="mr-2" />
-            Nueva Variedad
-          </button>
+          <div className="flex space-x-2 w-full md:w-auto">
+              <button onClick={() => setIsImportModalOpen(true)} className="flex-1 bg-blue-600 text-white px-5 py-2.5 rounded-2xl flex items-center justify-center hover:bg-blue-700 transition shadow-lg font-black text-xs uppercase tracking-widest">
+                <Sparkles size={18} className="mr-2" /> Importar HempIT
+              </button>
+              <button onClick={() => { setEditingId(null); setIsModalOpen(true); }} className="flex-1 bg-hemp-600 text-white px-5 py-2.5 rounded-2xl flex items-center justify-center hover:bg-hemp-700 transition shadow-lg font-black text-xs uppercase tracking-widest">
+                <Plus size={18} className="mr-2" /> Nueva Variedad
+              </button>
+          </div>
         )}
       </div>
 
@@ -92,8 +128,8 @@ export default function Varieties() {
         <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
         <input 
           type="text" 
-          placeholder="Buscar por nombre de genética o semillero..." 
-          className="w-full pl-12 pr-4 py-3 bg-white text-gray-900 rounded-2xl border border-gray-200 focus:ring-2 focus:ring-hemp-500 outline-none shadow-sm transition-all"
+          placeholder="Buscar por nombre de genética o proveedor..." 
+          className="w-full pl-12 pr-4 py-4 bg-white dark:bg-slate-900 text-gray-900 dark:text-white rounded-[24px] border border-gray-200 dark:border-slate-800 focus:ring-2 focus:ring-hemp-500 outline-none shadow-sm transition-all"
           value={searchTerm}
           onChange={e => setSearchTerm(e.target.value)}
         />
@@ -103,67 +139,59 @@ export default function Varieties() {
         {filtered.map(v => {
             const supplier = suppliers.find(s => s.id === v.supplierId);
             return (
-              <div key={v.id} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-xl transition-all relative group flex flex-col h-full">
+              <div key={v.id} className="bg-white dark:bg-slate-900 p-6 rounded-[32px] shadow-sm border border-gray-100 dark:border-slate-800 hover:shadow-xl transition-all relative group flex flex-col h-full">
                  {isAdmin && (
                    <div className="absolute top-4 right-4 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => handleEdit(v)} className="p-2 text-gray-400 hover:text-hemp-600 hover:bg-gray-50 rounded-lg border border-transparent hover:border-gray-100"><Edit2 size={16} /></button>
-                      <button onClick={() => handleDelete(v.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg border border-transparent hover:border-gray-100"><Trash2 size={16} /></button>
+                      <button onClick={() => handleEdit(v)} className="p-2 text-gray-400 hover:text-hemp-600 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition"><Edit2 size={16} /></button>
+                      <button onClick={() => handleDelete(v.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-slate-800 rounded-xl transition"><Trash2 size={16} /></button>
                    </div>
                  )}
 
                 <div className="flex justify-between items-start mb-4 pr-10">
                   <div className="flex items-center">
-                      <div className="bg-hemp-50 p-2.5 rounded-xl mr-3">
-                        <Sprout size={20} className="text-hemp-600" />
+                      <div className="bg-hemp-50 dark:bg-hemp-900/20 p-3 rounded-2xl mr-3">
+                        <Sprout size={24} className="text-hemp-600" />
                       </div>
-                      <h3 className="text-xl font-black text-gray-800">{v.name}</h3>
-                  </div>
-                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${
-                    v.usage === 'Medicinal' ? 'bg-purple-50 text-purple-700 border-purple-100' :
-                    v.usage === 'Fibra' ? 'bg-amber-50 text-amber-700 border-amber-100' :
-                    v.usage === 'Grano' ? 'bg-orange-50 text-orange-700 border-orange-100' :
-                    'bg-blue-50 text-blue-700 border-blue-100'
-                  }`}>
-                    {v.usage}
-                  </span>
-                </div>
-                
-                <div className="space-y-2 text-sm text-gray-600 bg-gray-50 p-4 rounded-xl mb-4 border border-gray-100">
-                  <div className="flex justify-between items-center border-b border-gray-200 pb-2">
-                      <span className="font-bold text-gray-400 text-xs uppercase tracking-tighter">Semillero</span> 
-                      <span className="font-black text-gray-800 truncate max-w-[140px]" title={supplier?.name}>{supplier?.name || 'S/D'}</span>
-                  </div>
-                  <div className="flex justify-between items-center border-b border-gray-200 pb-2">
-                      <span className="font-bold text-gray-400 text-xs uppercase tracking-tighter">Ciclo Est.</span> 
-                      <span className="font-black text-gray-800">{v.cycleDays} días</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                      <span className="font-bold text-gray-400 text-xs uppercase tracking-tighter">THC Ref.</span> 
-                      <span className="font-black text-gray-800">{v.expectedThc}%</span>
+                      <div>
+                        <h3 className="text-xl font-black text-gray-800 dark:text-white uppercase tracking-tighter">{v.name}</h3>
+                        <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest">{supplier?.name || 'Origen Desconocido'}</p>
+                      </div>
                   </div>
                 </div>
                 
-                {v.notes && (
-                    <p className="text-xs text-gray-500 italic mb-6 flex-1 line-clamp-3 leading-relaxed">
-                        "{v.notes}"
-                    </p>
-                )}
+                <div className="grid grid-cols-3 gap-2 mb-4">
+                    <div className="bg-gray-50 dark:bg-slate-950 p-2 rounded-xl text-center border dark:border-slate-800">
+                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Uso</p>
+                        <p className="text-xs font-black text-gray-700 dark:text-gray-300 uppercase">{v.usage}</p>
+                    </div>
+                    <div className="bg-gray-50 dark:bg-slate-950 p-2 rounded-xl text-center border dark:border-slate-800">
+                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Ciclo</p>
+                        <p className="text-xs font-black text-gray-700 dark:text-gray-300">{v.cycleDays}d</p>
+                    </div>
+                    <div className="bg-gray-50 dark:bg-slate-950 p-2 rounded-xl text-center border dark:border-slate-800">
+                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">THC</p>
+                        <p className="text-xs font-black text-gray-700 dark:text-gray-300">{v.expectedThc}%</p>
+                    </div>
+                </div>
 
-                {/* STOCK ACTION BUTTONS */}
-                <div className="grid grid-cols-1 gap-2 mt-auto">
+                {v.knowledgeBase && (
+                    <div className="bg-blue-50/50 dark:bg-blue-900/10 p-4 rounded-2xl border border-blue-100 dark:border-blue-900/20 mb-4 flex-1">
+                        <h4 className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest flex items-center mb-2">
+                            <BookOpen size={12} className="mr-1.5"/> Manejo Técnico
+                        </h4>
+                        <p className="text-[11px] text-blue-800 dark:text-blue-200 leading-relaxed font-medium italic">
+                            {v.knowledgeBase}
+                        </p>
+                    </div>
+                )}
+                
+                <div className="grid grid-cols-1 gap-2 mt-auto pt-4 border-t dark:border-slate-800">
                     <button 
                         onClick={() => navigate(`/seed-batches?variety=${v.name}`)}
-                        className="w-full bg-slate-900 text-white py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center hover:bg-black transition shadow-sm group"
+                        className="w-full bg-slate-900 dark:bg-hemp-600 text-white py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center hover:scale-[1.02] transition-all shadow-md group"
                     >
                         <Archive size={14} className="mr-2 text-hemp-400 group-hover:scale-110 transition-transform" />
-                        Ver Inventario
-                    </button>
-                    <button 
-                        onClick={() => navigate(`/seed-batches?tab=logistics&variety=${v.name}`)}
-                        className="w-full bg-white text-gray-700 border border-gray-200 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center hover:bg-gray-50 transition shadow-sm group"
-                    >
-                        <Truck size={14} className="mr-2 text-blue-500 group-hover:translate-x-1 transition-transform" />
-                        Despachar (Logística)
+                        Ver Inventario Lotes
                     </button>
                 </div>
               </div>
@@ -171,58 +199,102 @@ export default function Varieties() {
         })}
       </div>
 
+      {/* MODAL IMPORTACIÓN HempIT */}
+      {isImportModalOpen && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[70] p-4">
+              <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-lg w-full p-10 shadow-2xl animate-in zoom-in-95">
+                  <div className="flex justify-between items-center mb-8">
+                      <div className="flex items-center gap-3">
+                          <div className="bg-blue-600 p-3 rounded-2xl text-white shadow-lg"><Sparkles size={24}/></div>
+                          <div>
+                              <h2 className="text-2xl font-black text-slate-800 dark:text-white uppercase tracking-tighter">HempIT France</h2>
+                              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Importador de Catálogo Oficial</p>
+                          </div>
+                      </div>
+                      <button onClick={() => setIsImportModalOpen(false)} className="text-slate-400 hover:text-slate-600"><X size={28}/></button>
+                  </div>
+
+                  <div className="space-y-6">
+                      <div className="bg-gray-50 dark:bg-slate-950 p-6 rounded-3xl border dark:border-slate-800">
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-3">Vincular al Proveedor</label>
+                          <select 
+                            className={inputClass} 
+                            value={selectedSupplierForImport} 
+                            onChange={e => setSelectedSupplierForImport(e.target.value)}
+                          >
+                              <option value="">-- Seleccionar Proveedor --</option>
+                              {suppliers.filter(s => s.category === 'Semillas').map(s => (
+                                  <option key={s.id} value={s.id}>{s.name} ({s.country})</option>
+                              ))}
+                          </select>
+                          <p className="text-[9px] text-slate-400 mt-3 italic">* Se cargarán Fedora 17, Felina 32, Futura 75, Santhica y Ferimon automáticamente.</p>
+                      </div>
+                      
+                      <button 
+                        onClick={handleHempITImport}
+                        disabled={!selectedSupplierForImport}
+                        className="w-full bg-blue-600 text-white py-4 rounded-3xl font-black text-xs uppercase tracking-[0.2em] shadow-xl hover:scale-[1.02] transition-all disabled:opacity-30"
+                      >
+                          Confirmar Importación
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* MODAL CREAR/EDITAR */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-8 shadow-2xl animate-in zoom-in-95">
-            <h2 className="text-2xl font-black mb-6 text-gray-900">{editingId ? 'Editar Genética' : 'Registrar Nueva Genética'}</h2>
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-2xl w-full p-10 shadow-2xl animate-in zoom-in-95 max-h-[95vh] overflow-y-auto">
+            <h2 className="text-3xl font-black mb-8 text-gray-900 dark:text-white uppercase tracking-tighter italic">Gestionar <span className="text-hemp-600">Genética</span></h2>
             
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-black text-gray-500 uppercase mb-1.5 tracking-widest ml-1">Nombre Comercial *</label>
-                <input required type="text" className={inputClass} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Ej: Fedora 17" />
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="bg-gray-50 dark:bg-slate-950 p-6 rounded-[32px] border dark:border-slate-800">
+                  <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center"><Sprout size={14} className="mr-2"/> Datos Básicos</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-500 uppercase mb-1.5 tracking-widest ml-1">Nombre Comercial *</label>
+                      <input required type="text" className={inputClass} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Ej: Fedora 17" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-black text-gray-500 uppercase mb-1.5 tracking-widest ml-1">Uso Principal</label>
+                        <select className={inputClass} value={formData.usage} onChange={e => setFormData({...formData, usage: e.target.value as UsageType})}>
+                          <option value="Fibra">Fibra</option>
+                          <option value="Grano">Grano</option>
+                          <option value="Dual">Dual</option>
+                          <option value="Medicinal">Medicinal</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-black text-gray-500 uppercase mb-1.5 tracking-widest ml-1">Proveedor *</label>
+                        <select required className={inputClass} value={formData.supplierId} onChange={e => setFormData({...formData, supplierId: e.target.value})}>
+                            <option value="">Seleccionar...</option>
+                            {suppliers.map(s => <option key={s.id} value={s.id}>{s.name} ({s.country})</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-black text-gray-500 uppercase mb-1.5 tracking-widest ml-1">Días de Ciclo</label>
+                        <input type="number" className={inputClass} value={formData.cycleDays} onChange={e => setFormData({...formData, cycleDays: Number(e.target.value)})} />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-black text-gray-500 uppercase mb-1.5 tracking-widest ml-1">% THC Esperado</label>
+                        <input type="number" step="0.01" className={inputClass} value={formData.expectedThc} onChange={e => setFormData({...formData, expectedThc: Number(e.target.value)})} />
+                      </div>
+                    </div>
+                  </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-black text-gray-500 uppercase mb-1.5 tracking-widest ml-1">Uso Principal</label>
-                  <select className={inputClass} value={formData.usage} onChange={e => setFormData({...formData, usage: e.target.value as UsageType})}>
-                    <option value="Fibra">Fibra</option>
-                    <option value="Grano">Grano</option>
-                    <option value="Dual">Dual</option>
-                    <option value="Medicinal">Medicinal</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-black text-gray-500 uppercase mb-1.5 tracking-widest ml-1">Proveedor *</label>
-                  <select 
-                    required 
-                    className={inputClass} 
-                    value={formData.supplierId} 
-                    onChange={e => setFormData({...formData, supplierId: e.target.value})}
-                  >
-                      <option value="">Seleccionar...</option>
-                      {suppliers.map(s => (
-                          <option key={s.id} value={s.id}>{s.name} ({s.country})</option>
-                      ))}
-                  </select>
-                </div>
+
+              <div className="bg-blue-50/50 dark:bg-blue-900/10 p-6 rounded-[32px] border border-blue-100 dark:border-blue-900/20">
+                   <h3 className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-4 flex items-center"><BookOpen size={14} className="mr-2"/> Base de Conocimiento (Protocolos)</h3>
+                   <textarea className={`${inputClass} border-blue-100`} rows={4} value={formData.knowledgeBase || ''} onChange={e => setFormData({...formData, knowledgeBase: e.target.value})} placeholder="Instrucciones especiales de siembra, fertilización o cosecha para esta variedad..."></textarea>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-black text-gray-500 uppercase mb-1.5 tracking-widest ml-1">Días de Ciclo</label>
-                  <input type="number" className={inputClass} value={formData.cycleDays} onChange={e => setFormData({...formData, cycleDays: Number(e.target.value)})} />
-                </div>
-                <div>
-                  <label className="block text-xs font-black text-gray-500 uppercase mb-1.5 tracking-widest ml-1">% THC Esperado</label>
-                  <input type="number" step="0.01" className={inputClass} value={formData.expectedThc} onChange={e => setFormData({...formData, expectedThc: Number(e.target.value)})} />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-black text-gray-500 uppercase mb-1.5 tracking-widest ml-1">Notas Técnicas</label>
-                <textarea className={inputClass} rows={3} value={formData.notes || ''} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder="Características agronómicas destacadas..."></textarea>
-              </div>
-              <div className="flex justify-end space-x-3 pt-6 border-t">
-                <button type="button" onClick={closeModal} className="px-6 py-2.5 text-gray-500 font-bold hover:bg-gray-100 rounded-xl transition">Cancelar</button>
-                <button type="submit" className="px-8 py-2.5 bg-hemp-600 text-white rounded-xl font-black shadow-lg shadow-hemp-900/20 hover:bg-hemp-700 transition">Guardar Genética</button>
+
+              <div className="flex justify-end space-x-3 pt-6 border-t dark:border-slate-800">
+                <button type="button" onClick={closeModal} className="px-8 py-3 text-slate-400 font-black uppercase text-[10px] tracking-widest hover:text-slate-600 transition">Cancelar</button>
+                <button type="submit" className="bg-slate-900 dark:bg-hemp-600 text-white px-10 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl flex items-center hover:scale-[1.02] active:scale-[0.98] transition-all">Guardar Genética</button>
               </div>
             </form>
           </div>
