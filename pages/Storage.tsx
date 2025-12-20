@@ -29,9 +29,11 @@ export default function Storage() {
     lat: '', lng: ''
   });
 
+  // Aseguramos que el mapa solo se intente cargar cuando el modal está abierto
   useEffect(() => {
     if (isModalOpen) {
-      const timer = setTimeout(() => setRenderMap(true), 50);
+      // Esperamos a que la animación de entrada del modal (zoom-in-95) termine
+      const timer = setTimeout(() => setRenderMap(true), 400);
       return () => clearTimeout(timer);
     } else {
       setRenderMap(false);
@@ -95,10 +97,10 @@ export default function Storage() {
             setIsModalOpen(false);
             resetForm();
         } else {
-            alert("Error al guardar. Verifique conexión a base de datos.");
+            alert("Error de integridad de datos. Verifique si el código de nodo ya existe.");
         }
     } catch (err) {
-        alert("Fallo al guardar nodo logístico.");
+        alert("Fallo crítico al guardar nodo logístico.");
     } finally {
         setIsSaving(false);
     }
@@ -132,7 +134,7 @@ export default function Storage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>
             <h1 className="text-2xl font-black text-gray-800 dark:text-white uppercase tracking-tight italic">Nodos <span className="text-hemp-600">Logísticos</span></h1>
-            <p className="text-sm text-gray-500">Centros de acopio y trazabilidad estandarizada.</p>
+            <p className="text-sm text-gray-500">Centros de acopio y trazabilidad estandarizada para materiales reales.</p>
         </div>
         {isAdmin && (
           <button onClick={() => { resetForm(); setIsModalOpen(true); }} className="bg-hemp-600 text-white px-6 py-3 rounded-2xl flex items-center hover:bg-hemp-700 transition shadow-xl font-black text-xs uppercase tracking-widest">
@@ -169,9 +171,9 @@ export default function Storage() {
                   <div key={sp.id} className="bg-white dark:bg-slate-900 rounded-[32px] shadow-sm border border-gray-100 dark:border-slate-800 overflow-hidden relative group flex flex-col h-full hover:shadow-xl transition-all">
                       <div className="h-40 bg-gray-100 dark:bg-slate-800 relative">
                           {sp.coordinates && sp.coordinates.lat ? (
-                              <iframe width="100%" height="100%" frameBorder="0" scrolling="no" src={`https://maps.google.com/maps?q=${sp.coordinates.lat},${sp.coordinates.lng}&z=14&output=embed`} className="absolute inset-0 opacity-80 group-hover:opacity-100 transition-opacity pointer-events-none"></iframe>
+                              <iframe width="100%" height="100%" frameBorder="0" scrolling="no" src={`https://maps.google.com/maps?q=${sp.coordinates.lat},${sp.coordinates.lng}&z=14&output=embed`} className="absolute inset-0 opacity-80 group-hover:opacity-100 transition-opacity pointer-events-none border-none"></iframe>
                           ) : (
-                              <div className="flex items-center justify-center h-full text-gray-400 flex-col"><MapPin size={32} className="mb-2 opacity-30"/><span className="text-[10px] font-black uppercase tracking-widest">Sin GPS</span></div>
+                              <div className="flex items-center justify-center h-full text-gray-400 flex-col bg-slate-50 dark:bg-slate-800"><MapPin size={32} className="mb-2 opacity-30"/><span className="text-[10px] font-black uppercase tracking-widest">Sin GPS</span></div>
                           )}
                           <div className="absolute top-4 left-4 flex gap-2">
                              <div className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest shadow-lg border border-white/20 text-white ${sp.clientId ? 'bg-blue-600' : 'bg-hemp-600'}`}>
@@ -229,7 +231,7 @@ export default function Storage() {
 
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-6xl w-full p-10 shadow-2xl max-h-[95vh] overflow-y-auto animate-in zoom-in-95">
+          <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-6xl w-full p-10 shadow-2xl max-h-[95vh] overflow-y-auto animate-in zoom-in-95 border border-white/10">
             <div className="flex justify-between items-center mb-8">
                 <h2 className="text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tighter italic">Configurar <span className="text-hemp-600">Nodo Logístico</span></h2>
                 <button onClick={() => { if(!isSaving) setIsModalOpen(false); }} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition text-slate-400"><X size={28}/></button>
@@ -287,15 +289,16 @@ export default function Storage() {
                         </div>
                     </div>
 
-                    <div className="bg-emerald-50/50 dark:bg-emerald-900/10 p-6 rounded-[32px] border border-emerald-100 dark:border-emerald-900/30 flex flex-col">
+                    <div className="bg-emerald-50/50 dark:bg-emerald-900/10 p-6 rounded-[32px] border border-emerald-100 dark:border-emerald-900/30 flex flex-col min-h-[450px]">
                         <h3 className="text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-[0.2em] mb-4 flex items-center"><MapPin size={14} className="mr-2"/> Localización Geográfica</h3>
-                        <div className="space-y-4 flex-1">
+                        <div className="space-y-4 flex-1 flex flex-col">
                             <input type="text" className={inputClass} value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} placeholder="Dirección Postal de Despacho" />
                             
-                            <div className="flex-1 min-h-[350px] rounded-2xl overflow-hidden border dark:border-slate-800 shadow-inner group/map relative bg-slate-100 dark:bg-slate-950">
+                            <div className="flex-1 rounded-2xl overflow-hidden border dark:border-slate-800 shadow-inner group/map relative bg-slate-200 dark:bg-slate-950">
                                 {renderMap ? (
-                                    <div className="h-full w-full">
+                                    <div className="h-full w-full animate-in fade-in duration-500">
                                         <MapEditor 
+                                            key={`map-storage-${editingId || 'new'}`}
                                             initialCenter={formData.lat && formData.lng ? { lat: parseFloat(formData.lat.replace(',','.')), lng: parseFloat(formData.lng.replace(',','.')) } : undefined} 
                                             initialPolygon={formData.lat && formData.lng ? [{ lat: parseFloat(formData.lat.replace(',','.')), lng: parseFloat(formData.lng.replace(',','.')) }] : []} 
                                             onPolygonChange={(poly) => {
@@ -309,14 +312,20 @@ export default function Storage() {
                                 ) : (
                                     <div className="h-full flex items-center justify-center text-slate-400 animate-pulse uppercase text-[10px] font-black tracking-widest flex-col gap-3">
                                         <RefreshCw className="animate-spin" size={32}/>
-                                        Sincronizando Cartografía...
+                                        Sincronizando Cartografía Satelital...
                                     </div>
                                 )}
                             </div>
                             
                             <div className="grid grid-cols-2 gap-3 mt-4">
-                                <input type="text" className={`${inputClass} text-xs h-9 bg-white/50 dark:bg-slate-800/50`} value={formData.lat} onChange={e => setFormData({...formData, lat: e.target.value})} placeholder="Latitud" />
-                                <input type="text" className={`${inputClass} text-xs h-9 bg-white/50 dark:bg-slate-800/50`} value={formData.lng} onChange={e => setFormData({...formData, lng: e.target.value})} placeholder="Longitud" />
+                                <div className="space-y-1">
+                                    <span className="text-[8px] font-black text-slate-400 uppercase ml-1">Latitud</span>
+                                    <input type="text" className={`${inputClass} text-xs h-9 bg-white/50 dark:bg-slate-800/50`} value={formData.lat} onChange={e => setFormData({...formData, lat: e.target.value})} placeholder="Ej: -34.12345" />
+                                </div>
+                                <div className="space-y-1">
+                                    <span className="text-[8px] font-black text-slate-400 uppercase ml-1">Longitud</span>
+                                    <input type="text" className={`${inputClass} text-xs h-9 bg-white/50 dark:bg-slate-800/50`} value={formData.lng} onChange={e => setFormData({...formData, lng: e.target.value})} placeholder="Ej: -58.12345" />
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -326,7 +335,7 @@ export default function Storage() {
                     <button type="button" disabled={isSaving} onClick={() => setIsModalOpen(false)} className="px-8 py-3 text-slate-400 font-black uppercase text-[10px] tracking-widest hover:text-slate-600 transition">Cancelar</button>
                     <button type="submit" disabled={isSaving} className="bg-slate-900 dark:bg-hemp-600 text-white px-10 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl flex items-center hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50">
                         {isSaving ? <Loader2 className="animate-spin mr-2" size={18}/> : <Save className="mr-2" size={18}/>}
-                        {editingId ? 'Actualizar Nodo' : 'Finalizar Registro'}
+                        {editingId ? 'Actualizar Nodo Industrial' : 'Finalizar Registro Maestro'}
                     </button>
                 </div>
             </form>

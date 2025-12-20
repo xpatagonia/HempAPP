@@ -1,5 +1,7 @@
 {
   "name": "HempAPP",
   "description": "Sistema de gestión integral para ensayos industriales de cáñamo, bitácoras de cultivo y análisis de rendimientos.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [
+    "geolocation"
+  ]
 }

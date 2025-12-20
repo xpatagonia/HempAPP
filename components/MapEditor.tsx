@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Polygon, Marker, useMapEvents, useMap } from 'react-leaflet';
-import { Trash2, MapPin, MousePointer, Ruler, Route, Layers, Maximize } from 'lucide-react';
+import { Trash2, MapPin, MousePointer, Maximize } from 'lucide-react';
 import L from 'leaflet';
 
 // Fix Leaflet icons in React
@@ -23,37 +22,33 @@ interface MapEditorProps {
     onPolygonChange?: (polygon: { lat: number, lng: number }[], areaHa: number, center: { lat: number, lng: number }, perimeterM: number) => void;
     readOnly?: boolean;
     height?: string;
+    // Fix: Added key to interface to resolve TS error in pages/Storage.tsx line 301
+    key?: string | number;
 }
 
-// FIX DEFINITIVO: Componente que observa el tamaño del contenedor
+// FIX DE VISUALIZACIÓN: Componente que fuerza el redibujado cuando el modal termina su animación
 const MapResizer = () => {
     const map = useMap();
-    const container = map.getContainer();
-
     useEffect(() => {
-        if (!container) return;
-
-        // Invalidate size immediately
-        map.invalidateSize();
-
-        // Observer for when the modal animation finishes or container changes
-        const observer = new ResizeObserver(() => {
+        // Ejecutamos múltiples veces durante el primer segundo para atrapar el final de la animación del modal
+        const timers = [100, 300, 600, 1000].map(ms => 
             setTimeout(() => {
                 map.invalidateSize();
-            }, 100);
-        });
-
-        observer.observe(container);
+            }, ms)
+        );
         
-        // Safety timeout
-        const timer = setTimeout(() => map.invalidateSize(), 500);
+        // ResizeObserver para cambios dinámicos del contenedor
+        const observer = new ResizeObserver(() => {
+            map.invalidateSize();
+        });
+        
+        observer.observe(map.getContainer());
 
         return () => {
+            timers.forEach(t => clearTimeout(t));
             observer.disconnect();
-            clearTimeout(timer);
         };
-    }, [map, container]);
-
+    }, [map]);
     return null;
 };
 
@@ -68,7 +63,7 @@ const MapRecenter = ({ center }: { center: { lat: number, lng: number } }) => {
     const map = useMap();
     useEffect(() => {
         if (center && center.lat !== 0 && center.lng !== 0) {
-            map.flyTo(center, map.getZoom() || 15, { duration: 1.5 });
+            map.setView([center.lat, center.lng], map.getZoom() || 15);
         }
     }, [center, map]);
     return null;
@@ -81,7 +76,7 @@ export default function MapEditor({ initialPolygon = [], initialCenter, referenc
         if (initialCenter && initialCenter.lat !== 0) return initialCenter;
         if (initialPolygon && initialPolygon.length > 0) return initialPolygon[0];
         if (referencePolygon && referencePolygon.length > 0) return referencePolygon[0];
-        return { lat: -34.6037, lng: -58.3816 };
+        return { lat: -34.6037, lng: -58.3816 }; // Buenos Aires default
     });
 
     useEffect(() => {
@@ -91,9 +86,6 @@ export default function MapEditor({ initialPolygon = [], initialCenter, referenc
     useEffect(() => {
         if (initialPolygon) {
             setPolygon(initialPolygon);
-            if((!initialCenter || initialCenter.lat === 0) && initialPolygon.length > 0) {
-                 setCenter(initialPolygon[0]);
-            }
         }
     }, [initialPolygon]);
 
@@ -113,21 +105,6 @@ export default function MapEditor({ initialPolygon = [], initialCenter, referenc
         return area / 10000;
     };
 
-    const calculatePerimeterMeters = (coords: { lat: number, lng: number }[]) => {
-        if (coords.length < 2) return 0;
-        let perimeter = 0;
-        const R = 6371000;
-        for (let i = 0; i < coords.length; i++) {
-            const j = (i + 1) % coords.length;
-            const dLat = toRad(coords[j].lat - coords[i].lat);
-            const dLon = toRad(coords[j].lng - coords[i].lng);
-            const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(toRad(coords[i].lat)) * Math.cos(toRad(coords[j].lat)) * Math.sin(dLon/2) * Math.sin(dLon/2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-            perimeter += R * c;
-        }
-        return perimeter;
-    };
-
     const calculateCentroid = (coords: { lat: number, lng: number }[]) => {
         if (coords.length === 0) return center;
         const lats = coords.map(c => c.lat);
@@ -140,21 +117,26 @@ export default function MapEditor({ initialPolygon = [], initialCenter, referenc
         const newPoly = [...polygon, { lat: e.latlng.lat, lng: e.latlng.lng }];
         setPolygon(newPoly);
         if (onPolygonChange) {
-            onPolygonChange(newPoly, calculateAreaHa(newPoly), calculateCentroid(newPoly), calculatePerimeterMeters(newPoly));
+            onPolygonChange(newPoly, calculateAreaHa(newPoly), calculateCentroid(newPoly), 0);
         }
     };
 
     return (
-        <div className="relative rounded-2xl overflow-hidden border border-gray-300 dark:border-slate-800 shadow-inner z-0 w-full" style={{ height }}>
+        <div className="relative w-full rounded-2xl overflow-hidden border border-gray-300 dark:border-slate-800 shadow-inner z-0 bg-slate-100" style={{ height, minHeight: '300px' }}>
             {!readOnly && (
-                <div className="absolute top-2 right-2 z-[1000] bg-white dark:bg-slate-900 p-2 rounded-xl shadow-lg flex flex-col gap-2 border dark:border-slate-700">
-                    <button onClick={() => { setPolygon([]); if(onPolygonChange) onPolygonChange([], 0, center, 0); }} className="flex items-center text-[10px] text-red-600 font-black uppercase tracking-widest bg-red-50 dark:bg-red-900/20 p-2 rounded-lg hover:bg-red-100" type="button">
-                        <Trash2 size={12} className="mr-1"/> Borrar Marcadores
+                <div className="absolute top-2 right-2 z-[1000] bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm p-2 rounded-xl shadow-lg border dark:border-slate-700">
+                    <button onClick={() => { setPolygon([]); if(onPolygonChange) onPolygonChange([], 0, center, 0); }} className="flex items-center text-[10px] text-red-600 font-black uppercase tracking-widest bg-red-50 dark:bg-red-900/20 p-2 rounded-lg hover:bg-red-100 transition-colors" type="button">
+                        <Trash2 size={12} className="mr-1"/> Limpiar
                     </button>
                 </div>
             )}
 
-            <MapContainer center={center} zoom={15} style={{ height: "100%", width: "100%" }} scrollWheelZoom={!readOnly}>
+            <MapContainer 
+                center={[center.lat, center.lng]} 
+                zoom={15} 
+                style={{ height: "100%", width: "100%" }}
+                scrollWheelZoom={!readOnly}
+            >
                 <MapResizer />
                 <TileLayer attribution='&copy; OSM' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                 {!readOnly && <MapEvents onAddPoint={handleAddPoint} />}
@@ -169,17 +151,17 @@ export default function MapEditor({ initialPolygon = [], initialCenter, referenc
                 )}
 
                 {polygon.length > 0 && polygon.map((pos, idx) => ( 
-                    <Marker key={idx} position={pos} interactive={!readOnly} /> 
+                    <Marker key={`marker-${idx}`} position={[pos.lat, pos.lng]} interactive={!readOnly} /> 
                 ))}
                 
                 {readOnly && polygon.length === 0 && center.lat !== 0 && ( 
-                    <Marker position={center} /> 
+                    <Marker position={[center.lat, center.lng]} /> 
                 )}
             </MapContainer>
             
             {!readOnly && polygon.length === 0 && (
-                <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-[1000] bg-slate-900/80 text-white px-4 py-2 rounded-full text-[9px] font-black uppercase tracking-[0.2em] pointer-events-none flex items-center shadow-2xl border border-white/20 backdrop-blur-md">
-                    <MousePointer size={12} className="mr-2 animate-pulse text-hemp-400"/> Marcar ubicación en el mapa
+                <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-[1000] bg-slate-900/90 text-white px-5 py-2.5 rounded-full text-[9px] font-black uppercase tracking-[0.2em] pointer-events-none flex items-center shadow-2xl border border-white/20 backdrop-blur-md">
+                    <MousePointer size={12} className="mr-2 animate-pulse text-hemp-400"/> Haz clic para marcar la ubicación
                 </div>
             )}
         </div>
