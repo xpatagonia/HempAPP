@@ -150,7 +150,6 @@ const toSnakeCase = (obj: any) => {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
             const snakeKey = manualMap[key] || key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
             let val = obj[key];
-            // Fix para evitar strings vacíos en FKs o IDs relacionados
             if ((key === 'relatedUserId' || key === 'clientId') && val === '') val = null;
             if (val !== undefined) {
                 newObj[snakeKey] = val;
@@ -347,9 +346,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const syncTeam = async (clientId: string, teamUserIds: string[]) => {
-      // 1. Limpiamos usuarios que ya no pertenecen a este equipo
+      if (!clientId) return;
+      // 1. Limpiamos usuarios vinculados a este cliente para sobreescribir con los nuevos (excepto si son dueños de otro cliente por error)
       await supabase.from('users').update({ client_id: null }).eq('client_id', clientId);
-      // 2. Asignamos a los nuevos
+      // 2. Asignamos a los nuevos seleccionados
       if (teamUserIds.length > 0) {
           await supabase.from('users').update({ client_id: clientId }).in('id', teamUserIds);
       }
