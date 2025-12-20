@@ -30,7 +30,7 @@ export default function Settings() {
   // Unit Test State
   const [tests, setTests] = useState<UnitTest[]>([
       { id: 'conn', name: 'Conexión Supabase', description: 'Verifica alcance de URL y Key.', status: 'idle' },
-      { id: 'tables', name: 'Esquema de Tablas', description: 'Valida existencia de todas las entidades V17.', status: 'idle' },
+      { id: 'tables', name: 'Esquema de Tablas', description: 'Valida existencia de todas las entidades V18.', status: 'idle' },
       { id: 'geo', name: 'Protocolo JSONB GPS', description: 'Verifica compatibilidad de georreferencia.', status: 'idle' },
       { id: 'auth', name: 'Permisos RLS', description: 'Chequea privilegios de escritura.', status: 'idle' }
   ]);
@@ -87,7 +87,7 @@ export default function Settings() {
       // 4. Auth/RLS Test
       updateTest('auth', { status: 'running' });
       try {
-          const { error } = await supabase.from('logs').select('id').limit(1);
+          const { error } = await supabase.from('users').select('id').limit(1);
           updateTest('auth', { status: error ? 'fail' : 'pass', error: error?.message });
       } catch (e: any) {
           updateTest('auth', { status: 'fail' });
@@ -127,7 +127,7 @@ export default function Settings() {
           <button onClick={() => setActiveTab('branding')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'branding' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Identidad</button>
           <button onClick={() => setActiveTab('connections')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'connections' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Conectividad</button>
           <button onClick={() => setActiveTab('audit')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'audit' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Protocolo & Pruebas</button>
-          <button onClick={() => setActiveTab('database')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'database' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>SQL Nucleus</button>
+          <button onClick={() => setActiveTab('database')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'database' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>SQL Nucleus V18</button>
       </div>
 
       {activeTab === 'branding' && (
@@ -175,7 +175,7 @@ export default function Settings() {
                           <h3 className="text-xl font-black text-slate-800 dark:text-white flex items-center">
                               <FlaskConical className="mr-2 text-blue-600" size={20} /> Terminal de Pruebas Unitarias
                           </h3>
-                          <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">Verificación de integridad del protocolo V17</p>
+                          <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">Verificación de integridad del protocolo V18</p>
                       </div>
                       <button onClick={runTests} className="bg-slate-900 dark:bg-blue-600 text-white px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:scale-105 transition-all">Ejecutar Suite</button>
                   </div>
@@ -228,13 +228,13 @@ export default function Settings() {
               <div className="bg-slate-900 border border-slate-800 p-8 rounded-[32px] shadow-2xl relative overflow-hidden">
                   <div className="flex items-center space-x-3 mb-6">
                       <Shield className="text-hemp-500" size={24}/>
-                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Nucleus SQL V17</h3>
+                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Nucleus SQL V18</h3>
                   </div>
                   <div className="bg-amber-900/20 border border-amber-500/30 p-4 rounded-2xl mb-6 flex items-start text-amber-200">
                       <AlertTriangle className="text-amber-500 mr-3 flex-shrink-0" size={20}/>
                       <div className="text-xs space-y-2 leading-relaxed">
-                        <p className="font-bold uppercase tracking-tight">Reconstrucción del Protocolo Maestro</p>
-                        <p>Asegura que los campos <code className="bg-black/40 px-1 rounded text-white">coordinates</code> sean de tipo JSONB para evitar fallos de guardado en Proveedores y Socios.</p>
+                        <p className="font-bold uppercase tracking-tight">Protocolo Nuclear de Datos</p>
+                        <p>Asegura que los campos <code className="bg-black/40 px-1 rounded text-white">coordinates</code> sean de tipo JSONB y todos los mapeos de proveedores estén normalizados.</p>
                       </div>
                   </div>
 
@@ -258,7 +258,7 @@ DROP TABLE IF EXISTS public.resources CASCADE;
 DROP TABLE IF EXISTS public.storage_points CASCADE;
 DROP TABLE IF EXISTS public.projects CASCADE;
 
--- 2. RECREACIÓN ESTRUCTURA V17
+-- 2. RECREACIÓN ESTRUCTURA V18
 CREATE TABLE public.users (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -394,17 +394,17 @@ VALUES ('root-user', 'Super Administrador', 'admin@hempc.com', 'super_admin', 'a
 NOTIFY pgrst, 'reload schema';
                       `;
                       navigator.clipboard.writeText(sql.trim());
-                      alert("Script Nuclear V17 Copiado. Ejecútalo en el SQL Editor de Supabase.");
+                      alert("Script Nuclear V18 Copiado. Ejecútalo en el SQL Editor de Supabase.");
                     }} className="w-full bg-red-600 hover:bg-red-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center transition-all shadow-xl">
-                        <RotateCcw size={18} className="mr-2"/> Reconstrucción Nuclear (V17)
+                        <RotateCcw size={18} className="mr-2"/> Reconstrucción Nuclear (V18)
                     </button>
                     
                     <button onClick={() => {
                         const sql = `ALTER TABLE public.suppliers ADD COLUMN IF NOT EXISTS coordinates JSONB; ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS coordinates JSONB; NOTIFY pgrst, 'reload schema';`;
                         navigator.clipboard.writeText(sql);
-                        alert("Parche V17 (Compatibilidad GPS) copiado.");
+                        alert("Parche V18 (GPS Fix) copiado.");
                     }} className="w-full bg-slate-800 hover:bg-slate-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center transition-all border border-slate-700">
-                        <RefreshCw size={18} className="mr-2"/> Parche V17: Solo Columnas GPS
+                        <RefreshCw size={18} className="mr-2"/> Parche V18: Solo GPS JSONB
                     </button>
                   </div>
               </div>

@@ -106,7 +106,6 @@ interface AppContextType {
   loading: boolean;
   isRefreshing: boolean;
   isEmergencyMode: boolean;
-  dbNeedsMigration: boolean; 
 
   theme: 'light' | 'dark';
   toggleTheme: () => void;
@@ -114,14 +113,24 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// Mapeo JS (CamelCase) -> DB (SnakeCase) - Reforzado para campos específicos
+// Mapeo JS (CamelCase) -> DB (SnakeCase) - REFORZADO PARA PERSISTENCIA
 const toSnakeCase = (obj: any) => {
     if (!obj || typeof obj !== 'object') return obj;
     const newObj: any = {};
     for (const key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
+            // Especiales: no queremos que se mapeen mal
+            if (key === 'coordinates' && obj[key]) {
+                newObj['coordinates'] = obj[key];
+                continue;
+            }
+            if (key === 'polygon' && obj[key]) {
+                newObj['polygon'] = obj[key];
+                continue;
+            }
+
             let snakeKey = key;
-            const map: Record<string, string> = {
+            const manualMap: Record<string, string> = {
                 clientId: 'client_id',
                 isNetworkMember: 'is_network_member',
                 relatedUserId: 'related_user_id',
@@ -134,15 +143,21 @@ const toSnakeCase = (obj: any) => {
                 postalCode: 'postal_code',
                 commercialContact: 'commercial_contact',
                 logisticsContact: 'logistics_contact',
-                legalName: 'legal_name'
+                legalName: 'legal_name',
+                membershipLevel: 'membership_level',
+                contractDate: 'contract_date',
+                storagePointId: 'storage_point_id'
             };
             
-            if (map[key]) {
-                snakeKey = map[key];
+            if (manualMap[key]) {
+                snakeKey = manualMap[key];
             } else {
                 snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
             }
-            newObj[snakeKey] = obj[key];
+            // Evitamos enviar undefined a la DB
+            if (obj[key] !== undefined) {
+                newObj[snakeKey] = obj[key];
+            }
         }
     }
     return newObj;
@@ -155,7 +170,7 @@ const toCamelCase = (obj: any) => {
     for (const key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
             let camelKey = key;
-            const map: Record<string, string> = {
+            const manualMap: Record<string, string> = {
                 client_id: 'clientId',
                 is_network_member: 'isNetworkMember',
                 related_user_id: 'relatedUserId',
@@ -168,11 +183,14 @@ const toCamelCase = (obj: any) => {
                 postal_code: 'postalCode',
                 commercial_contact: 'commercialContact',
                 logistics_contact: 'logisticsContact',
-                legal_name: 'legalName'
+                legal_name: 'legalName',
+                membership_level: 'membershipLevel',
+                contract_date: 'contractDate',
+                storage_point_id: 'storagePointId'
             };
             
-            if (map[key]) {
-                camelKey = map[key];
+            if (manualMap[key]) {
+                camelKey = manualMap[key];
             } else {
                 camelKey = key.replace(/(_\w)/g, m => m[1].toUpperCase());
             }
@@ -311,10 +329,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           const { error } = await supabase.from(table).insert([dbItem]);
           if (error) {
               console.error(`[DB INSERT ERROR] ${table}:`, error.message, error.details);
-              if (error.message.includes('column') || error.message.includes('cache')) setIsEmergencyMode(true);
               return false; 
           }
-          // Solo actualizamos local si la DB confirma éxito
           setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
           return true;
       } catch (e: any) {
@@ -325,18 +341,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const genericUpdate = async (table: string, item: any, setter: any, localKey: string) => {
       const dbItem = toSnakeCase(item);
-      const { error } = await supabase.from(table).update(dbItem).eq('id', item.id);
-      if (error) { 
-          console.error(`[DB UPDATE ERROR] ${table}:`, error.message); 
-          return false; 
+      try {
+          const { error } = await supabase.from(table).update(dbItem).eq('id', item.id);
+          if (error) { 
+              console.error(`[DB UPDATE ERROR] ${table}:`, error.message); 
+              return false; 
+          }
+          setter((prev: any[]) => { const n = prev.map((i: any) => i.id === item.id ? item : i); saveToLocal(localKey, n); return n; });
+          return true;
+      } catch (e) {
+          console.error(`[RUNTIME UPDATE ERROR] ${table}:`, e);
+          return false;
       }
-      setter((prev: any[]) => { const n = prev.map((i: any) => i.id === item.id ? item : i); saveToLocal(localKey, n); return n; });
-      return true;
   };
 
   const genericDelete = async (table: string, id: string, setter: any, localKey: string) => {
-      await supabase.from(table).delete().eq('id', id);
-      setter((prev: any[]) => { const n = prev.filter((i: any) => i.id !== id); saveToLocal(localKey, n); return n; });
+      try {
+          const { error } = await supabase.from(table).delete().eq('id', id);
+          if (!error) {
+              setter((prev: any[]) => { const n = prev.filter((i: any) => i.id !== id); saveToLocal(localKey, n); return n; });
+          }
+      } catch (e) { console.error("Delete Error:", e); }
   };
 
   const addUser = async (u: User) => {
@@ -453,7 +478,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       addStoragePoint, updateStoragePoint, deleteStoragePoint,
       addHydricRecord, deleteHydricRecord,
       getPlotHistory, getLatestRecord,
-      loading, isRefreshing, isEmergencyMode, dbNeedsMigration: false,
+      loading, isRefreshing, isEmergencyMode,
       theme, toggleTheme
     }}>
       {children}

@@ -6,7 +6,7 @@ import {
   Plus, Edit2, Trash2, Building, MapPin, Globe, Phone, Mail, 
   UserCheck, Truck, Tag, Wrench, Users, X, MessageCircle, 
   Hash, CheckCircle2, ShieldCheck, ShoppingBag, ArrowRight, Eye,
-  Sprout, Navigation, Save, Loader2, AlertCircle
+  Sprout, Navigation, Save, Loader2, AlertCircle, Copy
 } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
 
@@ -39,13 +39,16 @@ export default function Suppliers() {
   // --- HANDLERS ---
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name) return;
+    if (!formData.name || isSaving) return;
     
     setIsSaving(true);
     try {
-        const finalLat = parseFloat(formData.lat.replace(',', '.'));
-        const finalLng = parseFloat(formData.lng.replace(',', '.'));
-        const coordinates = (!isNaN(finalLat) && !isNaN(finalLng)) ? { lat: finalLat, lng: finalLng } : undefined;
+        const cleanLat = formData.lat.toString().replace(',', '.').trim();
+        const cleanLng = formData.lng.toString().replace(',', '.').trim();
+        const finalLat = parseFloat(cleanLat);
+        const finalLng = parseFloat(cleanLng);
+        
+        const coordinates = (!isNaN(finalLat) && !isNaN(finalLng)) ? { lat: finalLat, lng: finalLng } : null;
 
         const payload = {
             name: formData.name!.trim(),
@@ -78,10 +81,10 @@ export default function Suppliers() {
             setIsModalOpen(false);
             resetForm();
         } else {
-            throw new Error("El servidor no pudo procesar el registro. Verifique su conexión.");
+            alert("El servidor rechazó el registro. Por favor, revise los campos obligatorios.");
         }
     } catch (err: any) {
-        alert("Error al guardar: " + err.message);
+        alert("Fallo crítico en el alta: " + err.message);
     } finally {
         setIsSaving(false);
     }
@@ -179,7 +182,7 @@ export default function Suppliers() {
 
                   <div className="space-y-3 mb-6 flex-1">
                       <div className="flex items-center justify-between bg-gray-50 dark:bg-slate-950 p-3 rounded-2xl border dark:border-slate-800">
-                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Genética</span>
+                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Catálogo</span>
                           <span className="text-sm font-black text-slate-700 dark:text-slate-300">{varieties.filter(v => v.supplierId === supplier.id).length} Variedades</span>
                       </div>
                       
@@ -208,7 +211,6 @@ export default function Suppliers() {
             <div className="col-span-full py-20 text-center bg-white dark:bg-slate-900 rounded-[40px] border border-dashed border-gray-300 dark:border-slate-800">
                 <Building size={48} className="mx-auto mb-4 text-gray-300"/>
                 <p className="text-gray-500 font-bold uppercase tracking-widest">No hay proveedores registrados</p>
-                <button onClick={() => setIsModalOpen(true)} className="mt-4 text-hemp-600 font-black uppercase text-xs">Crear el primero ahora</button>
             </div>
         )}
       </div>
@@ -227,19 +229,19 @@ export default function Suppliers() {
                 <div className="lg:col-span-2 space-y-6">
                     <div className="bg-gray-50 dark:bg-slate-950 p-6 rounded-[32px] border dark:border-slate-800">
                         <div className="flex justify-between items-center mb-4">
-                            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] flex items-center"><Building size={14} className="mr-2"/> Identidad Corporativa</h3>
+                            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] flex items-center"><Building size={14} className="mr-2"/> Datos Jurídicos</h3>
                             <label className="flex items-center space-x-2 cursor-pointer bg-blue-50 dark:bg-blue-900/20 px-3 py-1.5 rounded-full border border-blue-100 dark:border-blue-800">
                                 <input type="checkbox" className="rounded text-blue-500 focus:ring-blue-400" checked={formData.isOfficialPartner} onChange={e => setFormData({...formData, isOfficialPartner: e.target.checked})} />
-                                <span className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-tighter">Socio Estratégico</span>
+                                <span className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-tighter">Socio Certificado</span>
                             </label>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="md:col-span-2">
-                                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1 mb-1.5">Nombre Comercial / Fantasía *</label>
+                                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1 mb-1.5">Razón Social *</label>
                                 <input required type="text" className={inputClass} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Ej: Fertilizantes del Norte S.A." />
                             </div>
                             <div>
-                                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1 mb-1.5">Categoría / Rubro</label>
+                                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1 mb-1.5">Categoría</label>
                                 <select className={inputClass} value={formData.category} onChange={e => setFormData({...formData, category: e.target.value as SupplierCategory})}>
                                     <option value="Semillas">Semillas (Genética)</option>
                                     <option value="Insumos">Insumos (Fert/Fito)</option>
@@ -248,17 +250,17 @@ export default function Suppliers() {
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1 mb-1.5">CUIT / Tax ID</label>
+                                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1 mb-1.5">CUIT / TAX ID</label>
                                 <input type="text" className={inputClass} value={formData.cuit} onChange={e => setFormData({...formData, cuit: e.target.value})} placeholder="00-00000000-0" />
                             </div>
                         </div>
                     </div>
 
                     <div className="bg-emerald-50/50 dark:bg-emerald-900/10 p-6 rounded-[32px] border border-emerald-100 dark:border-emerald-900/30">
-                         <h3 className="text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-[0.2em] mb-4 flex items-center"><Phone size={14} className="mr-2"/> Comunicación Directa</h3>
+                         <h3 className="text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-[0.2em] mb-4 flex items-center"><Phone size={14} className="mr-2"/> Enlace de Comunicación</h3>
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1 mb-1.5">Atención Comercial</label>
+                                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1 mb-1.5">Contacto Comercial</label>
                                 <input type="text" className={inputClass} value={formData.commercialContact} onChange={e => setFormData({...formData, commercialContact: e.target.value})} />
                             </div>
                             <div>
@@ -269,7 +271,7 @@ export default function Suppliers() {
                                 </div>
                             </div>
                             <div className="md:col-span-2">
-                                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1 mb-1.5">Correo Electrónico de Operaciones</label>
+                                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1 mb-1.5">Email de Operaciones</label>
                                 <div className="relative">
                                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-500" size={16}/>
                                     <input type="email" className={`${inputClass} pl-10`} value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="logistica@empresa.com" />
@@ -285,15 +287,15 @@ export default function Suppliers() {
                         <div className="space-y-4 mb-4">
                             <div className="grid grid-cols-2 gap-2">
                                 <input type="text" placeholder="Ciudad" className={inputClass} value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})} />
-                                <input type="text" placeholder="Código Postal" className={inputClass} value={formData.postalCode} onChange={e => setFormData({...formData, postalCode: e.target.value})} />
+                                <input type="text" placeholder="C.P." className={inputClass} value={formData.postalCode} onChange={e => setFormData({...formData, postalCode: e.target.value})} />
                             </div>
                             <input type="text" placeholder="Dirección Exacta" className={inputClass} value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} />
                         </div>
                         
                         <div className="flex-1 min-h-[200px] rounded-2xl overflow-hidden border dark:border-slate-800 shadow-inner group/map relative">
                              <MapEditor 
-                                initialCenter={formData.lat && formData.lng ? { lat: parseFloat(formData.lat), lng: parseFloat(formData.lng) } : undefined} 
-                                initialPolygon={formData.lat && formData.lng ? [{ lat: parseFloat(formData.lat), lng: parseFloat(formData.lng) }] : []} 
+                                initialCenter={formData.lat && formData.lng ? { lat: parseFloat(formData.lat.replace(',','.')), lng: parseFloat(formData.lng.replace(',','.')) } : undefined} 
+                                initialPolygon={formData.lat && formData.lng ? [{ lat: parseFloat(formData.lat.replace(',','.')), lng: parseFloat(formData.lng.replace(',','.')) }] : []} 
                                 onPolygonChange={handleMapChange} 
                                 height="100%" 
                              />
@@ -309,7 +311,7 @@ export default function Suppliers() {
                                 <input type="text" className={`${inputClass} text-xs h-9 bg-white/50`} value={formData.lng} onChange={e => setFormData({...formData, lng: e.target.value})} placeholder="-58.0000" />
                             </div>
                         </div>
-                        <p className="text-[9px] font-black text-blue-400 uppercase mt-4 text-center italic leading-tight">Marque el punto en el mapa para sincronizar coordenadas de GPS</p>
+                        <p className="text-[9px] font-black text-blue-400 uppercase mt-4 text-center italic leading-tight">Mueva el pin en el mapa para sincronizar el GPS</p>
                     </div>
                 </div>
               </div>
@@ -318,7 +320,7 @@ export default function Suppliers() {
                 <button type="button" disabled={isSaving} onClick={() => setIsModalOpen(false)} className="px-8 py-3 text-slate-400 font-black uppercase text-[10px] tracking-widest hover:text-slate-600 transition">Cancelar</button>
                 <button type="submit" disabled={isSaving} className="bg-slate-900 dark:bg-hemp-600 text-white px-10 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl flex items-center hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50">
                     {isSaving ? <Loader2 className="animate-spin mr-2" size={18}/> : <Save className="mr-2" size={18}/>}
-                    {editingId ? 'Actualizar Proveedor' : 'Finalizar Registro'}
+                    {editingId ? 'Actualizar' : 'Finalizar Registro'}
                 </button>
               </div>
             </form>
