@@ -184,60 +184,32 @@ export default function Settings() {
                       <Shield className="text-hemp-500" size={24}/>
                       <h3 className="font-black text-white uppercase text-sm tracking-widest">Protocolo de Reparación SQL</h3>
                   </div>
-                  <p className="text-xs text-slate-400 mb-4 leading-relaxed">Ejecute este script para corregir fallos de guardado por permisos (RLS) y forzar la estructura de balance hídrico:</p>
+                  <p className="text-xs text-slate-400 mb-4 leading-relaxed">Ejecute este script para habilitar permisos públicos (RLS) y forzar que la tabla acepte inserciones sin autenticación compleja:</p>
                   <pre className="bg-black/50 p-6 rounded-2xl text-[10px] text-blue-400 overflow-x-auto border border-white/5 font-mono h-80 custom-scrollbar">
-{`/* 1. ELIMINAR TABLA SI ESTÁ BLOQUEADA O CREARLA DE NUEVO */
-CREATE TABLE IF NOT EXISTS hydric_records (
-  id TEXT PRIMARY KEY,
-  location_id TEXT,
-  plot_id TEXT,
-  date DATE,
-  time TEXT,
-  type TEXT,
-  amount_mm NUMERIC DEFAULT 0,
-  notes TEXT,
-  created_by TEXT
-);
+{`/* REPARACIÓN TOTAL DE POLÍTICAS DE ACCESO */
 
-/* 2. REPARAR PERMISOS DE SEGURIDAD (RLS) - CRÍTICO */
-ALTER TABLE hydric_records ENABLE ROW LEVEL SECURITY;
-ALTER TABLE hydric_records FORCE ROW LEVEL SECURITY;
+/* 1. TABLA HIDRICA */
+ALTER TABLE IF EXISTS hydric_records DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS hydric_records ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Public Insert Access" ON hydric_records;
-CREATE POLICY "Public Insert Access" ON hydric_records 
-FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "public_access" ON hydric_records;
+CREATE POLICY "public_access" ON hydric_records FOR ALL TO public USING (true) WITH CHECK (true);
 
-DROP POLICY IF EXISTS "Public Select Access" ON hydric_records;
-CREATE POLICY "Public Select Access" ON hydric_records 
-FOR SELECT USING (true);
+/* 2. TABLA DE MONITOREO */
+ALTER TABLE IF EXISTS trial_records DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS trial_records ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Public Delete Access" ON hydric_records;
-CREATE POLICY "Public Delete Access" ON hydric_records 
-FOR DELETE USING (true);
+DROP POLICY IF EXISTS "trial_public_access" ON trial_records;
+CREATE POLICY "trial_public_access" ON trial_records FOR ALL TO public USING (true) WITH CHECK (true);
 
-/* 3. REPARAR TABLA DE MONITOREO TÉCNICO */
-CREATE TABLE IF NOT EXISTS trial_records (
-  id TEXT PRIMARY KEY,
-  plot_id TEXT,
-  date DATE,
-  time TEXT,
-  stage TEXT,
-  temperature NUMERIC,
-  humidity NUMERIC,
-  plant_height NUMERIC,
-  vigor NUMERIC,
-  created_by TEXT,
-  created_by_name TEXT
-);
-
-ALTER TABLE trial_records ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Trial Public Access" ON trial_records;
-CREATE POLICY "Trial Public Access" ON trial_records FOR ALL USING (true);`}
+/* 3. PERMISOS DE ESQUEMA */
+GRANT ALL ON TABLE hydric_records TO anon, authenticated, service_role;
+GRANT ALL ON TABLE trial_records TO anon, authenticated, service_role;`}
                   </pre>
                   <button onClick={() => {
-                      const sql = `ALTER TABLE hydric_records ENABLE ROW LEVEL SECURITY; CREATE POLICY "Public Insert Access" ON hydric_records FOR INSERT WITH CHECK (true); CREATE POLICY "Public Select Access" ON hydric_records FOR SELECT USING (true);`;
+                      const sql = `ALTER TABLE hydric_records DISABLE ROW LEVEL SECURITY; ALTER TABLE hydric_records ENABLE ROW LEVEL SECURITY; DROP POLICY IF EXISTS "public_access" ON hydric_records; CREATE POLICY "public_access" ON hydric_records FOR ALL TO public USING (true) WITH CHECK (true); GRANT ALL ON TABLE hydric_records TO anon, authenticated, service_role;`;
                       navigator.clipboard.writeText(sql);
-                      alert("SQL Correctivo copiado. Péguelo en el editor de Supabase.");
+                      alert("SQL de emergencia copiado.");
                   }} className="mt-4 text-[10px] font-black text-hemp-400 uppercase tracking-widest flex items-center hover:text-white transition">
                       <Copy size={12} className="mr-1"/> Copiar Script de Reparación RLS
                   </button>
