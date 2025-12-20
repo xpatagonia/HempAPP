@@ -114,7 +114,7 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// Motor de conversión camelCase -> snake_case mejorado
+// Motor de conversión robusto
 const toSnakeCase = (obj: any) => {
     if (!obj || typeof obj !== 'object') return obj;
     const newObj: any = {};
@@ -127,7 +127,6 @@ const toSnakeCase = (obj: any) => {
     return newObj;
 };
 
-// Motor de conversión snake_case -> camelCase mejorado
 const toCamelCase = (obj: any) => {
     if (!obj || typeof obj !== 'object') return obj;
     const newObj: any = {};
@@ -199,13 +198,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           const connected = await checkConnection();
           if (!connected) {
               setIsEmergencyMode(true);
-              setUsersList(getFromLocal('users'));
-              setProjects(getFromLocal('projects')); setVarieties(getFromLocal('varieties'));
-              setSuppliers(getFromLocal('suppliers')); setClients(getFromLocal('clients'));
-              setLocations(getFromLocal('locations')); setPlots(getFromLocal('plots'));
-              setSeedBatches(getFromLocal('seedBatches')); setSeedMovements(getFromLocal('seedMovements'));
-              setResources(getFromLocal('resources')); setStoragePoints(getFromLocal('storagePoints'));
-              setTrialRecords(getFromLocal('trialRecords')); setLogs(getFromLocal('logs')); setTasks(getFromLocal('tasks'));
               setHydricRecords(getFromLocal('hydricRecords'));
           } else {
               setIsEmergencyMode(false);
@@ -251,32 +243,33 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const logout = () => { setCurrentUser(null); localStorage.removeItem('ht_session_user'); };
 
   const genericAdd = async (table: string, item: any, setter: any, localKey: string) => {
-      // Limpieza de datos antes de enviar a Supabase
-      const processedItem = { ...item };
+      // Limpieza profunda de datos
+      const cleanItem = { ...item };
       
-      // Forzar tipos numéricos para tablas específicas
+      // CASTEO OBLIGATORIO PARA SUPABASE
       if (table === 'hydric_records') {
-          processedItem.amountMm = Number(processedItem.amountMm) || 0;
+          cleanItem.amountMm = Number(cleanItem.amountMm) || 0;
       }
       if (table === 'trial_records') {
-          if (processedItem.plantHeight !== undefined) processedItem.plantHeight = Number(processedItem.plantHeight);
-          if (processedItem.temperature !== undefined) processedItem.temperature = Number(processedItem.temperature);
+          if (cleanItem.plantHeight !== undefined) cleanItem.plantHeight = Number(cleanItem.plantHeight);
+          if (cleanItem.temperature !== undefined) cleanItem.temperature = Number(cleanItem.temperature);
       }
 
-      const dbItem = toSnakeCase(processedItem);
-      console.log(`[PERSISTENCIA] Insertando en ${table}:`, dbItem);
+      const dbItem = toSnakeCase(cleanItem);
+      console.log(`[CORE] Guardando en ${table}:`, dbItem);
       
       if (!isEmergencyMode) {
           try {
               const { error } = await supabase.from(table).insert([dbItem]);
               if (error) {
-                  console.error(`[ERROR SUPABASE] en ${table}:`, error.message, error.details);
+                  console.error(`[SUPABASE ERROR] ${table}:`, error.message);
+                  alert(`Error de base de datos en ${table}: ${error.message}`);
                   throw error;
               }
               setter((prev: any[]) => [...prev, item]);
               return true;
           } catch (e: any) {
-              console.warn(`[FALLBACK] Error en servidor. Guardando localmente en ${localKey}.`);
+              console.warn(`[FALLBACK] Servidor no responde. Guardando localmente en ${localKey}.`);
               setter((prev: any[]) => { 
                   const n = [...prev, item]; 
                   saveToLocal(localKey, n); 
