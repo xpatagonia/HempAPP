@@ -77,7 +77,7 @@ export interface StoragePoint {
     lng: number;
   };
   responsibleUserId?: string; 
-  capacityKg?: number; 
+  clientId?: string; // Socio propietario del punto de almacenamiento
   surfaceM2?: number; 
   conditions?: string; 
   notes?: string;
