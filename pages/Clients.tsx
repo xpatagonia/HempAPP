@@ -22,10 +22,10 @@ export default function Clients() {
   const [viewClient, setViewClient] = useState<Client | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [activeSubTab, setActiveSubTab] = useState<'team' | 'resources' | 'knowledge'>('team');
+  const [isSaving, setIsSaving] = useState(false);
 
   // User Management States
   const [showCreateUserForm, setShowCreateUserForm] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
   const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'technician' as 'technician' | 'viewer' });
 
   const [formData, setFormData] = useState<Partial<Client> & { lat: string, lng: string }>({
@@ -61,35 +61,46 @@ export default function Clients() {
     e.preventDefault();
     if (!formData.name) return;
     
-    // Construcción de coordenadas
-    const finalLat = parseFloat(formData.lat);
-    const finalLng = parseFloat(formData.lng);
-    const coordinates = (!isNaN(finalLat) && !isNaN(finalLng)) ? { lat: finalLat, lng: finalLng } : undefined;
+    setIsSaving(true);
+    try {
+        const finalLat = parseFloat(formData.lat.replace(',', '.'));
+        const finalLng = parseFloat(formData.lng.replace(',', '.'));
+        const coordinates = (!isNaN(finalLat) && !isNaN(finalLng)) ? { lat: finalLat, lng: finalLng } : undefined;
 
-    const payload = {
-        name: formData.name!.trim(),
-        type: formData.type,
-        contactName: formData.contactName,
-        contactPhone: formData.contactPhone,
-        email: formData.email,
-        isNetworkMember: formData.isNetworkMember,
-        membershipLevel: formData.membershipLevel,
-        contractDate: formData.contractDate,
-        cuit: formData.cuit,
-        notes: formData.notes,
-        relatedUserId: formData.relatedUserId,
-        coordinates,
-        id: editingId || Date.now().toString(),
-    } as Client;
+        const payload = {
+            name: formData.name!.trim(),
+            type: formData.type,
+            contactName: formData.contactName?.trim(),
+            contactPhone: formData.contactPhone?.trim(),
+            email: formData.email?.trim(),
+            isNetworkMember: formData.isNetworkMember,
+            membershipLevel: formData.membershipLevel,
+            contractDate: formData.contractDate,
+            cuit: formData.cuit?.trim(),
+            notes: formData.notes,
+            relatedUserId: formData.relatedUserId,
+            coordinates,
+            id: editingId || Date.now().toString(),
+        } as Client;
 
-    if (editingId) {
-        updateClient(payload);
-    } else {
-        await addClient(payload);
+        let success = false;
+        if (editingId) {
+            success = await updateClient(payload);
+        } else {
+            success = await addClient(payload);
+        }
+
+        if (success) {
+            setIsModalOpen(false);
+            resetForm();
+        } else {
+            throw new Error("No se pudo conectar con el servidor central.");
+        }
+    } catch (err: any) {
+        alert("Fallo en registro: " + err.message);
+    } finally {
+        setIsSaving(false);
     }
-
-    setIsModalOpen(false);
-    resetForm();
   };
 
   const resetForm = () => {
@@ -106,8 +117,8 @@ export default function Clients() {
       if (poly.length > 0) {
           setFormData(prev => ({ 
               ...prev, 
-              lat: poly[0].lat.toFixed(6), 
-              lng: poly[0].lng.toFixed(6) 
+              lat: poly[0].lat.toFixed(7), 
+              lng: poly[0].lng.toFixed(7) 
           }));
       }
   };
@@ -136,7 +147,7 @@ export default function Clients() {
       setIsSaving(false);
   };
 
-  const inputClass = "w-full border border-gray-300 dark:border-slate-800 bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 p-2.5 rounded-xl focus:ring-2 focus:ring-hemp-500 outline-none";
+  const inputClass = "w-full border border-gray-300 dark:border-slate-800 bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 p-2.5 rounded-xl focus:ring-2 focus:ring-hemp-500 outline-none transition-all";
 
   return (
     <div className="animate-in fade-in duration-500">
@@ -192,7 +203,7 @@ export default function Clients() {
                   </div>
 
                   <div className="h-24 bg-gray-50 dark:bg-slate-950 mb-6 rounded-2xl overflow-hidden relative border dark:border-slate-800">
-                      {client.coordinates ? (
+                      {client.coordinates && client.coordinates.lat ? (
                           <iframe width="100%" height="100%" frameBorder="0" scrolling="no" src={`https://maps.google.com/maps?q=${client.coordinates.lat},${client.coordinates.lng}&z=10&output=embed`} className="opacity-50 group-hover:opacity-80 transition-opacity grayscale"></iframe>
                       ) : (
                           <div className="flex items-center justify-center h-full text-slate-300 text-[8px] font-black uppercase tracking-[0.2em] italic">Sin Georreferencia Central</div>
@@ -365,7 +376,7 @@ export default function Clients() {
                                       <Info size={24} className="text-blue-600 mt-1 flex-shrink-0"/>
                                       <div>
                                           <h4 className="text-sm font-black text-blue-900 dark:text-blue-100 uppercase mb-1">Centro de Asistencia Técnica</h4>
-                                          <p className="text-xs text-blue-700 dark:text-blue-300 leading-relaxed">Mostrando protocolos exclusivos para las genéticas currently assigned to your fields. This knowledge base is property of the cooperative and restricted for members.</p>
+                                          <p className="text-xs text-blue-700 dark:text-blue-300 leading-relaxed">Mostrando protocolos exclusivos para las genéticas actualmente asignadas a sus campos. Esta base de conocimiento es propiedad de la cooperativa y de uso restringido para socios.</p>
                                       </div>
                                   </div>
 
@@ -401,11 +412,11 @@ export default function Clients() {
 
       {/* CREATE / EDIT CLIENT MODAL */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-4xl w-full p-10 shadow-2xl max-h-[95vh] overflow-y-auto animate-in zoom-in-95">
             <div className="flex justify-between items-center mb-8">
-                <h2 className="text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tighter italic">Gestión de <span className="text-hemp-600">Socio de Red</span></h2>
-                <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition text-slate-400"><X size={28}/></button>
+                <h2 className="text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tighter italic">Gestionar <span className="text-hemp-600">Socio de Red</span></h2>
+                <button onClick={() => { if(!isSaving) setIsModalOpen(false); }} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition text-slate-400"><X size={28}/></button>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-6">
@@ -452,10 +463,10 @@ export default function Clients() {
                         <h3 className="text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-[0.2em] mb-4 flex items-center">
                             <MapPin size={14} className="mr-2"/> Georreferencia de Sede
                         </h3>
-                        <div className="flex-1 min-h-[250px] rounded-2xl overflow-hidden border dark:border-slate-800 shadow-inner mb-4">
+                        <div className="flex-1 min-h-[250px] rounded-2xl overflow-hidden border dark:border-slate-800 shadow-inner mb-4 relative">
                              <MapEditor 
-                                initialCenter={formData.lat && formData.lng ? { lat: parseFloat(formData.lat), lng: parseFloat(formData.lng) } : undefined} 
-                                initialPolygon={formData.lat && formData.lng ? [{ lat: parseFloat(formData.lat), lng: parseFloat(formData.lng) }] : []} 
+                                initialCenter={formData.lat && formData.lng ? { lat: parseFloat(formData.lat.replace(',','.')), lng: parseFloat(formData.lng.replace(',','.')) } : undefined} 
+                                initialPolygon={formData.lat && formData.lng ? [{ lat: parseFloat(formData.lat.replace(',','.')), lng: parseFloat(formData.lng.replace(',','.')) }] : []} 
                                 onPolygonChange={handleMapChange} 
                                 height="100%" 
                              />
@@ -463,11 +474,11 @@ export default function Clients() {
                         <div className="grid grid-cols-2 gap-3">
                             <div>
                                 <label className="block text-[9px] font-black text-emerald-900 dark:text-emerald-400 mb-1 flex items-center uppercase tracking-widest">Latitud <Navigation size={10} className="ml-1" /></label>
-                                <input type="text" className={`${inputClass} text-xs h-8`} value={formData.lat} onChange={e => setFormData({...formData, lat: e.target.value})} />
+                                <input type="text" className={`${inputClass} text-xs h-9 bg-white/50`} value={formData.lat} onChange={e => setFormData({...formData, lat: e.target.value})} placeholder="-34.0000" />
                             </div>
                             <div>
                                 <label className="block text-[9px] font-black text-emerald-900 dark:text-emerald-400 mb-1 flex items-center uppercase tracking-widest">Longitud <Navigation size={10} className="ml-1" /></label>
-                                <input type="text" className={`${inputClass} text-xs h-8`} value={formData.lng} onChange={e => setFormData({...formData, lng: e.target.value})} />
+                                <input type="text" className={`${inputClass} text-xs h-9 bg-white/50`} value={formData.lng} onChange={e => setFormData({...formData, lng: e.target.value})} placeholder="-58.0000" />
                             </div>
                         </div>
                         <p className="text-[9px] font-black text-emerald-600 dark:text-emerald-500 uppercase mt-2 text-center italic">Este punto identifica la base operativa del socio en la red global</p>
@@ -476,8 +487,11 @@ export default function Clients() {
               </div>
 
               <div className="flex justify-end space-x-3 pt-6 border-t dark:border-slate-800">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="px-8 py-3 text-slate-400 font-black uppercase text-[10px] tracking-widest hover:text-slate-600 transition">Cancelar</button>
-                <button type="submit" className="bg-slate-900 dark:bg-hemp-600 text-white px-10 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl flex items-center hover:scale-[1.02] active:scale-[0.98] transition-all">Guardar Socio</button>
+                <button type="button" disabled={isSaving} onClick={() => setIsModalOpen(false)} className="px-8 py-3 text-slate-400 font-black uppercase text-[10px] tracking-widest hover:text-slate-600 transition">Cancelar</button>
+                <button type="submit" disabled={isSaving} className="bg-slate-900 dark:bg-hemp-600 text-white px-10 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl flex items-center hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50">
+                    {isSaving ? <Loader2 className="animate-spin mr-2" size={18}/> : <Save className="mr-2" size={18}/>}
+                    {editingId ? 'Actualizar Socio' : 'Guardar Socio'}
+                </button>
               </div>
             </form>
           </div>
