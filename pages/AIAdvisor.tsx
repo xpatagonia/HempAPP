@@ -9,7 +9,7 @@ interface Message { id: string; role: 'user' | 'model' | 'error'; text: string; 
 export default function AIAdvisor() {
     const { appName } = useAppContext();
     const [messages, setMessages] = useState<Message[]>([
-        { id: '1', role: 'model', text: `Terminal de Inteligencia ${appName} v5.7.0.\nMotor: Gemini-3-Pro.\n\nEstatus: Esperando enlace de datos...` }
+        { id: '1', role: 'model', text: `Terminal de Inteligencia ${appName} v5.8.0.\nMotor: Gemini-3-Pro.\n\nEstatus: Enlace de datos establecido.` }
     ]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -45,47 +45,58 @@ export default function AIAdvisor() {
         setIsLoading(true);
 
         try {
-            // Fix: Check API key availability directly from process.env as per guidelines
-            if (!process.env.API_KEY || process.env.API_KEY === "undefined") {
-                throw new Error("API_KEY_MISSING: La llave no fue detectada por el navegador.");
-            }
-
-            // Fix: Always use named parameter for apiKey in constructor as per @google/genai initialization rules
+            // El SDK requiere que apiKey se pase como un objeto con nombre
+            // Se asume que process.env.API_KEY está disponible por la configuración de Vite
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-            const model = 'gemini-3-pro-preview';
+            const modelName = 'gemini-3-pro-preview';
             
             let response;
             if (userMsg.image) {
                 const base64Data = userMsg.image.split(',')[1];
                 response = await ai.models.generateContent({
-                    model,
+                    model: modelName,
                     contents: {
                         parts: [
-                            { text: userMsg.text || "Analiza esta imagen agronómica." },
+                            { text: userMsg.text || "Realiza un análisis agronómico de esta muestra." },
                             { inlineData: { mimeType: 'image/jpeg', data: base64Data } }
                         ]
                     },
-                    config: { systemInstruction: `Eres el consultor experto de ${appName}. Responde con tecnicismos en español.` }
+                    config: { 
+                        systemInstruction: `Eres el consultor experto senior de ${appName}. Analiza con precisión científica y responde en español.` 
+                    }
                 });
             } else {
                 response = await ai.models.generateContent({
-                    model,
+                    model: modelName,
                     contents: userMsg.text,
-                    config: { systemInstruction: `Eres el consultor experto de ${appName}. Responde con tecnicismos en español.` }
+                    config: { 
+                        systemInstruction: `Eres el consultor experto senior de ${appName}. Responde con lenguaje técnico y profesional en español.` 
+                    }
                 });
             }
 
-            // Fix: Use response.text property directly (not as a method) to extract generated text
-            if (response && response.text) {
-                setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', text: response.text }]);
+            // Acceso directo a la propiedad .text según las reglas del SDK
+            const responseText = response.text;
+            if (responseText) {
+                setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', text: responseText }]);
+            } else {
+                throw new Error("El modelo no devolvió una respuesta válida.");
             }
             
         } catch (err: any) {
-            console.error("AI Error:", err);
+            console.error("AI Runtime Error:", err);
+            
+            // Mensaje de error más genérico pero útil para depuración
+            let errorMessage = `ERROR DE PROTOCOLO: ${err.message}`;
+            
+            if (err.message && err.message.includes("API key")) {
+              errorMessage = "FALLO DE IDENTIDAD: La API_KEY no ha sido reconocida.\n\n1. Revisa que en Vercel el nombre sea 'API_KEY'.\n2. Asegúrate de haber hecho un 'Redeploy' manual (Deployment > Redeploy).";
+            }
+
             setMessages(prev => [...prev, { 
                 id: Date.now().toString(), 
                 role: 'error', 
-                text: `FALLO DE INYECCIÓN: No se detectó la variable API_KEY.\n\nPasos para solucionar:\n1. Ve a Vercel > Settings > Environment Variables.\n2. Borra y recrea API_KEY.\n3. Haz un REDEPLOY manual desde la pestaña 'Deployments'.` 
+                text: errorMessage 
             }]);
         } finally {
             setIsLoading(false);
@@ -100,7 +111,7 @@ export default function AIAdvisor() {
                     <div>
                         <h1 className="text-4xl font-black text-slate-800 dark:text-white tracking-tighter uppercase italic">{appName} <span className="text-hemp-600">Core</span></h1>
                         <p className="text-[11px] text-slate-400 font-bold uppercase tracking-[0.4em] flex items-center mt-1">
-                            <Terminal size={12} className="mr-2"/> V5.7.0 NEURAL LINK
+                            <Terminal size={12} className="mr-2"/> NEURAL-LINK ACTIVE
                         </p>
                     </div>
                 </div>
@@ -114,14 +125,14 @@ export default function AIAdvisor() {
                                 msg.role === 'user' 
                                     ? 'bg-hemp-600 text-white rounded-tr-none' 
                                     : msg.role === 'error'
-                                        ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-100 dark:border-red-900/30 font-mono text-xs'
+                                        ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-100 dark:border-red-900/30 font-mono text-xs whitespace-pre-wrap'
                                         : 'bg-slate-50 dark:bg-white/5 text-slate-800 dark:text-slate-200 border border-slate-100 dark:border-white/5 rounded-tl-none'
                             }`}>
                                 <div className="flex items-center gap-2 mb-4 opacity-50 text-[10px] font-black uppercase tracking-widest">
                                     {msg.role === 'user' ? <User size={12}/> : msg.role === 'error' ? <AlertTriangle size={12}/> : <Bot size={12}/>} 
-                                    {msg.role === 'user' ? 'Personal Técnico' : msg.role === 'error' ? 'Error Crítico' : `${appName} Advisor`}
+                                    {msg.role === 'user' ? 'Técnico de Campo' : msg.role === 'error' ? 'Fallo Neural' : `${appName} Advisor`}
                                 </div>
-                                {msg.image && <img src={msg.image} className="mb-4 rounded-2xl max-h-64 w-full object-cover border border-white/10 shadow-lg" alt="Analitica" />}
+                                {msg.image && <img src={msg.image} className="mb-4 rounded-2xl max-h-64 w-full object-cover border border-white/10 shadow-lg" alt="Captura" />}
                                 <div className="text-sm md:text-base leading-relaxed font-medium whitespace-pre-wrap font-mono">{msg.text}</div>
                             </div>
                         </div>
@@ -130,7 +141,7 @@ export default function AIAdvisor() {
                         <div className="flex justify-start">
                             <div className="bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 rounded-[32px] p-6 md:p-8 flex items-center space-x-4">
                                 <RefreshCw className="animate-spin text-hemp-600" size={24} />
-                                <span className="text-[11px] font-black text-slate-400 uppercase tracking-[0.3em]">Procesando consulta...</span>
+                                <span className="text-[11px] font-black text-slate-400 uppercase tracking-[0.3em]">Sincronizando con la red...</span>
                             </div>
                         </div>
                     )}
@@ -145,7 +156,7 @@ export default function AIAdvisor() {
                         </label>
                         <input 
                             type="text" className="flex-1 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/5 rounded-[24px] px-6 md:px-8 py-4 md:py-5 focus:ring-4 focus:ring-hemp-600/20 outline-none text-base text-slate-800 dark:text-white placeholder-slate-400 font-mono"
-                            placeholder="Consultar al experto IA..." value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSend()}
+                            placeholder="Ingrese su consulta técnica..." value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSend()}
                         />
                         <button onClick={handleSend} disabled={isLoading} className="bg-hemp-600 text-white p-4 md:p-5 rounded-[24px] shadow-lg disabled:opacity-30 active:scale-95 transition-all">
                             <Send size={28} />

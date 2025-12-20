@@ -3,15 +3,14 @@ import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ mode }) => {
-  // Carga las variables de entorno basadas en el modo (production/development)
-  // Fix: Cast process to any to avoid "Property 'cwd' does not exist on type 'Process'" error
+  // Carga todas las variables de entorno sin importar el prefijo VITE_
+  // Fixed: Cast process to any to avoid 'cwd' does not exist on type 'Process' error
   const env = loadEnv(mode, (process as any).cwd(), '');
   
   return {
     plugins: [react()],
     define: {
-      // Inyectamos la variable API_KEY desde el entorno de Vercel al código cliente
-      // Fix: Cast process to any to access env property which may be untyped in this context
+      // Mapeo directo y robusto de la variable process.env.API_KEY
       'process.env.API_KEY': JSON.stringify(env.API_KEY || (process as any).env.API_KEY)
     },
     build: {
