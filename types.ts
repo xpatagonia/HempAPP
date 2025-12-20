@@ -128,6 +128,7 @@ export interface Client {
   cuit?: string;
   notes?: string;
   relatedUserId?: string; 
+  coordinates?: { lat: number; lng: number }; // Geolocalización del socio
 }
 
 export interface Project {

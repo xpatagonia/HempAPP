@@ -7,9 +7,9 @@ import {
   Users, Building, Eye, X, Link as LinkIcon, UserCheck, 
   Shield, UserPlus, Star, Loader2, Save, UserMinus, 
   Archive, Sprout, BookOpen, Clock, ClipboardCheck, ArrowUpRight,
-  // Added Info icon
-  Info
+  Info, Navigation
 } from 'lucide-react';
+import MapEditor from '../components/MapEditor';
 
 export default function Clients() {
   const { 
@@ -28,10 +28,11 @@ export default function Clients() {
   const [isSaving, setIsSaving] = useState(false);
   const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'technician' as 'technician' | 'viewer' });
 
-  const [formData, setFormData] = useState<Partial<Client>>({
+  const [formData, setFormData] = useState<Partial<Client> & { lat: string, lng: string }>({
     name: '', type: 'Empresa Privada', contactName: '', contactPhone: '', email: '', 
     isNetworkMember: true, cuit: '', notes: '', relatedUserId: '', 
-    membershipLevel: 'Activo', contractDate: new Date().toISOString().split('T')[0]
+    membershipLevel: 'Activo', contractDate: new Date().toISOString().split('T')[0],
+    lat: '', lng: ''
   });
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
@@ -60,9 +61,24 @@ export default function Clients() {
     e.preventDefault();
     if (!formData.name) return;
     
+    // Construcción de coordenadas
+    const finalLat = parseFloat(formData.lat);
+    const finalLng = parseFloat(formData.lng);
+    const coordinates = (!isNaN(finalLat) && !isNaN(finalLng)) ? { lat: finalLat, lng: finalLng } : undefined;
+
     const payload = {
-        ...formData,
         name: formData.name!.trim(),
+        type: formData.type,
+        contactName: formData.contactName,
+        contactPhone: formData.contactPhone,
+        email: formData.email,
+        isNetworkMember: formData.isNetworkMember,
+        membershipLevel: formData.membershipLevel,
+        contractDate: formData.contractDate,
+        cuit: formData.cuit,
+        notes: formData.notes,
+        relatedUserId: formData.relatedUserId,
+        coordinates,
         id: editingId || Date.now().toString(),
     } as Client;
 
@@ -80,9 +96,20 @@ export default function Clients() {
     setFormData({ 
         name: '', type: 'Empresa Privada', contactName: '', contactPhone: '', email: '', 
         isNetworkMember: true, cuit: '', notes: '', relatedUserId: '', 
-        membershipLevel: 'Activo', contractDate: new Date().toISOString().split('T')[0]
+        membershipLevel: 'Activo', contractDate: new Date().toISOString().split('T')[0],
+        lat: '', lng: ''
     });
     setEditingId(null);
+  };
+
+  const handleMapChange = (poly: { lat: number, lng: number }[]) => {
+      if (poly.length > 0) {
+          setFormData(prev => ({ 
+              ...prev, 
+              lat: poly[0].lat.toFixed(6), 
+              lng: poly[0].lng.toFixed(6) 
+          }));
+      }
   };
 
   const handleQuickAddUser = async (e: React.FormEvent) => {
@@ -142,7 +169,15 @@ export default function Clients() {
                   <div className="absolute top-6 right-6 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity z-20">
                       <button onClick={() => setViewClient(client)} className="p-2 text-gray-400 hover:text-blue-600 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 transition"><Eye size={18} /></button>
                       {isAdmin && (
-                          <button onClick={() => { setFormData(client); setEditingId(client.id); setIsModalOpen(true); }} className="p-2 text-gray-400 hover:text-hemp-600 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 transition"><Edit2 size={18} /></button>
+                          <button onClick={() => { 
+                              setFormData({
+                                  ...client,
+                                  lat: client.coordinates?.lat.toString() || '',
+                                  lng: client.coordinates?.lng.toString() || ''
+                              }); 
+                              setEditingId(client.id); 
+                              setIsModalOpen(true); 
+                            }} className="p-2 text-gray-400 hover:text-hemp-600 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 transition"><Edit2 size={18} /></button>
                       )}
                   </div>
 
@@ -154,6 +189,14 @@ export default function Clients() {
                           <h3 className="text-xl font-black text-gray-800 dark:text-white leading-none uppercase tracking-tighter truncate">{client.name}</h3>
                           <span className="text-[10px] uppercase font-black text-gray-400 mt-2 block tracking-widest">{client.type}</span>
                       </div>
+                  </div>
+
+                  <div className="h-24 bg-gray-50 dark:bg-slate-950 mb-6 rounded-2xl overflow-hidden relative border dark:border-slate-800">
+                      {client.coordinates ? (
+                          <iframe width="100%" height="100%" frameBorder="0" scrolling="no" src={`https://maps.google.com/maps?q=${client.coordinates.lat},${client.coordinates.lng}&z=10&output=embed`} className="opacity-50 group-hover:opacity-80 transition-opacity grayscale"></iframe>
+                      ) : (
+                          <div className="flex items-center justify-center h-full text-slate-300 text-[8px] font-black uppercase tracking-[0.2em] italic">Sin Georreferencia Central</div>
+                      )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 mb-6">
@@ -358,46 +401,81 @@ export default function Clients() {
 
       {/* CREATE / EDIT CLIENT MODAL */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-xl w-full p-10 shadow-2xl max-h-[95vh] overflow-y-auto animate-in zoom-in-95">
-            <h2 className="text-3xl font-black mb-8 text-gray-900 dark:text-white uppercase tracking-tighter italic">Gestión de <span className="text-hemp-600">Socio de Red</span></h2>
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-4xl w-full p-10 shadow-2xl max-h-[95vh] overflow-y-auto animate-in zoom-in-95">
+            <div className="flex justify-between items-center mb-8">
+                <h2 className="text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tighter italic">Gestión de <span className="text-hemp-600">Socio de Red</span></h2>
+                <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition text-slate-400"><X size={28}/></button>
+            </div>
+
             <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="bg-gray-50 dark:bg-slate-950 p-6 rounded-[32px] border dark:border-slate-800">
-                  <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Perfil Cooperativo</h3>
-                  <div className="grid grid-cols-1 gap-4">
-                    <input required type="text" placeholder="Razón Social / Nombre Comercial" className={inputClass} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-                    <div className="grid grid-cols-2 gap-4">
-                        <select className={inputClass} value={formData.membershipLevel} onChange={e => setFormData({...formData, membershipLevel: e.target.value as MembershipLevel})}>
-                            <option value="Activo">Estado: Activo</option>
-                            <option value="Premium">Estado: Premium (I+D)</option>
-                            <option value="En Observación">En Observación</option>
-                        </select>
-                        <input type="date" title="Fecha Alta Contrato" className={inputClass} value={formData.contractDate} onChange={e => setFormData({...formData, contractDate: e.target.value})} />
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div className="space-y-6">
+                    <div className="bg-gray-50 dark:bg-slate-950 p-6 rounded-[32px] border dark:border-slate-800">
+                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Perfil Cooperativo</h3>
+                        <div className="grid grid-cols-1 gap-4">
+                            <input required type="text" placeholder="Razón Social / Nombre Comercial" className={inputClass} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                            <div className="grid grid-cols-2 gap-4">
+                                <select className={inputClass} value={formData.membershipLevel} onChange={e => setFormData({...formData, membershipLevel: e.target.value as MembershipLevel})}>
+                                    <option value="Activo">Estado: Activo</option>
+                                    <option value="Premium">Estado: Premium (I+D)</option>
+                                    <option value="En Observación">En Observación</option>
+                                </select>
+                                <input type="date" title="Fecha Alta Contrato" className={inputClass} value={formData.contractDate} onChange={e => setFormData({...formData, contractDate: e.target.value})} />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <select className={inputClass} value={formData.type} onChange={e => setFormData({...formData, type: e.target.value as RoleType})}>
+                                    <option value="Productor Pequeño (<5 ha)">Escala: Pequeño</option>
+                                    <option value="Productor Mediano (5-15 ha)">Escala: Mediano</option>
+                                    <option value="Productor Grande (>15 ha)">Escala: Grande</option>
+                                    <option value="Empresa Privada">Empresa Privada</option>
+                                </select>
+                                <input type="text" placeholder="CUIT / ID Fiscal" className={inputClass} value={formData.cuit} onChange={e => setFormData({...formData, cuit: e.target.value})} />
+                            </div>
+                        </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <select className={inputClass} value={formData.type} onChange={e => setFormData({...formData, type: e.target.value as RoleType})}>
-                            <option value="Productor Pequeño (<5 ha)">Escala: Pequeño</option>
-                            <option value="Productor Mediano (5-15 ha)">Escala: Mediano</option>
-                            <option value="Productor Grande (>15 ha)">Escala: Grande</option>
-                            <option value="Empresa Privada">Empresa Privada</option>
-                        </select>
-                        <input type="text" placeholder="CUIT / ID Fiscal" className={inputClass} value={formData.cuit} onChange={e => setFormData({...formData, cuit: e.target.value})} />
+
+                    <div className="bg-blue-50/50 dark:bg-blue-900/10 p-6 rounded-[32px] border border-blue-100 dark:border-blue-900/30">
+                        <h3 className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest mb-4">Información de Contacto</h3>
+                        <div className="space-y-4">
+                            <input required type="text" placeholder="Nombre de Persona de Contacto" className={inputClass} value={formData.contactName} onChange={e => setFormData({...formData, contactName: e.target.value})} />
+                            <div className="grid grid-cols-2 gap-4">
+                                    <input type="email" placeholder="Email corporativo" className={inputClass} value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+                                    <input type="text" placeholder="WhatsApp / Teléfono" className={inputClass} value={formData.contactPhone} onChange={e => setFormData({...formData, contactPhone: e.target.value})} />
+                            </div>
+                        </div>
                     </div>
-                  </div>
+                </div>
+
+                <div className="space-y-6">
+                    <div className="bg-emerald-50/50 dark:bg-emerald-900/10 p-6 rounded-[32px] border border-emerald-100 dark:border-emerald-900/30 flex flex-col h-full">
+                        <h3 className="text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-[0.2em] mb-4 flex items-center">
+                            <MapPin size={14} className="mr-2"/> Georreferencia de Sede
+                        </h3>
+                        <div className="flex-1 min-h-[250px] rounded-2xl overflow-hidden border dark:border-slate-800 shadow-inner mb-4">
+                             <MapEditor 
+                                initialCenter={formData.lat && formData.lng ? { lat: parseFloat(formData.lat), lng: parseFloat(formData.lng) } : undefined} 
+                                initialPolygon={formData.lat && formData.lng ? [{ lat: parseFloat(formData.lat), lng: parseFloat(formData.lng) }] : []} 
+                                onPolygonChange={handleMapChange} 
+                                height="100%" 
+                             />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="block text-[9px] font-black text-emerald-900 dark:text-emerald-400 mb-1 flex items-center uppercase tracking-widest">Latitud <Navigation size={10} className="ml-1" /></label>
+                                <input type="text" className={`${inputClass} text-xs h-8`} value={formData.lat} onChange={e => setFormData({...formData, lat: e.target.value})} />
+                            </div>
+                            <div>
+                                <label className="block text-[9px] font-black text-emerald-900 dark:text-emerald-400 mb-1 flex items-center uppercase tracking-widest">Longitud <Navigation size={10} className="ml-1" /></label>
+                                <input type="text" className={`${inputClass} text-xs h-8`} value={formData.lng} onChange={e => setFormData({...formData, lng: e.target.value})} />
+                            </div>
+                        </div>
+                        <p className="text-[9px] font-black text-emerald-600 dark:text-emerald-500 uppercase mt-2 text-center italic">Este punto identifica la base operativa del socio en la red global</p>
+                    </div>
+                </div>
               </div>
 
-              <div className="bg-blue-50/50 dark:bg-blue-900/10 p-6 rounded-[32px] border border-blue-100 dark:border-blue-900/30">
-                   <h3 className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest mb-4">Información de Contacto</h3>
-                   <div className="space-y-4">
-                       <input required type="text" placeholder="Nombre de Persona de Contacto" className={inputClass} value={formData.contactName} onChange={e => setFormData({...formData, contactName: e.target.value})} />
-                       <div className="grid grid-cols-2 gap-4">
-                            <input type="email" placeholder="Email corporativo" className={inputClass} value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
-                            <input type="text" placeholder="WhatsApp / Teléfono" className={inputClass} value={formData.contactPhone} onChange={e => setFormData({...formData, contactPhone: e.target.value})} />
-                       </div>
-                   </div>
-              </div>
-
-              <div className="flex justify-end space-x-3 pt-4 border-t dark:border-slate-800">
+              <div className="flex justify-end space-x-3 pt-6 border-t dark:border-slate-800">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-8 py-3 text-slate-400 font-black uppercase text-[10px] tracking-widest hover:text-slate-600 transition">Cancelar</button>
                 <button type="submit" className="bg-slate-900 dark:bg-hemp-600 text-white px-10 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl flex items-center hover:scale-[1.02] active:scale-[0.98] transition-all">Guardar Socio</button>
               </div>

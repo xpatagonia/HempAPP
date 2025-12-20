@@ -6,8 +6,7 @@ import {
   Plus, Edit2, Trash2, Building, MapPin, Globe, Phone, Mail, 
   UserCheck, Truck, Tag, Wrench, Users, X, MessageCircle, 
   Hash, CheckCircle2, ShieldCheck, ShoppingBag, ArrowRight, Eye,
-  // Added Sprout icon
-  Sprout
+  Sprout, Navigation
 } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
 
@@ -17,9 +16,10 @@ export default function Suppliers() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [viewSupplier, setViewSupplier] = useState<Supplier | null>(null);
 
-  const [formData, setFormData] = useState<Partial<Supplier>>({
+  const [formData, setFormData] = useState<Partial<Supplier> & { lat: string, lng: string }>({
     name: '', category: 'Semillas', legalName: '', cuit: '', country: 'Argentina', province: '', city: '', address: '', postalCode: '',
-    whatsapp: '', email: '', commercialContact: '', website: '', coordinates: undefined, isOfficialPartner: false
+    whatsapp: '', email: '', commercialContact: '', website: '', isOfficialPartner: false,
+    lat: '', lng: ''
   });
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
@@ -36,20 +36,38 @@ export default function Suppliers() {
   }, [viewSupplier, seedBatches, varieties]);
 
   // --- HANDLERS ---
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name) return;
     
+    // Construcción robusta del objeto de coordenadas
+    const finalLat = parseFloat(formData.lat);
+    const finalLng = parseFloat(formData.lng);
+    const coordinates = (!isNaN(finalLat) && !isNaN(finalLng)) ? { lat: finalLat, lng: finalLng } : undefined;
+
     const payload = {
-        ...formData,
         name: formData.name!.trim(),
+        category: formData.category,
+        legalName: formData.legalName,
+        cuit: formData.cuit,
+        country: formData.country,
+        province: formData.province,
+        city: formData.city,
+        address: formData.address,
+        postalCode: formData.postalCode,
+        whatsapp: formData.whatsapp,
+        email: formData.email,
+        commercialContact: formData.commercialContact,
+        website: formData.website,
+        isOfficialPartner: formData.isOfficialPartner,
+        coordinates,
         id: editingId || Date.now().toString(),
     } as Supplier;
 
     if (editingId) {
         updateSupplier(payload);
     } else {
-        addSupplier(payload);
+        await addSupplier(payload);
     }
 
     setIsModalOpen(false);
@@ -59,15 +77,24 @@ export default function Suppliers() {
   const resetForm = () => {
     setFormData({ 
         name: '', category: 'Semillas', legalName: '', cuit: '', country: 'Argentina', province: '', city: '', address: '', postalCode: '',
-        whatsapp: '', email: '', commercialContact: '', website: '', coordinates: undefined, isOfficialPartner: false
+        whatsapp: '', email: '', commercialContact: '', website: '', isOfficialPartner: false,
+        lat: '', lng: ''
     });
     setEditingId(null);
   };
 
   const handleMapChange = (poly: { lat: number, lng: number }[]) => {
       if (poly.length > 0) {
-          setFormData(prev => ({ ...prev, coordinates: poly[0] }));
+          setFormData(prev => ({ 
+              ...prev, 
+              lat: poly[0].lat.toFixed(6), 
+              lng: poly[0].lng.toFixed(6) 
+          }));
       }
+  };
+
+  const handleManualCoordChange = () => {
+      // Esta función se puede disparar al perder el foco para validar formatos si fuera necesario
   };
 
   const getCategoryColor = (cat: SupplierCategory) => {
@@ -127,7 +154,15 @@ export default function Suppliers() {
                       {isAdmin && (
                           <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
                               <button onClick={() => setViewSupplier(supplier)} className="text-gray-400 hover:text-blue-600 p-2 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 transition"><Eye size={14}/></button>
-                              <button onClick={() => { setFormData(supplier); setEditingId(supplier.id); setIsModalOpen(true); }} className="text-gray-400 hover:text-hemp-600 p-2 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 transition"><Edit2 size={14} /></button>
+                              <button onClick={() => { 
+                                  setFormData({
+                                      ...supplier,
+                                      lat: supplier.coordinates?.lat.toString() || '',
+                                      lng: supplier.coordinates?.lng.toString() || ''
+                                  }); 
+                                  setEditingId(supplier.id); 
+                                  setIsModalOpen(true); 
+                                }} className="text-gray-400 hover:text-hemp-600 p-2 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 transition"><Edit2 size={14} /></button>
                           </div>
                       )}
                   </div>
@@ -284,13 +319,31 @@ export default function Suppliers() {
                     <div className="bg-blue-50/50 dark:bg-blue-900/10 p-6 rounded-[32px] border border-blue-100 dark:border-blue-900/30 flex flex-col h-full">
                         <h3 className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-[0.2em] mb-4 flex items-center"><MapPin size={14} className="mr-2"/> Georreferencia Logística</h3>
                         <div className="space-y-4 mb-4">
-                            <input type="text" placeholder="Ciudad / Provincia" className={inputClass} value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})} />
+                            <div className="grid grid-cols-2 gap-2">
+                                <input type="text" placeholder="Ciudad / Provincia" className={inputClass} value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})} />
+                                <input type="text" placeholder="Código Postal" className={inputClass} value={formData.postalCode} onChange={e => setFormData({...formData, postalCode: e.target.value})} />
+                            </div>
                             <input type="text" placeholder="Dirección Fiscal/Carga" className={inputClass} value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} />
                         </div>
                         <div className="flex-1 min-h-[200px] rounded-2xl overflow-hidden border dark:border-slate-800 shadow-inner">
-                             <MapEditor initialCenter={formData.coordinates} initialPolygon={formData.coordinates ? [formData.coordinates] : []} onPolygonChange={handleMapChange} height="100%" />
+                             <MapEditor 
+                                initialCenter={formData.lat && formData.lng ? { lat: parseFloat(formData.lat), lng: parseFloat(formData.lng) } : undefined} 
+                                initialPolygon={formData.lat && formData.lng ? [{ lat: parseFloat(formData.lat), lng: parseFloat(formData.lng) }] : []} 
+                                onPolygonChange={handleMapChange} 
+                                height="100%" 
+                             />
                         </div>
-                        <p className="text-[9px] font-black text-blue-400 uppercase mt-4 text-center italic">Marque el punto exacto para cálculo de fletes y rutas</p>
+                        <div className="grid grid-cols-2 gap-3 mt-4">
+                            <div>
+                                <label className="block text-[9px] font-black text-blue-900 mb-1 flex items-center uppercase">Latitud <Navigation size={10} className="ml-1 text-blue-500" /></label>
+                                <input type="text" className={`${inputClass} text-xs h-8`} value={formData.lat} onChange={e => setFormData({...formData, lat: e.target.value})} onBlur={handleManualCoordChange}/>
+                            </div>
+                            <div>
+                                <label className="block text-[9px] font-black text-blue-900 mb-1 flex items-center uppercase">Longitud <Navigation size={10} className="ml-1 text-blue-500" /></label>
+                                <input type="text" className={`${inputClass} text-xs h-8`} value={formData.lng} onChange={e => setFormData({...formData, lng: e.target.value})} onBlur={handleManualCoordChange}/>
+                            </div>
+                        </div>
+                        <p className="text-[9px] font-black text-blue-400 uppercase mt-2 text-center italic">Marque el punto exacto o ingrese coordenadas manualmente</p>
                     </div>
                 </div>
               </div>
