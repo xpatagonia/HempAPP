@@ -92,13 +92,13 @@ export default function Settings() {
             <div className="bg-white dark:bg-slate-900 rounded-[32px] shadow-sm border dark:border-slate-800 p-8">
                 <h2 className="text-lg font-black text-gray-800 dark:text-white mb-6 flex items-center"><Database size={20} className="mr-2 text-hemp-600" /> Servidor de Datos (Supabase)</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Supabase URL</label><input type="text" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl font-bold text-slate-800 dark:text-white" value={url} onChange={e => setUrl(e.target.value)} /></div>
+                    <div><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Supabase Project URL</label><input type="text" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl font-bold text-slate-800 dark:text-white" value={url} onChange={e => setUrl(e.target.value)} /></div>
                     <div><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Anon API Key</label><input type="password" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl font-bold text-slate-800 dark:text-white" value={key} onChange={e => setKey(e.target.value)} /></div>
                 </div>
             </div>
             <button onClick={handleSaveConnections} disabled={status === 'checking'} className={`w-full py-5 rounded-[24px] font-black text-xs uppercase tracking-widest text-white flex items-center justify-center transition-all shadow-xl ${status === 'checking' ? 'bg-gray-400' : status === 'success' ? 'bg-green-600' : 'bg-slate-900 dark:bg-hemp-600 hover:scale-[1.01]'}`}>
                 {status === 'checking' ? <RefreshCw className="animate-spin mr-2"/> : status === 'success' ? <CheckCircle2 className="mr-2"/> : <Save className="mr-2"/>}
-                {status === 'checking' ? 'Verificando...' : status === 'success' ? 'Conexión Exitosa' : 'Guardar Credenciales'}
+                {status === 'checking' ? 'Sincronizando...' : status === 'success' ? 'Conexión Exitosa' : 'Actualizar Credenciales'}
             </button>
           </div>
       )}
@@ -108,18 +108,50 @@ export default function Settings() {
               <div className="bg-slate-900 border border-slate-800 p-8 rounded-[32px] shadow-2xl relative overflow-hidden">
                   <div className="flex items-center space-x-3 mb-6">
                       <Shield className="text-hemp-500" size={24}/>
-                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Script Nuclear de Reparación</h3>
+                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Protocolo de Reconstrucción de Esquema</h3>
                   </div>
-                  <div className="bg-red-900/20 border border-red-500/30 p-4 rounded-2xl mb-6 flex items-start">
-                      <AlertTriangle className="text-red-500 mr-3 flex-shrink-0" size={20}/>
-                      <p className="text-xs text-red-200 leading-relaxed font-medium">Este script es la solución definitiva al error de columna faltante. Agrega el campo y <strong>fuerza la recarga de la caché del servidor (pgrst)</strong>.</p>
+                  <div className="bg-amber-900/20 border border-amber-500/30 p-4 rounded-2xl mb-6 flex items-start text-amber-200">
+                      <AlertTriangle className="text-amber-500 mr-3 flex-shrink-0" size={20}/>
+                      <div className="text-xs space-y-2">
+                        <p className="font-bold">⚠️ ATENCIÓN: La reconstrucción total eliminará todos los registros actuales para limpiar el caché de Supabase.</p>
+                        <p>Este proceso es necesario para corregir el error <code className="bg-black/40 px-1 rounded">client_id</code> permanentemente.</p>
+                      </div>
                   </div>
-                  <pre className="bg-black/50 p-6 rounded-2xl text-[10px] text-green-400 overflow-x-auto border border-white/5 font-mono h-96 custom-scrollbar">
-{`-- 1. AGREGAR COLUMNA client_id A users
-ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS client_id TEXT;
 
--- 2. ASEGURAR TABLA DE ENTIDADES (CLIENTES)
-CREATE TABLE IF NOT EXISTS public.clients (
+                  <div className="space-y-4">
+                    <button onClick={() => {
+                      const sql = `
+-- 1. LIMPIEZA TOTAL
+DROP TABLE IF EXISTS public.tasks CASCADE;
+DROP TABLE IF EXISTS public.seed_movements CASCADE;
+DROP TABLE IF EXISTS public.seed_batches CASCADE;
+DROP TABLE IF EXISTS public.hydric_records CASCADE;
+DROP TABLE IF EXISTS public.trial_records CASCADE;
+DROP TABLE IF EXISTS public.field_logs CASCADE;
+DROP TABLE IF EXISTS public.plots CASCADE;
+DROP TABLE IF EXISTS public.locations CASCADE;
+DROP TABLE IF EXISTS public.clients CASCADE;
+DROP TABLE IF EXISTS public.users CASCADE;
+DROP TABLE IF EXISTS public.varieties CASCADE;
+DROP TABLE IF EXISTS public.suppliers CASCADE;
+DROP TABLE IF EXISTS public.resources CASCADE;
+DROP TABLE IF EXISTS public.storage_points CASCADE;
+DROP TABLE IF EXISTS public.projects CASCADE;
+
+-- 2. CREACIÓN DE TABLAS (ORDEN JERÁRQUICO)
+CREATE TABLE public.users (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  email TEXT UNIQUE NOT NULL,
+  role TEXT NOT NULL,
+  password TEXT,
+  job_title TEXT,
+  phone TEXT,
+  avatar TEXT,
+  client_id TEXT
+);
+
+CREATE TABLE public.clients (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   type TEXT,
@@ -132,34 +164,85 @@ CREATE TABLE IF NOT EXISTS public.clients (
   related_user_id TEXT
 );
 
--- 3. DESACTIVAR RLS PARA EVITAR BLOQUEOS EN PROTOTIPO
+CREATE TABLE public.locations (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  province TEXT,
+  city TEXT,
+  address TEXT,
+  soil_type TEXT,
+  climate TEXT,
+  responsible_person TEXT,
+  coordinates JSONB,
+  polygon JSONB,
+  client_id TEXT,
+  owner_name TEXT,
+  owner_legal_name TEXT,
+  owner_cuit TEXT,
+  owner_contact TEXT,
+  owner_type TEXT,
+  capacity_ha NUMERIC,
+  irrigation_system TEXT,
+  responsible_ids TEXT[]
+);
+
+CREATE TABLE public.plots (
+  id TEXT PRIMARY KEY,
+  location_id TEXT REFERENCES public.locations(id),
+  project_id TEXT,
+  variety_id TEXT,
+  seed_batch_id TEXT,
+  name TEXT NOT NULL,
+  type TEXT,
+  block TEXT,
+  replicate INTEGER,
+  surface_area NUMERIC,
+  surface_unit TEXT,
+  density NUMERIC,
+  status TEXT,
+  sowing_date TEXT,
+  owner_name TEXT,
+  responsible_ids TEXT[],
+  row_distance NUMERIC,
+  perimeter NUMERIC,
+  observations TEXT,
+  coordinates JSONB,
+  polygon JSONB,
+  irrigation_type TEXT
+);
+
+-- 3. PERMISOS
 ALTER TABLE public.users DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.clients DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.locations DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.plots DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.trial_records DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.hydric_records DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.field_logs DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.varieties DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.suppliers DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.seed_batches DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.seed_movements DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.tasks DISABLE ROW LEVEL SECURITY;
-
--- 4. OTORGAR PERMISOS PÚBLICOS
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;
 
--- 5. !!! RECARGAR CACHÉ DE POSTGREST (REPARA EL ERROR DEFINITIVAMENTE) !!!
+-- 4. RECARGA DE CACHÉ POSTGREST (REPARA EL ERROR DEFINITIVAMENTE)
 NOTIFY pgrst, 'reload schema';
-`}
-                  </pre>
-                  <button onClick={() => {
-                      const sql = `ALTER TABLE public.users ADD COLUMN IF NOT EXISTS client_id TEXT; ALTER TABLE public.users DISABLE ROW LEVEL SECURITY; ALTER TABLE public.clients DISABLE ROW LEVEL SECURITY; GRANT ALL ON ALL TABLES IN SCHEMA public TO anon; NOTIFY pgrst, 'reload schema';`;
+
+-- 5. USUARIO MAESTRO INICIAL (Opcional: puedes borrar esto si prefieres crear el tuyo)
+-- INSERT INTO public.users (id, name, email, role, password) 
+-- VALUES ('admin', 'Super Admin', 'admin@hempc.com', 'super_admin', 'admin123');
+                      `;
+                      navigator.clipboard.writeText(sql.trim());
+                      alert("Script de Reconstrucción Copiado. Pégalo en el SQL Editor de Supabase y dale a RUN.");
+                    }} className="w-full bg-red-600 hover:bg-red-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] flex items-center justify-center transition-all shadow-xl">
+                        <RotateCcw size={18} className="mr-2"/> Copiar Script de Reconstrucción Total
+                    </button>
+
+                    <button onClick={() => {
+                      const sql = `ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS client_id TEXT; NOTIFY pgrst, 'reload schema';`;
                       navigator.clipboard.writeText(sql);
-                      alert("SQL copiado. Pégalo en el SQL Editor de Supabase y dale a RUN.");
-                  }} className="mt-4 text-[10px] font-black text-hemp-400 uppercase tracking-widest flex items-center hover:text-white transition">
-                      <Copy size={12} className="mr-1"/> Copiar Fix de Caché
-                  </button>
+                      alert("Script de Reparación Rápida Copiado.");
+                    }} className="w-full bg-slate-800 hover:bg-slate-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] flex items-center justify-center transition-all border border-slate-700">
+                        <RefreshCw size={18} className="mr-2"/> Copiar Script de Reparación Rápida (Solo client_id)
+                    </button>
+                  </div>
+
+                  <p className="mt-6 text-[10px] text-slate-500 text-center font-bold uppercase">
+                    Tras ejecutar el script, el servidor tardará unos segundos en actualizar el "Schema Cache".
+                  </p>
               </div>
           </div>
       )}

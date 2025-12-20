@@ -120,17 +120,19 @@ const toSnakeCase = (obj: any) => {
     const newObj: any = {};
     for (const key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
-            // Refuerzo manual PRIORITARIO
-            if (key === 'clientId') newObj['client_id'] = obj[key];
-            else if (key === 'relatedUserId') newObj['related_user_id'] = obj[key];
-            else if (key === 'projectId') newObj['project_id'] = obj[key];
-            else if (key === 'varietyId') newObj['variety_id'] = obj[key];
-            else if (key === 'locationId') newObj['location_id'] = obj[key];
-            else if (key === 'plotId') newObj['plot_id'] = obj[key];
+            // Mapeo explícito de campos críticos para evitar errores de Schema Cache
+            let snakeKey = key;
+            if (key === 'clientId') snakeKey = 'client_id';
+            else if (key === 'relatedUserId') snakeKey = 'related_user_id';
+            else if (key === 'projectId') snakeKey = 'project_id';
+            else if (key === 'varietyId') snakeKey = 'variety_id';
+            else if (key === 'locationId') snakeKey = 'location_id';
+            else if (key === 'seedBatchId') snakeKey = 'seed_batch_id';
+            else if (key === 'jobTitle') snakeKey = 'job_title';
             else {
-                const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
-                newObj[snakeKey] = obj[key];
+                snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
             }
+            newObj[snakeKey] = obj[key];
         }
     }
     return newObj;
@@ -261,16 +263,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const genericAdd = async (table: string, item: any, setter: any, localKey: string) => {
       const dbItem = toSnakeCase({ ...item });
-      console.log(`[PERSISTENCE] Saving to ${table}:`, dbItem);
+      console.log(`[PERSISTENCE] Guardando en ${table}:`, dbItem);
       
       try {
           const { error } = await supabase.from(table).insert([dbItem]);
           if (error) {
-              console.error(`[CLOUD SAVE ERROR] ${table}:`, error.message);
+              console.error(`[DATABASE ERROR] ${table}:`, error.message);
+              // Fallback Local
               setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
+              
               if (error.message.includes('column') || error.message.includes('cache')) {
                   setIsEmergencyMode(true);
-                  alert("⚠️ Error de Esquema detectado. Ejecuta el script de reparación en Configuración.");
+                  alert(`⚠️ Error de Servidor: La columna 'client_id' no fue reconocida. \n\nPor favor, vaya a Configuración > SQL Cloud y ejecute el script de reconstrucción.`);
               }
               return true; 
           }
@@ -286,7 +290,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const dbItem = toSnakeCase(item);
       const { error } = await supabase.from(table).update(dbItem).eq('id', item.id);
       if (error) {
-          console.error(`Error updating ${table}:`, error.message);
+          console.error(`Error actualizando ${table}:`, error.message);
           return false;
       }
       setter((prev: any[]) => { const n = prev.map((i: any) => i.id === item.id ? item : i); saveToLocal(localKey, n); return n; });
@@ -338,7 +342,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (move) {
           const batch = seedBatches.find(b => b.id === move.batchId);
           if (batch) {
-              const updatedBatch = { ...batch, remainingQuantity: batch.remainingQuantity + move.quantity };
+              const updatedBatch = { ...batch, remainingQuantity: (batch.remainingQuantity || 0) + (move.quantity || 0) };
               await genericUpdate('seed_batches', updatedBatch, setSeedBatches, 'seed_batches');
           }
       }
