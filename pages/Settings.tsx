@@ -39,14 +39,6 @@ export default function Settings() {
       alert("✅ Identidad corporativa actualizada.");
   };
 
-  const handleResetBranding = () => {
-      if (window.confirm("¿Restaurar marca original?")) {
-          updateBranding('HempC', null);
-          setEditAppName('HempC');
-          setEditAppLogo(null);
-      }
-  };
-
   const handleSaveConnections = async () => {
       setStatus('checking');
       localStorage.setItem('hemp_sb_url', url.trim());
@@ -63,8 +55,8 @@ export default function Settings() {
       <div className="flex items-center mb-6">
         <SettingsIcon className="text-hemp-600 mr-3" size={32} />
         <div>
-            <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Configuración Maestra</h1>
-            <p className="text-gray-500">Gestión de identidad y estructura de datos cloud.</p>
+            <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Configuración del Servidor</h1>
+            <p className="text-gray-500">Mantenimiento de base de datos e identidad visual.</p>
         </div>
       </div>
 
@@ -78,18 +70,18 @@ export default function Settings() {
           <div className="space-y-8 animate-in fade-in slide-in-from-top-4">
               <div className="bg-white dark:bg-slate-900 p-8 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-sm">
                   <h3 className="text-xl font-black text-slate-800 dark:text-white flex items-center mb-6">
-                      <Layout className="mr-2 text-hemp-600" size={20} /> Personalización Visual
+                      <Layout className="mr-2 text-hemp-600" size={20} /> Marca Blanca
                   </h3>
                   <div className="space-y-6">
                       <div>
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Nombre del Sistema</label>
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Nombre de la App</label>
                           <input type="text" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl font-bold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-hemp-600" value={editAppName} onChange={e => setEditAppName(e.target.value)} />
                       </div>
                       <div>
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Logo URL</label>
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">URL del Logo (PNG/SVG)</label>
                           <input type="text" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl font-bold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-hemp-600" value={editAppLogo || ''} onChange={e => setEditAppLogo(e.target.value)} placeholder="https://..." />
                       </div>
-                      <button onClick={handleSaveBranding} className="w-full md:w-auto px-10 py-4 bg-hemp-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:scale-[1.02] transition-all">Guardar Cambios</button>
+                      <button onClick={handleSaveBranding} className="w-full md:w-auto px-10 py-4 bg-hemp-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:scale-[1.02] transition-all">Actualizar Marca</button>
                   </div>
               </div>
           </div>
@@ -100,13 +92,13 @@ export default function Settings() {
             <div className="bg-white dark:bg-slate-900 rounded-[32px] shadow-sm border dark:border-slate-800 p-8">
                 <h2 className="text-lg font-black text-gray-800 dark:text-white mb-6 flex items-center"><Database size={20} className="mr-2 text-hemp-600" /> Servidor de Datos (Supabase)</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Supabase Project URL</label><input type="text" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl font-bold text-slate-800 dark:text-white" value={url} onChange={e => setUrl(e.target.value)} /></div>
+                    <div><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Supabase URL</label><input type="text" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl font-bold text-slate-800 dark:text-white" value={url} onChange={e => setUrl(e.target.value)} /></div>
                     <div><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Anon API Key</label><input type="password" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl font-bold text-slate-800 dark:text-white" value={key} onChange={e => setKey(e.target.value)} /></div>
                 </div>
             </div>
             <button onClick={handleSaveConnections} disabled={status === 'checking'} className={`w-full py-5 rounded-[24px] font-black text-xs uppercase tracking-widest text-white flex items-center justify-center transition-all shadow-xl ${status === 'checking' ? 'bg-gray-400' : status === 'success' ? 'bg-green-600' : 'bg-slate-900 dark:bg-hemp-600 hover:scale-[1.01]'}`}>
                 {status === 'checking' ? <RefreshCw className="animate-spin mr-2"/> : status === 'success' ? <CheckCircle2 className="mr-2"/> : <Save className="mr-2"/>}
-                {status === 'checking' ? 'Sincronizando...' : status === 'success' ? 'Conexión Exitosa' : 'Actualizar Credenciales'}
+                {status === 'checking' ? 'Verificando...' : status === 'success' ? 'Conexión Exitosa' : 'Guardar Credenciales'}
             </button>
           </div>
       )}
@@ -116,18 +108,17 @@ export default function Settings() {
               <div className="bg-slate-900 border border-slate-800 p-8 rounded-[32px] shadow-2xl relative overflow-hidden">
                   <div className="flex items-center space-x-3 mb-6">
                       <Shield className="text-hemp-500" size={24}/>
-                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Script de Reconstrucción Total</h3>
+                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Script Nuclear de Reparación</h3>
                   </div>
-                  <div className="bg-amber-900/20 border border-amber-500/30 p-4 rounded-2xl mb-6 flex items-start">
-                      <AlertTriangle className="text-amber-500 mr-3 flex-shrink-0" size={20}/>
-                      <p className="text-xs text-amber-200 leading-relaxed font-medium">Este script solucionará el error de la columna <code className="bg-black/40 px-1 rounded text-white">client_id</code>. Copia el código y ejecútalo en el <strong>SQL Editor</strong> de Supabase.</p>
+                  <div className="bg-red-900/20 border border-red-500/30 p-4 rounded-2xl mb-6 flex items-start">
+                      <AlertTriangle className="text-red-500 mr-3 flex-shrink-0" size={20}/>
+                      <p className="text-xs text-red-200 leading-relaxed font-medium">Este script es la solución definitiva al error de columna faltante. Agrega el campo y <strong>fuerza la recarga de la caché del servidor (pgrst)</strong>.</p>
                   </div>
-                  <pre className="bg-black/50 p-6 rounded-2xl text-[10px] text-green-400 overflow-x-auto border border-white/5 font-mono h-80 custom-scrollbar">
-{`-- 1. ASEGURAR QUE LA TABLA users TIENE LA COLUMNA client_id
--- Si la tabla existe, agregamos la columna si falta
+                  <pre className="bg-black/50 p-6 rounded-2xl text-[10px] text-green-400 overflow-x-auto border border-white/5 font-mono h-96 custom-scrollbar">
+{`-- 1. AGREGAR COLUMNA client_id A users
 ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS client_id TEXT;
 
--- 2. ASEGURAR TABLAS BASE (SI NO EXISTEN)
+-- 2. ASEGURAR TABLA DE ENTIDADES (CLIENTES)
 CREATE TABLE IF NOT EXISTS public.clients (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -141,43 +132,33 @@ CREATE TABLE IF NOT EXISTS public.clients (
   related_user_id TEXT
 );
 
-CREATE TABLE IF NOT EXISTS public.locations (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  province TEXT,
-  city TEXT,
-  address TEXT,
-  soil_type TEXT,
-  climate TEXT,
-  responsible_person TEXT,
-  coordinates JSONB,
-  polygon JSONB,
-  client_id TEXT,
-  owner_name TEXT,
-  owner_legal_name TEXT,
-  owner_cuit TEXT,
-  owner_contact TEXT,
-  owner_type TEXT,
-  capacity_ha NUMERIC,
-  irrigation_system TEXT,
-  responsible_ids TEXT[]
-);
-
--- 3. ACTUALIZAR CACHÉ DE ESQUEMA (DISABLE/ENABLE RLS)
+-- 3. DESACTIVAR RLS PARA EVITAR BLOQUEOS EN PROTOTIPO
 ALTER TABLE public.users DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.clients DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.locations DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.plots DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.trial_records DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.hydric_records DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.field_logs DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.varieties DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.suppliers DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.seed_batches DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.seed_movements DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.tasks DISABLE ROW LEVEL SECURITY;
 
 -- 4. OTORGAR PERMISOS PÚBLICOS
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;
+
+-- 5. !!! RECARGAR CACHÉ DE POSTGREST (REPARA EL ERROR DEFINITIVAMENTE) !!!
+NOTIFY pgrst, 'reload schema';
 `}
                   </pre>
                   <button onClick={() => {
-                      const sql = `ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS client_id TEXT; ALTER TABLE public.users DISABLE ROW LEVEL SECURITY; ALTER TABLE public.clients DISABLE ROW LEVEL SECURITY; GRANT ALL ON ALL TABLES IN SCHEMA public TO anon;`;
+                      const sql = `ALTER TABLE public.users ADD COLUMN IF NOT EXISTS client_id TEXT; ALTER TABLE public.users DISABLE ROW LEVEL SECURITY; ALTER TABLE public.clients DISABLE ROW LEVEL SECURITY; GRANT ALL ON ALL TABLES IN SCHEMA public TO anon; NOTIFY pgrst, 'reload schema';`;
                       navigator.clipboard.writeText(sql);
-                      alert("SQL de reparación rápida copiado.");
+                      alert("SQL copiado. Pégalo en el SQL Editor de Supabase y dale a RUN.");
                   }} className="mt-4 text-[10px] font-black text-hemp-400 uppercase tracking-widest flex items-center hover:text-white transition">
-                      <Copy size={12} className="mr-1"/> Copiar Fix Rápido
+                      <Copy size={12} className="mr-1"/> Copiar Fix de Caché
                   </button>
               </div>
           </div>
