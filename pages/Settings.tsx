@@ -30,9 +30,9 @@ export default function Settings() {
   // Unit Test State
   const [tests, setTests] = useState<UnitTest[]>([
       { id: 'conn', name: 'Conexión Supabase', description: 'Verifica alcance de URL y Key.', status: 'idle' },
-      { id: 'tables', name: 'Esquema de Tablas', description: 'Valida existencia de todas las entidades V20.', status: 'idle' },
+      { id: 'tables', name: 'Esquema de Tablas', description: 'Valida existencia de todas las entidades V21.', status: 'idle' },
       { id: 'geo', name: 'Protocolo JSONB GPS', description: 'Verifica compatibilidad de georreferencia.', status: 'idle' },
-      { id: 'auth', name: 'Vínculo Socio-Usuario', description: 'Valida FK de relacionados.', status: 'idle' }
+      { id: 'auth', name: 'Vínculo Organizacional', description: 'Valida FK de equipos de trabajo.', status: 'idle' }
   ]);
 
   useEffect(() => {
@@ -84,10 +84,10 @@ export default function Settings() {
           updateTest('geo', { status: 'fail', error: 'Falta columna coordinates JSONB' });
       }
 
-      // 4. Auth/Link Test
+      // 4. Auth/Team Test
       updateTest('auth', { status: 'running' });
       try {
-          const { error } = await supabase.from('clients').select('related_user_id').limit(1);
+          const { error } = await supabase.from('users').select('client_id').limit(1);
           updateTest('auth', { status: error ? 'fail' : 'pass', error: error?.message });
       } catch (e: any) {
           updateTest('auth', { status: 'fail' });
@@ -123,7 +123,7 @@ export default function Settings() {
           <button onClick={() => setActiveTab('branding')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'branding' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Identidad</button>
           <button onClick={() => setActiveTab('connections')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'connections' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Conectividad</button>
           <button onClick={() => setActiveTab('audit')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'audit' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Protocolo & Pruebas</button>
-          <button onClick={() => setActiveTab('database')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'database' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>SQL Nucleus V20</button>
+          <button onClick={() => setActiveTab('database')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'database' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>SQL Nucleus V21</button>
       </div>
 
       {activeTab === 'branding' && (
@@ -153,7 +153,7 @@ export default function Settings() {
                 <h2 className="text-lg font-black text-gray-800 dark:text-white mb-6 flex items-center"><Database size={20} className="mr-2 text-hemp-600" /> Servidor de Datos (Supabase)</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Supabase URL</label><input type="text" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl font-bold text-slate-800 dark:text-white" value={url} onChange={e => setUrl(e.target.value)} /></div>
-                    <div><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Anon API Key</label><input type="password" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl font-bold text-slate-800 dark:text-white" value={key} onChange={e => setKey(e.target.value)} /></div>
+                    <div><label className="text-[10px) font-black text-gray-400 uppercase tracking-widest block mb-2">Anon API Key</label><input type="password" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl font-bold text-slate-800 dark:text-white" value={key} onChange={e => setKey(e.target.value)} /></div>
                 </div>
             </div>
             <button onClick={handleSaveConnections} disabled={status === 'checking'} className={`w-full py-5 rounded-[24px] font-black text-xs uppercase tracking-widest text-white flex items-center justify-center transition-all shadow-xl ${status === 'checking' ? 'bg-gray-400' : status === 'success' ? 'bg-green-600' : 'bg-slate-900 dark:bg-hemp-600 hover:scale-[1.01]'}`}>
@@ -169,9 +169,9 @@ export default function Settings() {
                   <div className="flex justify-between items-center mb-8">
                       <div>
                           <h3 className="text-xl font-black text-slate-800 dark:text-white flex items-center">
-                              <FlaskConical className="mr-2 text-blue-600" size={20} /> Suite de Sincronización V20
+                              <FlaskConical className="mr-2 text-blue-600" size={20} /> Suite Nuclear V21
                           </h3>
-                          <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">Sincronización de Usuarios y Entidades de Red</p>
+                          <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">Verificación de equipos y jerarquías de red</p>
                       </div>
                       <button onClick={runTests} className="bg-slate-900 dark:bg-blue-600 text-white px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:scale-105 transition-all">Ejecutar Suite</button>
                   </div>
@@ -202,20 +202,20 @@ export default function Settings() {
               <div className="bg-slate-900 border border-slate-800 p-8 rounded-[32px] shadow-2xl relative overflow-hidden">
                   <div className="flex items-center space-x-3 mb-6">
                       <Shield className="text-hemp-500" size={24}/>
-                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Protocolo Nuclear V20</h3>
+                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Nucleus SQL V21</h3>
                   </div>
                   <div className="bg-amber-900/20 border border-amber-500/30 p-4 rounded-2xl mb-6 flex items-start text-amber-200">
                       <AlertTriangle className="text-amber-500 mr-3 flex-shrink-0" size={20}/>
                       <div className="text-xs space-y-2 leading-relaxed">
-                        <p className="font-bold uppercase tracking-tight">Sincronización de Identidades</p>
-                        <p>Este script garantiza que la tabla de Usuarios y Socios estén perfectamente vinculadas mediante claves `related_user_id` y `client_id`.</p>
+                        <p className="font-bold uppercase tracking-tight">Estructura Organizacional</p>
+                        <p>Garantiza que la gestión de equipos de trabajo funcione correctamente permitiendo la actualización masiva de usuarios bajo un mismo CUIT/Socio.</p>
                       </div>
                   </div>
 
                   <div className="space-y-4">
                     <button onClick={() => {
                       const sql = `
--- PROTOCOLO V20: VINCULO USUARIO-SOCIO
+-- PROTOCOLO V21: ESTRUCTURA ORGANIZACIONAL TOTAL
 DROP TABLE IF EXISTS public.suppliers CASCADE;
 DROP TABLE IF EXISTS public.clients CASCADE;
 DROP TABLE IF EXISTS public.users CASCADE;
@@ -270,7 +270,7 @@ CREATE TABLE public.suppliers (
   is_official_partner BOOLEAN DEFAULT false
 );
 
--- PERMISOS TOTALES V20
+-- PERMISOS TOTALES V21
 ALTER TABLE public.suppliers DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.clients DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.users DISABLE ROW LEVEL SECURITY;
@@ -283,17 +283,17 @@ VALUES ('root-user', 'Super Administrador', 'admin@hempc.com', 'super_admin', 'a
 NOTIFY pgrst, 'reload schema';
                       `;
                       navigator.clipboard.writeText(sql.trim());
-                      alert("Script Nuclear V20 Copiado. Ejecútalo en Supabase para resolver fallos de vinculación.");
+                      alert("Script Nuclear V21 Copiado. Ejecútalo en Supabase para habilitar la gestión de equipos.");
                     }} className="w-full bg-red-600 hover:bg-red-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center transition-all shadow-xl">
-                        <RotateCcw size={18} className="mr-2"/> Copiar Script SQL V20 (Completo)
+                        <RotateCcw size={18} className="mr-2"/> Copiar Script SQL V21 (Recomendado)
                     </button>
                     
                     <button onClick={() => {
-                        const sql = `ALTER TABLE public.users ADD COLUMN IF NOT EXISTS client_id TEXT; ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS related_user_id TEXT; NOTIFY pgrst, 'reload schema';`;
+                        const sql = `ALTER TABLE public.users DROP CONSTRAINT IF EXISTS users_client_id_fkey; NOTIFY pgrst, 'reload schema';`;
                         navigator.clipboard.writeText(sql);
-                        alert("Parche V20 (Vínculos) copiado.");
+                        alert("Parche V21 (Flexibilidad de Vínculos) copiado.");
                     }} className="w-full bg-slate-800 hover:bg-slate-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center transition-all border border-slate-700">
-                        <RefreshCw size={18} className="mr-2"/> Parche V20: Solo Vínculos
+                        <RefreshCw size={18} className="mr-2"/> Parche V21: Solo Permisos de Vínculo
                     </button>
                   </div>
               </div>

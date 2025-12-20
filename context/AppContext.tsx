@@ -52,8 +52,8 @@ interface AppContextType {
   updateSupplier: (s: Supplier) => Promise<boolean>;
   deleteSupplier: (id: string) => void;
 
-  addClient: (c: Client) => Promise<boolean>; 
-  updateClient: (c: Client) => Promise<boolean>; 
+  addClient: (c: Client, teamUserIds?: string[]) => Promise<boolean>; 
+  updateClient: (c: Client, teamUserIds?: string[]) => Promise<boolean>; 
   deleteClient: (id: string) => void; 
 
   addResource: (r: Resource) => void; 
@@ -113,19 +113,10 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// Mapeo JS (CamelCase) -> DB (SnakeCase) - EXPLICITO PARA EVITAR ERRORES
 const toSnakeCase = (obj: any) => {
     if (!obj || typeof obj !== 'object') return obj;
     const newObj: any = {};
     const manualMap: Record<string, string> = {
-        id: 'id',
-        name: 'name',
-        email: 'email',
-        role: 'role',
-        password: 'password',
-        jobTitle: 'job_title',
-        phone: 'phone',
-        avatar: 'avatar',
         clientId: 'client_id',
         isNetworkMember: 'is_network_member',
         relatedUserId: 'related_user_id',
@@ -149,31 +140,20 @@ const toSnakeCase = (obj: any) => {
         pricePerKg: 'price_per_kg',
         initialQuantity: 'initial_quantity',
         remainingQuantity: 'remaining_quantity',
-        coordinates: 'coordinates',
-        polygon: 'polygon',
-        analysisDate: 'analysis_date',
-        germination: 'germination',
-        purity: 'purity',
         labelSerialNumber: 'label_serial_number',
         certificationNumber: 'certification_number',
         gs1Code: 'gs1_code',
-        status: 'status',
-        type: 'type',
-        cuit: 'cuit',
-        notes: 'notes',
-        address: 'address',
-        city: 'city',
-        province: 'province',
-        country: 'country',
-        whatsapp: 'whatsapp',
-        website: 'website'
+        jobTitle: 'job_title'
     };
 
     for (const key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
             const snakeKey = manualMap[key] || key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
-            if (obj[key] !== undefined) {
-                newObj[snakeKey] = obj[key];
+            let val = obj[key];
+            // Fix para evitar strings vacíos en FKs o IDs relacionados
+            if ((key === 'relatedUserId' || key === 'clientId') && val === '') val = null;
+            if (val !== undefined) {
+                newObj[snakeKey] = val;
             }
         }
     }
@@ -280,9 +260,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setIsRefreshing(true);
       try {
           const connected = await checkConnection();
-          if (!connected) {
-              setIsEmergencyMode(true);
-          } else {
+          if (!connected) setIsEmergencyMode(true);
+          else {
               setIsEmergencyMode(false);
               const fetchData = async (table: string, setter: any, localKey: string) => {
                   try {
@@ -292,12 +271,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                         setter(camelData);
                         saveToLocal(localKey, camelData);
                     } else if (error) {
-                        console.warn(`[SYNC WARNING] ${table}:`, error.message);
                         setter(getFromLocal(localKey));
                     }
-                  } catch (e) {
-                      setter(getFromLocal(localKey));
-                  }
+                  } catch (e) { setter(getFromLocal(localKey)); }
               };
               await Promise.allSettled([
                   fetchData('users', setUsersList, 'users'), fetchData('projects', setProjects, 'projects'),
@@ -347,41 +323,37 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const dbItem = toSnakeCase({ ...item });
       try {
           const { error } = await supabase.from(table).insert([dbItem]);
-          if (error) {
-              console.error(`[DB INSERT ERROR] ${table}:`, error.message, error.details);
-              return false; 
-          }
+          if (error) { console.error(`[DB INSERT ERROR] ${table}:`, error.message); return false; }
           setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
           return true;
-      } catch (e: any) {
-          console.error(`[RUNTIME INSERT ERROR] ${table}:`, e);
-          return false;
-      }
+      } catch (e: any) { console.error(`[RUNTIME INSERT ERROR] ${table}:`, e); return false; }
   };
 
   const genericUpdate = async (table: string, item: any, setter: any, localKey: string) => {
       const dbItem = toSnakeCase(item);
       try {
           const { error } = await supabase.from(table).update(dbItem).eq('id', item.id);
-          if (error) { 
-              console.error(`[DB UPDATE ERROR] ${table}:`, error.message); 
-              return false; 
-          }
+          if (error) { console.error(`[DB UPDATE ERROR] ${table}:`, error.message); return false; }
           setter((prev: any[]) => { const n = prev.map((i: any) => i.id === item.id ? item : i); saveToLocal(localKey, n); return n; });
           return true;
-      } catch (e) {
-          console.error(`[RUNTIME UPDATE ERROR] ${table}:`, e);
-          return false;
-      }
+      } catch (e) { console.error(`[RUNTIME UPDATE ERROR] ${table}:`, e); return false; }
   };
 
   const genericDelete = async (table: string, id: string, setter: any, localKey: string) => {
       try {
           const { error } = await supabase.from(table).delete().eq('id', id);
-          if (!error) {
-              setter((prev: any[]) => { const n = prev.filter((i: any) => i.id !== id); saveToLocal(localKey, n); return n; });
-          }
+          if (!error) setter((prev: any[]) => { const n = prev.filter((i: any) => i.id !== id); saveToLocal(localKey, n); return n; });
       } catch (e) { console.error("Delete Error:", e); }
+  };
+
+  const syncTeam = async (clientId: string, teamUserIds: string[]) => {
+      // 1. Limpiamos usuarios que ya no pertenecen a este equipo
+      await supabase.from('users').update({ client_id: null }).eq('client_id', clientId);
+      // 2. Asignamos a los nuevos
+      if (teamUserIds.length > 0) {
+          await supabase.from('users').update({ client_id: clientId }).in('id', teamUserIds);
+      }
+      await refreshData();
   };
 
   const addUser = async (u: User) => {
@@ -411,24 +383,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const updateSupplier = (s: Supplier) => genericUpdate('suppliers', s, setSuppliers, 'suppliers');
   const deleteSupplier = (id: string) => { genericDelete('suppliers', id, setSuppliers, 'suppliers'); };
   
-  const addClient = async (c: Client) => {
+  const addClient = async (c: Client, teamUserIds: string[] = []) => {
       const success = await genericAdd('clients', c, setClients, 'clients');
-      if (success && c.relatedUserId) {
-          // Actualizamos al usuario vinculado para que tenga el client_id
-          const user = usersList.find(u => u.id === c.relatedUserId);
-          if (user) {
-              await genericUpdate('users', { ...user, clientId: c.id }, setUsersList, 'users');
-          }
+      if (success) {
+          const finalTeam = [...new Set([...teamUserIds, c.relatedUserId].filter(Boolean) as string[])];
+          await syncTeam(c.id, finalTeam);
       }
       return success;
   };
-  const updateClient = async (c: Client) => {
+  const updateClient = async (c: Client, teamUserIds: string[] = []) => {
       const success = await genericUpdate('clients', c, setClients, 'clients');
-      if (success && c.relatedUserId) {
-          const user = usersList.find(u => u.id === c.relatedUserId);
-          if (user) {
-              await genericUpdate('users', { ...user, clientId: c.id }, setUsersList, 'users');
-          }
+      if (success) {
+          const finalTeam = [...new Set([...teamUserIds, c.relatedUserId].filter(Boolean) as string[])];
+          await syncTeam(c.id, finalTeam);
       }
       return success;
   };
