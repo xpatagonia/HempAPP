@@ -48,12 +48,12 @@ interface AppContextType {
   updateVariety: (v: Variety) => void;
   deleteVariety: (id: string) => void;
 
-  addSupplier: (s: Supplier) => Promise<string>;
-  updateSupplier: (s: Supplier) => void;
+  addSupplier: (s: Supplier) => Promise<string | null>;
+  updateSupplier: (s: Supplier) => Promise<boolean>;
   deleteSupplier: (id: string) => void;
 
   addClient: (c: Client) => Promise<boolean>; 
-  updateClient: (c: Client) => void; 
+  updateClient: (c: Client) => Promise<boolean>; 
   deleteClient: (id: string) => void; 
 
   addResource: (r: Resource) => void; 
@@ -114,22 +114,32 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// Mapeo JS -> DB
+// Mapeo JS (CamelCase) -> DB (SnakeCase) - Reforzado para campos específicos
 const toSnakeCase = (obj: any) => {
     if (!obj || typeof obj !== 'object') return obj;
     const newObj: any = {};
     for (const key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
             let snakeKey = key;
-            if (key === 'clientId') snakeKey = 'client_id';
-            else if (key === 'isNetworkMember') snakeKey = 'is_network_member';
-            else if (key === 'relatedUserId') snakeKey = 'related_user_id';
-            else if (key === 'projectId') snakeKey = 'project_id';
-            else if (key === 'varietyId') snakeKey = 'variety_id';
-            else if (key === 'locationId') snakeKey = 'location_id';
-            else if (key === 'seedBatchId') snakeKey = 'seed_batch_id';
-            else if (key === 'jobTitle') snakeKey = 'job_title';
-            else {
+            const map: Record<string, string> = {
+                clientId: 'client_id',
+                isNetworkMember: 'is_network_member',
+                relatedUserId: 'related_user_id',
+                projectId: 'project_id',
+                varietyId: 'variety_id',
+                locationId: 'location_id',
+                seedBatchId: 'seed_batch_id',
+                jobTitle: 'job_title',
+                isOfficialPartner: 'is_official_partner',
+                postalCode: 'postal_code',
+                commercialContact: 'commercial_contact',
+                logisticsContact: 'logistics_contact',
+                legalName: 'legal_name'
+            };
+            
+            if (map[key]) {
+                snakeKey = map[key];
+            } else {
                 snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
             }
             newObj[snakeKey] = obj[key];
@@ -145,11 +155,25 @@ const toCamelCase = (obj: any) => {
     for (const key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
             let camelKey = key;
-            if (key === 'client_id') camelKey = 'clientId';
-            else if (key === 'is_network_member') camelKey = 'isNetworkMember';
-            else if (key === 'related_user_id') camelKey = 'relatedUserId';
-            else if (key === 'job_title') camelKey = 'jobTitle';
-            else {
+            const map: Record<string, string> = {
+                client_id: 'clientId',
+                is_network_member: 'isNetworkMember',
+                related_user_id: 'relatedUserId',
+                job_title: 'jobTitle',
+                project_id: 'projectId',
+                variety_id: 'varietyId',
+                location_id: 'locationId',
+                seed_batch_id: 'seedBatchId',
+                is_official_partner: 'isOfficialPartner',
+                postal_code: 'postalCode',
+                commercial_contact: 'commercialContact',
+                logistics_contact: 'logisticsContact',
+                legal_name: 'legalName'
+            };
+            
+            if (map[key]) {
+                camelKey = map[key];
+            } else {
                 camelKey = key.replace(/(_\w)/g, m => m[1].toUpperCase());
             }
             newObj[camelKey] = obj[key];
@@ -283,26 +307,29 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const genericAdd = async (table: string, item: any, setter: any, localKey: string) => {
       const dbItem = toSnakeCase({ ...item });
-      // Actualización inmediata del estado local para evitar lag visual
-      setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
-      
       try {
           const { error } = await supabase.from(table).insert([dbItem]);
           if (error) {
-              console.error(`[DB ERROR] ${table}:`, error.message);
+              console.error(`[DB INSERT ERROR] ${table}:`, error.message, error.details);
               if (error.message.includes('column') || error.message.includes('cache')) setIsEmergencyMode(true);
-              return true; // Retornamos true para no bloquear el flujo de la UI, el dato queda local
+              return false; 
           }
+          // Solo actualizamos local si la DB confirma éxito
+          setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
           return true;
       } catch (e: any) {
-          return true;
+          console.error(`[RUNTIME INSERT ERROR] ${table}:`, e);
+          return false;
       }
   };
 
   const genericUpdate = async (table: string, item: any, setter: any, localKey: string) => {
       const dbItem = toSnakeCase(item);
       const { error } = await supabase.from(table).update(dbItem).eq('id', item.id);
-      if (error) { console.error(`Error actualizando ${table}:`, error.message); return false; }
+      if (error) { 
+          console.error(`[DB UPDATE ERROR] ${table}:`, error.message); 
+          return false; 
+      }
       setter((prev: any[]) => { const n = prev.map((i: any) => i.id === item.id ? item : i); saveToLocal(localKey, n); return n; });
       return true;
   };
@@ -331,7 +358,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const addVariety = (v: Variety) => { genericAdd('varieties', v, setVarieties, 'varieties'); };
   const updateVariety = (v: Variety) => { genericUpdate('varieties', v, setVarieties, 'varieties'); };
   const deleteVariety = (id: string) => { genericDelete('varieties', id, setVarieties, 'varieties'); };
-  const addSupplier = async (s: Supplier) => { await genericAdd('suppliers', s, setSuppliers, 'suppliers'); return s.id; };
+  
+  const addSupplier = async (s: Supplier) => { 
+      const success = await genericAdd('suppliers', s, setSuppliers, 'suppliers'); 
+      return success ? s.id : null; 
+  };
   const updateSupplier = (s: Supplier) => genericUpdate('suppliers', s, setSuppliers, 'suppliers');
   const deleteSupplier = (id: string) => { genericDelete('suppliers', id, setSuppliers, 'suppliers'); };
   
@@ -382,7 +413,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const notifs: AppNotification[] = [];
     tasks.forEach(t => {
         if (t.status === 'Completada') return;
-        const isAssigned = t.assignedToIds.includes(currentUser.id) || currentUser.role === 'admin' || currentUser.role === 'super_admin';
+        const isAssigned = t.assignedToIds.includes(currentUser.id) || currentUser.role === 'admin' || currentUser?.role === 'super_admin';
         if (!isAssigned) return;
         const dueDate = new Date(t.dueDate);
         if (dueDate < new Date()) notifs.push({ id: `t-${t.id}`, type: 'alert', title: 'Tarea Vencida', message: t.title, link: '/tasks', date: t.dueDate });

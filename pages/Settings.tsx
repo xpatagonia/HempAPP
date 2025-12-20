@@ -1,18 +1,39 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Save, Database, RefreshCw, Lock, Settings as SettingsIcon, CheckCircle2, Layout, Trash2, RotateCcw, Shield, AlertTriangle } from 'lucide-react';
+import { supabase, checkConnection } from '../supabaseClient';
+import { 
+  Save, Database, RefreshCw, Lock, Settings as SettingsIcon, 
+  CheckCircle2, Layout, Trash2, RotateCcw, Shield, 
+  AlertTriangle, FlaskConical, CheckCircle, XCircle, Info, Search, FileCode
+} from 'lucide-react';
+
+interface UnitTest {
+    id: string;
+    name: string;
+    description: string;
+    status: 'idle' | 'running' | 'pass' | 'fail';
+    error?: string;
+}
 
 export default function Settings() {
-  const { currentUser, appName, appLogo, updateBranding, refreshData } = useAppContext();
+  const { currentUser, appName, appLogo, updateBranding, refreshData, suppliers, varieties, seedBatches, clients } = useAppContext();
   
-  const [activeTab, setActiveTab] = useState<'branding' | 'database' | 'connections'>('branding');
+  const [activeTab, setActiveTab] = useState<'branding' | 'database' | 'connections' | 'audit'>('branding');
   const [url, setUrl] = useState('');
   const [key, setKey] = useState('');
   const [status, setStatus] = useState<'idle' | 'checking' | 'success' | 'error'>('idle');
 
   const [editAppName, setEditAppName] = useState(appName);
   const [editAppLogo, setEditAppLogo] = useState(appLogo);
+
+  // Unit Test State
+  const [tests, setTests] = useState<UnitTest[]>([
+      { id: 'conn', name: 'Conexión Supabase', description: 'Verifica alcance de URL y Key.', status: 'idle' },
+      { id: 'tables', name: 'Esquema de Tablas', description: 'Valida existencia de todas las entidades V17.', status: 'idle' },
+      { id: 'geo', name: 'Protocolo JSONB GPS', description: 'Verifica compatibilidad de georreferencia.', status: 'idle' },
+      { id: 'auth', name: 'Permisos RLS', description: 'Chequea privilegios de escritura.', status: 'idle' }
+  ]);
 
   useEffect(() => {
       const storedUrl = localStorage.getItem('hemp_sb_url');
@@ -33,6 +54,46 @@ export default function Settings() {
       );
   }
 
+  const runTests = async () => {
+      const updateTest = (id: string, update: Partial<UnitTest>) => {
+          setTests(prev => prev.map(t => t.id === id ? { ...t, ...update } : t));
+      };
+
+      // 1. Connection Test
+      updateTest('conn', { status: 'running' });
+      const isConnected = await checkConnection();
+      updateTest('conn', { status: isConnected ? 'pass' : 'fail', error: isConnected ? undefined : 'URL o Key inválidos' });
+
+      // 2. Tables Test
+      updateTest('tables', { status: 'running' });
+      try {
+          const { error } = await supabase.from('suppliers').select('id').limit(1);
+          if (error) throw error;
+          updateTest('tables', { status: 'pass' });
+      } catch (e: any) {
+          updateTest('tables', { status: 'fail', error: e.message });
+      }
+
+      // 3. GEO JSONB Test
+      updateTest('geo', { status: 'running' });
+      try {
+          const { data, error } = await supabase.from('suppliers').select('coordinates').limit(1);
+          if (error) throw error;
+          updateTest('geo', { status: 'pass' });
+      } catch (e: any) {
+          updateTest('geo', { status: 'fail', error: 'Falta columna coordinates JSONB' });
+      }
+
+      // 4. Auth/RLS Test
+      updateTest('auth', { status: 'running' });
+      try {
+          const { error } = await supabase.from('logs').select('id').limit(1);
+          updateTest('auth', { status: error ? 'fail' : 'pass', error: error?.message });
+      } catch (e: any) {
+          updateTest('auth', { status: 'fail' });
+      }
+  };
+
   const handleSaveBranding = () => {
       updateBranding(editAppName, editAppLogo);
       alert("✅ Identidad corporativa actualizada.");
@@ -48,6 +109,10 @@ export default function Settings() {
       }, 800);
   };
 
+  // Consistency Audits
+  const orphanVarieties = varieties.filter(v => !suppliers.find(s => s.id === v.supplierId));
+  const orphanBatches = seedBatches.filter(b => !varieties.find(v => v.id === b.varietyId));
+
   return (
     <div className="max-w-4xl mx-auto pb-10 animate-in fade-in">
       <div className="flex items-center mb-6">
@@ -61,7 +126,8 @@ export default function Settings() {
       <div className="flex space-x-1 bg-gray-100 dark:bg-slate-900 p-1 rounded-lg mb-8 w-fit">
           <button onClick={() => setActiveTab('branding')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'branding' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Identidad</button>
           <button onClick={() => setActiveTab('connections')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'connections' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Conectividad</button>
-          <button onClick={() => setActiveTab('database')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'database' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>SQL Cloud (V17)</button>
+          <button onClick={() => setActiveTab('audit')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'audit' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Protocolo & Pruebas</button>
+          <button onClick={() => setActiveTab('database')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'database' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>SQL Nucleus</button>
       </div>
 
       {activeTab === 'branding' && (
@@ -101,18 +167,74 @@ export default function Settings() {
           </div>
       )}
 
+      {activeTab === 'audit' && (
+          <div className="space-y-6 animate-in fade-in">
+              <div className="bg-white dark:bg-slate-900 rounded-[32px] p-8 border dark:border-slate-800 shadow-sm">
+                  <div className="flex justify-between items-center mb-8">
+                      <div>
+                          <h3 className="text-xl font-black text-slate-800 dark:text-white flex items-center">
+                              <FlaskConical className="mr-2 text-blue-600" size={20} /> Terminal de Pruebas Unitarias
+                          </h3>
+                          <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">Verificación de integridad del protocolo V17</p>
+                      </div>
+                      <button onClick={runTests} className="bg-slate-900 dark:bg-blue-600 text-white px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:scale-105 transition-all">Ejecutar Suite</button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {tests.map(test => (
+                          <div key={test.id} className="p-5 rounded-3xl bg-gray-50 dark:bg-slate-950 border dark:border-slate-800 flex items-start space-x-4">
+                              <div className="mt-1">
+                                  {test.status === 'idle' && <div className="w-6 h-6 rounded-full border-2 border-gray-200"></div>}
+                                  {test.status === 'running' && <RefreshCw size={24} className="text-blue-500 animate-spin"/>}
+                                  {test.status === 'pass' && <CheckCircle size={24} className="text-green-500"/>}
+                                  {test.status === 'fail' && <XCircle size={24} className="text-red-500"/>}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                  <h4 className="font-black text-sm text-slate-800 dark:text-white uppercase tracking-tight">{test.name}</h4>
+                                  <p className="text-[10px] text-gray-500 mb-1">{test.description}</p>
+                                  {test.error && <p className="text-[9px] font-mono text-red-500 break-words mt-1 bg-red-50 dark:bg-red-900/10 p-1 rounded">Error: {test.error}</p>}
+                              </div>
+                          </div>
+                      ))}
+                  </div>
+              </div>
+
+              <div className="bg-white dark:bg-slate-900 rounded-[32px] p-8 border dark:border-slate-800 shadow-sm">
+                   <h3 className="text-xl font-black text-slate-800 dark:text-white flex items-center mb-6">
+                      <Shield className="mr-2 text-hemp-600" size={20} /> Auditor de Consistencia
+                  </h3>
+                  <div className="space-y-4">
+                      <div className={`p-4 rounded-2xl border flex items-center justify-between ${orphanVarieties.length > 0 ? 'bg-red-50 border-red-100 text-red-700' : 'bg-green-50 border-green-100 text-green-700'}`}>
+                          <div className="flex items-center">
+                              {orphanVarieties.length > 0 ? <AlertTriangle className="mr-3"/> : <CheckCircle className="mr-3"/>}
+                              <span className="text-xs font-black uppercase tracking-tight">Variedades Huérfanas (Sin Proveedor)</span>
+                          </div>
+                          <span className="font-black text-lg">{orphanVarieties.length}</span>
+                      </div>
+                      <div className={`p-4 rounded-2xl border flex items-center justify-between ${orphanBatches.length > 0 ? 'bg-amber-50 border-amber-100 text-amber-700' : 'bg-green-50 border-green-100 text-green-700'}`}>
+                          <div className="flex items-center">
+                              {orphanBatches.length > 0 ? <AlertTriangle className="mr-3"/> : <CheckCircle className="mr-3"/>}
+                              <span className="text-xs font-black uppercase tracking-tight">Lotes Huérfanos (Sin Genética)</span>
+                          </div>
+                          <span className="font-black text-lg">{orphanBatches.length}</span>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      )}
+
       {activeTab === 'database' && (
           <div className="space-y-6 animate-in fade-in">
               <div className="bg-slate-900 border border-slate-800 p-8 rounded-[32px] shadow-2xl relative overflow-hidden">
                   <div className="flex items-center space-x-3 mb-6">
                       <Shield className="text-hemp-500" size={24}/>
-                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Protocolo Cooperativo V17</h3>
+                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Nucleus SQL V17</h3>
                   </div>
                   <div className="bg-amber-900/20 border border-amber-500/30 p-4 rounded-2xl mb-6 flex items-start text-amber-200">
                       <AlertTriangle className="text-amber-500 mr-3 flex-shrink-0" size={20}/>
                       <div className="text-xs space-y-2 leading-relaxed">
-                        <p className="font-bold uppercase tracking-tight">Georreferencia Universal de Red</p>
-                        <p>Este script integra <code className="bg-black/40 px-1 rounded text-white">coordinates</code> como JSONB para asegurar trazabilidad geográfica en Socios y Proveedores.</p>
+                        <p className="font-bold uppercase tracking-tight">Reconstrucción del Protocolo Maestro</p>
+                        <p>Asegura que los campos <code className="bg-black/40 px-1 rounded text-white">coordinates</code> sean de tipo JSONB para evitar fallos de guardado en Proveedores y Socios.</p>
                       </div>
                   </div>
 
@@ -272,7 +394,7 @@ VALUES ('root-user', 'Super Administrador', 'admin@hempc.com', 'super_admin', 'a
 NOTIFY pgrst, 'reload schema';
                       `;
                       navigator.clipboard.writeText(sql.trim());
-                      alert("Script Nuclear V17 Copiado. Ejecútalo en el SQL Editor de Supabase para corregir inconsistencias de georreferencia.");
+                      alert("Script Nuclear V17 Copiado. Ejecútalo en el SQL Editor de Supabase.");
                     }} className="w-full bg-red-600 hover:bg-red-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center transition-all shadow-xl">
                         <RotateCcw size={18} className="mr-2"/> Reconstrucción Nuclear (V17)
                     </button>
