@@ -6,7 +6,7 @@ import { Plot, Variety, Location, Project, TrialRecord } from '../types';
 import { 
   ChevronRight, FileSpreadsheet, LayoutGrid, List, Tag, FlaskConical, 
   Tractor, Trash2, Edit2, QrCode, X, Save, Search, Filter, 
-  MapPin, Calendar, Sprout, Printer, Ruler, Activity, CheckCircle2, AlertCircle
+  MapPin, Calendar, Sprout, Printer, Ruler, Activity, CheckCircle2, AlertCircle, Download, ExternalLink
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -71,50 +71,50 @@ export default function Plots() {
     XLSX.writeFile(workbook, `HempC_Planilla_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
-  const inputClass = "w-full border border-gray-300 dark:border-dark-border bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 p-2.5 rounded-lg focus:ring-2 focus:ring-hemp-500 outline-none transition-all";
+  const inputClass = "w-full border border-gray-300 dark:border-slate-800 bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 p-2.5 rounded-lg focus:ring-2 focus:ring-hemp-500 outline-none transition-all";
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
             <h1 className="text-3xl font-black text-gray-800 dark:text-white flex items-center">
-                <LayoutGrid className="mr-3 text-hemp-600" size={32}/> Planilla de Unidades Prod.
+                <LayoutGrid className="mr-3 text-hemp-600" size={32}/> Planilla de Unidades
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 font-medium ml-11">Control centralizado de unidades productivas y de investigación.</p>
         </div>
         <div className="flex items-center space-x-2 w-full sm:w-auto">
-          <div className="bg-white dark:bg-dark-card p-1 rounded-xl flex border dark:border-dark-border shadow-sm">
+          <div className="bg-white dark:bg-slate-900 p-1 rounded-xl flex border dark:border-slate-800 shadow-sm">
               <button onClick={() => setViewMode('table')} className={`p-2 rounded-lg transition ${viewMode === 'table' ? 'bg-hemp-600 text-white shadow-md' : 'text-gray-400'}`}><List size={20} /></button>
               <button onClick={() => setViewMode('gallery')} className={`p-2 rounded-lg transition ${viewMode === 'gallery' ? 'bg-hemp-600 text-white shadow-md' : 'text-gray-400'}`}><LayoutGrid size={20} /></button>
           </div>
-          <button onClick={handleExport} className="flex-1 sm:flex-none border dark:border-dark-border bg-white dark:bg-dark-card text-gray-700 dark:text-gray-200 px-4 py-2 rounded-xl text-sm font-black hover:bg-gray-50 transition shadow-sm flex items-center justify-center">
+          <button onClick={handleExport} className="flex-1 sm:flex-none border dark:border-slate-800 bg-white dark:bg-slate-900 text-gray-700 dark:text-gray-200 px-4 py-2 rounded-xl text-sm font-black hover:bg-gray-50 transition shadow-sm flex items-center justify-center">
             <FileSpreadsheet size={18} className="mr-2 text-green-600" /> Exportar Excel
           </button>
         </div>
       </div>
 
       {/* FILTERS PANEL */}
-      <div className="bg-white dark:bg-dark-card p-5 rounded-2xl shadow-sm border dark:border-dark-border grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-4">
+      <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl shadow-sm border dark:border-slate-800 grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-4">
           <div className="relative lg:col-span-2">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
               <input 
                 type="text" 
                 placeholder="Buscar por identificador..." 
-                className="w-full pl-10 pr-4 py-2 border dark:border-dark-border bg-gray-50 dark:bg-slate-900 rounded-xl text-sm outline-none focus:ring-2 focus:ring-hemp-500"
+                className="w-full pl-10 pr-4 py-2 border dark:border-slate-800 bg-gray-50 dark:bg-slate-950 rounded-xl text-sm outline-none focus:ring-2 focus:ring-hemp-500"
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
               />
           </div>
-          <select className="px-3 py-2 border dark:border-dark-border bg-gray-50 dark:bg-slate-900 rounded-xl text-sm outline-none font-bold text-gray-600 dark:text-gray-300" value={filterLoc} onChange={e => setFilterLoc(e.target.value)}>
+          <select className="px-3 py-2 border dark:border-slate-800 bg-gray-50 dark:bg-slate-950 rounded-xl text-sm outline-none font-bold text-gray-600 dark:text-gray-300" value={filterLoc} onChange={e => setFilterLoc(e.target.value)}>
               <option value="all">Todas las Locaciones</option>
               {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
           </select>
-          <select className="px-3 py-2 border dark:border-dark-border bg-gray-50 dark:bg-slate-900 rounded-xl text-sm outline-none font-bold text-gray-600 dark:text-gray-300" value={filterType} onChange={e => setFilterType(e.target.value as any)}>
+          <select className="px-3 py-2 border dark:border-slate-800 bg-gray-50 dark:bg-slate-950 rounded-xl text-sm outline-none font-bold text-gray-600 dark:text-gray-300" value={filterType} onChange={e => setFilterType(e.target.value as any)}>
               <option value="all">Ensayo & Prod.</option>
               <option value="Ensayo">Solo Ensayos</option>
               <option value="Producción">Solo Producción</option>
           </select>
-          <select className="px-3 py-2 border dark:border-dark-border bg-gray-50 dark:bg-slate-900 rounded-xl text-sm outline-none font-bold text-gray-600 dark:text-gray-300" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+          <select className="px-3 py-2 border dark:border-slate-800 bg-gray-50 dark:bg-slate-950 rounded-xl text-sm outline-none font-bold text-gray-600 dark:text-gray-300" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
               <option value="all">Todos los Estados</option>
               <option value="Activa">Activa</option>
               <option value="Cosechada">Cosechada</option>
@@ -124,9 +124,9 @@ export default function Plots() {
       </div>
 
       {viewMode === 'table' ? (
-          <div className="bg-white dark:bg-dark-card rounded-2xl shadow-sm border dark:border-dark-border overflow-hidden overflow-x-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border dark:border-slate-800 overflow-hidden overflow-x-auto">
             <table className="min-w-full text-sm text-left">
-              <thead className="bg-gray-50 dark:bg-slate-900/50 text-gray-500 uppercase font-black text-[10px] tracking-widest border-b dark:border-dark-border">
+              <thead className="bg-gray-50 dark:bg-slate-950/50 text-gray-500 uppercase font-black text-[10px] tracking-widest border-b dark:border-slate-800">
                 <tr>
                   <th className="px-6 py-4">Identificación</th>
                   <th className="px-6 py-4">Variedad / Tipo</th>
@@ -136,7 +136,7 @@ export default function Plots() {
                   <th className="px-6 py-4 text-right">Acciones</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-dark-border">
+              <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
                 {filteredPlots.length === 0 ? (
                   <tr><td colSpan={6} className="p-12 text-center text-gray-400 italic font-medium">No se encontraron registros con los filtros actuales.</td></tr>
                 ) : filteredPlots.map(p => {
@@ -187,7 +187,7 @@ export default function Plots() {
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex justify-end items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button onClick={() => setQrPlot(p)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition" title="QR Label"><QrCode size={18}/></button>
+                          <button onClick={() => setQrPlot(p)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition" title="Generar Etiqueta QR"><QrCode size={18}/></button>
                           {isAdmin && (
                             <>
                                 <button onClick={() => setEditingPlot(p)} className="p-2 text-gray-400 hover:text-hemp-600 hover:bg-hemp-50 dark:hover:bg-hemp-900/20 rounded-lg transition"><Edit2 size={18}/></button>
@@ -206,7 +206,7 @@ export default function Plots() {
       ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredPlots.map(p => (
-                  <div key={p.id} className="bg-white dark:bg-dark-card p-6 rounded-3xl shadow-sm border dark:border-dark-border hover:shadow-xl transition-all relative group overflow-hidden flex flex-col">
+                  <div key={p.id} className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border dark:border-slate-800 hover:shadow-xl transition-all relative group overflow-hidden flex flex-col">
                       <div className="absolute top-0 right-0 p-3 bg-hemp-600 text-white rounded-bl-2xl font-black text-[10px] uppercase tracking-widest">{p.status}</div>
                       <h4 className="font-black text-xl text-gray-800 dark:text-white mb-1">{p.name}</h4>
                       <p className="text-xs text-gray-500 mb-4 font-bold uppercase">{varieties.find(v => v.id === p.varietyId)?.name} • {p.type}</p>
@@ -216,7 +216,7 @@ export default function Plots() {
                           <div className="flex items-center text-xs text-gray-500"><Calendar size={14} className="mr-2 text-hemp-500"/> Siembra: {p.sowingDate}</div>
                       </div>
 
-                      <div className="flex justify-between items-center pt-4 border-t dark:border-dark-border">
+                      <div className="flex justify-between items-center pt-4 border-t dark:border-slate-800">
                           <div className="flex space-x-2">
                              <button onClick={() => setQrPlot(p)} className="p-2 bg-gray-100 dark:bg-slate-800 rounded-lg text-gray-500 hover:text-blue-600 transition"><QrCode size={16}/></button>
                              {isAdmin && <button onClick={() => setEditingPlot(p)} className="p-2 bg-gray-100 dark:bg-slate-800 rounded-lg text-gray-500 hover:text-hemp-600 transition"><Edit2 size={16}/></button>}
@@ -228,29 +228,61 @@ export default function Plots() {
           </div>
       )}
 
+      {/* QR MODAL (NUEVO) */}
+      {qrPlot && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+              <div className="bg-white dark:bg-slate-900 rounded-[40px] shadow-2xl max-w-sm w-full p-10 text-center animate-in zoom-in-95 relative overflow-hidden">
+                  <button onClick={() => setQrPlot(null)} className="absolute top-6 right-6 p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition dark:text-white"><X size={24}/></button>
+                  
+                  <div className="mb-8">
+                    <div className="bg-hemp-50 dark:bg-hemp-900/20 p-4 rounded-3xl inline-block mb-4">
+                        <QrCode size={40} className="text-hemp-600"/>
+                    </div>
+                    <h2 className="text-2xl font-black text-slate-800 dark:text-white uppercase tracking-tighter">Etiqueta de Campo</h2>
+                    <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Identificador: {qrPlot.name}</p>
+                  </div>
+
+                  <div className="bg-white p-6 rounded-[32px] shadow-inner border border-slate-100 mb-8 inline-block mx-auto">
+                      <img 
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(window.location.origin + '/#/plots/' + qrPlot.id)}`} 
+                        alt="QR Code" 
+                        className="w-48 h-48"
+                      />
+                  </div>
+
+                  <div className="space-y-4">
+                    <button onClick={() => window.print()} className="w-full bg-slate-900 dark:bg-hemp-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl flex items-center justify-center hover:scale-[1.02] transition-all">
+                        <Printer size={18} className="mr-2"/> Imprimir Etiqueta
+                    </button>
+                    <p className="text-[10px] text-slate-400 font-medium px-6 leading-relaxed">Escanee este código para acceder directamente a la bitácora técnica desde cualquier dispositivo móvil.</p>
+                  </div>
+              </div>
+          </div>
+      )}
+
       {/* EDIT MODAL */}
       {editingPlot && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-dark-card rounded-3xl shadow-2xl max-w-xl w-full p-8 animate-in zoom-in-95 duration-200">
-                <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-2xl font-black text-gray-800 dark:text-white">Editar Unidad Prod.</h2>
-                    <button onClick={() => setEditingPlot(null)} className="p-1 hover:bg-gray-100 dark:hover:bg-dark-border rounded-full transition dark:text-gray-400"><X size={24}/></button>
+            <div className="bg-white dark:bg-slate-900 rounded-[40px] shadow-2xl max-w-xl w-full p-10 animate-in zoom-in-95 duration-200">
+                <div className="flex justify-between items-center mb-8">
+                    <h2 className="text-3xl font-black text-gray-800 dark:text-white uppercase tracking-tighter">Editar Unidad</h2>
+                    <button onClick={() => setEditingPlot(null)} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition dark:text-gray-400"><X size={24}/></button>
                 </div>
-                <form onSubmit={handleUpdatePlot} className="space-y-5">
+                <form onSubmit={handleUpdatePlot} className="space-y-6">
                     <div>
-                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Identificador *</label>
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2 ml-1">Identificador Único *</label>
                         <input required className={inputClass} value={editingPlot.name} onChange={e => setEditingPlot({...editingPlot, name: e.target.value})} />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Tipo de Unidad</label>
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2 ml-1">Tipo de Unidad</label>
                             <select className={inputClass} value={editingPlot.type} onChange={e => setEditingPlot({...editingPlot, type: e.target.value as any})}>
                                 <option value="Ensayo">Ensayo (I+D)</option>
                                 <option value="Producción">Producción (Escala)</option>
                             </select>
                         </div>
                         <div>
-                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Estado</label>
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2 ml-1">Estatus Actual</label>
                             <select className={inputClass} value={editingPlot.status} onChange={e => setEditingPlot({...editingPlot, status: e.target.value as any})}>
                                 <option value="Activa">Activa</option>
                                 <option value="Cosechada">Cosechada</option>
@@ -259,12 +291,12 @@ export default function Plots() {
                         </div>
                     </div>
                     <div>
-                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Fecha de Siembra</label>
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2 ml-1">Fecha de Siembra</label>
                         <input type="date" className={inputClass} value={editingPlot.sowingDate} onChange={e => setEditingPlot({...editingPlot, sowingDate: e.target.value})} />
                     </div>
-                    <div className="flex justify-end gap-3 pt-6 border-t dark:border-dark-border">
-                        <button type="button" onClick={() => setEditingPlot(null)} className="px-6 py-2.5 text-gray-500 font-bold">Cancelar</button>
-                        <button type="submit" className="px-10 py-2.5 bg-hemp-600 text-white rounded-xl font-black shadow-lg hover:bg-hemp-700 transition">Guardar</button>
+                    <div className="flex justify-end gap-3 pt-8 border-t dark:border-slate-800 mt-4">
+                        <button type="button" onClick={() => setEditingPlot(null)} className="px-8 py-3 text-gray-500 font-black uppercase text-[10px] tracking-widest">Cancelar</button>
+                        <button type="submit" className="px-10 py-3 bg-hemp-600 text-white rounded-2xl font-black shadow-lg hover:bg-hemp-700 transition uppercase text-[10px] tracking-widest">Guardar Cambios</button>
                     </div>
                 </form>
             </div>

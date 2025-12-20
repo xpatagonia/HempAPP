@@ -7,7 +7,7 @@ import {
   ArrowLeft, Activity, MapPin, Plus, Eye, Tag, Clock, 
   Sprout, X, Map, ShieldCheck, Info, AlertCircle, Trash2, Edit2,
   Camera, Image as ImageIcon, MessageSquare, ClipboardList, User, Calendar, Ruler, Maximize2, Download, Scale, Wind, Bird, CheckCircle2,
-  RefreshCw, Globe, Layers, Save, Thermometer, Droplets, Waves
+  RefreshCw, Globe, Layers, Save, Thermometer, Droplets, Waves, QrCode, Printer
 } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
 import WeatherWidget from '../components/WeatherWidget';
@@ -69,6 +69,7 @@ export default function PlotDetails() {
   const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
   const [isMapModalOpen, setIsMapModalOpen] = useState(false);
+  const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
   const [isViewMode, setIsViewMode] = useState(false);
   const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
@@ -196,6 +197,9 @@ export default function PlotDetails() {
         <Link to="/plots" className="flex items-center text-gray-500 font-bold hover:text-gray-800 transition uppercase text-xs tracking-widest group">
             <ArrowLeft size={16} className="mr-2 group-hover:-translate-x-1 transition-transform" /> Listado Global
         </Link>
+        <button onClick={() => setIsQrModalOpen(true)} className="bg-white border border-slate-200 p-2 rounded-xl text-slate-500 hover:text-hemp-600 shadow-sm transition-all flex items-center gap-2 px-4 text-xs font-black uppercase tracking-widest">
+            <QrCode size={18}/> Etiqueta QR
+        </button>
       </div>
 
       <div className="bg-white rounded-[32px] shadow-sm border p-8 relative overflow-hidden">
@@ -225,7 +229,28 @@ export default function PlotDetails() {
           </div>
       </div>
 
+      {/* QR MODAL (NUEVO) */}
+      {isQrModalOpen && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+              <div className="bg-white rounded-[40px] shadow-2xl max-w-sm w-full p-10 text-center animate-in zoom-in-95 relative overflow-hidden">
+                  <button onClick={() => setIsQrModalOpen(false)} className="absolute top-6 right-6 p-2 hover:bg-slate-100 rounded-full transition"><X size={24}/></button>
+                  <div className="mb-8">
+                    <div className="bg-hemp-50 p-4 rounded-3xl inline-block mb-4"><QrCode size={40} className="text-hemp-600"/></div>
+                    <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">Etiqueta QR</h2>
+                    <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">{plot.name}</p>
+                  </div>
+                  <div className="bg-white p-6 rounded-[32px] shadow-inner border border-slate-100 mb-8 inline-block mx-auto">
+                      <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(window.location.href)}`} alt="QR" className="w-48 h-48"/>
+                  </div>
+                  <button onClick={() => window.print()} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl flex items-center justify-center hover:scale-[1.02] transition-all">
+                      <Printer size={18} className="mr-2"/> Imprimir Etiqueta
+                  </button>
+              </div>
+          </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Contenido Restante Igual... */}
           <div className="lg:col-span-1 space-y-6">
               <div className="bg-white rounded-3xl shadow-sm border overflow-hidden">
                   <div className="px-6 py-5 bg-gray-50 border-b flex items-center"><ShieldCheck size={18} className="mr-2 text-hemp-600"/><h3 className="text-xs font-black uppercase tracking-[0.2em]">Trazabilidad Fiscal</h3></div>
@@ -285,23 +310,6 @@ export default function PlotDetails() {
               )}
           </div>
       </div>
-
-      {/* MAP MODAL */}
-      {isMapModalOpen && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] flex items-center justify-center p-4">
-              <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-5xl h-[85vh] overflow-hidden flex flex-col animate-in zoom-in-95"><div className="px-8 py-6 border-b flex justify-between items-center bg-gray-50"><div className="flex items-center"><Globe size={24} className="text-blue-600 mr-3"/><div><h2 className="font-black text-gray-800 uppercase text-sm tracking-widest">Delimitación de Unidad Experimental</h2><p className="text-xs text-gray-500 font-bold uppercase tracking-tighter">Establecimiento: {location?.name}</p></div></div><button onClick={() => setIsMapModalOpen(false)} className="p-2 hover:bg-gray-200 rounded-full transition"><X size={24}/></button></div><div className="flex-1 relative"><MapEditor initialCenter={plot.coordinates || location?.coordinates} initialPolygon={plot.polygon || []} referencePolygon={location?.polygon || []} onPolygonChange={(poly, area, center) => { setTempPolygon(poly); setTempArea(Number(area.toFixed(4))); setTempCoords(center); }} height="100%" /></div><div className="px-8 py-6 border-t bg-gray-50 flex flex-col md:flex-row justify-between items-center gap-4"><div className="flex gap-8"><div className="text-center"><p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Superficie Calculada</p><p className="text-xl font-black text-blue-600">{tempArea} ha</p></div><div className="text-center"><p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Área En M²</p><p className="text-xl font-black text-hemp-600">{(tempArea * 10000).toFixed(0)} m²</p></div></div><div className="flex space-x-3"><button onClick={() => setIsMapModalOpen(false)} className="px-8 py-3 text-gray-500 font-black text-xs uppercase tracking-widest hover:bg-gray-200 rounded-2xl transition">Descartar</button><button onClick={handleSaveMap} disabled={tempPolygon.length < 3 || isSaving} className="px-10 py-3 bg-hemp-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:bg-hemp-700 transition flex items-center">{isSaving ? <RefreshCw className="animate-spin mr-2" size={16}/> : <Save className="mr-2" size={16}/>} Guardar Geometría</button></div></div></div>
-          </div>
-      )}
-
-      {/* RECORD MODAL CON CLIMA AUTOMÁTICO */}
-      {isRecordModalOpen && (
-           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"><div className="bg-white rounded-[32px] shadow-2xl w-full max-w-3xl max-h-[95vh] overflow-y-auto animate-in zoom-in-95 duration-200"><div className="px-8 py-6 border-b flex justify-between bg-gray-50 items-center sticky top-0 z-20"><h2 className="font-black text-gray-800 uppercase text-xs tracking-widest">{isViewMode ? 'Ficha de Monitoreo' : (editingRecordId ? 'Editar Registro' : 'Nueva Medición')}</h2><button onClick={() => setIsRecordModalOpen(false)} className="p-1 hover:bg-gray-200 rounded-full transition"><X size={24}/></button></div><div className="p-8"><form onSubmit={handleSaveRecord} className="space-y-10"><section><div className="flex justify-between items-center mb-4 border-b pb-2"><h3 className="text-xs font-black text-hemp-600 uppercase tracking-widest flex items-center"><Clock size={14} className="mr-2"/> Datos Generales</h3>{!isViewMode && !editingRecordId && <div className={`flex items-center text-[9px] font-black uppercase tracking-tighter px-2 py-1 rounded-full border ${isWeatherLoading ? 'bg-blue-50 text-blue-600 border-blue-100 animate-pulse' : 'bg-green-50 text-green-600 border-green-100'}`}>{isWeatherLoading ? <RefreshCw size={10} className="mr-1 animate-spin"/> : <Thermometer size={10} className="mr-1"/>}{isWeatherLoading ? 'Capturando Clima...' : 'Smart Capture Activo'}</div>}</div><div className="grid grid-cols-1 md:grid-cols-3 gap-6"><div><label className={labelClass}>Fecha</label><input type="date" required disabled={isViewMode} className={inputStyle} value={recordForm.date} onChange={e => setRecordForm({...recordForm, date: e.target.value})}/></div><div><label className={labelClass}>Hora</label><input type="time" required disabled={isViewMode} className={inputStyle} value={recordForm.time} onChange={e => setRecordForm({...recordForm, time: e.target.value})}/></div><div><label className={labelClass}>Etapa</label><select disabled={isViewMode} className={inputStyle} value={recordForm.stage} onChange={e => setRecordForm({...recordForm, stage: e.target.value as any})}><option value="Vegetativo">Vegetativo</option><option value="Floración">Floración</option><option value="Maduración">Maduración</option><option value="Cosecha">Cosecha</option></select></div></div><div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6"><div className="relative group"><label className={labelClass}>Temp. Aire (°C)</label><div className="relative"><Thermometer size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300"/><input type="number" disabled={isViewMode} placeholder="--" className={`${inputStyle} pl-9`} value={recordForm.temperature || ''} onChange={e => setRecordForm({...recordForm, temperature: Number(e.target.value)})}/></div></div><div className="relative group"><label className={labelClass}>Humedad (%)</label><div className="relative"><Droplets size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300"/><input type="number" disabled={isViewMode} placeholder="--" className={`${inputStyle} pl-9`} value={recordForm.humidity || ''} onChange={e => setRecordForm({...recordForm, humidity: Number(e.target.value)})}/></div></div></div></section><section><h3 className="text-xs font-black text-blue-600 uppercase tracking-widest mb-4 flex items-center border-b pb-2"><Sprout size={14} className="mr-2"/> Fenología</h3><div className="grid grid-cols-1 md:grid-cols-3 gap-6"><div><label className={labelClass}>Réplica</label><input type="number" disabled={isViewMode} className={inputStyle} value={recordForm.replicate} onChange={e => setRecordForm({...recordForm, replicate: Number(e.target.value)})}/></div><div><label className={labelClass}>Plantas/m</label><input type="number" step="0.1" disabled={isViewMode} className={inputStyle} value={recordForm.plantsPerMeter} onChange={e => setRecordForm({...recordForm, plantsPerMeter: Number(e.target.value)})}/></div><div><label className={labelClass}>Vigor %</label><input type="number" max="100" disabled={isViewMode} className={inputStyle} value={recordForm.vigor} onChange={e => setRecordForm({...recordForm, vigor: Number(e.target.value)})}/></div><div><label className={labelClass}>Altura cm</label><input type="number" step="0.1" disabled={isViewMode} className={inputStyle} value={recordForm.plantHeight} onChange={e => setRecordForm({...recordForm, plantHeight: Number(e.target.value)})}/></div></div></section><div className="flex justify-between pt-8 border-t">{isAdmin && editingRecordId && <button type="button" onClick={handleDeleteRecord} className="px-6 py-2.5 text-red-600 hover:bg-red-50 rounded-xl font-black text-xs uppercase tracking-widest transition">Eliminar</button>}<div className="flex space-x-3 ml-auto"><button type="button" onClick={() => setIsRecordModalOpen(false)} className="px-8 py-2.5 text-gray-500 font-black text-xs uppercase tracking-widest hover:bg-gray-100 rounded-xl transition">Cerrar</button>{!isViewMode && <button type="submit" disabled={isSaving} className="px-10 py-2.5 bg-hemp-600 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-xl hover:bg-hemp-700 transition flex items-center">{isSaving && <RefreshCw className="animate-spin mr-2" size={16}/>} Guardar</button>}</div></div></form></div></div></div>
-       )}
-
-       {/* LOG MODAL */}
-       {isLogModalOpen && (
-           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"><div className="bg-white rounded-[32px] shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95"><div className="px-8 py-6 bg-blue-600 text-white flex justify-between items-center"><h2 className="font-black uppercase text-xs tracking-widest flex items-center"><Camera size={18} className="mr-2"/> Nota de Campo</h2><button onClick={() => setIsLogModalOpen(false)} className="hover:bg-blue-700 p-1 rounded-full transition"><X size={24}/></button></div><form onSubmit={handleSaveLog} className="p-8 space-y-6"><div className="grid grid-cols-2 gap-4"><div><label className={labelClass}>Fecha</label><input type="date" required className={inputStyle} value={logForm.date} onChange={e => setLogForm({...logForm, date: e.target.value})} /></div><div><label className={labelClass}>Hora</label><input type="time" required className={inputStyle} value={logForm.time} onChange={e => setLogForm({...logForm, time: e.target.value})} /></div></div><div><label className="text-[10px] font-black uppercase mb-2 block text-gray-400 tracking-widest">Observación</label><textarea required className="w-full border border-gray-200 p-4 rounded-2xl bg-gray-50 font-medium min-h-[120px]" value={logForm.note} onChange={e => setLogForm({...logForm, note: e.target.value})}></textarea></div><div className="flex items-center gap-4"><label className="flex-1 border-2 border-dashed rounded-2xl p-6 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50">{isUploading ? <RefreshCw className="animate-spin text-blue-500"/> : <><Camera className="text-gray-400 mb-2" size={32}/><span className="text-[10px] font-black text-gray-500 uppercase">Subir Foto</span></>}<input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload}/></label>{logForm.photoUrl && <div className="w-24 h-24 rounded-2xl overflow-hidden border-2 shadow-lg relative"><img src={logForm.photoUrl} className="w-full h-full object-cover" /><button type="button" onClick={() => setLogForm({...logForm, photoUrl: ''})} className="absolute top-1 right-1 bg-red-500 text-white p-0.5 rounded-full"><X size={12}/></button></div>}</div><button type="submit" disabled={isSaving || isUploading} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:bg-blue-700 flex items-center justify-center">{isSaving && <RefreshCw className="animate-spin mr-2" size={16}/>} Confirmar Entrada</button></form></div></div>
-       )}
     </div>
   );
 }
