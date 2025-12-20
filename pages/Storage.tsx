@@ -16,11 +16,10 @@ export default function Storage() {
   } = useAppContext();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [renderMap, setRenderMap] = useState(false); // Para asegurar que el mapa se monte tras el modal
+  const [renderMap, setRenderMap] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   
-  // Filtros
   const [searchTerm, setSearchTerm] = useState('');
   const [filterOwner, setFilterOwner] = useState<'all' | 'central' | 'client'>('all');
 
@@ -30,10 +29,9 @@ export default function Storage() {
     lat: '', lng: ''
   });
 
-  // Delay map rendering until modal is fully shown to avoid Leaflet gray tiles
   useEffect(() => {
     if (isModalOpen) {
-      const timer = setTimeout(() => setRenderMap(true), 300);
+      const timer = setTimeout(() => setRenderMap(true), 50);
       return () => clearTimeout(timer);
     } else {
       setRenderMap(false);
@@ -48,7 +46,6 @@ export default function Storage() {
       setFormData(prev => ({ ...prev, nodeCode: `${prefix}-${random}` }));
   };
 
-  // --- LOGIC ---
   const filteredPoints = useMemo(() => {
     return storagePoints.filter(sp => {
         const matchesSearch = sp.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -87,13 +84,19 @@ export default function Storage() {
             coordinates
         } as StoragePoint;
 
+        let success = false;
         if (editingId) {
-            await updateStoragePoint(payload);
+            success = await updateStoragePoint(payload);
         } else {
-            await addStoragePoint(payload);
+            success = await addStoragePoint(payload);
         }
-        setIsModalOpen(false);
-        resetForm();
+        
+        if(success) {
+            setIsModalOpen(false);
+            resetForm();
+        } else {
+            alert("Error al guardar. Verifique conexión a base de datos.");
+        }
     } catch (err) {
         alert("Fallo al guardar nodo logístico.");
     } finally {
@@ -129,7 +132,7 @@ export default function Storage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>
             <h1 className="text-2xl font-black text-gray-800 dark:text-white uppercase tracking-tight italic">Nodos <span className="text-hemp-600">Logísticos</span></h1>
-            <p className="text-sm text-gray-500">Centros de acopio, distribución y trazabilidad de materiales.</p>
+            <p className="text-sm text-gray-500">Centros de acopio y trazabilidad estandarizada.</p>
         </div>
         {isAdmin && (
           <button onClick={() => { resetForm(); setIsModalOpen(true); }} className="bg-hemp-600 text-white px-6 py-3 rounded-2xl flex items-center hover:bg-hemp-700 transition shadow-xl font-black text-xs uppercase tracking-widest">
@@ -138,13 +141,12 @@ export default function Storage() {
         )}
       </div>
 
-      {/* FILTERS */}
       <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl shadow-sm border dark:border-slate-800 flex flex-col md:flex-row gap-4 mb-8">
           <div className="relative flex-1">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18}/>
               <input 
                 type="text" 
-                placeholder="Buscar por código, nombre o ciudad..." 
+                placeholder="Buscar por código HNC, nombre o ciudad..." 
                 className="w-full pl-12 pr-4 py-3 bg-gray-50 dark:bg-slate-950 border-none rounded-xl text-sm outline-none focus:ring-2 focus:ring-hemp-500 transition-all font-medium"
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
@@ -166,7 +168,7 @@ export default function Storage() {
               return (
                   <div key={sp.id} className="bg-white dark:bg-slate-900 rounded-[32px] shadow-sm border border-gray-100 dark:border-slate-800 overflow-hidden relative group flex flex-col h-full hover:shadow-xl transition-all">
                       <div className="h-40 bg-gray-100 dark:bg-slate-800 relative">
-                          {sp.coordinates ? (
+                          {sp.coordinates && sp.coordinates.lat ? (
                               <iframe width="100%" height="100%" frameBorder="0" scrolling="no" src={`https://maps.google.com/maps?q=${sp.coordinates.lat},${sp.coordinates.lng}&z=14&output=embed`} className="absolute inset-0 opacity-80 group-hover:opacity-100 transition-opacity pointer-events-none"></iframe>
                           ) : (
                               <div className="flex items-center justify-center h-full text-gray-400 flex-col"><MapPin size={32} className="mb-2 opacity-30"/><span className="text-[10px] font-black uppercase tracking-widest">Sin GPS</span></div>
@@ -270,7 +272,7 @@ export default function Storage() {
                             </div>
                         </div>
 
-                        <div className="bg-blue-50/50 dark:bg-blue-900/10 p-6 rounded-[32px] border border-blue-100 dark:border-blue-900/30">
+                        <div className="bg-blue-50 dark:bg-blue-900/10 p-6 rounded-[32px] border border-blue-100 dark:border-blue-900/30">
                             <h3 className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-[0.2em] mb-4 flex items-center"><Building size={14} className="mr-2"/> Vínculo Organizacional</h3>
                             <div className="space-y-4">
                                 <select className={inputClass} value={formData.clientId || ''} onChange={e => setFormData({...formData, clientId: e.target.value})}>
@@ -290,29 +292,31 @@ export default function Storage() {
                         <div className="space-y-4 flex-1">
                             <input type="text" className={inputClass} value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} placeholder="Dirección Postal de Despacho" />
                             
-                            <div className="flex-1 min-h-[300px] rounded-2xl overflow-hidden border dark:border-slate-800 shadow-inner group/map relative bg-slate-100 dark:bg-slate-950">
+                            <div className="flex-1 min-h-[350px] rounded-2xl overflow-hidden border dark:border-slate-800 shadow-inner group/map relative bg-slate-100 dark:bg-slate-950">
                                 {renderMap ? (
-                                    <MapEditor 
-                                        initialCenter={formData.lat && formData.lng ? { lat: parseFloat(formData.lat.replace(',','.')), lng: parseFloat(formData.lng.replace(',','.')) } : undefined} 
-                                        initialPolygon={formData.lat && formData.lng ? [{ lat: parseFloat(formData.lat.replace(',','.')), lng: parseFloat(formData.lng.replace(',','.')) }] : []} 
-                                        onPolygonChange={(poly) => {
-                                            if (poly.length > 0) {
-                                                setFormData(prev => ({ ...prev, lat: poly[0].lat.toFixed(7), lng: poly[0].lng.toFixed(7) }));
-                                            }
-                                        }} 
-                                        height="100%" 
-                                    />
+                                    <div className="h-full w-full">
+                                        <MapEditor 
+                                            initialCenter={formData.lat && formData.lng ? { lat: parseFloat(formData.lat.replace(',','.')), lng: parseFloat(formData.lng.replace(',','.')) } : undefined} 
+                                            initialPolygon={formData.lat && formData.lng ? [{ lat: parseFloat(formData.lat.replace(',','.')), lng: parseFloat(formData.lng.replace(',','.')) }] : []} 
+                                            onPolygonChange={(poly) => {
+                                                if (poly.length > 0) {
+                                                    setFormData(prev => ({ ...prev, lat: poly[0].lat.toFixed(7), lng: poly[0].lng.toFixed(7) }));
+                                                }
+                                            }} 
+                                            height="100%" 
+                                        />
+                                    </div>
                                 ) : (
                                     <div className="h-full flex items-center justify-center text-slate-400 animate-pulse uppercase text-[10px] font-black tracking-widest flex-col gap-3">
                                         <RefreshCw className="animate-spin" size={32}/>
-                                        Inicializando Cartografía...
+                                        Sincronizando Cartografía...
                                     </div>
                                 )}
                             </div>
                             
                             <div className="grid grid-cols-2 gap-3 mt-4">
-                                <input type="text" className={`${inputClass} text-xs h-9 bg-white/50 dark:bg-slate-800/50`} value={formData.lat} onChange={e => setFormData({...formData, lat: e.target.value})} placeholder="Latitud (-34.0000)" />
-                                <input type="text" className={`${inputClass} text-xs h-9 bg-white/50 dark:bg-slate-800/50`} value={formData.lng} onChange={e => setFormData({...formData, lng: e.target.value})} placeholder="Longitud (-58.0000)" />
+                                <input type="text" className={`${inputClass} text-xs h-9 bg-white/50 dark:bg-slate-800/50`} value={formData.lat} onChange={e => setFormData({...formData, lat: e.target.value})} placeholder="Latitud" />
+                                <input type="text" className={`${inputClass} text-xs h-9 bg-white/50 dark:bg-slate-800/50`} value={formData.lng} onChange={e => setFormData({...formData, lng: e.target.value})} placeholder="Longitud" />
                             </div>
                         </div>
                     </div>

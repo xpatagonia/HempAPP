@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Polygon, Marker, useMapEvents, useMap } from 'react-leaflet';
-import { Trash2, MapPin, MousePointer, Ruler, Route, Layers } from 'lucide-react';
+import { Trash2, MapPin, MousePointer, Ruler, Route, Layers, Maximize } from 'lucide-react';
 import L from 'leaflet';
 
 // Fix Leaflet icons in React
@@ -19,13 +19,23 @@ L.Marker.prototype.options.icon = DefaultIcon;
 interface MapEditorProps {
     initialPolygon?: { lat: number, lng: number }[];
     initialCenter?: { lat: number, lng: number };
-    referencePolygon?: { lat: number, lng: number }[]; // Límite del campo padre
+    referencePolygon?: { lat: number, lng: number }[]; 
     onPolygonChange?: (polygon: { lat: number, lng: number }[], areaHa: number, center: { lat: number, lng: number }, perimeterM: number) => void;
     readOnly?: boolean;
     height?: string;
 }
 
-// Component to handle map clicks
+// FIX: Resizer component to handle modal transitions
+const MapResizer = () => {
+    const map = useMap();
+    useEffect(() => {
+        setTimeout(() => {
+            map.invalidateSize();
+        }, 400);
+    }, [map]);
+    return null;
+};
+
 const MapEvents = ({ onAddPoint }: { onAddPoint: (e: L.LeafletMouseEvent) => void }) => {
     useMapEvents({
         click: onAddPoint,
@@ -33,12 +43,11 @@ const MapEvents = ({ onAddPoint }: { onAddPoint: (e: L.LeafletMouseEvent) => voi
     return null;
 };
 
-// Component to center map dynamically
 const MapRecenter = ({ center }: { center: { lat: number, lng: number } }) => {
     const map = useMap();
     useEffect(() => {
         if (center && center.lat !== 0 && center.lng !== 0) {
-            map.flyTo(center, 18, { duration: 1.5 }); // Zoom más profundo para parcelas
+            map.flyTo(center, 15, { duration: 1.5 });
         }
     }, [center, map]);
     return null;
@@ -114,49 +123,40 @@ export default function MapEditor({ initialPolygon = [], initialCenter, referenc
         }
     };
 
-    const handleClear = () => {
-        setPolygon([]);
-        if (onPolygonChange) onPolygonChange([], 0, center, 0);
-    };
-
     return (
-        <div className="relative rounded-2xl overflow-hidden border border-gray-300 shadow-inner z-0" style={{ height }}>
+        <div className="relative rounded-2xl overflow-hidden border border-gray-300 dark:border-slate-800 shadow-inner z-0" style={{ height }}>
             {!readOnly && (
-                <div className="absolute top-2 right-2 z-[400] bg-white p-2 rounded-xl shadow-lg flex flex-col gap-2 border">
-                    <button onClick={handleClear} className="flex items-center text-[10px] text-red-600 font-black uppercase tracking-widest bg-red-50 p-2 rounded-lg hover:bg-red-100" type="button">
-                        <Trash2 size={12} className="mr-1"/> Borrar Polígono
+                <div className="absolute top-2 right-2 z-[400] bg-white dark:bg-slate-900 p-2 rounded-xl shadow-lg flex flex-col gap-2 border dark:border-slate-700">
+                    <button onClick={() => setPolygon([])} className="flex items-center text-[10px] text-red-600 font-black uppercase tracking-widest bg-red-50 dark:bg-red-900/20 p-2 rounded-lg hover:bg-red-100" type="button">
+                        <Trash2 size={12} className="mr-1"/> Borrar
                     </button>
-                    <div className="text-[10px] font-black text-gray-500 bg-gray-50 p-2 rounded-lg border border-gray-200 space-y-1">
-                        <div className="flex items-center uppercase tracking-tighter"><Ruler size={10} className="mr-1 text-hemp-600"/> {calculateAreaHa(polygon).toFixed(4)} ha</div>
-                        <div className="flex items-center uppercase tracking-tighter"><Layers size={10} className="mr-1 text-blue-600"/> {(calculateAreaHa(polygon) * 10000).toFixed(0)} m²</div>
+                    <div className="text-[10px] font-black text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-slate-800 p-2 rounded-lg border dark:border-slate-700">
+                        <div className="flex items-center uppercase tracking-tighter"><Maximize size={10} className="mr-1 text-hemp-600"/> Lat: {center.lat.toFixed(4)}</div>
                     </div>
                 </div>
             )}
 
-            <MapContainer center={center} zoom={18} style={{ height: "100%", width: "100%" }}>
-                <TileLayer attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community' url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
-                <TileLayer url="https://stamen-tiles-{s}.a.ssl.fastly.net/toner-labels/{z}/{x}/{y}{r}.png" opacity={0.5} />
-
+            <MapContainer center={center} zoom={15} style={{ height: "100%", width: "100%" }}>
+                <MapResizer />
+                <TileLayer attribution='&copy; OpenStreetMap contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                 {!readOnly && <MapEvents onAddPoint={handleAddPoint} />}
                 <MapRecenter center={center} />
 
-                {/* Polígono de Referencia (Límite del Campo) */}
                 {referencePolygon.length > 2 && (
                     <Polygon positions={referencePolygon} pathOptions={{ color: '#ef4444', fillColor: 'transparent', weight: 2, dashArray: '5, 10' }} />
                 )}
 
-                {/* Polígono de la Parcela */}
                 {polygon.length > 0 && (
                     <Polygon positions={polygon} pathOptions={{ color: '#22c55e', fillColor: '#22c55e', fillOpacity: 0.5, weight: 3 }} />
                 )}
 
                 {!readOnly && polygon.map((pos, idx) => ( <Marker key={idx} position={pos} opacity={0.8} /> ))}
-                {readOnly && polygon.length === 0 && center.lat !== 0 && ( <Marker position={center} opacity={1.0} /> )}
+                {(readOnly || (polygon.length === 0)) && center.lat !== 0 && ( <Marker position={center} opacity={1.0} /> )}
             </MapContainer>
             
             {!readOnly && polygon.length === 0 && (
-                <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-[400] bg-black/70 text-white px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest pointer-events-none flex items-center shadow-2xl border border-white/20">
-                    <MousePointer size={12} className="mr-2 animate-bounce"/> Haz clic para delimitar la parcela dentro del campo
+                <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-[400] bg-black/70 text-white px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest pointer-events-none flex items-center shadow-2xl border border-white/20 backdrop-blur-sm">
+                    <MousePointer size={12} className="mr-2 animate-pulse"/> Haz clic para marcar ubicación exacta
                 </div>
             )}
         </div>
