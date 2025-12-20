@@ -113,15 +113,15 @@ export default function Settings() {
                   <div className="bg-amber-900/20 border border-amber-500/30 p-4 rounded-2xl mb-6 flex items-start text-amber-200">
                       <AlertTriangle className="text-amber-500 mr-3 flex-shrink-0" size={20}/>
                       <div className="text-xs space-y-2 leading-relaxed">
-                        <p className="font-bold">⚠️ ADVERTENCIA: Este script ELIMINARÁ todos los datos para limpiar el caché de Supabase.</p>
-                        <p>Úsalo para solucionar el error <code className="bg-black/40 px-1 rounded">client_id</code> de forma definitiva.</p>
+                        <p className="font-bold">⚠️ ADVERTENCIA NUCLEAR: Este script ELIMINARÁ todas las tablas para corregir errores de estructura.</p>
+                        <p>Úsalo para asegurar que <code className="bg-black/40 px-1 rounded">client_id</code> e <code className="bg-black/40 px-1 rounded">is_network_member</code> existan correctamente.</p>
                       </div>
                   </div>
 
                   <div className="space-y-4">
                     <button onClick={() => {
                       const sql = `
--- 1. LIMPIEZA NUCLEAR
+-- 1. LIMPIEZA DE TABLAS
 DROP TABLE IF EXISTS public.tasks CASCADE;
 DROP TABLE IF EXISTS public.seed_movements CASCADE;
 DROP TABLE IF EXISTS public.seed_batches CASCADE;
@@ -138,7 +138,7 @@ DROP TABLE IF EXISTS public.resources CASCADE;
 DROP TABLE IF EXISTS public.storage_points CASCADE;
 DROP TABLE IF EXISTS public.projects CASCADE;
 
--- 2. RECREACIÓN DE ESTRUCTURA (CON COLUMNAS CORRECTAS)
+-- 2. RECREACIÓN CON ESTRUCTURA V11 (IDENTIFICADOR DE RED)
 CREATE TABLE public.users (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -148,7 +148,8 @@ CREATE TABLE public.users (
   job_title TEXT,
   phone TEXT,
   avatar TEXT,
-  client_id TEXT
+  client_id TEXT,
+  is_network_member BOOLEAN DEFAULT false
 );
 
 CREATE TABLE public.clients (
@@ -186,60 +187,56 @@ CREATE TABLE public.locations (
   responsible_ids TEXT[]
 );
 
-CREATE TABLE public.plots (
+CREATE TABLE public.varieties (
   id TEXT PRIMARY KEY,
-  location_id TEXT REFERENCES public.locations(id),
-  project_id TEXT,
-  variety_id TEXT,
-  seed_batch_id TEXT,
+  supplier_id TEXT,
   name TEXT NOT NULL,
-  type TEXT,
-  block TEXT,
-  replicate INTEGER,
-  surface_area NUMERIC,
-  surface_unit TEXT,
-  density NUMERIC,
-  status TEXT,
-  sowing_date TEXT,
-  owner_name TEXT,
-  responsible_ids TEXT[],
-  row_distance NUMERIC,
-  perimeter NUMERIC,
-  observations TEXT,
-  coordinates JSONB,
-  polygon JSONB,
-  irrigation_type TEXT
+  usage TEXT,
+  cycle_days INTEGER,
+  expected_thc NUMERIC,
+  notes TEXT
 );
 
--- 3. SEGURIDAD Y ACCESO
+CREATE TABLE public.suppliers (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  legal_name TEXT,
+  cuit TEXT,
+  country TEXT,
+  province TEXT,
+  city TEXT,
+  address TEXT,
+  commercial_contact TEXT,
+  logistics_contact TEXT,
+  website TEXT,
+  notes TEXT
+);
+
+-- 3. PERMISOS TOTALES (DESARROLLO)
 ALTER TABLE public.users DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.clients DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.locations DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.plots DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.varieties DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.suppliers DISABLE ROW LEVEL SECURITY;
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;
 
--- 4. !!! COMANDO CLAVE: PURGAR CACHÉ DE ESQUEMA !!!
--- Esto obliga a Supabase a reconocer la nueva estructura al instante.
+-- 4. FORZAR RECARGA DE CACHÉ
 NOTIFY pgrst, 'reload schema';
                       `;
                       navigator.clipboard.writeText(sql.trim());
-                      alert("Script de Reconstrucción Copiado. Pégalo en el SQL Editor de Supabase y presiona RUN.");
+                      alert("Script Nuclear Copiado. Pégalo en el SQL Editor de Supabase y dale a RUN.");
                     }} className="w-full bg-red-600 hover:bg-red-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center transition-all shadow-xl">
                         <RotateCcw size={18} className="mr-2"/> Copiar Script de Reconstrucción Total
                     </button>
 
                     <button onClick={() => {
-                      const sql = `ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS client_id TEXT; NOTIFY pgrst, 'reload schema';`;
+                      const sql = `ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS is_network_member BOOLEAN DEFAULT false; ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS client_id TEXT; NOTIFY pgrst, 'reload schema';`;
                       navigator.clipboard.writeText(sql);
                       alert("Script de Reparación Rápida Copiado.");
                     }} className="w-full bg-slate-800 hover:bg-slate-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center transition-all border border-slate-700">
-                        <RefreshCw size={18} className="mr-2"/> Reparación Rápida (Solo client_id + Cache)
+                        <RefreshCw size={18} className="mr-2"/> Reparación Rápida (Solo Columnas + Cache)
                     </button>
                   </div>
-
-                  <p className="mt-6 text-[10px] text-slate-500 text-center font-bold uppercase tracking-tighter">
-                    Tras ejecutar el script, la aplicación se sincronizará automáticamente con la nueva estructura.
-                  </p>
               </div>
           </div>
       )}

@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { User, UserRole, RoleType, Client } from '../types';
-import { Plus, Trash2, Edit2, Shield, Wrench, Eye, AlertCircle, Lock, Key, Save, Loader2, Phone, Briefcase, User as UserIcon, CloudOff, Link as LinkIcon, UserCheck, Building, X, Sparkles, PlusCircle } from 'lucide-react';
+import { Plus, Trash2, Edit2, Shield, Wrench, Eye, AlertCircle, Lock, Key, Save, Loader2, Phone, Briefcase, User as UserIcon, CloudOff, Link as LinkIcon, UserCheck, Building, X, Sparkles, PlusCircle, Star } from 'lucide-react';
 
 const PRESET_AVATARS = [
     "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix",
@@ -24,9 +24,10 @@ export default function Users() {
   // Estado para creación rápida de entidad
   const [showQuickClient, setShowQuickClient] = useState(false);
   const [quickClientName, setQuickClientName] = useState('');
+  const [quickClientIsRed, setQuickClientIsRed] = useState(false);
 
   const [formData, setFormData] = useState<Partial<User>>({
-    name: '', email: '', role: 'technician', password: '', jobTitle: '', phone: '', avatar: PRESET_AVATARS[0], clientId: ''
+    name: '', email: '', role: 'technician', password: '', jobTitle: '', phone: '', avatar: PRESET_AVATARS[0], clientId: '', isNetworkMember: false
   });
 
   const isSuperAdmin = currentUser?.role === 'super_admin';
@@ -53,7 +54,7 @@ export default function Users() {
           type: 'Empresa Privada',
           contactName: formData.name || 'Titular',
           email: formData.email || '',
-          isNetworkMember: true
+          isNetworkMember: quickClientIsRed
       };
       
       setIsSaving(true);
@@ -61,9 +62,11 @@ export default function Users() {
       setIsSaving(false);
       
       if (success) {
-          setFormData(prev => ({ ...prev, clientId: newClientId }));
+          setFormData(prev => ({ ...prev, clientId: newClientId, isNetworkMember: quickClientIsRed }));
           setShowQuickClient(false);
           setQuickClientName('');
+          setQuickClientIsRed(false);
+          alert(`Entidad "${newClient.name}" creada y vinculada.`);
       }
   };
 
@@ -80,7 +83,8 @@ export default function Users() {
             jobTitle: formData.jobTitle || '',
             phone: formData.phone || '',
             avatar: formData.avatar || PRESET_AVATARS[0],
-            clientId: (formData.role === 'client' || formData.role === 'technician') ? formData.clientId : null
+            clientId: (formData.role === 'client' || formData.role === 'technician') ? formData.clientId : null,
+            isNetworkMember: formData.isNetworkMember || false
         };
 
         if (editingId) {
@@ -91,7 +95,7 @@ export default function Users() {
         } else {
             if (!formData.password) { alert("Asigne una clave."); setIsSaving(false); return; }
             const success = await addUser({ ...payload, id: Date.now().toString(), password: formData.password } as User);
-            if (!success) throw new Error("Error al crear usuario en la nube.");
+            if (!success) throw new Error("Error al crear usuario en la nube. Verifique el SQL Cloud.");
         }
         setIsModalOpen(false);
     } catch (err: any) {
@@ -106,9 +110,9 @@ export default function Users() {
       <div className="flex justify-between items-center mb-6">
         <div>
             <h1 className="text-2xl font-black text-gray-800 dark:text-white uppercase tracking-tight italic">Control de <span className="text-hemp-600">Acceso</span></h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Gestión de personal operativo y roles jerárquicos.</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Gestión de personal operativo y socios de la red.</p>
         </div>
-        <button onClick={() => { setEditingId(null); setFormData({ name: '', email: '', role: 'technician', password: '', avatar: PRESET_AVATARS[0], clientId: '' }); setIsModalOpen(true); }} className="bg-hemp-600 text-white px-6 py-3 rounded-[20px] flex items-center hover:bg-hemp-700 transition shadow-xl font-black text-xs uppercase tracking-widest">
+        <button onClick={() => { setEditingId(null); setFormData({ name: '', email: '', role: 'technician', password: '', avatar: PRESET_AVATARS[0], clientId: '', isNetworkMember: false }); setIsModalOpen(true); }} className="bg-hemp-600 text-white px-6 py-3 rounded-[20px] flex items-center hover:bg-hemp-700 transition shadow-xl font-black text-xs uppercase tracking-widest">
           <Plus size={18} className="mr-2" /> Nuevo Usuario
         </button>
       </div>
@@ -118,7 +122,7 @@ export default function Users() {
           <thead className="bg-gray-50 dark:bg-slate-950/50 text-gray-500 dark:text-slate-400 uppercase text-[10px] font-black tracking-widest border-b dark:border-slate-800">
             <tr>
               <th className="px-8 py-5">Perfil</th>
-              <th className="px-8 py-5">Rol del Sistema</th>
+              <th className="px-8 py-5">Identificación</th>
               <th className="px-8 py-5">Entidad Vinculada</th>
               <th className="px-8 py-5 text-right">Acciones</th>
             </tr>
@@ -130,7 +134,10 @@ export default function Users() {
                   <div className="flex items-center">
                     <img className="h-10 w-10 rounded-2xl border-2 border-white dark:border-slate-800 shadow-sm mr-4" src={user.avatar || PRESET_AVATARS[0]} alt="" />
                     <div>
-                      <div className="font-black text-gray-900 dark:text-white uppercase text-xs tracking-tight">{user.name}</div>
+                      <div className="font-black text-gray-900 dark:text-white uppercase text-xs tracking-tight flex items-center">
+                          {user.name}
+                          {user.isNetworkMember && <Star size={12} className="ml-1.5 text-amber-500 fill-amber-500" title="Socio de la Red"/>}
+                      </div>
                       <div className="text-[10px] text-gray-400 font-mono">{user.email}</div>
                     </div>
                   </div>
@@ -144,7 +151,7 @@ export default function Users() {
                   }`}>
                     {user.role === 'client' ? 'Productor' : user.role.replace('_', ' ')}
                   </span>
-                  <div className="text-[10px] text-gray-400 mt-1 uppercase font-bold tracking-tighter">{user.jobTitle || '-'}</div>
+                  {user.isNetworkMember && <div className="text-[9px] text-amber-600 font-black uppercase mt-1 tracking-tighter">Miembro de la Red</div>}
                 </td>
                 <td className="px-8 py-5">
                    {(user.role === 'client' || user.role === 'technician') && user.clientId ? (
@@ -176,7 +183,13 @@ export default function Users() {
 
             <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="bg-slate-50 dark:bg-slate-950 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 space-y-4">
-                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 flex items-center"><UserIcon size={14} className="mr-2"/> Identidad del Perfil</h3>
+                    <div className="flex justify-between items-center mb-2">
+                        <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center"><UserIcon size={14} className="mr-2"/> Identidad del Perfil</h3>
+                        <label className="flex items-center space-x-2 cursor-pointer bg-amber-50 dark:bg-amber-900/20 px-3 py-1.5 rounded-full border border-amber-100 dark:border-amber-800">
+                            <input type="checkbox" className="rounded text-amber-500 focus:ring-amber-400" checked={formData.isNetworkMember} onChange={e => setFormData({...formData, isNetworkMember: e.target.checked})} />
+                            <span className="text-[10px] font-black text-amber-700 dark:text-amber-400 uppercase tracking-tighter">Miembro de la Red</span>
+                        </label>
+                    </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 block mb-2">Nombre Completo *</label><input required className={inputClass} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} /></div>
                         <div><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 block mb-2">Especialidad</label><input className={inputClass} value={formData.jobTitle} onChange={e => setFormData({...formData, jobTitle: e.target.value})} placeholder="Ej: Ing. Agrónomo"/></div>
@@ -227,7 +240,7 @@ export default function Users() {
                         </div>
                         
                         {showQuickClient ? (
-                            <div className="space-y-2 animate-in fade-in">
+                            <div className="space-y-4 animate-in fade-in">
                                 <div className="flex gap-2">
                                     <input 
                                         autoFocus
@@ -235,7 +248,6 @@ export default function Users() {
                                         placeholder="Nombre de la nueva empresa..." 
                                         value={quickClientName}
                                         onChange={e => setQuickClientName(e.target.value)}
-                                        onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleQuickClientSubmit())}
                                     />
                                     <button 
                                         type="button" 
@@ -245,12 +257,20 @@ export default function Users() {
                                         <Sparkles size={18}/>
                                     </button>
                                 </div>
-                                <p className="text-[9px] text-blue-500 font-bold uppercase ml-1">Crea la entidad primero para vincular este usuario en un solo flujo.</p>
+                                <div className="flex items-center space-x-4">
+                                    <label className="flex items-center space-x-2 cursor-pointer">
+                                        <input type="checkbox" className="rounded text-hemp-600" checked={quickClientIsRed} onChange={e => setQuickClientIsRed(e.target.checked)} />
+                                        <span className="text-[10px] font-black text-slate-500 uppercase">¿Esta entidad pertenece a la RED?</span>
+                                    </label>
+                                </div>
                             </div>
                         ) : (
-                            <select required className={inputClass} value={formData.clientId || ''} onChange={e => setFormData({...formData, clientId: e.target.value})}>
+                            <select required className={inputClass} value={formData.clientId || ''} onChange={e => {
+                                const sel = clients.find(c => c.id === e.target.value);
+                                setFormData({...formData, clientId: e.target.value, isNetworkMember: sel ? sel.isNetworkMember : formData.isNetworkMember});
+                            }}>
                                 <option value="">Seleccionar entidad registrada...</option>
-                                {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                {clients.map(c => <option key={c.id} value={c.id}>{c.name} {c.isNetworkMember ? '(SOCIO RED)' : ''}</option>)}
                             </select>
                         )}
                     </div>

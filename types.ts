@@ -13,6 +13,7 @@ export interface User {
   phone?: string;
   avatar?: string;
   clientId?: string;
+  isNetworkMember: boolean; // Identificador de Red
 }
 
 export type RoleType = 

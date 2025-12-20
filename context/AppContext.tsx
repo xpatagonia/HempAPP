@@ -114,15 +114,16 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// Conversión Ultra-Estricta: Mapea nombres de JS a Snake Case (SQL)
+// Mapeo Estricto: JS CamelCase -> DB snake_case
 const toSnakeCase = (obj: any) => {
     if (!obj || typeof obj !== 'object') return obj;
     const newObj: any = {};
     for (const key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
             let snakeKey = key;
-            // Mapeos Manuales para asegurar compatibilidad con Schema de Supabase
+            // Mapeos Explícitos Críticos
             if (key === 'clientId') snakeKey = 'client_id';
+            else if (key === 'isNetworkMember') snakeKey = 'is_network_member';
             else if (key === 'relatedUserId') snakeKey = 'related_user_id';
             else if (key === 'projectId') snakeKey = 'project_id';
             else if (key === 'varietyId') snakeKey = 'variety_id';
@@ -130,7 +131,6 @@ const toSnakeCase = (obj: any) => {
             else if (key === 'seedBatchId') snakeKey = 'seed_batch_id';
             else if (key === 'jobTitle') snakeKey = 'job_title';
             else {
-                // Caso general camelCase a snake_case
                 snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
             }
             newObj[snakeKey] = obj[key];
@@ -139,12 +139,18 @@ const toSnakeCase = (obj: any) => {
     return newObj;
 };
 
+// Mapeo Estricto: DB snake_case -> JS CamelCase
 const toCamelCase = (obj: any) => {
     if (!obj || typeof obj !== 'object') return obj;
     const newObj: any = {};
     for (const key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
-            const camelKey = key.replace(/(_\w)/g, m => m[1].toUpperCase());
+            let camelKey = key;
+            if (key === 'client_id') camelKey = 'clientId';
+            else if (key === 'is_network_member') camelKey = 'isNetworkMember';
+            else {
+                camelKey = key.replace(/(_\w)/g, m => m[1].toUpperCase());
+            }
             newObj[camelKey] = obj[key];
         }
     }
@@ -222,7 +228,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                       setter(camelData);
                       saveToLocal(localKey, camelData);
                   } else if (error) {
-                      console.error(`[LOAD ERROR] ${table}:`, error.message);
+                      console.error(`[CLOUD LOAD ERROR] ${table}:`, error.message);
                       setter(getFromLocal(localKey));
                       if (error.message.includes('column') || error.message.includes('cache')) setIsEmergencyMode(true);
                   }
@@ -264,26 +270,37 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const genericAdd = async (table: string, item: any, setter: any, localKey: string) => {
       const dbItem = toSnakeCase({ ...item });
+      console.log(`[SUPABASE PUSH] ${table}:`, dbItem);
+      
       try {
           const { error } = await supabase.from(table).insert([dbItem]);
           if (error) {
-              console.error(`[DB ERROR] ${table}:`, error.message);
+              console.error(`[DATABASE PERSISTENCE ERROR] ${table}:`, error.message);
+              // Fallback Local
               setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
-              if (error.message.includes('column') || error.message.includes('cache')) setIsEmergencyMode(true);
-              return true; 
+              
+              if (error.message.includes('column') || error.message.includes('cache')) {
+                  setIsEmergencyMode(true);
+                  alert(`⚠️ Error de Servidor: La columna '${error.message.split("'")[1]}' no existe o el caché de Supabase está desactualizado.\n\nVaya a Admin Server > SQL Cloud y ejecute el script de reconstrucción.`);
+              }
+              return false; // Retornamos falso para indicar fallo en la nube
           }
+          // Si todo bien, actualizamos el estado local con el item original (camelCase)
           setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
           return true;
       } catch (e: any) {
           setter((prev: any[]) => { const n = [...prev, item]; saveToLocal(localKey, n); return n; });
-          return true;
+          return false;
       }
   };
 
   const genericUpdate = async (table: string, item: any, setter: any, localKey: string) => {
       const dbItem = toSnakeCase(item);
       const { error } = await supabase.from(table).update(dbItem).eq('id', item.id);
-      if (error) { console.error(`Error actualizando ${table}:`, error.message); return false; }
+      if (error) {
+          console.error(`Error actualizando ${table}:`, error.message);
+          return false;
+      }
       setter((prev: any[]) => { const n = prev.map((i: any) => i.id === item.id ? item : i); saveToLocal(localKey, n); return n; });
       return true;
   };
@@ -294,9 +311,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const addUser = async (u: User) => {
-    const success = await genericAdd('users', u, setUsersList, 'users');
-    if (success) await refreshData(); 
-    return success;
+      const success = await genericAdd('users', u, setUsersList, 'users');
+      if (success) await refreshData();
+      return success;
   };
   const updateUser = (u: User) => genericUpdate('users', u, setUsersList, 'users');
   const deleteUser = (id: string) => genericDelete('users', id, setUsersList, 'users');
@@ -315,9 +332,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const addSupplier = async (s: Supplier) => { await genericAdd('suppliers', s, setSuppliers, 'suppliers'); return s.id; };
   const updateSupplier = (s: Supplier) => genericUpdate('suppliers', s, setSuppliers, 'suppliers');
   const deleteSupplier = (id: string) => { genericDelete('suppliers', id, setSuppliers, 'suppliers'); };
-  const addClient = async (c: Client) => genericAdd('clients', c, setClients, 'clients');
+  
+  const addClient = async (c: Client) => {
+      const success = await genericAdd('clients', c, setClients, 'clients');
+      if (success) await refreshData();
+      return success;
+  };
   const updateClient = (c: Client) => genericUpdate('clients', c, setClients, 'clients');
   const deleteClient = (id: string) => genericDelete('clients', id, setClients, 'clients');
+  
   const addResource = (r: Resource) => genericAdd('resources', r, setResources, 'resources');
   const updateResource = (r: Resource) => genericUpdate('resources', r, setResources, 'resources');
   const deleteResource = (id: string) => genericDelete('resources', id, setResources, 'resources');
