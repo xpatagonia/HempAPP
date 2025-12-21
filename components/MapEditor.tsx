@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Polygon, Marker, useMapEvents, useMap } from 'react-leaflet';
 import { Trash2, MapPin, MousePointer, Maximize } from 'lucide-react';
@@ -22,31 +23,31 @@ interface MapEditorProps {
     onPolygonChange?: (polygon: { lat: number, lng: number }[], areaHa: number, center: { lat: number, lng: number }, perimeterM: number) => void;
     readOnly?: boolean;
     height?: string;
-    // Fix: Added key to interface to resolve TS error in pages/Storage.tsx line 301
     key?: string | number;
 }
 
-// FIX DE VISUALIZACIÓN: Componente que fuerza el redibujado cuando el modal termina su animación
+// FIX FINAL: Componente que reacciona a cualquier cambio de tamaño del contenedor del mapa
 const MapResizer = () => {
     const map = useMap();
     useEffect(() => {
-        // Ejecutamos múltiples veces durante el primer segundo para atrapar el final de la animación del modal
-        const timers = [100, 300, 600, 1000].map(ms => 
-            setTimeout(() => {
-                map.invalidateSize();
-            }, ms)
-        );
-        
-        // ResizeObserver para cambios dinámicos del contenedor
+        if (!map) return;
+
+        const container = map.getContainer();
         const observer = new ResizeObserver(() => {
-            map.invalidateSize();
+            requestAnimationFrame(() => {
+                map.invalidateSize({ animate: false });
+            });
         });
+
+        observer.observe(container);
         
-        observer.observe(map.getContainer());
+        // Ejecución inmediata y retardada para mayor seguridad
+        map.invalidateSize();
+        const timer = setTimeout(() => map.invalidateSize(), 500);
 
         return () => {
-            timers.forEach(t => clearTimeout(t));
             observer.disconnect();
+            clearTimeout(timer);
         };
     }, [map]);
     return null;
@@ -76,7 +77,7 @@ export default function MapEditor({ initialPolygon = [], initialCenter, referenc
         if (initialCenter && initialCenter.lat !== 0) return initialCenter;
         if (initialPolygon && initialPolygon.length > 0) return initialPolygon[0];
         if (referencePolygon && referencePolygon.length > 0) return referencePolygon[0];
-        return { lat: -34.6037, lng: -58.3816 }; // Buenos Aires default
+        return { lat: -34.6037, lng: -58.3816 };
     });
 
     useEffect(() => {
