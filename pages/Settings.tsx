@@ -29,7 +29,7 @@ export default function Settings() {
 
   const [tests, setTests] = useState<UnitTest[]>([
       { id: 'conn', name: 'Conexión Supabase', description: 'Verifica alcance de URL y Key.', status: 'idle' },
-      { id: 'tables', name: 'Esquema de Tablas', description: 'Valida existencia de todas las entidades V24.', status: 'idle' },
+      { id: 'tables', name: 'Esquema de Tablas', description: 'Valida existencia de todas las entidades V25.', status: 'idle' },
       { id: 'geo', name: 'Protocolo JSONB GPS', description: 'Verifica compatibilidad de georreferencia.', status: 'idle' },
       { id: 'auth', name: 'Vínculo Organizacional', description: 'Valida FK de equipos de trabajo.', status: 'idle' }
   ]);
@@ -68,7 +68,7 @@ export default function Settings() {
           if (error) throw error;
           updateTest('tables', { status: 'pass' });
       } catch (e: any) {
-          updateTest('tables', { status: 'fail', error: 'Faltan columnas de la V24: ' + e.message });
+          updateTest('tables', { status: 'fail', error: 'Faltan columnas de la V25: ' + e.message });
       }
 
       updateTest('geo', { status: 'running' });
@@ -118,7 +118,7 @@ export default function Settings() {
           <button onClick={() => setActiveTab('branding')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'branding' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Identidad</button>
           <button onClick={() => setActiveTab('connections')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'connections' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Conectividad</button>
           <button onClick={() => setActiveTab('audit')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'audit' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Protocolo & Pruebas</button>
-          <button onClick={() => setActiveTab('database')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'database' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>SQL Nucleus V24 (Seguro)</button>
+          <button onClick={() => setActiveTab('database')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'database' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>SQL Nucleus V25</button>
       </div>
 
       {activeTab === 'branding' && (
@@ -164,9 +164,9 @@ export default function Settings() {
                   <div className="flex justify-between items-center mb-8">
                       <div>
                           <h3 className="text-xl font-black text-slate-800 dark:text-white flex items-center">
-                              <FlaskConical className="mr-2 text-blue-600" size={20} /> Suite Nuclear V24
+                              <FlaskConical className="mr-2 text-blue-600" size={20} /> Suite Nuclear V25
                           </h3>
-                          <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">Sincronización segura sin pérdida de datos</p>
+                          <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">Auditoría proactiva de integridad de datos</p>
                       </div>
                       <button onClick={runTests} className="bg-slate-900 dark:bg-blue-600 text-white px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:scale-105 transition-all">Ejecutar Suite</button>
                   </div>
@@ -197,52 +197,33 @@ export default function Settings() {
               <div className="bg-slate-900 border border-slate-800 p-8 rounded-[40px] shadow-2xl relative overflow-hidden">
                   <div className="flex items-center space-x-3 mb-6">
                       <Shield className="text-hemp-500" size={24}/>
-                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Protocolo Nuclear V24: Modo Producción</h3>
+                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Nucleus SQL V25: Sincronización Total</h3>
                   </div>
-                  <div className="bg-emerald-900/20 border border-emerald-500/30 p-4 rounded-2xl mb-6 flex items-start text-emerald-200">
-                      <CheckCircle className="text-emerald-500 mr-3 flex-shrink-0" size={20}/>
+                  <div className="bg-amber-900/20 border border-amber-500/30 p-4 rounded-2xl mb-6 flex items-start text-amber-200">
+                      <AlertTriangle className="text-amber-500 mr-3 flex-shrink-0" size={20}/>
                       <div className="text-xs space-y-2 leading-relaxed">
-                        <p className="font-bold uppercase tracking-tight">Sincronización Aditiva (No borra datos)</p>
-                        <p>Este script crea tablas si no existen y agrega columnas faltantes a tus datos actuales. **Tus administradores y socios se mantendrán intactos.**</p>
+                        <p className="font-bold uppercase tracking-tight">Script Aditivo (Seguro)</p>
+                        <p>Este script agrega campos de dirección y superficie sin borrar registros existentes. Ejecútalo en el SQL Editor de Supabase.</p>
                       </div>
                   </div>
 
                   <div className="space-y-4">
                     <button onClick={() => {
                       const sql = `
--- PROTOCOLO V24: ACTUALIZACIÓN SEGURA (CONSERVA DATOS)
+-- PROTOCOLO V25: TRAZABILIDAD SIN PÉRDIDA DE DATOS
 
--- 1. CREACIÓN DE TABLAS (Solo si no existen)
-CREATE TABLE IF NOT EXISTS public.users (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  email TEXT UNIQUE NOT NULL,
-  role TEXT NOT NULL,
-  password TEXT,
-  job_title TEXT,
-  phone TEXT,
-  avatar TEXT,
-  client_id TEXT,
-  is_network_member BOOLEAN DEFAULT false
-);
+-- 1. CREACIÓN DE TABLAS SI NO EXISTEN
+CREATE TABLE IF NOT EXISTS public.users (id TEXT PRIMARY KEY, name TEXT, email TEXT UNIQUE, role TEXT, password TEXT, job_title TEXT, phone TEXT, avatar TEXT, client_id TEXT, is_network_member BOOLEAN DEFAULT false);
+CREATE TABLE IF NOT EXISTS public.clients (id TEXT PRIMARY KEY, name TEXT, type TEXT, contact_name TEXT, contact_phone TEXT, email TEXT, is_network_member BOOLEAN DEFAULT true, membership_level TEXT DEFAULT 'Activo', contract_date TEXT, cuit TEXT, notes TEXT, related_user_id TEXT, coordinates JSONB);
+CREATE TABLE IF NOT EXISTS public.suppliers (id TEXT PRIMARY KEY, name TEXT, category TEXT, cuit TEXT, country TEXT, province TEXT, city TEXT, address TEXT, email TEXT, coordinates JSONB);
+CREATE TABLE IF NOT EXISTS public.storage_points (id TEXT PRIMARY KEY, node_code TEXT, name TEXT, type TEXT, address TEXT, city TEXT, province TEXT, coordinates JSONB, responsible_user_id TEXT, client_id TEXT, surface_m2 NUMERIC, conditions TEXT, notes TEXT);
+CREATE TABLE IF NOT EXISTS public.varieties (id TEXT PRIMARY KEY, supplier_id TEXT, name TEXT, usage TEXT, cycle_days INTEGER, expected_thc NUMERIC, knowledge_base TEXT, notes TEXT);
+CREATE TABLE IF NOT EXISTS public.seed_batches (id TEXT PRIMARY KEY, variety_id TEXT, supplier_id TEXT, batch_code TEXT, initial_quantity NUMERIC, remaining_quantity NUMERIC, storage_point_id TEXT, is_active BOOLEAN DEFAULT true, created_at TIMESTAMPTZ DEFAULT now());
+CREATE TABLE IF NOT EXISTS public.locations (id TEXT PRIMARY KEY, name TEXT, province TEXT, city TEXT, address TEXT, coordinates JSONB, polygon JSONB, client_id TEXT, capacity_ha NUMERIC);
+CREATE TABLE IF NOT EXISTS public.plots (id TEXT PRIMARY KEY, location_id TEXT, project_id TEXT, variety_id TEXT, seed_batch_id TEXT, name TEXT, type TEXT, status TEXT DEFAULT 'Activa', sowing_date TEXT);
+CREATE TABLE IF NOT EXISTS public.trial_records (id TEXT PRIMARY KEY, plot_id TEXT, date TEXT, time TEXT, stage TEXT, temperature NUMERIC, humidity NUMERIC, plant_height NUMERIC, yield NUMERIC, created_by TEXT, created_by_name TEXT);
 
-CREATE TABLE IF NOT EXISTS public.clients (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  type TEXT,
-  contact_name TEXT,
-  contact_phone TEXT,
-  email TEXT,
-  is_network_member BOOLEAN DEFAULT true,
-  membership_level TEXT DEFAULT 'Activo',
-  contract_date TEXT,
-  cuit TEXT,
-  notes TEXT,
-  related_user_id TEXT,
-  coordinates JSONB
-);
-
--- ACTUALIZACIÓN CLIENTES V24: Añadir columnas si no existen
+-- 2. PARCHE DE COLUMNAS V25 (Añade solo lo que falta)
 DO $$ 
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='clients' AND COLUMN_NAME='address') THEN
@@ -253,177 +234,7 @@ BEGIN
     END IF;
 END $$;
 
-CREATE TABLE IF NOT EXISTS public.suppliers (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  category TEXT,
-  legal_name TEXT,
-  cuit TEXT,
-  country TEXT,
-  province TEXT,
-  city TEXT,
-  address TEXT,
-  postal_code TEXT,
-  whatsapp TEXT,
-  email TEXT,
-  coordinates JSONB,
-  commercial_contact TEXT,
-  logistics_contact TEXT,
-  website TEXT,
-  notes TEXT,
-  is_official_partner BOOLEAN DEFAULT false
-);
-
-CREATE TABLE IF NOT EXISTS public.storage_points (
-  id TEXT PRIMARY KEY,
-  node_code TEXT, 
-  name TEXT NOT NULL,
-  type TEXT,
-  address TEXT,
-  city TEXT,
-  province TEXT,
-  coordinates JSONB,
-  responsible_user_id TEXT,
-  client_id TEXT,
-  surface_m2 NUMERIC,
-  conditions TEXT,
-  notes TEXT
-);
-
-CREATE TABLE IF NOT EXISTS public.varieties (
-  id TEXT PRIMARY KEY,
-  supplier_id TEXT REFERENCES public.suppliers(id),
-  name TEXT NOT NULL,
-  usage TEXT,
-  cycle_days INTEGER,
-  expected_thc NUMERIC,
-  knowledge_base TEXT,
-  notes TEXT
-);
-
-CREATE TABLE IF NOT EXISTS public.seed_batches (
-  id TEXT PRIMARY KEY,
-  variety_id TEXT REFERENCES public.varieties(id),
-  supplier_id TEXT REFERENCES public.suppliers(id),
-  batch_code TEXT NOT NULL,
-  label_serial_number TEXT,
-  category TEXT,
-  analysis_date TEXT,
-  purity NUMERIC,
-  germination NUMERIC,
-  gs1_code TEXT,
-  certification_number TEXT,
-  purchase_order TEXT,
-  purchase_date TEXT,
-  price_per_kg NUMERIC,
-  initial_quantity NUMERIC,
-  remaining_quantity NUMERIC,
-  storage_conditions TEXT,
-  storage_point_id TEXT REFERENCES public.storage_points(id),
-  logistics_responsible TEXT,
-  notes TEXT,
-  is_active BOOLEAN DEFAULT true,
-  created_at TIMESTAMPTZ DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS public.locations (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  province TEXT,
-  city TEXT,
-  address TEXT,
-  soil_type TEXT,
-  climate TEXT,
-  coordinates JSONB,
-  polygon JSONB,
-  client_id TEXT REFERENCES public.clients(id),
-  capacity_ha NUMERIC,
-  irrigation_system TEXT,
-  responsible_ids TEXT[]
-);
-
-CREATE TABLE IF NOT EXISTS public.plots (
-  id TEXT PRIMARY KEY,
-  location_id TEXT REFERENCES public.locations(id),
-  project_id TEXT,
-  variety_id TEXT REFERENCES public.varieties(id),
-  seed_batch_id TEXT REFERENCES public.seed_batches(id),
-  name TEXT NOT NULL,
-  type TEXT,
-  block TEXT,
-  replicate INTEGER,
-  surface_area NUMERIC,
-  surface_unit TEXT,
-  density NUMERIC,
-  status TEXT DEFAULT 'Activa',
-  sowing_date TEXT,
-  responsible_ids TEXT[],
-  coordinates JSONB,
-  polygon JSONB,
-  irrigation_type TEXT
-);
-
-CREATE TABLE IF NOT EXISTS public.trial_records (
-  id TEXT PRIMARY KEY,
-  plot_id TEXT REFERENCES public.plots(id),
-  date TEXT NOT NULL,
-  time TEXT,
-  stage TEXT,
-  temperature NUMERIC,
-  humidity NUMERIC,
-  plant_height NUMERIC,
-  yield NUMERIC,
-  created_by TEXT,
-  created_by_name TEXT
-);
-
-CREATE TABLE IF NOT EXISTS public.field_logs (
-  id TEXT PRIMARY KEY,
-  plot_id TEXT REFERENCES public.plots(id),
-  date TEXT NOT NULL,
-  time TEXT,
-  note TEXT,
-  photo_url TEXT
-);
-
-CREATE TABLE IF NOT EXISTS public.hydric_records (
-  id TEXT PRIMARY KEY,
-  location_id TEXT REFERENCES public.locations(id),
-  plot_id TEXT REFERENCES public.plots(id),
-  date TEXT NOT NULL,
-  time TEXT,
-  type TEXT,
-  amount_mm NUMERIC,
-  notes TEXT,
-  created_by TEXT
-);
-
-CREATE TABLE IF NOT EXISTS public.projects (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  description TEXT,
-  start_date TEXT,
-  status TEXT,
-  director_id TEXT,
-  responsible_ids TEXT[]
-);
-
-CREATE TABLE IF NOT EXISTS public.tasks (
-  id TEXT PRIMARY KEY,
-  title TEXT NOT NULL,
-  description TEXT,
-  status TEXT,
-  priority TEXT,
-  assigned_to_ids TEXT[],
-  due_date TEXT,
-  plot_id TEXT REFERENCES public.plots(id),
-  created_by TEXT,
-  resource_id TEXT,
-  resource_quantity NUMERIC,
-  resource_cost NUMERIC
-);
-
--- PERMISOS (Se aplican siempre para asegurar acceso)
+-- 3. PERMISOS
 ALTER TABLE public.users DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.clients DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.suppliers DISABLE ROW LEVEL SECURITY;
@@ -433,14 +244,9 @@ ALTER TABLE public.seed_batches DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.locations DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.plots DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.trial_records DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.field_logs DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.hydric_records DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.projects DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.tasks DISABLE ROW LEVEL SECURITY;
-
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;
 
--- USUARIO ROOT (Solo se inserta si no existe)
+-- 4. ROOT RECOVERY
 INSERT INTO public.users (id, name, email, role, password, job_title, is_network_member)
 VALUES ('root-user', 'Super Administrador', 'admin@hempc.com', 'super_admin', 'admin123', 'Director Cooperativa', true)
 ON CONFLICT (id) DO NOTHING;
@@ -448,9 +254,9 @@ ON CONFLICT (id) DO NOTHING;
 NOTIFY pgrst, 'reload schema';
                       `;
                       navigator.clipboard.writeText(sql.trim());
-                      alert("Script Nuclear V24 Copiado. Este script NO BORRARÁ tus datos existentes.");
+                      alert("Script Nuclear V25 Copiado.");
                     }} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center transition-all shadow-xl">
-                        <RotateCcw size={18} className="mr-2"/> Copiar Script Seguro V24
+                        <RotateCcw size={18} className="mr-2"/> Copiar Script Aditivo V25
                     </button>
                   </div>
               </div>
