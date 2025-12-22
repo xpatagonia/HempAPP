@@ -33,6 +33,42 @@ const ARG_GEO: Record<string, string[]> = {
     "Tucumán": ["San Miguel de Tucumán", "Tafí Viejo", "Concepción", "Yerba Buena", "Banda del Río Salí", "Aguilares", "Monteros", "Famaillá"]
 };
 
+const parseKML = (kmlText: string): { lat: number, lng: number }[] | null => {
+    try {
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(kmlText, "text/xml");
+        
+        // Buscamos todas las etiquetas que contengan 'coordinates', ignorando namespaces
+        const allCoords = Array.from(xmlDoc.querySelectorAll("*")).filter(el => el.tagName.toLowerCase().endsWith('coordinates'));
+        
+        if (allCoords.length === 0) return null;
+        
+        // Priorizamos la etiqueta con más contenido (probablemente el polígono)
+        allCoords.sort((a, b) => (b.textContent?.length || 0) - (a.textContent?.length || 0));
+        const targetNode = allCoords[0];
+        const text = targetNode.textContent || "";
+        
+        // Los KML separan puntos por espacios y coordenadas por comas (lng,lat,alt)
+        const rawPoints = text.trim().split(/\s+/);
+        const latLngs = rawPoints.map(point => {
+            const parts = point.split(',');
+            if (parts.length >= 2) {
+                const lng = parseFloat(parts[0]);
+                const lat = parseFloat(parts[1]);
+                if (!isNaN(lat) && !isNaN(lng)) {
+                    return { lat, lng };
+                }
+            }
+            return null;
+        }).filter((p): p is { lat: number, lng: number } => p !== null);
+        
+        return latLngs.length >= 3 ? latLngs : null;
+    } catch (e) {
+        console.error("Error parsing KML", e);
+        return null;
+    }
+};
+
 const parseCoordinate = (input: string): string => {
     if (!input) return '';
     const clean = input.trim().toUpperCase();
@@ -131,6 +167,38 @@ export default function Locations() {
       }
   };
 
+  const handleKMLUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (event) => {
+          const text = event.target?.result as string;
+          const poly = parseKML(text);
+          if (poly && poly.length > 2) {
+              const R = 6371000;
+              const toRad = (x: number) => x * Math.PI / 180;
+              let area = 0;
+              const lats = poly.map(p => p.lat);
+              const lngs = poly.map(p => p.lng);
+              const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+              const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
+              for (let i = 0; i < poly.length; i++) {
+                  const j = (i + 1) % poly.length;
+                  const p1 = poly[i];
+                  const p2 = poly[j];
+                  area += (toRad(p2.lng) - toRad(p1.lng)) * (2 + Math.sin(toRad(p1.lat)) + Math.sin(toRad(p2.lat)));
+              }
+              area = Math.abs(area * R * R / 2) / 10000;
+              setFormData(prev => ({ ...prev, polygon: poly, capacityHa: Number(area.toFixed(2)), lat: centerLat.toFixed(6), lng: centerLng.toFixed(6) }));
+              alert("✅ KML Importado con éxito.");
+          } else {
+              alert("⚠️ No se encontró un polígono válido en el archivo.");
+          }
+          if (fileInputRef.current) fileInputRef.current.value = '';
+      };
+      reader.readAsText(file);
+  };
+
   const handlePolygonChange = (newPoly: { lat: number, lng: number }[], areaHa: number, center: { lat: number, lng: number }) => {
       setFormData(prev => ({ ...prev, polygon: newPoly, capacityHa: areaHa > 0 ? Number(areaHa.toFixed(2)) : prev.capacityHa, lat: center.lat.toFixed(6), lng: center.lng.toFixed(6) }));
   };
@@ -167,7 +235,7 @@ export default function Locations() {
       ownerType: formData.ownerType as RoleType, 
       capacityHa: Number(formData.capacityHa || 0), 
       irrigationSystem: formData.irrigationSystem || '', 
-      responsibleIds: formData.responsibleIds || []
+      responsibleIds: Array.isArray(formData.responsibleIds) ? formData.responsibleIds : []
     };
 
     try {
@@ -211,13 +279,13 @@ export default function Locations() {
           clientId: loc.clientId || '', 
           capacityHa: loc.capacityHa || 0, 
           irrigationSystem: loc.irrigationSystem || '',
-          responsibleIds: loc.responsibleIds || []
+          responsibleIds: Array.isArray(loc.responsibleIds) ? loc.responsibleIds : []
       });
       setEditingId(loc.id);
       setIsModalOpen(true);
   };
 
-  const handleDelete = (id: string) => { if(window.confirm("¿Estás seguro de eliminar este sitio? Afectará a los ensayos históricos.")) deleteLocation(id); };
+  const handleDelete = (id: string) => { if(window.confirm("¿Estás seguro de eliminar este sitio?")) deleteLocation(id); };
 
   const inputClass = "w-full border border-gray-300 dark:border-slate-800 bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 p-2.5 rounded-xl focus:ring-2 focus:ring-hemp-500 outline-none transition-all disabled:opacity-50";
 
@@ -278,7 +346,7 @@ export default function Locations() {
 
       <div className="space-y-6">
         {visibleLocations.length === 0 && (
-            <div className="text-center py-10 bg-gray-50 dark:bg-slate-900 rounded-lg border border-dashed border-gray-300 dark:border-slate-700 text-gray-500">No se encontraron campos con los filtros actuales.</div>
+            <div className="text-center py-10 bg-gray-50 dark:bg-slate-900 rounded-lg border border-dashed border-gray-300 dark:border-slate-700 text-gray-500">No se encontraron campos.</div>
         )}
         {visibleLocations.map(loc => {
           const locPlots = plots.filter(p => p.locationId === loc.id);
@@ -323,11 +391,9 @@ export default function Locations() {
 
                       <div className="mt-4 pt-3 border-t border-gray-100 dark:border-slate-800 flex justify-between items-center">
                           <div className="text-xs font-black uppercase tracking-widest text-gray-400">{locPlots.length} Cultivos Activos</div>
-                          <div className="flex space-x-2">
-                              <button onClick={() => toggleExpand(loc.id)} className="text-[10px] font-black uppercase tracking-widest bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300 px-3 py-1.5 rounded-lg hover:bg-gray-200 transition">
-                                  {isExpanded ? 'Cerrar' : 'Ver Lista'}
-                              </button>
-                          </div>
+                          <button onClick={() => toggleExpand(loc.id)} className="text-[10px] font-black uppercase tracking-widest bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300 px-3 py-1.5 rounded-lg hover:bg-gray-200 transition">
+                              {isExpanded ? 'Cerrar' : 'Ver Lista'}
+                          </button>
                       </div>
                   </div>
               </div>
@@ -413,7 +479,7 @@ export default function Locations() {
                       <div className="bg-blue-50 dark:bg-blue-900/10 p-6 rounded-[32px] border border-blue-100 dark:border-blue-900/30 flex flex-col h-full">
                           <div className="flex justify-between items-center mb-6">
                               <h3 className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest flex items-center"><Globe size={14} className="mr-2"/> Delimitación Satelital</h3>
-                              <input type="file" accept=".kml" ref={fileInputRef} className="hidden" />
+                              <input type="file" accept=".kml" ref={fileInputRef} className="hidden" onChange={handleKMLUpload} />
                               <button type="button" onClick={() => fileInputRef.current?.click()} className="bg-white dark:bg-slate-800 border border-blue-200 dark:border-slate-700 text-blue-700 dark:text-blue-400 px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-50 transition shadow-sm flex items-center"><FileUp size={14} className="mr-1.5"/> Importar KML</button>
                           </div>
                           <div className="flex-1 min-h-[300px] border dark:border-slate-800 rounded-[24px] overflow-hidden mb-6 shadow-inner relative group/map bg-slate-200">
