@@ -65,11 +65,11 @@ interface AppContextType {
   deleteStoragePoint: (id: string) => void;
 
   addLocation: (l: Location) => Promise<boolean>;
-  updateLocation: (l: Location) => void;
+  updateLocation: (l: Location) => Promise<boolean>;
   deleteLocation: (id: string) => void;
   
   addPlot: (p: Plot) => Promise<boolean>;
-  updatePlot: (p: Plot) => void;
+  updatePlot: (p: Plot) => Promise<boolean>;
   deletePlot: (id: string) => Promise<void>;
   
   addTrialRecord: (r: TrialRecord) => Promise<boolean>;
@@ -112,7 +112,6 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// Mapeo exhaustivo y consistente para evitar inconsistencias de DB
 const MANUAL_MAP: Record<string, string> = {
     // Camel to Snake
     nodeCode: 'node_code',
@@ -173,6 +172,14 @@ const MANUAL_MAP: Record<string, string> = {
     surfaceUnit: 'surface_unit',
     sowingDate: 'sowing_date',
     ownerName: 'owner_name',
+    ownerLegalName: 'owner_legal_name',
+    ownerCuit: 'owner_cuit',
+    ownerContact: 'owner_contact',
+    ownerType: 'owner_type',
+    capacityHa: 'capacity_ha',
+    irrigationSystem: 'irrigation_system',
+    soilType: 'soil_type',
+    responsiblePerson: 'responsible_person',
     responsibleIds: 'responsible_ids',
     rowDistance: 'row_distance',
     irrigationType: 'irrigation_type',
@@ -189,7 +196,6 @@ const toSnakeCase = (obj: any) => {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
             const snakeKey = MANUAL_MAP[key] || key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
             let val = obj[key];
-            // Sanitización de IDs vacíos
             if ((key.toLowerCase().endsWith('id') || key === 'clientId' || key === 'supplierId') && val === '') {
                 val = null;
             }

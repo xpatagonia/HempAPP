@@ -2,7 +2,8 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Location, SoilType, RoleType, Plot } from '../types';
-import { Plus, MapPin, User, Globe, Edit2, Trash2, Keyboard, List, Briefcase, Building, Landmark, GraduationCap, Users, Droplets, Ruler, Navigation, ChevronDown, ChevronUp, Sprout, ArrowRight, LayoutDashboard, Search, Filter, ExternalLink, FileUp, X, ScanBarcode } from 'lucide-react';
+// Fixed: Added Save to lucide-react imports
+import { Plus, MapPin, User, Globe, Edit2, Trash2, Keyboard, List, Briefcase, Building, Landmark, GraduationCap, Users, Droplets, Ruler, Navigation, ChevronDown, ChevronUp, Sprout, ArrowRight, LayoutDashboard, Search, Filter, ExternalLink, FileUp, X, ScanBarcode, Loader2, Save } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import WeatherWidget from '../components/WeatherWidget';
 import MapEditor from '../components/MapEditor';
@@ -34,7 +35,6 @@ const ARG_GEO: Record<string, string[]> = {
     "Tucumán": ["San Miguel de Tucumán", "Tafí Viejo", "Concepción", "Yerba Buena", "Banda del Río Salí", "Aguilares", "Monteros", "Famaillá"]
 };
 
-// Helper: Robust KML Parser
 const parseKML = (kmlText: string): { lat: number, lng: number }[] | null => {
     try {
         const parser = new DOMParser();
@@ -63,7 +63,6 @@ const parseKML = (kmlText: string): { lat: number, lng: number }[] | null => {
     }
 };
 
-// Helper: Convert DMS to Decimal
 const parseCoordinate = (input: string): string => {
     if (!input) return '';
     const clean = input.trim().toUpperCase();
@@ -95,24 +94,20 @@ const parseCoordinate = (input: string): string => {
 export default function Locations() {
   const { locations, addLocation, updateLocation, deleteLocation, currentUser, usersList, clients, plots, addPlot, varieties, projects, seedBatches, seedMovements } = useAppContext();
   
-  // Location States
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isManualCity, setIsManualCity] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  // Filters
   const [searchTerm, setSearchTerm] = useState('');
   const [filterProvince, setFilterProvince] = useState('');
 
-  // Plot Creation State
   const [isPlotModalOpen, setIsPlotModalOpen] = useState(false);
   const [targetLocationId, setTargetLocationId] = useState<string | null>(null);
 
-  // Expanded State for Cards
   const [expandedLocations, setExpandedLocations] = useState<Record<string, boolean>>({});
 
-  // Forms
   const [formData, setFormData] = useState<Partial<Location> & { lat: string, lng: string }>({
     name: '', province: '', city: '', address: '', soilType: 'Franco', climate: '', 
     responsiblePerson: '', lat: '', lng: '',
@@ -127,10 +122,8 @@ export default function Locations() {
       block: '1', replicate: 1, surfaceArea: 0, surfaceUnit: 'ha', density: 0, status: 'Activa'
   });
 
-  // --- NEW LOGIC: Filter only what was received in THIS location ---
   const receivedBatchesAtThisLocation = useMemo(() => {
     if (!targetLocationId) return [];
-    // Only batches referenced in movements to this location that are "Recibido"
     const relevantMoves = seedMovements.filter(m => m.targetLocationId === targetLocationId && m.status === 'Recibido');
     const batchIds = Array.from(new Set(relevantMoves.map(m => m.batchId)));
     return seedBatches.filter(b => batchIds.includes(b.id));
@@ -141,14 +134,12 @@ export default function Locations() {
     return varieties.filter(v => varIds.includes(v.id));
   }, [receivedBatchesAtThisLocation, varieties]);
 
-  // Specific batches for the selected variety in the modal
   const availableBatchesForModal = receivedBatchesAtThisLocation.filter(b => b.varietyId === plotFormData.varietyId);
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
   const isClient = currentUser?.role === 'client';
   const canManage = isAdmin || isClient;
 
-  // Filter Locations Logic
   const visibleLocations = locations.filter(l => {
       let matches = true;
       if (isClient && currentUser.clientId) {
@@ -229,9 +220,11 @@ export default function Locations() {
       setFormData(prev => ({ ...prev, polygon: newPoly, capacityHa: areaHa > 0 ? Number(areaHa.toFixed(2)) : prev.capacityHa, lat: center.lat.toFixed(6), lng: center.lng.toFixed(6) }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name) return;
+    if (!formData.name || isSaving) return;
+    
+    setIsSaving(true);
     const finalLat = parseFloat(parseCoordinate(formData.lat));
     const finalLng = parseFloat(parseCoordinate(formData.lng));
     const coordinates = (!isNaN(finalLat) && !isNaN(finalLng)) ? { lat: finalLat, lng: finalLng } : undefined;
@@ -267,15 +260,26 @@ export default function Locations() {
     }
 
     const payload: any = {
-      name: formData.name!, province: formData.province || '', city: formData.city || '', address: formData.address || '', soilType: formData.soilType as SoilType, climate: formData.climate || '', responsiblePerson: formData.responsiblePerson || '',
+      name: formData.name!.trim(), province: formData.province || '', city: formData.city || '', address: formData.address || '', soilType: formData.soilType as SoilType, climate: formData.climate || '', responsiblePerson: formData.responsiblePerson || '',
       coordinates, polygon: formData.polygon, clientId: clientId || null, ownerName: ownerName || '', ownerLegalName: formData.ownerLegalName || '', ownerCuit: ownerCuit || '', ownerContact: ownerContact || '', ownerType: ownerType as RoleType, capacityHa: Number(formData.capacityHa), irrigationSystem: formData.irrigationSystem || '', responsibleIds: finalResponsibles
     };
 
-    if (editingId) updateLocation({ ...payload, id: editingId });
-    else addLocation({ ...payload, id: Date.now().toString() });
+    try {
+        let success = false;
+        if (editingId) success = await updateLocation({ ...payload, id: editingId });
+        else success = await addLocation({ ...payload, id: Date.now().toString() });
 
-    setIsModalOpen(false);
-    resetForm();
+        if (success) {
+            setIsModalOpen(false);
+            resetForm();
+        } else {
+            alert("Error al guardar en el servidor. Verifique la conexión.");
+        }
+    } catch (err) {
+        alert("Fallo crítico de sincronización.");
+    } finally {
+        setIsSaving(false);
+    }
   };
 
   const resetForm = () => {
@@ -301,10 +305,11 @@ export default function Locations() {
       setIsPlotModalOpen(true);
   };
 
-  const handlePlotSubmit = (e: React.FormEvent) => {
+  const handlePlotSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
-      if (!targetLocationId || !plotFormData.varietyId) return;
+      if (!targetLocationId || !plotFormData.varietyId || isSaving) return;
 
+      setIsSaving(true);
       const loc = locations.find(l => l.id === targetLocationId);
       const v = varieties.find(v => v.id === plotFormData.varietyId);
       const varCode = v ? v.name.substring(0, 3).toUpperCase() : 'VAR';
@@ -332,12 +337,20 @@ export default function Locations() {
           rowDistance: 0,
           perimeter: 0,
           observations: 'Creado desde gestión de campos.',
-          seedBatchId: plotFormData.seedBatchId || null // Ensure captures batch ID
+          seedBatchId: plotFormData.seedBatchId || null
       };
 
-      addPlot(newPlot);
-      setIsPlotModalOpen(false);
-      setExpandedLocations(prev => ({...prev, [targetLocationId]: true}));
+      try {
+          const success = await addPlot(newPlot);
+          if (success) {
+              setIsPlotModalOpen(false);
+              setExpandedLocations(prev => ({...prev, [targetLocationId]: true}));
+          } else {
+              alert("Error al registrar la unidad productiva.");
+          }
+      } finally {
+          setIsSaving(false);
+      }
   };
 
   const getClientIcon = (type?: RoleType) => {
@@ -353,12 +366,11 @@ export default function Locations() {
   const inputClass = "w-full border border-gray-300 bg-white text-gray-900 p-2 rounded focus:ring-2 focus:ring-hemp-500 focus:border-transparent outline-none transition-colors";
 
   return (
-    <div>
-      {/* DASHBOARD HEADER */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+    <div className="animate-in fade-in duration-500">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-200 dark:border-slate-800 p-6 mb-6">
           <div className="flex justify-between items-start mb-6">
               <div>
-                  <h1 className="text-2xl font-bold text-gray-800 flex items-center">
+                  <h1 className="text-2xl font-black text-gray-800 dark:text-white flex items-center uppercase tracking-tight italic">
                       <LayoutDashboard className="mr-2 text-hemp-600"/> Gestión de Campos
                   </h1>
                   <p className="text-sm text-gray-500">Centro de control de establecimientos productivos.</p>
@@ -370,40 +382,38 @@ export default function Locations() {
               )}
           </div>
 
-          {/* METRICS GRID */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
-                  <div className="text-xs font-bold text-gray-500 uppercase mb-1">Total Establecimientos</div>
-                  <div className="text-2xl font-black text-gray-800">{stats.totalLocs}</div>
+              <div className="bg-gray-50 dark:bg-slate-950 rounded-lg p-4 border border-gray-100 dark:border-slate-800">
+                  <div className="text-[10px] font-black text-gray-400 uppercase mb-1 tracking-widest">Total Establecimientos</div>
+                  <div className="text-2xl font-black text-gray-800 dark:text-white">{stats.totalLocs}</div>
               </div>
-              <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
-                  <div className="text-xs font-bold text-blue-700 uppercase mb-1">Capacidad Total</div>
-                  <div className="text-2xl font-black text-blue-900">{stats.totalHa.toFixed(1)} ha</div>
+              <div className="bg-blue-50 dark:bg-blue-900/10 rounded-lg p-4 border border-blue-100 dark:border-blue-900/20">
+                  <div className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase mb-1 tracking-widest">Capacidad Total</div>
+                  <div className="text-2xl font-black text-blue-900 dark:text-blue-300">{stats.totalHa.toFixed(1)} ha</div>
               </div>
-              <div className="bg-green-50 rounded-lg p-4 border border-green-100">
+              <div className="bg-green-50 dark:bg-green-900/10 rounded-lg p-4 border border-green-100 dark:border-green-900/20">
                   <div className="flex justify-between items-center mb-1">
-                      <div className="text-xs font-bold text-green-700 uppercase">Ocupación Activa</div>
+                      <div className="text-[10px] font-black text-green-700 dark:text-green-400 uppercase tracking-widest">Ocupación Activa</div>
                       <span className="text-xs font-bold text-green-600">{stats.occupancyRate.toFixed(1)}%</span>
                   </div>
-                  <div className="w-full bg-green-200 rounded-full h-2 mb-2">
+                  <div className="w-full bg-green-200 dark:bg-slate-800 rounded-full h-2 mb-2">
                       <div className="bg-green-600 h-2 rounded-full" style={{width: `${Math.min(stats.occupancyRate, 100)}%`}}></div>
                   </div>
-                  <div className="text-xs text-green-800">
-                      <strong>{stats.occupiedHa.toFixed(1)} ha</strong> en {stats.activePlotsCount} cultivos
+                  <div className="text-xs text-green-800 dark:text-green-500 font-bold">
+                      {stats.occupiedHa.toFixed(1)} ha en {stats.activePlotsCount} cultivos
                   </div>
               </div>
           </div>
       </div>
 
-      {/* FILTERS BAR */}
-      <div className="flex flex-col sm:flex-row gap-4 mb-6">
+      <div className="flex flex-col sm:row gap-4 mb-6">
           <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-              <input type="text" placeholder="Buscar campo, ciudad..." className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-hemp-500 outline-none text-sm" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+              <input type="text" placeholder="Buscar campo, ciudad..." className="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-800 rounded-lg focus:ring-2 focus:ring-hemp-500 outline-none text-sm dark:text-white" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
           </div>
           <div className="relative w-full sm:w-64">
               <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-              <select className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-hemp-500 outline-none text-sm appearance-none bg-white" value={filterProvince} onChange={e => setFilterProvince(e.target.value)}>
+              <select className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-slate-800 rounded-lg focus:ring-2 focus:ring-hemp-500 outline-none text-sm appearance-none bg-white dark:bg-slate-900 dark:text-white" value={filterProvince} onChange={e => setFilterProvince(e.target.value)}>
                   <option value="">Todas las Provincias</option>
                   {Object.keys(ARG_GEO).sort().map(p => ( <option key={p} value={p}>{p}</option> ))}
               </select>
@@ -412,89 +422,82 @@ export default function Locations() {
 
       <div className="space-y-6">
         {visibleLocations.length === 0 && (
-            <div className="text-center py-10 bg-gray-50 rounded-lg border border-dashed text-gray-500">No se encontraron campos con los filtros actuales.</div>
+            <div className="text-center py-10 bg-gray-50 dark:bg-slate-900 rounded-lg border border-dashed border-gray-300 dark:border-slate-700 text-gray-500">No se encontraron campos con los filtros actuales.</div>
         )}
         {visibleLocations.map(loc => {
           const locPlots = plots.filter(p => p.locationId === loc.id);
           const isExpanded = expandedLocations[loc.id];
 
           return (
-            <div key={loc.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden group hover:shadow-md transition-shadow">
-              {/* Location Header / Summary */}
+            <div key={loc.id} className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-200 dark:border-slate-800 overflow-hidden group hover:shadow-md transition-shadow">
               <div className="p-0 md:p-6 flex flex-col md:flex-row gap-6">
-                  {/* Map Preview (Smaller) */}
-                  <div className="w-full md:w-48 h-32 md:h-auto bg-gray-100 relative flex-shrink-0 md:rounded-lg overflow-hidden border-b md:border border-gray-200 group/map">
+                  <div className="w-full md:w-48 h-32 md:h-auto bg-gray-100 dark:bg-slate-800 relative flex-shrink-0 md:rounded-lg overflow-hidden border-b md:border border-gray-200 dark:border-slate-700 group/map">
                     {loc.coordinates ? (
                        <>
                            <iframe width="100%" height="100%" frameBorder="0" scrolling="no" marginHeight={0} marginWidth={0} src={`https://maps.google.com/maps?q=${loc.coordinates.lat},${loc.coordinates.lng}&z=14&output=embed`} className="absolute inset-0 opacity-80 group-hover/map:opacity-100 transition-opacity"></iframe>
                            <div className="absolute top-2 left-2 z-10 scale-90 origin-top-left"><WeatherWidget lat={loc.coordinates.lat} lng={loc.coordinates.lng} compact={true} /></div>
                        </>
                     ) : (
-                      <div className="flex items-center justify-center h-full text-gray-400 flex-col"><Globe size={32} className="mb-2 opacity-50" /><span className="text-[10px]">Sin GPS</span></div>
+                      <div className="flex items-center justify-center h-full text-gray-400 flex-col"><Globe size={32} className="mb-2 opacity-50" /><span className="text-[10px] font-black uppercase tracking-widest">Sin GPS</span></div>
                     )}
                   </div>
 
-                  {/* Main Info */}
                   <div className="p-4 md:p-0 flex-1 flex flex-col justify-between">
                       <div>
                           <div className="flex justify-between items-start">
                               <div>
-                                  <h3 className="text-xl font-bold text-gray-800 flex items-center"><MapPin size={20} className="mr-2 text-hemp-600" />{loc.name}</h3>
-                                  <p className="text-gray-500 text-sm ml-7">{loc.city ? `${loc.city}, ` : ''}{loc.province} • {loc.address}</p>
+                                  <h3 className="text-xl font-bold text-gray-800 dark:text-white flex items-center uppercase tracking-tight">{loc.name}</h3>
+                                  <p className="text-gray-500 text-sm">{loc.city ? `${loc.city}, ` : ''}{loc.province} • {loc.address}</p>
                               </div>
                               {canManage && (
                                   <div className="flex space-x-2">
-                                      <Link to={`/locations/${loc.id}`} className="bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg flex items-center text-xs font-bold transition shadow-sm"><ExternalLink size={14} className="mr-1"/> Ver Tablero</Link>
-                                      <button onClick={() => handleEdit(loc)} className="p-1.5 text-gray-400 hover:text-hemp-600 hover:bg-gray-100 rounded transition border border-transparent hover:border-gray-200"><Edit2 size={16} /></button>
-                                      <button onClick={() => handleDelete(loc.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-gray-100 rounded transition border border-transparent hover:border-gray-200"><Trash2 size={16} /></button>
+                                      <Link to={`/locations/${loc.id}`} className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 px-3 py-1.5 rounded-lg flex items-center text-xs font-black uppercase tracking-widest transition shadow-sm"><ExternalLink size={14} className="mr-1"/> Auditoría</Link>
+                                      <button onClick={() => handleEdit(loc)} className="p-1.5 text-gray-400 hover:text-hemp-600 hover:bg-gray-100 dark:hover:bg-slate-800 rounded transition border border-transparent hover:border-gray-200 dark:hover:border-slate-700"><Edit2 size={16} /></button>
+                                      <button onClick={() => handleDelete(loc.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-gray-100 dark:hover:bg-slate-800 rounded transition border border-transparent hover:border-gray-200 dark:hover:border-slate-700"><Trash2 size={16} /></button>
                                   </div>
                               )}
                           </div>
                           
-                          <div className="mt-3 flex flex-wrap gap-3">
-                              <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded border">{loc.capacityHa ? <strong>{loc.capacityHa} Ha</strong> : 'Sup. N/A'}</span>
-                              <span className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded border border-blue-100 flex items-center"><Droplets size={10} className="mr-1"/> {loc.irrigationSystem || 'Secano'}</span>
-                              <span className="text-xs bg-indigo-50 text-indigo-700 px-2 py-1 rounded border border-indigo-100 flex items-center">{getClientIcon(loc.ownerType)} <span className="ml-1">{loc.ownerName}</span></span>
+                          <div className="mt-4 flex flex-wrap gap-3">
+                              <span className="text-[10px] font-black uppercase tracking-widest bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-400 px-2.5 py-1 rounded border dark:border-slate-700">{loc.capacityHa ? <strong>{loc.capacityHa} Ha</strong> : 'Sup. N/A'}</span>
+                              <span className="text-[10px] font-black uppercase tracking-widest bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 px-2.5 py-1 rounded border border-blue-100 dark:border-blue-900/30 flex items-center"><Droplets size={10} className="mr-1"/> {loc.irrigationSystem || 'Secano'}</span>
+                              <span className="text-[10px] font-black uppercase tracking-widest bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 px-2.5 py-1 rounded border border-indigo-100 dark:border-indigo-900/30 flex items-center">{getClientIcon(loc.ownerType)} <span className="ml-1">{loc.ownerName}</span></span>
                           </div>
                       </div>
 
-                      {/* Expand/Collapse Plots Section */}
-                      <div className="mt-4 pt-3 border-t border-gray-100 flex justify-between items-center">
-                          <div className="text-sm font-medium text-gray-600">{locPlots.length} Cultivos Activos</div>
+                      <div className="mt-4 pt-3 border-t border-gray-100 dark:border-slate-800 flex justify-between items-center">
+                          <div className="text-xs font-black uppercase tracking-widest text-gray-400">{locPlots.length} Cultivos Activos</div>
                           <div className="flex space-x-2">
                               {canManage && (
-                                  <button onClick={() => openPlotModal(loc.id)} className="text-xs bg-hemp-50 text-hemp-700 px-3 py-1.5 rounded-lg font-bold hover:bg-hemp-100 flex items-center transition"><Plus size={14} className="mr-1"/> Agregar Lote</button>
+                                  <button onClick={() => openPlotModal(loc.id)} className="text-[10px] font-black uppercase tracking-widest bg-hemp-50 dark:bg-hemp-900/30 text-hemp-700 dark:text-hemp-400 px-3 py-1.5 rounded-lg hover:bg-hemp-100 transition"><Plus size={14} className="mr-1"/> Sembrar Lote</button>
                               )}
-                              <button onClick={() => toggleExpand(loc.id)} className="text-xs bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg font-bold hover:bg-gray-200 flex items-center transition">
-                                  {isExpanded ? <ChevronUp size={14} className="mr-1"/> : <ChevronDown size={14} className="mr-1"/>}
-                                  {isExpanded ? 'Ocultar' : 'Lista Rápida'}
+                              <button onClick={() => toggleExpand(loc.id)} className="text-[10px] font-black uppercase tracking-widest bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300 px-3 py-1.5 rounded-lg hover:bg-gray-200 transition">
+                                  {isExpanded ? 'Cerrar' : 'Ver Lista'}
                               </button>
                           </div>
                       </div>
                   </div>
               </div>
 
-              {/* EXPANDED PLOTS LIST */}
               {isExpanded && (
-                  <div className="bg-gray-50 border-t border-gray-200 p-4 animate-in slide-in-from-top-2">
+                  <div className="bg-gray-50 dark:bg-slate-950 border-t border-gray-200 dark:border-slate-800 p-4 animate-in slide-in-from-top-2">
                       {locPlots.length === 0 ? (
-                          <div className="text-center py-4 text-gray-400 text-sm">No hay cultivos registrados en este campo.</div>
+                          <div className="text-center py-4 text-gray-400 text-[10px] font-black uppercase tracking-widest">No hay cultivos registrados en este campo.</div>
                       ) : (
                           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                               {locPlots.map(p => {
                                   const vari = varieties.find(v => v.id === p.varietyId);
                                   return (
-                                      <Link to={`/plots/${p.id}`} key={p.id} className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition flex justify-between items-center group">
+                                      <Link to={`/plots/${p.id}`} key={p.id} className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-gray-200 dark:border-slate-800 shadow-sm hover:shadow-md transition flex justify-between items-center group">
                                           <div>
-                                              <h4 className="font-bold text-gray-800 text-sm flex items-center">
+                                              <h4 className="font-bold text-gray-800 dark:text-white text-sm flex items-center uppercase tracking-tight">
                                                   {p.type === 'Producción' ? <User size={12} className="text-green-600 mr-1"/> : <Sprout size={12} className="text-blue-600 mr-1"/>}
                                                   {p.name}
                                               </h4>
-                                              <p className="text-xs text-gray-500 mt-0.5">{vari?.name} • {p.surfaceArea} {p.surfaceUnit}</p>
+                                              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mt-0.5">{vari?.name} • {p.surfaceArea} {p.surfaceUnit}</p>
                                           </div>
                                           <div className="text-right">
-                                              <span className={`text-[10px] px-2 py-0.5 rounded-full ${p.status === 'Activa' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>{p.status}</span>
-                                              <div className="mt-1 opacity-0 group-hover:opacity-100 transition-opacity"><ArrowRight size={14} className="text-gray-400 ml-auto"/></div>
+                                              <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${p.status === 'Activa' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>{p.status}</span>
                                           </div>
                                       </Link>
                                   )
@@ -508,103 +511,112 @@ export default function Locations() {
         })}
       </div>
 
-       {/* LOCATION MODAL */}
        {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-2xl w-full p-6 shadow-xl max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-bold text-gray-900">{editingId ? 'Editar Campo' : 'Nuevo Campo'}</h2>
-                <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600"><X size={24}/></button>
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-4xl w-full p-10 shadow-2xl max-h-[95vh] overflow-y-auto animate-in zoom-in-95 border border-white/10">
+            <div className="flex justify-between items-center mb-8">
+                <div className="flex items-center gap-4">
+                    <div className="bg-hemp-600 p-3 rounded-2xl text-white shadow-lg"><MapPin size={28}/></div>
+                    <div>
+                        <h2 className="text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tighter italic">Gestionar <span className="text-hemp-600">Establecimiento</span></h2>
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Configuración técnica de sitio y georreferencia</p>
+                    </div>
+                </div>
+                <button onClick={() => !isSaving && setIsModalOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition text-slate-400"><X size={28}/></button>
             </div>
             
-            <form onSubmit={handleSubmit} className="space-y-4">
-              
-              <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
-                  <h3 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center"><MapPin size={12} className="mr-1"/> Datos Generales</h3>
-                  <div className="space-y-3">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Nombre del Establecimiento</label>
-                        <input required type="text" placeholder="Ej: Campo La Soledad" className={inputClass} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Provincia</label>
-                            <select className={inputClass} value={formData.province} onChange={e => setFormData({...formData, province: e.target.value, city: ''})}>
-                                <option value="">Seleccionar...</option>
-                                {Object.keys(ARG_GEO).sort().map(p => ( <option key={p} value={p}>{p}</option> ))}
-                            </select>
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  <div className="space-y-6">
+                      <div className="bg-gray-50 dark:bg-slate-950 p-6 rounded-[32px] border dark:border-slate-800">
+                          <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-6 border-b dark:border-slate-800 pb-3 flex items-center"><Navigation size={14} className="mr-2 text-hemp-500"/> Registro Maestro</h3>
+                          <div className="space-y-4">
+                              <div>
+                                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1 mb-1.5">Nombre Fantasía *</label>
+                                <input required type="text" placeholder="Ej: La Soledad" className={inputClass} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} disabled={isSaving} />
+                              </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                  <div>
+                                    <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1 mb-1.5">Provincia</label>
+                                    <select className={inputClass} value={formData.province} onChange={e => setFormData({...formData, province: e.target.value, city: ''})} disabled={isSaving}>
+                                        <option value="">Seleccionar...</option>
+                                        {Object.keys(ARG_GEO).sort().map(p => ( <option key={p} value={p}>{p}</option> ))}
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1 mb-1.5">Ciudad</label>
+                                    <input type="text" className={inputClass} value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})} disabled={isSaving} placeholder="Ej: Pergamino" />
+                                  </div>
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1 mb-1.5">Dirección / Acceso Rural</label>
+                                <input type="text" className={inputClass} value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} disabled={isSaving} placeholder="Ruta 8 Km 220" />
+                              </div>
                           </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1 flex justify-between">Ciudad/Localidad <button type="button" onClick={() => setIsManualCity(!isManualCity)} className="text-hemp-600 text-xs font-semibold hover:underline flex items-center">{isManualCity ? <List size={12} className="mr-1"/> : <Keyboard size={12} className="mr-1"/>}{isManualCity ? "Lista" : "Manual"}</button></label>
-                            {isManualCity ? (
-                                <input type="text" className={inputClass} value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})}/>
-                            ) : (
-                                <select className={inputClass} value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})} disabled={!formData.province}>
-                                    <option value="">Seleccionar...</option>
-                                    {formData.province && ARG_GEO[formData.province]?.map(c => ( <option key={c} value={c}>{c}</option> ))}
-                                </select>
-                            )}
+                      </div>
+
+                      <div className="bg-indigo-50 dark:bg-indigo-900/10 p-6 rounded-[32px] border border-indigo-100 dark:border-indigo-900/30">
+                          <h3 className="text-[10px] font-black text-indigo-700 dark:text-indigo-400 uppercase tracking-widest mb-4 flex items-center"><Briefcase size={14} className="mr-2"/> Atribución Corporativa</h3>
+                          <div className="space-y-4">
+                              <div>
+                                  <label className="block text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest ml-1 mb-1.5">Cliente / Socio Responsable</label>
+                                  <select className={inputClass} value={formData.clientId || ''} onChange={e => setFormData({...formData, clientId: e.target.value})} disabled={isSaving}>
+                                      <option value="">-- Sin Vincular --</option>
+                                      {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                  </select>
+                              </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                  <div>
+                                      <label className="block text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest ml-1 mb-1.5">Sistema Riego</label>
+                                      <select className={inputClass} value={formData.irrigationSystem} onChange={e => setFormData({...formData, irrigationSystem: e.target.value})} disabled={isSaving}>
+                                          <option value="Secano">Secano</option>
+                                          <option value="Pivote Central">Pivote Central</option>
+                                          <option value="Goteo">Goteo</option>
+                                          <option value="Aspersión">Aspersión</option>
+                                      </select>
+                                  </div>
+                                  <div>
+                                      <label className="block text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest ml-1 mb-1.5">Suelo Predom.</label>
+                                      <input type="text" className={inputClass} value={formData.soilType} onChange={e => setFormData({...formData, soilType: e.target.value})} disabled={isSaving} placeholder="Clase I, Franco" />
+                                  </div>
+                              </div>
+                          </div>
+                      </div>
+                  </div>
+
+                  <div className="flex flex-col">
+                      <div className="bg-blue-50 dark:bg-blue-900/10 p-6 rounded-[32px] border border-blue-100 dark:border-blue-900/30 flex flex-col h-full">
+                          <div className="flex justify-between items-center mb-6">
+                              <h3 className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest flex items-center"><Globe size={14} className="mr-2"/> Delimitación Satelital</h3>
+                              <input type="file" accept=".kml" ref={fileInputRef} className="hidden" onChange={handleKMLUpload} />
+                              <button type="button" onClick={() => fileInputRef.current?.click()} className="bg-white dark:bg-slate-800 border border-blue-200 dark:border-slate-700 text-blue-700 dark:text-blue-400 px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-50 transition shadow-sm flex items-center"><FileUp size={14} className="mr-1.5"/> Importar KML</button>
+                          </div>
+                          <div className="flex-1 min-h-[300px] border dark:border-slate-800 rounded-[24px] overflow-hidden mb-6 shadow-inner relative group/map bg-slate-200">
+                               <MapEditor initialCenter={formData.lat && formData.lng ? { lat: parseFloat(formData.lat), lng: parseFloat(formData.lng) } : undefined} initialPolygon={formData.polygon || []} onPolygonChange={handlePolygonChange} height="100%" />
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-[9px] font-black text-blue-900 dark:text-blue-400 mb-1 flex items-center uppercase tracking-widest">Coordenadas Centrales</label>
+                                    <div className="flex gap-2 font-mono">
+                                        <input type="text" placeholder="Lat" className={`${inputClass} text-xs bg-white/50`} value={formData.lat} onChange={e => setFormData({...formData, lat: e.target.value})} onBlur={() => handleCoordinateBlur('lat')} disabled={isSaving}/>
+                                        <input type="text" placeholder="Lng" className={`${inputClass} text-xs bg-white/50`} value={formData.lng} onChange={e => setFormData({...formData, lng: e.target.value})} onBlur={() => handleCoordinateBlur('lng')} disabled={isSaving}/>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-[9px] font-black text-blue-900 dark:text-blue-400 mb-1 uppercase tracking-widest">Superficie Total (Ha)</label>
+                                    <input type="number" step="0.1" className={`${inputClass} font-black text-blue-800 dark:text-blue-300 bg-white/50`} value={formData.capacityHa} onChange={e => setFormData({...formData, capacityHa: Number(e.target.value)})} disabled={isSaving}/>
+                                </div>
                           </div>
                       </div>
                   </div>
               </div>
 
-              {/* MAPA Y GEOMETRÍA */}
-              <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                  <div className="flex justify-between items-center mb-3">
-                      <h3 className="text-xs font-bold text-blue-700 uppercase flex items-center"><Globe size={12} className="mr-1"/> Delimitación Geográfica</h3>
-                      <div className="relative">
-                           <input type="file" accept=".kml" ref={fileInputRef} className="hidden" onChange={handleKMLUpload} />
-                           <button type="button" onClick={() => fileInputRef.current?.click()} className="bg-white border border-blue-200 text-blue-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-50 flex items-center shadow-sm"><FileUp size={14} className="mr-1"/> Importar KML</button>
-                       </div>
-                  </div>
-                  <div className="border border-gray-300 rounded-xl overflow-hidden mb-3">
-                       <MapEditor initialCenter={formData.lat && formData.lng ? { lat: parseFloat(formData.lat), lng: parseFloat(formData.lng) } : undefined} initialPolygon={formData.polygon || []} onPolygonChange={handlePolygonChange} height="250px" />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 text-xs">
-                        <div>
-                            <label className="block font-bold text-blue-900 mb-1 flex items-center">Latitud / Longitud <Navigation size={10} className="ml-1 text-blue-500" /></label>
-                            <div className="flex gap-1">
-                                <input type="text" placeholder="-34.5" className={`${inputClass} text-xs h-8`} value={formData.lat} onChange={e => setFormData({...formData, lat: e.target.value})} onBlur={() => handleCoordinateBlur('lat')}/>
-                                <input type="text" placeholder="-58.4" className={`${inputClass} text-xs h-8`} value={formData.lng} onChange={e => setFormData({...formData, lng: e.target.value})} onBlur={() => handleCoordinateBlur('lng')}/>
-                            </div>
-                        </div>
-                        <div>
-                            <label className="block font-bold text-blue-900 mb-1">Capacidad Total (Calculada)</label>
-                            <div className="flex items-center">
-                                <input type="number" step="0.1" className={`${inputClass} text-xs h-8 font-bold text-blue-800`} value={formData.capacityHa} onChange={e => setFormData({...formData, capacityHa: Number(e.target.value)})} placeholder="0"/>
-                                <span className="ml-2 text-blue-600 font-bold">ha</span>
-                            </div>
-                        </div>
-                  </div>
-              </div>
-
-              {/* CLIENTE / TITULAR */}
-              <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-100">
-                  <h3 className="text-xs font-bold text-indigo-700 uppercase mb-3 flex items-center"><Briefcase size={12} className="mr-1"/> Titularidad</h3>
-                  {isAdmin && (
-                      <div className="mb-3">
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Cliente Vinculado</label>
-                          <select className={inputClass} value={formData.clientId || ''} onChange={e => {
-                                const selectedId = e.target.value;
-                                if (selectedId) {
-                                    const c = clients.find(cl => cl.id === selectedId);
-                                    if (c) setFormData({ ...formData, clientId: c.id, ownerName: c.name, ownerType: c.type });
-                                } else setFormData({...formData, clientId: ''});
-                            }}>
-                              <option value="">-- Sin Vincular --</option>
-                              {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                          </select>
-                      </div>
-                  )}
-                  {!formData.clientId && (
-                      <input type="text" placeholder="Nombre del Propietario" className={inputClass} value={formData.ownerName} onChange={e => setFormData({...formData, ownerName: e.target.value})} disabled={isClient} />
-                  )}
-              </div>
-
-              <div className="flex justify-end space-x-2 pt-4">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancelar</button>
-                <button type="submit" className="px-4 py-2 bg-hemp-600 text-white rounded hover:bg-hemp-700 shadow-sm font-bold">Guardar Campo</button>
+              <div className="flex justify-end space-x-3 pt-8 border-t dark:border-slate-800 mt-6">
+                <button type="button" disabled={isSaving} onClick={() => setIsModalOpen(false)} className="px-8 py-3 text-slate-400 font-black uppercase text-[10px] tracking-widest hover:text-slate-600 transition">Cancelar</button>
+                <button type="submit" disabled={isSaving} className="bg-slate-900 dark:bg-hemp-600 text-white px-12 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl flex items-center hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50">
+                    {isSaving ? <Loader2 className="animate-spin mr-2" size={18}/> : <Save className="mr-2" size={18}/>}
+                    {editingId ? 'Actualizar Campo' : 'Finalizar Alta de Sitio'}
+                </button>
               </div>
             </form>
           </div>
@@ -613,88 +625,81 @@ export default function Locations() {
 
       {/* QUICK PLOT MODAL */}
       {isPlotModalOpen && (
-          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4 backdrop-blur-sm animate-in zoom-in-95">
-              <div className="bg-white rounded-xl w-full max-w-lg p-6 shadow-2xl">
-                  <h2 className="text-xl font-bold mb-4 text-gray-900 flex items-center">
-                      <Sprout size={24} className="mr-2 text-green-600"/>
-                      Nuevo Cultivo en {locations.find(l => l.id === targetLocationId)?.name}
-                  </h2>
-                  <form onSubmit={handlePlotSubmit} className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
-                          <div className="col-span-2">
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Nombre Lote (Opcional)</label>
-                              <input type="text" placeholder="Generado autom. si vacío" className={inputClass} value={plotFormData.name} onChange={e => setPlotFormData({...plotFormData, name: e.target.value})} />
-                          </div>
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[70] p-4 animate-in fade-in">
+              <div className="bg-white dark:bg-slate-900 rounded-[40px] w-full max-w-xl p-10 shadow-2xl border border-white/10 animate-in zoom-in-95">
+                  <div className="flex justify-between items-center mb-8">
+                      <div className="flex items-center gap-4">
+                          <div className="bg-hemp-600 p-3 rounded-2xl text-white shadow-lg"><Sprout size={28}/></div>
                           <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Variedad (Recibida en Campo)</label>
-                              <select required className={inputClass} value={plotFormData.varietyId} onChange={e => setPlotFormData({...plotFormData, varietyId: e.target.value, seedBatchId: ''})}>
-                                  <option value="">Seleccionar...</option>
-                                  {availableVarietiesAtThisLocation.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-                              </select>
-                              {availableVarietiesAtThisLocation.length === 0 && (
-                                  <p className="text-[10px] text-red-500 mt-1 font-bold">No se ha registrado recepción de semilla en este campo.</p>
-                              )}
-                          </div>
-                          <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Tipo</label>
-                              <select className={inputClass} value={plotFormData.type} onChange={e => setPlotFormData({...plotFormData, type: e.target.value as any})}>
-                                  <option value="Ensayo">Ensayo I+D</option>
-                                  <option value="Producción">Producción</option>
-                              </select>
-                          </div>
-                          
-                          {/* SEED BATCH SELECTION (TRACEABILITY) - Filtered by Location History */}
-                          <div className="col-span-2 bg-green-50 p-2 rounded border border-green-100">
-                              <label className="block text-xs font-bold text-green-800 mb-1 uppercase flex items-center">
-                                  <ScanBarcode size={12} className="mr-1"/> Lote de Semilla Asignado (Trazabilidad)
-                              </label>
-                              <select 
-                                  className={`${inputClass} text-sm`} 
-                                  value={plotFormData.seedBatchId || ''} 
-                                  onChange={e => setPlotFormData({...plotFormData, seedBatchId: e.target.value})}
-                                  disabled={!plotFormData.varietyId}
-                              >
-                                  <option value="">-- Seleccionar Lote Recibido --</option>
-                                  {availableBatchesForModal.map(b => (
-                                      <option key={b.id} value={b.id}>
-                                          {b.batchCode} - {b.labelSerialNumber ? `Etiqueta: ${b.labelSerialNumber}` : 'Sin Etiqueta'}
-                                      </option>
-                                  ))}
-                              </select>
-                              {plotFormData.varietyId && availableBatchesForModal.length === 0 && (
-                                  <p className="text-[10px] text-amber-600 mt-1">Este campo no tiene remitos 'Recibidos' para esta variedad.</p>
-                              )}
-                          </div>
-
-                          <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Superficie</label>
-                              <div className="flex">
-                                  <input type="number" step="0.1" className={`${inputClass} rounded-r-none border-r-0`} value={plotFormData.surfaceArea || ''} onChange={e => setPlotFormData({...plotFormData, surfaceArea: Number(e.target.value)})} />
-                                  <select className="bg-gray-100 border border-l-0 border-gray-300 rounded-r px-2 text-sm" value={plotFormData.surfaceUnit} onChange={e => setPlotFormData({...plotFormData, surfaceUnit: e.target.value as any})}>
-                                      <option value="ha">ha</option>
-                                      <option value="m2">m²</option>
-                                  </select>
-                              </div>
-                          </div>
-                          <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Fecha Siembra</label>
-                              <input type="date" className={inputClass} value={plotFormData.sowingDate} onChange={e => setPlotFormData({...plotFormData, sowingDate: e.target.value})} />
+                              <h2 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">Nueva <span className="text-hemp-600">Unidad Prod.</span></h2>
+                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">En {locations.find(l => l.id === targetLocationId)?.name}</p>
                           </div>
                       </div>
-                      
-                      {!isClient && (
-                          <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Proyecto Marco</label>
-                              <select className={inputClass} value={plotFormData.projectId} onChange={e => setPlotFormData({...plotFormData, projectId: e.target.value})}>
-                                  <option value="">-- Sin Proyecto --</option>
-                                  {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                              </select>
+                      <button onClick={() => !isSaving && setIsPlotModalOpen(false)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition text-slate-400"><X size={28}/></button>
+                  </div>
+
+                  <form onSubmit={handlePlotSubmit} className="space-y-6">
+                      <div className="bg-gray-50 dark:bg-slate-950 p-6 rounded-[32px] border dark:border-slate-800">
+                          <div className="grid grid-cols-2 gap-4">
+                              <div className="col-span-2">
+                                  <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1 mb-1.5">Identificador Lote (Opcional)</label>
+                                  <input type="text" placeholder="Se genera automático si vacío" className={inputClass} value={plotFormData.name} onChange={e => setPlotFormData({...plotFormData, name: e.target.value})} disabled={isSaving} />
+                              </div>
+                              <div>
+                                  <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1 mb-1.5">Genética *</label>
+                                  <select required className={inputClass} value={plotFormData.varietyId} onChange={e => setPlotFormData({...plotFormData, varietyId: e.target.value, seedBatchId: ''})} disabled={isSaving}>
+                                      <option value="">Seleccionar...</option>
+                                      {availableVarietiesAtThisLocation.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                                  </select>
+                              </div>
+                              <div>
+                                  <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1 mb-1.5">Finalidad</label>
+                                  <select className={inputClass} value={plotFormData.type} onChange={e => setPlotFormData({...plotFormData, type: e.target.value as any})} disabled={isSaving}>
+                                      <option value="Ensayo">Investigación (Ensayo)</option>
+                                      <option value="Producción">Producción (Escala)</option>
+                                  </select>
+                              </div>
+                              
+                              <div className="col-span-2 bg-emerald-50 dark:bg-emerald-900/10 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-900/30">
+                                  <label className="block text-[9px] font-black text-emerald-800 dark:text-emerald-400 uppercase tracking-widest mb-1.5 flex items-center">
+                                      <ScanBarcode size={12} className="mr-1.5"/> Lote de Semilla (Trazabilidad)
+                                  </label>
+                                  <select 
+                                      className={`${inputClass} font-mono`} 
+                                      value={plotFormData.seedBatchId || ''} 
+                                      onChange={e => setPlotFormData({...plotFormData, seedBatchId: e.target.value})}
+                                      disabled={!plotFormData.varietyId || isSaving}
+                                  >
+                                      <option value="">-- Seleccionar Lote Recibido --</option>
+                                      {availableBatchesForModal.map(b => (
+                                          <option key={b.id} value={b.id}>{b.batchCode} (Stock campo)</option>
+                                      ))}
+                                  </select>
+                              </div>
+
+                              <div>
+                                  <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1 mb-1.5">Superficie</label>
+                                  <div className="flex">
+                                      <input type="number" step="0.1" className={`${inputClass} rounded-r-none border-r-0`} value={plotFormData.surfaceArea || ''} onChange={e => setPlotFormData({...plotFormData, surfaceArea: Number(e.target.value)})} disabled={isSaving} />
+                                      <select className="bg-gray-200 dark:bg-slate-800 border-gray-300 dark:border-slate-700 rounded-r-xl px-2 text-[10px] font-black uppercase" value={plotFormData.surfaceUnit} onChange={e => setPlotFormData({...plotFormData, surfaceUnit: e.target.value as any})} disabled={isSaving}>
+                                          <option value="ha">ha</option>
+                                          <option value="m2">m²</option>
+                                      </select>
+                                  </div>
+                              </div>
+                              <div>
+                                  <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1 mb-1.5">Fecha Siembra</label>
+                                  <input type="date" className={inputClass} value={plotFormData.sowingDate} onChange={e => setPlotFormData({...plotFormData, sowingDate: e.target.value})} disabled={isSaving} />
+                              </div>
                           </div>
-                      )}
+                      </div>
 
                       <div className="pt-4 flex justify-end space-x-3">
-                          <button type="button" onClick={() => setIsPlotModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded transition">Cancelar</button>
-                          <button type="submit" className="px-6 py-2 bg-green-600 text-white font-bold rounded shadow hover:bg-green-700 transition" disabled={availableVarietiesAtThisLocation.length === 0}>Crear Lote</button>
+                          <button type="button" onClick={() => setIsPlotModalOpen(false)} className="px-8 py-3 text-slate-400 font-black uppercase text-[10px] tracking-widest hover:text-slate-600 transition" disabled={isSaving}>Cancelar</button>
+                          <button type="submit" className="bg-hemp-600 text-white px-10 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl flex items-center hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50" disabled={availableVarietiesAtThisLocation.length === 0 || isSaving}>
+                              {isSaving ? <Loader2 className="animate-spin mr-2"/> : <Save className="mr-2" size={18}/>}
+                              Registrar Siembra
+                          </button>
                       </div>
                   </form>
               </div>
