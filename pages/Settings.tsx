@@ -29,7 +29,7 @@ export default function Settings() {
 
   const [tests, setTests] = useState<UnitTest[]>([
       { id: 'conn', name: 'Conexión Supabase', description: 'Verifica alcance de URL y Key.', status: 'idle' },
-      { id: 'tables', name: 'Esquema de Tablas', description: 'Valida existencia de todas las entidades V25.', status: 'idle' },
+      { id: 'tables', name: 'Esquema de Tablas', description: 'Valida existencia de todas las entidades V26.', status: 'idle' },
       { id: 'geo', name: 'Protocolo JSONB GPS', description: 'Verifica compatibilidad de georreferencia.', status: 'idle' },
       { id: 'auth', name: 'Vínculo Organizacional', description: 'Valida FK de equipos de trabajo.', status: 'idle' }
   ]);
@@ -64,11 +64,11 @@ export default function Settings() {
 
       updateTest('tables', { status: 'running' });
       try {
-          const { error } = await supabase.from('clients').select('address').limit(1);
-          if (error) throw error;
+          const { error } = await supabase.from('seed_movements').select('id').limit(1);
+          if (error && error.code === '42P01') throw new Error("Falta tabla seed_movements");
           updateTest('tables', { status: 'pass' });
       } catch (e: any) {
-          updateTest('tables', { status: 'fail', error: 'Faltan columnas de la V25: ' + e.message });
+          updateTest('tables', { status: 'fail', error: e.message });
       }
 
       updateTest('geo', { status: 'running' });
@@ -118,7 +118,7 @@ export default function Settings() {
           <button onClick={() => setActiveTab('branding')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'branding' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Identidad</button>
           <button onClick={() => setActiveTab('connections')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'connections' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Conectividad</button>
           <button onClick={() => setActiveTab('audit')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'audit' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Protocolo & Pruebas</button>
-          <button onClick={() => setActiveTab('database')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'database' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>SQL Nucleus V25</button>
+          <button onClick={() => setActiveTab('database')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'database' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>SQL Nucleus V26</button>
       </div>
 
       {activeTab === 'branding' && (
@@ -164,7 +164,7 @@ export default function Settings() {
                   <div className="flex justify-between items-center mb-8">
                       <div>
                           <h3 className="text-xl font-black text-slate-800 dark:text-white flex items-center">
-                              <FlaskConical className="mr-2 text-blue-600" size={20} /> Suite Nuclear V25
+                              <FlaskConical className="mr-2 text-blue-600" size={20} /> Suite Nuclear V26
                           </h3>
                           <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">Auditoría proactiva de integridad de datos</p>
                       </div>
@@ -197,41 +197,52 @@ export default function Settings() {
               <div className="bg-slate-900 border border-slate-800 p-8 rounded-[40px] shadow-2xl relative overflow-hidden">
                   <div className="flex items-center space-x-3 mb-6">
                       <Shield className="text-hemp-500" size={24}/>
-                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Nucleus SQL V25: Sincronización Total</h3>
+                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Nucleus SQL V26: Sincronización Total</h3>
                   </div>
                   <div className="bg-amber-900/20 border border-amber-500/30 p-4 rounded-2xl mb-6 flex items-start text-amber-200">
                       <AlertTriangle className="text-amber-500 mr-3 flex-shrink-0" size={20}/>
                       <div className="text-xs space-y-2 leading-relaxed">
-                        <p className="font-bold uppercase tracking-tight">Script Aditivo (Seguro)</p>
-                        <p>Este script agrega campos de dirección y superficie sin borrar registros existentes. Ejecútalo en el SQL Editor de Supabase.</p>
+                        <p className="font-bold uppercase tracking-tight">Script Aditivo V26 (Seguro)</p>
+                        <p>Este script agrega tablas de movimientos hídricos y logísticos sin borrar registros. Incluye parches de contacto para proveedores.</p>
                       </div>
                   </div>
 
                   <div className="space-y-4">
                     <button onClick={() => {
                       const sql = `
--- PROTOCOLO V25: TRAZABILIDAD SIN PÉRDIDA DE DATOS
+-- PROTOCOLO V26: SINCRO TOTAL SIN PÉRDIDA DE DATOS
 
 -- 1. CREACIÓN DE TABLAS SI NO EXISTEN
 CREATE TABLE IF NOT EXISTS public.users (id TEXT PRIMARY KEY, name TEXT, email TEXT UNIQUE, role TEXT, password TEXT, job_title TEXT, phone TEXT, avatar TEXT, client_id TEXT, is_network_member BOOLEAN DEFAULT false);
-CREATE TABLE IF NOT EXISTS public.clients (id TEXT PRIMARY KEY, name TEXT, type TEXT, contact_name TEXT, contact_phone TEXT, email TEXT, is_network_member BOOLEAN DEFAULT true, membership_level TEXT DEFAULT 'Activo', contract_date TEXT, cuit TEXT, notes TEXT, related_user_id TEXT, coordinates JSONB);
-CREATE TABLE IF NOT EXISTS public.suppliers (id TEXT PRIMARY KEY, name TEXT, category TEXT, cuit TEXT, country TEXT, province TEXT, city TEXT, address TEXT, email TEXT, coordinates JSONB);
+CREATE TABLE IF NOT EXISTS public.clients (id TEXT PRIMARY KEY, name TEXT, type TEXT, contact_name TEXT, contact_phone TEXT, email TEXT, is_network_member BOOLEAN DEFAULT true, membership_level TEXT DEFAULT 'Activo', contract_date TEXT, cuit TEXT, notes TEXT, related_user_id TEXT, coordinates JSONB, address TEXT, total_hectares NUMERIC DEFAULT 0);
+CREATE TABLE IF NOT EXISTS public.suppliers (id TEXT PRIMARY KEY, name TEXT, category TEXT, cuit TEXT, country TEXT, province TEXT, city TEXT, address TEXT, email TEXT, coordinates JSONB, legal_name TEXT, postal_code TEXT, whatsapp TEXT, commercial_contact TEXT, website TEXT, is_official_partner BOOLEAN DEFAULT false);
 CREATE TABLE IF NOT EXISTS public.storage_points (id TEXT PRIMARY KEY, node_code TEXT, name TEXT, type TEXT, address TEXT, city TEXT, province TEXT, coordinates JSONB, responsible_user_id TEXT, client_id TEXT, surface_m2 NUMERIC, conditions TEXT, notes TEXT);
 CREATE TABLE IF NOT EXISTS public.varieties (id TEXT PRIMARY KEY, supplier_id TEXT, name TEXT, usage TEXT, cycle_days INTEGER, expected_thc NUMERIC, knowledge_base TEXT, notes TEXT);
-CREATE TABLE IF NOT EXISTS public.seed_batches (id TEXT PRIMARY KEY, variety_id TEXT, supplier_id TEXT, batch_code TEXT, initial_quantity NUMERIC, remaining_quantity NUMERIC, storage_point_id TEXT, is_active BOOLEAN DEFAULT true, created_at TIMESTAMPTZ DEFAULT now());
-CREATE TABLE IF NOT EXISTS public.locations (id TEXT PRIMARY KEY, name TEXT, province TEXT, city TEXT, address TEXT, coordinates JSONB, polygon JSONB, client_id TEXT, capacity_ha NUMERIC);
-CREATE TABLE IF NOT EXISTS public.plots (id TEXT PRIMARY KEY, location_id TEXT, project_id TEXT, variety_id TEXT, seed_batch_id TEXT, name TEXT, type TEXT, status TEXT DEFAULT 'Activa', sowing_date TEXT);
-CREATE TABLE IF NOT EXISTS public.trial_records (id TEXT PRIMARY KEY, plot_id TEXT, date TEXT, time TEXT, stage TEXT, temperature NUMERIC, humidity NUMERIC, plant_height NUMERIC, yield NUMERIC, created_by TEXT, created_by_name TEXT);
+CREATE TABLE IF NOT EXISTS public.seed_batches (id TEXT PRIMARY KEY, variety_id TEXT, supplier_id TEXT, batch_code TEXT, initial_quantity NUMERIC, remaining_quantity NUMERIC, storage_point_id TEXT, label_serial_number TEXT, category TEXT, certification_number TEXT, gs1_code TEXT, analysis_date TEXT, germination NUMERIC, purity NUMERIC, price_per_kg NUMERIC, is_active BOOLEAN DEFAULT true, created_at TIMESTAMPTZ DEFAULT now());
+CREATE TABLE IF NOT EXISTS public.locations (id TEXT PRIMARY KEY, name TEXT, province TEXT, city TEXT, address TEXT, coordinates JSONB, polygon JSONB, client_id TEXT, capacity_ha NUMERIC, soil_type TEXT, climate TEXT, responsible_person TEXT, owner_name TEXT, owner_legal_name TEXT, owner_cuit TEXT, owner_contact TEXT, owner_type TEXT, irrigation_system TEXT, responsible_ids TEXT[]);
+CREATE TABLE IF NOT EXISTS public.plots (id TEXT PRIMARY KEY, location_id TEXT, project_id TEXT, variety_id TEXT, seed_batch_id TEXT, name TEXT, type TEXT, status TEXT DEFAULT 'Activa', sowing_date TEXT, block TEXT, replicate INTEGER, surface_area NUMERIC, surface_unit TEXT, density NUMERIC, owner_name TEXT, responsible_ids TEXT[], row_distance NUMERIC, perimeter NUMERIC, coordinates JSONB, polygon JSONB, irrigation_type TEXT, observations TEXT);
+CREATE TABLE IF NOT EXISTS public.trial_records (id TEXT PRIMARY KEY, plot_id TEXT, date TEXT, time TEXT, stage TEXT, temperature NUMERIC, humidity NUMERIC, plant_height NUMERIC, yield NUMERIC, replicate INTEGER, created_by TEXT, created_by_name TEXT);
+CREATE TABLE IF NOT EXISTS public.field_logs (id TEXT PRIMARY KEY, plot_id TEXT, date TEXT, time TEXT, note TEXT, photo_url TEXT);
+CREATE TABLE IF NOT EXISTS public.hydric_records (id TEXT PRIMARY KEY, location_id TEXT, plot_id TEXT, date TEXT, time TEXT, type TEXT, amount_mm NUMERIC, notes TEXT, created_by TEXT);
+CREATE TABLE IF NOT EXISTS public.seed_movements (id TEXT PRIMARY KEY, batch_id TEXT, client_id TEXT, target_location_id TEXT, origin_storage_id TEXT, quantity NUMERIC, date TEXT, dispatch_time TEXT, transport_guide_number TEXT, transport_type TEXT, driver_name TEXT, vehicle_plate TEXT, vehicle_model TEXT, transport_company TEXT, route_itinerary TEXT, status TEXT, route_google_link TEXT, estimated_distance_km NUMERIC);
+CREATE TABLE IF NOT EXISTS public.projects (id TEXT PRIMARY KEY, name TEXT, description TEXT, start_date TEXT, status TEXT, director_id TEXT, responsible_ids TEXT[]);
+CREATE TABLE IF NOT EXISTS public.tasks (id TEXT PRIMARY KEY, title TEXT, description TEXT, status TEXT, priority TEXT, assigned_to_ids TEXT[], due_date TEXT, plot_id TEXT, created_by TEXT);
+CREATE TABLE IF NOT EXISTS public.resources (id TEXT PRIMARY KEY, name TEXT, type TEXT, unit TEXT, cost_per_unit NUMERIC, stock NUMERIC);
 
--- 2. PARCHE DE COLUMNAS V25 (Añade solo lo que falta)
+-- 2. PARCHE DE COLUMNAS V26 (Aditivo para tablas existentes)
 DO $$ 
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='clients' AND COLUMN_NAME='address') THEN
-        ALTER TABLE public.clients ADD COLUMN address TEXT;
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='clients' AND COLUMN_NAME='total_hectares') THEN
-        ALTER TABLE public.clients ADD COLUMN total_hectares NUMERIC DEFAULT 0;
-    END IF;
+    -- Clientes
+    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='clients' AND COLUMN_NAME='address') THEN ALTER TABLE public.clients ADD COLUMN address TEXT; END IF;
+    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='clients' AND COLUMN_NAME='total_hectares') THEN ALTER TABLE public.clients ADD COLUMN total_hectares NUMERIC DEFAULT 0; END IF;
+    
+    -- Proveedores
+    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='suppliers' AND COLUMN_NAME='legal_name') THEN ALTER TABLE public.suppliers ADD COLUMN legal_name TEXT; END IF;
+    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='suppliers' AND COLUMN_NAME='whatsapp') THEN ALTER TABLE public.suppliers ADD COLUMN whatsapp TEXT; END IF;
+    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='suppliers' AND COLUMN_NAME='commercial_contact') THEN ALTER TABLE public.suppliers ADD COLUMN commercial_contact TEXT; END IF;
+    
+    -- Usuarios
+    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='users' AND COLUMN_NAME='avatar') THEN ALTER TABLE public.users ADD COLUMN avatar TEXT; END IF;
 END $$;
 
 -- 3. PERMISOS
@@ -244,6 +255,13 @@ ALTER TABLE public.seed_batches DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.locations DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.plots DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.trial_records DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.field_logs DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.hydric_records DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.seed_movements DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.projects DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.tasks DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.resources DISABLE ROW LEVEL SECURITY;
+
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;
 
 -- 4. ROOT RECOVERY
@@ -254,9 +272,9 @@ ON CONFLICT (id) DO NOTHING;
 NOTIFY pgrst, 'reload schema';
                       `;
                       navigator.clipboard.writeText(sql.trim());
-                      alert("Script Nuclear V25 Copiado.");
+                      alert("Script Nuclear V26 Copiado. Incluye Soporte de Remitos y Balance Hídrico.");
                     }} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center transition-all shadow-xl">
-                        <RotateCcw size={18} className="mr-2"/> Copiar Script Aditivo V25
+                        <RotateCcw size={18} className="mr-2"/> Copiar Script Aditivo V26
                     </button>
                   </div>
               </div>

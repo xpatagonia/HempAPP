@@ -112,106 +112,100 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-const toSnakeCase = (obj: any) => {
-    if (!obj || typeof obj !== 'object') return obj;
-    const newObj: any = {};
-    const manualMap: Record<string, string> = {
-        nodeCode: 'node_code',
-        clientId: 'client_id',
-        supplierId: 'supplier_id',
-        storagePointId: 'storage_point_id',
-        varietyId: 'variety_id',
-        locationId: 'location_id',
-        projectId: 'project_id',
-        seedBatchId: 'seed_batch_id',
-        isNetworkMember: 'is_network_member',
-        relatedUserId: 'related_user_id',
-        isOfficialPartner: 'is_official_partner',
-        postalCode: 'postal_code',
-        commercialContact: 'commercial_contact',
-        logisticsContact: 'logistics_contact',
-        legalName: 'legal_name',
-        membershipLevel: 'membership_level',
-        contractDate: 'contract_date',
-        contactName: 'contact_name',
-        contactPhone: 'contact_phone',
-        expectedThc: 'expected_thc',
-        cycleDays: 'cycle_days',
-        knowledgeBase: 'knowledge_base',
-        pricePerKg: 'price_per_kg',
-        initialQuantity: 'initial_quantity',
-        remainingQuantity: 'remaining_quantity',
-        labelSerialNumber: 'label_serial_number',
-        certificationNumber: 'certification_number',
-        gs1Code: 'gs1_code',
-        jobTitle: 'job_title',
-        analysisDate: 'analysis_date',
-        purchaseDate: 'purchase_date',
-        purchaseOrder: 'purchase_order',
-        isActive: 'is_active',
-        createdAt: 'created_at',
-        totalHectares: 'total_hectares' // Nuevo campo
-    };
+// Mapeo exhaustivo y consistente para evitar inconsistencias de DB
+const MANUAL_MAP: Record<string, string> = {
+    // Camel to Snake
+    nodeCode: 'node_code',
+    clientId: 'client_id',
+    supplierId: 'supplier_id',
+    storagePointId: 'storage_point_id',
+    varietyId: 'variety_id',
+    locationId: 'location_id',
+    projectId: 'project_id',
+    seedBatchId: 'seed_batch_id',
+    isNetworkMember: 'is_network_member',
+    relatedUserId: 'related_user_id',
+    isOfficialPartner: 'is_official_partner',
+    postalCode: 'postal_code',
+    commercialContact: 'commercial_contact',
+    logisticsContact: 'logistics_contact',
+    legalName: 'legal_name',
+    membershipLevel: 'membership_level',
+    contractDate: 'contract_date',
+    contactName: 'contact_name',
+    contactPhone: 'contact_phone',
+    expectedThc: 'expected_thc',
+    cycleDays: 'cycle_days',
+    knowledgeBase: 'knowledge_base',
+    pricePerKg: 'price_per_kg',
+    initialQuantity: 'initial_quantity',
+    remainingQuantity: 'remaining_quantity',
+    labelSerialNumber: 'label_serial_number',
+    certificationNumber: 'certification_number',
+    gs1Code: 'gs1_code',
+    jobTitle: 'job_title',
+    analysisDate: 'analysis_date',
+    purchaseDate: 'purchase_date',
+    purchaseOrder: 'purchase_order',
+    isActive: 'is_active',
+    createdAt: 'created_at',
+    totalHectares: 'total_hectares',
+    plantHeight: 'plant_height',
+    createdBy: 'created_by',
+    createdByName: 'created_by_name',
+    plotId: 'plot_id',
+    amountMm: 'amount_mm',
+    targetLocationId: 'target_location_id',
+    dispatchTime: 'dispatch_time',
+    transportGuideNumber: 'transport_guide_number',
+    transportType: 'transport_type',
+    driverName: 'driver_name',
+    vehiclePlate: 'vehicle_plate',
+    vehicleModel: 'vehicle_model',
+    transportCompany: 'transport_company',
+    routeItinerary: 'route_itinerary',
+    originStorageId: 'origin_storage_id',
+    routeGoogleLink: 'route_google_link',
+    estimatedDistanceKm: 'estimated_distance_km',
+    assignedToIds: 'assigned_to_ids',
+    dueDate: 'due_date',
+    surfaceArea: 'surface_area',
+    surfaceUnit: 'surface_unit',
+    sowingDate: 'sowing_date',
+    ownerName: 'owner_name',
+    responsibleIds: 'responsible_ids',
+    rowDistance: 'row_distance',
+    irrigationType: 'irrigation_type',
+    photoUrl: 'photo_url',
+    costPerUnit: 'cost_per_unit',
+    startDate: 'start_date',
+    directorId: 'director_id'
+};
 
+const toSnakeCase = (obj: any) => {
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return obj;
+    const newObj: any = {};
     for (const key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
-            const snakeKey = manualMap[key] || key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+            const snakeKey = MANUAL_MAP[key] || key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
             let val = obj[key];
-            if ((key === 'relatedUserId' || key === 'clientId' || key === 'supplierId' || key === 'storagePointId' || key === 'varietyId' || key === 'projectId' || key === 'seedBatchId' || key === 'locationId') && val === '') {
+            // Sanitización de IDs vacíos
+            if ((key.toLowerCase().endsWith('id') || key === 'clientId' || key === 'supplierId') && val === '') {
                 val = null;
             }
-            if (val !== undefined) {
-                newObj[snakeKey] = val;
-            }
+            newObj[snakeKey] = val;
         }
     }
     return newObj;
 };
 
 const toCamelCase = (obj: any) => {
-    if (!obj || typeof obj !== 'object') return obj;
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return obj;
     const newObj: any = {};
-    const manualMap: Record<string, string> = {
-        node_code: 'nodeCode',
-        job_title: 'jobTitle',
-        client_id: 'clientId',
-        supplier_id: 'supplierId',
-        storage_point_id: 'storagePointId',
-        variety_id: 'varietyId',
-        location_id: 'locationId',
-        project_id: 'projectId',
-        seed_batch_id: 'seedBatchId',
-        is_network_member: 'isNetworkMember',
-        related_user_id: 'relatedUserId',
-        is_official_partner: 'isOfficialPartner',
-        postal_code: 'postalCode',
-        commercial_contact: 'commercialContact',
-        logistics_contact: 'logisticsContact',
-        legal_name: 'legalName',
-        membership_level: 'membershipLevel',
-        contract_date: 'contractDate',
-        contact_name: 'contactName',
-        contact_phone: 'contactPhone',
-        expected_thc: 'expectedThc',
-        cycle_days: 'cycleDays',
-        knowledge_base: 'knowledgeBase',
-        price_per_kg: 'pricePerKg',
-        initial_quantity: 'initialQuantity',
-        remaining_quantity: 'remainingQuantity',
-        analysis_date: 'analysisDate',
-        purchase_date: 'purchaseDate',
-        purchase_order: 'purchaseOrder',
-        label_serial_number: 'labelSerialNumber',
-        certification_number: 'certificationNumber',
-        gs1_code: 'gs1Code',
-        is_active: 'isActive',
-        created_at: 'createdAt',
-        total_hectares: 'totalHectares' // Nuevo campo
-    };
-
+    const REVERSE_MAP = Object.fromEntries(Object.entries(MANUAL_MAP).map(([k, v]) => [v, k]));
     for (const key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
-            const camelKey = manualMap[key] || key.replace(/(_\w)/g, m => m[1].toUpperCase());
+            const camelKey = REVERSE_MAP[key] || key.replace(/(_\w)/g, m => m[1].toUpperCase());
             newObj[camelKey] = obj[key];
         }
     }

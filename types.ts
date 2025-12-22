@@ -1,7 +1,10 @@
 
 export type UsageType = 'Fibra' | 'Grano' | 'Dual' | 'Medicinal';
-
 export type UserRole = 'super_admin' | 'admin' | 'technician' | 'client' | 'viewer';
+export type RoleType = 'Productor Pequeño (0-5 ha)' | 'Productor Mediano (5-15 ha)' | 'Productor Grande (>20 ha)' | 'Empresa Privada' | 'Gobierno' | 'Academia' | 'ONG/Cooperativa';
+export type SupplierCategory = 'Semillas' | 'Insumos' | 'Servicios' | 'Recursos Humanos';
+export type MembershipLevel = 'Activo' | 'En Observación' | 'Premium' | 'Baja Temporal';
+export type SoilType = string;
 
 export interface User {
   id: string;
@@ -15,21 +18,6 @@ export interface User {
   clientId?: string;
   isNetworkMember: boolean; 
 }
-
-export type RoleType = 
-  | 'Productor Pequeño (0-5 ha)' 
-  | 'Productor Mediano (5-15 ha)' 
-  | 'Productor Grande (>20 ha)' 
-  | 'Empresa Privada' 
-  | 'Gobierno' 
-  | 'Academia' 
-  | 'ONG/Cooperativa';
-
-export type SupplierCategory = 'Semillas' | 'Insumos' | 'Servicios' | 'Recursos Humanos';
-
-export type MembershipLevel = 'Activo' | 'En Observación' | 'Premium' | 'Baja Temporal';
-
-export type SoilType = string;
 
 export interface Location {
   id: string;
@@ -73,10 +61,7 @@ export interface StoragePoint {
   address: string;
   city?: string;
   province?: string;
-  coordinates?: {
-    lat: number;
-    lng: number;
-  };
+  coordinates?: { lat: number; lng: number };
   responsibleUserId?: string; 
   clientId?: string; 
   surfaceM2?: number; 
@@ -134,16 +119,6 @@ export interface Client {
   coordinates?: { lat: number; lng: number }; 
 }
 
-export interface Project {
-  id: string;
-  name: string;
-  description?: string;
-  startDate: string;
-  status: 'Planificación' | 'En Curso' | 'Finalizado';
-  directorId?: string;
-  responsibleIds?: string[];
-}
-
 export interface Plot {
   id: string;
   locationId: string;
@@ -167,71 +142,6 @@ export interface Plot {
   coordinates?: { lat: number; lng: number };
   polygon?: { lat: number; lng: number }[];
   irrigationType?: string;
-}
-
-export interface TrialRecord {
-  id: string;
-  plotId: string;
-  date: string;
-  time?: string;
-  stage: 'Vegetativo' | 'Floración' | 'Maduración' | 'Cosecha';
-  temperature?: number;
-  humidity?: number;
-  emergenceDate?: string;
-  replicate?: number; 
-  plantsPerMeter?: number; 
-  uniformity?: number; 
-  vigor?: number; 
-  floweringDate?: string; 
-  plantHeight?: number; 
-  lodging?: number; 
-  birdDamage?: number; 
-  diseases?: string; 
-  pests?: string; 
-  harvestDate?: string; 
-  yield?: number; 
-  stemWeight?: number; 
-  leafWeight?: number; 
-  freshWeight?: number;
-  applicationType?: string;
-  applicationProduct?: string;
-  applicationDose?: string;
-  createdBy?: string;
-  createdByName?: string;
-}
-
-export interface FieldLog {
-  id: string;
-  plotId: string;
-  date: string;
-  time?: string; 
-  note: string;
-  photoUrl?: string;
-}
-
-export interface Resource {
-  id: string;
-  name: string;
-  type: 'Fertilizante' | 'Fitosanitario' | 'Labor' | 'Insumo';
-  unit: string;
-  costPerUnit: number;
-  stock?: number;
-  notes?: string;
-}
-
-export interface Task {
-  id: string;
-  title: string;
-  description?: string;
-  status: 'Pendiente' | 'Completada';
-  priority: 'Alta' | 'Media' | 'Baja';
-  assignedToIds: string[];
-  dueDate: string;
-  plotId?: string;
-  createdBy: string;
-  resourceId?: string;
-  resourceQuantity?: number;
-  resourceCost?: number;
 }
 
 export interface SeedBatch {
@@ -278,4 +188,59 @@ export interface SeedMovement {
   originStorageId?: string;
   routeGoogleLink?: string;
   estimatedDistanceKm?: number;
+}
+
+export interface TrialRecord {
+  id: string;
+  plotId: string;
+  date: string;
+  time?: string;
+  stage: 'Vegetativo' | 'Floración' | 'Maduración' | 'Cosecha';
+  temperature?: number;
+  humidity?: number;
+  plantHeight?: number;
+  yield?: number;
+  replicate?: number;
+  createdBy?: string;
+  createdByName?: string;
+}
+
+export interface FieldLog {
+  id: string;
+  plotId: string;
+  date: string;
+  time?: string; 
+  note: string;
+  photoUrl?: string;
+}
+
+export interface Resource {
+  id: string;
+  name: string;
+  type: 'Fertilizante' | 'Fitosanitario' | 'Labor' | 'Insumo';
+  unit: string;
+  costPerUnit: number;
+  stock?: number;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  description?: string;
+  startDate: string;
+  status: 'Planificación' | 'En Curso' | 'Finalizado';
+  directorId?: string;
+  responsibleIds?: string[];
+}
+
+export interface Task {
+  id: string;
+  title: string;
+  description?: string;
+  status: 'Pendiente' | 'Completada';
+  priority: 'Alta' | 'Media' | 'Baja';
+  assignedToIds: string[];
+  dueDate: string;
+  plotId?: string;
+  createdBy: string;
 }
