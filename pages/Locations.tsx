@@ -89,7 +89,6 @@ export default function Locations() {
   
   const [searchTerm, setSearchTerm] = useState('');
   const [filterProvince, setFilterProvince] = useState('');
-  const [expandedLocations, setExpandedLocations] = useState<Record<string, boolean>>({});
 
   const [formData, setFormData] = useState<Partial<Location> & { lat: string, lng: string }>({
     name: '', province: '', city: '', address: '', soilType: 'Franco', climate: '', 
@@ -152,7 +151,6 @@ export default function Locations() {
               }
               area = Math.abs(area * R * R / 2) / 10000;
               setFormData(prev => ({ ...prev, polygon: poly, capacityHa: Number(area.toFixed(2)), lat: centerLat.toFixed(6), lng: centerLng.toFixed(6) }));
-              alert("✅ Geometría satelital cargada (" + area.toFixed(2) + " ha)");
           }
           if (fileInputRef.current) fileInputRef.current.value = '';
       };
@@ -235,9 +233,9 @@ export default function Locations() {
           <div className="flex justify-between items-start mb-6">
               <div>
                   <h1 className="text-2xl font-black text-gray-800 dark:text-white flex items-center uppercase tracking-tight italic">
-                      <LayoutDashboard className="mr-2 text-hemp-600"/> Registro de Campos
+                      <LayoutDashboard className="mr-2 text-hemp-600"/> Gestión de Campos
                   </h1>
-                  <p className="text-sm text-gray-500">Administración de sitios productivos y GPS.</p>
+                  <p className="text-sm text-gray-500">Centro de control de establecimientos productivos.</p>
               </div>
               {canManage && (
                 <button onClick={() => { resetForm(); setIsModalOpen(true); }} className="bg-hemp-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-hemp-700 transition shadow-sm font-bold text-sm">
@@ -253,31 +251,33 @@ export default function Locations() {
       </div>
 
       <div className="flex flex-col sm:row gap-4 mb-6">
-          <div className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} /><input type="text" placeholder="Buscar por nombre..." className="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-800 rounded-lg focus:ring-2 focus:ring-hemp-500 outline-none text-sm dark:text-white" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /></div>
+          <div className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} /><input type="text" placeholder="Buscar campo..." className="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-800 rounded-lg focus:ring-2 focus:ring-hemp-500 outline-none text-sm dark:text-white" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /></div>
           <div className="relative w-full sm:w-64"><Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} /><select className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-slate-800 rounded-lg focus:ring-2 focus:ring-hemp-500 outline-none text-sm appearance-none bg-white dark:bg-slate-900 dark:text-white" value={filterProvince} onChange={e => setFilterProvince(e.target.value)}><option value="">Todas las Provincias</option>{Object.keys(ARG_GEO).sort().map(p => ( <option key={p} value={p}>{p}</option> ))}</select></div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="space-y-6">
         {visibleLocations.map(loc => (
-          <div key={loc.id} className="bg-white dark:bg-slate-900 rounded-[32px] shadow-sm border border-gray-200 dark:border-slate-800 overflow-hidden hover:shadow-xl transition-all flex flex-col group">
-            <div className="h-40 bg-gray-100 dark:bg-slate-800 relative">
-                {loc.coordinates ? <iframe width="100%" height="100%" frameBorder="0" scrolling="no" src={`https://maps.google.com/maps?q=${loc.coordinates.lat},${loc.coordinates.lng}&z=14&output=embed`} className="opacity-80 grayscale group-hover:grayscale-0 transition-all pointer-events-none"></iframe> : <div className="flex items-center justify-center h-full text-gray-300"><Globe size={48} /></div>}
-                <div className="absolute top-4 left-4 bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border dark:border-slate-700">GPS Activo</div>
-            </div>
-            <div className="p-6 flex-1 flex flex-col">
-                <div className="flex justify-between items-start mb-4">
-                    <div>
-                        <h3 className="text-lg font-black text-gray-800 dark:text-white uppercase tracking-tighter">{loc.name}</h3>
-                        <p className="text-gray-500 text-xs font-bold uppercase">{loc.city}, {loc.province}</p>
+          <div key={loc.id} className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-200 dark:border-slate-800 overflow-hidden hover:shadow-md transition-shadow">
+            <div className="p-6 flex flex-col md:flex-row gap-6">
+                <div className="w-full md:w-48 h-32 md:h-auto bg-gray-100 dark:bg-slate-800 rounded-lg overflow-hidden border dark:border-slate-700">{loc.coordinates ? <iframe width="100%" height="100%" frameBorder="0" scrolling="no" src={`https://maps.google.com/maps?q=${loc.coordinates.lat},${loc.coordinates.lng}&z=14&output=embed`} className="opacity-80"></iframe> : <div className="flex items-center justify-center h-full text-gray-400"><Globe size={32} /></div>}</div>
+                <div className="flex-1">
+                    <div className="flex justify-between items-start">
+                        <div><h3 className="text-xl font-bold text-gray-800 dark:text-white uppercase">{loc.name}</h3><p className="text-gray-500 text-sm">{loc.city}, {loc.province}</p></div>
+                        <div className="flex space-x-2">
+                            <Link to={`/locations/${loc.id}`} className="px-3 py-1.5 bg-gray-100 dark:bg-slate-800 text-xs font-black uppercase rounded-lg">Auditoría</Link>
+                            {canManage && (
+                                <>
+                                    <button onClick={() => handleEdit(loc)} className="p-1.5 text-gray-400 hover:text-hemp-600"><Edit2 size={16} /></button>
+                                    <button onClick={() => { if(window.confirm("¿Eliminar este sitio?")) deleteLocation(loc.id); }} className="p-1.5 text-gray-400 hover:text-red-600"><Trash2 size={16} /></button>
+                                </>
+                            )}
+                        </div>
                     </div>
-                    <div className="flex space-x-1">
-                        {canManage && <button onClick={() => handleEdit(loc)} className="p-2 text-gray-400 hover:text-hemp-600 transition"><Edit2 size={16} /></button>}
-                        <Link to={`/locations/${loc.id}`} className="p-2 text-gray-400 hover:text-blue-600 transition"><ExternalLink size={16} /></Link>
+                    <div className="mt-4 flex flex-wrap gap-3">
+                        <span className="text-[10px] font-black uppercase bg-gray-100 dark:bg-slate-800 px-2 py-1 rounded">{loc.capacityHa} Ha</span>
+                        <span className="text-[10px] font-black uppercase bg-blue-50 dark:bg-blue-900/20 text-blue-700 px-2 py-1 rounded">{loc.irrigationSystem}</span>
+                        {loc.ownerName && <span className="text-[10px] font-black uppercase bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 px-2 py-1 rounded">Titular: {loc.ownerName}</span>}
                     </div>
-                </div>
-                <div className="flex flex-wrap gap-2 mt-auto">
-                    <span className="text-[9px] font-black uppercase bg-gray-100 dark:bg-slate-800 px-2 py-1 rounded border dark:border-slate-700">{loc.capacityHa} Ha</span>
-                    <span className="text-[9px] font-black uppercase bg-blue-50 dark:bg-blue-900/20 text-blue-600 px-2 py-1 rounded border border-blue-100 dark:border-blue-800">{loc.irrigationSystem || 'Secano'}</span>
                 </div>
             </div>
           </div>
@@ -289,7 +289,7 @@ export default function Locations() {
           <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-4xl w-full p-10 shadow-2xl max-h-[95vh] overflow-y-auto animate-in zoom-in-95">
             <div className="flex justify-between items-center mb-8">
                 <h2 className="text-3xl font-black dark:text-white uppercase italic">Gestionar <span className="text-hemp-600">Establecimiento</span></h2>
-                <button onClick={() => !isSaving && setIsModalOpen(false)} className="p-2 text-slate-400 hover:rotate-90 transition-transform"><X size={28}/></button>
+                <button onClick={() => !isSaving && setIsModalOpen(false)} className="p-2 text-slate-400"><X size={28}/></button>
             </div>
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -306,25 +306,29 @@ export default function Locations() {
                           </div>
                       </div>
                       <div className="bg-indigo-50 dark:bg-indigo-900/10 p-6 rounded-[32px] border dark:border-indigo-900/30">
-                          <label className="block text-[10px] font-black text-indigo-400 uppercase mb-4 tracking-widest">Socio Responsable</label>
-                          <select className={inputClass} value={formData.clientId || ''} onChange={e => setFormData({...formData, clientId: e.target.value})}><option value="">Seleccionar entidad...</option>{clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+                          <label className="block text-[10px] font-black text-indigo-400 uppercase mb-4 tracking-widest">Atribución de Titularidad</label>
+                          <div className="space-y-4">
+                            <input placeholder="Nombre Propietario / Titular" className={inputClass} value={formData.ownerName} onChange={e => setFormData({...formData, ownerName: e.target.value})} />
+                            <select className={inputClass} value={formData.clientId || ''} onChange={e => setFormData({...formData, clientId: e.target.value})}><option value="">Socio Responsable...</option>{clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+                          </div>
                       </div>
                   </div>
                   <div className="flex flex-col">
                       <div className="bg-blue-50 dark:bg-blue-900/10 p-6 rounded-[32px] border dark:border-blue-900/30 flex-1">
-                          <div className="flex justify-between mb-4"><h3 className="text-[10px] font-black uppercase text-blue-700">Georreferencia Satelital</h3><input type="file" accept=".kml" ref={fileInputRef} className="hidden" onChange={handleKMLUpload} /><button type="button" onClick={() => fileInputRef.current?.click()} className="text-[10px] font-black uppercase text-blue-600 bg-white px-3 py-1 rounded-lg border shadow-sm flex items-center hover:scale-105 transition-transform"><FileUp size={12} className="mr-1"/> Importar KML</button></div>
+                          <div className="flex justify-between mb-4"><h3 className="text-[10px] font-black uppercase text-blue-700">Georreferencia Satelital</h3><input type="file" accept=".kml" ref={fileInputRef} className="hidden" onChange={handleKMLUpload} /><button type="button" onClick={() => fileInputRef.current?.click()} className="text-[10px] font-black uppercase text-blue-600 bg-white px-3 py-1 rounded-lg border shadow-sm flex items-center"><FileUp size={12} className="mr-1"/> KML</button></div>
                           <div className="h-64 border dark:border-slate-800 rounded-[24px] overflow-hidden mb-4 bg-slate-200"><MapEditor initialCenter={formData.lat && formData.lng ? { lat: parseFloat(formData.lat), lng: parseFloat(formData.lng) } : undefined} initialPolygon={formData.polygon || []} onPolygonChange={handlePolygonChange} height="100%" /></div>
                           <div className="grid grid-cols-2 gap-4">
-                                <input placeholder="Lat" className={`${inputClass} font-mono text-xs`} value={formData.lat} onChange={e => setFormData({...formData, lat: e.target.value})} />
-                                <input placeholder="Lng" className={`${inputClass} font-mono text-xs`} value={formData.lng} onChange={e => setFormData({...formData, lng: e.target.value})} />
+                                <input placeholder="Lat" className={inputClass} value={formData.lat} onChange={e => setFormData({...formData, lat: e.target.value})} />
+                                <input placeholder="Lng" className={inputClass} value={formData.lng} onChange={e => setFormData({...formData, lng: e.target.value})} />
                           </div>
                       </div>
                   </div>
               </div>
               <div className="flex justify-end pt-8 border-t dark:border-slate-800">
+                <button type="button" onClick={() => setIsModalOpen(false)} className="px-8 py-3 text-slate-400 font-black uppercase text-[10px] tracking-widest mr-2">Cancelar</button>
                 <button type="submit" disabled={isSaving} className="bg-slate-900 dark:bg-hemp-600 text-white px-12 py-4 rounded-2xl font-black text-xs uppercase shadow-2xl flex items-center hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50">
                     {isSaving ? <Loader2 className="animate-spin mr-2" size={18}/> : <Save className="mr-2" size={18}/>}
-                    {editingId ? 'Actualizar Registro' : 'Finalizar Alta de Sitio'}
+                    {editingId ? 'Actualizar' : 'Finalizar Alta'}
                 </button>
               </div>
             </form>

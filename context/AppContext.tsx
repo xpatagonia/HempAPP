@@ -198,7 +198,6 @@ const toSnakeCase = (obj: any) => {
             const snakeKey = MANUAL_MAP[key] || key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
             let val = obj[key];
             
-            // Fix crucial para Postgres Arreglos (TEXT[])
             if (['responsibleIds', 'assignedToIds', 'responsible_ids', 'assigned_to_ids'].includes(snakeKey) || key.includes('Ids')) {
                 if (val === null || val === undefined) val = [];
             } else if ((key.toLowerCase().endsWith('id') || key === 'clientId' || key === 'supplierId') && val === '') {
@@ -348,14 +347,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           const { error } = await supabase.from(table).insert([dbItem]);
           if (error) { 
               console.error(`[DB INSERT ERROR] ${table}:`, error); 
-              alert(`FALLO DE SERVIDOR: La base de datos rechazó el registro.\nMotivo: ${error.message}\nAcción: Ejecute el Script Nuclear V30 en Ajustes.`);
+              alert(`FALLO DE SERVIDOR: La base de datos rechazó el registro.\n\nMOTIVO: ${error.message}\n\nACCIÓN: Ejecute el Script V31 en Ajustes -> SQL Nucleus.`);
               return false; 
           }
           await refreshData();
           return true;
       } catch (e: any) { 
           console.error(`[RUNTIME INSERT ERROR] ${table}:`, e); 
-          alert("Error de ejecución local.");
+          alert("Error de ejecución local al procesar el guardado.");
           return false; 
       }
   };
@@ -366,14 +365,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           const { error } = await supabase.from(table).update(dbItem).eq('id', item.id);
           if (error) { 
               console.error(`[DB UPDATE ERROR] ${table}:`, error); 
-              alert(`FALLO DE SERVIDOR: La base de datos rechazó la actualización.\nMotivo: ${error.message}\nAcción: Ejecute el Script Nuclear V30 en Ajustes.`);
+              alert(`FALLO DE SERVIDOR: No se pudo actualizar.\nMotivo: ${error.message}`);
               return false; 
           }
           await refreshData();
           return true;
       } catch (e) { 
           console.error(`[RUNTIME UPDATE ERROR] ${table}:`, e); 
-          alert("Error de ejecución local.");
           return false; 
       }
   };
