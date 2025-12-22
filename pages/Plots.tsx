@@ -1,16 +1,42 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { Plot, Variety, Location, Project, TrialRecord } from '../types';
 import { 
   ChevronRight, FileSpreadsheet, LayoutGrid, List, Tag, FlaskConical, 
   Tractor, Trash2, Edit2, QrCode, X, Save, Search, Filter, 
-  MapPin, Calendar, Sprout, Printer, Ruler, Activity, CheckCircle2, AlertCircle, Download, ExternalLink, Plus, Loader2, Info, FolderKanban, Archive,
-  // Add missing Link as LinkIcon alias from lucide-react to fix line 280 reference
+  MapPin, Calendar, Sprout, Printer, Ruler, Activity, CheckCircle2, AlertCircle, Download, ExternalLink, Plus, Loader2, Info, FolderKanban, Archive, FileUp,
   Link as LinkIcon
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import MapEditor from '../components/MapEditor';
+
+const parseKML = (kmlText: string): { lat: number, lng: number }[] | null => {
+    try {
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(kmlText, "text/xml");
+        const allCoords = Array.from(xmlDoc.querySelectorAll("*")).filter(el => el.tagName.toLowerCase().endsWith('coordinates'));
+        if (allCoords.length === 0) return null;
+        allCoords.sort((a, b) => (b.textContent?.length || 0) - (a.textContent?.length || 0));
+        const targetNode = allCoords[0];
+        const text = targetNode.textContent || "";
+        const rawPoints = text.trim().split(/\s+/);
+        const latLngs = rawPoints.map(point => {
+            const parts = point.split(',');
+            if (parts.length >= 2) {
+                const lng = parseFloat(parts[0]);
+                const lat = parseFloat(parts[1]);
+                if (!isNaN(lat) && !isNaN(lng)) return { lat, lng };
+            }
+            return null;
+        }).filter((p): p is { lat: number, lng: number } => p !== null);
+        return latLngs.length >= 3 ? latLngs : null;
+    } catch (e) {
+        console.error("Error parsing KML", e);
+        return null;
+    }
+};
 
 export default function Plots() {
   const { plots, locations, varieties, projects, currentUser, getLatestRecord, seedBatches, deletePlot, updatePlot, addPlot, trialRecords } = useAppContext();
@@ -26,9 +52,10 @@ export default function Plots() {
   const [isSaving, setIsSaving] = useState(false);
   const [editingPlot, setEditingPlot] = useState<Plot | null>(null);
   const [qrPlot, setQrPlot] = useState<Plot | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form State para Alta
-  const [formData, setFormData] = useState<Partial<Plot>>({
+  const [formData, setFormData] = useState<Partial<Plot> & { lat: string, lng: string }>({
       name: '',
       type: 'Ensayo',
       locationId: '',
@@ -40,7 +67,10 @@ export default function Plots() {
       surfaceArea: 0,
       surfaceUnit: 'ha',
       density: 0,
-      observations: ''
+      observations: '',
+      lat: '',
+      lng: '',
+      polygon: []
   });
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
@@ -55,6 +85,39 @@ export default function Plots() {
       return matchSearch && matchLoc && matchType && matchStatus && hasAccess;
   }), [plots, searchTerm, filterLoc, filterType, filterStatus, isAdmin, isClient, currentUser, locations]);
 
+  const handleKMLUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (event) => {
+          const text = event.target?.result as string;
+          const poly = parseKML(text);
+          if (poly && poly.length > 2) {
+              const R = 6371000;
+              const toRad = (x: number) => x * Math.PI / 180;
+              let area = 0;
+              const lats = poly.map(p => p.lat);
+              const lngs = poly.map(p => p.lng);
+              const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+              const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
+              for (let i = 0; i < poly.length; i++) {
+                  const j = (i + 1) % poly.length;
+                  const p1 = poly[i];
+                  const p2 = poly[j];
+                  area += (toRad(p2.lng) - toRad(p1.lng)) * (2 + Math.sin(toRad(p1.lat)) + Math.sin(toRad(p2.lat)));
+              }
+              area = Math.abs(area * R * R / 2) / 10000;
+              setFormData(prev => ({ ...prev, polygon: poly, surfaceArea: Number(area.toFixed(2)), surfaceUnit: 'ha', lat: centerLat.toFixed(6), lng: centerLng.toFixed(6) }));
+          }
+          if (fileInputRef.current) fileInputRef.current.value = '';
+      };
+      reader.readAsText(file);
+  };
+
+  const handlePolygonChange = (newPoly: { lat: number, lng: number }[], areaHa: number, center: { lat: number, lng: number }) => {
+      setFormData(prev => ({ ...prev, polygon: newPoly, surfaceArea: areaHa > 0 ? Number(areaHa.toFixed(2)) : prev.surfaceArea, surfaceUnit: 'ha', lat: center.lat.toFixed(6), lng: center.lng.toFixed(6) }));
+  };
+
   const handleSubmitAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name || !formData.locationId || !formData.varietyId || isSaving) {
@@ -63,18 +126,24 @@ export default function Plots() {
     }
 
     setIsSaving(true);
+    const finalLat = parseFloat(formData.lat || '0');
+    const finalLng = parseFloat(formData.lng || '0');
+    const coordinates = (!isNaN(finalLat) && !isNaN(finalLng) && finalLat !== 0) ? { lat: finalLat, lng: finalLng } : null;
+
     const payload = {
         ...formData,
         id: Date.now().toString(),
         responsibleIds: [currentUser?.id || ''],
         surfaceArea: Number(formData.surfaceArea),
-        density: Number(formData.density)
+        density: Number(formData.density),
+        coordinates,
+        polygon: formData.polygon || []
     } as Plot;
 
     const success = await addPlot(payload);
     if (success) {
         setIsAddModalOpen(false);
-        setFormData({ name: '', type: 'Ensayo', locationId: '', projectId: '', varietyId: '', seedBatchId: '', status: 'Activa', sowingDate: new Date().toISOString().split('T')[0], surfaceArea: 0, surfaceUnit: 'ha', density: 0 });
+        setFormData({ name: '', type: 'Ensayo', locationId: '', projectId: '', varietyId: '', seedBatchId: '', status: 'Activa', sowingDate: new Date().toISOString().split('T')[0], surfaceArea: 0, surfaceUnit: 'ha', density: 0, lat: '', lng: '', polygon: [] });
     }
     setIsSaving(false);
   };
@@ -89,23 +158,7 @@ export default function Plots() {
       }
   };
 
-  const handleExport = () => {
-    const exportData = filteredPlots.map(p => ({
-        'Nombre': p.name,
-        'Tipo': p.type, 
-        'Proyecto': projects.find(proj => proj.id === p.projectId)?.name || 'N/A',
-        'Locación': locations.find(l => l.id === p.locationId)?.name || 'N/A',
-        'Variedad': varieties.find(v => v.id === p.varietyId)?.name || 'N/A',
-        'Estado': p.status,
-        'Fecha Siembra': p.sowingDate
-    }));
-    const worksheet = XLSX.utils.json_to_sheet(exportData);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Planilla_Global");
-    XLSX.writeFile(workbook, `HempC_Planilla_${new Date().toISOString().split('T')[0]}.xlsx`);
-  };
-
-  const inputClass = "w-full border border-gray-300 dark:border-slate-800 bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 p-3 rounded-xl focus:ring-2 focus:ring-hemp-500 outline-none transition-all disabled:opacity-50 font-medium";
+  const inputClass = "w-full border border-gray-300 dark:border-slate-800 bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 p-3 rounded-xl focus:ring-2 focus:ring-hemp-500 outline-none transition-all disabled:opacity-50 font-medium text-sm";
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -127,7 +180,6 @@ export default function Plots() {
         </div>
       </div>
 
-      {/* FILTERS PANEL */}
       <div className="bg-white dark:bg-slate-900 p-5 rounded-[24px] shadow-sm border dark:border-slate-800 grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-4">
           <div className="relative lg:col-span-2">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
@@ -244,7 +296,7 @@ export default function Plots() {
       {/* MODAL ALTA NUEVA UNIDAD */}
       {isAddModalOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-4xl w-full p-10 shadow-2xl max-h-[95vh] overflow-y-auto animate-in zoom-in-95">
+          <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-5xl w-full p-10 shadow-2xl max-h-[95vh] overflow-y-auto animate-in zoom-in-95">
             <div className="flex justify-between items-center mb-8">
                 <div className="flex items-center gap-4">
                     <div className="bg-hemp-600 p-3 rounded-2xl text-white shadow-lg"><Sprout size={28}/></div>
@@ -299,52 +351,81 @@ export default function Plots() {
                       </div>
                   </div>
 
-                  {/* COLUMNA 2: GENÉTICA Y DISEÑO */}
+                  {/* COLUMNA 2: GEOLOCALIZACIÓN Y KML */}
                   <div className="space-y-6">
-                      <div className="bg-emerald-50 dark:bg-emerald-900/10 p-6 rounded-[32px] border border-emerald-100 dark:border-emerald-900/30">
-                          <h3 className="text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-widest mb-6 border-b border-emerald-100 dark:border-emerald-900/30 pb-3 flex items-center"><FlaskConical size={14} className="mr-2"/> Genética & Material</h3>
-                          <div className="space-y-4">
-                              <div>
-                                  <label className="text-[9px] font-black uppercase text-emerald-800 dark:text-emerald-300 ml-1 mb-1 block">Variedad Genética *</label>
-                                  <select required className={inputClass} value={formData.varietyId} onChange={e => setFormData({...formData, varietyId: e.target.value})}>
-                                      <option value="">-- Seleccionar Genética --</option>
-                                      {varieties.map(v => <option key={v.id} value={v.id}>{v.name} ({v.usage})</option>)}
-                                  </select>
-                              </div>
-                              <div>
-                                  <label className="text-[9px] font-black uppercase text-emerald-800 dark:text-emerald-300 ml-1 mb-1 block">Lote de Semilla (Trazabilidad)</label>
-                                  <select className={inputClass} value={formData.seedBatchId} onChange={e => setFormData({...formData, seedBatchId: e.target.value})}>
-                                      <option value="">-- Autoproducción o Externo --</option>
-                                      {seedBatches.filter(b => !formData.varietyId || b.varietyId === formData.varietyId).map(b => (
-                                          <option key={b.id} value={b.id}>{b.batchCode} - Disp: {b.remainingQuantity} kg</option>
-                                      ))}
-                                  </select>
+                      <div className="bg-emerald-50 dark:bg-emerald-900/10 p-6 rounded-[32px] border border-emerald-100 dark:border-emerald-900/30 flex flex-col min-h-[400px]">
+                          <div className="flex justify-between items-center mb-4">
+                              <h3 className="text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-widest flex items-center"><MapPin size={14} className="mr-2"/> Delimitación GPS</h3>
+                              <div className="flex gap-2">
+                                  <input type="file" accept=".kml" ref={fileInputRef} className="hidden" onChange={handleKMLUpload} />
+                                  <button type="button" onClick={() => fileInputRef.current?.click()} className="px-3 py-1.5 bg-white text-emerald-600 rounded-lg text-[10px] font-black uppercase tracking-widest border border-emerald-200 shadow-sm flex items-center hover:bg-emerald-50 transition">
+                                      <FileUp size={14} className="mr-1.5"/> Importar KML
+                                  </button>
                               </div>
                           </div>
-                      </div>
-
-                      <div className="bg-slate-50 dark:bg-slate-950 p-6 rounded-[32px] border dark:border-slate-800">
-                          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6 border-b dark:border-slate-800 pb-3 flex items-center"><Activity size={14} className="mr-2"/> Diseño Técnico</h3>
+                          <div className="flex-1 min-h-[250px] rounded-2xl overflow-hidden border border-emerald-200 dark:border-emerald-900/30 mb-4 shadow-inner">
+                               <MapEditor 
+                                  initialCenter={formData.lat && formData.lng ? { lat: parseFloat(formData.lat), lng: parseFloat(formData.lng) } : undefined} 
+                                  initialPolygon={formData.polygon || []} 
+                                  onPolygonChange={handlePolygonChange} 
+                                  height="100%" 
+                               />
+                          </div>
                           <div className="grid grid-cols-2 gap-4">
-                              <div>
-                                  <label className="text-[9px] font-black uppercase text-slate-400 ml-1 mb-1 block">Superficie</label>
-                                  <div className="flex">
-                                      <input type="number" step="0.01" className={`${inputClass} rounded-r-none`} value={formData.surfaceArea} onChange={e => setFormData({...formData, surfaceArea: Number(e.target.value)})} />
-                                      <select className="bg-slate-100 dark:bg-slate-800 border border-l-0 border-gray-300 dark:border-slate-800 rounded-r-xl px-2 text-[10px] font-black uppercase outline-none" value={formData.surfaceUnit} onChange={e => setFormData({...formData, surfaceUnit: e.target.value as any})}>
-                                          <option value="ha">HA</option>
-                                          <option value="m2">M²</option>
-                                          <option value="ac">AC</option>
-                                      </select>
-                                  </div>
-                              </div>
-                              <div>
-                                  <label className="text-[9px] font-black uppercase text-slate-400 ml-1 mb-1 block">Fecha de Siembra</label>
-                                  <input type="date" required className={inputClass} value={formData.sowingDate} onChange={e => setFormData({...formData, sowingDate: e.target.value})} />
-                              </div>
-                              <div className="col-span-2">
-                                  <label className="text-[9px] font-black uppercase text-slate-400 ml-1 mb-1 block">Densidad Objetivo (pl/m²)</label>
-                                  <input type="number" className={inputClass} value={formData.density} onChange={e => setFormData({...formData, density: Number(e.target.value)})} placeholder="Ej: 150" />
-                              </div>
+                               <div>
+                                  <label className="text-[9px] font-black uppercase text-emerald-800 dark:text-emerald-300 ml-1">Latitud</label>
+                                  <input type="text" className={inputClass} value={formData.lat} onChange={e => setFormData({...formData, lat: e.target.value})} placeholder="-00.000000" />
+                               </div>
+                               <div>
+                                  <label className="text-[9px] font-black uppercase text-emerald-800 dark:text-emerald-300 ml-1">Longitud</label>
+                                  <input type="text" className={inputClass} value={formData.lng} onChange={e => setFormData({...formData, lng: e.target.value})} placeholder="-00.000000" />
+                               </div>
+                          </div>
+                      </div>
+                  </div>
+              </div>
+
+              {/* TERCERA COLUMNA (INFERIOR): GENÉTICA Y DISEÑO */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-4">
+                  <div className="bg-purple-50 dark:bg-purple-900/10 p-6 rounded-[32px] border border-purple-100 dark:border-purple-900/30">
+                      <h3 className="text-[10px] font-black text-purple-700 dark:text-purple-400 uppercase tracking-widest mb-6 flex items-center"><FlaskConical size={14} className="mr-2"/> Genética & Trazabilidad</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                              <label className="text-[9px] font-black uppercase text-purple-800 dark:text-purple-300 ml-1 block mb-1">Variedad Genética *</label>
+                              <select required className={inputClass} value={formData.varietyId} onChange={e => setFormData({...formData, varietyId: e.target.value})}>
+                                  <option value="">-- Seleccionar --</option>
+                                  {varieties.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                              </select>
+                          </div>
+                          <div>
+                              <label className="text-[9px] font-black uppercase text-purple-800 dark:text-purple-300 ml-1 block mb-1">Lote de Semilla</label>
+                              <select className={inputClass} value={formData.seedBatchId} onChange={e => setFormData({...formData, seedBatchId: e.target.value})}>
+                                  <option value="">-- Autoproducción --</option>
+                                  {seedBatches.filter(b => !formData.varietyId || b.varietyId === formData.varietyId).map(b => (
+                                      <option key={b.id} value={b.id}>{b.batchCode} ({b.remainingQuantity} kg)</option>
+                                  ))}
+                              </select>
+                          </div>
+                      </div>
+                  </div>
+
+                  <div className="bg-slate-50 dark:bg-slate-950 p-6 rounded-[32px] border dark:border-slate-800">
+                      <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center"><Activity size={14} className="mr-2"/> Diseño de Campo</h3>
+                      <div className="grid grid-cols-3 gap-4">
+                          <div>
+                              <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Superficie</label>
+                              <input type="number" step="0.01" className={inputClass} value={formData.surfaceArea} onChange={e => setFormData({...formData, surfaceArea: Number(e.target.value)})} />
+                          </div>
+                          <div>
+                              <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Unidad</label>
+                              <select className={inputClass} value={formData.surfaceUnit} onChange={e => setFormData({...formData, surfaceUnit: e.target.value as any})}>
+                                  <option value="ha">HA</option>
+                                  <option value="m2">M²</option>
+                              </select>
+                          </div>
+                          <div>
+                              <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Fecha Siembra</label>
+                              <input type="date" className={inputClass} value={formData.sowingDate} onChange={e => setFormData({...formData, sowingDate: e.target.value})} />
                           </div>
                       </div>
                   </div>

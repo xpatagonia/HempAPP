@@ -149,6 +149,14 @@ const MANUAL_MAP: Record<string, string> = {
     createdAt: 'created_at',
     totalHectares: 'total_hectares',
     plantHeight: 'plant_height',
+    plantsPerMeter: 'plants_per_meter',
+    birdDamage: 'bird_damage',
+    stemWeight: 'stem_weight',
+    leafWeight: 'leaf_weight',
+    freshWeight: 'fresh_weight',
+    emergenceDate: 'emergence_date',
+    floweringDate: 'flowering_date',
+    harvestDate: 'harvest_date',
     createdBy: 'created_by',
     createdByName: 'created_by_name',
     plotId: 'plot_id',
@@ -200,7 +208,7 @@ const toSnakeCase = (obj: any) => {
             
             if (['responsibleIds', 'assignedToIds', 'responsible_ids', 'assigned_to_ids'].includes(snakeKey) || key.includes('Ids')) {
                 if (val === null || val === undefined) val = [];
-            } else if ((key.toLowerCase().endsWith('id') || key === 'clientId' || key === 'supplierId') && val === '') {
+            } else if ((key.toLowerCase().endsWith('id') || key === 'clientId' || key === 'supplierId') && (val === '' || val === undefined)) {
                 val = null;
             }
             
@@ -347,7 +355,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           const { error } = await supabase.from(table).insert([dbItem]);
           if (error) { 
               console.error(`[DB INSERT ERROR] ${table}:`, error); 
-              alert(`FALLO DE SERVIDOR: La base de datos rechazó el registro.\n\nMOTIVO: ${error.message}\n\nACCIÓN: Ejecute el Script V31 en Ajustes -> SQL Nucleus.`);
+              alert(`FALLO DE SERVIDOR: La base de datos rechazó el registro.\n\nMOTIVO: ${error.message}\n\nACCIÓN: Ejecute el Script V33 en Ajustes -> SQL Nucleus.`);
               return false; 
           }
           await refreshData();

@@ -199,8 +199,21 @@ export interface TrialRecord {
   temperature?: number;
   humidity?: number;
   plantHeight?: number;
+  plantsPerMeter?: number;
+  uniformity?: number;
+  vigor?: number;
+  lodging?: number;
+  birdDamage?: number;
+  stemWeight?: number;
+  leafWeight?: number;
+  freshWeight?: number;
   yield?: number;
   replicate?: number;
+  emergenceDate?: string;
+  floweringDate?: string;
+  harvestDate?: string;
+  diseases?: string;
+  pests?: string;
   createdBy?: string;
   createdByName?: string;
 }
