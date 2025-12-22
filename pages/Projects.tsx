@@ -77,14 +77,14 @@ export default function Projects() {
 
   const toggleResponsible = (userId: string) => {
     if (isSaving) return;
-    const current = formData.responsibleIds || [];
-    let next;
-    if (current.includes(userId)) {
-        next = current.filter(id => id !== userId);
-    } else {
-        next = [...current, userId];
-    }
-    setFormData(prev => ({ ...prev, responsibleIds: next }));
+    setFormData(prev => {
+        const current = prev.responsibleIds || [];
+        const isSelected = current.includes(userId);
+        const next = isSelected 
+            ? current.filter(id => id !== userId) 
+            : [...current, userId];
+        return { ...prev, responsibleIds: next };
+    });
   };
 
   const getPlotCount = (projectId: string) => plots.filter(p => p.projectId === projectId).length;
@@ -281,14 +281,14 @@ export default function Projects() {
                         return (
                             <div 
                                 key={u.id} 
-                                onClick={() => toggleResponsible(u.id)}
+                                onClick={(e) => { e.preventDefault(); toggleResponsible(u.id); }}
                                 className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer group ${
                                     isSelected 
                                     ? 'bg-hemp-600 border-hemp-500 text-white shadow-md' 
                                     : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-800 text-gray-600 dark:text-gray-400 hover:border-hemp-600'
                                 }`}
                             >
-                                <div className="flex items-center space-x-3">
+                                <div className="flex items-center space-x-3 pointer-events-none">
                                     <img src={u.avatar || `https://ui-avatars.com/api/?name=${u.name}`} className="w-8 h-8 rounded-full border border-white/20 object-cover" alt="avatar"/>
                                     <div className="min-w-0">
                                         <p className="text-xs font-black uppercase tracking-tight truncate leading-tight">{u.name}</p>

@@ -193,15 +193,21 @@ const toSnakeCase = (obj: any) => {
     const newObj: any = {};
     for (const key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
-            // Excluimos campos auxiliares de la interfaz que no van a la DB
+            // Excluimos campos auxiliares de la interfaz
             if (['lat', 'lng', 'teamUserIds'].includes(key)) continue;
 
             const snakeKey = MANUAL_MAP[key] || key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
             let val = obj[key];
+            
+            // Tratamiento especial para campos de ID vacíos y valores nulos
             if ((key.toLowerCase().endsWith('id') || key === 'clientId' || key === 'supplierId') && val === '') {
                 val = null;
             }
-            newObj[snakeKey] = val;
+            
+            // Si el valor es undefined, no lo incluimos para evitar fallos de Supabase
+            if (val !== undefined) {
+                newObj[snakeKey] = val;
+            }
         }
     }
     return newObj;
