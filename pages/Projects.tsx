@@ -1,8 +1,8 @@
+
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Project } from '../types';
-// Added missing Activity and CheckSquare icons to the lucide-react imports
-import { Plus, Folder, Calendar, Edit2, Users, Trash2, UserCheck, Star, X, Save, Loader2, Activity, CheckSquare } from 'lucide-react';
+import { Plus, Folder, Calendar, Edit2, Users, Trash2, UserCheck, Star, X, Save, Loader2, Activity, CheckSquare, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export default function Projects() {
@@ -44,7 +44,7 @@ export default function Projects() {
             setIsModalOpen(false);
             resetForm();
         } else {
-            alert("Error al guardar el proyecto. Verifique su conexión.");
+            alert("Error al guardar el proyecto. Verifique su conexión o esquema SQL.");
         }
     } catch (error) {
         console.error("Project Save Error:", error);
@@ -75,18 +75,16 @@ export default function Projects() {
       }
   };
 
-  const openNew = () => {
-      resetForm();
-      setIsModalOpen(true);
-  };
-
   const toggleResponsible = (userId: string) => {
+    if (isSaving) return;
     const current = formData.responsibleIds || [];
+    let next;
     if (current.includes(userId)) {
-        setFormData({...formData, responsibleIds: current.filter(id => id !== userId)});
+        next = current.filter(id => id !== userId);
     } else {
-        setFormData({...formData, responsibleIds: [...current, userId]});
+        next = [...current, userId];
     }
+    setFormData(prev => ({ ...prev, responsibleIds: next }));
   };
 
   const getPlotCount = (projectId: string) => plots.filter(p => p.projectId === projectId).length;
@@ -101,7 +99,7 @@ export default function Projects() {
             <p className="text-sm text-gray-500">Gestión de objetivos anuales y equipos de trabajo.</p>
         </div>
         {isAdmin && (
-          <button onClick={openNew} className="bg-slate-900 dark:bg-hemp-600 text-white px-6 py-3 rounded-2xl flex items-center hover:scale-[1.02] transition-all shadow-xl font-black text-xs uppercase tracking-widest">
+          <button onClick={() => { resetForm(); setIsModalOpen(true); }} className="bg-slate-900 dark:bg-hemp-600 text-white px-6 py-3 rounded-2xl flex items-center hover:scale-[1.02] transition-all shadow-xl font-black text-xs uppercase tracking-widest">
             <Plus size={18} className="mr-2" /> Nueva Campaña
           </button>
         )}
@@ -207,7 +205,6 @@ export default function Projects() {
         })}
       </div>
 
-       {/* Modal */}
        {isModalOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-2xl w-full p-10 shadow-2xl max-h-[95vh] overflow-y-auto animate-in zoom-in-95 border border-white/10">
@@ -228,7 +225,7 @@ export default function Projects() {
                   <div className="space-y-4">
                       <div>
                         <label className="block text-[10px] font-black text-gray-500 uppercase mb-1.5 tracking-widest ml-1">Nombre de la Campaña *</label>
-                        <input required type="text" placeholder="Ej: Campaña Fibra 2024 / Ensayo Varietal Sur" className={inputClass} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} disabled={isSaving} />
+                        <input required type="text" placeholder="Ej: Campaña Fibra 2024" className={inputClass} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} disabled={isSaving} />
                       </div>
                       
                       <div>
@@ -250,7 +247,7 @@ export default function Projects() {
 
                       <div>
                         <label className="block text-[10px] font-black text-gray-500 uppercase mb-1.5 tracking-widest ml-1">Objetivos & Descripción</label>
-                        <textarea className={inputClass} rows={3} value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} disabled={isSaving} placeholder="Detalle los alcances, zonas y metas de esta campaña..."></textarea>
+                        <textarea className={inputClass} rows={3} value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} disabled={isSaving} placeholder="Detalle los alcances de esta campaña..."></textarea>
                       </div>
                   </div>
               </div>
@@ -258,17 +255,9 @@ export default function Projects() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="bg-blue-50 dark:bg-blue-900/10 p-6 rounded-[32px] border border-blue-100 dark:border-blue-900/30">
                   <label className="block text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest mb-4 flex items-center">
-                    <Calendar size={14} className="mr-2" /> Fecha de Lanzamiento
+                    <Calendar size={14} className="mr-2" /> Fecha Lanzamiento
                   </label>
-                  <input 
-                    type="date" 
-                    required 
-                    className={`${inputClass} border-blue-100 dark:border-blue-900/50 cursor-pointer`} 
-                    value={formData.startDate} 
-                    onChange={e => setFormData({...formData, startDate: e.target.value})} 
-                    disabled={isSaving}
-                    onClick={(e) => {try{e.currentTarget.showPicker()}catch(e){}}}
-                  />
+                  <input type="date" required className={`${inputClass} border-blue-100 dark:border-blue-900/50`} value={formData.startDate} onChange={e => setFormData({...formData, startDate: e.target.value})} disabled={isSaving}/>
                 </div>
                 <div className="bg-emerald-50 dark:bg-emerald-900/10 p-6 rounded-[32px] border border-emerald-100 dark:border-emerald-900/30">
                   <label className="block text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-widest mb-4 flex items-center">
@@ -286,30 +275,30 @@ export default function Projects() {
                   <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-4 ml-1 flex items-center">
                       <Users size={14} className="mr-2"/> Equipo Operativo Seleccionado
                   </label>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
-                    {usersList.map(u => (
-                        <label key={u.id} className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer ${
-                            formData.responsibleIds?.includes(u.id) 
-                            ? 'bg-hemp-600 border-hemp-500 text-white shadow-md' 
-                            : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50'
-                        }`}>
-                            <div className="flex items-center space-x-3">
-                                <input 
-                                    type="checkbox" 
-                                    className="hidden" 
-                                    checked={formData.responsibleIds?.includes(u.id)} 
-                                    onChange={() => toggleResponsible(u.id)} 
-                                    disabled={isSaving}
-                                />
-                                <img src={u.avatar || `https://ui-avatars.com/api/?name=${u.name}`} className="w-8 h-8 rounded-full border border-white/20 object-cover" alt="avatar"/>
-                                <div>
-                                    <p className="text-xs font-black uppercase tracking-tight">{u.name}</p>
-                                    <p className={`text-[9px] font-bold ${formData.responsibleIds?.includes(u.id) ? 'text-hemp-100' : 'text-gray-400'}`}>{u.jobTitle || u.role}</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+                    {usersList.map(u => {
+                        const isSelected = (formData.responsibleIds || []).includes(u.id);
+                        return (
+                            <div 
+                                key={u.id} 
+                                onClick={() => toggleResponsible(u.id)}
+                                className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer group ${
+                                    isSelected 
+                                    ? 'bg-hemp-600 border-hemp-500 text-white shadow-md' 
+                                    : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-800 text-gray-600 dark:text-gray-400 hover:border-hemp-600'
+                                }`}
+                            >
+                                <div className="flex items-center space-x-3">
+                                    <img src={u.avatar || `https://ui-avatars.com/api/?name=${u.name}`} className="w-8 h-8 rounded-full border border-white/20 object-cover" alt="avatar"/>
+                                    <div className="min-w-0">
+                                        <p className="text-xs font-black uppercase tracking-tight truncate leading-tight">{u.name}</p>
+                                        <p className={`text-[9px] font-bold ${isSelected ? 'text-hemp-100' : 'text-gray-400'}`}>{u.jobTitle || u.role}</p>
+                                    </div>
                                 </div>
+                                {isSelected ? <CheckSquare size={16}/> : <Plus size={14} className="text-gray-300 group-hover:text-hemp-600 opacity-0 group-hover:opacity-100"/>}
                             </div>
-                            {formData.responsibleIds?.includes(u.id) && <CheckSquare size={16}/>}
-                        </label>
-                    ))}
+                        );
+                    })}
                   </div>
               </div>
 
@@ -327,10 +316,3 @@ export default function Projects() {
     </div>
   );
 }
-
-// Fixed ArrowRight missing import
-const ArrowRight = ({ size, className }: { size?: number, className?: string }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-        <path d="M5 12h14m-7-7 7 7-7 7"/>
-    </svg>
-);

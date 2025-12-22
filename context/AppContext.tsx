@@ -193,6 +193,9 @@ const toSnakeCase = (obj: any) => {
     const newObj: any = {};
     for (const key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
+            // Excluimos campos auxiliares de la interfaz que no van a la DB
+            if (['lat', 'lng', 'teamUserIds'].includes(key)) continue;
+
             const snakeKey = MANUAL_MAP[key] || key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
             let val = obj[key];
             if ((key.toLowerCase().endsWith('id') || key === 'clientId' || key === 'supplierId') && val === '') {
@@ -337,20 +340,32 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const dbItem = toSnakeCase({ ...item });
       try {
           const { error } = await supabase.from(table).insert([dbItem]);
-          if (error) { console.error(`[DB INSERT ERROR] ${table}:`, error.message); return false; }
+          if (error) { 
+              console.error(`[DB INSERT ERROR] ${table}:`, error.message, error.details, dbItem); 
+              return false; 
+          }
           await refreshData();
           return true;
-      } catch (e: any) { console.error(`[RUNTIME INSERT ERROR] ${table}:`, e); return false; }
+      } catch (e: any) { 
+          console.error(`[RUNTIME INSERT ERROR] ${table}:`, e); 
+          return false; 
+      }
   };
 
   const genericUpdate = async (table: string, item: any, setter: any, localKey: string) => {
       const dbItem = toSnakeCase(item);
       try {
           const { error } = await supabase.from(table).update(dbItem).eq('id', item.id);
-          if (error) { console.error(`[DB UPDATE ERROR] ${table}:`, error.message); return false; }
+          if (error) { 
+              console.error(`[DB UPDATE ERROR] ${table}:`, error.message, error.details, dbItem); 
+              return false; 
+          }
           await refreshData();
           return true;
-      } catch (e) { console.error(`[RUNTIME UPDATE ERROR] ${table}:`, e); return false; }
+      } catch (e) { 
+          console.error(`[RUNTIME UPDATE ERROR] ${table}:`, e); 
+          return false; 
+      }
   };
 
   const genericDelete = async (table: string, id: string, setter: any, localKey: string) => {

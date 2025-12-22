@@ -2,13 +2,11 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Location, SoilType, RoleType, Plot } from '../types';
-// Fixed: Added Save to lucide-react imports
-import { Plus, MapPin, User, Globe, Edit2, Trash2, Keyboard, List, Briefcase, Building, Landmark, GraduationCap, Users, Droplets, Ruler, Navigation, ChevronDown, ChevronUp, Sprout, ArrowRight, LayoutDashboard, Search, Filter, ExternalLink, FileUp, X, ScanBarcode, Loader2, Save } from 'lucide-react';
+import { Plus, MapPin, User, Globe, Edit2, Trash2, Briefcase, Building, Landmark, GraduationCap, Users, Droplets, Navigation, X, ScanBarcode, Loader2, Save, Search, Filter, ExternalLink, FileUp, LayoutDashboard } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import WeatherWidget from '../components/WeatherWidget';
 import MapEditor from '../components/MapEditor';
 
-// Expanded Argentina Database with Rural Hubs
 const ARG_GEO: Record<string, string[]> = {
     "Buenos Aires": ["La Plata", "Mar del Plata", "Bahía Blanca", "Tandil", "Pergamino", "Junín", "Olavarría", "San Nicolás", "Balcarce", "Castelar", "CABA", "San Pedro", "Trenque Lauquen", "Pehuajó", "9 de Julio", "Bolívar", "Saladillo", "Lobos", "Chascomús", "Necochea", "Tres Arroyos", "General Villegas", "Lincoln", "Chivilcoy", "Chacabuco", "Bragado", "25 de Mayo", "Azul", "Coronel Suárez", "Pigüé", "Carhué", "San Antonio de Areco", "Arrecifes", "Salto", "Rojas", "Mercedes", "Luján", "Cañuelas", "Las Flores"],
     "Catamarca": ["San Fernando del Valle de Catamarca", "Andalgalá", "Tinogasta", "Belén", "Santa María", "Recreo", "Fiambalá"],
@@ -92,11 +90,10 @@ const parseCoordinate = (input: string): string => {
 };
 
 export default function Locations() {
-  const { locations, addLocation, updateLocation, deleteLocation, currentUser, usersList, clients, plots, addPlot, varieties, projects, seedBatches, seedMovements } = useAppContext();
+  const { locations, addLocation, updateLocation, deleteLocation, currentUser, clients, plots, addPlot, varieties, projects, seedBatches, seedMovements } = useAppContext();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [isManualCity, setIsManualCity] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -116,25 +113,6 @@ export default function Locations() {
     responsibleIds: [],
     polygon: []
   });
-
-  const [plotFormData, setPlotFormData] = useState<Partial<Plot>>({
-      name: '', type: 'Ensayo', varietyId: '', projectId: '', seedBatchId: '', sowingDate: new Date().toISOString().split('T')[0],
-      block: '1', replicate: 1, surfaceArea: 0, surfaceUnit: 'ha', density: 0, status: 'Activa'
-  });
-
-  const receivedBatchesAtThisLocation = useMemo(() => {
-    if (!targetLocationId) return [];
-    const relevantMoves = seedMovements.filter(m => m.targetLocationId === targetLocationId && m.status === 'Recibido');
-    const batchIds = Array.from(new Set(relevantMoves.map(m => m.batchId)));
-    return seedBatches.filter(b => batchIds.includes(b.id));
-  }, [seedMovements, seedBatches, targetLocationId]);
-
-  const availableVarietiesAtThisLocation = useMemo(() => {
-    const varIds = Array.from(new Set(receivedBatchesAtThisLocation.map(b => b.varietyId)));
-    return varieties.filter(v => varIds.includes(v.id));
-  }, [receivedBatchesAtThisLocation, varieties]);
-
-  const availableBatchesForModal = receivedBatchesAtThisLocation.filter(b => b.varietyId === plotFormData.varietyId);
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
   const isClient = currentUser?.role === 'client';
@@ -225,9 +203,9 @@ export default function Locations() {
     if (!formData.name || isSaving) return;
     
     setIsSaving(true);
-    const finalLat = parseFloat(parseCoordinate(formData.lat));
-    const finalLng = parseFloat(parseCoordinate(formData.lng));
-    const coordinates = (!isNaN(finalLat) && !isNaN(finalLng)) ? { lat: finalLat, lng: finalLng } : undefined;
+    const finalLat = parseFloat(parseCoordinate(formData.lat || '0'));
+    const finalLng = parseFloat(parseCoordinate(formData.lng || '0'));
+    const coordinates = (!isNaN(finalLat) && !isNaN(finalLng) && finalLat !== 0) ? { lat: finalLat, lng: finalLng } : undefined;
 
     let ownerName = formData.ownerName;
     let ownerType = formData.ownerType;
@@ -273,10 +251,10 @@ export default function Locations() {
             setIsModalOpen(false);
             resetForm();
         } else {
-            alert("Error al guardar en el servidor. Verifique la conexión.");
+            alert("Error al guardar en el servidor. Verifique si ejecutó el Script SQL en Ajustes.");
         }
     } catch (err) {
-        alert("Fallo crítico de sincronización.");
+        alert("Fallo crítico de sincronización con el servidor.");
     } finally {
         setIsSaving(false);
     }
@@ -285,15 +263,11 @@ export default function Locations() {
   const resetForm = () => {
     setFormData({ name: '', province: '', city: '', address: '', soilType: 'Franco', climate: '', responsiblePerson: '', lat: '', lng: '', clientId: '', ownerName: '', ownerLegalName: '', ownerCuit: '', ownerContact: '', ownerType: 'Empresa Privada', capacityHa: 0, irrigationSystem: '', responsibleIds: [], polygon: [] });
     setEditingId(null);
-    setIsManualCity(false);
   };
 
   const handleEdit = (loc: Location) => {
-      const provinceCities = loc.province && ARG_GEO[loc.province] ? ARG_GEO[loc.province] : [];
-      const isStandardCity = loc.city && provinceCities.includes(loc.city);
       setFormData({ ...loc, lat: loc.coordinates?.lat.toString() || '', lng: loc.coordinates?.lng.toString() || '', polygon: loc.polygon || [], province: loc.province || '', city: loc.city || '', ownerType: loc.ownerType || 'Empresa Privada', ownerLegalName: loc.ownerLegalName || '', ownerCuit: loc.ownerCuit || '', ownerContact: loc.ownerContact || '', clientId: loc.clientId || '', capacityHa: loc.capacityHa || 0, irrigationSystem: loc.irrigationSystem || '' });
       setEditingId(loc.id);
-      setIsManualCity(!isStandardCity && !!loc.city);
       setIsModalOpen(true);
   };
 
@@ -301,69 +275,10 @@ export default function Locations() {
 
   const openPlotModal = (locId: string) => {
       setTargetLocationId(locId);
-      setPlotFormData({ name: '', type: 'Ensayo', varietyId: '', projectId: '', seedBatchId: '', sowingDate: new Date().toISOString().split('T')[0], block: '1', replicate: 1, surfaceArea: 0, surfaceUnit: 'ha', density: 0, status: 'Activa' });
       setIsPlotModalOpen(true);
   };
 
-  const handlePlotSubmit = async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!targetLocationId || !plotFormData.varietyId || isSaving) return;
-
-      setIsSaving(true);
-      const loc = locations.find(l => l.id === targetLocationId);
-      const v = varieties.find(v => v.id === plotFormData.varietyId);
-      const varCode = v ? v.name.substring(0, 3).toUpperCase() : 'VAR';
-      
-      let autoName = '';
-      if (plotFormData.type === 'Producción') {
-          autoName = `LOTE-${plotFormData.block}-${varCode}`; 
-      } else {
-          autoName = `${varCode}-B${plotFormData.block}-R${plotFormData.replicate}`; 
-      }
-
-      let finalProjectId = plotFormData.projectId;
-      if (!finalProjectId && projects.length > 0) {
-          finalProjectId = projects[0].id;
-      }
-
-      const newPlot: any = {
-          ...plotFormData,
-          id: Date.now().toString(),
-          locationId: targetLocationId,
-          projectId: finalProjectId || '',
-          name: plotFormData.name || autoName,
-          ownerName: loc?.ownerName || 'Propio',
-          responsibleIds: currentUser ? [currentUser.id] : [],
-          rowDistance: 0,
-          perimeter: 0,
-          observations: 'Creado desde gestión de campos.',
-          seedBatchId: plotFormData.seedBatchId || null
-      };
-
-      try {
-          const success = await addPlot(newPlot);
-          if (success) {
-              setIsPlotModalOpen(false);
-              setExpandedLocations(prev => ({...prev, [targetLocationId]: true}));
-          } else {
-              alert("Error al registrar la unidad productiva.");
-          }
-      } finally {
-          setIsSaving(false);
-      }
-  };
-
-  const getClientIcon = (type?: RoleType) => {
-      if (type?.includes('Productor')) return <User size={16} className="text-green-600" />;
-      switch(type) {
-          case 'Empresa Privada': return <Building size={16} className="text-gray-500" />;
-          case 'Gobierno': return <Landmark size={16} className="text-blue-500" />;
-          case 'Academia': return <GraduationCap size={16} className="text-purple-500" />;
-          default: return <Users size={16} className="text-gray-400" />;
-      }
-  };
-
-  const inputClass = "w-full border border-gray-300 bg-white text-gray-900 p-2 rounded focus:ring-2 focus:ring-hemp-500 focus:border-transparent outline-none transition-colors";
+  const inputClass = "w-full border border-gray-300 dark:border-slate-800 bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 p-2.5 rounded-xl focus:ring-2 focus:ring-hemp-500 outline-none transition-all disabled:opacity-50";
 
   return (
     <div className="animate-in fade-in duration-500">
@@ -461,7 +376,7 @@ export default function Locations() {
                           <div className="mt-4 flex flex-wrap gap-3">
                               <span className="text-[10px] font-black uppercase tracking-widest bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-400 px-2.5 py-1 rounded border dark:border-slate-700">{loc.capacityHa ? <strong>{loc.capacityHa} Ha</strong> : 'Sup. N/A'}</span>
                               <span className="text-[10px] font-black uppercase tracking-widest bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 px-2.5 py-1 rounded border border-blue-100 dark:border-blue-900/30 flex items-center"><Droplets size={10} className="mr-1"/> {loc.irrigationSystem || 'Secano'}</span>
-                              <span className="text-[10px] font-black uppercase tracking-widest bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 px-2.5 py-1 rounded border border-indigo-100 dark:border-indigo-900/30 flex items-center">{getClientIcon(loc.ownerType)} <span className="ml-1">{loc.ownerName}</span></span>
+                              <span className="text-[10px] font-black uppercase tracking-widest bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 px-2.5 py-1 rounded border border-indigo-100 dark:border-indigo-900/30 flex items-center">{loc.ownerName || 'Propio'}</span>
                           </div>
                       </div>
 
@@ -478,34 +393,6 @@ export default function Locations() {
                       </div>
                   </div>
               </div>
-
-              {isExpanded && (
-                  <div className="bg-gray-50 dark:bg-slate-950 border-t border-gray-200 dark:border-slate-800 p-4 animate-in slide-in-from-top-2">
-                      {locPlots.length === 0 ? (
-                          <div className="text-center py-4 text-gray-400 text-[10px] font-black uppercase tracking-widest">No hay cultivos registrados en este campo.</div>
-                      ) : (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                              {locPlots.map(p => {
-                                  const vari = varieties.find(v => v.id === p.varietyId);
-                                  return (
-                                      <Link to={`/plots/${p.id}`} key={p.id} className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-gray-200 dark:border-slate-800 shadow-sm hover:shadow-md transition flex justify-between items-center group">
-                                          <div>
-                                              <h4 className="font-bold text-gray-800 dark:text-white text-sm flex items-center uppercase tracking-tight">
-                                                  {p.type === 'Producción' ? <User size={12} className="text-green-600 mr-1"/> : <Sprout size={12} className="text-blue-600 mr-1"/>}
-                                                  {p.name}
-                                              </h4>
-                                              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mt-0.5">{vari?.name} • {p.surfaceArea} {p.surfaceUnit}</p>
-                                          </div>
-                                          <div className="text-right">
-                                              <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${p.status === 'Activa' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>{p.status}</span>
-                                          </div>
-                                      </Link>
-                                  )
-                              })}
-                          </div>
-                      )}
-                  </div>
-              )}
             </div>
           );
         })}
@@ -621,89 +508,6 @@ export default function Locations() {
             </form>
           </div>
         </div>
-      )}
-
-      {/* QUICK PLOT MODAL */}
-      {isPlotModalOpen && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[70] p-4 animate-in fade-in">
-              <div className="bg-white dark:bg-slate-900 rounded-[40px] w-full max-w-xl p-10 shadow-2xl border border-white/10 animate-in zoom-in-95">
-                  <div className="flex justify-between items-center mb-8">
-                      <div className="flex items-center gap-4">
-                          <div className="bg-hemp-600 p-3 rounded-2xl text-white shadow-lg"><Sprout size={28}/></div>
-                          <div>
-                              <h2 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">Nueva <span className="text-hemp-600">Unidad Prod.</span></h2>
-                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">En {locations.find(l => l.id === targetLocationId)?.name}</p>
-                          </div>
-                      </div>
-                      <button onClick={() => !isSaving && setIsPlotModalOpen(false)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition text-slate-400"><X size={28}/></button>
-                  </div>
-
-                  <form onSubmit={handlePlotSubmit} className="space-y-6">
-                      <div className="bg-gray-50 dark:bg-slate-950 p-6 rounded-[32px] border dark:border-slate-800">
-                          <div className="grid grid-cols-2 gap-4">
-                              <div className="col-span-2">
-                                  <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1 mb-1.5">Identificador Lote (Opcional)</label>
-                                  <input type="text" placeholder="Se genera automático si vacío" className={inputClass} value={plotFormData.name} onChange={e => setPlotFormData({...plotFormData, name: e.target.value})} disabled={isSaving} />
-                              </div>
-                              <div>
-                                  <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1 mb-1.5">Genética *</label>
-                                  <select required className={inputClass} value={plotFormData.varietyId} onChange={e => setPlotFormData({...plotFormData, varietyId: e.target.value, seedBatchId: ''})} disabled={isSaving}>
-                                      <option value="">Seleccionar...</option>
-                                      {availableVarietiesAtThisLocation.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-                                  </select>
-                              </div>
-                              <div>
-                                  <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1 mb-1.5">Finalidad</label>
-                                  <select className={inputClass} value={plotFormData.type} onChange={e => setPlotFormData({...plotFormData, type: e.target.value as any})} disabled={isSaving}>
-                                      <option value="Ensayo">Investigación (Ensayo)</option>
-                                      <option value="Producción">Producción (Escala)</option>
-                                  </select>
-                              </div>
-                              
-                              <div className="col-span-2 bg-emerald-50 dark:bg-emerald-900/10 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-900/30">
-                                  <label className="block text-[9px] font-black text-emerald-800 dark:text-emerald-400 uppercase tracking-widest mb-1.5 flex items-center">
-                                      <ScanBarcode size={12} className="mr-1.5"/> Lote de Semilla (Trazabilidad)
-                                  </label>
-                                  <select 
-                                      className={`${inputClass} font-mono`} 
-                                      value={plotFormData.seedBatchId || ''} 
-                                      onChange={e => setPlotFormData({...plotFormData, seedBatchId: e.target.value})}
-                                      disabled={!plotFormData.varietyId || isSaving}
-                                  >
-                                      <option value="">-- Seleccionar Lote Recibido --</option>
-                                      {availableBatchesForModal.map(b => (
-                                          <option key={b.id} value={b.id}>{b.batchCode} (Stock campo)</option>
-                                      ))}
-                                  </select>
-                              </div>
-
-                              <div>
-                                  <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1 mb-1.5">Superficie</label>
-                                  <div className="flex">
-                                      <input type="number" step="0.1" className={`${inputClass} rounded-r-none border-r-0`} value={plotFormData.surfaceArea || ''} onChange={e => setPlotFormData({...plotFormData, surfaceArea: Number(e.target.value)})} disabled={isSaving} />
-                                      <select className="bg-gray-200 dark:bg-slate-800 border-gray-300 dark:border-slate-700 rounded-r-xl px-2 text-[10px] font-black uppercase" value={plotFormData.surfaceUnit} onChange={e => setPlotFormData({...plotFormData, surfaceUnit: e.target.value as any})} disabled={isSaving}>
-                                          <option value="ha">ha</option>
-                                          <option value="m2">m²</option>
-                                      </select>
-                                  </div>
-                              </div>
-                              <div>
-                                  <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1 mb-1.5">Fecha Siembra</label>
-                                  <input type="date" className={inputClass} value={plotFormData.sowingDate} onChange={e => setPlotFormData({...plotFormData, sowingDate: e.target.value})} disabled={isSaving} />
-                              </div>
-                          </div>
-                      </div>
-
-                      <div className="pt-4 flex justify-end space-x-3">
-                          <button type="button" onClick={() => setIsPlotModalOpen(false)} className="px-8 py-3 text-slate-400 font-black uppercase text-[10px] tracking-widest hover:text-slate-600 transition" disabled={isSaving}>Cancelar</button>
-                          <button type="submit" className="bg-hemp-600 text-white px-10 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl flex items-center hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50" disabled={availableVarietiesAtThisLocation.length === 0 || isSaving}>
-                              {isSaving ? <Loader2 className="animate-spin mr-2"/> : <Save className="mr-2" size={18}/>}
-                              Registrar Siembra
-                          </button>
-                      </div>
-                  </form>
-              </div>
-          </div>
       )}
     </div>
   );
