@@ -25,6 +25,7 @@ export default function Clients() {
   // Estados de Formulario de Socio
   const [formData, setFormData] = useState<Partial<Client> & { lat: string, lng: string, teamUserIds: string[] }>({
     name: '', type: 'Empresa Privada', contactName: '', contactPhone: '', email: '', 
+    address: '', totalHectares: 0,
     isNetworkMember: true, cuit: '', notes: '', relatedUserId: '', 
     membershipLevel: 'Activo', contractDate: new Date().toISOString().split('T')[0],
     lat: '', lng: '', teamUserIds: []
@@ -44,8 +45,6 @@ export default function Clients() {
   }, [clients, isAdmin, isClient, currentUser]);
 
   const eligibleUsers = useMemo(() => {
-      // Si soy admin, veo a todos los prospectos (sin cliente asignado)
-      // Si soy cliente, veo solo a los que ya son míos o están libres
       return usersList.filter(u => 
         (u.role === 'client' || u.role === 'technician' || u.role === 'viewer') && 
         (!u.clientId || u.clientId === editingId)
@@ -70,6 +69,8 @@ export default function Clients() {
             contactName: formData.contactName?.trim(),
             contactPhone: formData.contactPhone?.trim(),
             email: formData.email?.trim(),
+            address: formData.address?.trim(), // Dirección Postal
+            totalHectares: Number(formData.totalHectares || 0), // Hectáreas socio
             isNetworkMember: formData.isNetworkMember,
             membershipLevel: formData.membershipLevel,
             contractDate: formData.contractDate,
@@ -116,6 +117,7 @@ export default function Clients() {
   const resetForm = () => {
     setFormData({ 
         name: '', type: 'Empresa Privada', contactName: '', contactPhone: '', email: '', 
+        address: '', totalHectares: 0,
         isNetworkMember: true, cuit: '', notes: '', relatedUserId: '', 
         membershipLevel: 'Activo', contractDate: new Date().toISOString().split('T')[0],
         lat: '', lng: '', teamUserIds: []
@@ -168,8 +170,8 @@ export default function Clients() {
             return (
                 <div key={client.id} className="bg-white dark:bg-slate-900 p-6 rounded-[32px] shadow-sm border border-gray-100 dark:border-slate-800 hover:shadow-xl transition-all relative group flex flex-col h-full overflow-hidden">
                     <div className={`absolute top-0 left-0 px-4 py-1 rounded-br-2xl text-[9px] font-black uppercase tracking-widest border-b border-r shadow-sm z-10 ${
-                        client.membershipLevel === 'Premium' ? 'bg-amber-500 text-white' : 
-                        client.membershipLevel === 'En Observación' ? 'bg-red-500 text-white' : 'bg-hemp-600 text-white'
+                        client.membershipLevel === 'Premium' ? 'bg-amber-50 text-white' : 
+                        client.membershipLevel === 'En Observación' ? 'bg-red-50 text-white' : 'bg-hemp-600 text-white'
                       }`}>
                         {client.membershipLevel || 'SOCIO'}
                     </div>
@@ -204,6 +206,11 @@ export default function Clients() {
                     </div>
 
                     <div className="space-y-4 flex-1">
+                        {client.address && (
+                            <div className="text-[10px] text-gray-400 uppercase font-black tracking-widest flex items-center">
+                                <MapPin size={10} className="mr-1.5 text-hemp-500"/> {client.address}
+                            </div>
+                        )}
                         <div className="bg-gray-50 dark:bg-slate-950 p-4 rounded-2xl border dark:border-slate-800">
                              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-3">Equipo Operativo</p>
                              <div className="flex items-center justify-between">
@@ -219,20 +226,13 @@ export default function Clients() {
 
                         <div className="grid grid-cols-2 gap-2">
                              <div className="bg-blue-50/50 p-3 rounded-2xl border border-blue-100 text-center">
-                                 <p className="text-[8px] font-black text-blue-400 uppercase">Capacidad</p>
-                                 <p className="text-sm font-black text-blue-900">{team.length} Personas</p>
+                                 <p className="text-[8px] font-black text-blue-400 uppercase">Superficie</p>
+                                 <p className="text-sm font-black text-blue-900">{client.totalHectares || 0} Ha</p>
                              </div>
                              <div className="bg-emerald-50/50 p-3 rounded-2xl border border-emerald-100 text-center">
                                  <p className="text-[8px] font-black text-emerald-400 uppercase">Labor Activa</p>
                                  <p className="text-sm font-black text-emerald-900">{locCount} Parcelas</p>
                              </div>
-                        </div>
-
-                        <div className="space-y-2 text-sm bg-blue-50/30 dark:bg-blue-900/10 p-4 rounded-2xl border border-blue-50 dark:border-blue-900/20">
-                            <div className="flex items-center justify-between text-xs">
-                                <span className="font-bold text-gray-400 uppercase text-[9px]">Responsable IT</span>
-                                <span className="font-black text-gray-800 dark:text-gray-200 uppercase truncate max-w-[120px]">{owner?.name || client.contactName}</span>
-                            </div>
                         </div>
                     </div>
                     
@@ -273,20 +273,28 @@ export default function Clients() {
                                 <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Razón Social *</label>
                                 <input required type="text" className={inputClass} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
                             </div>
+                            <div>
+                                <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Dirección Postal de Oficina</label>
+                                <input type="text" className={inputClass} value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} placeholder="Ej: Av. Rural 1234, Rosario" />
+                            </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Escala</label>
+                                    <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Escala Productiva</label>
                                     <select className={inputClass} value={formData.type} onChange={e => setFormData({...formData, type: e.target.value as RoleType})}>
-                                        <option value="Productor Pequeño (<5 ha)">Pequeño</option>
-                                        <option value="Productor Mediano (5-15 ha)">Mediano</option>
-                                        <option value="Productor Grande (>15 ha)">Grande</option>
+                                        <option value="Productor Pequeño (0-5 ha)">Pequeño (0-5)</option>
+                                        <option value="Productor Mediano (5-15 ha)">Mediano (5-15)</option>
+                                        <option value="Productor Grande (>20 ha)">Grande (+20)</option>
                                         <option value="Empresa Privada">Empresa</option>
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="text-[9px] font-black uppercase text-slate-400 ml-1">CUIT</label>
-                                    <input type="text" className={inputClass} value={formData.cuit} onChange={e => setFormData({...formData, cuit: e.target.value})} />
+                                    <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Ha Totales</label>
+                                    <input type="number" className={inputClass} value={formData.totalHectares} onChange={e => setFormData({...formData, totalHectares: Number(e.target.value)})} placeholder="0" />
                                 </div>
+                            </div>
+                            <div>
+                                <label className="text-[9px] font-black uppercase text-slate-400 ml-1">CUIT Fiscal</label>
+                                <input type="text" className={inputClass} value={formData.cuit} onChange={e => setFormData({...formData, cuit: e.target.value})} />
                             </div>
                         </div>
                     </div>
@@ -312,7 +320,7 @@ export default function Clients() {
                     </div>
                 </div>
 
-                {/* COLUMNA 2: GESTION DE EQUIPO (EL CORAZON SaaS) */}
+                {/* COLUMNA 2: GESTION DE EQUIPO */}
                 <div className="lg:col-span-2 space-y-6">
                     <div className="bg-slate-900 p-8 rounded-[40px] shadow-xl relative overflow-hidden">
                         <div className="flex justify-between items-center mb-6 relative z-10">
@@ -333,15 +341,15 @@ export default function Clients() {
                         </div>
 
                         {showStaffCreator ? (
-                            <div className="bg-slate-800/50 p-6 rounded-3xl border border-slate-700 animate-in slide-in-from-top-4 mb-6 relative z-10">
+                            <div className="bg-slate-800 p-6 rounded-3xl border border-slate-700 animate-in slide-in-from-top-4 mb-6 relative z-10">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <input type="text" placeholder="Nombre Completo" className={`${inputClass} bg-slate-900 border-slate-700 text-white`} value={staffData.name} onChange={e => setStaffData({...staffData, name: e.target.value})} />
-                                    <input type="email" placeholder="Email (Login)" className={`${inputClass} bg-slate-900 border-slate-700 text-white`} value={staffData.email} onChange={e => setStaffData({...staffData, email: e.target.value})} />
+                                    <input type="text" placeholder="Nombre Completo" className={inputClass} value={staffData.name} onChange={e => setStaffData({...staffData, name: e.target.value})} />
+                                    <input type="email" placeholder="Email (Login)" className={inputClass} value={staffData.email} onChange={e => setStaffData({...staffData, email: e.target.value})} />
                                     <div className="relative">
                                         <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16}/>
-                                        <input type="password" placeholder="Contraseña Inicial" className={`${inputClass} bg-slate-900 border-slate-700 text-white pl-10`} value={staffData.password} onChange={e => setStaffData({...staffData, password: e.target.value})} />
+                                        <input type="password" placeholder="Contraseña Inicial" className={`${inputClass} pl-10`} value={staffData.password} onChange={e => setStaffData({...staffData, password: e.target.value})} />
                                     </div>
-                                    <select className={`${inputClass} bg-slate-900 border-slate-700 text-white`} value={staffData.role} onChange={e => setStaffData({...staffData, role: e.target.value as any})}>
+                                    <select className={inputClass} value={staffData.role} onChange={e => setStaffData({...staffData, role: e.target.value as any})}>
                                         <option value="technician">Rol: Técnico de Campo</option>
                                         <option value="viewer">Rol: Solo Lectura</option>
                                     </select>
@@ -356,7 +364,7 @@ export default function Clients() {
                                 </div>
                             </div>
                         ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-96 overflow-y-auto pr-2 custom-scrollbar relative z-10">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-96 overflow-y-auto pr-2 custom-scrollbar relative z-10 text-white">
                                 {eligibleUsers.length === 0 ? (
                                     <div className="col-span-2 py-10 text-center text-slate-500 italic">No hay personal libre para asignar. Crea uno nuevo arriba.</div>
                                 ) : eligibleUsers.map(u => {

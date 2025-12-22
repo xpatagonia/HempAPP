@@ -17,9 +17,9 @@ export interface User {
 }
 
 export type RoleType = 
-  | 'Productor Pequeño (<5 ha)' 
+  | 'Productor Pequeño (0-5 ha)' 
   | 'Productor Mediano (5-15 ha)' 
-  | 'Productor Grande (>15 ha)' 
+  | 'Productor Grande (>20 ha)' 
   | 'Empresa Privada' 
   | 'Gobierno' 
   | 'Academia' 
@@ -123,6 +123,8 @@ export interface Client {
   contactName: string;
   contactPhone?: string;
   email?: string;
+  address?: string; // Nuevo: Dirección Postal
+  totalHectares?: number; // Nuevo: Hectáreas del socio
   isNetworkMember: boolean;
   membershipLevel?: MembershipLevel;
   contractDate?: string;

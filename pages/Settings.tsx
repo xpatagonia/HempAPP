@@ -30,7 +30,7 @@ export default function Settings() {
   // Unit Test State
   const [tests, setTests] = useState<UnitTest[]>([
       { id: 'conn', name: 'Conexión Supabase', description: 'Verifica alcance de URL y Key.', status: 'idle' },
-      { id: 'tables', name: 'Esquema de Tablas', description: 'Valida existencia de todas las entidades V22.', status: 'idle' },
+      { id: 'tables', name: 'Esquema de Tablas', description: 'Valida existencia de todas las entidades V23.', status: 'idle' },
       { id: 'geo', name: 'Protocolo JSONB GPS', description: 'Verifica compatibilidad de georreferencia.', status: 'idle' },
       { id: 'auth', name: 'Vínculo Organizacional', description: 'Valida FK de equipos de trabajo.', status: 'idle' }
   ]);
@@ -123,7 +123,7 @@ export default function Settings() {
           <button onClick={() => setActiveTab('branding')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'branding' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Identidad</button>
           <button onClick={() => setActiveTab('connections')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'connections' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Conectividad</button>
           <button onClick={() => setActiveTab('audit')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'audit' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Protocolo & Pruebas</button>
-          <button onClick={() => setActiveTab('database')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'database' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>SQL Nucleus V22</button>
+          <button onClick={() => setActiveTab('database')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'database' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>SQL Nucleus V23</button>
       </div>
 
       {activeTab === 'branding' && (
@@ -169,7 +169,7 @@ export default function Settings() {
                   <div className="flex justify-between items-center mb-8">
                       <div>
                           <h3 className="text-xl font-black text-slate-800 dark:text-white flex items-center">
-                              <FlaskConical className="mr-2 text-blue-600" size={20} /> Suite Nuclear V22
+                              <FlaskConical className="mr-2 text-blue-600" size={20} /> Suite Nuclear V23
                           </h3>
                           <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">Verificación de trazabilidad y nodos logísticos</p>
                       </div>
@@ -202,20 +202,20 @@ export default function Settings() {
               <div className="bg-slate-900 border border-slate-800 p-8 rounded-[40px] shadow-2xl relative overflow-hidden">
                   <div className="flex items-center space-x-3 mb-6">
                       <Shield className="text-hemp-500" size={24}/>
-                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Nucleus SQL V22: Trazabilidad Logística</h3>
+                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Nucleus SQL V23: Trazabilidad Logística</h3>
                   </div>
                   <div className="bg-amber-900/20 border border-amber-500/30 p-4 rounded-2xl mb-6 flex items-start text-amber-200">
                       <AlertTriangle className="text-amber-500 mr-3 flex-shrink-0" size={20}/>
                       <div className="text-xs space-y-2 leading-relaxed">
-                        <p className="font-bold uppercase tracking-tight">Esquema Industrial Actualizado</p>
-                        <p>Crea las tablas con soporte para `node_code` en almacenes, esencial para la trazabilidad de etiquetas HNC.</p>
+                        <p className="font-bold uppercase tracking-tight">Esquema Industrial Actualizado V23</p>
+                        <p>Crea las tablas con soporte para `address` y `total_hectares` en socios, esencial para la trazabilidad industrial.</p>
                       </div>
                   </div>
 
                   <div className="space-y-4">
                     <button onClick={() => {
                       const sql = `
--- PROTOCOLO V22: TRAZABILIDAD INDUSTRIAL TOTAL
+-- PROTOCOLO V23: TRAZABILIDAD INDUSTRIAL TOTAL
 DROP TABLE IF EXISTS public.trial_records CASCADE;
 DROP TABLE IF EXISTS public.field_logs CASCADE;
 DROP TABLE IF EXISTS public.plots CASCADE;
@@ -249,6 +249,8 @@ CREATE TABLE public.clients (
   contact_name TEXT,
   contact_phone TEXT,
   email TEXT,
+  address TEXT, -- NUEVO CAMPO V23
+  total_hectares NUMERIC DEFAULT 0, -- NUEVO CAMPO V23
   is_network_member BOOLEAN DEFAULT true,
   membership_level TEXT DEFAULT 'Activo',
   contract_date TEXT,
@@ -282,7 +284,7 @@ CREATE TABLE public.suppliers (
 -- 2. CADENA DE SUMINISTROS
 CREATE TABLE public.storage_points (
   id TEXT PRIMARY KEY,
-  node_code TEXT, -- NUEVO CAMPO TRAZABILIDAD HNC
+  node_code TEXT, 
   name TEXT NOT NULL,
   type TEXT,
   address TEXT,
@@ -404,9 +406,9 @@ ON CONFLICT (id) DO NOTHING;
 NOTIFY pgrst, 'reload schema';
                       `;
                       navigator.clipboard.writeText(sql.trim());
-                      alert("Script Nuclear Industrial V22 Copiado. Ejecútalo en Supabase para habilitar toda la trazabilidad.");
+                      alert("Script Nuclear Industrial V23 Copiado. Ejecútalo en Supabase para habilitar toda la trazabilidad.");
                     }} className="w-full bg-red-600 hover:bg-red-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center transition-all shadow-xl">
-                        <RotateCcw size={18} className="mr-2"/> Copiar Script Industrial V22
+                        <RotateCcw size={18} className="mr-2"/> Copiar Script Industrial V23
                     </button>
                   </div>
               </div>

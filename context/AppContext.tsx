@@ -149,7 +149,8 @@ const toSnakeCase = (obj: any) => {
         purchaseDate: 'purchase_date',
         purchaseOrder: 'purchase_order',
         isActive: 'is_active',
-        createdAt: 'created_at'
+        createdAt: 'created_at',
+        totalHectares: 'total_hectares' // Nuevo campo
     };
 
     for (const key in obj) {
@@ -204,7 +205,8 @@ const toCamelCase = (obj: any) => {
         certification_number: 'certificationNumber',
         gs1_code: 'gs1Code',
         is_active: 'isActive',
-        created_at: 'createdAt'
+        created_at: 'createdAt',
+        total_hectares: 'totalHectares' // Nuevo campo
     };
 
     for (const key in obj) {
