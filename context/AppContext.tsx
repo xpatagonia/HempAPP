@@ -193,11 +193,13 @@ const toSnakeCase = (obj: any) => {
     const newObj: any = {};
     for (const key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
+            // Ignorar campos de interfaz
             if (['lat', 'lng', 'teamUserIds'].includes(key)) continue;
 
             const snakeKey = MANUAL_MAP[key] || key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
             let val = obj[key];
             
+            // IDs vacíos a null para que Postgres los maneje como FKs
             if ((key.toLowerCase().endsWith('id') || key === 'clientId' || key === 'supplierId') && val === '') {
                 val = null;
             }
@@ -341,10 +343,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const genericAdd = async (table: string, item: any, setter: any, localKey: string) => {
       const dbItem = toSnakeCase({ ...item });
+      console.log(`[DB INSERT ATTEMPT] ${table}:`, dbItem);
       try {
           const { error } = await supabase.from(table).insert([dbItem]);
           if (error) { 
               console.error(`[DB INSERT ERROR] ${table}:`, error.message, error.details, dbItem); 
+              alert(`ERROR SERVIDOR: ${error.message}\n${error.details || ''}`);
               return false; 
           }
           await refreshData();
@@ -357,10 +361,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const genericUpdate = async (table: string, item: any, setter: any, localKey: string) => {
       const dbItem = toSnakeCase(item);
+      console.log(`[DB UPDATE ATTEMPT] ${table}:`, dbItem);
       try {
           const { error } = await supabase.from(table).update(dbItem).eq('id', item.id);
           if (error) { 
               console.error(`[DB UPDATE ERROR] ${table}:`, error.message, error.details, dbItem); 
+              alert(`ERROR SERVIDOR: ${error.message}\n${error.details || ''}`);
               return false; 
           }
           await refreshData();

@@ -38,17 +38,14 @@ const parseKML = (kmlText: string): { lat: number, lng: number }[] | null => {
         const parser = new DOMParser();
         const xmlDoc = parser.parseFromString(kmlText, "text/xml");
         
-        // Buscamos todas las etiquetas que contengan 'coordinates', ignorando namespaces
         const allCoords = Array.from(xmlDoc.querySelectorAll("*")).filter(el => el.tagName.toLowerCase().endsWith('coordinates'));
         
         if (allCoords.length === 0) return null;
         
-        // Priorizamos la etiqueta con más contenido (probablemente el polígono)
         allCoords.sort((a, b) => (b.textContent?.length || 0) - (a.textContent?.length || 0));
         const targetNode = allCoords[0];
         const text = targetNode.textContent || "";
         
-        // Los KML separan puntos por espacios y coordenadas por comas (lng,lat,alt)
         const rawPoints = text.trim().split(/\s+/);
         const latLngs = rawPoints.map(point => {
             const parts = point.split(',');
@@ -189,10 +186,16 @@ export default function Locations() {
                   area += (toRad(p2.lng) - toRad(p1.lng)) * (2 + Math.sin(toRad(p1.lat)) + Math.sin(toRad(p2.lat)));
               }
               area = Math.abs(area * R * R / 2) / 10000;
-              setFormData(prev => ({ ...prev, polygon: poly, capacityHa: Number(area.toFixed(2)), lat: centerLat.toFixed(6), lng: centerLng.toFixed(6) }));
-              alert("✅ KML Importado con éxito.");
+              setFormData(prev => ({ 
+                ...prev, 
+                polygon: poly, 
+                capacityHa: Number(area.toFixed(2)), 
+                lat: centerLat.toFixed(6), 
+                lng: centerLng.toFixed(6) 
+              }));
+              alert("✅ KML Importado: Geometría y superficie cargadas.");
           } else {
-              alert("⚠️ No se encontró un polígono válido en el archivo.");
+              alert("⚠️ No se detectó un polígono válido en el archivo.");
           }
           if (fileInputRef.current) fileInputRef.current.value = '';
       };
@@ -225,8 +228,8 @@ export default function Locations() {
       soilType: formData.soilType || 'Franco', 
       climate: formData.climate || '', 
       responsiblePerson: formData.responsiblePerson || '',
-      coordinates, 
-      polygon: formData.polygon || [], 
+      coordinates: coordinates || null, 
+      polygon: Array.isArray(formData.polygon) ? formData.polygon : [], 
       clientId: clientId || null, 
       ownerName: formData.ownerName || '', 
       ownerLegalName: formData.ownerLegalName || '', 
@@ -250,7 +253,7 @@ export default function Locations() {
             setIsModalOpen(false);
             resetForm();
         } else {
-            alert("Error al guardar en el servidor. Verifique si ejecutó el Script SQL en Ajustes.");
+            // El mensaje de error específico ahora viene del AppContext vía alert
         }
     } catch (err) {
         alert("Fallo crítico de sincronización con el servidor.");
@@ -483,7 +486,13 @@ export default function Locations() {
                               <button type="button" onClick={() => fileInputRef.current?.click()} className="bg-white dark:bg-slate-800 border border-blue-200 dark:border-slate-700 text-blue-700 dark:text-blue-400 px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-50 transition shadow-sm flex items-center"><FileUp size={14} className="mr-1.5"/> Importar KML</button>
                           </div>
                           <div className="flex-1 min-h-[300px] border dark:border-slate-800 rounded-[24px] overflow-hidden mb-6 shadow-inner relative group/map bg-slate-200">
-                               <MapEditor initialCenter={formData.lat && formData.lng ? { lat: parseFloat(formData.lat), lng: parseFloat(formData.lng) } : undefined} initialPolygon={formData.polygon || []} onPolygonChange={handlePolygonChange} height="100%" />
+                               <MapEditor 
+                                    key={editingId || 'new-location'}
+                                    initialCenter={formData.lat && formData.lng ? { lat: parseFloat(formData.lat), lng: parseFloat(formData.lng) } : undefined} 
+                                    initialPolygon={formData.polygon || []} 
+                                    onPolygonChange={handlePolygonChange} 
+                                    height="100%" 
+                                />
                           </div>
                           <div className="grid grid-cols-2 gap-4">
                                 <div>
