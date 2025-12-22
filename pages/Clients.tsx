@@ -69,8 +69,8 @@ export default function Clients() {
             contactName: formData.contactName?.trim(),
             contactPhone: formData.contactPhone?.trim(),
             email: formData.email?.trim(),
-            address: formData.address?.trim(), // Dirección Postal
-            totalHectares: Number(formData.totalHectares || 0), // Hectáreas socio
+            address: formData.address?.trim(), 
+            totalHectares: Number(formData.totalHectares || 0), 
             isNetworkMember: formData.isNetworkMember,
             membershipLevel: formData.membershipLevel,
             contractDate: formData.contractDate,
@@ -136,6 +136,7 @@ export default function Clients() {
   };
 
   const inputClass = "w-full border border-gray-300 dark:border-slate-800 bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 p-2.5 rounded-xl focus:ring-2 focus:ring-hemp-500 outline-none transition-all";
+  const darkInputClass = "w-full border border-slate-600 bg-slate-800 text-white p-2.5 rounded-xl focus:ring-2 focus:ring-hemp-500 outline-none transition-all";
 
   return (
     <div className="animate-in fade-in duration-500">
@@ -164,14 +165,13 @@ export default function Clients() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {myClients.map(client => {
             const team = usersList.filter(u => u.clientId === client.id);
-            const owner = usersList.find(u => u.id === client.relatedUserId);
             const locCount = plots.filter(p => p.locationId && team.some(u => u.id === p.responsibleIds?.[0])).length;
 
             return (
                 <div key={client.id} className="bg-white dark:bg-slate-900 p-6 rounded-[32px] shadow-sm border border-gray-100 dark:border-slate-800 hover:shadow-xl transition-all relative group flex flex-col h-full overflow-hidden">
                     <div className={`absolute top-0 left-0 px-4 py-1 rounded-br-2xl text-[9px] font-black uppercase tracking-widest border-b border-r shadow-sm z-10 ${
-                        client.membershipLevel === 'Premium' ? 'bg-amber-50 text-white' : 
-                        client.membershipLevel === 'En Observación' ? 'bg-red-50 text-white' : 'bg-hemp-600 text-white'
+                        client.membershipLevel === 'Premium' ? 'bg-amber-500 text-white border-amber-600' : 
+                        client.membershipLevel === 'En Observación' ? 'bg-red-500 text-white border-red-600' : 'bg-hemp-600 text-white border-hemp-700'
                       }`}>
                         {client.membershipLevel || 'SOCIO'}
                     </div>
@@ -206,11 +206,13 @@ export default function Clients() {
                     </div>
 
                     <div className="space-y-4 flex-1">
-                        {client.address && (
-                            <div className="text-[10px] text-gray-400 uppercase font-black tracking-widest flex items-center">
-                                <MapPin size={10} className="mr-1.5 text-hemp-500"/> {client.address}
-                            </div>
-                        )}
+                        <div className="text-[10px] text-gray-400 uppercase font-black tracking-widest flex items-center min-h-[14px]">
+                            {client.address ? (
+                                <><MapPin size={10} className="mr-1.5 text-hemp-500"/> {client.address}</>
+                            ) : (
+                                <span className="italic opacity-50">Sin dirección postal registrada</span>
+                            )}
+                        </div>
                         <div className="bg-gray-50 dark:bg-slate-950 p-4 rounded-2xl border dark:border-slate-800">
                              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-3">Equipo Operativo</p>
                              <div className="flex items-center justify-between">
@@ -225,13 +227,13 @@ export default function Clients() {
                         </div>
 
                         <div className="grid grid-cols-2 gap-2">
-                             <div className="bg-blue-50/50 p-3 rounded-2xl border border-blue-100 text-center">
+                             <div className="bg-blue-50/50 dark:bg-blue-900/10 p-3 rounded-2xl border border-blue-100 dark:border-blue-900/20 text-center">
                                  <p className="text-[8px] font-black text-blue-400 uppercase">Superficie</p>
-                                 <p className="text-sm font-black text-blue-900">{client.totalHectares || 0} Ha</p>
+                                 <p className="text-sm font-black text-blue-900 dark:text-blue-300">{client.totalHectares || 0} Ha</p>
                              </div>
-                             <div className="bg-emerald-50/50 p-3 rounded-2xl border border-emerald-100 text-center">
+                             <div className="bg-emerald-50/50 dark:bg-emerald-900/10 p-3 rounded-2xl border border-emerald-100 dark:border-emerald-900/20 text-center">
                                  <p className="text-[8px] font-black text-emerald-400 uppercase">Labor Activa</p>
-                                 <p className="text-sm font-black text-emerald-900">{locCount} Parcelas</p>
+                                 <p className="text-sm font-black text-emerald-900 dark:text-emerald-300">{locCount} Parcelas</p>
                              </div>
                         </div>
                     </div>
@@ -264,7 +266,6 @@ export default function Clients() {
 
             <form onSubmit={handleSubmit} className="space-y-8">
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* COLUMNA 1: DATOS CORPORATIVOS */}
                 <div className="space-y-6">
                     <div className="bg-gray-50 dark:bg-slate-950 p-6 rounded-[32px] border dark:border-slate-800">
                         <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Perfil Cooperativo</h3>
@@ -320,7 +321,6 @@ export default function Clients() {
                     </div>
                 </div>
 
-                {/* COLUMNA 2: GESTION DE EQUIPO */}
                 <div className="lg:col-span-2 space-y-6">
                     <div className="bg-slate-900 p-8 rounded-[40px] shadow-xl relative overflow-hidden">
                         <div className="flex justify-between items-center mb-6 relative z-10">
@@ -341,25 +341,41 @@ export default function Clients() {
                         </div>
 
                         {showStaffCreator ? (
-                            <div className="bg-slate-800 p-6 rounded-3xl border border-slate-700 animate-in slide-in-from-top-4 mb-6 relative z-10">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <input type="text" placeholder="Nombre Completo" className={inputClass} value={staffData.name} onChange={e => setStaffData({...staffData, name: e.target.value})} />
-                                    <input type="email" placeholder="Email (Login)" className={inputClass} value={staffData.email} onChange={e => setStaffData({...staffData, email: e.target.value})} />
-                                    <div className="relative">
-                                        <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16}/>
-                                        <input type="password" placeholder="Contraseña Inicial" className={`${inputClass} pl-10`} value={staffData.password} onChange={e => setStaffData({...staffData, password: e.target.value})} />
+                            <div className="bg-slate-800 p-8 rounded-[32px] border border-slate-700 animate-in slide-in-from-top-4 mb-6 relative z-10 shadow-2xl">
+                                <h4 className="text-white text-sm font-black uppercase tracking-widest mb-6 border-b border-slate-700 pb-4 flex items-center">
+                                    <UserPlus size={16} className="mr-2 text-hemp-400"/> Datos del Nuevo Miembro
+                                </h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="space-y-2">
+                                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Nombre Completo</label>
+                                        <input type="text" placeholder="Ej: Juan Pérez" className={darkInputClass} value={staffData.name} onChange={e => setStaffData({...staffData, name: e.target.value})} />
                                     </div>
-                                    <select className={inputClass} value={staffData.role} onChange={e => setStaffData({...staffData, role: e.target.value as any})}>
-                                        <option value="technician">Rol: Técnico de Campo</option>
-                                        <option value="viewer">Rol: Solo Lectura</option>
-                                    </select>
+                                    <div className="space-y-2">
+                                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Email de Acceso</label>
+                                        <input type="email" placeholder="email@empresa.com" className={darkInputClass} value={staffData.email} onChange={e => setStaffData({...staffData, email: e.target.value})} />
+                                    </div>
+                                    <div className="space-y-2 relative">
+                                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Contraseña Provisoria</label>
+                                        <div className="relative">
+                                            <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16}/>
+                                            <input type="text" placeholder="Mínimo 6 caract." className={`${darkInputClass} pl-10`} value={staffData.password} onChange={e => setStaffData({...staffData, password: e.target.value})} />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Rol Operativo</label>
+                                        <select className={darkInputClass} value={staffData.role} onChange={e => setStaffData({...staffData, role: e.target.value as any})}>
+                                            <option value="technician">Técnico de Campo</option>
+                                            <option value="viewer">Solo Lectura (Visor)</option>
+                                        </select>
+                                    </div>
                                     <button 
                                         type="button" 
                                         onClick={handleCreateStaff}
                                         disabled={!staffData.name || !staffData.email || !staffData.password || isSaving}
-                                        className="md:col-span-2 bg-blue-600 text-white py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-blue-700 disabled:opacity-30"
+                                        className="md:col-span-2 bg-hemp-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-hemp-700 shadow-xl transition-all disabled:opacity-30 flex items-center justify-center"
                                     >
-                                        {isSaving ? <Loader2 className="animate-spin mx-auto"/> : 'Finalizar Alta de Empleado'}
+                                        {isSaving ? <Loader2 className="animate-spin mr-2"/> : <UserCheck className="mr-2" size={18}/>}
+                                        Confirmar Alta de Empleado
                                     </button>
                                 </div>
                             </div>
@@ -395,7 +411,6 @@ export default function Clients() {
                                 })}
                             </div>
                         )}
-                        {/* Decoración Background */}
                         <Activity className="absolute -bottom-10 -right-10 text-white opacity-5 w-64 h-64" />
                     </div>
 
