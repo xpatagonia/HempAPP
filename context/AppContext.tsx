@@ -73,11 +73,11 @@ interface AppContextType {
   deletePlot: (id: string) => Promise<void>;
   
   addTrialRecord: (r: TrialRecord) => Promise<boolean>;
-  updateTrialRecord: (r: TrialRecord) => void;
+  updateTrialRecord: (r: TrialRecord) => Promise<boolean>;
   deleteTrialRecord: (id: string) => void;
   
   addLog: (l: FieldLog) => Promise<boolean>;
-  updateLog: (l: FieldLog) => void;
+  updateLog: (l: FieldLog) => Promise<boolean>;
   deleteLog: (id: string) => void;
   
   addHydricRecord: (h: HydricRecord) => Promise<boolean>;
@@ -96,7 +96,7 @@ interface AppContextType {
   deleteSeedBatch: (id: string) => Promise<void>;
   
   addSeedMovement: (m: SeedMovement) => Promise<boolean>;
-  updateSeedMovement: (m: SeedMovement) => void;
+  updateSeedMovement: (m: SeedMovement) => Promise<boolean>;
   deleteSeedMovement: (id: string) => Promise<void>;
 
   getPlotHistory: (plotId: string) => TrialRecord[];
@@ -113,7 +113,6 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const MANUAL_MAP: Record<string, string> = {
-    // Camel to Snake
     nodeCode: 'node_code',
     clientId: 'client_id',
     supplierId: 'supplier_id',
@@ -391,8 +390,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return success;
   };
   const updateVariety = async (v: Variety) => { 
-      const success = await genericUpdate('varieties', v, setVarieties, 'varieties'); 
-      return success;
+      return genericUpdate('varieties', v, setVarieties, 'varieties'); 
   };
   const deleteVariety = (id: string) => { genericDelete('varieties', id, setVarieties, 'varieties'); };
   
@@ -430,8 +428,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return success;
   };
   const updateStoragePoint = async (sp: StoragePoint) => {
-      const success = await genericUpdate('storage_points', sp, setStoragePoints, 'storage_points');
-      return success;
+      return genericUpdate('storage_points', sp, setStoragePoints, 'storage_points');
   };
   const deleteStoragePoint = (id: string) => genericDelete('storage_points', id, setStoragePoints, 'storage_points');
   
@@ -455,10 +452,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       await genericDelete('seed_movements', id, setSeedMovements, 'seed_movements');
   };
   const addTrialRecord = (r: TrialRecord) => genericAdd('trial_records', r, setTrialRecords, 'trial_records');
-  const updateTrialRecord = (r: TrialRecord) => { genericUpdate('trial_records', r, setTrialRecords, 'trial_records'); };
+  const updateTrialRecord = (r: TrialRecord) => { return genericUpdate('trial_records', r, setTrialRecords, 'trial_records'); };
   const deleteTrialRecord = (id: string) => { genericDelete('trial_records', id, setTrialRecords, 'trial_records'); };
   const addLog = (l: FieldLog) => genericAdd('field_logs', l, setLogs, 'field_logs');
-  const updateLog = (l: FieldLog) => { genericUpdate('field_logs', l, setLogs, 'field_logs'); };
+  const updateLog = (l: FieldLog) => { return genericUpdate('field_logs', l, setLogs, 'field_logs'); };
   const deleteLog = (id: string) => { genericDelete('field_logs', id, setLogs, 'field_logs'); };
   const addTask = (t: Task) => { genericAdd('tasks', t, setTasks, 'tasks'); };
   const updateTask = (t: Task) => { genericUpdate('tasks', t, setTasks, 'tasks'); };
