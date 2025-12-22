@@ -193,14 +193,15 @@ const toSnakeCase = (obj: any) => {
     const newObj: any = {};
     for (const key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
-            // Ignorar campos auxiliares
             if (['lat', 'lng', 'teamUserIds'].includes(key)) continue;
 
             const snakeKey = MANUAL_MAP[key] || key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
             let val = obj[key];
             
-            // Conversión de IDs vacíos a nulos para integridad referencial en Postgres
-            if ((key.toLowerCase().endsWith('id') || key === 'clientId' || key === 'supplierId') && val === '') {
+            // Fix crucial para Postgres Arreglos (TEXT[])
+            if (['responsibleIds', 'assignedToIds', 'responsible_ids', 'assigned_to_ids'].includes(snakeKey) || key.includes('Ids')) {
+                if (val === null || val === undefined) val = [];
+            } else if ((key.toLowerCase().endsWith('id') || key === 'clientId' || key === 'supplierId') && val === '') {
                 val = null;
             }
             
@@ -347,14 +348,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           const { error } = await supabase.from(table).insert([dbItem]);
           if (error) { 
               console.error(`[DB INSERT ERROR] ${table}:`, error); 
-              alert(`ERROR DB (${error.code}): ${error.message}\n${error.hint || ''}`);
+              alert(`FALLO DE SERVIDOR: La base de datos rechazó el registro.\nMotivo: ${error.message}\nAcción: Ejecute el Script Nuclear V30 en Ajustes.`);
               return false; 
           }
           await refreshData();
           return true;
       } catch (e: any) { 
           console.error(`[RUNTIME INSERT ERROR] ${table}:`, e); 
-          alert("Error de ejecución al guardar.");
+          alert("Error de ejecución local.");
           return false; 
       }
   };
@@ -365,14 +366,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           const { error } = await supabase.from(table).update(dbItem).eq('id', item.id);
           if (error) { 
               console.error(`[DB UPDATE ERROR] ${table}:`, error); 
-              alert(`ERROR DB (${error.code}): ${error.message}\n${error.hint || ''}`);
+              alert(`FALLO DE SERVIDOR: La base de datos rechazó la actualización.\nMotivo: ${error.message}\nAcción: Ejecute el Script Nuclear V30 en Ajustes.`);
               return false; 
           }
           await refreshData();
           return true;
       } catch (e) { 
           console.error(`[RUNTIME UPDATE ERROR] ${table}:`, e); 
-          alert("Error de ejecución al actualizar.");
+          alert("Error de ejecución local.");
           return false; 
       }
   };
