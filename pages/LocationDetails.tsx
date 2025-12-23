@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
-import { ArrowLeft, MapPin, Globe, Droplets, User, Building, ExternalLink, Ruler, Sprout, ChevronRight, Waves, CloudRain, Package, CheckCircle2, Truck, ClipboardCheck, Info, Tag, Activity } from 'lucide-react';
+import { ArrowLeft, MapPin, Globe, Droplets, User, Building, ExternalLink, Ruler, Sprout, ChevronRight, Waves, CloudRain, Package, CheckCircle2, Truck, ClipboardCheck, Info, Tag, Activity, Archive, Landmark } from 'lucide-react';
 import WeatherWidget from '../components/WeatherWidget';
 import MapEditor from '../components/MapEditor';
 import HydricBalance from '../components/HydricBalance';
@@ -20,24 +20,15 @@ export default function LocationDetails() {
         return seedMovements.filter(m => m.targetLocationId === id).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [seedMovements, id]);
 
-    // Variedades actualmente en suelo
-    const varietiesInSoil = useMemo(() => {
-        const varIds = [...new Set(locationPlots.filter(p => p.status === 'Activa').map(p => p.varietyId))];
-        return varieties.filter(v => varIds.includes(v.id));
-    }, [locationPlots, varieties]);
-    
     const occupiedArea = locationPlots.reduce((sum, p) => {
         let area = p.surfaceArea || 0;
         if(p.surfaceUnit === 'm2') area = area / 10000;
         return sum + area;
     }, 0);
     
-    const occupancyRate = location?.capacityHa ? (occupiedArea / location.capacityHa) * 100 : 0;
     const client = clients.find(c => c.id === location?.clientId);
 
     if (!location) return <div className="p-10 text-center">Establecimiento no encontrado.</div>;
-
-    const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
 
     return (
         <div className="space-y-6 pb-20 animate-in fade-in duration-500">
@@ -62,15 +53,32 @@ export default function LocationDetails() {
                                         <MapPin className="text-hemp-600" size={18}/>
                                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Establecimiento</span>
                                     </div>
-                                    <h1 className="text-4xl font-black text-gray-900 dark:text-white uppercase tracking-tighter mb-4 italic">{location.name}</h1>
+                                    <h1 className="text-4xl font-black text-gray-900 dark:text-white uppercase tracking-tighter mb-4 italic leading-tight">{location.name}</h1>
                                     <p className="text-gray-500 font-bold text-sm max-w-md">{location.city}, {location.province} • {location.address}</p>
+                                    
+                                    <div className="mt-8 flex flex-wrap gap-4">
+                                        <div className="flex items-center bg-gray-50 dark:bg-slate-950 px-4 py-2 rounded-2xl border dark:border-slate-800">
+                                            <Archive size={14} className="text-hemp-600 mr-2"/>
+                                            <div className="min-w-0">
+                                                <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Suelo</p>
+                                                <p className="text-xs font-black text-slate-700 dark:text-slate-300">{location.soilType || 'Franco'}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center bg-gray-50 dark:bg-slate-950 px-4 py-2 rounded-2xl border dark:border-slate-800">
+                                            <Waves size={14} className="text-blue-600 mr-2"/>
+                                            <div className="min-w-0">
+                                                <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Riego</p>
+                                                <p className="text-xs font-black text-slate-700 dark:text-slate-300">{location.irrigationSystem || 'Secano'}</p>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div className="bg-gray-50 dark:bg-slate-950 p-4 rounded-3xl border dark:border-slate-800 text-center w-32">
+                                    <div className="bg-gray-50 dark:bg-slate-950 p-4 rounded-3xl border dark:border-slate-800 text-center w-32 flex flex-col justify-center">
                                         <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">Superficie</p>
                                         <p className="text-xl font-black text-gray-800 dark:text-white">{location.capacityHa || 0} <span className="text-[10px] font-bold">HA</span></p>
                                     </div>
-                                    <div className="bg-gray-50 dark:bg-slate-950 p-4 rounded-3xl border dark:border-slate-800 text-center w-32">
+                                    <div className="bg-gray-50 dark:bg-slate-950 p-4 rounded-3xl border dark:border-slate-800 text-center w-32 flex flex-col justify-center">
                                         <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">Cultivos</p>
                                         <p className="text-xl font-black text-hemp-600">{locationPlots.length}</p>
                                     </div>

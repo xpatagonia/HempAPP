@@ -2,8 +2,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Location, SoilType, RoleType, Plot } from '../types';
-/* Added missing ChevronRight and Info imports */
-import { Plus, MapPin, User, Globe, Edit2, Trash2, Briefcase, Building, Landmark, GraduationCap, Users, Droplets, Navigation, X, ScanBarcode, Loader2, Save, Search, Filter, ExternalLink, FileUp, LayoutDashboard, Map as MapIcon, ChevronRight, Info } from 'lucide-react';
+import { Plus, MapPin, User, Globe, Edit2, Trash2, Briefcase, Building, Landmark, GraduationCap, Users, Droplets, Navigation, X, ScanBarcode, Loader2, Save, Search, Filter, ExternalLink, FileUp, LayoutDashboard, Map as MapIcon, ChevronRight, Info, Eye, Waves } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import WeatherWidget from '../components/WeatherWidget';
 import MapEditor from '../components/MapEditor';
@@ -33,6 +32,9 @@ const ARG_GEO: Record<string, string[]> = {
     "Tierra del Fuego": ["Ushuaia", "Río Grande", "Tolhuin"],
     "Tucumán": ["San Miguel de Tucumán", "Tafí Viejo", "Concepción", "Yerba Buena", "Banda del Río Salí", "Aguilares", "Monteros", "Famaillá"]
 };
+
+const SOIL_TYPES = ["Franco", "Franco Arenoso", "Franco Arcilloso", "Arenoso", "Arcilloso", "Limoso", "Sustrato Controlado"];
+const IRRIGATION_SYSTEMS = ["Secano (Lluvia)", "Pivot Central", "Goteo", "Aspersión", "Gravedad / Surcos", "Microaspersión"];
 
 const parseKML = (kmlText: string): { lat: number, lng: number }[] | null => {
     try {
@@ -75,7 +77,7 @@ export default function Locations() {
     name: '', province: '', city: '', address: '', soilType: 'Franco', climate: '', 
     responsiblePerson: '', lat: '', lng: '',
     clientId: '', ownerName: '', ownerLegalName: '', ownerCuit: '', ownerContact: '', ownerType: 'Empresa Privada', 
-    capacityHa: 0, irrigationSystem: '',
+    capacityHa: 0, irrigationSystem: 'Secano (Lluvia)',
     responsibleIds: [],
     polygon: []
   });
@@ -166,7 +168,7 @@ export default function Locations() {
   };
 
   const resetForm = () => {
-    setFormData({ name: '', province: '', city: '', address: '', soilType: 'Franco', climate: '', responsiblePerson: '', lat: '', lng: '', clientId: '', ownerName: '', ownerLegalName: '', ownerCuit: '', ownerContact: '', ownerType: 'Empresa Privada', capacityHa: 0, irrigationSystem: '', responsibleIds: [], polygon: [] });
+    setFormData({ name: '', province: '', city: '', address: '', soilType: 'Franco', climate: '', responsiblePerson: '', lat: '', lng: '', clientId: '', ownerName: '', ownerLegalName: '', ownerCuit: '', ownerContact: '', ownerType: 'Empresa Privada', capacityHa: 0, irrigationSystem: 'Secano (Lluvia)', responsibleIds: [], polygon: [] });
     setEditingId(null);
   };
 
@@ -231,9 +233,12 @@ export default function Locations() {
             </div>
             
             <div className="p-6 flex-1 flex flex-col">
-                <div className="mb-4">
-                    <h3 className="text-xl font-black text-gray-800 dark:text-white uppercase tracking-tighter leading-tight group-hover:text-hemp-600 transition-colors">{loc.name}</h3>
-                    <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mt-1">{loc.city}, {loc.province}</p>
+                <div className="mb-4 flex justify-between items-start">
+                    <div>
+                        <h3 className="text-xl font-black text-gray-800 dark:text-white uppercase tracking-tighter leading-tight group-hover:text-hemp-600 transition-colors">{loc.name}</h3>
+                        <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mt-1">{loc.city}, {loc.province}</p>
+                    </div>
+                    <Link to={`/locations/${loc.id}`} className="p-2 bg-slate-50 dark:bg-slate-800 rounded-lg text-slate-400 hover:text-hemp-600 transition-all"><Eye size={18}/></Link>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 mb-6">
@@ -243,7 +248,7 @@ export default function Locations() {
                     </div>
                     <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded-2xl border dark:border-slate-800 text-center">
                         <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Riego</p>
-                        <p className="text-sm font-black text-blue-600">{loc.irrigationSystem || 'Secano'}</p>
+                        <p className="text-sm font-black text-blue-600 truncate px-1" title={loc.irrigationSystem}>{loc.irrigationSystem?.split(' ')[0] || 'Secano'}</p>
                     </div>
                 </div>
 
@@ -274,7 +279,7 @@ export default function Locations() {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
                   <div className="space-y-6">
                       <div className="bg-gray-50 dark:bg-slate-950 p-6 rounded-[32px] border dark:border-slate-800">
-                          <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-6 border-b dark:border-slate-800 pb-3 flex items-center"><Info size={14} className="mr-2 text-hemp-500"/> Ficha Primaria</h3>
+                          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6 border-b dark:border-slate-800 pb-3 flex items-center"><Info size={14} className="mr-2 text-hemp-500"/> Ficha Primaria</h3>
                           <div className="space-y-4">
                               <div>
                                 <label className="text-[9px] font-black uppercase text-gray-400 ml-1 mb-1 block">Nombre Comercial / Fantasía *</label>
@@ -293,6 +298,25 @@ export default function Locations() {
                               <input placeholder="Dirección / Acceso Rural" className={inputClass} value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} />
                           </div>
                       </div>
+
+                      <div className="bg-emerald-50 dark:bg-emerald-900/10 p-6 rounded-[32px] border border-emerald-100 dark:border-emerald-900/30">
+                          <h3 className="text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-widest mb-6 border-b border-emerald-100 dark:border-emerald-900/30 pb-3 flex items-center"><Waves size={14} className="mr-2"/> Especificaciones Técnicas</h3>
+                          <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-[9px] font-black uppercase text-emerald-800 dark:text-emerald-300 ml-1 mb-1 block">Tipo de Suelo Principal</label>
+                                    <select className={inputClass} value={formData.soilType} onChange={e => setFormData({...formData, soilType: e.target.value})}>
+                                        {SOIL_TYPES.map(s => <option key={s} value={s}>{s}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-[9px] font-black uppercase text-emerald-800 dark:text-emerald-300 ml-1 mb-1 block">Sistema de Riego</label>
+                                    <select className={inputClass} value={formData.irrigationSystem} onChange={e => setFormData({...formData, irrigationSystem: e.target.value})}>
+                                        {IRRIGATION_SYSTEMS.map(i => <option key={i} value={i}>{i}</option>)}
+                                    </select>
+                                </div>
+                          </div>
+                      </div>
+
                       <div className="bg-blue-50 dark:bg-blue-900/10 p-6 rounded-[32px] border border-blue-100 dark:border-blue-900/30">
                           <h3 className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest mb-4 flex items-center"><Building size={14} className="mr-2"/> Atribución de Propiedad</h3>
                           <div className="space-y-4">
@@ -303,12 +327,12 @@ export default function Locations() {
                   </div>
 
                   <div className="flex flex-col h-full">
-                      <div className="bg-emerald-50 dark:bg-emerald-900/10 p-6 rounded-[32px] border border-emerald-100 dark:border-emerald-900/30 flex-1 flex flex-col min-h-[400px]">
+                      <div className="bg-slate-50 dark:bg-slate-950 p-6 rounded-[32px] border dark:border-slate-800 flex-1 flex flex-col min-h-[400px]">
                           <div className="flex justify-between items-center mb-4">
-                              <h3 className="text-[10px] font-black uppercase text-emerald-700 dark:text-emerald-400 tracking-widest flex items-center"><MapIcon size={14} className="mr-2"/> Perímetro General</h3>
+                              <h3 className="text-[10px] font-black uppercase text-slate-700 dark:text-slate-400 tracking-widest flex items-center"><MapIcon size={14} className="mr-2"/> Perímetro General</h3>
                               <div className="flex gap-2">
                                   <input type="file" accept=".kml" ref={fileInputRef} className="hidden" onChange={handleKMLUpload} />
-                                  <button type="button" onClick={() => fileInputRef.current?.click()} className="px-3 py-1.5 bg-white text-emerald-600 rounded-lg text-[10px] font-black uppercase tracking-widest border border-emerald-200 shadow-sm flex items-center hover:bg-emerald-50 transition">
+                                  <button type="button" onClick={() => fileInputRef.current?.click()} className="px-3 py-1.5 bg-white dark:bg-slate-800 text-slate-600 rounded-lg text-[10px] font-black uppercase tracking-widest border dark:border-slate-700 shadow-sm flex items-center hover:bg-slate-50 transition">
                                       <FileUp size={14} className="mr-1.5"/> Importar KML
                                   </button>
                               </div>
