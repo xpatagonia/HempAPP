@@ -84,23 +84,29 @@ export default function Plots() {
   const isAdmin = currentUser?.role === 'admin' || isSuperAdmin;
   const isClient = currentUser?.role === 'client';
 
-  // --- FILTRADO DE INVENTARIO LOCAL ---
+  // --- LÓGICA DE FILTRADO DE LOTES (Sincronizada con Variedad) ---
   const availableBatches = useMemo(() => {
       return seedBatches.filter(b => {
+          // Requisito básico: Lote activo y con algo de stock
           if (!b.isActive || b.remainingQuantity <= 0) return false;
           
-          // Si el usuario es un Productor (Client), solo mostramos lotes en almacenes vinculados a su ClientID
+          // Si el usuario seleccionó una Variedad primero, filtramos los lotes de esa variedad
+          if (formData.varietyId && b.varietyId !== formData.varietyId) return false;
+
+          // Filtrado por Seguridad de Inventario Local
           if (isClient && currentUser?.clientId) {
               const storage = storagePoints.find(s => s.id === b.storagePointId);
-              return storage?.clientId === currentUser.clientId;
+              // Solo mostramos lotes en almacenes del cliente o lotes asignados directamente (fallback)
+              return !storage || storage.clientId === currentUser.clientId;
           }
           
-          // Admin ve todo el stock de la red
+          // Admins y Técnicos ven todo el stock maestro
           return true;
       });
-  }, [seedBatches, isClient, currentUser, storagePoints]);
+  }, [seedBatches, isClient, currentUser, storagePoints, formData.varietyId]);
 
-  // Sincronización Variety <-> Batch
+  // Sincronización Batch -> Variety
+  // Si cambia el lote, actualizamos la variedad para que coincida con la genética del lote
   useEffect(() => {
     if (formData.seedBatchId) {
         const selectedBatch = seedBatches.find(b => b.id === formData.seedBatchId);
@@ -454,21 +460,20 @@ export default function Plots() {
                       <div className="space-y-6">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               <div>
+                                  <label className="text-[9px] font-black uppercase text-purple-800 dark:text-purple-300 ml-1 block mb-1 flex items-center gap-1.5"><Archive size={10}/> Variedad Genética *</label>
+                                  <select required className={inputClass} value={formData.varietyId} onChange={e => setFormData({...formData, varietyId: e.target.value, seedBatchId: ''})}>
+                                      <option value="">-- Seleccionar Genética --</option>
+                                      {varieties.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                                  </select>
+                              </div>
+                              <div>
                                   <label className="text-[9px] font-black uppercase text-purple-800 dark:text-purple-300 ml-1 block mb-1 flex items-center gap-1.5"><Archive size={10}/> Lote Local Certificado *</label>
                                   <select required className={inputClass} value={formData.seedBatchId} onChange={e => setFormData({...formData, seedBatchId: e.target.value})}>
-                                      <option value="">-- Seleccionar de mi stock --</option>
+                                      <option value="">{availableBatches.length > 0 ? '-- Seleccionar de mi stock --' : '-- Sin stock disponible --'}</option>
                                       {availableBatches.map(b => (
                                           <option key={b.id} value={b.id}>{b.batchCode} ({b.remainingQuantity.toLocaleString()} kg disp.)</option>
                                       ))}
                                   </select>
-                              </div>
-                              <div>
-                                  <label className="text-[9px] font-black uppercase text-purple-800 dark:text-purple-300 ml-1 block mb-1 flex items-center gap-1.5"><Sprout size={10}/> Variedad Genética *</label>
-                                  <select required className={`${inputClass} bg-slate-100 dark:bg-slate-800 cursor-not-allowed`} value={formData.varietyId} onChange={e => setFormData({...formData, varietyId: e.target.value})} disabled={!!formData.seedBatchId}>
-                                      <option value="">-- Automático por lote --</option>
-                                      {varieties.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-                                  </select>
-                                  {formData.seedBatchId && <p className="text-[8px] text-purple-400 mt-1 font-bold italic uppercase">Bloqueado para asegurar trazabilidad.</p>}
                               </div>
                           </div>
 
