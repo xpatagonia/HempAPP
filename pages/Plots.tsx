@@ -85,12 +85,12 @@ export default function Plots() {
   const isAdmin = currentUser?.role === 'admin' || isSuperAdmin;
   const isClient = currentUser?.role === 'client';
 
-  // Sincronizar variedad al elegir lote
+  // Sincronización Variety <-> Batch
   useEffect(() => {
     if (formData.seedBatchId) {
-        const batch = seedBatches.find(b => b.id === formData.seedBatchId);
-        if (batch && batch.varietyId !== formData.varietyId) {
-            setFormData(prev => ({ ...prev, varietyId: batch.varietyId }));
+        const selectedBatch = seedBatches.find(b => b.id === formData.seedBatchId);
+        if (selectedBatch && selectedBatch.varietyId !== formData.varietyId) {
+            setFormData(prev => ({ ...prev, varietyId: selectedBatch.varietyId }));
         }
     }
   }, [formData.seedBatchId, seedBatches]);
@@ -104,28 +104,80 @@ export default function Plots() {
       return matchSearch && matchLoc && matchType && matchStatus && hasAccess;
   }), [plots, searchTerm, filterLoc, filterType, filterStatus, isAdmin, isClient, currentUser, locations]);
 
-  // Lotes que el usuario puede elegir para sembrar (Filtrado por cliente)
+  // Lotes que el usuario puede elegir (Filtrado estricto por pertenencia local)
   const availableBatches = useMemo(() => {
       return seedBatches.filter(b => {
           const hasStock = b.remainingQuantity > 0;
-          
-          // Si es cliente, solo ve lotes que están en almacenes que le pertenecen
           if (isClient && currentUser?.clientId) {
               const sp = storagePoints.find(s => s.id === b.storagePointId);
               return hasStock && sp?.clientId === currentUser.clientId;
           }
-          
           return hasStock;
       });
   }, [seedBatches, isClient, currentUser, storagePoints]);
 
-  // Conversión de masa a KG para el backend
-  const usedSeedKg = useMemo(() => {
+  // Cálculo de conversión a KG para la transacción
+  const calculatedUsedKg = useMemo(() => {
       const val = Number(formData.usedSeedValue || 0);
-      if (formData.usedSeedUnit === 'gr') return val / 1000;
-      if (formData.usedSeedUnit === 'tn') return val * 1000;
-      return val;
+      switch(formData.usedSeedUnit) {
+          case 'gr': return val / 1000;
+          case 'tn': return val * 1000;
+          default: return val;
+      }
   }, [formData.usedSeedValue, formData.usedSeedUnit]);
+
+  const handleSubmitAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.name || !formData.locationId || !formData.varietyId || isSaving) {
+        alert("Por favor complete los campos obligatorios (*)");
+        return;
+    }
+
+    if (formData.seedBatchId && calculatedUsedKg > 0) {
+        const batch = seedBatches.find(b => b.id === formData.seedBatchId);
+        if (batch && batch.remainingQuantity < calculatedUsedKg) {
+            alert(`Error de Stock: La cantidad solicitada (${calculatedUsedKg.toFixed(3)} kg) supera los ${batch.remainingQuantity} kg disponibles en el lote.`);
+            return;
+        }
+    }
+
+    setIsSaving(true);
+    try {
+        const finalLat = parseFloat(formData.lat || '0');
+        const finalLng = parseFloat(formData.lng || '0');
+        const coordinates = (!isNaN(finalLat) && !isNaN(finalLng) && finalLat !== 0) ? { lat: finalLat, lng: finalLng } : null;
+
+        const payload = {
+            ...formData,
+            id: Date.now().toString(),
+            responsibleIds: [currentUser?.id || ''],
+            surfaceArea: Number(formData.surfaceArea),
+            density: Number(formData.density),
+            coordinates,
+            polygon: formData.polygon || []
+        } as Plot;
+
+        const success = await addPlot(payload);
+        
+        if (success) {
+            if (formData.seedBatchId && calculatedUsedKg > 0) {
+                const batch = seedBatches.find(b => b.id === formData.seedBatchId);
+                if (batch) {
+                    await updateSeedBatch({
+                        ...batch,
+                        remainingQuantity: batch.remainingQuantity - calculatedUsedKg
+                    });
+                }
+            }
+            setIsAddModalOpen(false);
+            setFormData({ name: '', type: 'Ensayo', locationId: '', projectId: '', varietyId: '', seedBatchId: '', status: 'Activa', sowingDate: new Date().toISOString().split('T')[0], surfaceArea: 0, surfaceUnit: 'ha', density: 0, lat: '', lng: '', polygon: [], usedSeedValue: 0, usedSeedUnit: 'kg' });
+        }
+    } catch (err) {
+        console.error(err);
+    } finally {
+        setIsSaving(false);
+    }
+  };
 
   const handleKMLUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
@@ -158,54 +210,6 @@ export default function Plots() {
 
   const handlePolygonChange = (newPoly: { lat: number, lng: number }[], areaHa: number, center: { lat: number, lng: number }) => {
       setFormData(prev => ({ ...prev, polygon: newPoly, surfaceArea: areaHa > 0 ? Number(areaHa.toFixed(2)) : prev.surfaceArea, surfaceUnit: 'ha', lat: center.lat.toFixed(6), lng: center.lng.toFixed(6) }));
-  };
-
-  const handleSubmitAdd = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.name || !formData.locationId || !formData.varietyId || isSaving) {
-        alert("Por favor complete los campos obligatorios (*)");
-        return;
-    }
-
-    if (formData.seedBatchId && usedSeedKg > 0) {
-        const batch = seedBatches.find(b => b.id === formData.seedBatchId);
-        if (batch && batch.remainingQuantity < usedSeedKg) {
-            alert(`Error: El lote seleccionado solo posee ${batch.remainingQuantity} kg disponibles. Su carga actual equivale a ${usedSeedKg.toFixed(2)} kg.`);
-            return;
-        }
-    }
-
-    setIsSaving(true);
-    const finalLat = parseFloat(formData.lat || '0');
-    const finalLng = parseFloat(formData.lng || '0');
-    const coordinates = (!isNaN(finalLat) && !isNaN(finalLng) && finalLat !== 0) ? { lat: finalLat, lng: finalLng } : null;
-
-    const payload = {
-        ...formData,
-        id: Date.now().toString(),
-        responsibleIds: [currentUser?.id || ''],
-        surfaceArea: Number(formData.surfaceArea),
-        density: Number(formData.density),
-        coordinates,
-        polygon: formData.polygon || []
-    } as Plot;
-
-    const success = await addPlot(payload);
-    
-    if (success) {
-        if (formData.seedBatchId && usedSeedKg > 0) {
-            const batch = seedBatches.find(b => b.id === formData.seedBatchId);
-            if (batch) {
-                await updateSeedBatch({
-                    ...batch,
-                    remainingQuantity: batch.remainingQuantity - usedSeedKg
-                });
-            }
-        }
-        setIsAddModalOpen(false);
-        setFormData({ name: '', type: 'Ensayo', locationId: '', projectId: '', varietyId: '', seedBatchId: '', status: 'Activa', sowingDate: new Date().toISOString().split('T')[0], surfaceArea: 0, surfaceUnit: 'ha', density: 0, lat: '', lng: '', polygon: [], usedSeedValue: 0, usedSeedUnit: 'kg' });
-    }
-    setIsSaving(false);
   };
 
   const handleUpdatePlot = async (e: React.FormEvent) => {
@@ -276,7 +280,7 @@ export default function Plots() {
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-slate-800 font-medium">
                 {filteredPlots.length === 0 ? (
-                  <tr><td colSpan={5} className="p-12 text-center text-gray-400 italic">Sin unidades registradas con este filtro.</td></tr>
+                  <tr><td colSpan={5} className="p-12 text-center text-gray-400 italic">Sin unidades registradas.</td></tr>
                 ) : filteredPlots.map(p => {
                   const loc = locations.find(l => l.id === p.locationId);
                   const vari = varieties.find(v => v.id === p.varietyId);
@@ -313,7 +317,6 @@ export default function Plots() {
                         <div className="flex justify-end items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button onClick={() => setQrPlot(p)} className="p-2 text-gray-400 hover:text-blue-600 bg-white dark:bg-slate-800 rounded-xl shadow-sm border dark:border-slate-700 transition"><QrCode size={16}/></button>
                           {isAdmin && <button onClick={() => setEditingPlot(p)} className="p-2 text-gray-400 hover:text-hemp-600 bg-white dark:bg-slate-800 rounded-xl shadow-sm border dark:border-slate-700 transition"><Edit2 size={16}/></button>}
-                          {isSuperAdmin && <button onClick={() => { if(window.confirm("¿Eliminar unidad productiva?")) deletePlot(p.id); }} className="p-2 text-gray-400 hover:text-red-600 bg-white dark:bg-slate-800 rounded-xl shadow-sm border dark:border-slate-700 transition"><Trash2 size={16} /></button>}
                           <Link to={`/plots/${p.id}`} className="p-2 text-hemp-600 bg-white dark:bg-slate-800 rounded-xl shadow-sm border dark:border-slate-700 transition"><ChevronRight size={18} /></Link>
                         </div>
                       </td>
@@ -346,7 +349,6 @@ export default function Plots() {
                           <div className="flex space-x-2">
                              <button onClick={() => setQrPlot(p)} className="p-2 bg-gray-100 dark:bg-slate-800 rounded-xl text-gray-500 hover:text-blue-600 transition"><QrCode size={16}/></button>
                              {isAdmin && <button onClick={() => setEditingPlot(p)} className="p-2 bg-gray-100 dark:bg-slate-800 rounded-xl text-gray-500 hover:text-hemp-600 transition"><Edit2 size={16}/></button>}
-                             {isSuperAdmin && <button onClick={() => { if(window.confirm("¿Eliminar unidad productiva?")) deletePlot(p.id); }} className="p-2 bg-gray-100 dark:bg-slate-800 rounded-xl text-gray-500 hover:text-red-600 transition"><Trash2 size={16}/></button>}
                           </div>
                           <Link to={`/plots/${p.id}`} className="bg-slate-900 dark:bg-hemp-600 text-white px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-lg">Entrar Bitácora</Link>
                       </div>
@@ -447,7 +449,7 @@ export default function Plots() {
                   </div>
               </div>
 
-              {/* TERCERA COLUMNA (INFERIOR): GENÉTICA Y DISEÑO */}
+              {/* TERCERA COLUMNA (INFERIOR): INSUMO Y DISEÑO */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-4">
                   <div className="bg-purple-50 dark:bg-purple-900/10 p-6 rounded-[32px] border border-purple-100 dark:border-purple-900/30">
                       <h3 className="text-[10px] font-black text-purple-700 dark:text-purple-400 uppercase tracking-widest mb-6 flex items-center"><Box size={14} className="mr-2"/> Insumo de Siembra (Local)</h3>
@@ -468,7 +470,7 @@ export default function Plots() {
                                       <option value="">-- Seleccionar --</option>
                                       {varieties.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
                                   </select>
-                                  {formData.seedBatchId && <p className="text-[8px] text-purple-400 mt-1 font-bold italic uppercase">Bloqueado por lote seleccionado.</p>}
+                                  {formData.seedBatchId && <p className="text-[8px] text-purple-400 mt-1 font-bold italic uppercase">Bloqueado por el lote seleccionado.</p>}
                               </div>
                           </div>
 
@@ -492,9 +494,9 @@ export default function Plots() {
                                 </div>
                                 {formData.seedBatchId && (
                                     <div className="mt-4 flex justify-between items-center text-[10px] font-bold uppercase tracking-widest px-1">
-                                        <span className="text-slate-400">Impacto en Stock:</span>
-                                        <span className={`${usedSeedKg > (seedBatches.find(b => b.id === formData.seedBatchId)?.remainingQuantity || 0) ? 'text-red-500 animate-pulse' : 'text-hemp-600'}`}>
-                                            -{usedSeedKg.toLocaleString()} KG
+                                        <span className="text-slate-400">Impacto en Inventario:</span>
+                                        <span className={`${calculatedUsedKg > (seedBatches.find(b => b.id === formData.seedBatchId)?.remainingQuantity || 0) ? 'text-red-500 animate-pulse' : 'text-hemp-600'}`}>
+                                            -{calculatedUsedKg.toLocaleString()} KG
                                         </span>
                                     </div>
                                 )}
