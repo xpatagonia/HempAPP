@@ -1,15 +1,14 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { Plot, Variety, Location, Project, TrialRecord, SeedBatch } from '../types';
 import { 
-  ChevronRight, FileSpreadsheet, LayoutGrid, List, Tag, FlaskConical, 
-  Tractor, Trash2, Edit2, QrCode, X, Save, Search, Filter, 
-  MapPin, Calendar, Sprout, Printer, Ruler, Activity, CheckCircle2, AlertCircle, Download, ExternalLink, Plus, Loader2, Info, FolderKanban, Archive, FileUp,
-  Link as LinkIcon, Scale, Box
+  ChevronRight, LayoutGrid, List, Tag, FlaskConical, 
+  Trash2, Edit2, QrCode, X, Save, Search, Filter, 
+  MapPin, Calendar, Sprout, Printer, Activity, Plus, Loader2, Info, FolderKanban, FileUp,
+  Link as LinkIcon, Scale, Box, Weight, Archive
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
 import MapEditor from '../components/MapEditor';
 
 const parseKML = (kmlText: string): { lat: number, lng: number }[] | null => {
@@ -43,8 +42,8 @@ type MassUnit = 'gr' | 'kg' | 'tn';
 export default function Plots() {
   const { 
     plots, locations, varieties, projects, currentUser, 
-    getLatestRecord, seedBatches, deletePlot, updatePlot, 
-    addPlot, updateSeedBatch, trialRecords, storagePoints 
+    seedBatches, deletePlot, updatePlot, 
+    addPlot, updateSeedBatch, storagePoints 
   } = useAppContext();
   
   const [viewMode, setViewMode] = useState<'table' | 'gallery'>('table');
@@ -60,7 +59,7 @@ export default function Plots() {
   const [qrPlot, setQrPlot] = useState<Plot | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Form State para Alta
+  // Form State para Alta con manejo de peso local
   const [formData, setFormData] = useState<Partial<Plot> & { lat: string, lng: string, usedSeedValue: number, usedSeedUnit: MassUnit }>({
       name: '',
       type: 'Ensayo',
@@ -85,6 +84,22 @@ export default function Plots() {
   const isAdmin = currentUser?.role === 'admin' || isSuperAdmin;
   const isClient = currentUser?.role === 'client';
 
+  // --- FILTRADO DE INVENTARIO LOCAL ---
+  const availableBatches = useMemo(() => {
+      return seedBatches.filter(b => {
+          if (!b.isActive || b.remainingQuantity <= 0) return false;
+          
+          // Si el usuario es un Productor (Client), solo mostramos lotes en almacenes vinculados a su ClientID
+          if (isClient && currentUser?.clientId) {
+              const storage = storagePoints.find(s => s.id === b.storagePointId);
+              return storage?.clientId === currentUser.clientId;
+          }
+          
+          // Admin ve todo el stock de la red
+          return true;
+      });
+  }, [seedBatches, isClient, currentUser, storagePoints]);
+
   // Sincronización Variety <-> Batch
   useEffect(() => {
     if (formData.seedBatchId) {
@@ -95,28 +110,7 @@ export default function Plots() {
     }
   }, [formData.seedBatchId, seedBatches]);
 
-  const filteredPlots = useMemo(() => plots.filter(p => {
-      const matchSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchLoc = filterLoc === 'all' || p.locationId === filterLoc;
-      const matchType = filterType === 'all' || p.type === filterType;
-      const matchStatus = filterStatus === 'all' || p.status === filterStatus;
-      let hasAccess = isAdmin || (isClient && locations.find(l => l.id === p.locationId)?.clientId === currentUser.clientId) || p.responsibleIds?.includes(currentUser?.id || '');
-      return matchSearch && matchLoc && matchType && matchStatus && hasAccess;
-  }), [plots, searchTerm, filterLoc, filterType, filterStatus, isAdmin, isClient, currentUser, locations]);
-
-  // Lotes que el usuario puede elegir (Filtrado estricto por pertenencia local)
-  const availableBatches = useMemo(() => {
-      return seedBatches.filter(b => {
-          const hasStock = b.remainingQuantity > 0;
-          if (isClient && currentUser?.clientId) {
-              const sp = storagePoints.find(s => s.id === b.storagePointId);
-              return hasStock && sp?.clientId === currentUser.clientId;
-          }
-          return hasStock;
-      });
-  }, [seedBatches, isClient, currentUser, storagePoints]);
-
-  // Cálculo de conversión a KG para la transacción
+  // Cálculo de conversión a KG
   const calculatedUsedKg = useMemo(() => {
       const val = Number(formData.usedSeedValue || 0);
       switch(formData.usedSeedUnit) {
@@ -126,58 +120,20 @@ export default function Plots() {
       }
   }, [formData.usedSeedValue, formData.usedSeedUnit]);
 
-  const handleSubmitAdd = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.name || !formData.locationId || !formData.varietyId || isSaving) {
-        alert("Por favor complete los campos obligatorios (*)");
-        return;
-    }
-
-    if (formData.seedBatchId && calculatedUsedKg > 0) {
-        const batch = seedBatches.find(b => b.id === formData.seedBatchId);
-        if (batch && batch.remainingQuantity < calculatedUsedKg) {
-            alert(`Error de Stock: La cantidad solicitada (${calculatedUsedKg.toFixed(3)} kg) supera los ${batch.remainingQuantity} kg disponibles en el lote.`);
-            return;
-        }
-    }
-
-    setIsSaving(true);
-    try {
-        const finalLat = parseFloat(formData.lat || '0');
-        const finalLng = parseFloat(formData.lng || '0');
-        const coordinates = (!isNaN(finalLat) && !isNaN(finalLng) && finalLat !== 0) ? { lat: finalLat, lng: finalLng } : null;
-
-        const payload = {
-            ...formData,
-            id: Date.now().toString(),
-            responsibleIds: [currentUser?.id || ''],
-            surfaceArea: Number(formData.surfaceArea),
-            density: Number(formData.density),
-            coordinates,
-            polygon: formData.polygon || []
-        } as Plot;
-
-        const success = await addPlot(payload);
-        
-        if (success) {
-            if (formData.seedBatchId && calculatedUsedKg > 0) {
-                const batch = seedBatches.find(b => b.id === formData.seedBatchId);
-                if (batch) {
-                    await updateSeedBatch({
-                        ...batch,
-                        remainingQuantity: batch.remainingQuantity - calculatedUsedKg
-                    });
-                }
-            }
-            setIsAddModalOpen(false);
-            setFormData({ name: '', type: 'Ensayo', locationId: '', projectId: '', varietyId: '', seedBatchId: '', status: 'Activa', sowingDate: new Date().toISOString().split('T')[0], surfaceArea: 0, surfaceUnit: 'ha', density: 0, lat: '', lng: '', polygon: [], usedSeedValue: 0, usedSeedUnit: 'kg' });
-        }
-    } catch (err) {
-        console.error(err);
-    } finally {
-        setIsSaving(false);
-    }
-  };
+  const filteredPlots = useMemo(() => plots.filter(p => {
+      const matchSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchLoc = filterLoc === 'all' || p.locationId === filterLoc;
+      const matchType = filterType === 'all' || p.type === filterType;
+      const matchStatus = filterStatus === 'all' || p.status === filterStatus;
+      
+      let hasAccess = isAdmin;
+      if (isClient && currentUser?.clientId) {
+          const loc = locations.find(l => l.id === p.locationId);
+          hasAccess = loc?.clientId === currentUser.clientId;
+      }
+      
+      return matchSearch && matchLoc && matchType && matchStatus && (hasAccess || p.responsibleIds?.includes(currentUser?.id || ''));
+  }), [plots, searchTerm, filterLoc, filterType, filterStatus, isAdmin, isClient, currentUser, locations]);
 
   const handleKMLUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
@@ -210,6 +166,54 @@ export default function Plots() {
 
   const handlePolygonChange = (newPoly: { lat: number, lng: number }[], areaHa: number, center: { lat: number, lng: number }) => {
       setFormData(prev => ({ ...prev, polygon: newPoly, surfaceArea: areaHa > 0 ? Number(areaHa.toFixed(2)) : prev.surfaceArea, surfaceUnit: 'ha', lat: center.lat.toFixed(6), lng: center.lng.toFixed(6) }));
+  };
+
+  const handleSubmitAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.name || !formData.locationId || !formData.varietyId || isSaving) {
+        alert("Por favor complete los campos obligatorios (*)");
+        return;
+    }
+
+    const selectedBatch = seedBatches.find(b => b.id === formData.seedBatchId);
+    if (selectedBatch && calculatedUsedKg > selectedBatch.remainingQuantity) {
+        alert(`STOCK INSUFICIENTE: El lote seleccionado solo posee ${selectedBatch.remainingQuantity} kg disponibles. Su pedido actual es de ${calculatedUsedKg.toFixed(3)} kg.`);
+        return;
+    }
+
+    setIsSaving(true);
+    try {
+        const finalLat = parseFloat(formData.lat || '0');
+        const finalLng = parseFloat(formData.lng || '0');
+        const coordinates = (!isNaN(finalLat) && !isNaN(finalLng) && finalLat !== 0) ? { lat: finalLat, lng: finalLng } : null;
+
+        const payload = {
+            ...formData,
+            id: Date.now().toString(),
+            responsibleIds: [currentUser?.id || ''],
+            surfaceArea: Number(formData.surfaceArea),
+            density: Number(formData.density),
+            coordinates,
+            polygon: formData.polygon || []
+        } as Plot;
+
+        const success = await addPlot(payload);
+        
+        if (success && selectedBatch && calculatedUsedKg > 0) {
+            // Descontamos el stock real en KG del lote industrial
+            await updateSeedBatch({
+                ...selectedBatch,
+                remainingQuantity: selectedBatch.remainingQuantity - calculatedUsedKg
+            });
+        }
+
+        if (success) {
+            setIsAddModalOpen(false);
+            setFormData({ name: '', type: 'Ensayo', locationId: '', projectId: '', varietyId: '', seedBatchId: '', status: 'Activa', sowingDate: new Date().toISOString().split('T')[0], surfaceArea: 0, surfaceUnit: 'ha', density: 0, lat: '', lng: '', polygon: [], usedSeedValue: 0, usedSeedUnit: 'kg' });
+        }
+    } finally {
+        setIsSaving(false);
+    }
   };
 
   const handleUpdatePlot = async (e: React.FormEvent) => {
@@ -280,7 +284,7 @@ export default function Plots() {
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-slate-800 font-medium">
                 {filteredPlots.length === 0 ? (
-                  <tr><td colSpan={5} className="p-12 text-center text-gray-400 italic">Sin unidades registradas.</td></tr>
+                  <tr><td colSpan={5} className="p-12 text-center text-gray-400 italic">Sin unidades registradas con este filtro.</td></tr>
                 ) : filteredPlots.map(p => {
                   const loc = locations.find(l => l.id === p.locationId);
                   const vari = varieties.find(v => v.id === p.varietyId);
@@ -317,6 +321,7 @@ export default function Plots() {
                         <div className="flex justify-end items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button onClick={() => setQrPlot(p)} className="p-2 text-gray-400 hover:text-blue-600 bg-white dark:bg-slate-800 rounded-xl shadow-sm border dark:border-slate-700 transition"><QrCode size={16}/></button>
                           {isAdmin && <button onClick={() => setEditingPlot(p)} className="p-2 text-gray-400 hover:text-hemp-600 bg-white dark:bg-slate-800 rounded-xl shadow-sm border dark:border-slate-700 transition"><Edit2 size={16}/></button>}
+                          {isSuperAdmin && <button onClick={() => { if(window.confirm("¿Eliminar unidad productiva?")) deletePlot(p.id); }} className="p-2 text-gray-400 hover:text-red-600 bg-white dark:bg-slate-800 rounded-xl shadow-sm border dark:border-slate-700 transition"><Trash2 size={16} /></button>}
                           <Link to={`/plots/${p.id}`} className="p-2 text-hemp-600 bg-white dark:bg-slate-800 rounded-xl shadow-sm border dark:border-slate-700 transition"><ChevronRight size={18} /></Link>
                         </div>
                       </td>
@@ -349,6 +354,7 @@ export default function Plots() {
                           <div className="flex space-x-2">
                              <button onClick={() => setQrPlot(p)} className="p-2 bg-gray-100 dark:bg-slate-800 rounded-xl text-gray-500 hover:text-blue-600 transition"><QrCode size={16}/></button>
                              {isAdmin && <button onClick={() => setEditingPlot(p)} className="p-2 bg-gray-100 dark:bg-slate-800 rounded-xl text-gray-500 hover:text-hemp-600 transition"><Edit2 size={16}/></button>}
+                             {isSuperAdmin && <button onClick={() => { if(window.confirm("¿Eliminar unidad productiva?")) deletePlot(p.id); }} className="p-2 bg-gray-100 dark:bg-slate-800 rounded-xl text-gray-500 hover:text-red-600 transition"><Trash2 size={16}/></button>}
                           </div>
                           <Link to={`/plots/${p.id}`} className="bg-slate-900 dark:bg-hemp-600 text-white px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-lg">Entrar Bitácora</Link>
                       </div>
@@ -360,13 +366,13 @@ export default function Plots() {
       {/* MODAL ALTA NUEVA UNIDAD */}
       {isAddModalOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-6xl w-full p-10 shadow-2xl max-h-[95vh] overflow-y-auto animate-in zoom-in-95">
+          <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-6xl w-full p-10 shadow-2xl max-h-[95vh] overflow-y-auto animate-in zoom-in-95 border border-white/10">
             <div className="flex justify-between items-center mb-8">
                 <div className="flex items-center gap-4">
                     <div className="bg-hemp-600 p-3 rounded-2xl text-white shadow-lg"><Sprout size={28}/></div>
                     <div>
                         <h2 className="text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tighter italic">Lanzar <span className="text-hemp-600">Unidad Productiva</span></h2>
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Protocolo de diseño de parcelas y lotes de escala</p>
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Planificación de siembra con trazabilidad industrial</p>
                     </div>
                 </div>
                 <button onClick={() => !isSaving && setIsAddModalOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition text-slate-400"><X size={28}/></button>
@@ -380,11 +386,11 @@ export default function Plots() {
                           <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6 border-b dark:border-slate-800 pb-3 flex items-center"><Info size={14} className="mr-2 text-hemp-500"/> Definición Básica</h3>
                           <div className="space-y-4">
                               <div>
-                                  <label className="text-[9px] font-black uppercase text-slate-400 ml-1 mb-1 block">Identificador Único *</label>
+                                  <label className="text-[9px] font-black uppercase text-slate-400 ml-1 mb-1 block">Identificador de Parcela / Lote *</label>
                                   <input required type="text" className={inputClass} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value.toUpperCase()})} placeholder="EJ: LOTE-A1-TRELEW" />
                               </div>
                               <div>
-                                  <label className="text-[9px] font-black uppercase text-slate-400 ml-1 mb-1 block">Tipo de Cultivo</label>
+                                  <label className="text-[9px] font-black uppercase text-slate-400 ml-1 mb-1 block">Tipo de Unidad</label>
                                   <div className="grid grid-cols-2 gap-2">
                                       {['Ensayo', 'Producción'].map(t => (
                                           <button key={t} type="button" onClick={() => setFormData({...formData, type: t as any})} className={`py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${formData.type === t ? 'bg-hemp-600 text-white border-hemp-600 shadow-md' : 'bg-white dark:bg-slate-800 text-gray-400 border-gray-200 dark:border-slate-700 hover:bg-gray-50'}`}>{t}</button>
@@ -395,19 +401,21 @@ export default function Plots() {
                       </div>
 
                       <div className="bg-blue-50 dark:bg-blue-900/10 p-6 rounded-[32px] border border-blue-100 dark:border-blue-900/30">
-                          <h3 className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest mb-6 border-b border-blue-100 dark:border-blue-900/30 pb-3 flex items-center"><LinkIcon size={14} className="mr-2"/> Atribución de Sitio</h3>
+                          <h3 className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest mb-6 border-b border-blue-100 dark:border-blue-900/30 pb-3 flex items-center"><LinkIcon size={14} className="mr-2"/> Atribución de Campo</h3>
                           <div className="space-y-4">
                               <div>
-                                  <label className="text-[9px] font-black uppercase text-blue-800 dark:text-blue-300 ml-1 mb-1 block">Establecimiento / Campo *</label>
+                                  <label className="text-[9px] font-black uppercase text-blue-800 dark:text-blue-300 ml-1 mb-1 block">Establecimiento Receptor *</label>
                                   <select required className={inputClass} value={formData.locationId} onChange={e => setFormData({...formData, locationId: e.target.value})}>
                                       <option value="">-- Seleccionar Campo --</option>
-                                      {locations.map(l => <option key={l.id} value={l.id}>{l.name} ({l.province})</option>)}
+                                      {locations.filter(l => !isClient || l.clientId === currentUser?.clientId).map(l => (
+                                          <option key={l.id} value={l.id}>{l.name} ({l.province})</option>
+                                      ))}
                                   </select>
                               </div>
                               <div>
-                                  <label className="text-[9px] font-black uppercase text-blue-800 dark:text-blue-300 ml-1 mb-1 block">Campaña / Proyecto</label>
+                                  <label className="text-[9px] font-black uppercase text-blue-800 dark:text-blue-300 ml-1 mb-1 block">Campaña de Trabajo</label>
                                   <select className={inputClass} value={formData.projectId} onChange={e => setFormData({...formData, projectId: e.target.value})}>
-                                      <option value="">-- Sin proyecto específico --</option>
+                                      <option value="">-- Sin campaña asignada --</option>
                                       {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                                   </select>
                               </div>
@@ -435,99 +443,98 @@ export default function Plots() {
                                   height="100%" 
                                />
                           </div>
-                          <div className="grid grid-cols-2 gap-4">
-                               <div>
-                                  <label className="text-[9px] font-black uppercase text-emerald-800 dark:text-emerald-300 ml-1">Latitud</label>
-                                  <input type="text" className={inputClass} value={formData.lat} onChange={e => setFormData({...formData, lat: e.target.value})} placeholder="-00.000000" />
-                               </div>
-                               <div>
-                                  <label className="text-[9px] font-black uppercase text-emerald-800 dark:text-emerald-300 ml-1">Longitud</label>
-                                  <input type="text" className={inputClass} value={formData.lng} onChange={e => setFormData({...formData, lng: e.target.value})} placeholder="-00.000000" />
-                               </div>
-                          </div>
                       </div>
                   </div>
               </div>
 
-              {/* TERCERA COLUMNA (INFERIOR): INSUMO Y DISEÑO */}
+              {/* TERCERA FILA: INSUMOS LOCALES Y DISEÑO */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-4">
-                  <div className="bg-purple-50 dark:bg-purple-900/10 p-6 rounded-[32px] border border-purple-100 dark:border-purple-900/30">
-                      <h3 className="text-[10px] font-black text-purple-700 dark:text-purple-400 uppercase tracking-widest mb-6 flex items-center"><Box size={14} className="mr-2"/> Insumo de Siembra (Local)</h3>
+                  <div className="bg-purple-50 dark:bg-purple-900/10 p-8 rounded-[40px] border border-purple-100 dark:border-purple-900/30">
+                      <h3 className="text-[10px] font-black text-purple-700 dark:text-purple-400 uppercase tracking-widest mb-6 flex items-center"><Box size={14} className="mr-2"/> Insumos de Mi Inventario Local</h3>
                       <div className="space-y-6">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               <div>
-                                  <label className="text-[9px] font-black uppercase text-purple-800 dark:text-purple-300 ml-1 block mb-1">Lote de Semilla *</label>
+                                  <label className="text-[9px] font-black uppercase text-purple-800 dark:text-purple-300 ml-1 block mb-1 flex items-center gap-1.5"><Archive size={10}/> Lote Local Certificado *</label>
                                   <select required className={inputClass} value={formData.seedBatchId} onChange={e => setFormData({...formData, seedBatchId: e.target.value})}>
-                                      <option value="">-- Seleccionar Lote --</option>
+                                      <option value="">-- Seleccionar de mi stock --</option>
                                       {availableBatches.map(b => (
-                                          <option key={b.id} value={b.id}>{b.batchCode} ({b.remainingQuantity} kg disp.)</option>
+                                          <option key={b.id} value={b.id}>{b.batchCode} ({b.remainingQuantity.toLocaleString()} kg disp.)</option>
                                       ))}
                                   </select>
                               </div>
                               <div>
-                                  <label className="text-[9px] font-black uppercase text-purple-800 dark:text-purple-300 ml-1 block mb-1">Variedad Genética *</label>
+                                  <label className="text-[9px] font-black uppercase text-purple-800 dark:text-purple-300 ml-1 block mb-1 flex items-center gap-1.5"><Sprout size={10}/> Variedad Genética *</label>
                                   <select required className={`${inputClass} bg-slate-100 dark:bg-slate-800 cursor-not-allowed`} value={formData.varietyId} onChange={e => setFormData({...formData, varietyId: e.target.value})} disabled={!!formData.seedBatchId}>
-                                      <option value="">-- Seleccionar --</option>
+                                      <option value="">-- Automático por lote --</option>
                                       {varieties.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
                                   </select>
-                                  {formData.seedBatchId && <p className="text-[8px] text-purple-400 mt-1 font-bold italic uppercase">Bloqueado por el lote seleccionado.</p>}
+                                  {formData.seedBatchId && <p className="text-[8px] text-purple-400 mt-1 font-bold italic uppercase">Bloqueado para asegurar trazabilidad.</p>}
                               </div>
                           </div>
 
-                          <div className="bg-white/50 dark:bg-slate-900/50 p-6 rounded-[24px] border border-dashed dark:border-slate-800">
-                                <label className="text-[10px] font-black uppercase text-hemp-600 ml-1 block mb-3 flex items-center"><Scale size={14} className="mr-2"/> Cantidad a Sembrar</label>
-                                <div className="flex gap-2">
+                          <div className="bg-white/50 dark:bg-slate-900/50 p-6 rounded-[28px] border border-dashed border-purple-200 dark:border-slate-800 shadow-inner">
+                                <label className="text-[10px] font-black uppercase text-hemp-600 ml-1 block mb-3 flex items-center"><Scale size={14} className="mr-2"/> Cantidad necesaria para siembra</label>
+                                <div className="flex gap-3">
                                     <input 
                                         required 
                                         type="number" 
                                         step="0.001" 
-                                        className={`${inputClass} flex-1 text-xl font-black text-hemp-700 text-center`}
+                                        className={`${inputClass} flex-1 text-2xl font-black text-hemp-700 text-center border-hemp-200`}
                                         value={formData.usedSeedValue} 
                                         onChange={e => setFormData({...formData, usedSeedValue: Number(e.target.value)})} 
                                         placeholder="0.000"
                                     />
-                                    <select className="w-24 border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl text-xs font-black uppercase tracking-widest text-hemp-600" value={formData.usedSeedUnit} onChange={e => setFormData({...formData, usedSeedUnit: e.target.value as MassUnit})}>
-                                        <option value="gr">GR</option>
-                                        <option value="kg">KG</option>
-                                        <option value="tn">TN</option>
+                                    <select className="w-28 border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl text-xs font-black uppercase tracking-widest text-hemp-600" value={formData.usedSeedUnit} onChange={e => setFormData({...formData, usedSeedUnit: e.target.value as MassUnit})}>
+                                        <option value="gr">GRAMOS</option>
+                                        <option value="kg">KILOS</option>
+                                        <option value="tn">TONELADAS</option>
                                     </select>
                                 </div>
                                 {formData.seedBatchId && (
-                                    <div className="mt-4 flex justify-between items-center text-[10px] font-bold uppercase tracking-widest px-1">
-                                        <span className="text-slate-400">Impacto en Inventario:</span>
-                                        <span className={`${calculatedUsedKg > (seedBatches.find(b => b.id === formData.seedBatchId)?.remainingQuantity || 0) ? 'text-red-500 animate-pulse' : 'text-hemp-600'}`}>
-                                            -{calculatedUsedKg.toLocaleString()} KG
-                                        </span>
+                                    <div className="mt-4 flex justify-between items-center px-2">
+                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Impacto Real:</span>
+                                        <div className="text-right">
+                                            <span className={`text-sm font-black ${calculatedUsedKg > (seedBatches.find(b => b.id === formData.seedBatchId)?.remainingQuantity || 0) ? 'text-red-600 animate-pulse' : 'text-hemp-600'}`}>
+                                                -{calculatedUsedKg.toLocaleString()} KG
+                                            </span>
+                                            <p className="text-[8px] text-slate-400 font-bold uppercase">del stock disponible</p>
+                                        </div>
                                     </div>
                                 )}
                           </div>
                       </div>
                   </div>
 
-                  <div className="bg-slate-50 dark:bg-slate-950 p-6 rounded-[32px] border dark:border-slate-800">
+                  <div className="bg-slate-50 dark:bg-slate-950 p-8 rounded-[40px] border dark:border-slate-800">
                       <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center"><Activity size={14} className="mr-2"/> Diseño de Campo</h3>
-                      <div className="grid grid-cols-3 gap-4">
-                          <div>
-                              <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Superficie</label>
-                              <input type="number" step="0.01" className={inputClass} value={formData.surfaceArea} onChange={e => setFormData({...formData, surfaceArea: Number(e.target.value)})} />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                  <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Superficie</label>
+                                  <input type="number" step="0.01" className={inputClass} value={formData.surfaceArea} onChange={e => setFormData({...formData, surfaceArea: Number(e.target.value)})} />
+                              </div>
+                              <div>
+                                  <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Unidad</label>
+                                  <select className={inputClass} value={formData.surfaceUnit} onChange={e => setFormData({...formData, surfaceUnit: e.target.value as any})}>
+                                      <option value="ha">HA</option>
+                                      <option value="m2">M²</option>
+                                  </select>
+                              </div>
                           </div>
                           <div>
-                              <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Unidad</label>
-                              <select className={inputClass} value={formData.surfaceUnit} onChange={e => setFormData({...formData, surfaceUnit: e.target.value as any})}>
-                                  <option value="ha">HA</option>
-                                  <option value="m2">M²</option>
-                              </select>
-                          </div>
-                          <div>
-                              <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Fecha Siembra</label>
+                              <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Fecha de Siembra</label>
                               <input type="date" className={inputClass} value={formData.sowingDate} onChange={e => setFormData({...formData, sowingDate: e.target.value})} />
+                          </div>
+                          <div className="md:col-span-2">
+                               <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Densidad Proyectada (pl/m²)</label>
+                               <input type="number" className={inputClass} value={formData.density} onChange={e => setFormData({...formData, density: Number(e.target.value)})} placeholder="Ej: 150" />
                           </div>
                       </div>
                   </div>
               </div>
 
               <div className="flex justify-end space-x-3 pt-8 border-t dark:border-slate-800 mt-4">
-                <button type="button" disabled={isSaving} onClick={() => setIsAddModalOpen(false)} className="px-8 py-3 text-slate-400 font-black uppercase text-[10px] tracking-widest hover:text-slate-600 transition">Descartar</button>
+                <button type="button" disabled={isSaving} onClick={() => setIsAddModalOpen(false)} className="px-8 py-3 text-slate-400 font-black uppercase text-[10px] tracking-widest hover:text-slate-600 transition">Cancelar</button>
                 <button type="submit" disabled={isSaving} className="bg-slate-900 dark:bg-hemp-600 text-white px-12 py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-2xl flex items-center hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50">
                     {isSaving ? <Loader2 className="animate-spin mr-2" size={18}/> : <Save className="mr-2" size={18}/>}
                     {isSaving ? 'Lanzando...' : 'Lanzar Unidad'}
