@@ -76,6 +76,12 @@ export default function PlotDetails() {
   const [isUploading, setIsUploading] = useState(false);
   const [autoRain, setAutoRain] = useState(0);
 
+  // --- PERMISOS ---
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
+  const isOwner = currentUser?.role === 'client' && location?.clientId === currentUser?.clientId;
+  const isAssignedTech = currentUser?.role === 'technician' && plot?.responsibleIds?.includes(currentUser.id);
+  const canEdit = isAdmin || isOwner || isAssignedTech;
+
   // --- HUELLA HÍDRICA LOGIC ---
   useEffect(() => {
     const fetchPlotAutoRain = async () => {
@@ -117,9 +123,6 @@ export default function PlotDetails() {
   const [logForm, setLogForm] = useState<Partial<FieldLog>>({ note: '', date: new Date().toISOString().split('T')[0], time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }), photoUrl: '' });
   const [selectedBatchId, setSelectedBatchId] = useState(plot?.seedBatchId || '');
 
-  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
-  const canEdit = isAdmin || (currentUser?.role === 'technician' && plot?.responsibleIds?.includes(currentUser.id));
-  
   if (!plot) return <div className="p-10 text-center">Parcela no encontrada.</div>;
 
   const handleSaveRecord = async (e: React.FormEvent) => {
@@ -227,7 +230,7 @@ export default function PlotDetails() {
                       {seedBatch ? (
                           <div className="space-y-4">
                               <div className="bg-gradient-to-br from-hemp-50 to-white dark:from-slate-800 dark:to-slate-900 p-6 rounded-3xl border border-hemp-100 dark:border-slate-700 text-center shadow-inner relative group">
-                                  <p className="text-[10px] font-black text-hemp-600 uppercase mb-2 tracking-widest">Lote Master</p>
+                                  <p className="text-[10px] font-black text-hemp-600 uppercase mb-2 tracking-widest">Lote Maestro</p>
                                   <p className="text-2xl font-black text-hemp-900 dark:text-hemp-400 font-mono tracking-tighter">{seedBatch.batchCode}</p>
                               </div>
                               <div className="space-y-4 text-xs">
