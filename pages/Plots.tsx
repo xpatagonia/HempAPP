@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { Plot, Variety, Location, Project, TrialRecord, SeedBatch } from '../types';
@@ -7,7 +7,7 @@ import {
   ChevronRight, FileSpreadsheet, LayoutGrid, List, Tag, FlaskConical, 
   Tractor, Trash2, Edit2, QrCode, X, Save, Search, Filter, 
   MapPin, Calendar, Sprout, Printer, Ruler, Activity, CheckCircle2, AlertCircle, Download, ExternalLink, Plus, Loader2, Info, FolderKanban, Archive, FileUp,
-  Link as LinkIcon, Scale
+  Link as LinkIcon, Scale, Box
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import MapEditor from '../components/MapEditor';
@@ -38,6 +38,8 @@ const parseKML = (kmlText: string): { lat: number, lng: number }[] | null => {
     }
 };
 
+type MassUnit = 'gr' | 'kg' | 'tn';
+
 export default function Plots() {
   const { 
     plots, locations, varieties, projects, currentUser, 
@@ -59,7 +61,7 @@ export default function Plots() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form State para Alta
-  const [formData, setFormData] = useState<Partial<Plot> & { lat: string, lng: string, usedSeedKg: number }>({
+  const [formData, setFormData] = useState<Partial<Plot> & { lat: string, lng: string, usedSeedValue: number, usedSeedUnit: MassUnit }>({
       name: '',
       type: 'Ensayo',
       locationId: '',
@@ -75,12 +77,23 @@ export default function Plots() {
       lat: '',
       lng: '',
       polygon: [],
-      usedSeedKg: 0
+      usedSeedValue: 0,
+      usedSeedUnit: 'kg'
   });
 
   const isSuperAdmin = currentUser?.role === 'super_admin';
   const isAdmin = currentUser?.role === 'admin' || isSuperAdmin;
   const isClient = currentUser?.role === 'client';
+
+  // Sincronizar variedad al elegir lote
+  useEffect(() => {
+    if (formData.seedBatchId) {
+        const batch = seedBatches.find(b => b.id === formData.seedBatchId);
+        if (batch && batch.varietyId !== formData.varietyId) {
+            setFormData(prev => ({ ...prev, varietyId: batch.varietyId }));
+        }
+    }
+  }, [formData.seedBatchId, seedBatches]);
 
   const filteredPlots = useMemo(() => plots.filter(p => {
       const matchSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase());
@@ -91,21 +104,28 @@ export default function Plots() {
       return matchSearch && matchLoc && matchType && matchStatus && hasAccess;
   }), [plots, searchTerm, filterLoc, filterType, filterStatus, isAdmin, isClient, currentUser, locations]);
 
-  // Lotes que el usuario puede elegir para sembrar
+  // Lotes que el usuario puede elegir para sembrar (Filtrado por cliente)
   const availableBatches = useMemo(() => {
       return seedBatches.filter(b => {
-          const matchesVariety = !formData.varietyId || b.varietyId === formData.varietyId;
           const hasStock = b.remainingQuantity > 0;
           
           // Si es cliente, solo ve lotes que están en almacenes que le pertenecen
           if (isClient && currentUser?.clientId) {
               const sp = storagePoints.find(s => s.id === b.storagePointId);
-              return matchesVariety && hasStock && sp?.clientId === currentUser.clientId;
+              return hasStock && sp?.clientId === currentUser.clientId;
           }
           
-          return matchesVariety && hasStock;
+          return hasStock;
       });
-  }, [seedBatches, formData.varietyId, isClient, currentUser, storagePoints]);
+  }, [seedBatches, isClient, currentUser, storagePoints]);
+
+  // Conversión de masa a KG para el backend
+  const usedSeedKg = useMemo(() => {
+      const val = Number(formData.usedSeedValue || 0);
+      if (formData.usedSeedUnit === 'gr') return val / 1000;
+      if (formData.usedSeedUnit === 'tn') return val * 1000;
+      return val;
+  }, [formData.usedSeedValue, formData.usedSeedUnit]);
 
   const handleKMLUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
@@ -147,10 +167,10 @@ export default function Plots() {
         return;
     }
 
-    if (formData.seedBatchId && formData.usedSeedKg > 0) {
+    if (formData.seedBatchId && usedSeedKg > 0) {
         const batch = seedBatches.find(b => b.id === formData.seedBatchId);
-        if (batch && batch.remainingQuantity < formData.usedSeedKg) {
-            alert(`Error: El lote seleccionado solo posee ${batch.remainingQuantity} kg disponibles.`);
+        if (batch && batch.remainingQuantity < usedSeedKg) {
+            alert(`Error: El lote seleccionado solo posee ${batch.remainingQuantity} kg disponibles. Su carga actual equivale a ${usedSeedKg.toFixed(2)} kg.`);
             return;
         }
     }
@@ -173,17 +193,17 @@ export default function Plots() {
     const success = await addPlot(payload);
     
     if (success) {
-        if (formData.seedBatchId && formData.usedSeedKg > 0) {
+        if (formData.seedBatchId && usedSeedKg > 0) {
             const batch = seedBatches.find(b => b.id === formData.seedBatchId);
             if (batch) {
                 await updateSeedBatch({
                     ...batch,
-                    remainingQuantity: batch.remainingQuantity - formData.usedSeedKg
+                    remainingQuantity: batch.remainingQuantity - usedSeedKg
                 });
             }
         }
         setIsAddModalOpen(false);
-        setFormData({ name: '', type: 'Ensayo', locationId: '', projectId: '', varietyId: '', seedBatchId: '', status: 'Activa', sowingDate: new Date().toISOString().split('T')[0], surfaceArea: 0, surfaceUnit: 'ha', density: 0, lat: '', lng: '', polygon: [], usedSeedKg: 0 });
+        setFormData({ name: '', type: 'Ensayo', locationId: '', projectId: '', varietyId: '', seedBatchId: '', status: 'Activa', sowingDate: new Date().toISOString().split('T')[0], surfaceArea: 0, surfaceUnit: 'ha', density: 0, lat: '', lng: '', polygon: [], usedSeedValue: 0, usedSeedUnit: 'kg' });
     }
     setIsSaving(false);
   };
@@ -338,7 +358,7 @@ export default function Plots() {
       {/* MODAL ALTA NUEVA UNIDAD */}
       {isAddModalOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-5xl w-full p-10 shadow-2xl max-h-[95vh] overflow-y-auto animate-in zoom-in-95">
+          <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-6xl w-full p-10 shadow-2xl max-h-[95vh] overflow-y-auto animate-in zoom-in-95">
             <div className="flex justify-between items-center mb-8">
                 <div className="flex items-center gap-4">
                     <div className="bg-hemp-600 p-3 rounded-2xl text-white shadow-lg"><Sprout size={28}/></div>
@@ -430,39 +450,55 @@ export default function Plots() {
               {/* TERCERA COLUMNA (INFERIOR): GENÉTICA Y DISEÑO */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-4">
                   <div className="bg-purple-50 dark:bg-purple-900/10 p-6 rounded-[32px] border border-purple-100 dark:border-purple-900/30">
-                      <h3 className="text-[10px] font-black text-purple-700 dark:text-purple-400 uppercase tracking-widest mb-6 flex items-center"><FlaskConical size={14} className="mr-2"/> Genética & Inventario</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                              <label className="text-[9px] font-black uppercase text-purple-800 dark:text-purple-300 ml-1 block mb-1">Variedad Genética *</label>
-                              <select required className={inputClass} value={formData.varietyId} onChange={e => setFormData({...formData, varietyId: e.target.value})}>
-                                  <option value="">-- Seleccionar --</option>
-                                  {varieties.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-                              </select>
-                          </div>
-                          <div>
-                              <label className="text-[9px] font-black uppercase text-purple-800 dark:text-purple-300 ml-1 block mb-1">Lote de Semilla</label>
-                              <select className={inputClass} value={formData.seedBatchId} onChange={e => setFormData({...formData, seedBatchId: e.target.value})}>
-                                  <option value="">-- Autoproducción --</option>
-                                  {availableBatches.map(b => (
-                                      <option key={b.id} value={b.id}>{b.batchCode} ({b.remainingQuantity} kg)</option>
-                                  ))}
-                              </select>
-                          </div>
-                          {formData.seedBatchId && (
-                              <div className="md:col-span-2 bg-white/50 dark:bg-slate-900/50 p-4 rounded-2xl border border-dashed dark:border-slate-800 animate-in slide-in-from-top-2">
-                                  <label className="text-[9px] font-black uppercase text-hemp-600 ml-1 block mb-1 flex items-center"><Scale size={10} className="mr-1"/> Semilla a utilizar (kg) *</label>
-                                  <input 
-                                    required 
-                                    type="number" 
-                                    step="0.01" 
-                                    className={`${inputClass} border-hemp-200 text-lg font-black text-hemp-700`}
-                                    value={formData.usedSeedKg} 
-                                    onChange={e => setFormData({...formData, usedSeedKg: Number(e.target.value)})} 
-                                    placeholder="0.00"
-                                  />
-                                  <p className="text-[8px] text-slate-400 mt-2 font-bold uppercase tracking-widest">* Este valor se descontará automáticamente del stock del lote.</p>
+                      <h3 className="text-[10px] font-black text-purple-700 dark:text-purple-400 uppercase tracking-widest mb-6 flex items-center"><Box size={14} className="mr-2"/> Insumo de Siembra (Local)</h3>
+                      <div className="space-y-6">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div>
+                                  <label className="text-[9px] font-black uppercase text-purple-800 dark:text-purple-300 ml-1 block mb-1">Lote de Semilla *</label>
+                                  <select required className={inputClass} value={formData.seedBatchId} onChange={e => setFormData({...formData, seedBatchId: e.target.value})}>
+                                      <option value="">-- Seleccionar Lote --</option>
+                                      {availableBatches.map(b => (
+                                          <option key={b.id} value={b.id}>{b.batchCode} ({b.remainingQuantity} kg disp.)</option>
+                                      ))}
+                                  </select>
                               </div>
-                          )}
+                              <div>
+                                  <label className="text-[9px] font-black uppercase text-purple-800 dark:text-purple-300 ml-1 block mb-1">Variedad Genética *</label>
+                                  <select required className={`${inputClass} bg-slate-100 dark:bg-slate-800 cursor-not-allowed`} value={formData.varietyId} onChange={e => setFormData({...formData, varietyId: e.target.value})} disabled={!!formData.seedBatchId}>
+                                      <option value="">-- Seleccionar --</option>
+                                      {varieties.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                                  </select>
+                                  {formData.seedBatchId && <p className="text-[8px] text-purple-400 mt-1 font-bold italic uppercase">Bloqueado por lote seleccionado.</p>}
+                              </div>
+                          </div>
+
+                          <div className="bg-white/50 dark:bg-slate-900/50 p-6 rounded-[24px] border border-dashed dark:border-slate-800">
+                                <label className="text-[10px] font-black uppercase text-hemp-600 ml-1 block mb-3 flex items-center"><Scale size={14} className="mr-2"/> Cantidad a Sembrar</label>
+                                <div className="flex gap-2">
+                                    <input 
+                                        required 
+                                        type="number" 
+                                        step="0.001" 
+                                        className={`${inputClass} flex-1 text-xl font-black text-hemp-700 text-center`}
+                                        value={formData.usedSeedValue} 
+                                        onChange={e => setFormData({...formData, usedSeedValue: Number(e.target.value)})} 
+                                        placeholder="0.000"
+                                    />
+                                    <select className="w-24 border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl text-xs font-black uppercase tracking-widest text-hemp-600" value={formData.usedSeedUnit} onChange={e => setFormData({...formData, usedSeedUnit: e.target.value as MassUnit})}>
+                                        <option value="gr">GR</option>
+                                        <option value="kg">KG</option>
+                                        <option value="tn">TN</option>
+                                    </select>
+                                </div>
+                                {formData.seedBatchId && (
+                                    <div className="mt-4 flex justify-between items-center text-[10px] font-bold uppercase tracking-widest px-1">
+                                        <span className="text-slate-400">Impacto en Stock:</span>
+                                        <span className={`${usedSeedKg > (seedBatches.find(b => b.id === formData.seedBatchId)?.remainingQuantity || 0) ? 'text-red-500 animate-pulse' : 'text-hemp-600'}`}>
+                                            -{usedSeedKg.toLocaleString()} KG
+                                        </span>
+                                    </div>
+                                )}
+                          </div>
                       </div>
                   </div>
 
