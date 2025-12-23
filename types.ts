@@ -142,6 +142,8 @@ export interface Plot {
   coordinates?: { lat: number; lng: number };
   polygon?: { lat: number; lng: number }[];
   irrigationType?: string;
+  usedSeedValue?: number;
+  usedSeedUnit?: 'gr' | 'kg' | 'tn';
 }
 
 export interface SeedBatch {

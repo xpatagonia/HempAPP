@@ -196,7 +196,9 @@ const MANUAL_MAP: Record<string, string> = {
     photoUrl: 'photo_url',
     costPerUnit: 'cost_per_unit',
     startDate: 'start_date',
-    directorId: 'director_id'
+    directorId: 'director_id',
+    usedSeedValue: 'used_seed_value',
+    usedSeedUnit: 'used_seed_unit'
 };
 
 const toSnakeCase = (obj: any) => {
@@ -244,7 +246,6 @@ const getFromLocal = (key: string) => {
     } catch { return []; }
 };
 
-// Fix: Changed children to be optional to avoid TypeScript error 'Property children is missing in type {}' in React 18 environments
 export const AppProvider = ({ children }: { children?: React.ReactNode }) => {
   const [usersList, setUsersList] = useState<User[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -359,7 +360,7 @@ export const AppProvider = ({ children }: { children?: React.ReactNode }) => {
           const { error } = await supabase.from(table).insert([dbItem]);
           if (error) { 
               console.error(`[DB INSERT ERROR] ${table}:`, error); 
-              alert(`FALLO DE SERVIDOR: La base de datos rechazó el registro.\n\nMOTIVO: ${error.message}\n\nACCIÓN: Ejecute el Script V33 en Ajustes -> SQL Nucleus.`);
+              alert(`FALLO DE SERVIDOR: La base de datos rechazó el registro.\n\nMOTIVO: ${error.message}\n\nACCIÓN: Ejecute el Script V35 en Ajustes -> SQL Nucleus.`);
               return false; 
           }
           await refreshData();

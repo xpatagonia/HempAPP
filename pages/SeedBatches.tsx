@@ -158,11 +158,12 @@ export default function SeedBatches() {
       }
       setIsSubmitting(true);
       try {
+          // Fix: Replaced undefined 'editingId' with 'editingBatchId'
           const payload = { 
             ...batchFormData, 
-            id: editingId || crypto.randomUUID(), 
+            id: editingBatchId || crypto.randomUUID(), 
             initialQuantity: calculatedEntryKg,
-            remainingQuantity: editingId ? (batchFormData.remainingQuantity || 0) : calculatedEntryKg, 
+            remainingQuantity: editingBatchId ? (batchFormData.remainingQuantity || 0) : calculatedEntryKg, 
             pricePerKg: Number(batchFormData.pricePerKg), 
             isActive: true, 
             createdAt: batchFormData.createdAt || new Date().toISOString() 
@@ -362,8 +363,8 @@ export default function SeedBatches() {
                         </div>
                         <div>
                             <label className={labelClass}>Variedad Genética *</label>
-                            {/* Fix: Changed setFormData to setBatchFormData and formData to batchFormData to match component state */}
-                            <select required className={inputClass} value={batchFormData.varietyId} onChange={e => setBatchFormData({...batchFormData, varietyId: e.target.value})} disabled={false} // Se asume que en alta no esta bloqueado
+                            {/* Fix: Replaced className string literal with variable and corrected state update */}
+                            <select required className={inputClass} value={batchFormData.varietyId} onChange={e => setBatchFormData({...batchFormData, varietyId: e.target.value})} disabled={false}
                             >
                                 <option value="">Seleccionar genética...</option>
                                 {varieties.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}

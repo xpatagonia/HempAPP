@@ -46,7 +46,7 @@ export default function Settings() {
 
       <div className="flex space-x-1 bg-gray-100 dark:bg-slate-900 p-1 rounded-lg mb-8 w-fit">
           <button onClick={() => setActiveTab('branding')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'branding' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Identidad</button>
-          <button onClick={() => setActiveTab('database')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'database' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>SQL Nucleus V34</button>
+          <button onClick={() => setActiveTab('database')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'database' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>SQL Nucleus V35</button>
       </div>
 
       {activeTab === 'branding' && (
@@ -72,17 +72,22 @@ export default function Settings() {
               <div className="bg-slate-900 border border-slate-800 p-8 rounded-[40px] shadow-2xl relative overflow-hidden">
                   <div className="flex items-center space-x-3 mb-6">
                       <Shield className="text-hemp-500" size={24}/>
-                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Protocolo Nuclear V34 (Corrección de Transporte)</h3>
+                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Protocolo Nuclear V35 (Corrección de Unidades y Parcelas)</h3>
                   </div>
                   
                   <div className="bg-amber-900/20 border border-amber-500/30 p-4 rounded-2xl mb-6 text-amber-200 text-xs leading-relaxed">
-                      <p className="font-black mb-2 flex items-center uppercase"><RefreshCw className="mr-2" size={14}/> REPARACIÓN DE COLUMNAS (SOLUCIÓN AL ERROR)</p>
-                      Ejecuta este script para añadir <strong>driver_dni</strong>, <strong>recipient_name</strong>, y las métricas de despacho que están fallando en los remitos.
+                      <p className="font-black mb-2 flex items-center uppercase"><RefreshCw className="mr-2" size={14}/> REPARACIÓN DE COLUMNAS (SOLUCIÓN AL ERROR DE SIEMBRA)</p>
+                      Ejecuta este script para añadir <strong>used_seed_value</strong> y <strong>used_seed_unit</strong> a la tabla de parcelas, además de los campos de transporte que faltaban.
                   </div>
 
                   <button onClick={() => {
                       const sql = `
--- PROTOCOLO V34: REPARACIÓN DE LOGÍSTICA Y DESPACHO
+-- PROTOCOLO V35: REPARACIÓN DE LOGÍSTICA Y UNIDADES DE SIEMBRA
+-- Trazabilidad en Parcelas (SOLUCIÓN ERROR IMAGEN)
+ALTER TABLE IF EXISTS public.plots ADD COLUMN IF NOT EXISTS used_seed_value NUMERIC;
+ALTER TABLE IF EXISTS public.plots ADD COLUMN IF NOT EXISTS used_seed_unit TEXT;
+
+-- Reparación Transporte y Remitos
 ALTER TABLE IF EXISTS public.seed_movements ADD COLUMN IF NOT EXISTS driver_dni TEXT;
 ALTER TABLE IF EXISTS public.seed_movements ADD COLUMN IF NOT EXISTS recipient_name TEXT;
 ALTER TABLE IF EXISTS public.seed_movements ADD COLUMN IF NOT EXISTS recipient_dni TEXT;
@@ -105,9 +110,9 @@ ALTER TABLE IF EXISTS public.trial_records ADD COLUMN IF NOT EXISTS vigor NUMERI
 NOTIFY pgrst, 'reload schema';
                       `;
                       navigator.clipboard.writeText(sql.trim());
-                      alert("Script de REPARACIÓN V34 Copiado. Péguelo en el SQL Editor de Supabase y presione RUN.");
+                      alert("Script de REPARACIÓN V35 Copiado. Péguelo en el SQL Editor de Supabase y presione RUN.");
                   }} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-2xl font-black text-xs uppercase shadow-xl flex items-center justify-center transition-all mb-8">
-                      <RefreshCw size={18} className="mr-2"/> Copiar Script Reparador V34
+                      <RefreshCw size={18} className="mr-2"/> Copiar Script Reparador V35
                   </button>
 
                   <div className="border-t border-slate-800 pt-8 mt-4">
@@ -118,7 +123,7 @@ NOTIFY pgrst, 'reload schema';
 
                       <button onClick={() => {
                         const sql = `
--- PROTOCOLO V34: RECREACIÓN TOTAL LOGÍSTICA
+-- PROTOCOLO V35: RECREACIÓN TOTAL LOGÍSTICA
 DROP TABLE IF EXISTS public.seed_movements CASCADE;
 DROP TABLE IF EXISTS public.seed_batches CASCADE;
 
@@ -176,9 +181,9 @@ GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;
 NOTIFY pgrst, 'reload schema';
                         `;
                         navigator.clipboard.writeText(sql.trim());
-                        alert("☢️ SCRIPT RESET V34 COPIADO. Pegue en Supabase.");
+                        alert("☢️ SCRIPT RESET V35 COPIADO. Pegue en Supabase.");
                       }} className="w-full bg-red-600 hover:bg-red-700 text-white py-4 rounded-2xl font-black text-xs uppercase shadow-xl flex items-center justify-center transition-all">
-                        <Flame size={18} className="mr-2"/> Copiar Script BORRADO TOTAL V34
+                        <Flame size={18} className="mr-2"/> Copiar Script BORRADO TOTAL V35
                       </button>
                   </div>
               </div>
