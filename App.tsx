@@ -2,7 +2,8 @@
 import React from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider, useAppContext } from './context/AppContext';
-import { Layout } from './components/Layout';
+/* Fix: Use default import for Layout as it is exported as default in Layout.tsx */
+import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import Varieties from './pages/Varieties';
 import Locations from './pages/Locations';

@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Sprout, Menu, Leaf, LogOut, 
   UserCircle, Calendar, Sun, Moon, 
   Tractor, BookOpen, Bot, Settings, 
-  FolderKanban, CheckSquare, BarChart3, Users, Warehouse, Package, X, Bell, Globe
+  FolderKanban, CheckSquare, BarChart3, Users, Warehouse, Package, X, Bell, Globe, Building
 } from 'lucide-react';
 
 const NavItem = ({ to, icon: Icon, label, badge }: any) => {
@@ -27,13 +27,15 @@ const NavItem = ({ to, icon: Icon, label, badge }: any) => {
   );
 };
 
-export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export default function Layout({ children }: { children: React.ReactNode }) {
   const { currentUser, logout, theme, toggleTheme, tasks, appName, appLogo } = useAppContext();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   
   if (!currentUser) return <>{children}</>;
 
   const pendingTasksCount = tasks.filter(t => t.status === 'Pendiente').length;
+  const isAdmin = currentUser.role === 'admin' || currentUser.role === 'super_admin';
+  const isClient = currentUser.role === 'client';
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-950">
@@ -68,13 +70,23 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           <NavItem to="/storage" icon={Warehouse} label="Almacenes" />
           <NavItem to="/seed-batches" icon={Package} label="Inventario" />
           <NavItem to="/varieties" icon={BookOpen} label="Genética" />
-          <NavItem to="/suppliers" icon={Warehouse} label="Proveedores" />
-          <NavItem to="/clients" icon={Users} label="Socios de Red" />
+          
+          {/* Opciones filtradas para Productores */}
+          {!isClient && (
+            <>
+              <NavItem to="/suppliers" icon={Warehouse} label="Proveedores" />
+              <NavItem to="/clients" icon={Users} label="Socios de Red" />
+            </>
+          )}
+
+          {isClient && (
+            <NavItem to="/clients" icon={Building} label="Mi Organización" />
+          )}
 
           <div className="pt-8 pb-3 px-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Sistema</div>
           <NavItem to="/analytics" icon={BarChart3} label="Analítica Avanzada" />
-          <NavItem to="/users" icon={Users} label="Equipo" />
-          <NavItem to="/settings" icon={Settings} label="Admin Server" />
+          {!isClient && <NavItem to="/users" icon={Users} label="Equipo" />}
+          {currentUser.role === 'super_admin' && <NavItem to="/settings" icon={Settings} label="Admin Server" />}
         </nav>
 
         <div className="p-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
