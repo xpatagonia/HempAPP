@@ -39,7 +39,11 @@ const parseKML = (kmlText: string): { lat: number, lng: number }[] | null => {
 };
 
 export default function Plots() {
-  const { plots, locations, varieties, projects, currentUser, getLatestRecord, seedBatches, deletePlot, updatePlot, addPlot, updateSeedBatch, trialRecords } = useAppContext();
+  const { 
+    plots, locations, varieties, projects, currentUser, 
+    getLatestRecord, seedBatches, deletePlot, updatePlot, 
+    addPlot, updateSeedBatch, trialRecords, storagePoints 
+  } = useAppContext();
   
   const [viewMode, setViewMode] = useState<'table' | 'gallery'>('table');
   const [searchTerm, setSearchTerm] = useState('');
@@ -87,6 +91,22 @@ export default function Plots() {
       return matchSearch && matchLoc && matchType && matchStatus && hasAccess;
   }), [plots, searchTerm, filterLoc, filterType, filterStatus, isAdmin, isClient, currentUser, locations]);
 
+  // Lotes que el usuario puede elegir para sembrar
+  const availableBatches = useMemo(() => {
+      return seedBatches.filter(b => {
+          const matchesVariety = !formData.varietyId || b.varietyId === formData.varietyId;
+          const hasStock = b.remainingQuantity > 0;
+          
+          // Si es cliente, solo ve lotes que están en almacenes que le pertenecen
+          if (isClient && currentUser?.clientId) {
+              const sp = storagePoints.find(s => s.id === b.storagePointId);
+              return matchesVariety && hasStock && sp?.clientId === currentUser.clientId;
+          }
+          
+          return matchesVariety && hasStock;
+      });
+  }, [seedBatches, formData.varietyId, isClient, currentUser, storagePoints]);
+
   const handleKMLUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
@@ -127,7 +147,6 @@ export default function Plots() {
         return;
     }
 
-    // Validación de stock si se seleccionó un lote
     if (formData.seedBatchId && formData.usedSeedKg > 0) {
         const batch = seedBatches.find(b => b.id === formData.seedBatchId);
         if (batch && batch.remainingQuantity < formData.usedSeedKg) {
@@ -154,7 +173,6 @@ export default function Plots() {
     const success = await addPlot(payload);
     
     if (success) {
-        // Descontar stock del lote si aplica
         if (formData.seedBatchId && formData.usedSeedKg > 0) {
             const batch = seedBatches.find(b => b.id === formData.seedBatchId);
             if (batch) {
@@ -425,7 +443,7 @@ export default function Plots() {
                               <label className="text-[9px] font-black uppercase text-purple-800 dark:text-purple-300 ml-1 block mb-1">Lote de Semilla</label>
                               <select className={inputClass} value={formData.seedBatchId} onChange={e => setFormData({...formData, seedBatchId: e.target.value})}>
                                   <option value="">-- Autoproducción --</option>
-                                  {seedBatches.filter(b => (!formData.varietyId || b.varietyId === formData.varietyId) && b.remainingQuantity > 0).map(b => (
+                                  {availableBatches.map(b => (
                                       <option key={b.id} value={b.id}>{b.batchCode} ({b.remainingQuantity} kg)</option>
                                   ))}
                               </select>
