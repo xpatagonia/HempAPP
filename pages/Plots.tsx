@@ -59,7 +59,7 @@ export default function Plots() {
   const [qrPlot, setQrPlot] = useState<Plot | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Form State para Alta con manejo de peso local
+  // Form State para Alta
   const [formData, setFormData] = useState<Partial<Plot> & { lat: string, lng: string, usedSeedValue: number, usedSeedUnit: MassUnit }>({
       name: '',
       type: 'Ensayo',
@@ -84,29 +84,29 @@ export default function Plots() {
   const isAdmin = currentUser?.role === 'admin' || isSuperAdmin;
   const isClient = currentUser?.role === 'client';
 
-  // --- LÓGICA DE FILTRADO DE LOTES (Sincronizada con Variedad) ---
+  // --- LÓGICA DE INVENTARIO DISPONIBLE (ALINEADA CON STOCK GLOBAL) ---
   const availableBatches = useMemo(() => {
       return seedBatches.filter(b => {
-          // Requisito básico: Lote activo y con algo de stock
+          // 1. Debe estar activo y tener saldo físico
           if (!b.isActive || b.remainingQuantity <= 0) return false;
           
-          // Si el usuario seleccionó una Variedad primero, filtramos los lotes de esa variedad
+          // 2. Si el usuario ya filtró por Variedad, respetamos ese filtro
           if (formData.varietyId && b.varietyId !== formData.varietyId) return false;
 
-          // Filtrado por Seguridad de Inventario Local
+          // 3. Filtrado por Propiedad Local (Socio/Productor)
           if (isClient && currentUser?.clientId) {
               const storage = storagePoints.find(s => s.id === b.storagePointId);
-              // Solo mostramos lotes en almacenes del cliente o lotes asignados directamente (fallback)
-              return !storage || storage.clientId === currentUser.clientId;
+              // Si el lote está en un almacén que NO es del cliente, se oculta
+              if (storage && storage.clientId !== currentUser.clientId) return false;
+              // Si el lote no tiene almacén asignado pero el usuario es cliente, 
+              // asumimos que es un lote huérfano que puede ver o uno asignado a su perfil.
           }
           
-          // Admins y Técnicos ven todo el stock maestro
           return true;
       });
   }, [seedBatches, isClient, currentUser, storagePoints, formData.varietyId]);
 
-  // Sincronización Batch -> Variety
-  // Si cambia el lote, actualizamos la variedad para que coincida con la genética del lote
+  // Sincronización Batch -> Variety (Si elijo lote, la variedad se pone sola)
   useEffect(() => {
     if (formData.seedBatchId) {
         const selectedBatch = seedBatches.find(b => b.id === formData.seedBatchId);
@@ -183,7 +183,7 @@ export default function Plots() {
 
     const selectedBatch = seedBatches.find(b => b.id === formData.seedBatchId);
     if (selectedBatch && calculatedUsedKg > selectedBatch.remainingQuantity) {
-        alert(`STOCK INSUFICIENTE: El lote seleccionado solo posee ${selectedBatch.remainingQuantity} kg disponibles. Su pedido actual es de ${calculatedUsedKg.toFixed(3)} kg.`);
+        alert(`STOCK INSUFICIENTE: El lote seleccionado posee ${selectedBatch.remainingQuantity} kg. Su pedido es de ${calculatedUsedKg.toFixed(3)} kg.`);
         return;
     }
 
@@ -206,7 +206,6 @@ export default function Plots() {
         const success = await addPlot(payload);
         
         if (success && selectedBatch && calculatedUsedKg > 0) {
-            // Descontamos el stock real en KG del lote industrial
             await updateSeedBatch({
                 ...selectedBatch,
                 remainingQuantity: selectedBatch.remainingQuantity - calculatedUsedKg
@@ -460,20 +459,21 @@ export default function Plots() {
                       <div className="space-y-6">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               <div>
-                                  <label className="text-[9px] font-black uppercase text-purple-800 dark:text-purple-300 ml-1 block mb-1 flex items-center gap-1.5"><Archive size={10}/> Variedad Genética *</label>
-                                  <select required className={inputClass} value={formData.varietyId} onChange={e => setFormData({...formData, varietyId: e.target.value, seedBatchId: ''})}>
-                                      <option value="">-- Seleccionar Genética --</option>
-                                      {varieties.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-                                  </select>
-                              </div>
-                              <div>
                                   <label className="text-[9px] font-black uppercase text-purple-800 dark:text-purple-300 ml-1 block mb-1 flex items-center gap-1.5"><Archive size={10}/> Lote Local Certificado *</label>
                                   <select required className={inputClass} value={formData.seedBatchId} onChange={e => setFormData({...formData, seedBatchId: e.target.value})}>
-                                      <option value="">{availableBatches.length > 0 ? '-- Seleccionar de mi stock --' : '-- Sin stock disponible --'}</option>
+                                      <option value="">{availableBatches.length > 0 ? '-- Seleccionar Lote --' : '-- Sin stock disponible --'}</option>
                                       {availableBatches.map(b => (
                                           <option key={b.id} value={b.id}>{b.batchCode} ({b.remainingQuantity.toLocaleString()} kg disp.)</option>
                                       ))}
                                   </select>
+                              </div>
+                              <div>
+                                  <label className="text-[9px] font-black uppercase text-purple-800 dark:text-purple-300 ml-1 block mb-1 flex items-center gap-1.5"><Archive size={10}/> Variedad Genética *</label>
+                                  <select required className={`${inputClass} ${formData.seedBatchId ? 'bg-gray-100 dark:bg-slate-800 cursor-not-allowed opacity-80' : ''}`} value={formData.varietyId} onChange={e => setFormData({...formData, varietyId: e.target.value})} disabled={!!formData.seedBatchId}>
+                                      <option value="">-- Seleccionar Genética --</option>
+                                      {varieties.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                                  </select>
+                                  {formData.seedBatchId && <p className="text-[8px] text-purple-400 mt-1 font-bold italic uppercase">Vínculo automático para asegurar trazabilidad.</p>}
                               </div>
                           </div>
 
@@ -497,12 +497,12 @@ export default function Plots() {
                                 </div>
                                 {formData.seedBatchId && (
                                     <div className="mt-4 flex justify-between items-center px-2">
-                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Impacto Real:</span>
+                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Carga Real:</span>
                                         <div className="text-right">
                                             <span className={`text-sm font-black ${calculatedUsedKg > (seedBatches.find(b => b.id === formData.seedBatchId)?.remainingQuantity || 0) ? 'text-red-600 animate-pulse' : 'text-hemp-600'}`}>
                                                 -{calculatedUsedKg.toLocaleString()} KG
                                             </span>
-                                            <p className="text-[8px] text-slate-400 font-bold uppercase">del stock disponible</p>
+                                            <p className="text-[8px] text-slate-400 font-bold uppercase">del saldo físico</p>
                                         </div>
                                     </div>
                                 )}
@@ -542,7 +542,7 @@ export default function Plots() {
                 <button type="button" disabled={isSaving} onClick={() => setIsAddModalOpen(false)} className="px-8 py-3 text-slate-400 font-black uppercase text-[10px] tracking-widest hover:text-slate-600 transition">Cancelar</button>
                 <button type="submit" disabled={isSaving} className="bg-slate-900 dark:bg-hemp-600 text-white px-12 py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-2xl flex items-center hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50">
                     {isSaving ? <Loader2 className="animate-spin mr-2" size={18}/> : <Save className="mr-2" size={18}/>}
-                    {isSaving ? 'Lanzando...' : 'Lanzar Unidad'}
+                    {isSaving ? 'Sincronizando...' : 'Lanzar Unidad'}
                 </button>
               </div>
             </form>
