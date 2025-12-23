@@ -166,9 +166,12 @@ const MANUAL_MAP: Record<string, string> = {
     transportGuideNumber: 'transport_guide_number',
     transportType: 'transport_type',
     driverName: 'driver_name',
+    driverDni: 'driver_dni',
     vehiclePlate: 'vehicle_plate',
     vehicleModel: 'vehicle_model',
     transportCompany: 'transport_company',
+    recipientName: 'recipient_name',
+    recipientDni: 'recipient_dni',
     routeItinerary: 'route_itinerary',
     originStorageId: 'origin_storage_id',
     routeGoogleLink: 'route_google_link',
@@ -241,8 +244,8 @@ const getFromLocal = (key: string) => {
     } catch { return []; }
 };
 
-// Fix: Removed React.FC type to avoid implicit children issues in React 18 and typed props directly
-export const AppProvider = ({ children }: { children: React.ReactNode }) => {
+// Fix: Changed children to be optional to avoid TypeScript error 'Property children is missing in type {}' in React 18 environments
+export const AppProvider = ({ children }: { children?: React.ReactNode }) => {
   const [usersList, setUsersList] = useState<User[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [varieties, setVarieties] = useState<Variety[]>([]);

@@ -180,9 +180,12 @@ export interface SeedMovement {
   transportGuideNumber?: string;
   transportType?: 'Propio' | 'Tercerizado';
   driverName?: string;
+  driverDni?: string;
   vehiclePlate?: string;
   vehicleModel?: string;
   transportCompany?: string;
+  recipientName?: string;
+  recipientDni?: string;
   routeItinerary?: string;
   status?: 'En Tránsito' | 'Recibido';
   originStorageId?: string;
