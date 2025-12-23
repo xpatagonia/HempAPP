@@ -59,26 +59,33 @@ export default function SeedBatches() {
   const isAdmin = currentUser?.role === 'admin' || isSuperAdmin;
   const isClient = currentUser?.role === 'client';
 
+  // Lotes que el usuario puede ver
   const filteredBatches = useMemo(() => seedBatches.filter(b => {
       const v = varieties.find(v => v.id === b.varietyId);
       const sp = storagePoints.find(s => s.id === b.storagePointId);
+      
+      // Si es cliente, solo ve los lotes en puntos de acopio que le pertenecen
       if (isClient && currentUser?.clientId) {
           if (sp?.clientId !== currentUser.clientId) return false;
       }
+      
       const matchesSearch = b.batchCode.toLowerCase().includes(searchTerm.toLowerCase()) || 
                            (v?.name || '').toLowerCase().includes(searchTerm.toLowerCase());
       return matchesSearch;
   }), [seedBatches, searchTerm, varieties, isClient, currentUser, storagePoints]);
 
+  // Remitos que el usuario puede ver e interactuar
   const filteredMovements = useMemo(() => seedMovements.filter(m => {
       const b = seedBatches.find(batch => batch.id === m.batchId);
       const v = varieties.find(vari => vari.id === b?.varietyId);
-      const c = clients.find(cli => cli.id === m.clientId);
+      
+      // Un cliente solo ve remitos donde él es el destinatario (clientId)
       if (isClient && currentUser?.clientId) {
           if (m.clientId !== currentUser.clientId) return false;
       }
+      
       const term = searchTerm.toLowerCase();
-      const matchesSearch = (v?.name || '').toLowerCase().includes(term) || (c?.name || '').toLowerCase().includes(term);
+      const matchesSearch = (v?.name || '').toLowerCase().includes(term) || (m.recipientName || '').toLowerCase().includes(term);
       const matchesStatus = !filterStatus || m.status === filterStatus;
       return matchesSearch && matchesStatus;
   }).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()), [seedMovements, seedBatches, varieties, clients, searchTerm, filterStatus, isClient, currentUser]);
@@ -96,7 +103,7 @@ export default function SeedBatches() {
 
   const handleDeleteBatch = async (id: string) => {
       if (!isSuperAdmin) return;
-      if (window.confirm("¿ESTÁ SEGURO? Esta acción eliminará el lote del inventario permanentemente y no podrá deshacerse.")) {
+      if (window.confirm("¿ESTÁ SEGURO? Esta acción eliminará el lote permanentemente.")) {
           setIsSubmitting(true);
           try {
               await deleteSeedBatch(id);
@@ -115,31 +122,40 @@ export default function SeedBatches() {
 
   const handleConfirmReceipt = async (move: SeedMovement) => {
       if (isSubmitting) return;
-      if (!window.confirm(`¿Confirma la recepción de ${move.quantity} kg de material?\n\nEste material se sumará automáticamente a su inventario disponible.`)) return;
+      
+      // Verificar si el cliente tiene un punto de acopio creado
+      const clientStorage = storagePoints.find(sp => sp.clientId === move.clientId);
+      
+      if (!clientStorage && isClient) {
+          alert("Error: No tienes un 'Nodo Logístico' (Almacén) creado. Por favor, crea uno en la sección Almacenes antes de recibir material.");
+          return;
+      }
+
+      if (!window.confirm(`¿Confirma la recepción de ${move.quantity} kg?\n\nEl material se sumará a su stock disponible.`)) return;
       
       setIsSubmitting(true);
       try {
-          // 1. Actualizar el estado del remito
+          // 1. Actualizar remito
           const updateSuccess = await updateSeedMovement({ ...move, status: 'Recibido' });
           
           if (updateSuccess) {
-              // 2. Obtener el lote original para clonar su info técnica
               const originalBatch = seedBatches.find(b => b.id === move.batchId);
               if (originalBatch) {
-                  // 3. Crear el "Lote Local" en el inventario del receptor
+                  // 2. Crear lote local para el cliente
                   const localBatchPayload: SeedBatch = {
                       ...originalBatch,
                       id: crypto.randomUUID(),
                       batchCode: `${originalBatch.batchCode}-REC`,
                       initialQuantity: move.quantity,
                       remainingQuantity: move.quantity,
-                      // Buscamos un punto de acopio del cliente destinatario o lo dejamos central
-                      storagePointId: storagePoints.find(sp => sp.clientId === move.clientId)?.id || originalBatch.storagePointId,
-                      notes: `Lote recibido mediante remito ${move.transportGuideNumber || 'S/N'}.`,
-                      createdAt: new Date().toISOString()
+                      // Asignar al punto de acopio del cliente para que sea visible en su "Stock Asignado"
+                      storagePointId: clientStorage?.id || originalBatch.storagePointId,
+                      notes: `Recibido por remito ${move.transportGuideNumber || 'S/N'}.`,
+                      createdAt: new Date().toISOString(),
+                      isActive: true
                   };
                   await addSeedBatch(localBatchPayload);
-                  alert("✅ Material recepcionado e ingresado al inventario local.");
+                  alert("✅ Material recepcionado e integrado al inventario local.");
               }
           }
       } finally { setIsSubmitting(false); }
@@ -172,7 +188,7 @@ export default function SeedBatches() {
       e.preventDefault();
       const batch = seedBatches.find(b => b.id === moveFormData.batchId);
       if (!batch || moveFormData.quantity! > batch.remainingQuantity) {
-          alert("Error: Stock insuficiente en el lote de origen.");
+          alert("Error: Stock insuficiente en origen.");
           return;
       }
       setIsSubmitting(true);
@@ -199,16 +215,15 @@ export default function SeedBatches() {
         {isAdmin && (
           <div className="flex space-x-2 w-full md:w-auto">
               <button onClick={() => handleOpenDispatch()} className="flex-1 md:flex-none bg-blue-600 text-white px-6 py-3 rounded-2xl flex items-center justify-center hover:bg-blue-700 transition shadow-xl font-black text-xs uppercase tracking-widest"><ArrowUpRight size={18} className="mr-2" /> Despachar</button>
-              {/* Fix: Replace setEditingId with setEditingBatchId as it is the correct state setter */}
               <button onClick={() => { setEditingBatchId(null); setBatchFormData({ varietyId: '', supplierId: '', batchCode: '', initialQuantity: 0, purchaseDate: new Date().toISOString().split('T')[0], pricePerKg: 0, storagePointId: '', isActive: true }); setIsBatchModalOpen(true); }} className="flex-1 md:flex-none bg-hemp-600 text-white px-6 py-3 rounded-2xl flex items-center justify-center hover:bg-hemp-700 transition shadow-xl font-black text-xs uppercase tracking-widest"><Plus size={18} className="mr-2" /> Ingresar Lote</button>
           </div>
         )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <MetricCard label="Stock Total" value={`${stats.totalKg.toLocaleString()} kg`} icon={Package} colorClass="bg-blue-500" />
-          <MetricCard label="Lotes Activos" value={seedBatches.filter(b => b.remainingQuantity > 0).length} icon={Tag} colorClass="bg-hemp-500" />
-          <MetricCard label="En Tránsito" value={stats.activeTransits} icon={Truck} colorClass="bg-purple-500" />
+          <MetricCard label="Stock Disponible" value={`${stats.totalKg.toLocaleString()} kg`} icon={Package} colorClass="bg-blue-500" />
+          <MetricCard label="Lotes en Silo" value={filteredBatches.filter(b => b.remainingQuantity > 0).length} icon={Tag} colorClass="bg-hemp-500" />
+          <MetricCard label="Cargas en Tránsito" value={stats.activeTransits} icon={Truck} colorClass="bg-purple-500" />
       </div>
 
       <div className="bg-white dark:bg-slate-900 rounded-[32px] shadow-sm border dark:border-slate-800 p-4">
@@ -229,36 +244,35 @@ export default function SeedBatches() {
               <table className="min-w-full text-sm text-left">
                   <thead className="bg-gray-50 dark:bg-slate-950/50 text-gray-500 uppercase text-[10px] font-black tracking-widest border-b dark:border-slate-800">
                       <tr>
-                          <th className="px-8 py-5">Lote / Etiqueta</th>
-                          <th className="px-8 py-5">Variedad / Proveedor</th>
+                          <th className="px-8 py-5">Identificador / Lote</th>
+                          <th className="px-8 py-5">Ubicación Actual</th>
                           <th className="px-8 py-5 text-center">Disponible</th>
                           <th className="px-8 py-5 text-right">Acciones</th>
                       </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
-                      {filteredBatches.map(batch => {
+                      {filteredBatches.length === 0 ? (
+                          <tr><td colSpan={4} className="p-12 text-center text-gray-400 italic font-medium">No se encontró stock asignado a su perfil.</td></tr>
+                      ) : filteredBatches.map(batch => {
                           const v = varieties.find(v => v.id === batch.varietyId);
-                          const s = suppliers.find(sup => sup.id === batch.supplierId);
+                          const sp = storagePoints.find(s => s.id === batch.storagePointId);
                           return (
                               <tr key={batch.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors group">
                                   <td className="px-8 py-5">
                                       <div className="font-black text-gray-800 dark:text-gray-200">{batch.batchCode}</div>
-                                      <div className="text-[9px] text-blue-500 font-bold uppercase">SN: {batch.labelSerialNumber || 'S/N'}</div>
+                                      <div className="text-[9px] text-hemp-600 font-bold uppercase">{v?.name || 'Genética S/D'}</div>
                                   </td>
                                   <td className="px-8 py-5">
-                                      <div className="font-bold text-slate-800 dark:text-slate-200 uppercase tracking-tighter">{v?.name || 'N/A'}</div>
-                                      <div className="text-[9px] text-gray-400 uppercase font-black">{s?.name || '-'}</div>
+                                      <div className="font-bold text-slate-800 dark:text-slate-200 uppercase tracking-tighter">{sp?.name || 'CENTRAL'}</div>
+                                      <div className="text-[9px] text-gray-400 uppercase font-black">{sp?.city || '-'}</div>
                                   </td>
                                   <td className="px-8 py-5 text-center">
                                       <span className={`px-4 py-1.5 rounded-full font-black text-xs ${batch.remainingQuantity === 0 ? 'bg-gray-100 text-gray-400' : 'bg-green-100 text-green-700'}`}>{batch.remainingQuantity.toLocaleString()} kg</span>
                                   </td>
                                   <td className="px-8 py-5 text-right">
                                       <div className="flex justify-end space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                          <button onClick={() => handleOpenView(batch)} title="Visualizar ficha técnica" className="p-2 text-gray-400 hover:text-blue-600 bg-white dark:bg-slate-800 rounded-xl shadow-sm border dark:border-slate-700 transition"><Eye size={16}/></button>
-                                          <button onClick={() => { setBatchFormData(batch); setEditingBatchId(batch.id); setIsBatchModalOpen(true); }} className="p-2 text-gray-400 hover:text-hemp-600 bg-white dark:bg-slate-800 rounded-xl shadow-sm border dark:border-slate-700 transition"><Edit2 size={16}/></button>
-                                          {isSuperAdmin && (
-                                            <button onClick={() => handleDeleteBatch(batch.id)} title="Eliminar definitivamente" className="p-2 text-gray-400 hover:text-red-600 bg-white dark:bg-slate-800 rounded-xl shadow-sm border dark:border-slate-700 transition"><Trash2 size={16}/></button>
-                                          )}
+                                          <button onClick={() => handleOpenView(batch)} title="Auditoría" className="p-2 text-gray-400 hover:text-blue-600 bg-white dark:bg-slate-800 rounded-xl shadow-sm border dark:border-slate-700 transition"><Eye size={16}/></button>
+                                          {isAdmin && <button onClick={() => { setBatchFormData(batch); setEditingBatchId(batch.id); setIsBatchModalOpen(true); }} className="p-2 text-gray-400 hover:text-hemp-600 bg-white dark:bg-slate-800 rounded-xl shadow-sm border dark:border-slate-700 transition"><Edit2 size={16}/></button>}
                                       </div>
                                   </td>
                               </tr>
@@ -279,18 +293,23 @@ export default function SeedBatches() {
                       </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
-                      {filteredMovements.map(move => {
+                      {filteredMovements.length === 0 ? (
+                           <tr><td colSpan={4} className="p-12 text-center text-gray-400 italic font-medium">No hay movimientos registrados.</td></tr>
+                      ) : filteredMovements.map(move => {
                           const b = seedBatches.find(batch => batch.id === move.batchId);
                           const v = varieties.find(vari => vari.id === b?.varietyId);
+                          // El destinatario o el admin pueden confirmar
+                          const canConfirm = isAdmin || (isClient && move.clientId === currentUser?.clientId);
+                          
                           return (
                               <tr key={move.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors">
                                   <td className="px-8 py-5">
                                       <div className="font-black text-gray-800 dark:text-gray-200">Guía: {move.transportGuideNumber || 'S/N'}</div>
-                                      <div className="text-[9px] text-gray-400 font-bold uppercase">{move.driverName || 'Sin Chofer'} {move.vehiclePlate && `(${move.vehiclePlate})`}</div>
+                                      <div className="text-[9px] text-gray-400 font-bold uppercase">{move.driverName || 'S/Chofer'} ({move.vehiclePlate || 'S/P'})</div>
                                   </td>
                                   <td className="px-8 py-5">
-                                      <div className="font-bold text-slate-800 dark:text-slate-200 uppercase">{move.recipientName || 'Sin Receptor'}</div>
-                                      <div className="text-[9px] text-gray-400 uppercase">{move.recipientDni && `DNI: ${move.recipientDni}`}</div>
+                                      <div className="font-bold text-slate-800 dark:text-slate-200 uppercase">{move.recipientName || 'S/D'}</div>
+                                      <div className="text-[9px] text-gray-400 uppercase">{v?.name}</div>
                                   </td>
                                   <td className="px-8 py-5 text-center font-black text-hemp-700">{move.quantity} kg</td>
                                   <td className="px-8 py-5 text-right">
@@ -298,7 +317,7 @@ export default function SeedBatches() {
                                           <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase shadow-sm ${move.status === 'Recibido' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700 animate-pulse'}`}>
                                             {move.status}
                                           </span>
-                                          {move.status !== 'Recibido' && (
+                                          {move.status !== 'Recibido' && canConfirm && (
                                               <button 
                                                 onClick={() => handleConfirmReceipt(move)}
                                                 disabled={isSubmitting}
@@ -318,7 +337,7 @@ export default function SeedBatches() {
           </div>
       )}
 
-      {/* MODAL VISUALIZAR LOTE (VISTA DE AUDITORÍA) */}
+      {/* MODAL VISUALIZAR LOTE */}
       {isViewModalOpen && selectedBatch && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] flex items-center justify-center p-4">
               <div className="bg-white dark:bg-slate-900 rounded-[48px] shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 border border-white/10">
@@ -326,7 +345,7 @@ export default function SeedBatches() {
                       <div className="flex items-center gap-4">
                           <div className="bg-blue-600 p-3 rounded-2xl text-white shadow-lg"><Info size={20}/></div>
                           <div>
-                              <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter">Vista de <span className="text-blue-600">Auditoría</span></h2>
+                              <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter">Ficha Técnica <span className="text-blue-600">Auditoría</span></h2>
                               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Trazabilidad Fiscal Industrial</p>
                           </div>
                       </div>
@@ -337,7 +356,7 @@ export default function SeedBatches() {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                           <div className="space-y-6">
                               <div>
-                                  <label className={labelClass}>Identificador Maestro</label>
+                                  <label className={labelClass}>Lote Maestro</label>
                                   <div className="text-2xl font-black text-slate-800 dark:text-white font-mono tracking-tighter uppercase">{selectedBatch.batchCode}</div>
                               </div>
                               <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-3xl border dark:border-slate-800">
@@ -351,10 +370,6 @@ export default function SeedBatches() {
                                           <span className="text-slate-400">Certificación:</span>
                                           <span className="text-slate-800 dark:text-slate-200 font-mono">{selectedBatch.certificationNumber || '---'}</span>
                                       </div>
-                                      <div className="flex justify-between text-xs font-bold uppercase tracking-tight">
-                                          <span className="text-slate-400">GS1 Code:</span>
-                                          <span className="text-slate-800 dark:text-slate-200 font-mono">{selectedBatch.gs1Code || '---'}</span>
-                                      </div>
                                   </div>
                               </div>
                           </div>
@@ -366,25 +381,25 @@ export default function SeedBatches() {
                                       <p className="text-xl font-black text-green-700 dark:text-green-400">{selectedBatch.purity || '0'}%</p>
                                   </div>
                                   <div className="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-3xl border border-blue-100 dark:border-blue-900/30 text-center">
-                                      <p className="text-[8px] font-black text-blue-600 uppercase tracking-widest mb-1">PG (Poder Germ.)</p>
+                                      <p className="text-[8px] font-black text-blue-600 uppercase tracking-widest mb-1">Poder Germ.</p>
                                       <p className="text-xl font-black text-blue-700 dark:text-blue-400">{selectedBatch.germination || '0'}%</p>
                                   </div>
                               </div>
                               <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-3xl border border-amber-100 dark:border-amber-900/30 text-center">
-                                  <p className="text-[8px] font-black text-amber-600 uppercase tracking-widest mb-1">Stock Disponible</p>
+                                  <p className="text-[8px] font-black text-amber-600 uppercase tracking-widest mb-1">Disponible</p>
                                   <p className="text-2xl font-black text-amber-700 dark:text-amber-400">{selectedBatch.remainingQuantity.toLocaleString()} kg</p>
                               </div>
                           </div>
                       </div>
 
                       <div className="bg-slate-50 dark:bg-slate-950 p-6 rounded-3xl border dark:border-slate-800">
-                          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center"><Warehouse size={14} className="text-hemp-600 mr-2"/> Ubicación Geográfica Actual</h3>
+                          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center"><Warehouse size={14} className="text-hemp-600 mr-2"/> Ubicación Geográfica</h3>
                           <div className="flex items-center justify-between">
                               <div>
                                   <p className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-tighter italic">
-                                      {storagePoints.find(sp => sp.id === selectedBatch.storagePointId)?.name || 'CENTRAL / SIN ASIGNAR'}
+                                      {storagePoints.find(sp => sp.id === selectedBatch.storagePointId)?.name || 'ALMACÉN CENTRAL'}
                                   </p>
-                                  <p className="text-[10px] text-slate-500 font-bold uppercase">{storagePoints.find(sp => sp.id === selectedBatch.storagePointId)?.city || 'Ubicación Desconocida'}</p>
+                                  <p className="text-[10px] text-slate-500 font-bold uppercase">{storagePoints.find(sp => sp.id === selectedBatch.storagePointId)?.city || 'Ubicación S/D'}</p>
                               </div>
                               <button onClick={() => window.print()} className="bg-white dark:bg-slate-800 p-3 rounded-2xl text-slate-400 hover:text-hemp-600 transition shadow-sm border dark:border-slate-700">
                                   <Printer size={20}/>
@@ -473,15 +488,11 @@ export default function SeedBatches() {
                             <label className={labelClass}>Cantidad Inicial (kg) *</label>
                             <input required type="number" className={`${inputClass} text-xl font-black`} value={batchFormData.initialQuantity} onChange={e => setBatchFormData({...batchFormData, initialQuantity: Number(e.target.value)})} />
                         </div>
-                        <div>
-                            <label className={labelClass}>Fecha de Análisis</label>
-                            <input type="date" className={inputClass} value={batchFormData.analysisDate} onChange={e => setBatchFormData({...batchFormData, analysisDate: e.target.value})} />
-                        </div>
                     </div>
                 </div>
                 <button type="submit" disabled={isSubmitting} className="w-full bg-slate-900 dark:bg-hemp-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl flex items-center justify-center hover:scale-[1.01] transition-all disabled:opacity-50">
                     {isSubmitting ? <Loader2 className="animate-spin mr-2"/> : <Save className="mr-2"/>}
-                    {editingBatchId ? 'Actualizar Lote' : 'Finalizar Registro de Lote'}
+                    {editingBatchId ? 'Actualizar Lote' : 'Finalizar Registro'}
                 </button>
             </form>
           </div>
