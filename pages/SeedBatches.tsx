@@ -7,7 +7,7 @@ import {
   AlertCircle, DollarSign, ShoppingCart, Archive, Save, X, 
   Loader2, Search, Eye, Info, CheckCircle, Filter, FilterX, ArrowUpRight, ArrowDownLeft,
   Building, User, Calendar, FileText, Globe, ClipboardList, ShieldCheck, Warehouse,
-  FlaskConical, RefreshCw, Plus
+  FlaskConical, RefreshCw, Plus, CheckCircle2
 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 
@@ -42,7 +42,7 @@ export default function SeedBatches() {
 
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
   const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
-  const [editingBatchId, setEditingBatchId] = useState<string | null>(null);
+  const [editingBatchId, setEditingId] = useState<string | null>(null);
 
   const [batchFormData, setBatchFormData] = useState<Partial<SeedBatch>>({
     varietyId: '', supplierId: '', batchCode: '', initialQuantity: 0, purchaseDate: new Date().toISOString().split('T')[0], pricePerKg: 0, storagePointId: '', isActive: true,
@@ -54,15 +54,14 @@ export default function SeedBatches() {
     transportGuideNumber: '', driverName: '', vehiclePlate: '', transportCompany: ''
   });
 
+  // Ambos niveles administrativos tienen control total sobre creación y edición
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
   const isClient = currentUser?.role === 'client';
 
-  // --- FILTRADO DE SEGURIDAD POR ROL ---
   const filteredBatches = useMemo(() => seedBatches.filter(b => {
       const v = varieties.find(v => v.id === b.varietyId);
       const sp = storagePoints.find(s => s.id === b.storagePointId);
       
-      // Si es cliente, solo ve lotes en sus propios depósitos
       if (isClient && currentUser?.clientId) {
           if (sp?.clientId !== currentUser.clientId) return false;
       }
@@ -78,7 +77,6 @@ export default function SeedBatches() {
       const v = varieties.find(vari => vari.id === b?.varietyId);
       const c = clients.find(cli => cli.id === m.clientId);
 
-      // Si es cliente, solo ve movimientos que le pertenecen
       if (isClient && currentUser?.clientId) {
           if (m.clientId !== currentUser.clientId) return false;
       }
@@ -104,6 +102,20 @@ export default function SeedBatches() {
       setIsMoveModalOpen(true);
   };
 
+  // Función para que el cliente confirme recepción
+  const handleConfirmReceipt = async (move: SeedMovement) => {
+      if (isSubmitting) return;
+      setIsSubmitting(true);
+      try {
+          const success = await updateSeedMovement({ ...move, status: 'Recibido' });
+          if (!success) alert("No se pudo actualizar el estado del remito.");
+      } catch (err) {
+          console.error(err);
+      } finally {
+          setIsSubmitting(false);
+      }
+  };
+
   const handleBatchSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!batchFormData.varietyId || !batchFormData.batchCode || batchFormData.initialQuantity! <= 0 || isSubmitting) return;
@@ -111,9 +123,10 @@ export default function SeedBatches() {
       try {
           const payload = { ...batchFormData, id: editingBatchId || crypto.randomUUID(), remainingQuantity: editingBatchId ? batchFormData.remainingQuantity : batchFormData.initialQuantity, initialQuantity: Number(batchFormData.initialQuantity), pricePerKg: Number(batchFormData.pricePerKg), purity: Number(batchFormData.purity), germination: Number(batchFormData.germination), isActive: true, createdAt: batchFormData.createdAt || new Date().toISOString() } as SeedBatch;
           let success = false;
+          // Fix: Changed editingId to editingBatchId to correctly reference the state
           if (editingBatchId) success = await updateSeedBatch(payload);
           else success = await addSeedBatch(payload);
-          if (success) { setIsBatchModalOpen(false); setEditingBatchId(null); }
+          if (success) { setIsBatchModalOpen(false); setEditingId(null); }
       } catch (err: any) { alert("Fallo en el registro."); } finally { setIsSubmitting(false); }
   };
 
@@ -149,7 +162,7 @@ export default function SeedBatches() {
         {isAdmin && (
           <div className="flex space-x-2 w-full md:w-auto">
               <button onClick={() => handleOpenDispatch()} className="flex-1 md:flex-none bg-blue-600 text-white px-6 py-3 rounded-2xl flex items-center justify-center hover:bg-blue-700 transition shadow-xl font-black text-xs uppercase tracking-widest"><ArrowUpRight size={18} className="mr-2" /> Despachar</button>
-              <button onClick={() => { setEditingBatchId(null); setBatchFormData({ varietyId: '', batchCode: '', initialQuantity: 0, purchaseDate: new Date().toISOString().split('T')[0], pricePerKg: 0, storagePointId: '', isActive: true }); setIsBatchModalOpen(true); }} className="flex-1 md:flex-none bg-hemp-600 text-white px-6 py-3 rounded-2xl flex items-center justify-center hover:bg-hemp-700 transition shadow-xl font-black text-xs uppercase tracking-widest"><Plus size={18} className="mr-2" /> Ingresar Lote</button>
+              <button onClick={() => { setEditingId(null); setBatchFormData({ varietyId: '', batchCode: '', initialQuantity: 0, purchaseDate: new Date().toISOString().split('T')[0], pricePerKg: 0, storagePointId: '', isActive: true }); setIsBatchModalOpen(true); }} className="flex-1 md:flex-none bg-hemp-600 text-white px-6 py-3 rounded-2xl flex items-center justify-center hover:bg-hemp-700 transition shadow-xl font-black text-xs uppercase tracking-widest"><Plus size={18} className="mr-2" /> Ingresar Lote</button>
           </div>
         )}
       </div>
@@ -211,7 +224,7 @@ export default function SeedBatches() {
                                   {isAdmin && (
                                     <td className="px-8 py-5 text-right">
                                         <div className="flex justify-end space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button onClick={() => { setBatchFormData(batch); setEditingBatchId(batch.id); setIsBatchModalOpen(true); }} className="p-2 text-gray-400 hover:text-hemp-600"><Edit2 size={18}/></button>
+                                            <button onClick={() => { setBatchFormData(batch); setEditingId(batch.id); setIsBatchModalOpen(true); }} className="p-2 text-gray-400 hover:text-hemp-600"><Edit2 size={18}/></button>
                                         </div>
                                     </td>
                                   )}
@@ -229,7 +242,7 @@ export default function SeedBatches() {
                           <th className="px-8 py-5">Remito / Fecha</th>
                           <th className="px-8 py-5">Material & Cantidad</th>
                           <th className="px-8 py-5">Origen / Depósito</th>
-                          <th className="px-8 py-5 text-center">Estado</th>
+                          <th className="px-8 py-5 text-center">Estado / Recepción</th>
                       </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
@@ -243,7 +256,22 @@ export default function SeedBatches() {
                                   <td className="px-8 py-5"><div className="font-black text-gray-800 dark:text-gray-200">{move.date}</div><div className="text-[10px] text-blue-600 font-black uppercase">Guía: {move.transportGuideNumber || 'S/N'}</div></td>
                                   <td className="px-8 py-5"><div className="font-bold text-slate-800 dark:text-slate-200 uppercase">{v?.name || 'N/A'}</div><div className="text-hemp-700 dark:text-hemp-400 font-black">{move.quantity} kg</div></td>
                                   <td className="px-8 py-5"><div className="font-bold text-gray-700 dark:text-gray-300 flex items-center uppercase text-xs"><Warehouse size={12} className="mr-2 opacity-50"/>{move.originStorageId || 'Sede Central'}</div></td>
-                                  <td className="px-8 py-5 text-center"><span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase inline-flex items-center shadow-sm ${move.status === 'Recibido' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700 animate-pulse'}`}>{move.status || 'En Tránsito'}</span></td>
+                                  <td className="px-8 py-5 text-center">
+                                      {move.status === 'En Tránsito' && isClient ? (
+                                          <button 
+                                            onClick={() => handleConfirmReceipt(move)}
+                                            disabled={isSubmitting}
+                                            className="bg-green-600 text-white px-4 py-1.5 rounded-xl text-[9px] font-black uppercase hover:bg-green-700 transition shadow-sm flex items-center gap-1 mx-auto"
+                                          >
+                                            {isSubmitting ? <Loader2 size={10} className="animate-spin"/> : <CheckCircle size={12}/>} Confirmar
+                                          </button>
+                                      ) : (
+                                          <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase inline-flex items-center shadow-sm ${move.status === 'Recibido' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700 animate-pulse'}`}>
+                                            {move.status === 'Recibido' ? <CheckCircle2 size={10} className="mr-1.5"/> : <Truck size={10} className="mr-1.5"/>}
+                                            {move.status}
+                                          </span>
+                                      )}
+                                  </td>
                               </tr>
                           )
                       })}
@@ -252,7 +280,7 @@ export default function SeedBatches() {
           </div>
       )}
 
-      {/* MODAL BATCH (RESTRICTED TO ADMIN) */}
+      {/* MODAL BATCH (RESTRICTED TO ADMINS) */}
       {isBatchModalOpen && isAdmin && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[60] p-4">
           <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-4xl w-full p-10 shadow-2xl max-h-[95vh] overflow-y-auto animate-in zoom-in-95">
@@ -280,6 +308,54 @@ export default function SeedBatches() {
                 <button type="submit" disabled={isSubmitting} className="w-full bg-slate-900 dark:bg-hemp-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl flex items-center justify-center hover:scale-[1.02] disabled:opacity-50">{isSubmitting ? <Loader2 className="animate-spin mr-2" size={18}/> : <Save className="mr-2" size={18}/>} Confirmar Registro</button>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* MODAL DISPATCH (RESTRICTED TO ADMINS) */}
+      {isMoveModalOpen && isAdmin && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[60] p-4">
+            <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-4xl w-full p-10 shadow-2xl max-h-[95vh] overflow-y-auto animate-in zoom-in-95">
+                <div className="flex justify-between items-center mb-8">
+                    <div className="flex items-center gap-4"><div className="bg-blue-600 p-3 rounded-2xl text-white shadow-lg"><Truck size={24}/></div><div><h2 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">Despacho de <span className="text-blue-600">Material</span></h2><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Generación de remito y hoja de ruta</p></div></div>
+                    <button onClick={() => setIsMoveModalOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition text-slate-400"><X size={28}/></button>
+                </div>
+                <form onSubmit={handleMoveSubmit} className="space-y-8">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div className="space-y-6">
+                            <div className="bg-gray-50 dark:bg-slate-950 p-6 rounded-[32px] border dark:border-slate-800">
+                                <label className="text-[9px] font-black uppercase text-slate-500 ml-1">Lote de Origen *</label>
+                                <select required className={inputClass} value={moveFormData.batchId} onChange={e => setMoveFormData({...moveFormData, batchId: e.target.value})}>
+                                    <option value="">Seleccionar lote con stock...</option>
+                                    {seedBatches.filter(b => b.remainingQuantity > 0).map(b => (
+                                        <option key={b.id} value={b.id}>{b.batchCode} ({b.remainingQuantity} kg disp.)</option>
+                                    ))}
+                                </select>
+                                <div className="mt-4">
+                                    <label className="text-[9px] font-black uppercase text-slate-500 ml-1">Cantidad a Enviar (kg)</label>
+                                    <input required type="number" className={inputClass} value={moveFormData.quantity} onChange={e => setMoveFormData({...moveFormData, quantity: Number(e.target.value)})} />
+                                </div>
+                            </div>
+                            <div className="bg-emerald-50 dark:bg-emerald-900/10 p-6 rounded-[32px] border border-emerald-100 dark:border-emerald-900/30">
+                                <label className="text-[9px] font-black uppercase text-emerald-700 ml-1">Destinatario (Socio / Campo)</label>
+                                <select required className={inputClass} value={moveFormData.clientId} onChange={e => setMoveFormData({...moveFormData, clientId: e.target.value})}>
+                                    <option value="">Seleccionar destinatario...</option>
+                                    {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                </select>
+                            </div>
+                        </div>
+                        <div className="space-y-6">
+                             <div className="bg-blue-50 dark:bg-blue-900/10 p-6 rounded-[32px] border border-blue-100 dark:border-blue-900/30">
+                                <label className="text-[9px] font-black uppercase text-blue-700 ml-1">Datos de Transporte</label>
+                                <div className="grid grid-cols-2 gap-4 mt-2">
+                                    <input type="text" placeholder="Guía de Remito" className={inputClass} value={moveFormData.transportGuideNumber} onChange={e => setMoveFormData({...moveFormData, transportGuideNumber: e.target.value})} />
+                                    <input type="text" placeholder="Patente Vehículo" className={inputClass} value={moveFormData.vehiclePlate} onChange={e => setMoveFormData({...moveFormData, vehiclePlate: e.target.value})} />
+                                </div>
+                             </div>
+                        </div>
+                    </div>
+                    <button type="submit" disabled={isSubmitting} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl flex items-center justify-center hover:scale-[1.02] disabled:opacity-50">{isSubmitting ? <Loader2 className="animate-spin mr-2" size={18}/> : <ArrowUpRight className="mr-2" size={18}/>} Generar Remito de Salida</button>
+                </form>
+            </div>
         </div>
       )}
     </div>

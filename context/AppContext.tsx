@@ -241,7 +241,8 @@ const getFromLocal = (key: string) => {
     } catch { return []; }
 };
 
-export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+// Fix: Removed React.FC type to avoid implicit children issues in React 18 and typed props directly
+export const AppProvider = ({ children }: { children: React.ReactNode }) => {
   const [usersList, setUsersList] = useState<User[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [varieties, setVarieties] = useState<Variety[]>([]);
