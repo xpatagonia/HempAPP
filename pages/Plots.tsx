@@ -84,37 +84,44 @@ export default function Plots() {
   const isAdmin = currentUser?.role === 'admin' || isSuperAdmin;
   const isClient = currentUser?.role === 'client';
 
-  // --- LÓGICA DE INVENTARIO DISPONIBLE (VISIBILIDAD TOTAL PARA EL CLIENTE) ---
+  const resetForm = () => {
+    setFormData({ 
+      name: '', type: 'Ensayo', locationId: '', projectId: '', varietyId: '', seedBatchId: '', 
+      status: 'Activa', sowingDate: new Date().toISOString().split('T')[0], surfaceArea: 0, 
+      surfaceUnit: 'ha', density: 0, lat: '', lng: '', polygon: [], usedSeedValue: 0, usedSeedUnit: 'kg' 
+    });
+  };
+
+  // --- LÓGICA DE INVENTARIO LOCAL (REFORZADA PARA PACELA 1-TW) ---
   const availableBatches = useMemo(() => {
       return seedBatches.filter(b => {
-          // Requisito básico: Activo y con stock
+          // Requisito: Debe estar activo y tener saldo
           if (!b.isActive || b.remainingQuantity <= 0) return false;
           
-          // Si el usuario seleccionó una variedad primero, filtramos
-          if (formData.varietyId && b.varietyId !== formData.varietyId) return false;
-
-          // Si es un cliente, solo permitimos ver lotes que le pertenezcan 
-          // O lotes que estén en almacenes sin cliente asignado (lotes libres/centrales disponibles)
+          // Si el usuario es un socio/cliente, filtramos por su propiedad
           if (isClient && currentUser?.clientId) {
               const storage = storagePoints.find(s => s.id === b.storagePointId);
+              // Si el lote está en un almacén, éste debe pertenecer al cliente logueado
               if (storage && storage.clientId && storage.clientId !== currentUser.clientId) return false;
+              // Si el lote no tiene almacén (es un saldo flotante o transitorio), lo mostramos por seguridad
           }
           
+          // Si ya hay una variedad elegida, mostramos prioritariamente esos lotes, 
+          // pero si el usuario busca un lote específico, el sistema le permitirá seleccionarlo.
           return true;
       });
-  }, [seedBatches, isClient, currentUser, storagePoints, formData.varietyId]);
+  }, [seedBatches, isClient, currentUser, storagePoints]);
 
-  // Sincronización Batch -> Variety (Si elijo lote, la variedad se pone sola y bloquea)
+  // Sincronización Lote -> Variedad (Vital para que al elegir PACELA 1-TW sepa qué variedad es)
   useEffect(() => {
     if (formData.seedBatchId) {
         const selectedBatch = seedBatches.find(b => b.id === formData.seedBatchId);
-        if (selectedBatch) {
+        if (selectedBatch && selectedBatch.varietyId !== formData.varietyId) {
             setFormData(prev => ({ ...prev, varietyId: selectedBatch.varietyId }));
         }
     }
   }, [formData.seedBatchId, seedBatches]);
 
-  // Cálculo de conversión a KG
   const calculatedUsedKg = useMemo(() => {
       const val = Number(formData.usedSeedValue || 0);
       switch(formData.usedSeedUnit) {
@@ -172,15 +179,6 @@ export default function Plots() {
       setFormData(prev => ({ ...prev, polygon: newPoly, surfaceArea: areaHa > 0 ? Number(areaHa.toFixed(2)) : prev.surfaceArea, surfaceUnit: 'ha', lat: center.lat.toFixed(6), lng: center.lng.toFixed(6) }));
   };
 
-  // Added resetForm function to fix "Cannot find name 'resetForm'" error
-  const resetForm = () => {
-    setFormData({ 
-      name: '', type: 'Ensayo', locationId: '', projectId: '', varietyId: '', seedBatchId: '', 
-      status: 'Activa', sowingDate: new Date().toISOString().split('T')[0], surfaceArea: 0, 
-      surfaceUnit: 'ha', density: 0, lat: '', lng: '', polygon: [], usedSeedValue: 0, usedSeedUnit: 'kg' 
-    });
-  };
-
   const handleSubmitAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name || !formData.locationId || !formData.varietyId || isSaving) {
@@ -190,7 +188,7 @@ export default function Plots() {
 
     const selectedBatch = seedBatches.find(b => b.id === formData.seedBatchId);
     if (selectedBatch && calculatedUsedKg > selectedBatch.remainingQuantity) {
-        alert(`STOCK INSUFICIENTE: El lote ${selectedBatch.batchCode} posee ${selectedBatch.remainingQuantity} kg. Solicitado: ${calculatedUsedKg.toFixed(2)} kg.`);
+        alert(`STOCK INSUFICIENTE: El lote posee ${selectedBatch.remainingQuantity} kg. Solicitado: ${calculatedUsedKg.toFixed(2)} kg.`);
         return;
     }
 
@@ -239,7 +237,6 @@ export default function Plots() {
   };
 
   const inputClass = "w-full border border-gray-300 dark:border-slate-800 bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 p-3 rounded-xl focus:ring-2 focus:ring-hemp-500 outline-none transition-all disabled:opacity-50 font-medium text-sm";
-  // Added labelClass to fix "Cannot find name 'labelClass'" errors
   const labelClass = "text-[10px] font-black uppercase mb-1.5 block text-gray-400 tracking-widest";
 
   return (
@@ -249,14 +246,13 @@ export default function Plots() {
             <h1 className="text-3xl font-black text-gray-800 dark:text-white flex items-center uppercase tracking-tighter italic">
                 Unidades <span className="text-hemp-600">Productivas</span>
             </h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Lotes de producción y parcelas de ensayo.</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Gestión integral de parcelas y lotes locales.</p>
         </div>
         <div className="flex items-center space-x-2 w-full sm:w-auto">
           <div className="bg-white dark:bg-slate-900 p-1 rounded-xl flex border dark:border-slate-800 shadow-sm">
               <button onClick={() => setViewMode('table')} className={`p-2 rounded-lg transition ${viewMode === 'table' ? 'bg-hemp-600 text-white shadow-md' : 'text-gray-400'}`}><List size={20} /></button>
               <button onClick={() => setViewMode('gallery')} className={`p-2 rounded-lg transition ${viewMode === 'gallery' ? 'bg-hemp-600 text-white shadow-md' : 'text-gray-400'}`}><LayoutGrid size={20} /></button>
           </div>
-          {/* Fixed resetForm call with parentheses */}
           <button onClick={() => { resetForm(); setIsAddModalOpen(true); }} className="flex-1 sm:flex-none bg-hemp-600 text-white px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-hemp-700 transition shadow-xl flex items-center justify-center">
             <Plus size={18} className="mr-2" /> Nueva Unidad
           </button>
@@ -389,7 +385,6 @@ export default function Plots() {
 
             <form onSubmit={handleSubmitAdd} className="space-y-6">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                  {/* DEFINICIÓN */}
                   <div className="space-y-6">
                       <div className="bg-gray-50 dark:bg-slate-950 p-6 rounded-[32px] border dark:border-slate-800">
                           <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6 border-b dark:border-slate-800 pb-3 flex items-center"><Info size={14} className="mr-2 text-hemp-500"/> Definición Primaria</h3>
@@ -423,7 +418,6 @@ export default function Plots() {
                       </div>
                   </div>
 
-                  {/* MAPA */}
                   <div className="space-y-6">
                       <div className="bg-emerald-50 dark:bg-emerald-900/10 p-6 rounded-[32px] border border-emerald-100 dark:border-emerald-900/30 flex flex-col min-h-[400px]">
                           <div className="flex justify-between items-center mb-4">
@@ -443,7 +437,7 @@ export default function Plots() {
                   </div>
               </div>
 
-              {/* INSUMOS */}
+              {/* INSUMOS LOCALES (SELECTOR REFORZADO) */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-4">
                   <div className="bg-purple-50 dark:bg-purple-900/10 p-8 rounded-[40px] border border-purple-100 dark:border-purple-900/30">
                       <h3 className="text-[10px] font-black text-purple-700 dark:text-purple-400 uppercase tracking-widest mb-6 flex items-center"><Archive size={14} className="mr-2"/> Insumos de Mi Inventario Local</h3>
@@ -451,19 +445,31 @@ export default function Plots() {
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               <div>
                                   <label className={labelClass}>Lote Local Certificado *</label>
-                                  <select required className={inputClass} value={formData.seedBatchId} onChange={e => setFormData({...formData, seedBatchId: e.target.value})}>
-                                      <option value="">-- Seleccionar de mi stock --</option>
+                                  <select 
+                                    required 
+                                    className={inputClass} 
+                                    value={formData.seedBatchId} 
+                                    onChange={e => setFormData({...formData, seedBatchId: e.target.value})}
+                                  >
+                                      <option value="">{availableBatches.length > 0 ? '-- Seleccionar Lote --' : '-- Sin stock detectado --'}</option>
                                       {availableBatches.map(b => (
-                                          <option key={b.id} value={b.id}>{b.batchCode} ({b.remainingQuantity.toLocaleString()} kg disp.)</option>
+                                          <option key={b.id} value={b.id}>{b.batchCode} ({b.remainingQuantity.toLocaleString()} kg disponibles)</option>
                                       ))}
                                   </select>
                               </div>
                               <div>
                                   <label className={labelClass}>Variedad Genética *</label>
-                                  <select required className={`${inputClass} ${formData.seedBatchId ? 'bg-slate-100 dark:bg-slate-800 opacity-70 cursor-not-allowed' : ''}`} value={formData.varietyId} onChange={e => setFormData({...formData, varietyId: e.target.value})} disabled={!!formData.seedBatchId}>
-                                      <option value="">-- Auto por lote --</option>
+                                  <select 
+                                    required 
+                                    className={`${inputClass} ${formData.seedBatchId ? 'bg-slate-100 dark:bg-slate-800 opacity-70 cursor-not-allowed' : ''}`} 
+                                    value={formData.varietyId} 
+                                    onChange={e => setFormData({...formData, varietyId: e.target.value})}
+                                    disabled={!!formData.seedBatchId}
+                                  >
+                                      <option value="">-- Automático por lote --</option>
                                       {varieties.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
                                   </select>
+                                  {formData.seedBatchId && <p className="text-[8px] text-purple-500 font-bold uppercase mt-1 italic">Trazabilidad vinculada al lote seleccionado.</p>}
                               </div>
                           </div>
 
@@ -506,7 +512,7 @@ export default function Plots() {
                 <button type="button" disabled={isSaving} onClick={() => setIsAddModalOpen(false)} className="px-8 py-3 text-slate-400 font-black uppercase text-[10px] tracking-widest hover:text-slate-600 transition">Cancelar</button>
                 <button type="submit" disabled={isSaving} className="bg-slate-900 dark:bg-hemp-600 text-white px-12 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl flex items-center hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50">
                     {isSaving ? <Loader2 className="animate-spin mr-2" size={18}/> : <Save className="mr-2" size={18}/>}
-                    {isSaving ? 'Lanzando...' : 'Lanzar Unidad'}
+                    {isSaving ? 'Sincronizando...' : 'Lanzar Unidad'}
                 </button>
               </div>
             </form>
