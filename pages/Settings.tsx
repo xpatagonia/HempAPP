@@ -72,125 +72,111 @@ export default function Settings() {
               <div className="bg-slate-900 border border-slate-800 p-8 rounded-[40px] shadow-2xl relative overflow-hidden">
                   <div className="flex items-center space-x-3 mb-6">
                       <Shield className="text-hemp-500" size={24}/>
-                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Protocolo Nuclear V34 (Corrección de bird_damage)</h3>
+                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Protocolo Nuclear V34 (Corrección de Transporte)</h3>
                   </div>
                   
                   <div className="bg-amber-900/20 border border-amber-500/30 p-4 rounded-2xl mb-6 text-amber-200 text-xs leading-relaxed">
                       <p className="font-black mb-2 flex items-center uppercase"><RefreshCw className="mr-2" size={14}/> REPARACIÓN DE COLUMNAS (SOLUCIÓN AL ERROR)</p>
-                      Ejecuta este script para añadir <strong>bird_damage</strong>, <strong>lodging</strong> y todas las métricas de rendimiento que están fallando.
+                      Ejecuta este script para añadir <strong>driver_dni</strong>, <strong>recipient_name</strong>, y las métricas de despacho que están fallando en los remitos.
                   </div>
 
                   <button onClick={() => {
                       const sql = `
--- PROTOCOLO V34: CORRECCIÓN DEFINITIVA DE ESQUEMA TÉCNICO
+-- PROTOCOLO V34: REPARACIÓN DE LOGÍSTICA Y DESPACHO
+ALTER TABLE IF EXISTS public.seed_movements ADD COLUMN IF NOT EXISTS driver_dni TEXT;
+ALTER TABLE IF EXISTS public.seed_movements ADD COLUMN IF NOT EXISTS recipient_name TEXT;
+ALTER TABLE IF EXISTS public.seed_movements ADD COLUMN IF NOT EXISTS recipient_dni TEXT;
+ALTER TABLE IF EXISTS public.seed_movements ADD COLUMN IF NOT EXISTS transport_company TEXT;
+
+-- Trazabilidad de Lote (Etiquetas Fiscales)
+ALTER TABLE IF EXISTS public.seed_batches ADD COLUMN IF NOT EXISTS label_serial_number TEXT;
+ALTER TABLE IF EXISTS public.seed_batches ADD COLUMN IF NOT EXISTS certification_number TEXT;
+ALTER TABLE IF EXISTS public.seed_batches ADD COLUMN IF NOT EXISTS gs1_code TEXT;
+ALTER TABLE IF EXISTS public.seed_batches ADD COLUMN IF NOT EXISTS purity NUMERIC DEFAULT 99;
+ALTER TABLE IF EXISTS public.seed_batches ADD COLUMN IF NOT EXISTS germination NUMERIC DEFAULT 90;
+ALTER TABLE IF EXISTS public.seed_batches ADD COLUMN IF NOT EXISTS analysis_date TEXT;
+
+-- Métricas Fenológicas
 ALTER TABLE IF EXISTS public.trial_records ADD COLUMN IF NOT EXISTS bird_damage NUMERIC DEFAULT 0;
 ALTER TABLE IF EXISTS public.trial_records ADD COLUMN IF NOT EXISTS lodging NUMERIC DEFAULT 0;
 ALTER TABLE IF EXISTS public.trial_records ADD COLUMN IF NOT EXISTS uniformity NUMERIC DEFAULT 100;
 ALTER TABLE IF EXISTS public.trial_records ADD COLUMN IF NOT EXISTS vigor NUMERIC DEFAULT 100;
-ALTER TABLE IF EXISTS public.trial_records ADD COLUMN IF NOT EXISTS plants_per_meter NUMERIC DEFAULT 0;
-ALTER TABLE IF EXISTS public.trial_records ADD COLUMN IF NOT EXISTS stem_weight NUMERIC DEFAULT 0;
-ALTER TABLE IF EXISTS public.trial_records ADD COLUMN IF NOT EXISTS leaf_weight NUMERIC DEFAULT 0;
-ALTER TABLE IF EXISTS public.trial_records ADD COLUMN IF NOT EXISTS fresh_weight NUMERIC DEFAULT 0;
-ALTER TABLE IF EXISTS public.trial_records ADD COLUMN IF NOT EXISTS emergence_date TEXT;
-ALTER TABLE IF EXISTS public.trial_records ADD COLUMN IF NOT EXISTS flowering_date TEXT;
-ALTER TABLE IF EXISTS public.trial_records ADD COLUMN IF NOT EXISTS harvest_date TEXT;
-ALTER TABLE IF EXISTS public.trial_records ADD COLUMN IF NOT EXISTS diseases TEXT;
-ALTER TABLE IF EXISTS public.trial_records ADD COLUMN IF NOT EXISTS pests TEXT;
-ALTER TABLE IF EXISTS public.trial_records ADD COLUMN IF NOT EXISTS time TEXT;
-
--- Asegurar multimedia y huella hídrica
-ALTER TABLE IF EXISTS public.field_logs ADD COLUMN IF NOT EXISTS photo_url TEXT;
-ALTER TABLE IF EXISTS public.field_logs ADD COLUMN IF NOT EXISTS time TEXT;
-ALTER TABLE IF EXISTS public.hydric_records ADD COLUMN IF NOT EXISTS time TEXT;
-ALTER TABLE IF EXISTS public.hydric_records ADD COLUMN IF NOT EXISTS plot_id TEXT;
 
 NOTIFY pgrst, 'reload schema';
                       `;
                       navigator.clipboard.writeText(sql.trim());
-                      alert("Script de REPARACIÓN V34 Copiado. Péguelo en el SQL Editor de Supabase.");
+                      alert("Script de REPARACIÓN V34 Copiado. Péguelo en el SQL Editor de Supabase y presione RUN.");
                   }} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-2xl font-black text-xs uppercase shadow-xl flex items-center justify-center transition-all mb-8">
                       <RefreshCw size={18} className="mr-2"/> Copiar Script Reparador V34
                   </button>
 
                   <div className="border-t border-slate-800 pt-8 mt-4">
                       <div className="bg-red-900/40 border border-red-500/30 p-4 rounded-2xl mb-6 text-red-200 text-xs leading-relaxed">
-                        <p className="font-black mb-2 flex items-center uppercase"><Flame className="mr-2 text-red-500" size={16}/> RESET TOTAL (LIMPIEZA DE COLUMNAS OBSOLETAS)</p>
-                        Usa esta opción si el error persiste después de la reparación. Borrará todos los datos.
+                        <p className="font-black mb-2 flex items-center uppercase"><Flame className="mr-2 text-red-500" size={16}/> RESET TOTAL (LIMPIEZA Y RECREACIÓN)</p>
+                        Usa esta opción si el error persiste. Borrará todos los datos para aplicar el nuevo esquema.
                       </div>
 
                       <button onClick={() => {
                         const sql = `
--- PROTOCOLO V34: RECREACIÓN TOTAL CON TODAS LAS COLUMNAS TÉCNICAS
-DROP TABLE IF EXISTS public.field_logs CASCADE;
-DROP TABLE IF EXISTS public.trial_records CASCADE;
-DROP TABLE IF EXISTS public.hydric_records CASCADE;
+-- PROTOCOLO V34: RECREACIÓN TOTAL LOGÍSTICA
 DROP TABLE IF EXISTS public.seed_movements CASCADE;
 DROP TABLE IF EXISTS public.seed_batches CASCADE;
-DROP TABLE IF EXISTS public.plots CASCADE;
-DROP TABLE IF EXISTS public.locations CASCADE;
-DROP TABLE IF EXISTS public.projects CASCADE;
-DROP TABLE IF EXISTS public.clients CASCADE;
-DROP TABLE IF EXISTS public.suppliers CASCADE;
-DROP TABLE IF EXISTS public.users CASCADE;
-DROP TABLE IF EXISTS public.varieties CASCADE;
-DROP TABLE IF EXISTS public.tasks CASCADE;
-DROP TABLE IF EXISTS public.storage_points CASCADE;
 
--- Tablas Maestras
-CREATE TABLE public.users (id TEXT PRIMARY KEY, name TEXT, email TEXT UNIQUE, role TEXT, password TEXT, job_title TEXT, phone TEXT, avatar TEXT, client_id TEXT, is_network_member BOOLEAN DEFAULT false);
-CREATE TABLE public.clients (id TEXT PRIMARY KEY, name TEXT, type TEXT, contact_name TEXT, contact_phone TEXT, email TEXT, is_network_member BOOLEAN DEFAULT true, membership_level TEXT DEFAULT 'Activo', contract_date TEXT, cuit TEXT, notes TEXT, related_user_id TEXT, coordinates JSONB, address TEXT, total_hectares NUMERIC DEFAULT 0);
-CREATE TABLE public.suppliers (id TEXT PRIMARY KEY, name TEXT, category TEXT, cuit TEXT, country TEXT, province TEXT, city TEXT, address TEXT, email TEXT, coordinates JSONB, legal_name TEXT, postal_code TEXT, whatsapp TEXT, commercial_contact TEXT, website TEXT, is_official_partner BOOLEAN DEFAULT false);
-CREATE TABLE public.varieties (id TEXT PRIMARY KEY, supplier_id TEXT, name TEXT, usage TEXT, cycle_days INTEGER, expected_thc NUMERIC, knowledge_base TEXT, notes TEXT);
-CREATE TABLE public.locations (id TEXT PRIMARY KEY, name TEXT, province TEXT, city TEXT, address TEXT, coordinates JSONB, polygon JSONB, client_id TEXT, capacity_ha NUMERIC, soil_type TEXT, climate TEXT, responsible_person TEXT, owner_name TEXT, owner_legal_name TEXT, owner_cuit TEXT, owner_contact TEXT, owner_type TEXT, irrigation_system TEXT, responsible_ids TEXT[]);
-CREATE TABLE public.projects (id TEXT PRIMARY KEY, name TEXT, description TEXT, start_date TEXT, status TEXT, director_id TEXT, responsible_ids TEXT[]);
-CREATE TABLE public.plots (id TEXT PRIMARY KEY, location_id TEXT, project_id TEXT, variety_id TEXT, seed_batch_id TEXT, name TEXT, type TEXT, status TEXT DEFAULT 'Activa', sowing_date TEXT, block TEXT, replicate INTEGER, surface_area NUMERIC, surface_unit TEXT, density NUMERIC, owner_name TEXT, responsible_ids TEXT[], row_distance NUMERIC, perimeter NUMERIC, coordinates JSONB, polygon JSONB, irrigation_type TEXT, observations TEXT);
-
--- Logística e Inventario
-CREATE TABLE public.seed_batches (id TEXT PRIMARY KEY, variety_id TEXT, supplier_id TEXT, batch_code TEXT, label_serial_number TEXT, category TEXT, analysis_date TEXT, purity NUMERIC, germination NUMERIC, gs1_code TEXT, certification_number TEXT, purchase_order TEXT, purchase_date TEXT, price_per_kg NUMERIC, initial_quantity NUMERIC, remaining_quantity NUMERIC, storage_conditions TEXT, storage_point_id TEXT, logistics_responsible TEXT, notes TEXT, is_active BOOLEAN DEFAULT true, created_at TIMESTAMPTZ DEFAULT now());
-CREATE TABLE public.seed_movements (id TEXT PRIMARY KEY, batch_id TEXT, client_id TEXT, target_location_id TEXT, quantity NUMERIC, date TEXT, dispatch_time TEXT, transport_guide_number TEXT, transport_type TEXT, driver_name TEXT, vehicle_plate TEXT, vehicle_model TEXT, transport_company TEXT, route_itinerary TEXT, status TEXT, origin_storage_id TEXT, route_google_link TEXT, estimated_distance_km NUMERIC);
-
--- REGISTROS TÉCNICOS (TODO NUMERIC PARA ANALÍTICA)
-CREATE TABLE public.trial_records (
+-- Tablas de Logística Actualizadas
+CREATE TABLE public.seed_batches (
     id TEXT PRIMARY KEY, 
-    plot_id TEXT, 
-    date TEXT, 
-    time TEXT, 
-    stage TEXT, 
-    temperature NUMERIC DEFAULT 0, 
-    humidity NUMERIC DEFAULT 0, 
-    plant_height NUMERIC DEFAULT 0, 
-    plants_per_meter NUMERIC DEFAULT 0,
-    uniformity NUMERIC DEFAULT 100,
-    vigor NUMERIC DEFAULT 100,
-    lodging NUMERIC DEFAULT 0,
-    bird_damage NUMERIC DEFAULT 0,
-    stem_weight NUMERIC DEFAULT 0,
-    leaf_weight NUMERIC DEFAULT 0,
-    fresh_weight NUMERIC DEFAULT 0,
-    yield NUMERIC DEFAULT 0, 
-    replicate INTEGER, 
-    emergence_date TEXT,
-    flowering_date TEXT,
-    harvest_date TEXT,
-    diseases TEXT,
-    pests TEXT,
-    created_by TEXT, 
-    created_by_name TEXT
+    variety_id TEXT, 
+    supplier_id TEXT, 
+    batch_code TEXT, 
+    label_serial_number TEXT, 
+    category TEXT, 
+    analysis_date TEXT, 
+    purity NUMERIC DEFAULT 99, 
+    germination NUMERIC DEFAULT 90, 
+    gs1_code TEXT, 
+    certification_number TEXT, 
+    purchase_order TEXT, 
+    purchase_date TEXT, 
+    price_per_kg NUMERIC, 
+    initial_quantity NUMERIC, 
+    remaining_quantity NUMERIC, 
+    storage_conditions TEXT, 
+    storage_point_id TEXT, 
+    logistics_responsible TEXT, 
+    notes TEXT, 
+    is_active BOOLEAN DEFAULT true, 
+    created_at TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE TABLE public.field_logs (id TEXT PRIMARY KEY, plot_id TEXT, date TEXT, time TEXT, note TEXT, photo_url TEXT);
-CREATE TABLE public.hydric_records (id TEXT PRIMARY KEY, location_id TEXT, plot_id TEXT, date TEXT, time TEXT, type TEXT, amount_mm NUMERIC, notes TEXT, created_by TEXT);
-CREATE TABLE public.tasks (id TEXT PRIMARY KEY, title TEXT, description TEXT, status TEXT, priority TEXT, assigned_to_ids TEXT[], due_date TEXT, plot_id TEXT, created_by TEXT);
-CREATE TABLE public.storage_points (id TEXT PRIMARY KEY, name TEXT, node_code TEXT, type TEXT, address TEXT, city TEXT, province TEXT, coordinates JSONB, responsible_user_id TEXT, client_id TEXT, surface_m2 NUMERIC, conditions TEXT, notes TEXT);
+CREATE TABLE public.seed_movements (
+    id TEXT PRIMARY KEY, 
+    batch_id TEXT, 
+    client_id TEXT, 
+    target_location_id TEXT, 
+    quantity NUMERIC, 
+    date TEXT, 
+    dispatch_time TEXT, 
+    transport_guide_number TEXT, 
+    transport_type TEXT, 
+    driver_name TEXT, 
+    driver_dni TEXT,
+    vehicle_plate TEXT, 
+    vehicle_model TEXT, 
+    transport_company TEXT, 
+    recipient_name TEXT,
+    recipient_dni TEXT,
+    route_itinerary TEXT, 
+    status TEXT, 
+    origin_storage_id TEXT, 
+    route_google_link TEXT, 
+    estimated_distance_km NUMERIC
+);
 
--- Desactivar RLS y otorgar permisos
-ALTER TABLE public.users DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.locations DISABLE ROW LEVEL SECURITY;
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;
 NOTIFY pgrst, 'reload schema';
                         `;
                         navigator.clipboard.writeText(sql.trim());
-                        alert("☢️ SCRIPT NUCLEAR V34 COPIADO. Pegue en Supabase para limpiar todo.");
+                        alert("☢️ SCRIPT RESET V34 COPIADO. Pegue en Supabase.");
                       }} className="w-full bg-red-600 hover:bg-red-700 text-white py-4 rounded-2xl font-black text-xs uppercase shadow-xl flex items-center justify-center transition-all">
                         <Flame size={18} className="mr-2"/> Copiar Script BORRADO TOTAL V34
                       </button>
