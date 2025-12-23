@@ -7,7 +7,7 @@ import {
   AlertCircle, DollarSign, Archive, Save, X, 
   Loader2, Search, Eye, Info, CheckCircle, Filter, FilterX, ArrowUpRight,
   Building, User, Calendar, FileText, Globe, ClipboardList, ShieldCheck, Warehouse,
-  Plus, CheckCircle2, Navigation, Smartphone, UserCheck, Barcode, FlaskConical, Scale
+  Plus, CheckCircle2, Navigation, Smartphone, UserCheck, Barcode, FlaskConical, Scale, ClipboardCheck
 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 
@@ -115,9 +115,33 @@ export default function SeedBatches() {
 
   const handleConfirmReceipt = async (move: SeedMovement) => {
       if (isSubmitting) return;
+      if (!window.confirm(`¿Confirma la recepción de ${move.quantity} kg de material?\n\nEste material se sumará automáticamente a su inventario disponible.`)) return;
+      
       setIsSubmitting(true);
       try {
-          await updateSeedMovement({ ...move, status: 'Recibido' });
+          // 1. Actualizar el estado del remito
+          const updateSuccess = await updateSeedMovement({ ...move, status: 'Recibido' });
+          
+          if (updateSuccess) {
+              // 2. Obtener el lote original para clonar su info técnica
+              const originalBatch = seedBatches.find(b => b.id === move.batchId);
+              if (originalBatch) {
+                  // 3. Crear el "Lote Local" en el inventario del receptor
+                  const localBatchPayload: SeedBatch = {
+                      ...originalBatch,
+                      id: crypto.randomUUID(),
+                      batchCode: `${originalBatch.batchCode}-REC`,
+                      initialQuantity: move.quantity,
+                      remainingQuantity: move.quantity,
+                      // Buscamos un punto de acopio del cliente destinatario o lo dejamos central
+                      storagePointId: storagePoints.find(sp => sp.clientId === move.clientId)?.id || originalBatch.storagePointId,
+                      notes: `Lote recibido mediante remito ${move.transportGuideNumber || 'S/N'}.`,
+                      createdAt: new Date().toISOString()
+                  };
+                  await addSeedBatch(localBatchPayload);
+                  alert("✅ Material recepcionado e ingresado al inventario local.");
+              }
+          }
       } finally { setIsSubmitting(false); }
   };
 
@@ -175,6 +199,7 @@ export default function SeedBatches() {
         {isAdmin && (
           <div className="flex space-x-2 w-full md:w-auto">
               <button onClick={() => handleOpenDispatch()} className="flex-1 md:flex-none bg-blue-600 text-white px-6 py-3 rounded-2xl flex items-center justify-center hover:bg-blue-700 transition shadow-xl font-black text-xs uppercase tracking-widest"><ArrowUpRight size={18} className="mr-2" /> Despachar</button>
+              {/* Fix: Replace setEditingId with setEditingBatchId as it is the correct state setter */}
               <button onClick={() => { setEditingBatchId(null); setBatchFormData({ varietyId: '', supplierId: '', batchCode: '', initialQuantity: 0, purchaseDate: new Date().toISOString().split('T')[0], pricePerKg: 0, storagePointId: '', isActive: true }); setIsBatchModalOpen(true); }} className="flex-1 md:flex-none bg-hemp-600 text-white px-6 py-3 rounded-2xl flex items-center justify-center hover:bg-hemp-700 transition shadow-xl font-black text-xs uppercase tracking-widest"><Plus size={18} className="mr-2" /> Ingresar Lote</button>
           </div>
         )}
@@ -245,12 +270,12 @@ export default function SeedBatches() {
       ) : (
           <div className="bg-white dark:bg-slate-900 rounded-[32px] shadow-sm border dark:border-slate-800 overflow-hidden overflow-x-auto">
               <table className="min-w-full text-sm text-left">
-                  <thead className="bg-gray-50 dark:bg-slate-950/50 text-gray-500 uppercase text-[10px] font-black tracking-widest border-b dark:border-slate-800">
+                  <thead className="bg-gray-50 dark:bg-slate-950 text-gray-400 uppercase text-[10px] font-black tracking-widest border-b dark:border-slate-800">
                       <tr>
                           <th className="px-8 py-5">Remito / Chofer</th>
                           <th className="px-8 py-5">Destinatario</th>
                           <th className="px-8 py-5 text-center">Cantidad</th>
-                          <th className="px-8 py-5 text-right">Estatus</th>
+                          <th className="px-8 py-5 text-right">Estatus / Acción</th>
                       </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
@@ -269,9 +294,21 @@ export default function SeedBatches() {
                                   </td>
                                   <td className="px-8 py-5 text-center font-black text-hemp-700">{move.quantity} kg</td>
                                   <td className="px-8 py-5 text-right">
-                                      <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase shadow-sm ${move.status === 'Recibido' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700 animate-pulse'}`}>
-                                        {move.status}
-                                      </span>
+                                      <div className="flex items-center justify-end space-x-2">
+                                          <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase shadow-sm ${move.status === 'Recibido' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700 animate-pulse'}`}>
+                                            {move.status}
+                                          </span>
+                                          {move.status !== 'Recibido' && (
+                                              <button 
+                                                onClick={() => handleConfirmReceipt(move)}
+                                                disabled={isSubmitting}
+                                                className="bg-emerald-600 text-white p-2 rounded-xl hover:bg-emerald-700 transition shadow-md disabled:opacity-50"
+                                                title="Confirmar Recepción de Material"
+                                              >
+                                                  <ClipboardCheck size={16}/>
+                                              </button>
+                                          )}
+                                      </div>
                                   </td>
                               </tr>
                           )
@@ -368,7 +405,7 @@ export default function SeedBatches() {
                     <div className="bg-hemp-600 p-3 rounded-2xl text-white shadow-lg"><Archive size={24}/></div>
                     <div>
                         <h2 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tighter italic">Ingresar <span className="text-hemp-600">Lote Industrial</span></h2>
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Trazabilidad desde etiqueta fiscal / proveedor</p>
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Trazabilidad desde etiqueta fiscal / proveedor</p>
                     </div>
                 </div>
                 <button onClick={() => setIsBatchModalOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition text-slate-400"><X size={28}/></button>

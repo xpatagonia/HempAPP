@@ -2,12 +2,12 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
-import { Plot, Variety, Location, Project, TrialRecord } from '../types';
+import { Plot, Variety, Location, Project, TrialRecord, SeedBatch } from '../types';
 import { 
   ChevronRight, FileSpreadsheet, LayoutGrid, List, Tag, FlaskConical, 
   Tractor, Trash2, Edit2, QrCode, X, Save, Search, Filter, 
   MapPin, Calendar, Sprout, Printer, Ruler, Activity, CheckCircle2, AlertCircle, Download, ExternalLink, Plus, Loader2, Info, FolderKanban, Archive, FileUp,
-  Link as LinkIcon
+  Link as LinkIcon, Scale
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import MapEditor from '../components/MapEditor';
@@ -39,7 +39,7 @@ const parseKML = (kmlText: string): { lat: number, lng: number }[] | null => {
 };
 
 export default function Plots() {
-  const { plots, locations, varieties, projects, currentUser, getLatestRecord, seedBatches, deletePlot, updatePlot, addPlot, trialRecords } = useAppContext();
+  const { plots, locations, varieties, projects, currentUser, getLatestRecord, seedBatches, deletePlot, updatePlot, addPlot, updateSeedBatch, trialRecords } = useAppContext();
   
   const [viewMode, setViewMode] = useState<'table' | 'gallery'>('table');
   const [searchTerm, setSearchTerm] = useState('');
@@ -55,7 +55,7 @@ export default function Plots() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form State para Alta
-  const [formData, setFormData] = useState<Partial<Plot> & { lat: string, lng: string }>({
+  const [formData, setFormData] = useState<Partial<Plot> & { lat: string, lng: string, usedSeedKg: number }>({
       name: '',
       type: 'Ensayo',
       locationId: '',
@@ -70,7 +70,8 @@ export default function Plots() {
       observations: '',
       lat: '',
       lng: '',
-      polygon: []
+      polygon: [],
+      usedSeedKg: 0
   });
 
   const isSuperAdmin = currentUser?.role === 'super_admin';
@@ -126,6 +127,15 @@ export default function Plots() {
         return;
     }
 
+    // Validación de stock si se seleccionó un lote
+    if (formData.seedBatchId && formData.usedSeedKg > 0) {
+        const batch = seedBatches.find(b => b.id === formData.seedBatchId);
+        if (batch && batch.remainingQuantity < formData.usedSeedKg) {
+            alert(`Error: El lote seleccionado solo posee ${batch.remainingQuantity} kg disponibles.`);
+            return;
+        }
+    }
+
     setIsSaving(true);
     const finalLat = parseFloat(formData.lat || '0');
     const finalLng = parseFloat(formData.lng || '0');
@@ -142,9 +152,20 @@ export default function Plots() {
     } as Plot;
 
     const success = await addPlot(payload);
+    
     if (success) {
+        // Descontar stock del lote si aplica
+        if (formData.seedBatchId && formData.usedSeedKg > 0) {
+            const batch = seedBatches.find(b => b.id === formData.seedBatchId);
+            if (batch) {
+                await updateSeedBatch({
+                    ...batch,
+                    remainingQuantity: batch.remainingQuantity - formData.usedSeedKg
+                });
+            }
+        }
         setIsAddModalOpen(false);
-        setFormData({ name: '', type: 'Ensayo', locationId: '', projectId: '', varietyId: '', seedBatchId: '', status: 'Activa', sowingDate: new Date().toISOString().split('T')[0], surfaceArea: 0, surfaceUnit: 'ha', density: 0, lat: '', lng: '', polygon: [] });
+        setFormData({ name: '', type: 'Ensayo', locationId: '', projectId: '', varietyId: '', seedBatchId: '', status: 'Activa', sowingDate: new Date().toISOString().split('T')[0], surfaceArea: 0, surfaceUnit: 'ha', density: 0, lat: '', lng: '', polygon: [], usedSeedKg: 0 });
     }
     setIsSaving(false);
   };
@@ -391,7 +412,7 @@ export default function Plots() {
               {/* TERCERA COLUMNA (INFERIOR): GENÉTICA Y DISEÑO */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-4">
                   <div className="bg-purple-50 dark:bg-purple-900/10 p-6 rounded-[32px] border border-purple-100 dark:border-purple-900/30">
-                      <h3 className="text-[10px] font-black text-purple-700 dark:text-purple-400 uppercase tracking-widest mb-6 flex items-center"><FlaskConical size={14} className="mr-2"/> Genética & Trazabilidad</h3>
+                      <h3 className="text-[10px] font-black text-purple-700 dark:text-purple-400 uppercase tracking-widest mb-6 flex items-center"><FlaskConical size={14} className="mr-2"/> Genética & Inventario</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
                               <label className="text-[9px] font-black uppercase text-purple-800 dark:text-purple-300 ml-1 block mb-1">Variedad Genética *</label>
@@ -404,11 +425,26 @@ export default function Plots() {
                               <label className="text-[9px] font-black uppercase text-purple-800 dark:text-purple-300 ml-1 block mb-1">Lote de Semilla</label>
                               <select className={inputClass} value={formData.seedBatchId} onChange={e => setFormData({...formData, seedBatchId: e.target.value})}>
                                   <option value="">-- Autoproducción --</option>
-                                  {seedBatches.filter(b => !formData.varietyId || b.varietyId === formData.varietyId).map(b => (
+                                  {seedBatches.filter(b => (!formData.varietyId || b.varietyId === formData.varietyId) && b.remainingQuantity > 0).map(b => (
                                       <option key={b.id} value={b.id}>{b.batchCode} ({b.remainingQuantity} kg)</option>
                                   ))}
                               </select>
                           </div>
+                          {formData.seedBatchId && (
+                              <div className="md:col-span-2 bg-white/50 dark:bg-slate-900/50 p-4 rounded-2xl border border-dashed dark:border-slate-800 animate-in slide-in-from-top-2">
+                                  <label className="text-[9px] font-black uppercase text-hemp-600 ml-1 block mb-1 flex items-center"><Scale size={10} className="mr-1"/> Semilla a utilizar (kg) *</label>
+                                  <input 
+                                    required 
+                                    type="number" 
+                                    step="0.01" 
+                                    className={`${inputClass} border-hemp-200 text-lg font-black text-hemp-700`}
+                                    value={formData.usedSeedKg} 
+                                    onChange={e => setFormData({...formData, usedSeedKg: Number(e.target.value)})} 
+                                    placeholder="0.00"
+                                  />
+                                  <p className="text-[8px] text-slate-400 mt-2 font-bold uppercase tracking-widest">* Este valor se descontará automáticamente del stock del lote.</p>
+                              </div>
+                          )}
                       </div>
                   </div>
 
