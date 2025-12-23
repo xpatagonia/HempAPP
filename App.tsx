@@ -27,8 +27,8 @@ import Storage from './pages/Storage';
 import LogisticsMap from './pages/LogisticsMap';
 
 // Componente para proteger rutas
-// Fix: Changed children to be required to match usage and avoid TS property missing error
-const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+// Fix: Changed children to be optional to avoid TS property missing error when used in Route element in some React 18 environments
+const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
   const { currentUser } = useAppContext();
   
   if (!currentUser) {

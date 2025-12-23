@@ -27,7 +27,8 @@ const NavItem = ({ to, icon: Icon, label, badge }: any) => {
   );
 };
 
-export default function Layout({ children }: { children: React.ReactNode }) {
+// Fix: Made children optional to avoid "Property 'children' is missing" TS error when used in App.tsx
+export default function Layout({ children }: { children?: React.ReactNode }) {
   const { currentUser, logout, theme, toggleTheme, tasks, appName, appLogo } = useAppContext();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   

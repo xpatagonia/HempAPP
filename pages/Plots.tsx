@@ -73,7 +73,8 @@ export default function Plots() {
       polygon: []
   });
 
-  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
+  const isSuperAdmin = currentUser?.role === 'super_admin';
+  const isAdmin = currentUser?.role === 'admin' || isSuperAdmin;
   const isClient = currentUser?.role === 'client';
 
   const filteredPlots = useMemo(() => plots.filter(p => {
@@ -253,6 +254,7 @@ export default function Plots() {
                         <div className="flex justify-end items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button onClick={() => setQrPlot(p)} className="p-2 text-gray-400 hover:text-blue-600 bg-white dark:bg-slate-800 rounded-xl shadow-sm border dark:border-slate-700 transition"><QrCode size={16}/></button>
                           {isAdmin && <button onClick={() => setEditingPlot(p)} className="p-2 text-gray-400 hover:text-hemp-600 bg-white dark:bg-slate-800 rounded-xl shadow-sm border dark:border-slate-700 transition"><Edit2 size={16}/></button>}
+                          {isSuperAdmin && <button onClick={() => { if(window.confirm("¿Eliminar unidad productiva?")) deletePlot(p.id); }} className="p-2 text-gray-400 hover:text-red-600 bg-white dark:bg-slate-800 rounded-xl shadow-sm border dark:border-slate-700 transition"><Trash2 size={16} /></button>}
                           <Link to={`/plots/${p.id}`} className="p-2 text-hemp-600 bg-white dark:bg-slate-800 rounded-xl shadow-sm border dark:border-slate-700 transition"><ChevronRight size={18} /></Link>
                         </div>
                       </td>
@@ -285,6 +287,7 @@ export default function Plots() {
                           <div className="flex space-x-2">
                              <button onClick={() => setQrPlot(p)} className="p-2 bg-gray-100 dark:bg-slate-800 rounded-xl text-gray-500 hover:text-blue-600 transition"><QrCode size={16}/></button>
                              {isAdmin && <button onClick={() => setEditingPlot(p)} className="p-2 bg-gray-100 dark:bg-slate-800 rounded-xl text-gray-500 hover:text-hemp-600 transition"><Edit2 size={16}/></button>}
+                             {isSuperAdmin && <button onClick={() => { if(window.confirm("¿Eliminar unidad productiva?")) deletePlot(p.id); }} className="p-2 bg-gray-100 dark:bg-slate-800 rounded-xl text-gray-500 hover:text-red-600 transition"><Trash2 size={16}/></button>}
                           </div>
                           <Link to={`/plots/${p.id}`} className="bg-slate-900 dark:bg-hemp-600 text-white px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-lg">Entrar Bitácora</Link>
                       </div>

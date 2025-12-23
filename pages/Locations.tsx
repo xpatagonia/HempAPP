@@ -82,7 +82,8 @@ export default function Locations() {
     polygon: []
   });
 
-  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
+  const isSuperAdmin = currentUser?.role === 'super_admin';
+  const isAdmin = currentUser?.role === 'admin' || isSuperAdmin;
   const isClient = currentUser?.role === 'client';
   const canManage = isAdmin || isClient;
 
@@ -227,8 +228,8 @@ export default function Locations() {
                     <WeatherWidget lat={loc.coordinates?.lat || 0} lng={loc.coordinates?.lng || 0} compact={true}/>
                 </div>
                 <div className="absolute bottom-4 right-4 flex space-x-1">
-                    <button onClick={() => handleEdit(loc)} className="p-2.5 bg-white dark:bg-slate-800 rounded-xl text-gray-500 hover:text-hemp-600 shadow-lg border dark:border-slate-700 transition"><Edit2 size={16} /></button>
-                    <button onClick={() => { if(window.confirm("¿Eliminar sitio?")) deleteLocation(loc.id); }} className="p-2.5 bg-white dark:bg-slate-800 text-gray-500 hover:text-red-600 shadow-lg border dark:border-slate-700 transition"><Trash2 size={16} /></button>
+                    {isAdmin && <button onClick={() => handleEdit(loc)} className="p-2.5 bg-white dark:bg-slate-800 rounded-xl text-gray-500 hover:text-hemp-600 shadow-lg border dark:border-slate-700 transition"><Edit2 size={16} /></button>}
+                    {isSuperAdmin && <button onClick={() => { if(window.confirm("¿Eliminar sitio?")) deleteLocation(loc.id); }} className="p-2.5 bg-white dark:bg-slate-800 text-gray-500 hover:text-red-600 shadow-lg border dark:border-slate-700 transition"><Trash2 size={16} /></button>}
                 </div>
             </div>
             
