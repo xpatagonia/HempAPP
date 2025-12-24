@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Sprout, Menu, Leaf, LogOut, 
   UserCircle, Calendar, Sun, Moon, 
   Tractor, BookOpen, Bot, Settings, 
-  FolderKanban, CheckSquare, BarChart3, Users, Warehouse, Package, X, Bell, Globe, Building, ShieldAlert
+  FolderKanban, CheckSquare, BarChart3, Users, Warehouse, Package, X, Bell, Globe, Building, ShieldAlert, FileText, BrainCircuit
 } from 'lucide-react';
 
 const NavItem = ({ to, icon: Icon, label, badge }: any) => {
@@ -55,6 +55,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
 
         <nav className="flex-1 px-4 py-8 space-y-1 overflow-y-auto custom-scrollbar">
           <NavItem to="/" icon={LayoutDashboard} label="Dashboard" />
+          <NavItem to="/intelligence" icon={BrainCircuit} label="Inteligencia Agrónoma" />
           <NavItem to="/advisor" icon={Bot} label="AI Terminal" />
           
           <div className="pt-8 pb-3 px-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Manejo Técnico</div>
@@ -82,7 +83,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
           )}
 
           <div className="pt-8 pb-3 px-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Sistema</div>
-          <NavItem to="/analytics" icon={BarChart3} label="Analítica Avanzada" />
+          <NavItem to="/analytics" icon={BarChart3} label="Comparativa Genética" />
           <NavItem to="/integrity" icon={ShieldAlert} label="Integridad Datos" />
           {!isClient && <NavItem to="/users" icon={Users} label="Equipo" />}
           {currentUser.role === 'super_admin' && <NavItem to="/settings" icon={Settings} label="Admin Server" />}

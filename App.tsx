@@ -25,6 +25,7 @@ import Resources from './pages/Resources';
 import Storage from './pages/Storage'; 
 import LogisticsMap from './pages/LogisticsMap';
 import IntegrityCheck from './pages/IntegrityCheck';
+import AgronomicIntelligence from './pages/AgronomicIntelligence';
 
 const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
   const { currentUser } = useAppContext();
@@ -66,6 +67,11 @@ export default function App() {
             <Route path="/tools" element={
               <ProtectedRoute>
                 <Tools />
+              </ProtectedRoute>
+            } />
+            <Route path="/intelligence" element={
+              <ProtectedRoute>
+                <AgronomicIntelligence />
               </ProtectedRoute>
             } />
             <Route path="/analytics" element={
