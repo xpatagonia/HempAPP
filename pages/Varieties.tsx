@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Variety, UsageType } from '../types';
@@ -8,12 +9,90 @@ import {
 import { useNavigate } from 'react-router-dom';
 
 const HEMPIT_CATALOG = [
-    { name: 'Fedora 17', usage: 'Fibra' as UsageType, cycleDays: 135, expectedThc: 0.12, knowledgeBase: 'Variedad monoica precoz. Excelente para fibra y grano. Sensible a la humedad excesiva en maduración.' },
-    { name: 'Felina 32', usage: 'Dual' as UsageType, cycleDays: 140, expectedThc: 0.15, knowledgeBase: 'Variedad monoica. Muy equilibrada. Altamente valorada por la calidad de su fibra textil.' },
-    { name: 'Ferimon', usage: 'Grano' as UsageType, cycleDays: 130, expectedThc: 0.10, knowledgeBase: 'Especializada en producción de semilla. Porte medio, fácil cosecha mecánica.' },
-    { name: 'Futura 75', usage: 'Fibra' as UsageType, cycleDays: 155, expectedThc: 0.18, knowledgeBase: 'Variedad de ciclo tardío. Máximo potencial de biomasa y fibra técnica. Requiere suelos profundos.' },
-    { name: 'Santhica 27', usage: 'Fibra' as UsageType, cycleDays: 145, expectedThc: 0.05, knowledgeBase: 'Variedad libre de THC (solo CBG). Ideal para aplicaciones industriales sin restricciones psicoactivas.' },
-    { name: 'Fedrina 74', usage: 'Fibra' as UsageType, cycleDays: 150, expectedThc: 0.15, knowledgeBase: 'Alta densidad foliar. Excelente supresora de malezas.' }
+    { 
+      name: 'Fedora 17', 
+      usage: 'Dual' as UsageType, 
+      cycleDays: 135, 
+      expectedThc: 0.12, 
+      knowledgeBase: 'Variedad monoica muy versátil y precoz. Excelente equilibrio entre producción de semilla y fibra de alta calidad. Muy adaptada a latitudes medias y septentrionales.' 
+    },
+    { 
+      name: 'Felina 32', 
+      usage: 'Fibra' as UsageType, 
+      cycleDays: 140, 
+      expectedThc: 0.15, 
+      knowledgeBase: 'Variedad monoica de referencia en Europa. Destaca por la finura y tenacidad de su fibra textil. Muy estable fenotípicamente y resistente al encamado.' 
+    },
+    { 
+      name: 'Ferimon', 
+      usage: 'Grano' as UsageType, 
+      cycleDays: 130, 
+      expectedThc: 0.10, 
+      knowledgeBase: 'Especializada en producción de grano para alimentación. Porte medio-bajo que facilita la cosecha mecanizada directa con cosechadora de cereales.' 
+    },
+    { 
+      name: 'Futura 75', 
+      usage: 'Fibra' as UsageType, 
+      cycleDays: 155, 
+      expectedThc: 0.18, 
+      knowledgeBase: 'Variedad monoica de ciclo tardío. Máximo potencial de biomasa y producción de paja/fibra técnica. Requiere suelos profundos y buena disponibilidad hídrica para expresar su altura (>3.5m).' 
+    },
+    { 
+      name: 'Santhica 27', 
+      usage: 'Fibra' as UsageType, 
+      cycleDays: 145, 
+      expectedThc: 0.01, 
+      knowledgeBase: 'Variedad monoica única: selección libre de THC. Orientada a la producción de CBG y fibra de alta calidad. Ideal para mercados con regulaciones de THC extremadamente estrictas.' 
+    },
+    { 
+      name: 'Muka 76', 
+      usage: 'Fibra' as UsageType, 
+      cycleDays: 160, 
+      expectedThc: 0.12, 
+      knowledgeBase: 'Fenotipo de gran altura y riqueza en fibra excepcional (Fibre-Oriented). Ciclo muy largo, maximiza el rendimiento de paja seca por hectárea.' 
+    },
+    { 
+      name: 'Nashinoïde 15', 
+      usage: 'Fibra' as UsageType, 
+      cycleDays: 140, 
+      expectedThc: 0.10, 
+      knowledgeBase: 'Variedad seleccionada por su alta riqueza en fibra y facilidad de desfibrado industrial. Monoica, ciclo medio.' 
+    },
+    { 
+      name: 'Ostara 9', 
+      usage: 'Grano' as UsageType, 
+      cycleDays: 125, 
+      expectedThc: 0.08, 
+      knowledgeBase: 'Línea específica para Food & Cosmetic. Grano con perfil lipídico óptimo y alta tasa de germinación para brotes.' 
+    },
+    { 
+      name: 'Mona 16', 
+      usage: 'Dual' as UsageType, 
+      cycleDays: 135, 
+      expectedThc: 0.10, 
+      knowledgeBase: 'Variedad monoica equilibrada para usos alimentarios y cosméticos. Buena resistencia a enfermedades fúngicas en la semilla.' 
+    },
+    { 
+      name: 'Djumbo 20', 
+      usage: 'Medicinal' as UsageType, 
+      cycleDays: 150, 
+      expectedThc: 0.18, 
+      knowledgeBase: 'Variedad Dioica (Plantas Macho y Hembra separadas). Orientada a Food & Cosmetic con potencial interesante en biomasa floral.' 
+    },
+    { 
+      name: 'Futura 83', 
+      usage: 'Fibra' as UsageType, 
+      cycleDays: 158, 
+      expectedThc: 0.15, 
+      knowledgeBase: 'Especializada en producción de "Shive" (cañamiza/madera). Estructura de tallo muy robusta con alto contenido de celulosa para aplicaciones en construcción.' 
+    },
+    { 
+      name: 'Earlina 08', 
+      usage: 'Grano' as UsageType, 
+      cycleDays: 120, 
+      expectedThc: 0.05, 
+      knowledgeBase: 'La más precoz del catálogo. Ideal para siembras tardías o zonas con veranos muy cortos. Cosecha de grano garantizada antes de las lluvias otoñales.' 
+    }
 ];
 
 export default function Varieties() {
@@ -58,7 +137,7 @@ export default function Varieties() {
         if (success) {
             closeModal();
         } else {
-            alert("⚠️ Error: No se pudo grabar en el servidor. Verifique si ejecutó el Script SQL en Configuración.");
+            alert("⚠️ Error: No se pudo grabar en el servidor.");
         }
     } catch (err) {
         alert("Fallo de conexión con el servidor de datos.");
@@ -83,7 +162,7 @@ export default function Varieties() {
                     ...v,
                     id: crypto.randomUUID(),
                     supplierId: selectedSupplierForImport,
-                    notes: 'Importado de catálogo oficial HempIT France.'
+                    notes: 'Importado de catálogo oficial HempIT France 2024.'
                 } as Variety);
                 if (success) count++;
             }
@@ -130,7 +209,7 @@ export default function Varieties() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>
             <h1 className="text-3xl font-black text-gray-800 dark:text-white uppercase tracking-tighter italic">Genética <span className="text-hemp-600">& Biodiversidad</span></h1>
-            <p className="text-sm text-gray-500">Gestión de variedades autorizadas y protocolos de manejo.</p>
+            <p className="text-sm text-gray-500">Gestión de variedades autorizadas y protocolos de manejo técnico.</p>
         </div>
         
         {isAdmin && (
@@ -198,7 +277,7 @@ export default function Varieties() {
                 {v.knowledgeBase && (
                     <div className="bg-blue-50/50 dark:bg-blue-900/10 p-4 rounded-2xl border border-blue-100 dark:border-blue-900/20 mb-4 flex-1">
                         <h4 className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest flex items-center mb-2">
-                            <BookOpen size={12} className="mr-1.5"/> Manejo Técnico
+                            <BookOpen size={12} className="mr-1.5"/> Ficha de Inteligencia
                         </h4>
                         <p className="text-[11px] text-blue-800 dark:text-blue-200 leading-relaxed font-medium italic">
                             {v.knowledgeBase}
@@ -211,7 +290,6 @@ export default function Varieties() {
                         onClick={() => navigate(`/seed-batches?variety=${v.name}`)}
                         className="w-full bg-slate-900 dark:bg-hemp-600 text-white py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center hover:scale-[1.02] transition-all shadow-md group"
                     >
-                        {/* Fixed: Added Archive to lucide-react imports */}
                         <Archive size={14} className="mr-2 text-hemp-400 group-hover:scale-110 transition-transform" />
                         Ver Inventario Lotes
                     </button>
@@ -250,7 +328,7 @@ export default function Varieties() {
                                   <option key={s.id} value={s.id}>{s.name} ({s.country})</option>
                               ))}
                           </select>
-                          <p className="text-[9px] text-slate-400 mt-3 italic">* Se cargarán Fedora 17, Felina 32, Futura 75, Santhica y Ferimon automáticamente.</p>
+                          <p className="text-[9px] text-slate-400 mt-3 italic">* Se cargarán Fedora 17, Felina 32, Futura 75/83, Santhica, Muka y más con sus fichas técnicas.</p>
                       </div>
                       
                       <button 
@@ -259,7 +337,7 @@ export default function Varieties() {
                         className="w-full bg-blue-600 text-white py-4 rounded-3xl font-black text-xs uppercase tracking-[0.2em] shadow-xl hover:scale-[1.02] transition-all disabled:opacity-30 flex items-center justify-center"
                       >
                           {isSaving ? <Loader2 className="animate-spin mr-2"/> : null}
-                          Confirmar Importación
+                          Confirmar Importación Catálogo
                       </button>
                   </div>
               </div>
