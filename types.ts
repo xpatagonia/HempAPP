@@ -221,6 +221,7 @@ export interface TrialRecord {
   pests?: string;
   createdBy?: string;
   createdByName?: string;
+  lightHours?: number;
 }
 
 export interface FieldLog {

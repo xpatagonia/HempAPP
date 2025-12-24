@@ -4,10 +4,14 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { TrialRecord, Plot, FieldLog, HydricRecord, SeedBatch } from '../types';
 import { 
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area
+} from 'recharts';
+import { 
   ArrowLeft, Activity, MapPin, Plus, Eye, Tag, Clock, 
   Sprout, X, Map, ShieldCheck, Info, AlertCircle, Trash2, Edit2,
   Camera, Image as ImageIcon, MessageSquare, ClipboardList, User, Calendar, Ruler, Maximize2, Download, Scale, Wind, Bird, CheckCircle2,
-  RefreshCw, Globe, Layers, Save, Thermometer, Droplets, Waves, QrCode, Printer, Loader2, Zap, Sparkles, Link as LinkIcon
+  RefreshCw, Globe, Layers, Save, Thermometer, Droplets, Waves, QrCode, Printer, Loader2, Zap, Sparkles, Link as LinkIcon, Sun,
+  TrendingUp, ArrowUpRight, Beaker
 } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
 import WeatherWidget from '../components/WeatherWidget';
@@ -75,12 +79,53 @@ export default function PlotDetails() {
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [autoRain, setAutoRain] = useState(0);
+  const [isFetchingWeather, setIsFetchingWeather] = useState(false);
 
   // --- PERMISOS ---
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
   const isOwner = currentUser?.role === 'client' && location?.clientId === currentUser?.clientId;
   const isAssignedTech = currentUser?.role === 'technician' && plot?.responsibleIds?.includes(currentUser.id);
   const canEdit = isAdmin || isOwner || isAssignedTech;
+
+  // --- MÉTRICAS AGRONÓMICAS AVANZADAS ---
+  const agronomyStats = useMemo(() => {
+      if (history.length === 0) return { avgGrowth: 0, totalGdd: 0, currentPhase: 'Emergencia' };
+      
+      // GDD Simplificado (Base 10°C para cáñamo)
+      const TBASE = 10;
+      let totalGdd = 0;
+      history.forEach(r => {
+          if (r.temperature && r.temperature > TBASE) {
+              totalGdd += (r.temperature - TBASE);
+          }
+      });
+
+      // Velocidad de crecimiento último tramo
+      let lastGrowth = 0;
+      if (history.length >= 2) {
+          const newest = history[0];
+          const previous = history[1];
+          const diffCm = (newest.plantHeight || 0) - (previous.plantHeight || 0);
+          const diffDays = Math.max(1, (new Date(newest.date).getTime() - new Date(previous.date).getTime()) / 86400000);
+          lastGrowth = diffCm / diffDays;
+      }
+
+      let phase = 'Vegetativo';
+      if (lastGrowth > 3) phase = 'Stretch (Rápido)';
+      else if (history[0].stage === 'Floración') phase = 'Floración';
+      else if (lastGrowth < 0.5 && history.length > 3) phase = 'Maduración';
+
+      return { avgGrowth: lastGrowth.toFixed(2), totalGdd: Math.round(totalGdd), currentPhase: phase };
+  }, [history]);
+
+  const chartData = useMemo(() => {
+      return [...history].reverse().map(r => ({
+          fecha: r.date,
+          altura: r.plantHeight || 0,
+          temp: r.temperature || 0,
+          hum: r.humidity || 0
+      }));
+  }, [history]);
 
   // --- HUELLA HÍDRICA LOGIC ---
   useEffect(() => {
@@ -117,11 +162,36 @@ export default function PlotDetails() {
   // Form States
   const [recordForm, setRecordForm] = useState<Partial<TrialRecord>>({ 
     date: new Date().toISOString().split('T')[0], time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }), 
-    stage: 'Vegetativo' as any, temperature: 0, humidity: 0, plantHeight: 0, plantsPerMeter: 0, replicate: 1, uniformity: 100, vigor: 100, lodging: 0, birdDamage: 0, yield: 0, stemWeight: 0, leafWeight: 0, freshWeight: 0
+    stage: 'Vegetativo' as any, temperature: 0, humidity: 0, plantHeight: 0, plantsPerMeter: 0, replicate: 1, uniformity: 100, vigor: 100, lodging: 0, birdDamage: 0, yield: 0, stemWeight: 0, leafWeight: 0, freshWeight: 0, lightHours: 18
   });
 
   const [logForm, setLogForm] = useState<Partial<FieldLog>>({ note: '', date: new Date().toISOString().split('T')[0], time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }), photoUrl: '' });
   const [selectedBatchId, setSelectedBatchId] = useState(plot?.seedBatchId || '');
+
+  // --- AUTOMATIC WEATHER FETCH ---
+  const fetchCurrentWeather = async () => {
+    if (!location?.coordinates) {
+        alert("El campo no posee coordenadas configuradas.");
+        return;
+    }
+    setIsFetchingWeather(true);
+    try {
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${location.coordinates.lat}&longitude=${location.coordinates.lng}&current=temperature_2m,relative_humidity_2m&timezone=auto`;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data.current) {
+            setRecordForm(prev => ({ 
+                ...prev, 
+                temperature: Math.round(data.current.temperature_2m), 
+                humidity: Math.round(data.current.relative_humidity_2m) 
+            }));
+        }
+    } catch (e) {
+        alert("Fallo al conectar con el servidor meteorológico.");
+    } finally {
+        setIsFetchingWeather(false);
+    }
+  };
 
   if (!plot) return <div className="p-10 text-center">Parcela no encontrada.</div>;
 
@@ -130,7 +200,19 @@ export default function PlotDetails() {
       setIsSaving(true);
       const payload: any = { 
         ...recordForm, plotId: plot.id, createdBy: currentUser?.id, createdByName: currentUser?.name,
-        temperature: Number(recordForm.temperature || 0), humidity: Number(recordForm.humidity || 0), plantHeight: Number(recordForm.plantHeight || 0), plantsPerMeter: Number(recordForm.plantsPerMeter || 0), uniformity: Number(recordForm.uniformity || 100), vigor: Number(recordForm.vigor || 100), lodging: Number(recordForm.lodging || 0), birdDamage: Number(recordForm.birdDamage || 0), yield: Number(recordForm.yield || 0), stemWeight: Number(recordForm.stemWeight || 0), leafWeight: Number(recordForm.leafWeight || 0), freshWeight: Number(recordForm.freshWeight || 0),
+        temperature: Number(recordForm.temperature || 0), 
+        humidity: Number(recordForm.humidity || 0), 
+        plantHeight: Number(recordForm.plantHeight || 0), 
+        plantsPerMeter: Number(recordForm.plantsPerMeter || 0), 
+        uniformity: Number(recordForm.uniformity || 100), 
+        vigor: Number(recordForm.vigor || 100), 
+        lodging: Number(recordForm.lodging || 0), 
+        birdDamage: Number(recordForm.birdDamage || 0), 
+        yield: Number(recordForm.yield || 0), 
+        stemWeight: Number(recordForm.stemWeight || 0), 
+        leafWeight: Number(recordForm.leafWeight || 0), 
+        freshWeight: Number(recordForm.freshWeight || 0),
+        lightHours: Number(recordForm.lightHours || 0)
       };
       try {
           let success = false;
@@ -213,8 +295,8 @@ export default function PlotDetails() {
           <CycleGraph sowingDate={plot.sowingDate} cycleDays={variety?.cycleDays || 120} />
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
               <KPI label="Huella Hídrica" value={waterMetrics.footprint > 0 ? `${waterMetrics.footprint} L/kg` : 'CALCULANDO'} icon={Waves} color="bg-blue-100" subtext={`${waterMetrics.totalMm.toFixed(1)} mm acumulados`} />
-              <KPI label="Superficie" value={`${plot.surfaceArea} ${plot.surfaceUnit}`} icon={Map} color="bg-purple-100" />
-              <KPI label="Densidad" value={plot.density} subtext="pl/m²" icon={Sprout} color="bg-emerald-100" />
+              <KPI label="Acumulación Térmica" value={`${agronomyStats.totalGdd} GDD`} icon={Thermometer} color="bg-orange-100" subtext="Grados Día Base 10°C" />
+              <KPI label="Crecimiento Act." value={`${agronomyStats.avgGrowth} cm/d`} icon={TrendingUp} color="bg-emerald-100" subtext={`Fase: ${agronomyStats.currentPhase}`} />
               <KPI label="Días Ciclo" value={Math.floor((Date.now() - new Date(plot.sowingDate).getTime()) / 86400000)} icon={Clock} color="bg-blue-100" />
           </div>
       </div>
@@ -258,6 +340,44 @@ export default function PlotDetails() {
           </div>
 
           <div className="lg:col-span-2 space-y-8">
+              {/* GRÁFICO DE CRECIMIENTO */}
+              <div className="bg-white dark:bg-slate-900 p-8 rounded-[40px] border dark:border-slate-800 shadow-sm">
+                  <div className="flex justify-between items-center mb-8">
+                      <div>
+                          <h3 className="text-xs font-black uppercase tracking-[0.2em] dark:text-white flex items-center"><Activity size={18} className="mr-2 text-hemp-600"/> Curva de Evolución Agronómica</h3>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Altura (cm) vs Variables Ambientales</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-hemp-500"></div><span className="text-[9px] font-black text-slate-400 uppercase">Altura</span></div>
+                          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-orange-400"></div><span className="text-[9px] font-black text-slate-400 uppercase">Temp</span></div>
+                      </div>
+                  </div>
+                  <div className="h-64 w-full">
+                      {chartData.length > 0 ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={chartData}>
+                                <defs>
+                                    <linearGradient id="colorHeight" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#16a34a" stopOpacity={0.3}/>
+                                        <stop offset="95%" stopColor="#16a34a" stopOpacity={0}/>
+                                    </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                <XAxis dataKey="fecha" axisLine={false} tickLine={false} tick={{fontSize: 9, fill: '#94a3b8', fontWeight: 'bold'}} />
+                                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fill: '#94a3b8'}} />
+                                <Tooltip 
+                                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '10px', fontWeight: 'bold' }}
+                                />
+                                <Area type="monotone" dataKey="altura" stroke="#16a34a" fillOpacity={1} fill="url(#colorHeight)" strokeWidth={3} />
+                                <Line type="monotone" dataKey="temp" stroke="#fb923c" strokeWidth={2} dot={{ r: 3 }} />
+                            </AreaChart>
+                        </ResponsiveContainer>
+                      ) : (
+                          <div className="h-full flex items-center justify-center text-slate-300 font-black uppercase text-[10px] tracking-widest bg-gray-50 dark:bg-slate-950 rounded-3xl border border-dashed dark:border-slate-800">Esperando datos de monitoreo...</div>
+                      )}
+                  </div>
+              </div>
+
               <div className="flex bg-white dark:bg-slate-900 p-2 rounded-3xl border dark:border-slate-800 shadow-sm w-fit overflow-x-auto">
                   <button onClick={() => setActiveTab('records')} className={`px-8 py-3 font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl transition-all whitespace-nowrap ${activeTab === 'records' ? 'bg-hemp-600 text-white shadow-xl' : 'text-gray-400 hover:text-gray-600'}`}>Monitoreo Fenológico</button>
                   <button onClick={() => setActiveTab('water')} className={`px-8 py-3 font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl transition-all whitespace-nowrap ${activeTab === 'water' ? 'bg-blue-600 text-white shadow-xl' : 'text-gray-400 hover:text-gray-600'}`}>Pluviómetro & Huella</button>
@@ -266,11 +386,46 @@ export default function PlotDetails() {
 
               {activeTab === 'records' && (
                 <div className="bg-white dark:bg-slate-900 rounded-[40px] shadow-sm border dark:border-slate-800 overflow-hidden animate-in fade-in">
-                    <div className="px-10 py-6 border-b dark:border-slate-800 flex justify-between items-center bg-gray-50/50 dark:bg-slate-950/50"><h2 className="font-black text-gray-900 dark:text-white uppercase text-[10px] tracking-[0.3em] flex items-center"><Activity size={18} className="mr-3 text-hemp-600"/> Historial de Medición</h2>{canEdit && <button onClick={() => { setIsRecordModalOpen(true); setIsViewMode(false); setEditingRecordId(null); setRecordForm({ date: new Date().toISOString().split('T')[0], time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }), stage: 'Vegetativo' }); }} className="bg-hemp-600 text-white px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl hover:bg-hemp-700 transition">Nuevo Registro</button>}</div>
+                    <div className="px-10 py-6 border-b dark:border-slate-800 flex justify-between items-center bg-gray-50/50 dark:bg-slate-950/50">
+                        <h2 className="font-black text-gray-900 dark:text-white uppercase text-[10px] tracking-[0.3em] flex items-center"><Activity size={18} className="mr-3 text-hemp-600"/> Historial de Medición</h2>
+                        {canEdit && <button onClick={() => { setIsRecordModalOpen(true); setIsViewMode(false); setEditingRecordId(null); setRecordForm({ date: new Date().toISOString().split('T')[0], time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }), stage: 'Vegetativo', lightHours: 18 }); }} className="bg-hemp-600 text-white px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl hover:bg-hemp-700 transition">Nuevo Registro</button>}
+                    </div>
                     <div className="overflow-x-auto">
                         <table className="min-w-full text-sm text-left">
-                            <thead className="bg-gray-50/50 dark:bg-slate-950/50 text-gray-400 uppercase text-[9px] font-black tracking-widest"><tr><th className="px-10 py-5">Fecha/Hora</th><th className="px-10 py-5">Etapa</th><th className="px-10 py-5 text-center">Altura</th><th className="px-10 py-5 text-right">Detalle</th></tr></thead>
-                            <tbody className="divide-y divide-gray-100 dark:divide-slate-800 font-bold uppercase text-[11px]">{history.length === 0 ? ( <tr><td colSpan={5} className="p-12 text-center text-gray-300 italic font-medium">No hay monitoreos registrados.</td></tr> ) : history.map(r => ( <tr key={r.id} className="hover:bg-gray-50 dark:hover:bg-slate-800 cursor-pointer group" onClick={() => { setEditingRecordId(r.id); setRecordForm(r); setIsViewMode(true); setIsRecordModalOpen(true); }}><td className="px-10 py-6 font-black text-gray-800 dark:text-white tracking-tighter">{r.date} <span className="block text-[9px] text-slate-400 font-bold tracking-widest">{r.time || '--:--'} hs</span></td><td className="px-10 py-6"><span className="px-3 py-1 rounded-lg text-[9px] font-black uppercase border bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-100 dark:border-green-900/30">{r.stage}</span></td><td className="px-10 py-6 font-black text-gray-900 dark:text-white text-center">{r.plantHeight ? `${r.plantHeight} cm` : '-'}</td><td className="px-10 py-6 text-right"><Eye size={18} className="text-gray-300 group-hover:text-hemp-600 ml-auto transition"/></td></tr> ))}</tbody>
+                            <thead className="bg-gray-50/50 dark:bg-slate-950/50 text-gray-400 uppercase text-[9px] font-black tracking-widest"><tr><th className="px-10 py-5">Fecha/Hora</th><th className="px-10 py-5">Fase/Etapa</th><th className="px-10 py-5 text-center">Altura (Crecimiento)</th><th className="px-10 py-5 text-center">Clima / Luz</th><th className="px-10 py-5 text-right">Detalle</th></tr></thead>
+                            <tbody className="divide-y divide-gray-100 dark:divide-slate-800 font-bold uppercase text-[11px]">{history.length === 0 ? ( <tr><td colSpan={5} className="p-12 text-center text-gray-300 italic font-medium">No hay monitoreos registrados.</td></tr> ) : history.map((r, idx) => {
+                                // Cálculo de tasa de crecimiento
+                                let growthRate = 0;
+                                const nextRecord = history[idx + 1];
+                                if (nextRecord && r.plantHeight && nextRecord.plantHeight) {
+                                    const diffCm = r.plantHeight - nextRecord.plantHeight;
+                                    const diffDays = Math.max(1, (new Date(r.date).getTime() - new Date(nextRecord.date).getTime()) / 86400000);
+                                    growthRate = Number((diffCm / diffDays).toFixed(2));
+                                }
+
+                                return (
+                                    <tr key={r.id} className="hover:bg-gray-50 dark:hover:bg-slate-800 cursor-pointer group" onClick={() => { setEditingRecordId(r.id); setRecordForm(r); setIsViewMode(true); setIsRecordModalOpen(true); }}>
+                                        <td className="px-10 py-6 font-black text-gray-800 dark:text-white tracking-tighter">{r.date} <span className="block text-[9px] text-slate-400 font-bold tracking-widest">{r.time || '--:--'} hs</span></td>
+                                        <td className="px-10 py-6">
+                                            <div className="flex flex-col gap-1">
+                                                <span className="px-3 py-1 rounded-lg text-[9px] font-black uppercase border bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-100 dark:border-green-900/30 w-fit">{r.stage}</span>
+                                                {growthRate > 3 && <span className="text-[8px] text-purple-600 font-black uppercase animate-pulse">🔥 Fase Stretch</span>}
+                                            </div>
+                                        </td>
+                                        <td className="px-10 py-6 text-center">
+                                            <div className="font-black text-gray-900 dark:text-white">{r.plantHeight ? `${r.plantHeight} cm` : '-'}</div>
+                                            {growthRate > 0 && <div className="text-[9px] text-emerald-600 font-black flex items-center justify-center mt-1"><TrendingUp size={10} className="mr-1"/> +{growthRate} cm/día</div>}
+                                        </td>
+                                        <td className="px-10 py-6 text-center">
+                                            <div className="flex items-center justify-center space-x-3 text-[10px] text-slate-500 font-black uppercase">
+                                                <span className="flex items-center text-orange-500"><Thermometer size={10} className="mr-1"/>{r.temperature}°</span>
+                                                <span className="flex items-center text-amber-500"><Sun size={10} className="mr-1"/>{r.lightHours}h</span>
+                                            </div>
+                                        </td>
+                                        <td className="px-10 py-6 text-right"><Eye size={18} className="text-gray-300 group-hover:text-hemp-600 ml-auto transition"/></td>
+                                    </tr>
+                                );
+                            })}</tbody>
                         </table>
                     </div>
                 </div>
@@ -299,38 +454,10 @@ export default function PlotDetails() {
           </div>
       </div>
 
-      {/* MODAL EDITAR LOTE MAESTRO */}
-      {isBatchModalOpen && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] flex items-center justify-center p-4">
-              <div className="bg-white dark:bg-slate-900 rounded-[40px] shadow-2xl w-full max-w-md p-10 animate-in zoom-in-95 border border-white/10">
-                  <div className="flex justify-between items-center mb-8">
-                      <h2 className="text-2xl font-black dark:text-white uppercase italic tracking-tighter">Vincular <span className="text-hemp-600">Lote Maestro</span></h2>
-                      <button onClick={() => setIsBatchModalOpen(false)} className="p-1 text-slate-400 hover:bg-slate-100 rounded-full"><X size={28}/></button>
-                  </div>
-                  <div className="space-y-6">
-                      <div className="bg-gray-50 dark:bg-slate-950 p-6 rounded-3xl border dark:border-slate-800">
-                          <label className={labelClass}>Lote de Semilla Certificado</label>
-                          <select className={inputStyle} value={selectedBatchId} onChange={e => setSelectedBatchId(e.target.value)}>
-                              <option value="">-- Autoproducción / Sin lote --</option>
-                              {seedBatches.filter(b => b.varietyId === plot.varietyId).map(b => (
-                                  <option key={b.id} value={b.id}>{b.batchCode} ({b.remainingQuantity} kg disp.)</option>
-                              ))}
-                          </select>
-                          <p className="text-[9px] text-slate-400 mt-3 italic font-bold uppercase tracking-widest">* Solo se muestran lotes de variedad {variety?.name}</p>
-                      </div>
-                      <button onClick={handleUpdateBatchLink} disabled={isSaving} className="w-full bg-hemp-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl flex items-center justify-center hover:scale-[1.02] transition-all">
-                          {isSaving ? <Loader2 className="animate-spin mr-2"/> : <LinkIcon className="mr-2" size={16}/>}
-                          Actualizar Trazabilidad
-                      </button>
-                  </div>
-              </div>
-          </div>
-      )}
-
       {/* MODAL RECORD (TECHNICAL MONITORING) */}
       {isRecordModalOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-4xl w-full p-10 shadow-2xl max-h-[95vh] overflow-y-auto animate-in zoom-in-95">
+          <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-4xl w-full p-10 shadow-2xl max-h-[95vh] overflow-y-auto animate-in zoom-in-95 border border-white/10">
             <div className="flex justify-between items-center mb-8">
                 <div className="flex items-center gap-4">
                     <div className="bg-hemp-600 p-3 rounded-2xl text-white shadow-lg"><Activity size={24}/></div>
@@ -351,14 +478,38 @@ export default function PlotDetails() {
                             <option value="Maduración">Llenado / Maduración</option>
                             <option value="Cosecha">Cosecha / Final</option>
                         </select>
+
+                        <div className="pt-4 border-t dark:border-slate-800">
+                             <label className={labelClass}>Fotoperiodo (Luz)</label>
+                             <div className="flex gap-2">
+                                <input type="number" step="0.5" disabled={isViewMode} className={`${inputStyle} text-center text-xl`} value={recordForm.lightHours} onChange={e => setRecordForm({...recordForm, lightHours: Number(e.target.value)})} />
+                                <div className="bg-amber-50 dark:bg-amber-900/20 p-2.5 rounded-xl border border-amber-100 dark:border-amber-800 text-amber-600 flex items-center justify-center font-black text-xs">HORAS</div>
+                             </div>
+                        </div>
                     </div>
-                    <div className="md:col-span-2 grid grid-cols-2 sm:grid-cols-3 gap-4 bg-slate-50 dark:bg-slate-950 p-6 rounded-3xl border dark:border-slate-800">
-                        <div><label className={labelClass}>Altura (cm)</label><input type="number" step="0.1" disabled={isViewMode} className={inputStyle} value={recordForm.plantHeight} onChange={e => setRecordForm({...recordForm, plantHeight: Number(e.target.value)})} /></div>
-                        <div><label className={labelClass}>Vigor (1-100)</label><input type="number" disabled={isViewMode} className={inputStyle} value={recordForm.vigor} onChange={e => setRecordForm({...recordForm, vigor: Number(e.target.value)})} /></div>
-                        <div><label className={labelClass}>Rinde Est. (kg/ha)</label><input type="number" step="1" disabled={isViewMode} className={`${inputStyle} border-blue-200 bg-blue-50 dark:bg-blue-900/10`} value={recordForm.yield} onChange={e => setRecordForm({...recordForm, yield: Number(e.target.value)})} /></div>
-                        <div><label className={labelClass}>Uniformidad (%)</label><input type="number" disabled={isViewMode} className={inputStyle} value={recordForm.uniformity} onChange={e => setRecordForm({...recordForm, uniformity: Number(e.target.value)})} /></div>
-                        <div><label className={labelClass}>Vuelco / Acame (%)</label><input type="number" disabled={isViewMode} className={inputStyle} value={recordForm.lodging} onChange={e => setRecordForm({...recordForm, lodging: Number(e.target.value)})} /></div>
-                        <div><label className={labelClass}>Daño Aves (%)</label><input type="number" disabled={isViewMode} className={inputStyle} value={recordForm.birdDamage} onChange={e => setRecordForm({...recordForm, birdDamage: Number(e.target.value)})} /></div>
+                    <div className="md:col-span-2 space-y-4">
+                        <div className="grid grid-cols-2 gap-4 bg-blue-50 dark:bg-blue-900/10 p-6 rounded-3xl border border-blue-100 dark:border-blue-900/30">
+                            <div className="col-span-2 flex justify-between items-center mb-2">
+                                <h4 className="text-[10px] font-black uppercase text-blue-600 tracking-widest flex items-center"><RefreshCw size={14} className="mr-2"/> Condiciones Ambientales</h4>
+                                {!isViewMode && (
+                                    <button type="button" onClick={fetchCurrentWeather} disabled={isFetchingWeather} className="text-[8px] font-black bg-white dark:bg-slate-800 text-blue-600 px-3 py-1 rounded-full shadow-sm hover:scale-105 transition-all flex items-center">
+                                        {isFetchingWeather ? <Loader2 className="animate-spin mr-1" size={10}/> : <Sparkles className="mr-1" size={10}/>}
+                                        Sincronizar Estación
+                                    </button>
+                                )}
+                            </div>
+                            <div><label className={labelClass}>Temperatura (°C)</label><input type="number" step="1" disabled={isViewMode} className={inputStyle} value={recordForm.temperature} onChange={e => setRecordForm({...recordForm, temperature: Number(e.target.value)})} /></div>
+                            <div><label className={labelClass}>Humedad (%)</label><input type="number" step="1" disabled={isViewMode} className={inputStyle} value={recordForm.humidity} onChange={e => setRecordForm({...recordForm, humidity: Number(e.target.value)})} /></div>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 bg-slate-50 dark:bg-slate-950 p-6 rounded-3xl border dark:border-slate-800">
+                            <div><label className={labelClass}>Altura (cm)</label><input type="number" step="0.1" disabled={isViewMode} className={`${inputStyle} border-hemp-200 dark:border-hemp-900`} value={recordForm.plantHeight} onChange={e => setRecordForm({...recordForm, plantHeight: Number(e.target.value)})} /></div>
+                            <div><label className={labelClass}>Vigor (1-100)</label><input type="number" disabled={isViewMode} className={inputStyle} value={recordForm.vigor} onChange={e => setRecordForm({...recordForm, vigor: Number(e.target.value)})} /></div>
+                            <div><label className={labelClass}>Rinde Est. (kg/ha)</label><input type="number" step="1" disabled={isViewMode} className={`${inputStyle} border-blue-200 bg-blue-50 dark:bg-blue-900/10`} value={recordForm.yield} onChange={e => setRecordForm({...recordForm, yield: Number(e.target.value)})} /></div>
+                            <div><label className={labelClass}>Uniformidad (%)</label><input type="number" disabled={isViewMode} className={inputStyle} value={recordForm.uniformity} onChange={e => setRecordForm({...recordForm, uniformity: Number(e.target.value)})} /></div>
+                            <div><label className={labelClass}>Vuelco / Acame (%)</label><input type="number" disabled={isViewMode} className={inputStyle} value={recordForm.lodging} onChange={e => setRecordForm({...recordForm, lodging: Number(e.target.value)})} /></div>
+                            <div><label className={labelClass}>Daño Aves (%)</label><input type="number" disabled={isViewMode} className={inputStyle} value={recordForm.birdDamage} onChange={e => setRecordForm({...recordForm, birdDamage: Number(e.target.value)})} /></div>
+                        </div>
                     </div>
                 </div>
                 <div className="flex justify-end pt-8 border-t dark:border-slate-800">
@@ -370,42 +521,6 @@ export default function PlotDetails() {
                         <button type="button" onClick={() => setIsViewMode(false)} className="bg-slate-900 text-white px-10 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl flex items-center hover:scale-[1.02] transition-all"><Edit2 className="mr-2" size={16}/> Habilitar Edición</button>
                     )}
                 </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* LOG MODAL (MULTIMEDIA LOG) */}
-      {isLogModalOpen && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-lg w-full p-10 shadow-2xl animate-in zoom-in-95">
-            <div className="flex justify-between items-center mb-8">
-                <h2 className="text-2xl font-black dark:text-white uppercase tracking-tighter italic">Nota <span className="text-blue-600">Multimedia</span></h2>
-                <button onClick={() => !isSaving && setIsLogModalOpen(false)} className="p-2 text-slate-400"><X size={28}/></button>
-            </div>
-            <form onSubmit={handleSaveLog} className="space-y-6">
-                <div className="grid grid-cols-2 gap-4">
-                    <div><label className={labelClass}>Fecha</label><input type="date" className={inputStyle} value={logForm.date} onChange={e => setLogForm({...logForm, date: e.target.value})} /></div>
-                    <div><label className={labelClass}>Hora</label><input type="time" className={inputStyle} value={logForm.time} onChange={e => setLogForm({...logForm, time: e.target.value})} /></div>
-                </div>
-                <div><label className={labelClass}>Descripción de la Observación *</label><textarea required className={`${inputStyle} h-32`} value={logForm.note} onChange={e => setLogForm({...logForm, note: e.target.value})} placeholder="Detalle lo observado en el lote..."></textarea></div>
-                <div className="bg-slate-50 dark:bg-slate-950 p-6 rounded-3xl border border-dashed dark:border-slate-800 text-center relative group">
-                    {logForm.photoUrl ? (
-                        <div className="relative rounded-2xl overflow-hidden shadow-lg border border-white max-h-48">
-                            <img src={logForm.photoUrl} className="w-full h-full object-cover" />
-                            <button type="button" onClick={() => setLogForm({...logForm, photoUrl: ''})} className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full shadow-md"><X size={16}/></button>
-                        </div>
-                    ) : (
-                        <label className="cursor-pointer flex flex-col items-center py-6">
-                            {isUploading ? <Loader2 className="animate-spin text-blue-500 mb-2" size={32}/> : <Camera size={40} className="text-slate-300 group-hover:text-blue-500 transition-colors mb-2"/>}
-                            <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">{isUploading ? 'Procesando...' : 'Capturar o Subir Foto'}</span>
-                            <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotoUpload} />
-                        </label>
-                    )}
-                </div>
-                <button type="submit" disabled={isSaving || isUploading} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl flex items-center justify-center hover:scale-[1.02] transition-all disabled:opacity-50">
-                    {isSaving ? <Loader2 className="animate-spin mr-2"/> : <Save className="mr-2"/>} Publicar en Bitácora
-                </button>
             </form>
           </div>
         </div>

@@ -198,7 +198,8 @@ const MANUAL_MAP: Record<string, string> = {
     startDate: 'start_date',
     directorId: 'director_id',
     usedSeedValue: 'used_seed_value',
-    usedSeedUnit: 'used_seed_unit'
+    usedSeedUnit: 'used_seed_unit',
+    lightHours: 'light_hours'
 };
 
 const toSnakeCase = (obj: any) => {
@@ -360,7 +361,7 @@ export const AppProvider = ({ children }: { children?: React.ReactNode }) => {
           const { error } = await supabase.from(table).insert([dbItem]);
           if (error) { 
               console.error(`[DB INSERT ERROR] ${table}:`, error); 
-              alert(`FALLO DE SERVIDOR: La base de datos rechazó el registro.\n\nMOTIVO: ${error.message}\n\nACCIÓN: Ejecute el Script V35 en Ajustes -> SQL Nucleus.`);
+              alert(`FALLO DE SERVIDOR: La base de datos rechazó el registro.\n\nMOTIVO: ${error.message}\n\nACCIÓN: Ejecute el Script V36 en Ajustes -> SQL Nucleus.`);
               return false; 
           }
           await refreshData();
