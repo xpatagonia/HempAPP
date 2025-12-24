@@ -47,7 +47,7 @@ export default function Settings() {
       <div className="flex space-x-1 bg-gray-100 dark:bg-slate-900 p-1 rounded-lg mb-8 w-fit">
           <button onClick={() => setActiveTab('branding')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'branding' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Identidad</button>
           <button onClick={() => setActiveTab('database')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'database' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>SQL Nucleus</button>
-          <button onClick={() => setActiveTab('maintenance')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'maintenance' ? 'bg-white dark:bg-amber-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Mantenimiento V38</button>
+          <button onClick={() => setActiveTab('maintenance')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'maintenance' ? 'bg-white dark:bg-amber-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Mantenimiento V39</button>
       </div>
 
       {activeTab === 'branding' && (
@@ -110,23 +110,19 @@ export default function Settings() {
                   <button 
                       onClick={() => {
                         const sql = `-- PROTOCOLO V38: LIMPIEZA SELECTIVA DE TRANSACCIONES
--- Borrar datos dinámicos (registros y transacciones)
 DELETE FROM public.field_logs;
 DELETE FROM public.trial_records;
 DELETE FROM public.seed_movements;
 DELETE FROM public.seed_batches;
 DELETE FROM public.hydric_records;
 DELETE FROM public.tasks;
-
--- NOTA: No se usa TRUNCATE para evitar problemas con foreign keys si existen.
--- Los IDs de infraestructura (plots, locations, users) se mantienen.
 NOTIFY pgrst, 'reload schema';`;
                         navigator.clipboard.writeText(sql);
-                        alert("☢️ SCRIPT DE LIMPIEZA V38 COPIADO.\n\nPéguelo en el SQL Editor de Supabase y presione RUN para limpiar inventario y registros.");
+                        alert("☢️ SCRIPT DE LIMPIEZA COPIADO.");
                       }}
                       className="w-full bg-slate-900 dark:bg-amber-600 text-white py-5 rounded-[24px] font-black text-xs uppercase tracking-[0.2em] shadow-xl hover:bg-black dark:hover:bg-amber-700 transition-all flex items-center justify-center"
                   >
-                      <Eraser size={20} className="mr-2"/> Copiar Script de Limpieza V38
+                      <Eraser size={20} className="mr-2"/> Copiar Script de Limpieza
                   </button>
               </div>
           </div>
@@ -137,25 +133,25 @@ NOTIFY pgrst, 'reload schema';`;
               <div className="bg-slate-900 border border-slate-800 p-8 rounded-[40px] shadow-2xl relative overflow-hidden">
                   <div className="flex items-center space-x-3 mb-6">
                       <Shield className="text-hemp-500" size={24}/>
-                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Protocolo Nuclear (Actualización Fotoperiodo)</h3>
+                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Protocolo Nuclear V39 (Fotoperiodo & Estructura)</h3>
                   </div>
                   
                   <div className="bg-amber-900/20 border border-amber-500/30 p-4 rounded-2xl mb-6 text-amber-200 text-xs leading-relaxed">
-                      <p className="font-black mb-2 flex items-center uppercase"><RefreshCw className="mr-2" size={14}/> REPARACIÓN DE COLUMNAS (PROVISIONING)</p>
-                      Ejecuta este script para asegurar que <strong>light_hours</strong> esté presente en todos los registros.
+                      <p className="font-black mb-2 flex items-center uppercase"><RefreshCw className="mr-2" size={14}/> REPARACIÓN DE COLUMNAS (FOTOPERIODO)</p>
+                      Ejecuta este script para habilitar la columna de <strong>light_hours</strong> en tus registros técnicos.
                   </div>
 
                   <button onClick={() => {
                       const sql = `
--- PROTOCOLO V37: SOPORTE NATIVO FOTOPERIODO
+-- PROTOCOLO V39: SOPORTE NATIVO FOTOPERIODO
 ALTER TABLE IF EXISTS public.trial_records ADD COLUMN IF NOT EXISTS light_hours NUMERIC DEFAULT 18;
 
 NOTIFY pgrst, 'reload schema';
                       `;
                       navigator.clipboard.writeText(sql.trim());
-                      alert("Script de REPARACIÓN V37 Copiado. Péguelo en el SQL Editor de Supabase y presione RUN.");
+                      alert("Script V39 Copiado. Péguelo en el SQL Editor de Supabase y presione RUN.");
                   }} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-2xl font-black text-xs uppercase shadow-xl flex items-center justify-center transition-all mb-8">
-                      <RefreshCw size={18} className="mr-2"/> Copiar Script Reparador V37
+                      <RefreshCw size={18} className="mr-2"/> Copiar Script Reparador V39
                   </button>
               </div>
           </div>

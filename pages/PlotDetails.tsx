@@ -91,7 +91,6 @@ export default function PlotDetails() {
   const agronomyStats = useMemo(() => {
       if (history.length === 0) return { avgGrowth: 0, totalGdd: 0, currentPhase: 'Emergencia' };
       
-      // GDD Simplificado (Base 10°C para cáñamo)
       const TBASE = 10;
       let totalGdd = 0;
       history.forEach(r => {
@@ -100,7 +99,6 @@ export default function PlotDetails() {
           }
       });
 
-      // Velocidad de crecimiento último tramo
       let lastGrowth = 0;
       if (history.length >= 2) {
           const newest = history[0];
@@ -161,8 +159,23 @@ export default function PlotDetails() {
 
   // Form States
   const [recordForm, setRecordForm] = useState<Partial<TrialRecord>>({ 
-    date: new Date().toISOString().split('T')[0], time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }), 
-    stage: 'Vegetativo' as any, temperature: 0, humidity: 0, plantHeight: 0, plantsPerMeter: 0, replicate: 1, uniformity: 100, vigor: 100, lodging: 0, birdDamage: 0, yield: 0, stemWeight: 0, leafWeight: 0, freshWeight: 0, lightHours: 18
+    date: new Date().toISOString().split('T')[0], 
+    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }), 
+    stage: 'Vegetativo' as any, 
+    temperature: 0, 
+    humidity: 0, 
+    plantHeight: 0, 
+    plantsPerMeter: 0, 
+    replicate: 1, 
+    uniformity: 100, 
+    vigor: 100, 
+    lodging: 0, 
+    birdDamage: 0, 
+    yield: 0, 
+    stemWeight: 0, 
+    leafWeight: 0, 
+    freshWeight: 0, 
+    lightHours: 18 
   });
 
   const [logForm, setLogForm] = useState<Partial<FieldLog>>({ note: '', date: new Date().toISOString().split('T')[0], time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }), photoUrl: '' });
@@ -199,7 +212,10 @@ export default function PlotDetails() {
       e.preventDefault();
       setIsSaving(true);
       const payload: any = { 
-        ...recordForm, plotId: plot.id, createdBy: currentUser?.id, createdByName: currentUser?.name,
+        ...recordForm, 
+        plotId: plot.id, 
+        createdBy: currentUser?.id, 
+        createdByName: currentUser?.name,
         temperature: Number(recordForm.temperature || 0), 
         humidity: Number(recordForm.humidity || 0), 
         plantHeight: Number(recordForm.plantHeight || 0), 
@@ -392,7 +408,7 @@ export default function PlotDetails() {
                     </div>
                     <div className="overflow-x-auto">
                         <table className="min-w-full text-sm text-left">
-                            <thead className="bg-gray-50/50 dark:bg-slate-950/50 text-gray-400 uppercase text-[9px] font-black tracking-widest"><tr><th className="px-10 py-5">Fecha/Hora</th><th className="px-10 py-5">Fase/Etapa</th><th className="px-10 py-5 text-center">Altura (Crecimiento)</th><th className="px-10 py-5 text-center">Clima / Luz</th><th className="px-10 py-5 text-right">Detalle</th></tr></thead>
+                            <thead className="bg-gray-50/50 dark:bg-slate-950/50 text-gray-400 uppercase text-[9px] font-black tracking-widest"><tr><th className="px-10 py-5">Fecha/Hora</th><th className="px-10 py-5">Fase/Etapa</th><th className="px-10 py-5 text-center">Altura (Crecimiento)</th><th className="px-10 py-5 text-center">Clima / Fotoperiodo</th><th className="px-10 py-5 text-right">Detalle</th></tr></thead>
                             <tbody className="divide-y divide-gray-100 dark:divide-slate-800 font-bold uppercase text-[11px]">{history.length === 0 ? ( <tr><td colSpan={5} className="p-12 text-center text-gray-300 italic font-medium">No hay monitoreos registrados.</td></tr> ) : history.map((r, idx) => {
                                 // Cálculo de tasa de crecimiento
                                 let growthRate = 0;
@@ -418,8 +434,8 @@ export default function PlotDetails() {
                                         </td>
                                         <td className="px-10 py-6 text-center">
                                             <div className="flex items-center justify-center space-x-3 text-[10px] text-slate-500 font-black uppercase">
-                                                <span className="flex items-center text-orange-500"><Thermometer size={10} className="mr-1"/>{r.temperature}°</span>
-                                                <span className="flex items-center text-amber-500"><Sun size={10} className="mr-1"/>{r.lightHours}h</span>
+                                                <span className="flex items-center text-orange-500" title="Temperatura"><Thermometer size={10} className="mr-1"/>{r.temperature}°</span>
+                                                <span className="flex items-center text-amber-500" title="Horas de Luz (Fotoperiodo)"><Sun size={10} className="mr-1"/>{r.lightHours || '--'}h</span>
                                             </div>
                                         </td>
                                         <td className="px-10 py-6 text-right"><Eye size={18} className="text-gray-300 group-hover:text-hemp-600 ml-auto transition"/></td>
@@ -480,11 +496,19 @@ export default function PlotDetails() {
                         </select>
 
                         <div className="pt-4 border-t dark:border-slate-800">
-                             <label className={labelClass}>Fotoperiodo (Luz)</label>
+                             <label className={labelClass}>Fotoperiodo (Ciclo Luz)</label>
                              <div className="flex gap-2">
-                                <input type="number" step="0.5" disabled={isViewMode} className={`${inputStyle} text-center text-xl`} value={recordForm.lightHours} onChange={e => setRecordForm({...recordForm, lightHours: Number(e.target.value)})} />
-                                <div className="bg-amber-50 dark:bg-amber-900/20 p-2.5 rounded-xl border border-amber-100 dark:border-amber-800 text-amber-600 flex items-center justify-center font-black text-xs">HORAS</div>
+                                <input 
+                                    type="number" 
+                                    step="0.5" 
+                                    disabled={isViewMode} 
+                                    className={`${inputStyle} text-center text-xl`} 
+                                    value={recordForm.lightHours} 
+                                    onChange={e => setRecordForm({...recordForm, lightHours: Number(e.target.value)})} 
+                                />
+                                <div className="bg-amber-50 dark:bg-amber-900/20 p-2.5 rounded-xl border border-amber-100 dark:border-amber-800 text-amber-600 flex items-center justify-center font-black text-[10px]">HORAS</div>
                              </div>
+                             <p className="text-[8px] text-gray-400 mt-2 font-bold uppercase tracking-widest">Afecta directamente la inducción floral.</p>
                         </div>
                     </div>
                     <div className="md:col-span-2 space-y-4">

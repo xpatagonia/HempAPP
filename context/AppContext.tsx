@@ -361,7 +361,7 @@ export const AppProvider = ({ children }: { children?: React.ReactNode }) => {
           const { error } = await supabase.from(table).insert([dbItem]);
           if (error) { 
               console.error(`[DB INSERT ERROR] ${table}:`, error); 
-              alert(`FALLO DE SERVIDOR: La base de datos rechazó el registro.\n\nMOTIVO: ${error.message}\n\nACCIÓN: Ejecute el Script V36 en Ajustes -> SQL Nucleus.`);
+              alert(`FALLO DE SERVIDOR: La base de datos rechazó el registro.\n\nMOTIVO: ${error.message}\n\nACCIÓN: Ejecute el Script V39 en Ajustes.`);
               return false; 
           }
           await refreshData();
