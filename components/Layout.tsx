@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Sprout, Menu, Leaf, LogOut, 
   UserCircle, Calendar, Sun, Moon, 
   Tractor, BookOpen, Bot, Settings, 
-  FolderKanban, CheckSquare, BarChart3, Users, Warehouse, Package, X, Bell, Globe, Building
+  FolderKanban, CheckSquare, BarChart3, Users, Warehouse, Package, X, Bell, Globe, Building, ShieldAlert
 } from 'lucide-react';
 
 const NavItem = ({ to, icon: Icon, label, badge }: any) => {
@@ -27,7 +27,6 @@ const NavItem = ({ to, icon: Icon, label, badge }: any) => {
   );
 };
 
-// Fix: Made children optional to avoid "Property 'children' is missing" TS error when used in App.tsx
 export default function Layout({ children }: { children?: React.ReactNode }) {
   const { currentUser, logout, theme, toggleTheme, tasks, appName, appLogo } = useAppContext();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -35,7 +34,6 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
   if (!currentUser) return <>{children}</>;
 
   const pendingTasksCount = tasks.filter(t => t.status === 'Pendiente').length;
-  const isAdmin = currentUser.role === 'admin' || currentUser.role === 'super_admin';
   const isClient = currentUser.role === 'client';
 
   return (
@@ -72,7 +70,6 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
           <NavItem to="/seed-batches" icon={Package} label="Inventario" />
           <NavItem to="/varieties" icon={BookOpen} label="Genética" />
           
-          {/* Opciones filtradas para Productores */}
           {!isClient && (
             <>
               <NavItem to="/suppliers" icon={Warehouse} label="Proveedores" />
@@ -86,6 +83,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
 
           <div className="pt-8 pb-3 px-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Sistema</div>
           <NavItem to="/analytics" icon={BarChart3} label="Analítica Avanzada" />
+          <NavItem to="/integrity" icon={ShieldAlert} label="Integridad Datos" />
           {!isClient && <NavItem to="/users" icon={Users} label="Equipo" />}
           {currentUser.role === 'super_admin' && <NavItem to="/settings" icon={Settings} label="Admin Server" />}
         </nav>
@@ -107,7 +105,6 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
         </div>
       </aside>
 
-      {/* MAIN CONTENT */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
         <header className="h-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-8 flex items-center justify-between z-40 sticky top-0">
           <div className="flex items-center space-x-4">

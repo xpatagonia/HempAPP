@@ -2,7 +2,6 @@
 import React from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider, useAppContext } from './context/AppContext';
-/* Fix: Use default import for Layout as it is exported as default in Layout.tsx */
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import Varieties from './pages/Varieties';
@@ -25,9 +24,8 @@ import Clients from './pages/Clients';
 import Resources from './pages/Resources'; 
 import Storage from './pages/Storage'; 
 import LogisticsMap from './pages/LogisticsMap';
+import IntegrityCheck from './pages/IntegrityCheck';
 
-// Componente para proteger rutas
-// Fix: Changed children to be optional to avoid TS property missing error when used in Route element in some React 18 environments
 const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
   const { currentUser } = useAppContext();
   
@@ -73,6 +71,11 @@ export default function App() {
             <Route path="/analytics" element={
               <ProtectedRoute>
                 <Analytics />
+              </ProtectedRoute>
+            } />
+            <Route path="/integrity" element={
+              <ProtectedRoute>
+                <IntegrityCheck />
               </ProtectedRoute>
             } />
             <Route path="/advisor" element={
