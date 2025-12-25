@@ -207,7 +207,8 @@ const toSnakeCase = (obj: any) => {
     const newObj: any = {};
     for (const key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
-            if (['lat', 'lng', 'teamUserIds'].includes(key)) continue;
+            // IGNORAR CAMPOS AUXILIARES DE UI QUE NO EXISTEN EN DB
+            if (['lat', 'lng', 'teamUserIds', 'inputValue', 'usedSeedValue', 'usedSeedUnit'].includes(key)) continue;
 
             const snakeKey = MANUAL_MAP[key] || key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
             let val = obj[key];
@@ -436,7 +437,7 @@ export const AppProvider = ({ children }: { children?: React.ReactNode }) => {
       return success ? s.id : null; 
   };
   const updateSupplier = (s: Supplier) => genericUpdate('suppliers', s, setSuppliers, 'suppliers');
-  const deleteSupplier = (id: string) => { genericDelete('suppliers', id, setSuppliers, 'suppliers'); };
+  const deleteSupplier = (id: string) => { genericDelete('suppliers', id, setVarieties, 'suppliers'); };
   
   const addClient = async (c: Client, teamUserIds: string[] = []) => {
       const success = await genericAdd('clients', c, setClients, 'clients');

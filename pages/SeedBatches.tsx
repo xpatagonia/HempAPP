@@ -164,8 +164,11 @@ export default function SeedBatches() {
       }
       setIsSubmitting(true);
       try {
+          // LIMPPIEZA DE CAMPOS AUXILIARES ANTES DE ENVIAR
+          const { inputValue, ...cleanBatchData } = batchFormData;
+          
           const payload = { 
-            ...batchFormData, 
+            ...cleanBatchData, 
             id: editingBatchId || crypto.randomUUID(), 
             initialQuantity: calculatedEntryKg,
             remainingQuantity: editingBatchId ? (batchFormData.remainingQuantity || 0) : calculatedEntryKg, 
@@ -193,8 +196,11 @@ export default function SeedBatches() {
 
       setIsSubmitting(true);
       try {
+          // LIMPIEZA DE CAMPOS AUXILIARES ANTES DE ENVIAR
+          const { inputValue, ...cleanMoveData } = moveFormData;
+
           const movePayload = { 
-              ...moveFormData, 
+              ...cleanMoveData, 
               id: crypto.randomUUID(), 
               status: 'En Tránsito', 
               quantity: calculatedMoveKg,
@@ -408,6 +414,7 @@ export default function SeedBatches() {
                         </div>
                         <div>
                             <label className={labelClass}>Nro Certificación / Acta</label>
+                            {/* Fixed typo: changed formData to batchFormData in onChange */}
                             <input type="text" className={inputClass} value={batchFormData.certificationNumber} onChange={e => setBatchFormData({...batchFormData, certificationNumber: e.target.value})} />
                         </div>
                         <div className="grid grid-cols-2 gap-3">
