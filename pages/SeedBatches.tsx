@@ -69,10 +69,11 @@ export default function SeedBatches() {
 
   // Helper de conversión a KG
   const convertToKg = (val: number, unit: MassUnit) => {
+      const numericVal = Number(val) || 0;
       switch(unit) {
-          case 'gr': return val / 1000;
-          case 'tn': return val * 1000;
-          default: return val;
+          case 'gr': return numericVal / 1000;
+          case 'tn': return numericVal * 1000;
+          default: return numericVal;
       }
   };
 
@@ -107,11 +108,15 @@ export default function SeedBatches() {
       return { totalKg, activeTransits };
   }, [filteredBatches, filteredMovements]);
 
-  // --- FILTRO DE VARIEDADES POR PROVEEDOR ---
   const filteredVarietiesBySupplier = useMemo(() => {
     if (!batchFormData.supplierId) return [];
     return varieties.filter(v => v.supplierId === batchFormData.supplierId);
   }, [batchFormData.supplierId, varieties]);
+
+  const destinationStorages = useMemo(() => {
+      if (!moveFormData.clientId) return [];
+      return storagePoints.filter(sp => sp.clientId === moveFormData.clientId);
+  }, [moveFormData.clientId, storagePoints]);
 
   const handleOpenView = (batch: SeedBatch) => {
       setSelectedBatch(batch);
@@ -164,9 +169,7 @@ export default function SeedBatches() {
       }
       setIsSubmitting(true);
       try {
-          // LIMPPIEZA DE CAMPOS AUXILIARES ANTES DE ENVIAR
           const { inputValue, ...cleanBatchData } = batchFormData;
-          
           const payload = { 
             ...cleanBatchData, 
             id: editingBatchId || crypto.randomUUID(), 
@@ -185,6 +188,7 @@ export default function SeedBatches() {
   const handleMoveSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
       const batch = seedBatches.find(b => b.id === moveFormData.batchId);
+      
       if (!batch || calculatedMoveKg > batch.remainingQuantity) {
           alert(`Error: Stock insuficiente. El lote posee ${batch?.remainingQuantity || 0} kg.`);
           return;
@@ -196,7 +200,7 @@ export default function SeedBatches() {
 
       setIsSubmitting(true);
       try {
-          // LIMPIEZA DE CAMPOS AUXILIARES ANTES DE ENVIAR
+          // LIMPPIEZA CRÍTICA PARA EVITAR FALLO DE COLUMNA 'input_value'
           const { inputValue, ...cleanMoveData } = moveFormData;
 
           const movePayload = { 
@@ -209,26 +213,25 @@ export default function SeedBatches() {
           
           const success = await addSeedMovement(movePayload);
           if (success) {
+              // Actualizamos el saldo del lote origen
               await updateSeedBatch({ ...batch, remainingQuantity: batch.remainingQuantity - calculatedMoveKg });
               setIsMoveModalOpen(false);
+              alert("✅ Despacho registrado correctamente.");
           }
+      } catch (err) {
+          alert("Error de comunicación con el servidor logístico.");
       } finally { setIsSubmitting(false); }
   };
 
   const inputClass = "w-full border border-gray-300 dark:border-slate-800 bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 p-3 rounded-xl focus:ring-2 focus:ring-hemp-500 outline-none transition-all";
   const labelClass = "text-[9px] font-black uppercase text-slate-500 ml-1 mb-1.5 block tracking-widest";
 
-  const destinationStorages = useMemo(() => {
-      if (!moveFormData.clientId) return [];
-      return storagePoints.filter(sp => sp.clientId === moveFormData.clientId);
-  }, [moveFormData.clientId, storagePoints]);
-
   return (
     <div className="animate-in fade-in duration-500 space-y-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
             <h1 className="text-3xl font-black text-gray-800 dark:text-white uppercase tracking-tighter italic">Inventario <span className="text-hemp-600">& Logística</span></h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Control de stock y remitos unificado (GR, KG, TN).</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Control de stock y remitos unificado.</p>
         </div>
         {isAdmin && (
           <div className="flex space-x-2 w-full md:w-auto">
@@ -372,7 +375,6 @@ export default function SeedBatches() {
                                 className={inputClass} 
                                 value={batchFormData.supplierId} 
                                 onChange={e => {
-                                    // REINICIO DE VARIEDAD AL CAMBIAR PROVEEDOR PARA ASEGURAR COTEJACIÓN
                                     setBatchFormData({
                                         ...batchFormData, 
                                         supplierId: e.target.value,
@@ -396,9 +398,6 @@ export default function SeedBatches() {
                                 <option value="">{!batchFormData.supplierId ? '-- Seleccione Proveedor primero --' : 'Seleccionar genética...'}</option>
                                 {filteredVarietiesBySupplier.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
                             </select>
-                            {batchFormData.supplierId && filteredVarietiesBySupplier.length === 0 && (
-                                <p className="text-[8px] text-amber-600 font-bold uppercase mt-1 italic">⚠️ Este proveedor no tiene genéticas cargadas.</p>
-                            )}
                         </div>
                         <div>
                             <label className={labelClass}>Código de Lote *</label>
@@ -414,8 +413,7 @@ export default function SeedBatches() {
                         </div>
                         <div>
                             <label className={labelClass}>Nro Certificación / Acta</label>
-                            {/* Fixed typo: changed formData to batchFormData in onChange */}
-                            <input type="text" className={inputClass} value={batchFormData.certificationNumber} onChange={e => setBatchFormData({...batchFormData, certificationNumber: e.target.value})} />
+                            <input type="text" className={inputClass} value={batchFormData.certificationNumber || ''} onChange={e => setBatchFormData({...batchFormData, certificationNumber: e.target.value})} />
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                             <div><label className={labelClass}>Germinación (%)</label><input type="number" className={inputClass} value={batchFormData.germination} onChange={e => setBatchFormData({...batchFormData, germination: Number(e.target.value)})} /></div>
@@ -471,8 +469,174 @@ export default function SeedBatches() {
         </div>
       )}
 
-      {/* RESTO DE MODALES (VIEW, DISPATCH) NO REQUIEREN CAMBIOS EN ESTA LÓGICA */}
-      {/* ... */}
+      {/* MODAL DESPACHO CARGA (LOGÍSTICA DE ENVÍO) */}
+      {isMoveModalOpen && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[60] p-4">
+            <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-6xl w-full p-10 shadow-2xl max-h-[95vh] overflow-y-auto animate-in zoom-in-95 border border-white/10">
+                <div className="flex justify-between items-center mb-8">
+                    <div className="flex items-center gap-4">
+                        <div className="bg-blue-600 p-3 rounded-2xl text-white shadow-lg"><Truck size={28}/></div>
+                        <div>
+                            <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter italic">Despachar <span className="text-blue-600">Material</span></h2>
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Generación de remito y hoja de ruta logística</p>
+                        </div>
+                    </div>
+                    <button onClick={() => setIsMoveModalOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition text-slate-400"><X size={28}/></button>
+                </div>
+
+                <form onSubmit={handleMoveSubmit} className="space-y-8">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                        <div className="space-y-6">
+                            <div className="bg-slate-50 dark:bg-slate-950 p-6 rounded-[32px] border dark:border-slate-800">
+                                <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 border-b dark:border-slate-800 pb-2">Material en Origen</h3>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className={labelClass}>Seleccionar Lote *</label>
+                                        <select required className={inputClass} value={moveFormData.batchId} onChange={e => setMoveFormData({...moveFormData, batchId: e.target.value})}>
+                                            <option value="">Seleccione stock...</option>
+                                            {seedBatches.filter(b => b.remainingQuantity > 0).map(b => {
+                                                const v = varieties.find(v => v.id === b.varietyId);
+                                                const sp = storagePoints.find(s => s.id === b.storagePointId);
+                                                return (
+                                                    <option key={b.id} value={b.id}>
+                                                        {b.batchCode} - {v?.name} ({b.remainingQuantity}kg en {sp?.name})
+                                                    </option>
+                                                );
+                                            })}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className={labelClass}>Masa a Despachar *</label>
+                                        <div className="flex gap-2">
+                                            <input required type="number" step="0.001" className={`${inputClass} flex-1 text-xl font-black`} value={moveFormData.inputValue} onChange={e => setMoveFormData({...moveFormData, inputValue: Number(e.target.value)})} />
+                                            <select className="w-20 bg-gray-100 dark:bg-slate-800 rounded-xl text-[9px] font-black uppercase text-center" value={moveUnit} onChange={e => setMoveUnit(e.target.value as MassUnit)}>
+                                                <option value="gr">GR</option>
+                                                <option value="kg">KG</option>
+                                                <option value="tn">TN</option>
+                                            </select>
+                                        </div>
+                                        <p className="text-[9px] text-blue-600 font-bold mt-2 uppercase tracking-widest">Carga neta: {calculatedMoveKg.toLocaleString()} kg</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="bg-blue-50 dark:bg-blue-900/10 p-6 rounded-[32px] border border-blue-100 dark:border-blue-800">
+                                <h3 className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-4 border-b border-blue-100 dark:border-blue-800 pb-2">Destino de Carga</h3>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className={labelClass}>Cliente / Socio Destino *</label>
+                                        <select required className={inputClass} value={moveFormData.clientId} onChange={e => setMoveFormData({...moveFormData, clientId: e.target.value, targetLocationId: ''})}>
+                                            <option value="">Seleccione socio...</option>
+                                            <option value="INTERNAL">LOGÍSTICA INTERNA (CENTRAL)</option>
+                                            {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className={labelClass}>Nodo de Recepción *</label>
+                                        <select required className={inputClass} value={moveFormData.targetLocationId} onChange={e => setMoveFormData({...moveFormData, targetLocationId: e.target.value})}>
+                                            <option value="">Seleccione depósito destino...</option>
+                                            {moveFormData.clientId === 'INTERNAL' 
+                                                ? storagePoints.filter(sp => !sp.clientId).map(sp => <option key={sp.id} value={sp.id}>{sp.name}</option>)
+                                                : destinationStorages.map(sp => <option key={sp.id} value={sp.id}>{sp.name}</option>)
+                                            }
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-white dark:bg-slate-900 p-6 rounded-[32px] border dark:border-slate-800">
+                            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 border-b dark:border-slate-800 pb-2 flex items-center"><Smartphone size={14} className="mr-2"/> Documentación y Transporte</h3>
+                            <div className="space-y-4">
+                                <div><label className={labelClass}>Nro Remito / Guía de Transporte *</label><input required type="text" className={inputClass} value={moveFormData.transportGuideNumber} onChange={e => setMoveFormData({...moveFormData, transportGuideNumber: e.target.value.toUpperCase()})} /></div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div><label className={labelClass}>Fecha Despacho</label><input type="date" className={inputClass} value={moveFormData.date} onChange={e => setMoveFormData({...moveFormData, date: e.target.value})} /></div>
+                                    <div><label className={labelClass}>Hora Salida</label><input type="time" className={inputClass} value={moveFormData.dispatchTime} onChange={e => setMoveFormData({...moveFormData, dispatchTime: e.target.value})} /></div>
+                                </div>
+                                <div><label className={labelClass}>Empresa de Transporte</label><input type="text" className={inputClass} value={moveFormData.transportCompany} onChange={e => setMoveFormData({...moveFormData, transportCompany: e.target.value})} /></div>
+                                <div>
+                                    <label className={labelClass}>Tipo de Logística</label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <button type="button" onClick={() => setMoveFormData({...moveFormData, transportType: 'Propio'})} className={`py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${moveFormData.transportType === 'Propio' ? 'bg-blue-600 text-white border-blue-600' : 'bg-gray-50 dark:bg-slate-800 text-gray-400'}`}>Propio</button>
+                                        <button type="button" onClick={() => setMoveFormData({...moveFormData, transportType: 'Tercerizado'})} className={`py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${moveFormData.transportType === 'Tercerizado' ? 'bg-blue-600 text-white border-blue-600' : 'bg-gray-50 dark:bg-slate-800 text-gray-400'}`}>Tercerizado</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-white dark:bg-slate-900 p-6 rounded-[32px] border dark:border-slate-800">
+                             <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 border-b dark:border-slate-800 pb-2 flex items-center"><UserCheck size={14} className="mr-2"/> Identidad del Chofer</h3>
+                             <div className="space-y-4">
+                                <div><label className={labelClass}>Nombre del Conductor</label><input type="text" className={inputClass} value={moveFormData.driverName} onChange={e => setMoveFormData({...moveFormData, driverName: e.target.value})} /></div>
+                                <div><label className={labelClass}>DNI / Licencia</label><input type="text" className={inputClass} value={moveFormData.driverDni} onChange={e => setMoveFormData({...moveFormData, driverDni: e.target.value})} /></div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div><label className={labelClass}>Patente Camión</label><input type="text" className={inputClass} value={moveFormData.vehiclePlate} onChange={e => setMoveFormData({...moveFormData, vehiclePlate: e.target.value.toUpperCase()})} /></div>
+                                    <div><label className={labelClass}>Patente Acoplado</label><input type="text" className={inputClass} value={moveFormData.vehicleModel} onChange={e => setMoveFormData({...moveFormData, vehicleModel: e.target.value.toUpperCase()})} /></div>
+                                </div>
+                                <div className="pt-4 border-t dark:border-slate-800">
+                                    <label className={labelClass}>Ruta / Itinerario (Opcional)</label>
+                                    <textarea className={`${inputClass} text-xs`} rows={2} value={moveFormData.routeItinerary} onChange={e => setMoveFormData({...moveFormData, routeItinerary: e.target.value})} placeholder="Detalle paradas o ruta específica..." />
+                                </div>
+                             </div>
+                        </div>
+                    </div>
+
+                    <div className="flex justify-end space-x-3 pt-8 border-t dark:border-slate-800">
+                        <button type="button" disabled={isSubmitting} onClick={() => setIsMoveModalOpen(false)} className="px-8 py-4 text-slate-400 font-black uppercase text-[10px] tracking-widest hover:text-slate-600 transition">Cancelar Envío</button>
+                        <button type="submit" disabled={isSubmitting} className="bg-slate-900 dark:bg-blue-600 text-white px-12 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl flex items-center hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50">
+                            {isSubmitting ? <Loader2 className="animate-spin mr-2" size={18}/> : <Truck className="mr-2" size={18}/>}
+                            Generar Remito y Despachar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+      )}
+
+      {/* MODAL VISTA DETALLADA LOTE */}
+      {isViewModalOpen && selectedBatch && (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[70] p-4">
+              <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-2xl w-full p-10 shadow-2xl animate-in zoom-in-95">
+                  <div className="flex justify-between items-center mb-8">
+                      <div className="flex items-center gap-3">
+                          <div className="bg-hemp-600 p-3 rounded-2xl text-white shadow-lg"><Archive size={24}/></div>
+                          <div>
+                              <h2 className="text-2xl font-black text-slate-800 dark:text-white uppercase tracking-tighter">{selectedBatch.batchCode}</h2>
+                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Ficha Técnica de Lote</p>
+                          </div>
+                      </div>
+                      <button onClick={() => setIsViewModalOpen(false)} className="text-slate-400 hover:text-slate-600"><X size={28}/></button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 mb-8">
+                      <div className="bg-gray-50 dark:bg-slate-950 p-4 rounded-3xl border dark:border-slate-800">
+                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Genética</p>
+                          <p className="text-lg font-black text-hemp-600 uppercase">{varieties.find(v => v.id === selectedBatch.varietyId)?.name || 'S/D'}</p>
+                      </div>
+                      <div className="bg-gray-50 dark:bg-slate-950 p-4 rounded-3xl border dark:border-slate-800">
+                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Stock Actual</p>
+                          <p className="text-lg font-black text-slate-700 dark:text-slate-300">{selectedBatch.remainingQuantity.toLocaleString()} KG</p>
+                      </div>
+                      <div className="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-3xl border border-blue-100 dark:border-blue-900/30">
+                          <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1">Categoría</p>
+                          <p className="text-lg font-black text-blue-800 dark:text-blue-300 uppercase">{selectedBatch.category}</p>
+                      </div>
+                      <div className="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-3xl border border-blue-100 dark:border-blue-900/30">
+                          <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1">PG (%)</p>
+                          <p className="text-lg font-black text-blue-800 dark:text-blue-300 uppercase">{selectedBatch.germination}%</p>
+                      </div>
+                  </div>
+
+                  <div className="space-y-4">
+                      <div className="flex items-center text-sm text-gray-500 font-bold"><Calendar size={18} className="mr-3 opacity-50"/> Fecha de Adquisición: {selectedBatch.purchaseDate || 'N/A'}</div>
+                      <div className="flex items-center text-sm text-gray-500 font-bold"><ScanBarcode size={18} className="mr-3 opacity-50"/> Serie de Etiqueta: {selectedBatch.labelSerialNumber || 'S/N'}</div>
+                      <div className="flex items-center text-sm text-gray-500 font-bold"><Building size={18} className="mr-3 opacity-50"/> Proveedor: {suppliers.find(s => s.id === selectedBatch.supplierId)?.name || 'Origen Desconocido'}</div>
+                  </div>
+
+                  <button onClick={() => setIsViewModalOpen(false)} className="mt-10 w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest">Cerrar Ficha</button>
+              </div>
+          </div>
+      )}
     </div>
   );
 }
