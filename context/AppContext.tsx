@@ -207,8 +207,8 @@ const toSnakeCase = (obj: any) => {
     const newObj: any = {};
     for (const key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
-            // IGNORAR CAMPOS AUXILIARES DE UI QUE NO EXISTEN EN DB
-            if (['lat', 'lng', 'teamUserIds', 'inputValue', 'usedSeedValue', 'usedSeedUnit'].includes(key)) continue;
+            // CORRECCIÓN: Eliminamos usedSeedValue y usedSeedUnit de ignorados para que se guarden en plots
+            if (['lat', 'lng', 'teamUserIds', 'inputValue'].includes(key)) continue;
 
             const snakeKey = MANUAL_MAP[key] || key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
             let val = obj[key];
