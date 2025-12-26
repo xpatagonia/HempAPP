@@ -207,7 +207,6 @@ const toSnakeCase = (obj: any) => {
     const newObj: any = {};
     for (const key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
-            // CORRECCIÓN: Eliminamos usedSeedValue y usedSeedUnit de ignorados para que se guarden en plots
             if (['lat', 'lng', 'teamUserIds', 'inputValue'].includes(key)) continue;
 
             const snakeKey = MANUAL_MAP[key] || key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
