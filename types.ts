@@ -205,20 +205,26 @@ export interface TrialRecord {
   humidity?: number;
   plantHeight?: number;
   plantsPerMeter?: number;
-  uniformity?: number;
-  vigor?: number;
-  lodging?: number;
-  birdDamage?: number;
-  stemWeight?: number;
+  uniformity?: number; // Escala 1-9 (HempIT)
+  vigor?: number; // Escala 1-9 (HempIT)
+  lodging?: number; // Encamado Escala 1-9 (HempIT)
+  birdDamage?: number; // Escala 1-9 (HempIT)
+  diseasesScore?: number; // Escala 1-9 (HempIT)
+  pestsScore?: number; // Escala 1-9 (HempIT)
+  harvestPlantCount?: number; // Número plantas cosechadas en 1m2
+  seedYield?: number; // Rendimiento de semillas (g)
+  seedQualityGermination?: number; // % Germinación post-cosecha
+  seedQualityNonConformity?: number; // % No conforme
+  stemWeight?: number; // Peso tallo (g o kg)
   leafWeight?: number;
   freshWeight?: number;
   yield?: number;
   replicate?: number;
   emergenceDate?: string;
-  floweringDate?: string;
+  floweringDate?: string; // Fecha 50% floración (HempIT)
   harvestDate?: string;
-  diseases?: string;
-  pests?: string;
+  diseases?: string; // Notas de enfermedades
+  pests?: string; // Notas de plagas
   createdBy?: string;
   createdByName?: string;
   lightHours?: number;

@@ -200,7 +200,14 @@ const MANUAL_MAP: Record<string, string> = {
     usedSeedValue: 'used_seed_value',
     usedSeedUnit: 'used_seed_unit',
     lightHours: 'light_hours',
-    lunarPhase: 'lunar_phase'
+    lunarPhase: 'lunar_phase',
+    // NUEVOS CAMPOS HEMPIT FRANCE
+    diseasesScore: 'diseases_score',
+    pestsScore: 'pests_score',
+    harvestPlantCount: 'harvest_plant_count',
+    seedYield: 'seed_yield',
+    seedQualityGermination: 'seed_quality_germination',
+    seedQualityNonConformity: 'seed_quality_non_conformity'
 };
 
 const toSnakeCase = (obj: any) => {
