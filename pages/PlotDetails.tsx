@@ -31,6 +31,20 @@ const KPI = ({ label, value, icon: Icon, color, subtext }: any) => (
     </div>
 );
 
+// Helper: Cálculo de Fase Lunar dinámico
+const calculateLunarPhase = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const cycle = 29.53058867;
+    const knownNewMoon = new Date('2024-01-11T11:57:00Z').getTime(); // Luna nueva conocida
+    const diff = (date.getTime() - knownNewMoon) / (1000 * 60 * 60 * 24);
+    const pos = (diff % cycle) / cycle;
+    
+    if (pos < 0.06 || pos >= 0.94) return 'Nueva';
+    if (pos < 0.44) return 'Creciente';
+    if (pos < 0.56) return 'Llena';
+    return 'Menguante';
+};
+
 export default function PlotDetails() {
   const { id } = useParams<{ id: string }>();
   const { plots, locations, varieties, getPlotHistory, addTrialRecord, updateTrialRecord, deleteTrialRecord, currentUser, seedBatches, logs, addLog, deleteLog, hydricRecords, updatePlot } = useAppContext();
@@ -52,15 +66,23 @@ export default function PlotDetails() {
   const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isFetchingConditions, setIsFetchingConditions] = useState(false);
   
-  // Astro & Weather States
+  // Astro & Weather States para el Dashboard
   const [astroData, setAstroData] = useState<any>(null);
   const [autoWeather, setAutoWeather] = useState<any>(null);
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
   const canWriteLog = !!currentUser; 
 
-  // --- CARGA DE CLIMA Y ASTRONOMÍA ---
+  // Form Monitoring State
+  const [recordForm, setRecordForm] = useState<Partial<TrialRecord>>({ 
+    date: new Date().toISOString().split('T')[0], 
+    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }), 
+    stage: 'Vegetativo' as any, temperature: 0, humidity: 0, plantHeight: 0, plantsPerMeter: 0, lightHours: 12, lunarPhase: 'S/D'
+  });
+
+  // --- CARGA DE CLIMA Y ASTRONOMÍA DASHBOARD ---
   useEffect(() => {
     const fetchAstroAndWeather = async () => {
         if (!location?.coordinates) return;
@@ -82,23 +104,46 @@ export default function PlotDetails() {
     fetchAstroAndWeather();
   }, [location]);
 
-  const [recordForm, setRecordForm] = useState<Partial<TrialRecord>>({ 
-    date: new Date().toISOString().split('T')[0], 
-    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }), 
-    stage: 'Vegetativo' as any, temperature: 0, humidity: 0, plantHeight: 0, plantsPerMeter: 0, lightHours: 18, lunarPhase: 'Creciente'
-  });
+  // --- CAPTURA DE CONDICIONES EN TIEMPO REAL (AL ABRIR MODAL) ---
+  const syncCurrentConditions = async (targetDate: string) => {
+      if (!location?.coordinates) return;
+      setIsFetchingConditions(true);
+      try {
+          const lat = location.coordinates.lat;
+          const lng = location.coordinates.lng;
+          
+          // 1. Clima Actual
+          const wRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m&timezone=auto`);
+          const wData = await wRes.json();
+
+          // 2. Fotoperiodo
+          const aRes = await fetch(`https://api.sunrise-sunset.org/json?lat=${lat}&lng=${lng}&date=${targetDate}&formatted=0`);
+          const aData = await aRes.json();
+
+          // 3. Fase Lunar
+          const lunar = calculateLunarPhase(targetDate);
+
+          if (wData.current && aData.results) {
+              setRecordForm(prev => ({
+                  ...prev,
+                  temperature: Math.round(wData.current.temperature_2m),
+                  humidity: Math.round(wData.current.relative_humidity_2m),
+                  lightHours: parseFloat((aData.results.day_length / 3600).toFixed(2)),
+                  lunarPhase: lunar
+              }));
+          }
+      } catch (err) {
+          console.error("Sync Error:", err);
+      } finally {
+          setIsFetchingConditions(false);
+      }
+  };
 
   useEffect(() => {
-      if (isRecordModalOpen && !editingRecordId && autoWeather?.current) {
-          setRecordForm(prev => ({
-              ...prev,
-              temperature: autoWeather.current.temperature_2m,
-              humidity: autoWeather.current.relative_humidity_2m,
-              lightHours: parseFloat(astroData?.decimalHours || '18'),
-              lunarPhase: 'Creciente' 
-          }));
+      if (isRecordModalOpen && !editingRecordId) {
+          syncCurrentConditions(recordForm.date || new Date().toISOString().split('T')[0]);
       }
-  }, [isRecordModalOpen, editingRecordId, autoWeather, astroData]);
+  }, [isRecordModalOpen, editingRecordId]);
 
   const agronomyStats = useMemo(() => {
       if (history.length === 0) return { avgGrowth: 0, totalGdd: 0, currentPhase: 'Emergencia' };
@@ -133,7 +178,15 @@ export default function PlotDetails() {
       e.preventDefault();
       setIsSaving(true);
       try {
-          const payload = { ...recordForm, plotId: plot.id, createdBy: currentUser?.id, createdByName: currentUser?.name };
+          const payload = { 
+            ...recordForm, 
+            plotId: plot.id, 
+            createdBy: currentUser?.id, 
+            createdByName: currentUser?.name,
+            // Aseguramos que los campos obligatorios del Script V39 tengan valor
+            lunarPhase: recordForm.lunarPhase || 'S/D',
+            lightHours: recordForm.lightHours || 12
+          };
           if (editingRecordId) await updateTrialRecord({ ...payload, id: editingRecordId } as TrialRecord);
           else await addTrialRecord({ ...payload, id: crypto.randomUUID() } as TrialRecord);
           setIsRecordModalOpen(false);
@@ -255,7 +308,7 @@ export default function PlotDetails() {
                 <div className="bg-white dark:bg-slate-900 rounded-[40px] shadow-sm border dark:border-slate-800 overflow-hidden">
                     <div className="px-10 py-6 border-b dark:border-slate-800 flex justify-between items-center bg-gray-50/50 dark:bg-slate-950/50">
                         <h2 className="font-black text-gray-900 dark:text-white uppercase text-[10px] tracking-[0.3em] flex items-center"><Activity size={18} className="mr-3 text-hemp-600"/> Monitoreos Técnicos</h2>
-                        {currentUser && <button onClick={() => { setIsRecordModalOpen(true); setIsViewMode(false); setEditingRecordId(null); setRecordForm({ date: new Date().toISOString().split('T')[0], time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }), stage: 'Vegetativo' }); }} className="bg-hemp-600 text-white px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl hover:bg-hemp-700 transition">Nuevo Monitoreo</button>}
+                        {currentUser && <button onClick={() => { setIsRecordModalOpen(true); setIsViewMode(false); setEditingRecordId(null); setRecordForm({ date: new Date().toISOString().split('T')[0], time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }), stage: 'Vegetativo', temperature: 0, humidity: 0, lightHours: 12, lunarPhase: 'Calculando...' }); }} className="bg-hemp-600 text-white px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl hover:bg-hemp-700 transition">Nuevo Monitoreo</button>}
                     </div>
                     <div className="overflow-x-auto">
                         <table className="min-w-full text-sm text-left">
@@ -389,7 +442,9 @@ export default function PlotDetails() {
                        </h3>
                        <div className="relative z-10 py-10">
                            <Moon size={84} className="text-blue-100 mb-6 drop-shadow-[0_0_15px_rgba(255,255,255,0.3)] animate-pulse"/>
-                           <p className="text-3xl font-black uppercase tracking-tighter italic">Creciente / Fase Dual</p>
+                           <p className="text-3xl font-black uppercase tracking-tighter italic">
+                               {calculateLunarPhase(new Date().toISOString().split('T')[0])} / Fase Dual
+                           </p>
                            <p className="text-[10px] font-black text-blue-400 uppercase tracking-[0.3em] mt-4">Transición óptima para monitoreo nocturno</p>
                        </div>
                        <Activity className="absolute -bottom-10 -right-10 w-64 h-64 text-blue-600 opacity-10 pointer-events-none" />
@@ -493,14 +548,28 @@ export default function PlotDetails() {
             <div className="flex justify-between items-center mb-8">
                 <div className="flex items-center gap-4">
                     <div className="bg-hemp-600 p-3 rounded-2xl text-white shadow-lg"><Activity size={24}/></div>
-                    <h2 className="text-2xl font-black dark:text-white uppercase tracking-tighter italic">Monitoreo <span className="text-hemp-600">Fisiológico Automático</span></h2>
+                    <div>
+                        <h2 className="text-2xl font-black dark:text-white uppercase tracking-tighter italic">Monitoreo <span className="text-hemp-600">Fisiológico Automático</span></h2>
+                        {isFetchingConditions && (
+                            <div className="flex items-center text-[9px] font-black text-blue-500 uppercase tracking-widest mt-1">
+                                <Loader2 className="animate-spin mr-1.5" size={10}/> Capturando Red Nucleus GFS...
+                            </div>
+                        )}
+                    </div>
                 </div>
                 <button onClick={() => setIsRecordModalOpen(false)} className="p-2 text-slate-400 hover:bg-slate-100 rounded-full transition"><X size={28}/></button>
             </div>
             <form onSubmit={handleSaveRecord} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="space-y-4">
-                        <div><label className={labelClass}>Fecha de Muestreo</label><input type="date" required disabled={isViewMode} className={inputStyle} value={recordForm.date} onChange={e => setRecordForm({...recordForm, date: e.target.value})} /></div>
+                        <div>
+                            <label className={labelClass}>Fecha de Muestreo</label>
+                            <input type="date" required disabled={isViewMode} className={inputStyle} value={recordForm.date} onChange={e => {
+                                const newDate = e.target.value;
+                                setRecordForm({...recordForm, date: newDate});
+                                if (!isViewMode) syncCurrentConditions(newDate);
+                            }} />
+                        </div>
                         <div><label className={labelClass}>Hora Local</label><input type="time" required disabled={isViewMode} className={inputStyle} value={recordForm.time} onChange={e => setRecordForm({...recordForm, time: e.target.value})} /></div>
                         <div><label className={labelClass}>Etapa Fenológica</label><select required disabled={isViewMode} className={inputStyle} value={recordForm.stage} onChange={e => setRecordForm({...recordForm, stage: e.target.value as any})}><option value="Vegetativo">Vegetativo</option><option value="Floración">Floración</option><option value="Maduración">Maduración</option><option value="Cosecha">Cosecha</option></select></div>
                     </div>
@@ -511,26 +580,27 @@ export default function PlotDetails() {
                         </div>
                         <div className="bg-blue-50 dark:bg-blue-900/10 p-6 rounded-3xl border border-blue-100 dark:border-blue-900/30">
                             <div className="flex justify-between items-center mb-4">
-                                <h4 className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest flex items-center"><Sparkles size={12} className="mr-2 animate-pulse"/> Red de Captura Automática GFS/Archive</h4>
+                                <h4 className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest flex items-center">
+                                    <Sparkles size={12} className={`mr-2 ${isFetchingConditions ? 'animate-pulse' : ''}`}/> 
+                                    Captura Automática GFS/Astro
+                                </h4>
+                                {!isViewMode && (
+                                    <button type="button" onClick={() => syncCurrentConditions(recordForm.date!)} className="text-[8px] font-black bg-white dark:bg-slate-800 px-2 py-1 rounded-lg border dark:border-slate-700 shadow-sm uppercase">Refrescar GPS</button>
+                                )}
                             </div>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                 <div><label className={labelClass}>Temp. Amb. (°C)</label><input type="number" step="0.1" disabled={isViewMode} className={inputStyle} value={recordForm.temperature} onChange={e => setRecordForm({...recordForm, temperature: Number(e.target.value)})} /></div>
                                 <div><label className={labelClass}>Hum. Rel. (%)</label><input type="number" step="0.1" disabled={isViewMode} className={inputStyle} value={recordForm.humidity} onChange={e => setRecordForm({...recordForm, humidity: Number(e.target.value)})} /></div>
-                                <div><label className={labelClass}>Luz (Fotoperiodo)</label><input type="number" step="0.1" disabled={isViewMode} className={inputStyle} value={recordForm.lightHours} onChange={e => setRecordForm({...recordForm, lightHours: Number(e.target.value)})} /></div>
+                                <div><label className={labelClass}>Luz (Fotoperiodo)</label><input type="number" step="0.01" disabled={isViewMode} className={inputStyle} value={recordForm.lightHours} onChange={e => setRecordForm({...recordForm, lightHours: Number(e.target.value)})} /></div>
                                 <div>
                                     <label className={labelClass}>Fase Lunar</label>
-                                    <select disabled={isViewMode} className={inputStyle} value={recordForm.lunarPhase} onChange={e => setRecordForm({...recordForm, lunarPhase: e.target.value})}>
-                                        <option value="Nueva">Nueva</option>
-                                        <option value="Creciente">Creciente</option>
-                                        <option value="Llena">Llena</option>
-                                        <option value="Menguante">Menguante</option>
-                                    </select>
+                                    <input type="text" disabled className={`${inputStyle} bg-slate-100 text-blue-600 opacity-80`} value={recordForm.lunarPhase} />
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-                {!isViewMode && <button type="submit" disabled={isSaving} className="w-full bg-slate-900 dark:bg-hemp-600 text-white py-5 rounded-3xl font-black text-xs uppercase tracking-[0.3em] shadow-xl flex items-center justify-center hover:scale-[1.02] transition-all disabled:opacity-50">
+                {!isViewMode && <button type="submit" disabled={isSaving || isFetchingConditions} className="w-full bg-slate-900 dark:bg-hemp-600 text-white py-5 rounded-3xl font-black text-xs uppercase tracking-[0.3em] shadow-xl flex items-center justify-center hover:scale-[1.02] transition-all disabled:opacity-50">
                     {isSaving ? <Loader2 className="animate-spin mr-2" size={18}/> : <Save className="mr-2" size={18}/>} 
                     Sellar y Validar Registro Técnico
                 </button>}
