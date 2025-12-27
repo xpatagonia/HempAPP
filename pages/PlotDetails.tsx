@@ -11,7 +11,7 @@ import {
   Sprout, X, Map, ShieldCheck, Info, AlertCircle, Trash2, Edit2,
   Camera, Image as ImageIcon, MessageSquare, ClipboardList, User, Calendar, Ruler, Maximize2, Download, Scale, Wind, Bird, CheckCircle2,
   RefreshCw, Globe, Layers, Save, Thermometer, Droplets, Waves, QrCode, Printer, Loader2, Zap, Sparkles, Link as LinkIcon, Sun,
-  TrendingUp, ArrowUpRight, Beaker, FileUp, Moon, Sunrise, Sunset, ZapOff, Archive
+  TrendingUp, ArrowUpRight, Beaker, FileUp, Moon, Sunrise, Sunset, ZapOff, Archive, Navigation, Scan
 } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
 import WeatherWidget from '../components/WeatherWidget';
@@ -43,7 +43,7 @@ export default function PlotDetails() {
   const history = getPlotHistory(id || '');
   const plotLogs = useMemo(() => logs.filter(l => l.plotId === id).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()), [logs, id]);
   
-  const [activeTab, setActiveTab] = useState<'records' | 'logs' | 'water' | 'astro'>('records');
+  const [activeTab, setActiveTab] = useState<'records' | 'logs' | 'water' | 'astro' | 'map'>('records');
   const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
@@ -58,8 +58,6 @@ export default function PlotDetails() {
   const [autoWeather, setAutoWeather] = useState<any>(null);
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
-  const isOwner = currentUser?.role === 'client' && location?.clientId === currentUser?.clientId;
-  const isAssignedTech = currentUser?.role === 'technician' && plot?.responsibleIds?.includes(currentUser.id);
   const canWriteLog = !!currentUser; 
 
   // --- CARGA DE CLIMA Y ASTRONOMÍA ---
@@ -67,12 +65,10 @@ export default function PlotDetails() {
     const fetchAstroAndWeather = async () => {
         if (!location?.coordinates) return;
         try {
-            // Weather & UV
             const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${location.coordinates.lat}&longitude=${location.coordinates.lng}&current=temperature_2m,relative_humidity_2m,weather_code&daily=uv_index_max,sunrise,sunset&timezone=auto`);
             const weatherData = await weatherRes.json();
             setAutoWeather(weatherData);
 
-            // Astronomy (Day length calculation)
             const today = new Date().toISOString().split('T')[0];
             const astroRes = await fetch(`https://api.sunrise-sunset.org/json?lat=${location.coordinates.lat}&lng=${location.coordinates.lng}&date=${today}&formatted=0`);
             const astro = await astroRes.json();
@@ -86,7 +82,6 @@ export default function PlotDetails() {
     fetchAstroAndWeather();
   }, [location]);
 
-  // Form Monitoring (Pre-poblar con Clima y Astro)
   const [recordForm, setRecordForm] = useState<Partial<TrialRecord>>({ 
     date: new Date().toISOString().split('T')[0], 
     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }), 
@@ -100,7 +95,7 @@ export default function PlotDetails() {
               temperature: autoWeather.current.temperature_2m,
               humidity: autoWeather.current.relative_humidity_2m,
               lightHours: parseFloat(astroData?.decimalHours || '18'),
-              lunarPhase: 'Creciente' // Se podría calcular dinámicamente si hay API disponible
+              lunarPhase: 'Creciente' 
           }));
       }
   }, [isRecordModalOpen, editingRecordId, autoWeather, astroData]);
@@ -218,6 +213,7 @@ export default function PlotDetails() {
 
       <div className="flex bg-white dark:bg-slate-900 p-2 rounded-3xl border dark:border-slate-800 shadow-sm w-fit overflow-x-auto">
           <button onClick={() => setActiveTab('records')} className={`px-8 py-3 font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl transition-all whitespace-nowrap ${activeTab === 'records' ? 'bg-hemp-600 text-white shadow-xl' : 'text-gray-400 hover:text-gray-600'}`}>Monitoreo & Curvas</button>
+          <button onClick={() => setActiveTab('map')} className={`px-8 py-3 font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl transition-all whitespace-nowrap ${activeTab === 'map' ? 'bg-emerald-600 text-white shadow-xl' : 'text-gray-400 hover:text-gray-600'}`}>Mapa & Geocerca</button>
           <button onClick={() => setActiveTab('astro')} className={`px-8 py-3 font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl transition-all whitespace-nowrap ${activeTab === 'astro' ? 'bg-amber-600 text-white shadow-xl' : 'text-gray-400 hover:text-gray-600'}`}>Ciclo de Luz</button>
           <button onClick={() => setActiveTab('logs')} className={`px-8 py-3 font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl transition-all whitespace-nowrap ${activeTab === 'logs' ? 'bg-slate-800 text-white shadow-xl' : 'text-gray-400 hover:text-gray-600'}`}>Bitácora Multimedia</button>
           <button onClick={() => setActiveTab('water')} className={`px-8 py-3 font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl transition-all whitespace-nowrap ${activeTab === 'water' ? 'bg-blue-600 text-white shadow-xl' : 'text-gray-400 hover:text-gray-600'}`}>Pluviómetro</button>
@@ -226,7 +222,6 @@ export default function PlotDetails() {
       <div className="grid grid-cols-1 gap-8">
           {activeTab === 'records' && (
             <div className="space-y-8 animate-in fade-in">
-                {/* GRÁFICO DE CRECIMIENTO */}
                 <div className="bg-white dark:bg-slate-900 p-8 rounded-[40px] border dark:border-slate-800 shadow-sm">
                     <div className="flex justify-between items-center mb-8">
                         <div>
@@ -288,6 +283,67 @@ export default function PlotDetails() {
                     </div>
                 </div>
             </div>
+          )}
+
+          {activeTab === 'map' && (
+              <div className="space-y-8 animate-in fade-in">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      <div className="md:col-span-2 bg-white dark:bg-slate-900 rounded-[40px] border dark:border-slate-800 shadow-sm overflow-hidden h-[600px] relative">
+                          <MapEditor 
+                            initialCenter={plot.coordinates} 
+                            initialPolygon={plot.polygon} 
+                            referencePolygon={location?.polygon}
+                            readOnly={true} 
+                            height="100%" 
+                          />
+                          <div className="absolute top-6 left-6 z-[1000] bg-white/90 dark:bg-slate-900/90 backdrop-blur-md p-4 rounded-2xl border dark:border-slate-800 shadow-2xl space-y-3">
+                              <div className="flex items-center gap-3">
+                                  <div className="w-3 h-3 rounded-full bg-hemp-600 shadow-[0_0_8px_rgba(22,163,74,0.5)]"></div>
+                                  <span className="text-[10px] font-black text-slate-800 dark:text-white uppercase tracking-widest">Parcela: {plot.name}</span>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                  <div className="w-3 h-3 rounded-full border-2 border-red-500 border-dashed"></div>
+                                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Establecimiento: {location?.name}</span>
+                              </div>
+                          </div>
+                      </div>
+                      <div className="space-y-6">
+                          <div className="bg-white dark:bg-slate-900 p-8 rounded-[40px] border dark:border-slate-800 shadow-sm">
+                              <h3 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-widest mb-6 flex items-center"><Navigation size={18} className="mr-2 text-emerald-600"/> Datos Geofísicos</h3>
+                              <div className="space-y-4">
+                                  <div className="bg-emerald-50 dark:bg-emerald-900/10 p-5 rounded-3xl border border-emerald-100 dark:border-emerald-900/30">
+                                      <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mb-1">Superficie Perimetral</p>
+                                      <p className="text-3xl font-black text-emerald-800 dark:text-emerald-300">{plot.surfaceArea} <span className="text-sm">{plot.surfaceUnit}</span></p>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-3">
+                                      <div className="bg-gray-50 dark:bg-slate-950 p-4 rounded-2xl border dark:border-slate-800">
+                                          <p className="text-[8px] font-black text-slate-400 uppercase">Latitud</p>
+                                          <p className="text-xs font-mono font-bold dark:text-white truncate">{plot.coordinates?.lat.toFixed(6) || 'S/D'}</p>
+                                      </div>
+                                      <div className="bg-gray-50 dark:bg-slate-950 p-4 rounded-2xl border dark:border-slate-800">
+                                          <p className="text-[8px] font-black text-slate-400 uppercase">Longitud</p>
+                                          <p className="text-xs font-mono font-bold dark:text-white truncate">{plot.coordinates?.lng.toFixed(6) || 'S/D'}</p>
+                                      </div>
+                                  </div>
+                              </div>
+                          </div>
+                          <div className="bg-slate-900 p-8 rounded-[40px] text-white relative overflow-hidden">
+                              <h3 className="text-sm font-black uppercase tracking-widest mb-6 flex items-center relative z-10"><Scan size={18} className="mr-2 text-blue-400"/> Trazabilidad Geo</h3>
+                              <div className="space-y-4 relative z-10">
+                                  <div className="flex justify-between items-center text-xs font-bold text-slate-400 uppercase">
+                                      <span>Nodos de Borde</span>
+                                      <span className="text-white">{plot.polygon?.length || 0}</span>
+                                  </div>
+                                  <div className="flex justify-between items-center text-xs font-bold text-slate-400 uppercase">
+                                      <span>Perímetro Lineal</span>
+                                      <span className="text-white">--- m</span>
+                                  </div>
+                              </div>
+                              <Globe className="absolute -bottom-10 -right-10 w-48 h-48 text-blue-500 opacity-10" />
+                          </div>
+                      </div>
+                  </div>
+              </div>
           )}
 
           {activeTab === 'astro' && (

@@ -26,25 +26,19 @@ interface MapEditorProps {
     key?: string | number;
 }
 
-// FIX FINAL: Componente que reacciona a cualquier cambio de tamaño del contenedor del mapa
 const MapResizer = () => {
     const map = useMap();
     useEffect(() => {
         if (!map) return;
-
         const container = map.getContainer();
         const observer = new ResizeObserver(() => {
             requestAnimationFrame(() => {
                 map.invalidateSize({ animate: false });
             });
         });
-
         observer.observe(container);
-        
-        // Ejecución inmediata y retardada para mayor seguridad
         map.invalidateSize();
         const timer = setTimeout(() => map.invalidateSize(), 500);
-
         return () => {
             observer.disconnect();
             clearTimeout(timer);
@@ -54,19 +48,20 @@ const MapResizer = () => {
 };
 
 const MapEvents = ({ onAddPoint }: { onAddPoint: (e: L.LeafletMouseEvent) => void }) => {
-    useMapEvents({
-        click: onAddPoint,
-    });
+    useMapEvents({ click: onAddPoint });
     return null;
 };
 
-const MapRecenter = ({ center }: { center: { lat: number, lng: number } }) => {
+const MapRecenter = ({ center, polygon }: { center: { lat: number, lng: number }, polygon?: { lat: number, lng: number }[] }) => {
     const map = useMap();
     useEffect(() => {
-        if (center && center.lat !== 0 && center.lng !== 0) {
-            map.setView([center.lat, center.lng], map.getZoom() || 15);
+        if (polygon && polygon.length >= 3) {
+            const bounds = L.latLngBounds(polygon.map(p => [p.lat, p.lng]));
+            map.fitBounds(bounds, { padding: [20, 20] });
+        } else if (center && center.lat !== 0 && center.lng !== 0) {
+            map.setView([center.lat, center.lng], 15);
         }
-    }, [center, map]);
+    }, [center, polygon, map]);
     return null;
 };
 
@@ -85,9 +80,7 @@ export default function MapEditor({ initialPolygon = [], initialCenter, referenc
     }, [initialCenter]);
 
     useEffect(() => {
-        if (initialPolygon) {
-            setPolygon(initialPolygon);
-        }
+        if (initialPolygon) setPolygon(initialPolygon);
     }, [initialPolygon]);
 
     const toRad = (value: number) => (value * Math.PI) / 180;
@@ -136,23 +129,23 @@ export default function MapEditor({ initialPolygon = [], initialCenter, referenc
                 center={[center.lat, center.lng]} 
                 zoom={15} 
                 style={{ height: "100%", width: "100%" }}
-                scrollWheelZoom={!readOnly}
+                scrollWheelZoom={true}
             >
                 <MapResizer />
                 <TileLayer attribution='&copy; OSM' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                 {!readOnly && <MapEvents onAddPoint={handleAddPoint} />}
-                <MapRecenter center={center} />
+                <MapRecenter center={center} polygon={polygon.length > 2 ? polygon : undefined} />
 
                 {referencePolygon.length > 2 && (
                     <Polygon positions={referencePolygon} pathOptions={{ color: '#ef4444', fillColor: 'transparent', weight: 2, dashArray: '5, 10' }} />
                 )}
 
-                {polygon.length > 1 && !readOnly && (
+                {polygon.length > 1 && (
                     <Polygon positions={polygon} pathOptions={{ color: '#16a34a', fillColor: '#16a34a', fillOpacity: 0.3, weight: 3 }} />
                 )}
 
-                {polygon.length > 0 && polygon.map((pos, idx) => ( 
-                    <Marker key={`marker-${idx}`} position={[pos.lat, pos.lng]} interactive={!readOnly} /> 
+                {polygon.length > 0 && !readOnly && polygon.map((pos, idx) => ( 
+                    <Marker key={`marker-${idx}`} position={[pos.lat, pos.lng]} /> 
                 ))}
                 
                 {readOnly && polygon.length === 0 && center.lat !== 0 && ( 
