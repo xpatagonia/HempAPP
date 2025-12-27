@@ -199,7 +199,8 @@ const MANUAL_MAP: Record<string, string> = {
     directorId: 'director_id',
     usedSeedValue: 'used_seed_value',
     usedSeedUnit: 'used_seed_unit',
-    lightHours: 'light_hours'
+    lightHours: 'light_hours',
+    lunarPhase: 'lunar_phase'
 };
 
 const toSnakeCase = (obj: any) => {

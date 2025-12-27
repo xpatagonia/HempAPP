@@ -222,6 +222,7 @@ export interface TrialRecord {
   createdBy?: string;
   createdByName?: string;
   lightHours?: number;
+  lunarPhase?: string;
 }
 
 export interface FieldLog {

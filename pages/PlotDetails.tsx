@@ -86,11 +86,11 @@ export default function PlotDetails() {
     fetchAstroAndWeather();
   }, [location]);
 
-  // Form Monitoring (Pre-poblar con Clima)
+  // Form Monitoring (Pre-poblar con Clima y Astro)
   const [recordForm, setRecordForm] = useState<Partial<TrialRecord>>({ 
     date: new Date().toISOString().split('T')[0], 
     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }), 
-    stage: 'Vegetativo' as any, temperature: 0, humidity: 0, plantHeight: 0, plantsPerMeter: 0, lightHours: 18 
+    stage: 'Vegetativo' as any, temperature: 0, humidity: 0, plantHeight: 0, plantsPerMeter: 0, lightHours: 18, lunarPhase: 'Creciente'
   });
 
   useEffect(() => {
@@ -99,7 +99,8 @@ export default function PlotDetails() {
               ...prev,
               temperature: autoWeather.current.temperature_2m,
               humidity: autoWeather.current.relative_humidity_2m,
-              lightHours: parseFloat(astroData?.decimalHours || '18')
+              lightHours: parseFloat(astroData?.decimalHours || '18'),
+              lunarPhase: 'Creciente' // Se podría calcular dinámicamente si hay API disponible
           }));
       }
   }, [isRecordModalOpen, editingRecordId, autoWeather, astroData]);
@@ -217,7 +218,7 @@ export default function PlotDetails() {
 
       <div className="flex bg-white dark:bg-slate-900 p-2 rounded-3xl border dark:border-slate-800 shadow-sm w-fit overflow-x-auto">
           <button onClick={() => setActiveTab('records')} className={`px-8 py-3 font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl transition-all whitespace-nowrap ${activeTab === 'records' ? 'bg-hemp-600 text-white shadow-xl' : 'text-gray-400 hover:text-gray-600'}`}>Monitoreo & Curvas</button>
-          <button onClick={() => setActiveTab('astro')} className={`px-8 py-3 font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl transition-all whitespace-nowrap ${activeTab === 'astro' ? 'bg-amber-600 text-white shadow-xl' : 'text-gray-400 hover:text-gray-600'}`}>Luz & Astronomía</button>
+          <button onClick={() => setActiveTab('astro')} className={`px-8 py-3 font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl transition-all whitespace-nowrap ${activeTab === 'astro' ? 'bg-amber-600 text-white shadow-xl' : 'text-gray-400 hover:text-gray-600'}`}>Ciclo de Luz</button>
           <button onClick={() => setActiveTab('logs')} className={`px-8 py-3 font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl transition-all whitespace-nowrap ${activeTab === 'logs' ? 'bg-slate-800 text-white shadow-xl' : 'text-gray-400 hover:text-gray-600'}`}>Bitácora Multimedia</button>
           <button onClick={() => setActiveTab('water')} className={`px-8 py-3 font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl transition-all whitespace-nowrap ${activeTab === 'water' ? 'bg-blue-600 text-white shadow-xl' : 'text-gray-400 hover:text-gray-600'}`}>Pluviómetro</button>
       </div>
@@ -263,13 +264,23 @@ export default function PlotDetails() {
                     </div>
                     <div className="overflow-x-auto">
                         <table className="min-w-full text-sm text-left">
-                            <thead className="bg-gray-50/50 dark:bg-slate-950/50 text-gray-400 uppercase text-[9px] font-black tracking-widest"><tr><th className="px-10 py-5">Fecha</th><th className="px-10 py-5">Etapa</th><th className="px-10 py-5 text-center">Altura</th><th className="px-10 py-5 text-center">Temp / HR</th><th className="px-10 py-5 text-right">Detalle</th></tr></thead>
+                            <thead className="bg-gray-50/50 dark:bg-slate-950/50 text-gray-400 uppercase text-[9px] font-black tracking-widest border-b dark:border-slate-800"><tr><th className="px-10 py-5">Fecha</th><th className="px-10 py-5">Etapa</th><th className="px-10 py-5 text-center">Altura</th><th className="px-10 py-5 text-center">Clima</th><th className="px-10 py-5 text-center">Ciclo Luz / Luna</th><th className="px-10 py-5 text-right">Detalle</th></tr></thead>
                             <tbody className="divide-y divide-gray-100 dark:divide-slate-800 font-bold uppercase text-[11px]">{history.map(r => (
                                 <tr key={r.id} className="hover:bg-gray-50 dark:hover:bg-slate-800 cursor-pointer" onClick={() => { setEditingRecordId(r.id); setRecordForm(r); setIsViewMode(true); setIsRecordModalOpen(true); }}>
                                     <td className="px-10 py-6 font-black text-gray-800 dark:text-white tracking-tighter">{r.date}</td>
                                     <td className="px-10 py-6"><span className="px-3 py-1 rounded-lg text-[9px] font-black uppercase border bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-100 dark:border-green-900/30">{r.stage}</span></td>
                                     <td className="px-10 py-6 text-center font-black text-gray-900 dark:text-white">{r.plantHeight} cm</td>
-                                    <td className="px-10 py-6 text-center text-[10px] text-slate-500">{r.temperature}°C / {r.humidity}% HR</td>
+                                    <td className="px-10 py-6 text-center text-[10px] text-slate-500 whitespace-nowrap">{r.temperature}°C / {r.humidity}% HR</td>
+                                    <td className="px-10 py-6 text-center">
+                                        <div className="flex flex-col items-center gap-1">
+                                            <div className="flex items-center gap-1.5 text-amber-600 font-black text-[9px]">
+                                                <Sun size={10}/> {r.lightHours || '---'}h
+                                            </div>
+                                            <div className="flex items-center gap-1.5 text-blue-500 font-black text-[9px]">
+                                                <Moon size={10}/> {r.lunarPhase || '---'}
+                                            </div>
+                                        </div>
+                                    </td>
                                     <td className="px-10 py-6 text-right"><Eye size={18} className="text-gray-300 ml-auto transition"/></td>
                                 </tr>
                             ))}</tbody>
@@ -443,11 +454,22 @@ export default function PlotDetails() {
                             <div><label className={labelClass}>Población (Pl/m²)</label><input type="number" step="0.1" disabled={isViewMode} className={inputStyle} value={recordForm.plantsPerMeter} onChange={e => setRecordForm({...recordForm, plantsPerMeter: Number(e.target.value)})} /></div>
                         </div>
                         <div className="bg-blue-50 dark:bg-blue-900/10 p-6 rounded-3xl border border-blue-100 dark:border-blue-900/30">
-                            <h4 className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-4 flex items-center"><Sparkles size={12} className="mr-2 animate-pulse"/> Captura Automática Open-Meteo Red</h4>
-                            <div className="grid grid-cols-3 gap-4">
+                            <div className="flex justify-between items-center mb-4">
+                                <h4 className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest flex items-center"><Sparkles size={12} className="mr-2 animate-pulse"/> Red de Captura Automática GFS/Archive</h4>
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                 <div><label className={labelClass}>Temp. Amb. (°C)</label><input type="number" step="0.1" disabled={isViewMode} className={inputStyle} value={recordForm.temperature} onChange={e => setRecordForm({...recordForm, temperature: Number(e.target.value)})} /></div>
-                                <div><label className={labelClass}>Humedad Rel. (%)</label><input type="number" step="0.1" disabled={isViewMode} className={inputStyle} value={recordForm.humidity} onChange={e => setRecordForm({...recordForm, humidity: Number(e.target.value)})} /></div>
+                                <div><label className={labelClass}>Hum. Rel. (%)</label><input type="number" step="0.1" disabled={isViewMode} className={inputStyle} value={recordForm.humidity} onChange={e => setRecordForm({...recordForm, humidity: Number(e.target.value)})} /></div>
                                 <div><label className={labelClass}>Luz (Fotoperiodo)</label><input type="number" step="0.1" disabled={isViewMode} className={inputStyle} value={recordForm.lightHours} onChange={e => setRecordForm({...recordForm, lightHours: Number(e.target.value)})} /></div>
+                                <div>
+                                    <label className={labelClass}>Fase Lunar</label>
+                                    <select disabled={isViewMode} className={inputStyle} value={recordForm.lunarPhase} onChange={e => setRecordForm({...recordForm, lunarPhase: e.target.value})}>
+                                        <option value="Nueva">Nueva</option>
+                                        <option value="Creciente">Creciente</option>
+                                        <option value="Llena">Llena</option>
+                                        <option value="Menguante">Menguante</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
                     </div>
