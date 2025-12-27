@@ -5,7 +5,7 @@ import { supabase, checkConnection } from '../supabaseClient';
 import { 
   Save, Database, RefreshCw, Lock, Settings as SettingsIcon, 
   CheckCircle2, Layout, Trash2, RotateCcw, Shield, 
-  AlertTriangle, FlaskConical, CheckCircle, XCircle, Info, Search, FileCode, Flame, Eraser, database
+  AlertTriangle, FlaskConical, CheckCircle, XCircle, Info, Search, FileCode, Flame, Eraser
 } from 'lucide-react';
 
 export default function Settings() {
@@ -47,7 +47,7 @@ export default function Settings() {
       <div className="flex space-x-1 bg-gray-100 dark:bg-slate-900 p-1 rounded-lg mb-8 w-fit">
           <button onClick={() => setActiveTab('branding')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'branding' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Identidad</button>
           <button onClick={() => setActiveTab('database')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'database' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>SQL Nucleus</button>
-          <button onClick={() => setActiveTab('maintenance')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'maintenance' ? 'bg-white dark:bg-amber-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Mantenimiento V39</button>
+          <button onClick={() => setActiveTab('maintenance')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'maintenance' ? 'bg-white dark:bg-amber-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Mantenimiento</button>
       </div>
 
       {activeTab === 'branding' && (
@@ -79,37 +79,12 @@ export default function Settings() {
                   </div>
 
                   <p className="text-sm text-slate-500 dark:text-slate-400 mb-8 leading-relaxed">
-                      Este proceso elimina todos los datos operativos dinámicos para comenzar una nueva campaña o corregir errores masivos de carga, <strong>conservando la configuración estructural</strong>.
+                      Este proceso elimina todos los datos operativos dinámicos para comenzar una nueva campaña o corregir errores masivos de carga.
                   </p>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-                      <div className="bg-red-50 dark:bg-red-900/10 p-4 rounded-2xl border border-red-100 dark:border-red-900/20">
-                          <h4 className="text-[10px] font-black text-red-600 uppercase tracking-widest mb-2 flex items-center"><XCircle size={12} className="mr-1.5"/> SE ELIMINARÁ</h4>
-                          <ul className="text-[11px] text-red-700 dark:text-red-300 font-bold space-y-1">
-                              <li>• Inventario de Semillas (Lotes)</li>
-                              <li>• Remitos y Movimientos</li>
-                              <li>• Registros Fenológicos y de Altura</li>
-                              <li>• Bitácora Multimedia (Fotos/Notas)</li>
-                              <li>• Pluviómetro y Huella Hídrica</li>
-                              <li>• Tareas y Labores</li>
-                          </ul>
-                      </div>
-                      <div className="bg-green-50 dark:bg-green-900/10 p-4 rounded-2xl border border-green-100 dark:border-green-900/20">
-                          <h4 className="text-[10px] font-black text-green-600 uppercase tracking-widest mb-2 flex items-center"><CheckCircle size={12} className="mr-1.5"/> SE CONSERVARÁ</h4>
-                          <ul className="text-[11px] text-green-700 dark:text-green-300 font-bold space-y-1">
-                              <li>• Usuarios y Accesos</li>
-                              <li>• Campos (Locaciones Georreferenciadas)</li>
-                              <li>• Almacenes (Nodos Logísticos)</li>
-                              <li>• Catálogo de Variedades Genéticas</li>
-                              <li>• Proveedores y Socios de Red</li>
-                              <li>• Campañas (Estructura de Proyectos)</li>
-                          </ul>
-                      </div>
-                  </div>
 
                   <button 
                       onClick={() => {
-                        const sql = `-- PROTOCOLO V38: LIMPIEZA SELECTIVA DE TRANSACCIONES
+                        const sql = `-- PROTOCOLO DE LIMPIEZA
 DELETE FROM public.field_logs;
 DELETE FROM public.trial_records;
 DELETE FROM public.seed_movements;
@@ -133,26 +108,39 @@ NOTIFY pgrst, 'reload schema';`;
               <div className="bg-slate-900 border border-slate-800 p-8 rounded-[40px] shadow-2xl relative overflow-hidden">
                   <div className="flex items-center space-x-3 mb-6">
                       <Shield className="text-hemp-500" size={24}/>
-                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Protocolo Nuclear V39 (Fotoperiodo & Estructura)</h3>
+                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Protocolo Nuclear V39 (Fotoperiodo & Luna)</h3>
                   </div>
                   
                   <div className="bg-amber-900/20 border border-amber-500/30 p-4 rounded-2xl mb-6 text-amber-200 text-xs leading-relaxed">
-                      <p className="font-black mb-2 flex items-center uppercase"><RefreshCw className="mr-2" size={14}/> REPARACIÓN DE COLUMNAS (FOTOPERIODO)</p>
-                      Ejecuta este script para habilitar la columna de <strong>light_hours</strong> en tus registros técnicos.
+                      <p className="font-black mb-2 flex items-center uppercase"><RefreshCw className="mr-2" size={14}/> REPARACIÓN DE ESQUEMA</p>
+                      Este script habilita las columnas de <strong>light_hours</strong> y <strong>lunar_phase</strong> necesarias para los nuevos monitoreos astronómicos.
                   </div>
 
                   <button onClick={() => {
                       const sql = `
--- PROTOCOLO V39: SOPORTE NATIVO FOTOPERIODO
+-- PROTOCOLO V39: SOPORTE NATIVO ASTRONÓMICO
+-- Ejecutar para resolver error "Could not find lunar_phase column"
+
 ALTER TABLE IF EXISTS public.trial_records ADD COLUMN IF NOT EXISTS light_hours NUMERIC DEFAULT 18;
+ALTER TABLE IF EXISTS public.trial_records ADD COLUMN IF NOT EXISTS lunar_phase TEXT;
 
 NOTIFY pgrst, 'reload schema';
                       `;
                       navigator.clipboard.writeText(sql.trim());
-                      alert("Script V39 Copiado. Péguelo en el SQL Editor de Supabase y presione RUN.");
+                      alert("Script V39 Corregido Copiado. Péguelo en el SQL Editor de Supabase y presione RUN.");
                   }} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-2xl font-black text-xs uppercase shadow-xl flex items-center justify-center transition-all mb-8">
-                      <RefreshCw size={18} className="mr-2"/> Copiar Script Reparador V39
+                      <RefreshCw size={18} className="mr-2"/> Copiar Script V39 (Corregido)
                   </button>
+                  
+                  <div className="mt-4 p-4 bg-white/5 border border-white/10 rounded-2xl">
+                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-2">Previsualización del Script:</p>
+                      <pre className="text-[9px] text-emerald-400 font-mono overflow-x-auto">
+{`ALTER TABLE public.trial_records 
+ADD COLUMN IF NOT EXISTS light_hours NUMERIC;
+ALTER TABLE public.trial_records 
+ADD COLUMN IF NOT EXISTS lunar_phase TEXT;`}
+                      </pre>
+                  </div>
               </div>
           </div>
       )}
