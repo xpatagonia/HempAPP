@@ -108,37 +108,45 @@ NOTIFY pgrst, 'reload schema';`;
               <div className="bg-slate-900 border border-slate-800 p-8 rounded-[40px] shadow-2xl relative overflow-hidden">
                   <div className="flex items-center space-x-3 mb-6">
                       <Shield className="text-hemp-500" size={24}/>
-                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Protocolo Nuclear V39 (Fotoperiodo & Luna)</h3>
+                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Protocolo Nuclear V40 (HempIT France Full)</h3>
                   </div>
                   
-                  <div className="bg-amber-900/20 border border-amber-500/30 p-4 rounded-2xl mb-6 text-amber-200 text-xs leading-relaxed">
-                      <p className="font-black mb-2 flex items-center uppercase"><RefreshCw className="mr-2" size={14}/> REPARACIÓN DE ESQUEMA</p>
-                      Este script habilita las columnas de <strong>light_hours</strong> y <strong>lunar_phase</strong> necesarias para los nuevos monitoreos astronómicos.
+                  <div className="bg-emerald-900/20 border border-emerald-500/30 p-4 rounded-2xl mb-6 text-emerald-200 text-xs leading-relaxed">
+                      <p className="font-black mb-2 flex items-center uppercase"><RefreshCw className="mr-2" size={14}/> ACTUALIZACIÓN DE ESQUEMA REQUERIDA</p>
+                      Este script añade soporte para las escalas 1-9 (Vigor, Encamado, Sanidad) y métricas de cosecha (Peso tallo, Calidad de semilla) exigidas por HempIT France.
                   </div>
 
                   <button onClick={() => {
-                      const sql = `
--- PROTOCOLO V39: SOPORTE NATIVO ASTRONÓMICO
--- Ejecutar para resolver error "Could not find lunar_phase column"
+                      const sql = `-- PROTOCOLO V40: INTEGRACIÓN TÉCNICA HEMPTIT FRANCE & ASTRO
+ALTER TABLE IF EXISTS public.trial_records 
+ADD COLUMN IF NOT EXISTS light_hours NUMERIC DEFAULT 12,
+ADD COLUMN IF NOT EXISTS lunar_phase TEXT,
+ADD COLUMN IF NOT EXISTS uniformity INTEGER DEFAULT 9,
+ADD COLUMN IF NOT EXISTS vigor INTEGER DEFAULT 9,
+ADD COLUMN IF NOT EXISTS lodging INTEGER DEFAULT 1,
+ADD COLUMN IF NOT EXISTS bird_damage INTEGER DEFAULT 1,
+ADD COLUMN IF NOT EXISTS diseases_score INTEGER DEFAULT 1,
+ADD COLUMN IF NOT EXISTS pests_score INTEGER DEFAULT 1,
+ADD COLUMN IF NOT EXISTS harvest_plant_count NUMERIC DEFAULT 0,
+ADD COLUMN IF NOT EXISTS seed_yield NUMERIC DEFAULT 0,
+ADD COLUMN IF NOT EXISTS seed_quality_germination NUMERIC DEFAULT 0,
+ADD COLUMN IF NOT EXISTS seed_quality_non_conformity NUMERIC DEFAULT 0,
+ADD COLUMN IF NOT EXISTS stem_weight NUMERIC DEFAULT 0,
+ADD COLUMN IF NOT EXISTS flowering_date DATE;
 
-ALTER TABLE IF EXISTS public.trial_records ADD COLUMN IF NOT EXISTS light_hours NUMERIC DEFAULT 18;
-ALTER TABLE IF EXISTS public.trial_records ADD COLUMN IF NOT EXISTS lunar_phase TEXT;
-
-NOTIFY pgrst, 'reload schema';
-                      `;
+NOTIFY pgrst, 'reload schema';`;
                       navigator.clipboard.writeText(sql.trim());
-                      alert("Script V39 Corregido Copiado. Péguelo en el SQL Editor de Supabase y presione RUN.");
-                  }} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-2xl font-black text-xs uppercase shadow-xl flex items-center justify-center transition-all mb-8">
-                      <RefreshCw size={18} className="mr-2"/> Copiar Script V39 (Corregido)
+                      alert("Script V40 Copiado. Péguelo en el SQL Editor de Supabase y presione RUN.");
+                  }} className="w-full bg-hemp-600 hover:bg-hemp-700 text-white py-4 rounded-2xl font-black text-xs uppercase shadow-xl flex items-center justify-center transition-all mb-8">
+                      <RefreshCw size={18} className="mr-2"/> Copiar Script V40 (HempIT Protocol)
                   </button>
                   
                   <div className="mt-4 p-4 bg-white/5 border border-white/10 rounded-2xl">
-                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-2">Previsualización del Script:</p>
+                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-2">Columnas nuevas a crear:</p>
                       <pre className="text-[9px] text-emerald-400 font-mono overflow-x-auto">
-{`ALTER TABLE public.trial_records 
-ADD COLUMN IF NOT EXISTS light_hours NUMERIC;
-ALTER TABLE public.trial_records 
-ADD COLUMN IF NOT EXISTS lunar_phase TEXT;`}
+{`vigor, lodging, bird_damage, diseases_score, 
+pests_score, stem_weight, seed_yield, 
+seed_quality_germination, flowering_date...`}
                       </pre>
                   </div>
               </div>
