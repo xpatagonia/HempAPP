@@ -1,7 +1,20 @@
 {
-  "name": "HempAPP",
+  "name": "HempC | Nucleus Trace",
+  "short_name": "HempC",
   "description": "Sistema de gestión integral para ensayos industriales de cáñamo, bitácoras de cultivo y análisis de rendimientos.",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/628/628283.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#16a34a",
+  "background_color": "#020617",
   "requestFramePermissions": [
-    "geolocation"
+    "geolocation",
+    "camera"
   ]
 }

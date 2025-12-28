@@ -4,7 +4,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { TrialRecord, Plot, FieldLog, HydricRecord, SeedBatch } from '../types';
 import { 
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, BarChart, Bar
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area
 } from 'recharts';
 import { 
   ArrowLeft, Activity, MapPin, Plus, Eye, Tag, Clock, 
@@ -168,12 +168,12 @@ export default function PlotDetails() {
             plotId: plot.id, 
             date: logForm.date || new Date().toISOString().split('T')[0], 
             time: logForm.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
-            note: logForm.note || '', 
+            note: `[${currentUser?.name || 'Sistema'}] ${logForm.note || ''}`.trim(), 
             photoUrl: logForm.photoUrl || ''
           } as FieldLog;
           await addLog(payload);
           setLogForm({ note: '', date: new Date().toISOString().split('T')[0], time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }), photoUrl: '' });
-          alert("✅ Nota guardada en bitácora.");
+          alert("✅ Entrada de bitácora sellada.");
       } finally { setIsSaving(false); }
   };
 
@@ -223,7 +223,7 @@ export default function PlotDetails() {
             <ArrowLeft size={16} className="mr-2 group-hover:-translate-x-1 transition-transform" /> Listado Global
         </Link>
         <button onClick={() => setIsQrModalOpen(true)} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-2xl text-slate-500 hover:text-hemp-600 shadow-sm transition-all flex items-center gap-2 px-6 text-xs font-black uppercase tracking-widest">
-            <QrCode size={18}/> Etiqueta QR
+            <QrCode size={18}/> Generar Etiqueta QR
         </button>
       </div>
 
@@ -486,6 +486,41 @@ export default function PlotDetails() {
 
           {activeTab === 'water' && <HydricBalance locationId={plot.locationId} plotId={plot.id} startDate={plot.sowingDate} />}
       </div>
+
+      {/* MODAL QR CODE */}
+      {isQrModalOpen && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[110] p-4">
+              <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-sm w-full p-10 shadow-2xl text-center animate-in zoom-in-95">
+                   <div className="mb-6 flex justify-center">
+                        <div className="bg-hemp-600 p-4 rounded-[28px] text-white shadow-xl">
+                            <QrCode size={48}/>
+                        </div>
+                   </div>
+                   <h3 className="text-2xl font-black dark:text-white uppercase tracking-tighter mb-2 italic">Etiqueta Identificatoria</h3>
+                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-8">Escanear para acceder a trazabilidad</p>
+                   
+                   <div className="bg-white p-6 rounded-3xl border-4 border-gray-100 shadow-inner inline-block mb-8">
+                       <img 
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${window.location.origin}/#/plots/${plot.id}`} 
+                        alt="QR Code"
+                        className="w-40 h-40"
+                       />
+                   </div>
+                   
+                   <div className="text-left bg-gray-50 dark:bg-slate-800 p-4 rounded-2xl border dark:border-slate-700 mb-8">
+                       <p className="text-[9px] font-black text-gray-400 uppercase mb-1">ID Parcelario:</p>
+                       <p className="text-xs font-black dark:text-white font-mono">{plot.id}</p>
+                   </div>
+
+                   <div className="flex gap-3">
+                       <button onClick={() => window.print()} className="flex-1 bg-hemp-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg flex items-center justify-center">
+                           <Printer size={16} className="mr-2"/> Imprimir
+                       </button>
+                       <button onClick={() => setIsQrModalOpen(false)} className="px-6 bg-gray-100 dark:bg-slate-800 text-gray-500 rounded-2xl font-black text-xs uppercase transition-all">Cerrar</button>
+                   </div>
+              </div>
+          </div>
+      )}
 
       {/* MODAL INFORME PERIÓDICO */}
       {isRecordModalOpen && (
