@@ -26,6 +26,7 @@ import Storage from './pages/Storage';
 import LogisticsMap from './pages/LogisticsMap';
 import IntegrityCheck from './pages/IntegrityCheck';
 import AgronomicIntelligence from './pages/AgronomicIntelligence';
+import PublicTraceability from './pages/PublicTraceability';
 
 const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
   const { currentUser } = useAppContext();
@@ -40,126 +41,43 @@ export default function App() {
   return (
     <AppProvider>
       <Router>
-        <Layout>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            
-            <Route path="/" element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            } />
-            <Route path="/projects" element={
-              <ProtectedRoute>
-                <Projects />
-              </ProtectedRoute>
-            } />
-            <Route path="/calendar" element={
-              <ProtectedRoute>
-                <CalendarPage />
-              </ProtectedRoute>
-            } />
-            <Route path="/tasks" element={
-              <ProtectedRoute>
-                <Tasks />
-              </ProtectedRoute>
-            } />
-            <Route path="/tools" element={
-              <ProtectedRoute>
-                <Tools />
-              </ProtectedRoute>
-            } />
-            <Route path="/intelligence" element={
-              <ProtectedRoute>
-                <AgronomicIntelligence />
-              </ProtectedRoute>
-            } />
-            <Route path="/analytics" element={
-              <ProtectedRoute>
-                <Analytics />
-              </ProtectedRoute>
-            } />
-            <Route path="/integrity" element={
-              <ProtectedRoute>
-                <IntegrityCheck />
-              </ProtectedRoute>
-            } />
-            <Route path="/advisor" element={
-              <ProtectedRoute>
-                <AIAdvisor />
-              </ProtectedRoute>
-            } />
-            <Route path="/varieties" element={
-              <ProtectedRoute>
-                <Varieties />
-              </ProtectedRoute>
-            } />
-            <Route path="/suppliers" element={
-              <ProtectedRoute>
-                <Suppliers />
-              </ProtectedRoute>
-            } />
-            <Route path="/clients" element={
-              <ProtectedRoute>
-                <Clients />
-              </ProtectedRoute>
-            } />
-            <Route path="/resources" element={
-              <ProtectedRoute>
-                <Resources />
-              </ProtectedRoute>
-            } />
-            <Route path="/storage" element={
-              <ProtectedRoute>
-                <Storage />
-              </ProtectedRoute>
-            } />
-            <Route path="/logistics-map" element={
-              <ProtectedRoute>
-                <LogisticsMap />
-              </ProtectedRoute>
-            } />
-            <Route path="/seed-batches" element={
-              <ProtectedRoute>
-                <SeedBatches />
-              </ProtectedRoute>
-            } />
-            
-            <Route path="/locations" element={
-              <ProtectedRoute>
-                <Locations />
-              </ProtectedRoute>
-            } />
-            <Route path="/locations/:id" element={
-              <ProtectedRoute>
-                <LocationDetails />
-              </ProtectedRoute>
-            } />
-
-            <Route path="/plots" element={
-              <ProtectedRoute>
-                <Plots />
-              </ProtectedRoute>
-            } />
-            <Route path="/plots/:id" element={
-              <ProtectedRoute>
-                <PlotDetails />
-              </ProtectedRoute>
-            } />
-            
-            <Route path="/users" element={
-              <ProtectedRoute>
-                <Users />
-              </ProtectedRoute>
-            } />
-            <Route path="/settings" element={
-              <ProtectedRoute>
-                <Settings />
-              </ProtectedRoute>
-            } />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Layout>
+        <Routes>
+          {/* Ruta Pública de Trazabilidad (QR) */}
+          <Route path="/trace/:id" element={<PublicTraceability />} />
+          <Route path="/login" element={<Login />} />
+          
+          <Route path="/*" element={
+            <ProtectedRoute>
+              <Layout>
+                <Routes>
+                  <Route path="/" element={<Dashboard />} />
+                  <Route path="/projects" element={<Projects />} />
+                  <Route path="/calendar" element={<CalendarPage />} />
+                  <Route path="/tasks" element={<Tasks />} />
+                  <Route path="/tools" element={<Tools />} />
+                  <Route path="/intelligence" element={<AgronomicIntelligence />} />
+                  <Route path="/analytics" element={<Analytics />} />
+                  <Route path="/integrity" element={<IntegrityCheck />} />
+                  <Route path="/advisor" element={<AIAdvisor />} />
+                  <Route path="/varieties" element={<Varieties />} />
+                  <Route path="/suppliers" element={<Suppliers />} />
+                  <Route path="/clients" element={<Clients />} />
+                  <Route path="/resources" element={<Resources />} />
+                  <Route path="/storage" element={<Storage />} />
+                  <Route path="/logistics-map" element={<LogisticsMap />} />
+                  <Route path="/seed-batches" element={<SeedBatches />} />
+                  <Route path="/locations" element={<Locations />} />
+                  <Route path="/locations/:id" element={<LocationDetails />} />
+                  <Route path="/plots" element={<Plots />} />
+                  <Route path="/plots/:id" element={<PlotDetails />} />
+                  <Route path="/users" element={<Users />} />
+                  <Route path="/settings" element={<Settings />} />
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </Layout>
+            </ProtectedRoute>
+          } />
+        </Routes>
       </Router>
     </AppProvider>
   );

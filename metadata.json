@@ -15,6 +15,7 @@
   "background_color": "#020617",
   "requestFramePermissions": [
     "geolocation",
-    "camera"
+    "camera",
+    "microphone"
   ]
 }

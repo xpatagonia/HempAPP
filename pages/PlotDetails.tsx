@@ -100,6 +100,12 @@ export default function PlotDetails() {
 
   const totalPages = Math.ceil(filteredHistory.length / recordsPerPage);
 
+  const biologicalProgress = useMemo(() => {
+    if (!plot || !variety) return 0;
+    const diffDays = (Date.now() - new Date(plot.sowingDate).getTime()) / 86400000;
+    return Math.min(100, Math.max(0, (diffDays / variety.cycleDays) * 100));
+  }, [plot, variety]);
+
   useEffect(() => {
     const fetchAstroAndWeather = async () => {
         if (!location?.coordinates) return;
@@ -259,9 +265,18 @@ export default function PlotDetails() {
                     {seedBatch && <p className="text-slate-400 flex items-center text-[10px] font-black uppercase tracking-widest bg-slate-50 dark:bg-slate-800 px-3 py-1 rounded-full border dark:border-slate-700"><Archive size={14} className="mr-1.5"/> Lote Maestro: {seedBatch.batchCode}</p>}
                   </div>
               </div>
-              <div className={`px-6 py-2 rounded-2xl text-xs font-black uppercase border tracking-widest flex items-center shadow-sm ${plot.status === 'Activa' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-500 border-gray-200'}`}>
-                  {plot.status === 'Activa' && <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div>}
-                  {plot.status}
+              <div className="w-full md:w-64 space-y-3">
+                  <div className="flex justify-between items-end mb-1">
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Progreso Biológico</span>
+                      <span className="text-xs font-black text-hemp-600">{Math.round(biologicalProgress)}%</span>
+                  </div>
+                  <div className="h-3 bg-gray-100 dark:bg-slate-800 rounded-full overflow-hidden border dark:border-slate-700">
+                      <div className="h-full bg-gradient-to-r from-hemp-600 to-emerald-400 shadow-[0_0_15px_rgba(22,163,74,0.3)] transition-all duration-1000" style={{ width: `${biologicalProgress}%` }}></div>
+                  </div>
+                  <div className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase border tracking-widest flex items-center justify-center shadow-sm ${plot.status === 'Activa' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-500 border-gray-200'}`}>
+                    {plot.status === 'Activa' && <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div>}
+                    {plot.status}
+                  </div>
               </div>
           </div>
           
@@ -559,7 +574,7 @@ export default function PlotDetails() {
                    
                    <div className="bg-white p-6 rounded-3xl border-4 border-gray-100 shadow-inner inline-block mb-8">
                        <img 
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${window.location.origin}/#/plots/${plot.id}`} 
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${window.location.origin}/#/trace/${plot.id}`} 
                         alt="QR Code"
                         className="w-40 h-40"
                        />
