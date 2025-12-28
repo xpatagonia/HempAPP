@@ -27,6 +27,7 @@ import LogisticsMap from './pages/LogisticsMap';
 import IntegrityCheck from './pages/IntegrityCheck';
 import AgronomicIntelligence from './pages/AgronomicIntelligence';
 import PublicTraceability from './pages/PublicTraceability';
+import PublicRegistration from './pages/PublicRegistration';
 
 const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
   const { currentUser } = useAppContext();
@@ -42,8 +43,9 @@ export default function App() {
     <AppProvider>
       <Router>
         <Routes>
-          {/* Ruta Pública de Trazabilidad (QR) */}
+          {/* Rutas Públicas */}
           <Route path="/trace/:id" element={<PublicTraceability />} />
+          <Route path="/register-producer" element={<PublicRegistration />} />
           <Route path="/login" element={<Login />} />
           
           <Route path="/*" element={
