@@ -9,8 +9,9 @@ export default function Resources() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  // Fix: Removed 'notes' from initial state as it is not defined in Resource type
   const [formData, setFormData] = useState<Partial<Resource>>({
-    name: '', type: 'Insumo', unit: 'unidad', costPerUnit: 0, stock: 0, notes: ''
+    name: '', type: 'Insumo', unit: 'unidad', costPerUnit: 0, stock: 0
   });
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
@@ -32,7 +33,8 @@ export default function Resources() {
   };
 
   const resetForm = () => {
-    setFormData({ name: '', type: 'Insumo', unit: 'unidad', costPerUnit: 0, stock: 0, notes: '' });
+    // Fix: Removed 'notes' from reset state to match Resource definition
+    setFormData({ name: '', type: 'Insumo', unit: 'unidad', costPerUnit: 0, stock: 0 });
     setEditingId(null);
   };
 

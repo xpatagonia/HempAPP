@@ -65,7 +65,7 @@ export default function PublicRegistration() {
                     </div>
                     <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tighter italic mb-4">¡Solicitud Enviada!</h1>
                     <p className="text-slate-500 font-medium leading-relaxed mb-10">
-                        Gracias por querer formar parte de **El Cordón del Cáñamo**. Nuestro equipo técnico auditará tu perfil y se pondrá en contacto pronto.
+                        Gracias por querer formar parte de la **Red Cooperativa del Cáñamo Industrial Argentino**. Nuestro equipo técnico auditará tu perfil y se pondrá en contacto pronto.
                     </p>
                     <Link to="/login" className="block w-full py-5 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest">
                         Volver al Inicio
@@ -82,11 +82,11 @@ export default function PublicRegistration() {
             {/* Hero Informativo */}
             <div className="hidden lg:flex lg:w-2/5 bg-slate-900 p-16 flex-col justify-between relative overflow-hidden">
                 <div className="relative z-10">
-                    <h1 className="text-5xl font-black text-[#DDDB03] italic uppercase tracking-tighter mb-8 leading-none">
-                        Red de <br />Agricultores
+                    <h1 className="text-5xl font-black text-[#DDDB03] italic uppercase tracking-tighter mb-8 leading-tight">
+                        La Red <br />Cooperativa <br />del Cáñamo
                     </h1>
-                    <p className="text-slate-400 text-lg font-medium leading-relaxed max-w-sm mb-12">
-                        Sumate a la nueva generación de productores agroindustriales 4.0.
+                    <p className="text-slate-400 text-lg font-medium leading-relaxed max-w-sm mb-12 italic">
+                        "Industrial Argentino"
                     </p>
 
                     <div className="space-y-8">
@@ -125,7 +125,7 @@ export default function PublicRegistration() {
 
                     <div className="space-y-2">
                         <h2 className="text-4xl font-black text-slate-900 uppercase tracking-tighter italic leading-none">Alta de Productor</h2>
-                        <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.2em]">Formulario de postulación técnica para la Red</p>
+                        <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.2em]">Postulación para la Red Cooperativa</p>
                     </div>
 
                     <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-8">

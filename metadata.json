@@ -1,7 +1,7 @@
 {
-  "name": "HempC | Nucleus Trace",
-  "short_name": "HempC",
-  "description": "Sistema de gestión integral para ensayos industriales de cáñamo, bitácoras de cultivo y análisis de rendimientos.",
+  "name": "HempC | Red Cooperativa Nucleus",
+  "short_name": "HempC Nucleus",
+  "description": "Plataforma de la Red Cooperativa del Cáñamo Industrial Argentino. Gestión integral de ensayos, trazabilidad y bioeconomía.",
   "icons": [
     {
       "src": "https://cdn-icons-png.flaticon.com/512/628/628283.png",
@@ -11,7 +11,7 @@
   ],
   "start_url": "/",
   "display": "standalone",
-  "theme_color": "#16a34a",
+  "theme_color": "#DDDB03",
   "background_color": "#020617",
   "requestFramePermissions": [
     "geolocation",
