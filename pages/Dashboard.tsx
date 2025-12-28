@@ -9,7 +9,7 @@ import {
 import { 
   Activity, Globe, ShieldCheck, ChevronRight, 
   Bot, Sprout, TrendingUp, AlertTriangle, 
-  Calendar, ArrowUpRight, Zap, Target
+  Calendar, ArrowUpRight, Zap, Target, AlertCircle, Clock
 } from 'lucide-react';
 
 const MetricCard = ({ label, value, trend, icon: Icon, colorClass, subtext }: any) => (
@@ -36,13 +36,25 @@ export default function Dashboard() {
   const relevantPlots = currentUser?.role === 'client' ? plots.filter(p => p.responsibleIds?.includes(currentUser?.id || '')) : plots;
   const pendingTasks = tasks.filter(t => t.status === 'Pendiente').length;
 
+  const plotsAtRisk = useMemo(() => {
+      const now = new Date().getTime();
+      return relevantPlots.filter(p => {
+          if (p.status !== 'Activa') return false;
+          const latest = getLatestRecord(p.id);
+          if (!latest) return true; // Nunca monitoreada es un riesgo
+          const lastDate = new Date(latest.date).getTime();
+          const diffDays = (now - lastDate) / 86400000;
+          return diffDays > 7; // Más de una semana sin datos
+      }).slice(0, 5);
+  }, [relevantPlots, getLatestRecord]);
+
   const yieldData = useMemo(() => {
     const map = new Map<string, { actual: number; target: number; count: number }>();
     relevantPlots.forEach(plot => {
       const latest = getLatestRecord(plot.id);
       const v = varieties.find(v => v.id === plot.varietyId);
       if (v) {
-        const curr = map.get(v.name) || { actual: 0, target: 800, count: 0 }; // 800kg target default
+        const curr = map.get(v.name) || { actual: 0, target: 800, count: 0 }; 
         map.set(v.name, { 
             actual: curr.actual + (latest?.yield || 0), 
             target: curr.target,
@@ -62,7 +74,6 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700 max-w-[1600px] mx-auto">
-      {/* Top Banner: Saludo & Acciones Rápidas */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6">
         <div>
             <div className="flex items-center space-x-2 mb-2">
@@ -83,7 +94,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* KPI Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <MetricCard label="Ensayos Activos" value={relevantPlots.filter(p => p.status === 'Activa').length} trend="+24%" icon={Activity} colorClass="bg-hemp-600" subtext="8 unidades en etapa reproductiva" />
         <MetricCard label="Tareas Pendientes" value={pendingTasks} icon={Zap} colorClass="bg-amber-500" subtext={`${tasks.filter(t => t.priority === 'Alta').length} de prioridad crítica`} />
@@ -92,51 +102,91 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Main Analytics: Rendimiento Real vs Objetivo */}
-        <div className="lg:col-span-2 bg-white dark:bg-slate-900 p-8 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-sm">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
-              <div>
-                  <h2 className="text-xl font-black text-slate-900 dark:text-white flex items-center">
-                    <Target size={20} className="mr-2 text-hemp-600" /> Rendimiento de Cosecha
-                  </h2>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Comparativa de kg/ha: Logrado vs. Proyectado.</p>
-              </div>
-              <div className="flex items-center space-x-6">
-                  <div className="flex items-center"><span className="w-3 h-3 bg-hemp-500 rounded-full mr-2"></span><span className="text-[10px] font-bold text-slate-500 uppercase">Real</span></div>
-                  <div className="flex items-center"><span className="w-3 h-3 bg-slate-200 dark:bg-slate-700 rounded-full mr-2"></span><span className="text-[10px] font-bold text-slate-500 uppercase">Objetivo</span></div>
-              </div>
-          </div>
-          
-          <div className="h-[380px] w-full">
-            {yieldData.some(d => d.actual > 0) ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={yieldData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" className="dark:stroke-slate-800" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#64748b', fontWeight: 'bold'}} />
-                  <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#64748b'}} />
-                  <Tooltip 
-                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backgroundColor: '#fff', padding: '15px' }}
-                    itemStyle={{ fontWeight: 'bold', fontSize: '12px' }}
-                  />
-                  <Bar dataKey="target" fill="#f1f5f9" radius={[8, 8, 0, 0]} barSize={40} className="dark:fill-slate-800" />
-                  <Bar dataKey="actual" barSize={25} radius={[6, 6, 0, 0]}>
-                    {yieldData.map((_, i) => <Cell key={i} fill={i % 2 === 0 ? '#16a34a' : '#10b981'} />)}
-                  </Bar>
-                  <Line type="monotone" dataKey="actual" stroke="#16a34a" strokeWidth={3} dot={{ r: 4, fill: '#16a34a', strokeWidth: 2, stroke: '#fff' }} />
-                </ComposedChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-full flex flex-col items-center justify-center opacity-30">
-                <div className="bg-slate-100 dark:bg-slate-800 p-8 rounded-full mb-4">
-                    <Activity size={60} className="text-slate-400" />
+        <div className="lg:col-span-2 space-y-8">
+            {/* Monitor de Salud de Red (NUEVO) */}
+            <div className="bg-white dark:bg-slate-900 p-8 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-sm">
+                <div className="flex justify-between items-center mb-6">
+                    <div>
+                        <h2 className="text-xl font-black text-slate-900 dark:text-white flex items-center">
+                            <AlertCircle size={20} className="mr-2 text-red-500" /> Atención Requerida
+                        </h2>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Parcelas sin monitoreo técnico actualizado (+7 días).</p>
+                    </div>
+                    {plotsAtRisk.length > 0 && <span className="bg-red-100 text-red-700 px-3 py-1 rounded-full text-[10px] font-black uppercase">{plotsAtRisk.length} Alertas</span>}
                 </div>
-                <p className="text-sm font-bold text-slate-500 uppercase tracking-widest">Esperando datos de cosecha 2024</p>
-              </div>
-            )}
-          </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {plotsAtRisk.length === 0 ? (
+                        <div className="col-span-2 py-10 text-center bg-gray-50 dark:bg-slate-950/50 rounded-3xl border border-dashed dark:border-slate-800">
+                            <ShieldCheck className="mx-auto text-green-500 mb-2" size={32}/>
+                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Toda la red está bajo monitoreo activo.</p>
+                        </div>
+                    ) : plotsAtRisk.map(p => {
+                        const loc = locations.find(l => l.id === p.locationId);
+                        const latest = getLatestRecord(p.id);
+                        return (
+                            <Link key={p.id} to={`/plots/${p.id}`} className="flex items-center p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-transparent hover:border-red-200 dark:hover:border-red-900/30 transition-all group">
+                                <div className="p-3 bg-red-100 dark:bg-red-900/30 text-red-600 rounded-xl mr-4 group-hover:scale-110 transition-transform">
+                                    <Clock size={18}/>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-black text-gray-800 dark:text-white truncate uppercase tracking-tighter">{p.name}</p>
+                                    <p className="text-[10px] text-gray-400 font-bold uppercase truncate">{loc?.name || 'S/D'}</p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-[10px] font-black text-red-500 uppercase">Sin Datos</p>
+                                    <p className="text-[9px] text-gray-400 font-bold">{latest ? `U: ${latest.date}` : 'Nunca'}</p>
+                                </div>
+                            </Link>
+                        );
+                    })}
+                </div>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900 p-8 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-sm">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
+                    <div>
+                        <h2 className="text-xl font-black text-slate-900 dark:text-white flex items-center">
+                            <Target size={20} className="mr-2 text-hemp-600" /> Rendimiento de Cosecha
+                        </h2>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Comparativa de kg/ha: Logrado vs. Proyectado.</p>
+                    </div>
+                    <div className="flex items-center space-x-6">
+                        <div className="flex items-center"><span className="w-3 h-3 bg-hemp-500 rounded-full mr-2"></span><span className="text-[10px] font-bold text-slate-500 uppercase">Real</span></div>
+                        <div className="flex items-center"><span className="w-3 h-3 bg-slate-200 dark:bg-slate-700 rounded-full mr-2"></span><span className="text-[10px] font-bold text-slate-500 uppercase">Objetivo</span></div>
+                    </div>
+                </div>
+                
+                <div className="h-[380px] w-full">
+                    {yieldData.some(d => d.actual > 0) ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart data={yieldData}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" className="dark:stroke-slate-800" />
+                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#64748b', fontWeight: 'bold'}} />
+                        <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#64748b'}} />
+                        <Tooltip 
+                            contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backgroundColor: '#fff', padding: '15px' }}
+                            itemStyle={{ fontWeight: 'bold', fontSize: '12px' }}
+                        />
+                        <Bar dataKey="target" fill="#f1f5f9" radius={[8, 8, 0, 0]} barSize={40} className="dark:fill-slate-800" />
+                        <Bar dataKey="actual" barSize={25} radius={[6, 6, 0, 0]}>
+                            {yieldData.map((_, i) => <Cell key={i} fill={i % 2 === 0 ? '#16a34a' : '#10b981'} />)}
+                        </Bar>
+                        <Line type="monotone" dataKey="actual" stroke="#16a34a" strokeWidth={3} dot={{ r: 4, fill: '#16a34a', strokeWidth: 2, stroke: '#fff' }} />
+                        </ComposedChart>
+                    </ResponsiveContainer>
+                    ) : (
+                    <div className="h-full flex flex-col items-center justify-center opacity-30">
+                        <div className="bg-slate-100 dark:bg-slate-800 p-8 rounded-full mb-4">
+                            <Activity size={60} className="text-slate-400" />
+                        </div>
+                        <p className="text-sm font-bold text-slate-500 uppercase tracking-widest">Esperando datos de cosecha 2024</p>
+                    </div>
+                    )}
+                </div>
+            </div>
         </div>
 
-        {/* Live Feed: Estilo de Notificaciones */}
         <div className="bg-white dark:bg-slate-900 p-8 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col">
             <div className="flex items-center justify-between mb-8">
                 <h2 className="text-xl font-black text-slate-900 dark:text-white">Actividad Reciente</h2>
@@ -167,31 +217,6 @@ export default function Dashboard() {
                 Explorar Planillas <ChevronRight size={16} className="ml-2" />
             </Link>
         </div>
-      </div>
-
-      {/* Quick Access Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Link to="/locations" className="bg-blue-600 p-8 rounded-[32px] text-white flex items-center justify-between hover:scale-[1.02] transition-transform shadow-xl shadow-blue-900/20">
-              <div>
-                  <h4 className="text-2xl font-black">Campos</h4>
-                  <p className="text-blue-100 text-sm font-medium mt-1">Geolocalización y límites.</p>
-              </div>
-              <Globe size={48} className="opacity-30" />
-          </Link>
-          <Link to="/tasks" className="bg-slate-900 dark:bg-slate-800 p-8 rounded-[32px] text-white flex items-center justify-between hover:scale-[1.02] transition-transform shadow-xl">
-              <div>
-                  <h4 className="text-2xl font-black">Labores</h4>
-                  <p className="text-slate-400 text-sm font-medium mt-1">Órdenes de trabajo.</p>
-              </div>
-              <Zap size={48} className="opacity-30 text-amber-500" />
-          </Link>
-          <Link to="/seed-batches" className="bg-hemp-800 p-8 rounded-[32px] text-white flex items-center justify-between hover:scale-[1.02] transition-transform shadow-xl shadow-hemp-900/20">
-              <div>
-                  <h4 className="text-2xl font-black">Logística</h4>
-                  <p className="text-hemp-200 text-sm font-medium mt-1">Inventario y remitos.</p>
-              </div>
-              <TrendingUp size={48} className="opacity-30" />
-          </Link>
       </div>
     </div>
   );

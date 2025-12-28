@@ -12,11 +12,12 @@ import {
   Camera, Image as ImageIcon, MessageSquare, ClipboardList, User, Calendar, Ruler, Maximize2, Download, Scale, Wind, Bird, CheckCircle2,
   RefreshCw, Globe, Layers, Save, Thermometer, Droplets, Waves, QrCode, Printer, Loader2, Zap, Sparkles, Link as LinkIcon, Sun,
   TrendingUp, ArrowUpRight, Beaker, FileUp, Moon, Sunrise, Sunset, ZapOff, Archive, Navigation, Scan, Target, FlaskConical, ClipboardCheck,
-  ChevronLeft, ChevronRight, Filter
+  ChevronLeft, ChevronRight, Filter, Bot, Terminal
 } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
 import WeatherWidget from '../components/WeatherWidget';
 import HydricBalance from '../components/HydricBalance';
+import { GoogleGenAI } from "@google/genai";
 
 const KPI = ({ label, value, icon: Icon, color, subtext }: any) => (
     <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 p-6 rounded-[32px] shadow-sm flex items-start space-x-4 hover:shadow-md transition-shadow relative overflow-hidden group">
@@ -65,6 +66,8 @@ export default function PlotDetails() {
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isFetchingConditions, setIsFetchingConditions] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [aiInsight, setAiInsight] = useState<string | null>(null);
 
   // Pagination & Filtering for Records
   const [recordsPage, setRecordsPage] = useState(1);
@@ -126,6 +129,38 @@ export default function PlotDetails() {
     };
     fetchAstroAndWeather();
   }, [location]);
+
+  const handleIAAnalysis = async () => {
+    if (!plot || history.length === 0 || isAnalyzing) return;
+    setIsAnalyzing(true);
+    setAiInsight(null);
+    try {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const model = 'gemini-3-flash-preview';
+        
+        const historyContext = history.slice(0, 5).map(r => `Fecha: ${r.date}, Fase: ${r.stage}, Altura: ${r.plantHeight}cm, Vigor: ${r.vigor}/9, Temp: ${r.temperature}C`).join('\n');
+        
+        const prompt = `Analiza la salud agronómica de esta parcela de cáñamo industrial:
+        Variedad: ${variety?.name}
+        Ubicación: ${location?.name} (${location?.province})
+        Historial reciente:
+        ${historyContext}
+        Clima actual: ${autoWeather?.current?.temperature_2m || 'N/A'}°C, Hum: ${autoWeather?.current?.relative_humidity_2m || 'N/A'}%
+        Instrucción: Genera un diagnóstico técnico MUY breve (máximo 300 caracteres) y profesional en español.`;
+
+        const response = await ai.models.generateContent({
+            model: model,
+            contents: prompt,
+            config: { systemInstruction: "Eres el experto agrónomo de Nucleus Trace. Analiza datos y da consejos técnicos directos." }
+        });
+
+        setAiInsight(response.text || "No se pudo generar el diagnóstico.");
+    } catch (err) {
+        setAiInsight("Error de enlace con el motor de IA.");
+    } finally {
+        setIsAnalyzing(false);
+    }
+  };
 
   const syncCurrentConditions = async (targetDate: string) => {
       if (!location?.coordinates) return;
@@ -245,10 +280,32 @@ export default function PlotDetails() {
         <Link to="/plots" className="flex items-center text-gray-500 font-black hover:text-gray-800 transition uppercase text-[10px] tracking-widest group">
             <ArrowLeft size={16} className="mr-2 group-hover:-translate-x-1 transition-transform" /> Listado Global
         </Link>
-        <button onClick={() => setIsQrModalOpen(true)} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-2xl text-slate-500 hover:text-hemp-600 shadow-sm transition-all flex items-center gap-2 px-6 text-xs font-black uppercase tracking-widest">
-            <QrCode size={18}/> Generar Etiqueta QR
-        </button>
+        <div className="flex gap-2">
+            <button onClick={handleIAAnalysis} disabled={isAnalyzing || history.length === 0} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-2xl text-hemp-600 hover:text-hemp-700 shadow-sm transition-all flex items-center gap-2 px-6 text-xs font-black uppercase tracking-widest disabled:opacity-30">
+                {isAnalyzing ? <Loader2 className="animate-spin" size={18}/> : <Bot size={18}/>} Diagnóstico IA
+            </button>
+            <button onClick={() => setIsQrModalOpen(true)} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-2xl text-slate-500 hover:text-hemp-600 shadow-sm transition-all flex items-center gap-2 px-6 text-xs font-black uppercase tracking-widest">
+                <QrCode size={18}/> Generar Etiqueta QR
+            </button>
+        </div>
       </div>
+
+      {/* ALERT BOX AI INSIGHT */}
+      {aiInsight && (
+          <div className="bg-slate-900 dark:bg-hemp-600 p-6 rounded-[32px] text-white shadow-2xl animate-in slide-in-from-top-4 flex items-start gap-5 relative overflow-hidden border border-white/10">
+              <div className="p-3 bg-white/10 rounded-2xl">
+                  <Terminal size={24}/>
+              </div>
+              <div className="flex-1">
+                  <div className="flex items-center justify-between mb-1">
+                      <p className="text-[9px] font-black uppercase tracking-[0.3em] opacity-60">Nucleus AI Diagnosis v5.0</p>
+                      <button onClick={() => setAiInsight(null)} className="opacity-40 hover:opacity-100 transition-opacity"><X size={16}/></button>
+                  </div>
+                  <p className="text-sm font-bold leading-relaxed font-mono">"{aiInsight}"</p>
+              </div>
+              <Activity className="absolute -right-10 -bottom-10 w-32 h-32 opacity-10 pointer-events-none" />
+          </div>
+      )}
 
       {/* HEADER TRAZABILIDAD */}
       <div className="bg-white dark:bg-slate-900 rounded-[40px] shadow-sm border dark:border-slate-800 p-10 relative overflow-hidden">
