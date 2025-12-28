@@ -11,7 +11,8 @@ import {
   Sprout, X, Map, ShieldCheck, Info, AlertCircle, Trash2, Edit2,
   Camera, Image as ImageIcon, MessageSquare, ClipboardList, User, Calendar, Ruler, Maximize2, Download, Scale, Wind, Bird, CheckCircle2,
   RefreshCw, Globe, Layers, Save, Thermometer, Droplets, Waves, QrCode, Printer, Loader2, Zap, Sparkles, Link as LinkIcon, Sun,
-  TrendingUp, ArrowUpRight, Beaker, FileUp, Moon, Sunrise, Sunset, ZapOff, Archive, Navigation, Scan, Target, FlaskConical, ClipboardCheck
+  TrendingUp, ArrowUpRight, Beaker, FileUp, Moon, Sunrise, Sunset, ZapOff, Archive, Navigation, Scan, Target, FlaskConical, ClipboardCheck,
+  ChevronLeft, ChevronRight, Filter
 } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
 import WeatherWidget from '../components/WeatherWidget';
@@ -64,6 +65,11 @@ export default function PlotDetails() {
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isFetchingConditions, setIsFetchingConditions] = useState(false);
+
+  // Pagination & Filtering for Records
+  const [recordsPage, setRecordsPage] = useState(1);
+  const [recordsFilterStage, setRecordsFilterStage] = useState('all');
+  const recordsPerPage = 8;
   
   const [astroData, setAstroData] = useState<any>(null);
   const [autoWeather, setAutoWeather] = useState<any>(null);
@@ -82,6 +88,17 @@ export default function PlotDetails() {
     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }), 
     photoUrl: '' 
   });
+
+  const filteredHistory = useMemo(() => {
+    return history.filter(r => recordsFilterStage === 'all' || r.stage === recordsFilterStage);
+  }, [history, recordsFilterStage]);
+
+  const paginatedHistory = useMemo(() => {
+    const start = (recordsPage - 1) * recordsPerPage;
+    return filteredHistory.slice(start, start + recordsPerPage);
+  }, [filteredHistory, recordsPage]);
+
+  const totalPages = Math.ceil(filteredHistory.length / recordsPerPage);
 
   useEffect(() => {
     const fetchAstroAndWeather = async () => {
@@ -295,16 +312,35 @@ export default function PlotDetails() {
                 </div>
 
                 <div className="bg-white dark:bg-slate-900 rounded-[40px] shadow-sm border dark:border-slate-800 overflow-hidden">
-                    <div className="px-10 py-6 border-b dark:border-slate-800 flex justify-between items-center bg-gray-50/50 dark:bg-slate-950/50">
-                        <h2 className="font-black text-gray-900 dark:text-white uppercase text-[10px] tracking-[0.3em] flex items-center"><Activity size={18} className="mr-3 text-hemp-600"/> Monitoreos Técnicos</h2>
-                        {currentUser && <button onClick={() => { setIsRecordModalOpen(true); setIsViewMode(false); setEditingRecordId(null); setRecordForm({ ...recordForm, date: new Date().toISOString().split('T')[0], stage: 'Vegetativo' }); }} className="bg-hemp-600 text-white px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl hover:bg-hemp-700 transition">Nuevo Informe periódico</button>}
+                    <div className="px-10 py-6 border-b dark:border-slate-800 flex flex-col md:flex-row justify-between items-center bg-gray-50/50 dark:bg-slate-950/50 gap-4">
+                        <div className="flex items-center space-x-6">
+                            <h2 className="font-black text-gray-900 dark:text-white uppercase text-[10px] tracking-[0.3em] flex items-center"><Activity size={18} className="mr-3 text-hemp-600"/> Monitoreos Técnicos</h2>
+                            <div className="flex items-center bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-xl px-3 py-1.5 shadow-inner">
+                                <Filter size={12} className="text-gray-400 mr-2"/>
+                                <select 
+                                    className="bg-transparent text-[10px] font-black uppercase outline-none border-none cursor-pointer text-slate-600 dark:text-slate-300"
+                                    value={recordsFilterStage}
+                                    onChange={(e) => { setRecordsFilterStage(e.target.value); setRecordsPage(1); }}
+                                >
+                                    <option value="all">Todas las Etapas</option>
+                                    <option value="Vegetativo">Vegetativo</option>
+                                    <option value="Floración">Floración</option>
+                                    <option value="Maduración">Maduración</option>
+                                    <option value="Cosecha">Cosecha</option>
+                                </select>
+                            </div>
+                        </div>
+                        {currentUser && <button onClick={() => { setIsRecordModalOpen(true); setIsViewMode(false); setEditingRecordId(null); setRecordForm({ ...recordForm, date: new Date().toISOString().split('T')[0], time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }), stage: 'Vegetativo' }); }} className="bg-hemp-600 text-white px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl hover:bg-hemp-700 transition">Nuevo Informe periódico</button>}
                     </div>
                     <div className="overflow-x-auto">
                         <table className="min-w-full text-sm text-left">
-                            <thead className="bg-gray-50/50 dark:bg-slate-950/50 text-gray-400 uppercase text-[9px] font-black tracking-widest border-b dark:border-slate-800"><tr><th className="px-10 py-5">Fecha</th><th className="px-10 py-5">Etapa</th><th className="px-10 py-5 text-center">Altura</th><th className="px-10 py-5 text-center">Vigor (1-9)</th><th className="px-10 py-5 text-center">Temp/Hum</th><th className="px-10 py-5 text-right">Detalle</th></tr></thead>
-                            <tbody className="divide-y divide-gray-100 dark:divide-slate-800 font-bold uppercase text-[11px]">{history.map(r => (
+                            <thead className="bg-gray-50/50 dark:bg-slate-950/50 text-gray-400 uppercase text-[9px] font-black tracking-widest border-b dark:border-slate-800"><tr><th className="px-10 py-5">Fecha / Hora</th><th className="px-10 py-5">Etapa</th><th className="px-10 py-5 text-center">Altura</th><th className="px-10 py-5 text-center">Vigor (1-9)</th><th className="px-10 py-5 text-center">Temp/Hum</th><th className="px-10 py-5 text-right">Detalle</th></tr></thead>
+                            <tbody className="divide-y divide-gray-100 dark:divide-slate-800 font-bold uppercase text-[11px]">{paginatedHistory.map(r => (
                                 <tr key={r.id} className="hover:bg-gray-50 dark:hover:bg-slate-800 cursor-pointer" onClick={() => { setEditingRecordId(r.id); setRecordForm(r); setIsViewMode(true); setIsRecordModalOpen(true); }}>
-                                    <td className="px-10 py-6 font-black text-gray-800 dark:text-white tracking-tighter">{r.date}</td>
+                                    <td className="px-10 py-6 font-black text-gray-800 dark:text-white tracking-tighter">
+                                        {r.date}
+                                        <span className="block text-[8px] text-slate-400 font-bold mt-1 tracking-widest">{r.time || '--:--'} HS</span>
+                                    </td>
                                     <td className="px-10 py-6"><span className="px-3 py-1 rounded-lg text-[9px] font-black uppercase border bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-100 dark:border-green-900/30">{r.stage}</span></td>
                                     <td className="px-10 py-6 text-center font-black text-gray-900 dark:text-white">{r.plantHeight} cm</td>
                                     <td className="px-10 py-6 text-center font-black text-emerald-600">{r.vigor || '-'}</td>
@@ -314,6 +350,28 @@ export default function PlotDetails() {
                             ))}</tbody>
                         </table>
                     </div>
+                    {/* PAGINACIÓN */}
+                    {totalPages > 1 && (
+                        <div className="px-10 py-4 border-t dark:border-slate-800 flex justify-between items-center bg-gray-50/30 dark:bg-slate-950/30">
+                            <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Página {recordsPage} de {totalPages}</span>
+                            <div className="flex gap-2">
+                                <button 
+                                    disabled={recordsPage === 1}
+                                    onClick={() => setRecordsPage(prev => prev - 1)}
+                                    className="p-2 rounded-lg bg-white dark:bg-slate-900 border dark:border-slate-800 text-slate-500 disabled:opacity-30 hover:text-hemp-600 transition shadow-sm"
+                                >
+                                    <ChevronLeft size={16}/>
+                                </button>
+                                <button 
+                                    disabled={recordsPage === totalPages}
+                                    onClick={() => setRecordsPage(prev => prev + 1)}
+                                    className="p-2 rounded-lg bg-white dark:bg-slate-900 border dark:border-slate-800 text-slate-500 disabled:opacity-30 hover:text-hemp-600 transition shadow-sm"
+                                >
+                                    <ChevronRight size={16}/>
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
           )}
@@ -542,7 +600,14 @@ export default function PlotDetails() {
                     {/* SECCIÓN 1: AMBIENTE */}
                     <div className="bg-slate-50 dark:bg-slate-950 p-6 rounded-3xl border dark:border-slate-800 space-y-4">
                         <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 border-b dark:border-slate-800 pb-2 flex items-center"><Sun size={14} className="mr-2"/> Ambiente & Tiempo</h3>
-                        <div><label className={labelClass}>Fecha de Muestreo</label><input type="date" required disabled={isViewMode} className={inputStyle} value={recordForm.date} onChange={e => { setRecordForm({...recordForm, date: e.target.value}); if (!isViewMode) syncCurrentConditions(e.target.value); }} /></div>
+                        <div>
+                            <label className={labelClass}>Fecha de Muestreo</label>
+                            <input type="date" required disabled={isViewMode} className={inputStyle} value={recordForm.date} onChange={e => { setRecordForm({...recordForm, date: e.target.value}); if (!isViewMode) syncCurrentConditions(e.target.value); }} />
+                        </div>
+                        <div>
+                            <label className={labelClass}>Hora de Muestreo</label>
+                            <input type="time" required disabled={isViewMode} className={inputStyle} value={recordForm.time} onChange={e => setRecordForm({...recordForm, time: e.target.value})} />
+                        </div>
                         <div><label className={labelClass}>Fase Fisiológica</label><select required disabled={isViewMode} className={inputStyle} value={recordForm.stage} onChange={e => setRecordForm({...recordForm, stage: e.target.value as any})}><option value="Vegetativo">Vegetativo</option><option value="Floración">Floración</option><option value="Maduración">Maduración</option><option value="Cosecha">Cosecha</option></select></div>
                         
                         <div className="grid grid-cols-2 gap-2">
