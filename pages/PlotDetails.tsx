@@ -221,15 +221,41 @@ export default function PlotDetails() {
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (file) {
-          if (file.size > 2 * 1024 * 1024) {
-              alert("⚠️ La imagen es muy pesada (>2MB). Por favor, redúzcala o tome una foto de menor resolución.");
-              return;
-          }
           setIsUploading(true);
+          // Compresión de imagen en cliente
           const reader = new FileReader();
-          reader.onloadend = () => {
-              setLogForm(prev => ({ ...prev, photoUrl: reader.result as string }));
-              setIsUploading(false);
+          reader.onload = (event) => {
+              const img = new Image();
+              img.onload = () => {
+                  const canvas = document.createElement('canvas');
+                  let width = img.width;
+                  let height = img.height;
+                  const MAX_WIDTH = 800; // Reducimos a 800px para garantizar subida rápida
+                  const MAX_HEIGHT = 800;
+
+                  if (width > height) {
+                      if (width > MAX_WIDTH) {
+                          height *= MAX_WIDTH / width;
+                          width = MAX_WIDTH;
+                      }
+                  } else {
+                      if (height > MAX_HEIGHT) {
+                          width *= MAX_HEIGHT / height;
+                          height = MAX_HEIGHT;
+                      }
+                  }
+
+                  canvas.width = width;
+                  canvas.height = height;
+                  const ctx = canvas.getContext('2d');
+                  ctx?.drawImage(img, 0, 0, width, height);
+                  
+                  // Comprimir a JPEG calidad 0.6
+                  const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+                  setLogForm(prev => ({ ...prev, photoUrl: dataUrl }));
+                  setIsUploading(false);
+              };
+              img.src = event.target?.result as string;
           };
           reader.readAsDataURL(file);
       }
