@@ -230,7 +230,7 @@ export default function PlotDetails() {
                   const canvas = document.createElement('canvas');
                   let width = img.width;
                   let height = img.height;
-                  const MAX_WIDTH = 800; // Reducimos tamaño
+                  const MAX_WIDTH = 800; // Máximo 800px para evitar payloads gigantes
                   const MAX_HEIGHT = 800;
 
                   if (width > height) {
@@ -250,7 +250,7 @@ export default function PlotDetails() {
                   const ctx = canvas.getContext('2d');
                   ctx?.drawImage(img, 0, 0, width, height);
                   
-                  // Calidad media para asegurar payload ligero
+                  // Comprimir a JPEG calidad 0.5 (Media Calidad, Alto Rendimiento)
                   const dataUrl = canvas.toDataURL('image/jpeg', 0.5);
                   setLogForm(prev => ({ ...prev, photoUrl: dataUrl }));
                   setIsUploading(false);

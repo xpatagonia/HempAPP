@@ -86,17 +86,17 @@ export default function Settings() {
       {activeTab === 'database' && (
           <div className="space-y-6">
               <div className="bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30 p-8 rounded-[40px] shadow-2xl relative overflow-hidden">
-                  <div className="flex items-center space-x-3 mb-6"><Shield className="text-red-500" size={24}/><h3 className="font-black text-red-700 dark:text-red-400 uppercase text-sm tracking-widest">Protocolo de Emergencia V45 (FIX BITÁCORA)</h3></div>
+                  <div className="flex items-center space-x-3 mb-6"><Shield className="text-red-500" size={24}/><h3 className="font-black text-red-700 dark:text-red-400 uppercase text-sm tracking-widest">Protocolo de Emergencia V46 (FIX ID TYPE)</h3></div>
                   <div className="bg-white/50 dark:bg-black/20 p-4 rounded-2xl mb-6 text-red-800 dark:text-red-200 text-xs leading-relaxed font-bold">
-                      <p className="uppercase mb-2 flex items-center"><AlertTriangle size={14} className="mr-1"/> REPARACIÓN CRÍTICA DE TABLAS</p>
-                      Este script elimina la tabla de bitácora corrupta y la crea desde cero solo con los campos permitidos (Nota y Foto). Soluciona el error de "registro desaparecido" o error 400 al guardar.
+                      <p className="uppercase mb-2 flex items-center"><AlertTriangle size={14} className="mr-1"/> REPARACIÓN CRÍTICA DE TIPOS</p>
+                      Este script soluciona el error "incompatible types: uuid and text". Recrea la tabla de bitácora permitiendo que el ID de la parcela sea de tipo TEXTO, compatible con tu base de datos actual.
                   </div>
                   <button onClick={() => { 
-                      const sql = `-- PROTOCOLO V45: REPARACIÓN CRÍTICA DE BITÁCORA\n\n-- 1. Eliminar tabla corrupta\nDROP TABLE IF EXISTS public.field_logs CASCADE;\n\n-- 2. Crear tabla limpia (Solo Texto y Foto)\nCREATE TABLE public.field_logs (\n    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n    plot_id UUID REFERENCES public.plots(id) ON DELETE CASCADE,\n    date DATE NOT NULL,\n    time TEXT,\n    note TEXT,\n    photo_url TEXT\n);\n\n-- 3. Permisos Totales\nALTER TABLE public.field_logs ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS "Acceso Total Logs" ON public.field_logs;\nCREATE POLICY "Acceso Total Logs" ON public.field_logs FOR ALL USING (true) WITH CHECK (true);\n\n-- 4. Asegurar campos en TrialRecords\nALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS lunar_phase TEXT;\nALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS light_hours NUMERIC;\n\n-- 5. Recargar esquema\nNOTIFY pgrst, 'reload schema';`; 
+                      const sql = `-- PROTOCOLO V46: FIX COMPATIBILIDAD ID (TEXT)\n\n-- 1. Eliminar tabla corrupta\nDROP TABLE IF EXISTS public.field_logs CASCADE;\n\n-- 2. Crear tabla limpia (Usando TEXT para plot_id)\nCREATE TABLE public.field_logs (\n    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n    plot_id TEXT REFERENCES public.plots(id) ON DELETE CASCADE,\n    date DATE NOT NULL,\n    time TEXT,\n    note TEXT,\n    photo_url TEXT\n);\n\n-- 3. Permisos Totales\nALTER TABLE public.field_logs ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS "Acceso Total Logs" ON public.field_logs;\nCREATE POLICY "Acceso Total Logs" ON public.field_logs FOR ALL USING (true) WITH CHECK (true);\n\n-- 4. Asegurar campos en TrialRecords\nALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS lunar_phase TEXT;\nALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS light_hours NUMERIC;\n\n-- 5. Recargar esquema\nNOTIFY pgrst, 'reload schema';`; 
                       navigator.clipboard.writeText(sql.trim()); 
-                      alert("Script V45 Copiado al portapapeles. Vaya al SQL Editor de Supabase y ejecútelo para arreglar la bitácora."); 
+                      alert("Script V46 Copiado. Péguelo en el Editor SQL de Supabase para corregir el error de tipos."); 
                   }} className="w-full bg-red-600 hover:bg-red-700 text-white py-5 rounded-2xl font-black text-xs uppercase shadow-xl flex items-center justify-center transition-all mb-8 animate-pulse hover:animate-none">
-                      <RefreshCw size={18} className="mr-2"/> COPIAR SCRIPT DE EMERGENCIA V45
+                      <RefreshCw size={18} className="mr-2"/> COPIAR SCRIPT V46 (FIX ID TEXT)
                   </button>
               </div>
           </div>
