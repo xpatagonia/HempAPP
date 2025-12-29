@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
@@ -221,7 +222,7 @@ export default function PlotDetails() {
       const file = e.target.files?.[0];
       if (file) {
           setIsUploading(true);
-          // Compresión de imagen en cliente
+          // Compresión agresiva para garantizar subida (800px, 0.5 quality)
           const reader = new FileReader();
           reader.onload = (event) => {
               const img = new Image();
@@ -229,7 +230,7 @@ export default function PlotDetails() {
                   const canvas = document.createElement('canvas');
                   let width = img.width;
                   let height = img.height;
-                  const MAX_WIDTH = 800; // Máximo 800px para evitar payloads gigantes
+                  const MAX_WIDTH = 800; // Reducimos tamaño
                   const MAX_HEIGHT = 800;
 
                   if (width > height) {
@@ -249,7 +250,7 @@ export default function PlotDetails() {
                   const ctx = canvas.getContext('2d');
                   ctx?.drawImage(img, 0, 0, width, height);
                   
-                  // Comprimir a JPEG calidad 0.5 (Media Calidad, Alto Rendimiento)
+                  // Calidad media para asegurar payload ligero
                   const dataUrl = canvas.toDataURL('image/jpeg', 0.5);
                   setLogForm(prev => ({ ...prev, photoUrl: dataUrl }));
                   setIsUploading(false);
