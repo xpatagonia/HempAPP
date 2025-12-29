@@ -6,7 +6,7 @@ import {
   Save, Database, RefreshCw, Lock, Settings as SettingsIcon, 
   CheckCircle2, Layout, Trash2, RotateCcw, Shield, 
   AlertTriangle, FlaskConical, CheckCircle, XCircle, Info, Search, FileCode, Flame, Eraser
-} from 'lucide-react';
+} from 'lucide-center';
 
 export default function Settings() {
   const { currentUser, appName, appLogo, updateBranding, refreshData } = useAppContext();
@@ -108,45 +108,51 @@ NOTIFY pgrst, 'reload schema';`;
               <div className="bg-slate-900 border border-slate-800 p-8 rounded-[40px] shadow-2xl relative overflow-hidden">
                   <div className="flex items-center space-x-3 mb-6">
                       <Shield className="text-hemp-500" size={24}/>
-                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Protocolo Nuclear V40 (HempIT France Full)</h3>
+                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Protocolo de Reparación V41</h3>
                   </div>
                   
-                  <div className="bg-emerald-900/20 border border-emerald-500/30 p-4 rounded-2xl mb-6 text-emerald-200 text-xs leading-relaxed">
-                      <p className="font-black mb-2 flex items-center uppercase"><RefreshCw className="mr-2" size={14}/> ACTUALIZACIÓN DE ESQUEMA REQUERIDA</p>
-                      Este script añade soporte para las escalas 1-9 (Vigor, Encamado, Sanidad) y métricas de cosecha (Peso tallo, Calidad de semilla) exigidas por HempIT France.
+                  <div className="bg-amber-900/20 border border-amber-500/30 p-4 rounded-2xl mb-6 text-amber-200 text-xs leading-relaxed">
+                      <p className="font-black mb-2 flex items-center uppercase"><RefreshCw className="mr-2" size={14}/> REPARACIÓN DE TABLAS MULTIMEDIA</p>
+                      Este script asegura que la tabla de Bitácora (field_logs) exista con soporte para fotos en alta resolución (base64) y vinculación por UUID.
                   </div>
 
                   <button onClick={() => {
-                      const sql = `-- PROTOCOLO V40: INTEGRACIÓN TÉCNICA HEMPTIT FRANCE & ASTRO
-ALTER TABLE IF EXISTS public.trial_records 
-ADD COLUMN IF NOT EXISTS light_hours NUMERIC DEFAULT 12,
-ADD COLUMN IF NOT EXISTS lunar_phase TEXT,
-ADD COLUMN IF NOT EXISTS uniformity INTEGER DEFAULT 9,
-ADD COLUMN IF NOT EXISTS vigor INTEGER DEFAULT 9,
-ADD COLUMN IF NOT EXISTS lodging INTEGER DEFAULT 1,
-ADD COLUMN IF NOT EXISTS bird_damage INTEGER DEFAULT 1,
-ADD COLUMN IF NOT EXISTS diseases_score INTEGER DEFAULT 1,
-ADD COLUMN IF NOT EXISTS pests_score INTEGER DEFAULT 1,
-ADD COLUMN IF NOT EXISTS harvest_plant_count NUMERIC DEFAULT 0,
-ADD COLUMN IF NOT EXISTS seed_yield NUMERIC DEFAULT 0,
-ADD COLUMN IF NOT EXISTS seed_quality_germination NUMERIC DEFAULT 0,
-ADD COLUMN IF NOT EXISTS seed_quality_non_conformity NUMERIC DEFAULT 0,
-ADD COLUMN IF NOT EXISTS stem_weight NUMERIC DEFAULT 0,
-ADD COLUMN IF NOT EXISTS flowering_date DATE;
+                      const sql = `-- PROTOCOLO V41: REPARACIÓN BITÁCORA E HIDRIC RECORDS
+CREATE TABLE IF NOT EXISTS public.field_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    plot_id UUID REFERENCES public.plots(id) ON DELETE CASCADE,
+    date DATE NOT NULL,
+    time TEXT,
+    note TEXT,
+    photo_url TEXT
+);
+
+CREATE TABLE IF NOT EXISTS public.hydric_records (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    location_id UUID REFERENCES public.locations(id) ON DELETE CASCADE,
+    plot_id UUID REFERENCES public.plots(id) ON DELETE CASCADE,
+    date DATE NOT NULL,
+    time TEXT,
+    type TEXT,
+    amount_mm NUMERIC,
+    notes TEXT,
+    created_by UUID
+);
+
+ALTER TABLE IF EXISTS public.field_logs ADD COLUMN IF NOT EXISTS photo_url TEXT;
 
 NOTIFY pgrst, 'reload schema';`;
                       navigator.clipboard.writeText(sql.trim());
-                      alert("Script V40 Copiado. Péguelo en el SQL Editor de Supabase y presione RUN.");
-                  }} className="w-full bg-hemp-600 hover:bg-hemp-700 text-white py-4 rounded-2xl font-black text-xs uppercase shadow-xl flex items-center justify-center transition-all mb-8">
-                      <RefreshCw size={18} className="mr-2"/> Copiar Script V40 (HempIT Protocol)
+                      alert("Script V41 Copiado. Péguelo en el SQL Editor de Supabase y presione RUN.");
+                  }} className="w-full bg-amber-600 hover:bg-amber-700 text-white py-4 rounded-2xl font-black text-xs uppercase shadow-xl flex items-center justify-center transition-all mb-8">
+                      <RefreshCw size={18} className="mr-2"/> Copiar Script V41 (Reparar Bitácora)
                   </button>
                   
                   <div className="mt-4 p-4 bg-white/5 border border-white/10 rounded-2xl">
-                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-2">Columnas nuevas a crear:</p>
+                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-2">Tablas a verificar/crear:</p>
                       <pre className="text-[9px] text-emerald-400 font-mono overflow-x-auto">
-{`vigor, lodging, bird_damage, diseases_score, 
-pests_score, stem_weight, seed_yield, 
-seed_quality_germination, flowering_date...`}
+{`field_logs (id, plot_id, date, time, note, photo_url)
+hydric_records (id, location_id, plot_id, date, amount_mm...)`}
                       </pre>
                   </div>
               </div>

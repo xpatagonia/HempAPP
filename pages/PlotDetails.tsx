@@ -226,12 +226,24 @@ export default function PlotDetails() {
             plotId: plot.id, 
             date: logForm.date || new Date().toISOString().split('T')[0], 
             time: logForm.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
-            note: `[${currentUser?.name || 'Sistema'}] ${logForm.note || ''}`.trim(), 
+            note: logForm.note?.trim() || '', 
             photoUrl: logForm.photoUrl || ''
           } as FieldLog;
-          await addLog(payload);
-          setLogForm({ note: '', date: new Date().toISOString().split('T')[0], time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }), photoUrl: '' });
-          alert("✅ Entrada de bitácora sellada.");
+          
+          const success = await addLog(payload);
+          if (success) {
+              setLogForm({ 
+                note: '', 
+                date: new Date().toISOString().split('T')[0], 
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }), 
+                photoUrl: '' 
+              });
+              alert("✅ Entrada de bitácora registrada con éxito.");
+          } else {
+              alert("❌ Error: No se pudo guardar en el servidor. Verifique si el tamaño de la foto es excesivo.");
+          }
+      } catch (err) {
+          alert("❌ Fallo de conexión al intentar guardar la bitácora.");
       } finally { setIsSaving(false); }
   };
 
@@ -568,7 +580,7 @@ export default function PlotDetails() {
                                       </div>
                                   </div>
                                   <button type="submit" disabled={isSaving} className="w-full bg-slate-900 dark:bg-hemp-600 text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl hover:scale-[1.02] transition-all disabled:opacity-50">
-                                      {isSaving ? "Grabando..." : "Sellar Entrada"}
+                                      {isSaving ? "Sincronizando..." : "Sellar Entrada"}
                                   </button>
                               </form>
                           </div>
