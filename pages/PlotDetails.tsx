@@ -35,7 +35,6 @@ const KPI = ({ label, value, icon: Icon, color, subtext }: any) => (
 );
 
 const calculateLunarPhase = (dateStr: string) => {
-    // Usamos T12:00 para evitar desajustes por zona horaria local
     const date = new Date(dateStr + 'T12:00:00');
     const cycle = 29.53058867;
     const knownNewMoon = new Date('2024-01-11T11:57:00Z').getTime();
@@ -47,17 +46,28 @@ const calculateLunarPhase = (dateStr: string) => {
     return 'Menguante';
 };
 
+const fastUUID = () => {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
+};
+
 export default function PlotDetails() {
-  const { id } = useParams<{ id: string }>();
+  const { id: urlId } = useParams<{ id: string }>();
   const { plots, locations, varieties, getPlotHistory, addTrialRecord, updateTrialRecord, deleteTrialRecord, currentUser, seedBatches, logs, addLog, deleteLog, hydricRecords, appName } = useAppContext();
   
-  const plot = plots.find(p => p.id === id);
+  const plot = useMemo(() => plots.find(p => p.id.toLowerCase() === urlId?.toLowerCase()), [plots, urlId]);
   const location = locations.find(l => l.id === plot?.locationId);
   const variety = varieties.find(v => v.id === plot?.varietyId);
   const seedBatch = seedBatches.find(b => b.id === plot?.seedBatchId);
   
-  const history = getPlotHistory(id || '');
-  const plotLogs = useMemo(() => logs.filter(l => l.plotId === id).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()), [logs, id]);
+  const history = getPlotHistory(plot?.id || '');
+  const plotLogs = useMemo(() => {
+    if (!plot) return [];
+    return logs.filter(l => l.plotId?.toLowerCase() === plot.id.toLowerCase())
+               .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [logs, plot]);
   
   const [activeTab, setActiveTab] = useState<'records' | 'logs' | 'water' | 'astro' | 'map'>('records');
   const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
@@ -141,7 +151,6 @@ export default function PlotDetails() {
       try {
           const lat = location.coordinates.lat;
           const lng = location.coordinates.lng;
-          
           const isToday = targetDate === new Date().toISOString().split('T')[0];
           let temp = 0;
           let hum = 0;
@@ -159,24 +168,20 @@ export default function PlotDetails() {
                   hum = Math.round(wData.hourly.relative_humidity_2m.reduce((a:number,b:number)=>a+b,0) / 24);
               }
           }
-
           const aRes = await fetch(`https://api.sunrise-sunset.org/json?lat=${lat}&lng=${lng}&date=${targetDate}&formatted=0`);
           const aData = await aRes.json();
           const lunar = calculateLunarPhase(targetDate);
           const hours = aData.results ? parseFloat((aData.results.day_length / 3600).toFixed(2)) : 12;
-          
           targetSetter({ temperature: temp, humidity: hum, lightHours: hours, lunarPhase: lunar });
       } catch (err) { console.error("Sync Error:", err); } finally { setIsFetchingConditions(false); }
   };
 
-  // Efecto para sincronizar el Informe Periódico al abrir o cambiar fecha
   useEffect(() => {
       if (isRecordModalOpen && !editingRecordId) {
           syncEnvironmentalData(recordForm.date || new Date().toISOString().split('T')[0], (data) => setRecordForm(prev => ({ ...prev, ...data })));
       }
   }, [isRecordModalOpen, editingRecordId]);
 
-  // Efecto para sincronizar la Bitácora al cambiar fecha o abrir pestaña
   useEffect(() => {
       if (activeTab === 'logs' && !logForm.note && !logForm.photoUrl) {
           syncEnvironmentalData(logForm.date || new Date().toISOString().split('T')[0], (data) => setLogForm(prev => ({ ...prev, ...data })));
@@ -218,7 +223,7 @@ export default function PlotDetails() {
       try {
           const payload = { ...recordForm, plotId: plot?.id, createdBy: currentUser?.id, createdByName: currentUser?.name };
           if (editingRecordId) await updateTrialRecord({ ...payload, id: editingRecordId } as TrialRecord);
-          else await addTrialRecord({ ...payload, id: crypto.randomUUID() } as TrialRecord);
+          else await addTrialRecord({ ...payload, id: (window.crypto as any).randomUUID?.() || fastUUID() } as TrialRecord);
           setIsRecordModalOpen(false);
       } finally { setIsSaving(false); }
   };
@@ -242,7 +247,6 @@ export default function PlotDetails() {
 
   const handleSaveLog = async (e: React.FormEvent) => {
       e.preventDefault();
-      // Verificamos que haya contenido (texto o foto)
       if ((!logForm.note?.trim() && !logForm.photoUrl) || isSaving || !plot) {
           alert("Debe ingresar una nota de texto o subir una fotografía para guardar.");
           return;
@@ -250,7 +254,7 @@ export default function PlotDetails() {
       setIsSaving(true);
       try {
           const payload = { 
-            id: (window.crypto as any).randomUUID?.() || Date.now().toString(), 
+            id: (window.crypto as any).randomUUID?.() || fastUUID(), 
             plotId: plot.id, 
             date: logForm.date || new Date().toISOString().split('T')[0], 
             time: logForm.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
@@ -275,8 +279,6 @@ export default function PlotDetails() {
                 lightHours: 12
               });
               alert("✅ Entrada de bitácora registrada con éxito.");
-          } else {
-              alert("❌ Error de Servidor: La base de datos rechazó el registro. Por favor, ejecute el Script V41.1 en Ajustes -> SQL Nucleus.");
           }
       } catch (err) {
           alert("❌ Fallo de conexión o tiempo de espera agotado.");
@@ -435,7 +437,7 @@ export default function PlotDetails() {
           </div>
           
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-              <KPI label="Huella Hídrica" value={`${(hydricRecords.filter(h => h.plotId === id).reduce((s, r) => s + r.amountMm, 0)).toFixed(1)} mm`} icon={Waves} color="bg-blue-100" />
+              <KPI label="Huella Hídrica" value={`${(hydricRecords.filter(h => h.plotId === plot.id).reduce((s, r) => s + r.amountMm, 0)).toFixed(1)} mm`} icon={Waves} color="bg-blue-100" />
               <KPI label="Acumulación Térmica" value={`${agronomyStats.totalGdd} GDD`} icon={Thermometer} color="bg-orange-100" />
               <KPI label="Crecimiento Act." value={`${agronomyStats.avgGrowth} cm/d`} icon={TrendingUp} color="bg-emerald-100" subtext={`Fase: ${agronomyStats.currentPhase}`} />
               <KPI label="Días Ciclo" value={Math.floor((Date.now() - new Date(plot.sowingDate).getTime()) / 86400000)} icon={Clock} color="bg-blue-100" />
@@ -485,7 +487,7 @@ export default function PlotDetails() {
                     </div>
                     <div className="overflow-x-auto">
                         <table className="min-w-full text-sm text-left">
-                            <thead className="bg-gray-50/50 dark:bg-slate-950/50 text-gray-400 uppercase text-[9px] font-black tracking-widest border-b dark:border-slate-800"><tr><th className="px-10 py-5">Fecha / Hora</th><th className="px-10 py-5">Etapa</th><th className="px-10 py-5 text-center">Altura</th><th className="px-10 py-5 text-center">Vigor (1-9)</th><th className="px-10 py-5 text-center">Temp/Hum</th><th className="px-10 py-5 text-right">Detalle</th></tr></thead>
+                            <thead className="bg-gray-50 dark:bg-slate-950/50 text-gray-400 uppercase text-[9px] font-black tracking-widest border-b dark:border-slate-800"><tr><th className="px-10 py-5">Fecha / Hora</th><th className="px-10 py-5">Etapa</th><th className="px-10 py-5 text-center">Altura</th><th className="px-10 py-5 text-center">Vigor (1-9)</th><th className="px-10 py-5 text-center">Temp/Hum</th><th className="px-10 py-5 text-right">Detalle</th></tr></thead>
                             <tbody className="divide-y divide-gray-100 dark:divide-slate-800 font-bold uppercase text-[11px]">{paginatedHistory.map(r => (
                                 <tr key={r.id} className="hover:bg-gray-50 dark:hover:bg-slate-800 cursor-pointer" onClick={() => { setEditingRecordId(r.id); setRecordForm(r); setIsViewMode(true); setIsRecordModalOpen(true); }}>
                                     <td className="px-10 py-6 font-black text-gray-800 dark:text-white tracking-tighter">{r.date}<span className="block text-[8px] text-slate-400 font-bold mt-1 tracking-widest">{r.time || '--:--'} HS</span></td>

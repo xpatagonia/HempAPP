@@ -366,16 +366,23 @@ export const AppProvider = ({ children }: { children?: React.ReactNode }) => {
 
   const genericAdd = async (table: string, item: any, setter: any, localKey: string) => {
       const dbItem = toSnakeCase({ ...item });
+      // Actualización optimista inmediata
+      setter((prev: any[]) => [item, ...prev]);
+      
       try {
           const { error } = await supabase.from(table).insert([dbItem]);
           if (error) { 
               console.error(`[DB INSERT ERROR] ${table}:`, error); 
-              alert(`FALLO DE SERVIDOR: La base de datos rechazó el registro.\n\nMOTIVO: ${error.message}\n\nACCIÓN: Ejecute el Script V41.1 en Ajustes.`);
+              // Revertir en caso de error
+              setter((prev: any[]) => prev.filter(i => i.id !== item.id));
+              alert(`FALLO DE SERVIDOR: La base de datos rechazó el registro.\n\nMOTIVO: ${error.message}`);
               return false; 
           }
-          await refreshData();
+          // Forzar refresco real en background
+          refreshData();
           return true;
       } catch (e: any) { 
+          setter((prev: any[]) => prev.filter(i => i.id !== item.id));
           console.error(`[RUNTIME INSERT ERROR] ${table}:`, e); 
           alert("Error de ejecución local al procesar el guardado.");
           return false; 
@@ -384,14 +391,15 @@ export const AppProvider = ({ children }: { children?: React.ReactNode }) => {
 
   const genericUpdate = async (table: string, item: any, setter: any, localKey: string) => {
       const dbItem = toSnakeCase(item);
+      setter((prev: any[]) => prev.map(i => i.id === item.id ? item : i));
       try {
           const { error } = await supabase.from(table).update(dbItem).eq('id', item.id);
           if (error) { 
               console.error(`[DB UPDATE ERROR] ${table}:`, error); 
+              refreshData(); // Volver al estado real de la DB
               alert(`FALLO DE SERVIDOR: No se pudo actualizar.\nMotivo: ${error.message}`);
               return false; 
           }
-          await refreshData();
           return true;
       } catch (e) { 
           console.error(`[RUNTIME UPDATE ERROR] ${table}:`, e); 
@@ -400,9 +408,13 @@ export const AppProvider = ({ children }: { children?: React.ReactNode }) => {
   };
 
   const genericDelete = async (table: string, id: string, setter: any, localKey: string) => {
+      setter((prev: any[]) => prev.filter(i => i.id !== id));
       try {
           const { error } = await supabase.from(table).delete().eq('id', id);
-          if (!error) await refreshData();
+          if (error) {
+              console.error("Delete Error:", error);
+              refreshData();
+          }
       } catch (e) { console.error("Delete Error:", e); }
   };
 
@@ -415,10 +427,7 @@ export const AppProvider = ({ children }: { children?: React.ReactNode }) => {
       await refreshData();
   };
 
-  const addUser = async (u: User) => {
-      const success = await genericAdd('users', u, setUsersList, 'users');
-      return success;
-  };
+  const addUser = (u: User) => genericAdd('users', u, setUsersList, 'users');
   const updateUser = (u: User) => genericUpdate('users', u, setUsersList, 'users');
   const deleteUser = (id: string) => genericDelete('users', id, setUsersList, 'users');
   const addProject = (p: Project) => genericAdd('projects', p, setProjects, 'projects');
@@ -430,23 +439,15 @@ export const AppProvider = ({ children }: { children?: React.ReactNode }) => {
   const addPlot = (p: Plot) => genericAdd('plots', p, setPlots, 'plots');
   const updatePlot = (p: Plot) => genericUpdate('plots', p, setPlots, 'plots');
   const deletePlot = (id: string) => genericDelete('plots', id, setPlots, 'plots').then(() => {});
-  
-  const addVariety = async (v: Variety) => { 
-      const success = await genericAdd('varieties', v, setVarieties, 'varieties'); 
-      return success;
-  };
-  const updateVariety = async (v: Variety) => { 
-      return genericUpdate('varieties', v, setVarieties, 'varieties'); 
-  };
+  const addVariety = (v: Variety) => genericAdd('varieties', v, setVarieties, 'varieties');
+  const updateVariety = (v: Variety) => genericUpdate('varieties', v, setVarieties, 'varieties');
   const deleteVariety = (id: string) => { genericDelete('varieties', id, setVarieties, 'varieties'); };
-  
   const addSupplier = async (s: Supplier) => { 
       const success = await genericAdd('suppliers', s, setSuppliers, 'suppliers'); 
       return success ? s.id : null; 
   };
   const updateSupplier = (s: Supplier) => genericUpdate('suppliers', s, setSuppliers, 'suppliers');
   const deleteSupplier = (id: string) => { genericDelete('suppliers', id, setVarieties, 'suppliers'); };
-  
   const addClient = async (c: Client, teamUserIds: string[] = []) => {
       const success = await genericAdd('clients', c, setClients, 'clients');
       if (success) {
@@ -464,27 +465,18 @@ export const AppProvider = ({ children }: { children?: React.ReactNode }) => {
       return success;
   };
   const deleteClient = (id: string) => genericDelete('clients', id, setClients, 'clients');
-  
   const addResource = (r: Resource) => genericAdd('resources', r, setResources, 'resources');
   const updateResource = (r: Resource) => genericUpdate('resources', r, setResources, 'resources');
   const deleteResource = (id: string) => genericDelete('resources', id, setResources, 'resources');
-  
-  const addStoragePoint = async (sp: StoragePoint) => {
-      const success = await genericAdd('storage_points', sp, setStoragePoints, 'storage_points');
-      return success;
-  };
-  const updateStoragePoint = async (sp: StoragePoint) => {
-      return genericUpdate('storage_points', sp, setStoragePoints, 'storage_points');
-  };
+  const addStoragePoint = (sp: StoragePoint) => genericAdd('storage_points', sp, setStoragePoints, 'storage_points');
+  const updateStoragePoint = (sp: StoragePoint) => genericUpdate('storage_points', sp, setStoragePoints, 'storage_points');
   const deleteStoragePoint = (id: string) => genericDelete('storage_points', id, setStoragePoints, 'storage_points');
-  
   const addSeedBatch = (s: SeedBatch) => genericAdd('seed_batches', s, setSeedBatches, 'seed_batches');
   const updateSeedBatch = (s: SeedBatch) => genericUpdate('seed_batches', s, setSeedBatches, 'seed_batches');
   const deleteSeedBatch = async (id: string) => { await genericDelete('seed_batches', id, setSeedBatches, 'seed_batches'); };
-  
   const addHydricRecord = (h: HydricRecord) => genericAdd('hydric_records', h, setHydricRecords, 'hydric_records');
   const deleteHydricRecord = (id: string) => genericDelete('hydric_records', id, setHydricRecords, 'hydric_records');
-  const addSeedMovement = async (m: SeedMovement) => genericAdd('seed_movements', m, setSeedMovements, 'seed_movements');
+  const addSeedMovement = (m: SeedMovement) => genericAdd('seed_movements', m, setSeedMovements, 'seed_movements');
   const updateSeedMovement = (m: SeedMovement) => genericUpdate('seed_movements', m, setSeedMovements, 'seed_movements');
   const deleteSeedMovement = async (id: string) => { 
       const move = seedMovements.find(m => m.id === id);
@@ -492,7 +484,7 @@ export const AppProvider = ({ children }: { children?: React.ReactNode }) => {
           const batch = seedBatches.find(b => b.id === move.batchId);
           if (batch) {
               const updatedBatch = { ...batch, remainingQuantity: (batch.remainingQuantity || 0) + (move.quantity || 0) };
-              await genericUpdate('seed_batches', updatedBatch, setSeedBatches, 'seed_batches');
+              await updateSeedBatch(updatedBatch);
           }
       }
       await genericDelete('seed_movements', id, setSeedMovements, 'seed_movements');
