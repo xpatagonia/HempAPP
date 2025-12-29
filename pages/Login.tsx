@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { useNavigate, Link } from 'react-router-dom';
-import { ArrowRight, AlertCircle, Loader2, Leaf, Globe, Mail } from 'lucide-react';
+import { ArrowRight, AlertCircle, Loader2, Leaf, Globe, Mail, Code } from 'lucide-react';
 
 export default function Login() {
   const { login } = useAppContext();
@@ -29,10 +29,10 @@ export default function Login() {
       <div className="hidden lg:flex lg:w-1/2 bg-[#DDDB03] relative p-20 flex-col justify-between overflow-hidden shadow-2xl">
           <div className="relative z-10">
               <div className="mb-12">
-                  <h1 className="text-7xl font-black text-hemp-600 tracking-tighter italic uppercase leading-none drop-shadow-sm">
+                  <h1 className="text-7xl font-black text-hemp-700 tracking-tighter italic uppercase leading-none drop-shadow-sm">
                       HempC <span className="text-slate-900">APP</span>
                   </h1>
-                  <p className="text-slate-800 mt-2 text-sm font-black tracking-widest opacity-70">
+                  <p className="text-slate-800 mt-2 text-sm font-black tracking-widest opacity-80">
                       www.hempc.com.ar
                   </p>
                   <p className="text-white mt-8 text-3xl font-bold italic tracking-tight drop-shadow-sm" style={{ fontFamily: 'Arial, sans-serif' }}>
@@ -41,7 +41,7 @@ export default function Login() {
               </div>
               
               <div className="space-y-8 mt-16">
-                  {/* Título en Blanco solicitado por el usuario */}
+                  {/* Título en Blanco */}
                   <h2 className="text-6xl font-black text-white leading-[1.05] tracking-tighter uppercase italic drop-shadow-md">
                       La Red Cooperativa <br />
                       del Cáñamo <br />
@@ -57,33 +57,40 @@ export default function Login() {
               </div>
           </div>
 
-          <div className="relative z-10 flex flex-col space-y-4">
-              <div className="flex items-center space-x-3">
-                  <div className="p-3 bg-slate-900 rounded-2xl shadow-lg">
+          <div className="relative z-10 flex flex-col space-y-6">
+              <div className="flex items-center space-x-4">
+                  <div className="p-3 bg-slate-900 rounded-2xl shadow-lg border border-white/10">
                     <Leaf className="text-[#DDDB03]" size={24} />
                   </div>
                   <div>
-                      <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.4em]">Sostenibilidad & Trazabilidad</p>
-                      <p className="text-[10px] font-bold text-slate-900/50 uppercase tracking-widest">HempC Network v7.5 • 2025</p>
+                      <p className="text-[11px] font-black text-slate-900 uppercase tracking-[0.3em]">Sostenibilidad & Trazabilidad</p>
+                      <p className="text-[10px] font-bold text-slate-800/60 uppercase tracking-widest">Nucleus Industry v7.0 • 2025</p>
                   </div>
               </div>
               
               {/* Pie de página Lado Izquierdo */}
-              <div className="pt-6 border-t border-slate-900/10 space-y-1">
-                  <p className="text-xs font-black text-slate-900 flex items-center gap-2">
-                      <Globe size={12}/> www.hempc.com.ar
-                  </p>
-                  <p className="text-xs font-black text-slate-900 flex items-center gap-2">
-                      <Mail size={12}/> info@hempc.com.ar
-                  </p>
-                  <p className="text-xs font-black text-slate-900 uppercase tracking-widest mt-2">
-                      PatagonianC LTDA
-                  </p>
+              <div className="pt-6 border-t border-slate-900/20 grid grid-cols-2 gap-y-4 gap-x-8">
+                  <div className="space-y-1">
+                      <p className="text-[10px] font-black text-slate-900 flex items-center gap-2 uppercase tracking-widest">
+                          <Globe size={12} className="text-slate-700"/> www.hempc.com.ar
+                      </p>
+                      <p className="text-[10px] font-black text-slate-900 flex items-center gap-2 uppercase tracking-widest">
+                          <Mail size={12} className="text-slate-700"/> info@hempc.com.ar
+                      </p>
+                      <p className="text-[10px] font-black text-slate-900 uppercase tracking-widest pt-1">
+                          PatagonianC LTDA
+                      </p>
+                  </div>
+                  <div className="text-right space-y-1">
+                      <p className="text-[10px] font-black text-slate-900 flex items-center justify-end gap-2 uppercase tracking-widest">
+                          <Code size={12} className="text-slate-700"/> Dev. xpatagonia.com
+                      </p>
+                  </div>
               </div>
           </div>
           
-          {/* Elementos decorativos de fondo suaves */}
-          <div className="absolute -right-20 -bottom-20 w-[600px] h-[600px] bg-white/20 rounded-full blur-[120px]"></div>
+          {/* Elementos decorativos de fondo */}
+          <div className="absolute -right-20 -bottom-20 w-[600px] h-[600px] bg-white/30 rounded-full blur-[120px]"></div>
           <div className="absolute top-[-10%] left-[-10%] w-[400px] h-[400px] bg-slate-900/5 rounded-full blur-[100px]"></div>
       </div>
 
