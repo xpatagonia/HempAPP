@@ -216,14 +216,11 @@ const toSnakeCase = (obj: any) => {
     const newObj: any = {};
     for (const key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
-            if (['lat', 'lng', 'teamUserIds', 'inputValue'].includes(key)) continue;
-
             const snakeKey = MANUAL_MAP[key] || key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
             let val = obj[key];
             
-            if (['responsibleIds', 'assignedToIds', 'responsible_ids', 'assigned_to_ids'].includes(snakeKey) || key.includes('Ids')) {
-                if (val === null || val === undefined) val = [];
-            } else if ((key.toLowerCase().endsWith('id') || key === 'clientId' || key === 'supplierId') && (val === '' || val === undefined)) {
+            // Especial para IDs que pueden venir vacíos y causar error de FK
+            if ((key.toLowerCase().endsWith('id') || key === 'clientId' || key === 'supplierId') && (val === '' || val === undefined)) {
                 val = null;
             }
             
@@ -366,6 +363,7 @@ export const AppProvider = ({ children }: { children?: React.ReactNode }) => {
 
   const genericAdd = async (table: string, item: any, setter: any, localKey: string) => {
       const dbItem = toSnakeCase({ ...item });
+      
       // Actualización optimista inmediata
       setter((prev: any[]) => [item, ...prev]);
       
@@ -373,13 +371,17 @@ export const AppProvider = ({ children }: { children?: React.ReactNode }) => {
           const { error } = await supabase.from(table).insert([dbItem]);
           if (error) { 
               console.error(`[DB INSERT ERROR] ${table}:`, error); 
-              // Revertir en caso de error
+              // Revertimos la UI si hay error
               setter((prev: any[]) => prev.filter(i => i.id !== item.id));
-              alert(`FALLO DE SERVIDOR: La base de datos rechazó el registro.\n\nMOTIVO: ${error.message}`);
+              
+              // Error más descriptivo
+              let msg = `ERROR DE SERVIDOR: La base de datos rechazó el registro.\n\nTABLA: ${table}\nMOTIVO: ${error.message}`;
+              if (error.message.includes("column")) msg += "\n\nACCIÓN RECOMENDADA: Ejecute el Script SQL V42 en Ajustes.";
+              alert(msg);
               return false; 
           }
-          // Forzar refresco real en background
-          refreshData();
+          // Si fue exitoso, forzamos un refresco real
+          await refreshData();
           return true;
       } catch (e: any) { 
           setter((prev: any[]) => prev.filter(i => i.id !== item.id));
@@ -396,7 +398,7 @@ export const AppProvider = ({ children }: { children?: React.ReactNode }) => {
           const { error } = await supabase.from(table).update(dbItem).eq('id', item.id);
           if (error) { 
               console.error(`[DB UPDATE ERROR] ${table}:`, error); 
-              refreshData(); // Volver al estado real de la DB
+              refreshData(); 
               alert(`FALLO DE SERVIDOR: No se pudo actualizar.\nMotivo: ${error.message}`);
               return false; 
           }
