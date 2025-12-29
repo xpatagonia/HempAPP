@@ -2,10 +2,10 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { useNavigate, Link } from 'react-router-dom';
-import { ArrowRight, AlertCircle, Loader2, Leaf, Globe, Mail, Code } from 'lucide-react';
+import { ArrowRight, AlertCircle, Loader2, Leaf, Globe, Mail, Code, QrCode, Smartphone } from 'lucide-react';
 
 export default function Login() {
-  const { login } = useAppContext();
+  const { login, appName } = useAppContext();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -41,7 +41,6 @@ export default function Login() {
               </div>
               
               <div className="space-y-8 mt-16">
-                  {/* Título en Blanco */}
                   <h2 className="text-6xl font-black text-white leading-[1.05] tracking-tighter uppercase italic drop-shadow-md">
                       La Red Cooperativa <br />
                       del Cáñamo <br />
@@ -50,10 +49,30 @@ export default function Login() {
                   
                   <div className="h-2 w-24 bg-white rounded-full opacity-50"></div>
                   
-                  <p className="text-white text-xl font-medium leading-relaxed max-w-md drop-shadow-sm">
-                      Trazabilidad, Innovación y Bioeconomía. <br />
-                      <span className="font-bold">Impulsado por PatagonianC LTDA.</span>
-                  </p>
+                  <div className="flex items-start gap-10">
+                      <p className="text-white text-xl font-medium leading-relaxed max-w-xs drop-shadow-sm">
+                          Trazabilidad, Innovación y Bioeconomía. <br />
+                          <span className="font-bold">Impulsado por PatagonianC LTDA.</span>
+                      </p>
+
+                      {/* INTEGRACIÓN QR ACCESO MÓVIL */}
+                      <div className="bg-slate-900/90 backdrop-blur-md p-4 rounded-[24px] border border-white/10 shadow-2xl flex flex-col items-center">
+                          <div className="bg-white p-2 rounded-xl mb-3">
+                              <img 
+                                src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${window.location.origin}`} 
+                                alt="Acceso Móvil"
+                                className="w-20 h-20"
+                              />
+                          </div>
+                          <div className="text-center">
+                              <p className="text-[8px] font-black text-hemp-400 uppercase tracking-[0.2em] mb-1">Acceso Móvil</p>
+                              <div className="flex items-center justify-center gap-1 text-white">
+                                  <Smartphone size={10} />
+                                  <span className="text-[7px] font-bold uppercase opacity-60">Sincronizar Terminal</span>
+                              </div>
+                          </div>
+                      </div>
+                  </div>
               </div>
           </div>
 
