@@ -7,7 +7,6 @@ import {
   Users, Building, Eye, X, Link as LinkIcon, UserCheck, 
   Shield, UserPlus, Star, Loader2, Save, UserMinus, 
   Archive, Sprout, BookOpen, Clock, ClipboardCheck, ArrowUpRight,
-  // Added Sparkles to imports
   Info, Navigation, CheckCircle2, Key, LayoutGrid, Activity, Smartphone, Sparkles
 } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
@@ -32,7 +31,6 @@ export default function Clients() {
   const [isSaving, setIsSaving] = useState(false);
   const [showStaffCreator, setShowStaffCreator] = useState(false);
 
-  // Estados de Formulario de Socio
   const [formData, setFormData] = useState<Partial<Client> & { lat: string, lng: string, teamUserIds: string[] }>({
     name: '', type: 'Empresa Privada', contactName: '', contactPhone: '', email: '', 
     address: '', totalHectares: 0,
@@ -41,10 +39,10 @@ export default function Clients() {
     lat: '', lng: '', teamUserIds: []
   });
 
-  // Estados de Formulario de Personal
   const [staffData, setStaffData] = useState({ name: '', email: '', password: '', role: 'technician' as UserRole, jobTitle: '', avatar: PRESET_AVATARS[0] });
 
-  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
+  const isSuperAdmin = currentUser?.role === 'super_admin';
+  const isAdmin = currentUser?.role === 'admin' || isSuperAdmin;
   const isClient = currentUser?.role === 'client';
 
   const myClients = useMemo(() => {
@@ -110,7 +108,8 @@ export default function Clients() {
           id: Date.now().toString(),
           ...staffData,
           clientId: editingId || undefined,
-          isNetworkMember: formData.isNetworkMember || false
+          isNetworkMember: formData.isNetworkMember || false,
+          role: staffData.role
       };
       const success = await addUser(newUser);
       if (success) {
@@ -198,8 +197,8 @@ export default function Clients() {
                           }} className="p-2 text-gray-400 hover:text-hemp-600 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 transition">
                              <Edit2 size={18} />
                         </button>
-                        {isAdmin && (
-                           <button onClick={() => { if(window.confirm("¿Eliminar socio?")) deleteClient(client.id); }} className="p-2 text-gray-400 hover:text-red-600 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 transition"><Trash2 size={18} /></button>
+                        {isSuperAdmin && (
+                           <button onClick={() => { if(window.confirm("¿Eliminar socio y desvincular equipo?")) deleteClient(client.id); }} className="p-2 text-gray-400 hover:text-red-600 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 transition"><Trash2 size={18} /></button>
                         )}
                     </div>
 
@@ -280,7 +279,6 @@ export default function Clients() {
 
             <form onSubmit={handleSubmit} className="space-y-8">
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* COLUMNA DATOS EMPRESA */}
                 <div className="space-y-6">
                     <div className="bg-slate-50 dark:bg-slate-950 p-6 rounded-[32px] border dark:border-slate-800">
                         <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-6 border-b dark:border-slate-800 pb-3 flex items-center">
@@ -338,7 +336,6 @@ export default function Clients() {
                     </div>
                 </div>
 
-                {/* COLUMNA EQUIPO DE TRABAJO */}
                 <div className="lg:col-span-2 space-y-6">
                     <div className="bg-white dark:bg-slate-950 p-8 rounded-[40px] border dark:border-slate-800 shadow-xl relative overflow-hidden min-h-[500px] flex flex-col">
                         <div className="flex justify-between items-center mb-8 relative z-10">

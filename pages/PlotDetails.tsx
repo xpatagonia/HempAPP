@@ -12,12 +12,13 @@ import {
   Camera, Image as ImageIcon, MessageSquare, ClipboardList, User, Calendar, Ruler, Maximize2, Download, Scale, Wind, Bird, CheckCircle2,
   RefreshCw, Globe, Layers, Save, Thermometer, Droplets, Waves, QrCode, Printer, Loader2, Zap, Sparkles, Link as LinkIcon, Sun,
   TrendingUp, ArrowUpRight, Beaker, FileUp, Moon, Sunrise, Sunset, ZapOff, Archive, Navigation, Scan, Target, FlaskConical, ClipboardCheck,
-  ChevronLeft, ChevronRight, Filter, Bot, Terminal
+  ChevronLeft, ChevronRight, Filter, Bot, Terminal, FileText
 } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
 import WeatherWidget from '../components/WeatherWidget';
 import HydricBalance from '../components/HydricBalance';
 import { GoogleGenAI } from "@google/genai";
+import jsPDF from 'jspdf';
 
 const KPI = ({ label, value, icon: Icon, color, subtext }: any) => (
     <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 p-6 rounded-[32px] shadow-sm flex items-start space-x-4 hover:shadow-md transition-shadow relative overflow-hidden group">
@@ -47,7 +48,7 @@ const calculateLunarPhase = (dateStr: string) => {
 
 export default function PlotDetails() {
   const { id } = useParams<{ id: string }>();
-  const { plots, locations, varieties, getPlotHistory, addTrialRecord, updateTrialRecord, deleteTrialRecord, currentUser, seedBatches, logs, addLog, deleteLog, hydricRecords } = useAppContext();
+  const { plots, locations, varieties, getPlotHistory, addTrialRecord, updateTrialRecord, deleteTrialRecord, currentUser, seedBatches, logs, addLog, deleteLog, hydricRecords, appName } = useAppContext();
   
   const plot = plots.find(p => p.id === id);
   const location = locations.find(l => l.id === plot?.locationId);
@@ -69,7 +70,6 @@ export default function PlotDetails() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiInsight, setAiInsight] = useState<string | null>(null);
 
-  // Pagination & Filtering for Records
   const [recordsPage, setRecordsPage] = useState(1);
   const [recordsFilterStage, setRecordsFilterStage] = useState('all');
   const recordsPerPage = 8;
@@ -206,7 +206,6 @@ export default function PlotDetails() {
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (file) {
-          // Validamos tamaño (Límite sugerido 2MB para base64 en Supabase texto)
           if (file.size > 2 * 1024 * 1024) {
               alert("⚠️ La imagen es muy pesada (>2MB). Por favor, redúzcala o tome una foto de menor resolución.");
               return;
@@ -250,6 +249,79 @@ export default function PlotDetails() {
       } catch (err) {
           alert("❌ Fallo de conexión o tiempo de espera agotado.");
       } finally { setIsSaving(false); }
+  };
+
+  const generateFieldReport = () => {
+      if (!plot) return;
+      const doc = new jsPDF();
+      const margin = 20;
+      const pageWidth = doc.internal.pageSize.getWidth();
+      
+      // Branding Header
+      doc.setFillColor(221, 219, 3); // #DDDB03
+      doc.rect(0, 0, pageWidth, 40, 'F');
+      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(22);
+      doc.setFont("helvetica", "bold");
+      doc.text(appName.toUpperCase() + " NUCLEUS", margin, 20);
+      doc.setFontSize(10);
+      doc.text("INFORME DE AUDITORÍA Y GEOPOSICIONAMIENTO DE CAMPO", margin, 28);
+      
+      // Body Info
+      doc.setFontSize(14);
+      doc.setTextColor(0, 0, 0);
+      doc.text("IDENTIFICACIÓN TÉCNICA", margin, 55);
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Parcela: ${plot.name}`, margin, 65);
+      doc.text(`Variedad: ${variety?.name || 'S/D'}`, margin, 72);
+      doc.text(`Campo: ${location?.name || 'S/D'}`, margin, 79);
+      doc.text(`Fecha de Siembra: ${plot.sowingDate}`, margin, 86);
+      doc.text(`Superficie: ${plot.surfaceArea} ${plot.surfaceUnit}`, margin, 93);
+      
+      // GEOLOCATION BOX
+      doc.setFillColor(245, 245, 245);
+      doc.rect(margin, 100, pageWidth - (margin*2), 35, 'F');
+      doc.setFont("helvetica", "bold");
+      doc.text("GEOPOSICIONAMIENTO (GPS)", margin + 5, 110);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Latitud: ${plot.coordinates?.lat || 'N/A'}`, margin + 5, 120);
+      doc.text(`Longitud: ${plot.coordinates?.lng || 'N/A'}`, margin + 5, 127);
+      if (plot.coordinates) {
+          doc.setTextColor(37, 99, 235); // Blue
+          doc.text(`Enlace Satelital: https://maps.google.com/?q=${plot.coordinates.lat},${plot.coordinates.lng}`, margin + 5, 134);
+      }
+      
+      // PROTOCOL SECTION
+      doc.setTextColor(0, 0, 0);
+      doc.setFont("helvetica", "bold");
+      doc.text("AUDITORÍA PRESENCIAL (PARA COMPLETAR EN CAMPO)", margin, 150);
+      doc.setFont("helvetica", "normal");
+      
+      const checkItems = [
+          "Vigor Vegetal (1-9): ________",
+          "Homogeneidad (1-9): ________",
+          "Altura Promedio (cm): ________",
+          "Población Real (pl/m2): ________",
+          "Estado Sanitario: ________________________________________________"
+      ];
+      
+      let y = 160;
+      checkItems.forEach(item => {
+          doc.text(item, margin, y);
+          y += 10;
+      });
+      
+      doc.rect(margin, 210, pageWidth - (margin*2), 40); // Observaciones box
+      doc.text("OBSERVACIONES TÉCNICAS ADICIONALES:", margin + 2, 217);
+      
+      // FOOTER
+      doc.setFontSize(8);
+      doc.setTextColor(150, 150, 150);
+      doc.text(`ID Único de Trazabilidad: ${plot.id}`, margin, doc.internal.pageSize.getHeight() - 15);
+      doc.text("PatagonianC LTDA © 2025 - Red Cooperativa del Cáñamo", margin, doc.internal.pageSize.getHeight() - 10);
+      
+      doc.save(`Reporte_Campo_${plot.name.replace(/\s+/g, '_')}.pdf`);
   };
 
   const chartData = useMemo(() => {
@@ -298,6 +370,9 @@ export default function PlotDetails() {
             <ArrowLeft size={16} className="mr-2 group-hover:-translate-x-1 transition-transform" /> Listado Global
         </Link>
         <div className="flex gap-2">
+            <button onClick={generateFieldReport} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-2xl text-blue-600 hover:text-blue-700 shadow-sm transition-all flex items-center gap-2 px-6 text-xs font-black uppercase tracking-widest">
+                <FileText size={18}/> Reporte de Campo
+            </button>
             <button onClick={handleIAAnalysis} disabled={isAnalyzing || history.length === 0} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-2xl text-hemp-600 hover:text-hemp-700 shadow-sm transition-all flex items-center gap-2 px-6 text-xs font-black uppercase tracking-widest disabled:opacity-30">
                 {isAnalyzing ? <Loader2 className="animate-spin" size={18}/> : <Bot size={18}/>} Diagnóstico IA
             </button>
@@ -439,7 +514,6 @@ export default function PlotDetails() {
                             ))}</tbody>
                         </table>
                     </div>
-                    {/* PAGINACIÓN */}
                     {totalPages > 1 && (
                         <div className="px-10 py-4 border-t dark:border-slate-800 flex justify-between items-center bg-gray-50/30 dark:bg-slate-950/30">
                             <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Página {recordsPage} de {totalPages}</span>
@@ -686,7 +760,6 @@ export default function PlotDetails() {
             
             <form onSubmit={handleSaveRecord} className="space-y-8">
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                    {/* SECCIÓN 1: AMBIENTE */}
                     <div className="bg-slate-50 dark:bg-slate-950 p-6 rounded-3xl border dark:border-slate-800 space-y-4">
                         <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 border-b dark:border-slate-800 pb-2 flex items-center"><Sun size={14} className="mr-2"/> Ambiente & Tiempo</h3>
                         <div>
@@ -715,7 +788,6 @@ export default function PlotDetails() {
                         </div>
                     </div>
 
-                    {/* SECCIÓN 2: EVALUACIÓN VEGETAL */}
                     <div className="lg:col-span-2 space-y-6">
                         <div className="bg-white dark:bg-slate-900 p-6 rounded-[32px] border dark:border-slate-800 shadow-sm grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="md:col-span-2 border-b dark:border-slate-800 pb-2"><h3 className="text-[10px] font-black text-emerald-600 uppercase tracking-widest flex items-center"><Target size={14} className="mr-2"/> Evaluación Vegetal (1-9)</h3></div>
@@ -735,7 +807,6 @@ export default function PlotDetails() {
                         </div>
                     </div>
 
-                    {/* SECCIÓN 3: REPRODUCCIÓN & COSECHA */}
                     <div className="bg-slate-900 p-6 rounded-[32px] text-white space-y-4">
                         <h3 className="text-[10px] font-black text-hemp-400 uppercase tracking-widest mb-4 border-b border-white/10 pb-2 flex items-center"><FlaskConical size={14} className="mr-2"/> Datos de Cosecha</h3>
                         <div><label className="text-[9px] uppercase font-black text-slate-400">Plena Floración (50%)</label><input type="date" className="w-full bg-white/5 border border-white/10 p-2.5 rounded-xl text-xs outline-none focus:ring-1 focus:ring-hemp-500" value={recordForm.floweringDate} onChange={e => setRecordForm({...recordForm, floweringDate: e.target.value})} /></div>

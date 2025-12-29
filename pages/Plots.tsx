@@ -92,7 +92,6 @@ export default function Plots() {
     });
   };
 
-  // --- LÓGICA DE INVENTARIO LOCAL (SINCRO AUTOMÁTICA) ---
   const availableBatches = useMemo(() => {
       return seedBatches.filter(b => {
           if (!b.isActive || b.remainingQuantity <= 0) return false;
@@ -185,7 +184,6 @@ export default function Plots() {
     }
   };
 
-  // Fix: Adding handleKMLUpload to fix reference error on line 408
   const handleKMLUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
@@ -215,9 +213,15 @@ export default function Plots() {
       reader.readAsText(file);
   };
 
-  // Fix: Adding handlePolygonChange to fix reference error on line 417
   const handlePolygonChange = (newPoly: { lat: number, lng: number }[], areaHa: number, center: { lat: number, lng: number }) => {
       setFormData((prev: any) => ({ ...prev, polygon: newPoly, surfaceArea: areaHa > 0 ? Number(areaHa.toFixed(2)) : prev.surfaceArea, lat: center.lat.toFixed(6), lng: center.lng.toFixed(6) }));
+  };
+
+  const handleDeletePlot = (e: React.MouseEvent, id: string) => {
+      e.stopPropagation();
+      if (window.confirm("¿Está seguro de eliminar esta unidad productiva? Esta acción no se puede deshacer y borrará todo el historial de monitoreo.")) {
+          deletePlot(id);
+      }
   };
 
   const inputClass = "w-full border border-gray-300 dark:border-slate-800 bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 p-3 rounded-xl focus:ring-2 focus:ring-hemp-500 outline-none transition-all disabled:opacity-50 font-medium text-sm";
@@ -267,13 +271,13 @@ export default function Plots() {
       {viewMode === 'table' ? (
           <div className="bg-white dark:bg-slate-900 rounded-[32px] shadow-sm border dark:border-slate-800 overflow-hidden overflow-x-auto">
               <table className="min-w-full text-sm text-left">
-                  <thead className="bg-gray-50 dark:bg-slate-950/50 text-gray-400 uppercase text-[9px] font-black tracking-widest border-b dark:border-slate-800">
+                  <thead className="bg-gray-50 dark:bg-slate-950/50 text-gray-500 uppercase text-[9px] font-black tracking-widest border-b dark:border-slate-800">
                       <tr>
                           <th className="px-8 py-5">Nombre / Identificador</th>
                           <th className="px-8 py-5">Campo / Sitio</th>
                           <th className="px-8 py-5">Genética</th>
                           <th className="px-8 py-5 text-center">Superficie</th>
-                          <th className="px-8 py-5 text-right">Estatus</th>
+                          <th className="px-8 py-5 text-right">Acciones</th>
                       </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-slate-800 font-bold uppercase text-[11px]">
@@ -297,9 +301,14 @@ export default function Plots() {
                                   </td>
                                   <td className="px-8 py-6 text-center text-slate-500">{p.surfaceArea} {p.surfaceUnit}</td>
                                   <td className="px-8 py-6 text-right">
-                                      <div className="flex items-center justify-end">
+                                      <div className="flex items-center justify-end space-x-3">
                                           <span className={`px-3 py-1 rounded-full text-[8px] font-black shadow-sm border ${p.status === 'Activa' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-gray-100 text-gray-500'}`}>{p.status}</span>
-                                          <ChevronRight size={16} className="ml-3 text-slate-300 group-hover:text-hemp-600 transition-colors"/>
+                                          {isSuperAdmin && (
+                                              <button onClick={(e) => handleDeletePlot(e, p.id)} className="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all">
+                                                  <Trash2 size={16}/>
+                                              </button>
+                                          )}
+                                          <ChevronRight size={16} className="text-slate-300 group-hover:text-hemp-600 transition-colors"/>
                                       </div>
                                   </td>
                               </tr>
@@ -311,19 +320,26 @@ export default function Plots() {
       ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredPlots.map(p => (
-                  <Link key={p.id} to={`/plots/${p.id}`} className="bg-white dark:bg-slate-900 p-6 rounded-[40px] shadow-sm border border-gray-100 dark:border-slate-800 hover:shadow-xl transition-all group flex flex-col h-full">
-                      <div className="flex justify-between items-start mb-6">
-                          <div className="p-4 bg-hemp-50 dark:bg-hemp-900/20 rounded-2xl text-hemp-600"><Sprout size={24}/></div>
-                          <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${p.status === 'Activa' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>{p.status}</span>
-                      </div>
-                      <h3 className="text-xl font-black text-gray-800 dark:text-white uppercase tracking-tighter italic group-hover:text-hemp-600 transition-colors">{p.name}</h3>
-                      <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mt-2 flex items-center"><MapPin size={12} className="mr-1.5 text-blue-500"/> {locations.find(l => l.id === p.locationId)?.name}</p>
-                      
-                      <div className="mt-auto pt-6 grid grid-cols-2 gap-2 border-t dark:border-slate-800 mt-6">
-                          <div className="bg-gray-50 dark:bg-slate-950 p-2 rounded-xl text-center"><p className="text-[8px] font-black text-gray-400 uppercase">Superficie</p><p className="text-xs font-black dark:text-white">{p.surfaceArea} {p.surfaceUnit}</p></div>
-                          <div className="bg-gray-50 dark:bg-slate-950 p-2 rounded-xl text-center"><p className="text-[8px] font-black text-gray-400 uppercase">Genética</p><p className="text-xs font-black text-hemp-600 truncate px-1">{varieties.find(v => v.id === p.varietyId)?.name}</p></div>
-                      </div>
-                  </Link>
+                  <div key={p.id} className="relative group">
+                      <Link to={`/plots/${p.id}`} className="bg-white dark:bg-slate-900 p-6 rounded-[40px] shadow-sm border border-gray-100 dark:border-slate-800 hover:shadow-xl transition-all flex flex-col h-full">
+                          <div className="flex justify-between items-start mb-6">
+                              <div className="p-4 bg-hemp-50 dark:bg-hemp-900/20 rounded-2xl text-hemp-600"><Sprout size={24}/></div>
+                              <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${p.status === 'Activa' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>{p.status}</span>
+                          </div>
+                          <h3 className="text-xl font-black text-gray-800 dark:text-white uppercase tracking-tighter italic group-hover:text-hemp-600 transition-colors">{p.name}</h3>
+                          <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mt-2 flex items-center"><MapPin size={12} className="mr-1.5 text-blue-500"/> {locations.find(l => l.id === p.locationId)?.name}</p>
+                          
+                          <div className="mt-auto pt-6 grid grid-cols-2 gap-2 border-t dark:border-slate-800 mt-6">
+                              <div className="bg-gray-50 dark:bg-slate-950 p-2 rounded-xl text-center"><p className="text-[8px] font-black text-gray-400 uppercase">Superficie</p><p className="text-xs font-black dark:text-white">{p.surfaceArea} {p.surfaceUnit}</p></div>
+                              <div className="bg-gray-50 dark:bg-slate-950 p-2 rounded-xl text-center"><p className="text-[8px] font-black text-gray-400 uppercase">Genética</p><p className="text-xs font-black text-hemp-600 truncate px-1">{varieties.find(v => v.id === p.varietyId)?.name}</p></div>
+                          </div>
+                      </Link>
+                      {isSuperAdmin && (
+                          <button onClick={(e) => handleDeletePlot(e, p.id)} className="absolute top-4 right-4 p-2.5 bg-red-600 text-white rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity shadow-lg hover:bg-red-700">
+                              <Trash2 size={16}/>
+                          </button>
+                      )}
+                  </div>
               ))}
           </div>
       )}
@@ -345,7 +361,6 @@ export default function Plots() {
 
                   <form onSubmit={handleSubmitAdd} className="space-y-8">
                       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                          {/* Columna 1: Ubicación y Campaña */}
                           <div className="space-y-6">
                               <div className="bg-slate-50 dark:bg-slate-950 p-6 rounded-[32px] border dark:border-slate-800">
                                   <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-6 border-b dark:border-slate-800 pb-3 flex items-center"><MapPin size={14} className="mr-2 text-hemp-500"/> Atribución Territorial</h3>
@@ -394,7 +409,6 @@ export default function Plots() {
                               </div>
                           </div>
 
-                          {/* Columna 2: Datos de Siembra */}
                           <div className="space-y-6">
                               <div className="bg-blue-50 dark:bg-blue-900/10 p-6 rounded-[32px] border border-blue-100 dark:border-blue-900/30">
                                   <h3 className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest mb-6 border-b border-blue-100 dark:border-blue-800 pb-3 flex items-center"><Calendar size={14} className="mr-2"/> Protocolo de Siembra</h3>
@@ -435,7 +449,6 @@ export default function Plots() {
                               </div>
                           </div>
 
-                          {/* Columna 3: Cartografía GPS */}
                           <div className="bg-slate-900 rounded-[32px] p-6 flex flex-col h-full border border-slate-800 relative overflow-hidden">
                               <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center justify-between">
                                   <div className="flex items-center"><Globe size={14} className="mr-2 text-blue-500"/> Polígono de la Parcela</div>
