@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { supabase, checkConnection } from '../supabaseClient';
@@ -85,10 +84,19 @@ export default function Settings() {
 
       {activeTab === 'database' && (
           <div className="space-y-6">
-              <div className="bg-slate-900 border border-slate-800 p-8 rounded-[40px] shadow-2xl relative overflow-hidden">
-                  <div className="flex items-center space-x-3 mb-6"><Shield className="text-hemp-500" size={24}/><h3 className="font-black text-white uppercase text-sm tracking-widest">Protocolo de Reparación V44</h3></div>
-                  <div className="bg-amber-900/20 border border-amber-500/30 p-4 rounded-2xl mb-6 text-amber-200 text-xs leading-relaxed"><p className="font-black mb-2 flex items-center uppercase"><RefreshCw className="mr-2" size={14}/> SANEAMIENTO TOTAL DE BITÁCORA</p>Este script elimina y recrea la tabla de bitácora eliminando cualquier columna climática antigua. Es esencial para reparar el error de guardado de fotos.</div>
-                  <button onClick={() => { const sql = `-- PROTOCOLO V44: SANEAMIENTO TOTAL\n\n-- 1. Preparar Informes Periódicos (Asegurar Luna)\nALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS lunar_phase TEXT;\nALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS light_hours NUMERIC;\n\n-- 2. ELIMINAR Y RECREAR BITÁCORA (Limpieza Profunda)\nDROP TABLE IF EXISTS public.field_logs CASCADE;\n\nCREATE TABLE public.field_logs (\n    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n    plot_id UUID REFERENCES public.plots(id) ON DELETE CASCADE,\n    date DATE NOT NULL,\n    time TEXT,\n    note TEXT,\n    photo_url TEXT\n);\n\n-- 3. Restaurar Permisos (RLS)\nALTER TABLE public.field_logs ENABLE ROW LEVEL SECURITY;\nCREATE POLICY "Permitir todo a anonimos en logs" ON public.field_logs FOR ALL USING (true) WITH CHECK (true);\n\nALTER TABLE public.trial_records ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS "Permitir todo a anonimos en trial" ON public.trial_records;\nCREATE POLICY "Permitir todo a anonimos en trial" ON public.trial_records FOR ALL USING (true) WITH CHECK (true);\n\n-- 4. Notificar recarga\nNOTIFY pgrst, 'reload schema';`; navigator.clipboard.writeText(sql.trim()); alert("Script V44 Copiado. Ejecútelo en Supabase para reparar la bitácora."); }} className="w-full bg-amber-600 hover:bg-amber-700 text-white py-4 rounded-2xl font-black text-xs uppercase shadow-xl flex items-center justify-center transition-all mb-8"><RefreshCw size={18} className="mr-2"/> Copiar Script V44 (Reparar Guardado)</button>
+              <div className="bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30 p-8 rounded-[40px] shadow-2xl relative overflow-hidden">
+                  <div className="flex items-center space-x-3 mb-6"><Shield className="text-red-500" size={24}/><h3 className="font-black text-red-700 dark:text-red-400 uppercase text-sm tracking-widest">Protocolo de Emergencia V45</h3></div>
+                  <div className="bg-white/50 dark:bg-black/20 p-4 rounded-2xl mb-6 text-red-800 dark:text-red-200 text-xs leading-relaxed font-bold">
+                      <p className="uppercase mb-2 flex items-center"><AlertTriangle size={14} className="mr-1"/> REPARACIÓN CRÍTICA DE BITÁCORA</p>
+                      Este script elimina la tabla de bitácora corrupta y la crea desde cero solo con los campos permitidos (Nota y Foto). Soluciona el error de "registro desaparecido".
+                  </div>
+                  <button onClick={() => { 
+                      const sql = `-- PROTOCOLO V45: REPARACIÓN CRÍTICA\n\n-- 1. Eliminar tabla corrupta\nDROP TABLE IF EXISTS public.field_logs CASCADE;\n\n-- 2. Crear tabla limpia (Solo Texto y Foto)\nCREATE TABLE public.field_logs (\n    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n    plot_id UUID REFERENCES public.plots(id) ON DELETE CASCADE,\n    date DATE NOT NULL,\n    time TEXT,\n    note TEXT,\n    photo_url TEXT\n);\n\n-- 3. Permisos Totales\nALTER TABLE public.field_logs ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS "Acceso Total Logs" ON public.field_logs;\nCREATE POLICY "Acceso Total Logs" ON public.field_logs FOR ALL USING (true) WITH CHECK (true);\n\n-- 4. Asegurar campos en TrialRecords\nALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS lunar_phase TEXT;\nALTER TABLE public.trial_records ADD COLUMN IF NOT EXISTS light_hours NUMERIC;\n\n-- 5. Recargar esquema\nNOTIFY pgrst, 'reload schema';`; 
+                      navigator.clipboard.writeText(sql.trim()); 
+                      alert("Script V45 Copiado al portapapeles. Vaya al SQL Editor de Supabase y ejecútelo."); 
+                  }} className="w-full bg-red-600 hover:bg-red-700 text-white py-5 rounded-2xl font-black text-xs uppercase shadow-xl flex items-center justify-center transition-all mb-8 animate-pulse hover:animate-none">
+                      <RefreshCw size={18} className="mr-2"/> COPIAR SCRIPT DE REPARACIÓN V45
+                  </button>
               </div>
           </div>
       )}
