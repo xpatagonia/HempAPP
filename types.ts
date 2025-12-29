@@ -205,26 +205,26 @@ export interface TrialRecord {
   humidity?: number;
   plantHeight?: number;
   plantsPerMeter?: number;
-  uniformity?: number; // Escala 1-9 (HempIT)
-  vigor?: number; // Escala 1-9 (HempIT)
-  lodging?: number; // Encamado Escala 1-9 (HempIT)
-  birdDamage?: number; // Escala 1-9 (HempIT)
-  diseasesScore?: number; // Escala 1-9 (HempIT)
-  pestsScore?: number; // Escala 1-9 (HempIT)
-  harvestPlantCount?: number; // Número plantas cosechadas en 1m2
-  seedYield?: number; // Rendimiento de semillas (g)
-  seedQualityGermination?: number; // % Germinación post-cosecha
-  seedQualityNonConformity?: number; // % No conforme
-  stemWeight?: number; // Peso tallo (g o kg)
+  uniformity?: number; 
+  vigor?: number; 
+  lodging?: number; 
+  birdDamage?: number; 
+  diseasesScore?: number; 
+  pestsScore?: number; 
+  harvestPlantCount?: number; 
+  seedYield?: number; 
+  seedQualityGermination?: number; 
+  seedQualityNonConformity?: number; 
+  stemWeight?: number; 
   leafWeight?: number;
   freshWeight?: number;
   yield?: number;
   replicate?: number;
   emergenceDate?: string;
-  floweringDate?: string; // Fecha 50% floración (HempIT)
+  floweringDate?: string; 
   harvestDate?: string;
-  diseases?: string; // Notas de enfermedades
-  pests?: string; // Notas de plagas
+  diseases?: string; 
+  pests?: string; 
   createdBy?: string;
   createdByName?: string;
   lightHours?: number;
@@ -238,10 +238,6 @@ export interface FieldLog {
   time?: string; 
   note: string;
   photoUrl?: string;
-  temperature?: number;
-  humidity?: number;
-  lunarPhase?: string;
-  lightHours?: number;
 }
 
 export interface Resource {

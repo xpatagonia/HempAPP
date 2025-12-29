@@ -100,11 +100,7 @@ export default function PlotDetails() {
     note: '', 
     date: new Date().toISOString().split('T')[0], 
     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }), 
-    photoUrl: '',
-    temperature: 0,
-    humidity: 0,
-    lunarPhase: 'S/D',
-    lightHours: 12
+    photoUrl: ''
   });
 
   const filteredHistory = useMemo(() => {
@@ -182,12 +178,6 @@ export default function PlotDetails() {
       }
   }, [isRecordModalOpen, editingRecordId]);
 
-  useEffect(() => {
-      if (activeTab === 'logs' && !logForm.note && !logForm.photoUrl) {
-          syncEnvironmentalData(logForm.date || new Date().toISOString().split('T')[0], (data) => setLogForm(prev => ({ ...prev, ...data })));
-      }
-  }, [activeTab]);
-
   const handleIAAnalysis = async () => {
     if (!plot || history.length === 0 || isAnalyzing) return;
     setIsAnalyzing(true);
@@ -259,11 +249,7 @@ export default function PlotDetails() {
             date: logForm.date || new Date().toISOString().split('T')[0], 
             time: logForm.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
             note: logForm.note?.trim() || '', 
-            photoUrl: logForm.photoUrl || '',
-            temperature: Number(logForm.temperature) || 0,
-            humidity: Number(logForm.humidity) || 0,
-            lunarPhase: logForm.lunarPhase || 'S/D',
-            lightHours: Number(logForm.lightHours) || 12
+            photoUrl: logForm.photoUrl || ''
           } as FieldLog;
           
           const success = await addLog(payload);
@@ -272,11 +258,7 @@ export default function PlotDetails() {
                 note: '', 
                 date: new Date().toISOString().split('T')[0], 
                 time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }), 
-                photoUrl: '',
-                temperature: 0,
-                humidity: 0,
-                lunarPhase: 'S/D',
-                lightHours: 12
+                photoUrl: ''
               });
               alert("✅ Entrada de bitácora registrada con éxito.");
           }
@@ -531,21 +513,10 @@ export default function PlotDetails() {
                           <div className="bg-white dark:bg-slate-900 p-8 rounded-[40px] border dark:border-slate-800 shadow-sm sticky top-6">
                               <h3 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-tighter italic mb-6">Nueva Entrada <span className="text-hemp-600">Bitácora</span></h3>
                               <form onSubmit={handleSaveLog} className="space-y-4">
-                                  <div className="bg-blue-50 dark:bg-slate-950 p-4 rounded-2xl border border-blue-100 dark:border-slate-800 mb-4 flex justify-between items-center">
-                                      <div className="text-center flex-1 border-r dark:border-slate-800">
-                                          <p className="text-[8px] font-black text-blue-400 uppercase">Temp/Hum</p>
-                                          <p className="text-xs font-black dark:text-white">{isFetchingConditions ? '...' : `${logForm.temperature}° / ${logForm.humidity}%`}</p>
-                                      </div>
-                                      <div className="text-center flex-1">
-                                          <p className="text-[8px] font-black text-blue-400 uppercase">Luna</p>
-                                          <p className="text-xs font-black dark:text-white">{isFetchingConditions ? '...' : logForm.lunarPhase}</p>
-                                      </div>
-                                      <button type="button" onClick={() => syncEnvironmentalData(logForm.date!, (data) => setLogForm(p => ({...p, ...data})))} className="p-1.5 bg-white dark:bg-slate-800 rounded-lg text-blue-600 ml-2 shadow-sm"><RefreshCw size={14} className={isFetchingConditions ? 'animate-spin' : ''}/></button>
-                                  </div>
-                                  <div><label className={labelClass}>Fecha y Hora</label><div className="grid grid-cols-2 gap-2"><input type="date" className={inputStyle} value={logForm.date} onChange={e => {setLogForm({...logForm, date: e.target.value}); syncEnvironmentalData(e.target.value, (data) => setLogForm(p => ({...p, ...data})));}} /><input type="time" className={inputStyle} value={logForm.time} onChange={e => setLogForm({...logForm, time: e.target.value})} /></div></div>
+                                  <div><label className={labelClass}>Fecha y Hora</label><div className="grid grid-cols-2 gap-2"><input type="date" className={inputStyle} value={logForm.date} onChange={e => {setLogForm({...logForm, date: e.target.value});}} /><input type="time" className={inputStyle} value={logForm.time} onChange={e => setLogForm({...logForm, time: e.target.value})} /></div></div>
                                   <div><label className={labelClass}>Observación Técnica</label><textarea className={`${inputStyle} h-32 resize-none text-xs`} placeholder="Describa el evento, plaga detectada o labor realizada..." value={logForm.note} onChange={e => setLogForm({...logForm, note: e.target.value})} /></div>
                                   <div><label className={`${labelClass} flex justify-between items-center`}>Captura Visual{isUploading && <Loader2 size={12} className="animate-spin text-hemp-600"/>}</label><div className="relative group cursor-pointer"><input type="file" accept="image/*" onChange={handlePhotoUpload} className="absolute inset-0 opacity-0 cursor-pointer z-10" /><div className="border-2 border-dashed dark:border-slate-800 rounded-2xl p-6 flex flex-col items-center justify-center bg-gray-50 dark:bg-slate-950 group-hover:bg-hemp-50 transition-colors">{logForm.photoUrl ? <img src={logForm.photoUrl} className="w-full h-32 object-cover rounded-xl shadow-md" /> : <><Camera size={24} className="text-slate-300 mb-2"/><span className="text-[9px] font-black uppercase text-slate-400">Subir Evidencia</span></>}</div></div></div>
-                                  <button type="submit" disabled={isSaving || isFetchingConditions || isUploading} className="w-full bg-slate-900 dark:bg-hemp-600 text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl hover:scale-[1.02] transition-all disabled:opacity-50">{isSaving ? "Sincronizando..." : "Sellar Entrada"}</button>
+                                  <button type="submit" disabled={isSaving || isUploading} className="w-full bg-slate-900 dark:bg-hemp-600 text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl hover:scale-[1.02] transition-all disabled:opacity-50">{isSaving ? "Sincronizando..." : "Sellar Entrada"}</button>
                               </form>
                           </div>
                       </div>
@@ -555,7 +526,7 @@ export default function PlotDetails() {
                               <div className="space-y-4">{plotLogs.map(log => (
                                       <div key={log.id} className="bg-white dark:bg-slate-900 p-6 rounded-[32px] border dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow group">
                                           <div className="flex justify-between items-start mb-4"><div className="flex items-center gap-3"><div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-xl text-slate-500"><Clock size={16}/></div><div><p className="text-[10px] font-black text-gray-800 dark:text-white uppercase tracking-tighter">{log.date}</p><p className="text-[9px] font-bold text-slate-400 uppercase">{log.time || '--:--'} hs</p></div></div><button onClick={() => { if(window.confirm("¿Eliminar entrada?")) deleteLog(log.id); }} className="p-2 text-slate-200 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"><Trash2 size={16}/></button></div>
-                                          <div className="flex flex-col md:flex-row gap-6">{log.photoUrl && <div className="w-full md:w-48 h-32 rounded-2xl overflow-hidden cursor-pointer shadow-lg border border-white/10" onClick={() => setPreviewPhoto(log.photoUrl)}><img src={log.photoUrl} className="w-full h-full object-cover hover:scale-110 transition-transform duration-500" /></div>}<div className="flex-1"><p className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-relaxed">{log.note}</p><div className="mt-4 flex gap-4 text-[9px] font-black uppercase text-slate-400"><span>{log.temperature}°C / {log.humidity}% Hum</span><span>Luna: {log.lunarPhase}</span></div></div></div>
+                                          <div className="flex flex-col md:flex-row gap-6">{log.photoUrl && <div className="w-full md:w-48 h-32 rounded-2xl overflow-hidden cursor-pointer shadow-lg border border-white/10" onClick={() => setPreviewPhoto(log.photoUrl)}><img src={log.photoUrl} className="w-full h-full object-cover hover:scale-110 transition-transform duration-500" /></div>}<div className="flex-1"><p className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-relaxed">{log.note}</p></div></div>
                                       </div>
                                   ))}</div>
                           )}
