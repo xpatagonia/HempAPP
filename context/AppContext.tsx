@@ -201,7 +201,8 @@ const MANUAL_MAP: Record<string, string> = {
     usedSeedUnit: 'used_seed_unit',
     lightHours: 'light_hours',
     lunarPhase: 'lunar_phase',
-    // NUEVOS CAMPOS HEMPIT FRANCE
+    temperature: 'temperature',
+    humidity: 'humidity',
     diseasesScore: 'diseases_score',
     pestsScore: 'pests_score',
     harvestPlantCount: 'harvest_plant_count',
@@ -369,7 +370,7 @@ export const AppProvider = ({ children }: { children?: React.ReactNode }) => {
           const { error } = await supabase.from(table).insert([dbItem]);
           if (error) { 
               console.error(`[DB INSERT ERROR] ${table}:`, error); 
-              alert(`FALLO DE SERVIDOR: La base de datos rechazó el registro.\n\nMOTIVO: ${error.message}\n\nACCIÓN: Ejecute el Script V39 en Ajustes.`);
+              alert(`FALLO DE SERVIDOR: La base de datos rechazó el registro.\n\nMOTIVO: ${error.message}\n\nACCIÓN: Ejecute el Script V41.1 en Ajustes.`);
               return false; 
           }
           await refreshData();

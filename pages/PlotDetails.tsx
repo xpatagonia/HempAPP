@@ -242,20 +242,24 @@ export default function PlotDetails() {
 
   const handleSaveLog = async (e: React.FormEvent) => {
       e.preventDefault();
-      if ((!logForm.note && !logForm.photoUrl) || isSaving || !plot) return;
+      // Verificamos que haya contenido (texto o foto)
+      if ((!logForm.note?.trim() && !logForm.photoUrl) || isSaving || !plot) {
+          alert("Debe ingresar una nota de texto o subir una fotografía para guardar.");
+          return;
+      }
       setIsSaving(true);
       try {
           const payload = { 
-            id: crypto.randomUUID(), 
+            id: (window.crypto as any).randomUUID?.() || Date.now().toString(), 
             plotId: plot.id, 
             date: logForm.date || new Date().toISOString().split('T')[0], 
             time: logForm.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
             note: logForm.note?.trim() || '', 
             photoUrl: logForm.photoUrl || '',
-            temperature: logForm.temperature,
-            humidity: logForm.humidity,
-            lunarPhase: logForm.lunarPhase,
-            lightHours: logForm.lightHours
+            temperature: Number(logForm.temperature) || 0,
+            humidity: Number(logForm.humidity) || 0,
+            lunarPhase: logForm.lunarPhase || 'S/D',
+            lightHours: Number(logForm.lightHours) || 12
           } as FieldLog;
           
           const success = await addLog(payload);
@@ -537,9 +541,9 @@ export default function PlotDetails() {
                                       <button type="button" onClick={() => syncEnvironmentalData(logForm.date!, (data) => setLogForm(p => ({...p, ...data})))} className="p-1.5 bg-white dark:bg-slate-800 rounded-lg text-blue-600 ml-2 shadow-sm"><RefreshCw size={14} className={isFetchingConditions ? 'animate-spin' : ''}/></button>
                                   </div>
                                   <div><label className={labelClass}>Fecha y Hora</label><div className="grid grid-cols-2 gap-2"><input type="date" className={inputStyle} value={logForm.date} onChange={e => {setLogForm({...logForm, date: e.target.value}); syncEnvironmentalData(e.target.value, (data) => setLogForm(p => ({...p, ...data})));}} /><input type="time" className={inputStyle} value={logForm.time} onChange={e => setLogForm({...logForm, time: e.target.value})} /></div></div>
-                                  <div><label className={labelClass}>Observación Técnica</label><textarea required className={`${inputStyle} h-32 resize-none text-xs`} placeholder="Describa el evento, plaga detectada o labor realizada..." value={logForm.note} onChange={e => setLogForm({...logForm, note: e.target.value})} /></div>
+                                  <div><label className={labelClass}>Observación Técnica</label><textarea className={`${inputStyle} h-32 resize-none text-xs`} placeholder="Describa el evento, plaga detectada o labor realizada..." value={logForm.note} onChange={e => setLogForm({...logForm, note: e.target.value})} /></div>
                                   <div><label className={`${labelClass} flex justify-between items-center`}>Captura Visual{isUploading && <Loader2 size={12} className="animate-spin text-hemp-600"/>}</label><div className="relative group cursor-pointer"><input type="file" accept="image/*" onChange={handlePhotoUpload} className="absolute inset-0 opacity-0 cursor-pointer z-10" /><div className="border-2 border-dashed dark:border-slate-800 rounded-2xl p-6 flex flex-col items-center justify-center bg-gray-50 dark:bg-slate-950 group-hover:bg-hemp-50 transition-colors">{logForm.photoUrl ? <img src={logForm.photoUrl} className="w-full h-32 object-cover rounded-xl shadow-md" /> : <><Camera size={24} className="text-slate-300 mb-2"/><span className="text-[9px] font-black uppercase text-slate-400">Subir Evidencia</span></>}</div></div></div>
-                                  <button type="submit" disabled={isSaving || isFetchingConditions} className="w-full bg-slate-900 dark:bg-hemp-600 text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl hover:scale-[1.02] transition-all disabled:opacity-50">{isSaving ? "Sincronizando..." : "Sellar Entrada"}</button>
+                                  <button type="submit" disabled={isSaving || isFetchingConditions || isUploading} className="w-full bg-slate-900 dark:bg-hemp-600 text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl hover:scale-[1.02] transition-all disabled:opacity-50">{isSaving ? "Sincronizando..." : "Sellar Entrada"}</button>
                               </form>
                           </div>
                       </div>
