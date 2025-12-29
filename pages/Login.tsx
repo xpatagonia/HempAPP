@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { useNavigate, Link } from 'react-router-dom';
-import { ArrowRight, AlertCircle, Loader2, Leaf } from 'lucide-react';
+import { ArrowRight, AlertCircle, Loader2, Leaf, Globe, Mail } from 'lucide-react';
 
 export default function Login() {
   const { login } = useAppContext();
@@ -25,59 +25,77 @@ export default function Login() {
   return (
     <div className="min-h-screen bg-white dark:bg-slate-950 flex flex-col md:flex-row items-stretch overflow-hidden font-sans">
       
-      {/* Lado Izquierdo: Branding Corporativo */}
-      <div className="hidden lg:flex lg:w-1/2 bg-slate-900 relative p-20 flex-col justify-between overflow-hidden">
+      {/* Lado Izquierdo: Branding Corporativo con Fondo Institucional */}
+      <div className="hidden lg:flex lg:w-1/2 bg-[#DDDB03] relative p-20 flex-col justify-between overflow-hidden shadow-2xl">
           <div className="relative z-10">
               <div className="mb-12">
-                  <h1 className="text-7xl font-black text-hemp-600 tracking-tighter italic uppercase leading-none">
-                      HempC <span className="text-white">APP</span>
+                  <h1 className="text-7xl font-black text-hemp-800 tracking-tighter italic uppercase leading-none">
+                      HempC <span className="text-slate-900">APP</span>
                   </h1>
-                  <p className="text-white mt-4 text-2xl font-light italic tracking-[0.15em] opacity-90 font-serif">
-                      (Agroindustria Inteligente)
+                  <p className="text-slate-800 mt-2 text-sm font-black tracking-widest opacity-70">
+                      www.hempc.com.ar
+                  </p>
+                  <p className="text-white mt-8 text-3xl font-bold italic tracking-tight drop-shadow-sm" style={{ fontFamily: 'Arial, sans-serif' }}>
+                      Agroindustria Inteligente
                   </p>
               </div>
               
-              <div className="space-y-8 mt-20">
-                  <h2 className="text-6xl font-black text-white leading-[1.05] tracking-tighter uppercase italic">
+              <div className="space-y-8 mt-16">
+                  <h2 className="text-6xl font-black text-slate-900 leading-[1.05] tracking-tighter uppercase italic">
                       La Red Cooperativa <br />
                       del Cáñamo <br />
                       Industrial Argentino
                   </h2>
                   
-                  <div className="h-2 w-24 bg-hemp-600 rounded-full"></div>
+                  <div className="h-2 w-24 bg-hemp-800 rounded-full"></div>
                   
-                  <p className="text-white text-xl font-medium leading-relaxed opacity-100 max-w-md">
+                  <p className="text-slate-800 text-xl font-medium leading-relaxed max-w-md">
                       Trazabilidad, Innovación y Bioeconomía. <br />
                       <span className="font-bold">Impulsado por PatagonianC LTDA.</span>
                   </p>
               </div>
           </div>
 
-          <div className="relative z-10 flex items-center space-x-4">
-              <div className="p-3 bg-white/10 rounded-2xl backdrop-blur-md border border-white/10">
-                <Leaf className="text-hemp-500" size={24} />
+          <div className="relative z-10 flex flex-col space-y-4">
+              <div className="flex items-center space-x-3">
+                  <div className="p-3 bg-slate-900 rounded-2xl shadow-lg">
+                    <Leaf className="text-[#DDDB03]" size={24} />
+                  </div>
+                  <div>
+                      <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.4em]">Sostenibilidad & Trazabilidad</p>
+                      <p className="text-[10px] font-bold text-slate-900/50 uppercase tracking-widest">Nucleus Industry v7.0 • 2025</p>
+                  </div>
               </div>
-              <div>
-                  <p className="text-[10px] font-black text-white uppercase tracking-[0.4em] opacity-60">Sostenibilidad & Trazabilidad</p>
-                  <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest">Nucleus Industry v6.0 • 2025</p>
+              
+              {/* Pie de página Lado Izquierdo */}
+              <div className="pt-6 border-t border-slate-900/10 space-y-1">
+                  <p className="text-xs font-black text-slate-900 flex items-center gap-2">
+                      <Globe size={12}/> www.hempc.com.ar
+                  </p>
+                  <p className="text-xs font-black text-slate-900 flex items-center gap-2">
+                      <Mail size={12}/> info@hempc.com.ar
+                  </p>
+                  <p className="text-xs font-black text-slate-900 uppercase tracking-widest mt-2">
+                      PatagonianC LTDA
+                  </p>
               </div>
           </div>
           
           {/* Elementos decorativos de fondo suaves */}
-          <div className="absolute -right-20 -bottom-20 w-[600px] h-[600px] bg-hemp-600/10 rounded-full blur-[120px]"></div>
-          <div className="absolute top-[-10%] left-[-10%] w-[400px] h-[400px] bg-blue-600/5 rounded-full blur-[100px]"></div>
+          <div className="absolute -right-20 -bottom-20 w-[600px] h-[600px] bg-white/10 rounded-full blur-[120px]"></div>
+          <div className="absolute top-[-10%] left-[-10%] w-[400px] h-[400px] bg-slate-900/5 rounded-full blur-[100px]"></div>
       </div>
 
       {/* Lado Derecho: Formulario de Acceso */}
       <div className="flex-1 flex flex-col items-center justify-center p-8 md:p-16 bg-slate-50 dark:bg-slate-950">
         <div className="w-full max-w-md space-y-12">
             <div className="lg:hidden text-center mb-8">
-                <h1 className="text-5xl font-black text-hemp-600 italic uppercase tracking-tighter">HempC APP</h1>
-                <p className="text-slate-400 text-sm font-bold uppercase tracking-widest mt-2">(Agroindustria Inteligente)</p>
+                <h1 className="text-5xl font-black text-hemp-600 italic uppercase tracking-tighter leading-none">HempC APP</h1>
+                <p className="text-slate-400 text-sm font-bold uppercase tracking-widest mt-2" style={{ fontFamily: 'Arial, sans-serif' }}>Agroindustria Inteligente</p>
             </div>
 
             <div className="space-y-4">
-                <h2 className="text-4xl font-black text-slate-900 dark:text-white uppercase tracking-tighter italic leading-none">Acceso Técnico</h2>
+                <h2 className="text-4xl font-black text-slate-900 dark:text-white uppercase tracking-tighter italic leading-none">Acceso a la Red</h2>
                 <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.3em]">Autenticación de Terminal Autorizada</p>
             </div>
 
