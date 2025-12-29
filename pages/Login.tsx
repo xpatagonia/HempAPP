@@ -25,11 +25,11 @@ export default function Login() {
   return (
     <div className="min-h-screen bg-white dark:bg-slate-950 flex flex-col md:flex-row items-stretch overflow-hidden font-sans">
       
-      {/* Lado Izquierdo: Branding Corporativo con Fondo Institucional */}
+      {/* Lado Izquierdo: Branding Corporativo con Fondo Institucional #DDDB03 */}
       <div className="hidden lg:flex lg:w-1/2 bg-[#DDDB03] relative p-20 flex-col justify-between overflow-hidden shadow-2xl">
           <div className="relative z-10">
               <div className="mb-12">
-                  <h1 className="text-7xl font-black text-hemp-800 tracking-tighter italic uppercase leading-none">
+                  <h1 className="text-7xl font-black text-hemp-600 tracking-tighter italic uppercase leading-none drop-shadow-sm">
                       HempC <span className="text-slate-900">APP</span>
                   </h1>
                   <p className="text-slate-800 mt-2 text-sm font-black tracking-widest opacity-70">
@@ -41,15 +41,16 @@ export default function Login() {
               </div>
               
               <div className="space-y-8 mt-16">
-                  <h2 className="text-6xl font-black text-slate-900 leading-[1.05] tracking-tighter uppercase italic">
+                  {/* Título en Blanco solicitado por el usuario */}
+                  <h2 className="text-6xl font-black text-white leading-[1.05] tracking-tighter uppercase italic drop-shadow-md">
                       La Red Cooperativa <br />
                       del Cáñamo <br />
                       Industrial Argentino
                   </h2>
                   
-                  <div className="h-2 w-24 bg-hemp-800 rounded-full"></div>
+                  <div className="h-2 w-24 bg-white rounded-full opacity-50"></div>
                   
-                  <p className="text-slate-800 text-xl font-medium leading-relaxed max-w-md">
+                  <p className="text-white text-xl font-medium leading-relaxed max-w-md drop-shadow-sm">
                       Trazabilidad, Innovación y Bioeconomía. <br />
                       <span className="font-bold">Impulsado por PatagonianC LTDA.</span>
                   </p>
@@ -63,7 +64,7 @@ export default function Login() {
                   </div>
                   <div>
                       <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.4em]">Sostenibilidad & Trazabilidad</p>
-                      <p className="text-[10px] font-bold text-slate-900/50 uppercase tracking-widest">Nucleus Industry v7.0 • 2025</p>
+                      <p className="text-[10px] font-bold text-slate-900/50 uppercase tracking-widest">HempC Network v7.5 • 2025</p>
                   </div>
               </div>
               
@@ -82,7 +83,7 @@ export default function Login() {
           </div>
           
           {/* Elementos decorativos de fondo suaves */}
-          <div className="absolute -right-20 -bottom-20 w-[600px] h-[600px] bg-white/10 rounded-full blur-[120px]"></div>
+          <div className="absolute -right-20 -bottom-20 w-[600px] h-[600px] bg-white/20 rounded-full blur-[120px]"></div>
           <div className="absolute top-[-10%] left-[-10%] w-[400px] h-[400px] bg-slate-900/5 rounded-full blur-[100px]"></div>
       </div>
 
