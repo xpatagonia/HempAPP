@@ -35,7 +35,8 @@ const KPI = ({ label, value, icon: Icon, color, subtext }: any) => (
 );
 
 const calculateLunarPhase = (dateStr: string) => {
-    const date = new Date(dateStr);
+    // Usamos T12:00 para evitar desajustes por zona horaria local
+    const date = new Date(dateStr + 'T12:00:00');
     const cycle = 29.53058867;
     const knownNewMoon = new Date('2024-01-11T11:57:00Z').getTime();
     const diff = (date.getTime() - knownNewMoon) / (1000 * 60 * 60 * 24);
@@ -89,7 +90,11 @@ export default function PlotDetails() {
     note: '', 
     date: new Date().toISOString().split('T')[0], 
     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }), 
-    photoUrl: '' 
+    photoUrl: '',
+    temperature: 0,
+    humidity: 0,
+    lunarPhase: 'S/D',
+    lightHours: 12
   });
 
   const filteredHistory = useMemo(() => {
@@ -130,39 +135,7 @@ export default function PlotDetails() {
     fetchAstroAndWeather();
   }, [location]);
 
-  const handleIAAnalysis = async () => {
-    if (!plot || history.length === 0 || isAnalyzing) return;
-    setIsAnalyzing(true);
-    setAiInsight(null);
-    try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-        const model = 'gemini-3-flash-preview';
-        
-        const historyContext = history.slice(0, 5).map(r => `Fecha: ${r.date}, Fase: ${r.stage}, Altura: ${r.plantHeight}cm, Vigor: ${r.vigor}/9, Temp: ${r.temperature}C`).join('\n');
-        
-        const prompt = `Analiza la salud agronómica de esta parcela de cáñamo industrial:
-        Variedad: ${variety?.name}
-        Ubicación: ${location?.name} (${location?.province})
-        Historial reciente:
-        ${historyContext}
-        Clima actual: ${autoWeather?.current?.temperature_2m || 'N/A'}°C, Hum: ${autoWeather?.current?.relative_humidity_2m || 'N/A'}%
-        Instrucción: Genera un diagnóstico técnico MUY breve (máximo 300 caracteres) y profesional en español.`;
-
-        const response = await ai.models.generateContent({
-            model: model,
-            contents: prompt,
-            config: { systemInstruction: "Eres el experto agrónomo de Nucleus Trace. Analiza datos y da consejos técnicos directos." }
-        });
-
-        setAiInsight(response.text || "No se pudo generar el diagnóstico.");
-    } catch (err) {
-        setAiInsight("Error de enlace con el motor de IA.");
-    } finally {
-        setIsAnalyzing(false);
-    }
-  };
-
-  const syncCurrentConditions = async (targetDate: string) => {
+  const syncEnvironmentalData = async (targetDate: string, targetSetter: (data: any) => void) => {
       if (!location?.coordinates) return;
       setIsFetchingConditions(true);
       try {
@@ -190,24 +163,54 @@ export default function PlotDetails() {
           const aRes = await fetch(`https://api.sunrise-sunset.org/json?lat=${lat}&lng=${lng}&date=${targetDate}&formatted=0`);
           const aData = await aRes.json();
           const lunar = calculateLunarPhase(targetDate);
-          
           const hours = aData.results ? parseFloat((aData.results.day_length / 3600).toFixed(2)) : 12;
           
-          setRecordForm(prev => ({
-              ...prev,
-              temperature: temp,
-              humidity: hum,
-              lightHours: hours,
-              lunarPhase: lunar
-          }));
+          targetSetter({ temperature: temp, humidity: hum, lightHours: hours, lunarPhase: lunar });
       } catch (err) { console.error("Sync Error:", err); } finally { setIsFetchingConditions(false); }
   };
 
+  // Efecto para sincronizar el Informe Periódico al abrir o cambiar fecha
   useEffect(() => {
       if (isRecordModalOpen && !editingRecordId) {
-          syncCurrentConditions(recordForm.date || new Date().toISOString().split('T')[0]);
+          syncEnvironmentalData(recordForm.date || new Date().toISOString().split('T')[0], (data) => setRecordForm(prev => ({ ...prev, ...data })));
       }
   }, [isRecordModalOpen, editingRecordId]);
+
+  // Efecto para sincronizar la Bitácora al cambiar fecha o abrir pestaña
+  useEffect(() => {
+      if (activeTab === 'logs' && !logForm.note && !logForm.photoUrl) {
+          syncEnvironmentalData(logForm.date || new Date().toISOString().split('T')[0], (data) => setLogForm(prev => ({ ...prev, ...data })));
+      }
+  }, [activeTab]);
+
+  const handleIAAnalysis = async () => {
+    if (!plot || history.length === 0 || isAnalyzing) return;
+    setIsAnalyzing(true);
+    setAiInsight(null);
+    try {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const model = 'gemini-3-flash-preview';
+        const historyContext = history.slice(0, 5).map(r => `Fecha: ${r.date}, Fase: ${r.stage}, Altura: ${r.plantHeight}cm, Vigor: ${r.vigor}/9, Temp: ${r.temperature}C`).join('\n');
+        const prompt = `Analiza la salud agronómica de esta parcela de cáñamo industrial:
+        Variedad: ${variety?.name}
+        Ubicación: ${location?.name} (${location?.province})
+        Historial reciente:
+        ${historyContext}
+        Clima actual: ${autoWeather?.current?.temperature_2m || 'N/A'}°C, Hum: ${autoWeather?.current?.relative_humidity_2m || 'N/A'}%
+        Instrucción: Genera un diagnóstico técnico MUY breve (máximo 300 caracteres) y profesional en español.`;
+
+        const response = await ai.models.generateContent({
+            model: model,
+            contents: prompt,
+            config: { systemInstruction: "Eres el experto agrónomo de Nucleus Trace. Analiza datos y da consejos técnicos directos." }
+        });
+        setAiInsight(response.text || "No se pudo generar el diagnóstico.");
+    } catch (err) {
+        setAiInsight("Error de enlace con el motor de IA.");
+    } finally {
+        setIsAnalyzing(false);
+    }
+  };
 
   const handleSaveRecord = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -248,7 +251,11 @@ export default function PlotDetails() {
             date: logForm.date || new Date().toISOString().split('T')[0], 
             time: logForm.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
             note: logForm.note?.trim() || '', 
-            photoUrl: logForm.photoUrl || ''
+            photoUrl: logForm.photoUrl || '',
+            temperature: logForm.temperature,
+            humidity: logForm.humidity,
+            lunarPhase: logForm.lunarPhase,
+            lightHours: logForm.lightHours
           } as FieldLog;
           
           const success = await addLog(payload);
@@ -257,7 +264,11 @@ export default function PlotDetails() {
                 note: '', 
                 date: new Date().toISOString().split('T')[0], 
                 time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }), 
-                photoUrl: '' 
+                photoUrl: '',
+                temperature: 0,
+                humidity: 0,
+                lunarPhase: 'S/D',
+                lightHours: 12
               });
               alert("✅ Entrada de bitácora registrada con éxito.");
           } else {
@@ -273,9 +284,7 @@ export default function PlotDetails() {
       const doc = new jsPDF();
       const margin = 20;
       const pageWidth = doc.internal.pageSize.getWidth();
-      
-      // Branding Header
-      doc.setFillColor(221, 219, 3); // #DDDB03
+      doc.setFillColor(221, 219, 3);
       doc.rect(0, 0, pageWidth, 40, 'F');
       doc.setTextColor(0, 0, 0);
       doc.setFontSize(22);
@@ -283,8 +292,6 @@ export default function PlotDetails() {
       doc.text(appName.toUpperCase() + " NUCLEUS", margin, 20);
       doc.setFontSize(10);
       doc.text("INFORME DE AUDITORÍA Y GEOPOSICIONAMIENTO DE CAMPO", margin, 28);
-      
-      // Body Info
       doc.setFontSize(14);
       doc.setTextColor(0, 0, 0);
       doc.text("IDENTIFICACIÓN TÉCNICA", margin, 55);
@@ -295,8 +302,6 @@ export default function PlotDetails() {
       doc.text(`Campo: ${location?.name || 'S/D'}`, margin, 79);
       doc.text(`Fecha de Siembra: ${plot.sowingDate}`, margin, 86);
       doc.text(`Superficie: ${plot.surfaceArea} ${plot.surfaceUnit}`, margin, 93);
-      
-      // GEOLOCATION BOX
       doc.setFillColor(245, 245, 245);
       doc.rect(margin, 100, pageWidth - (margin*2), 35, 'F');
       doc.setFont("helvetica", "bold");
@@ -305,39 +310,22 @@ export default function PlotDetails() {
       doc.text(`Latitud: ${plot.coordinates?.lat || 'N/A'}`, margin + 5, 120);
       doc.text(`Longitud: ${plot.coordinates?.lng || 'N/A'}`, margin + 5, 127);
       if (plot.coordinates) {
-          doc.setTextColor(37, 99, 235); // Blue
+          doc.setTextColor(37, 99, 235);
           doc.text(`Enlace Satelital: https://maps.google.com/?q=${plot.coordinates.lat},${plot.coordinates.lng}`, margin + 5, 134);
       }
-      
-      // PROTOCOL SECTION
       doc.setTextColor(0, 0, 0);
       doc.setFont("helvetica", "bold");
       doc.text("AUDITORÍA PRESENCIAL (PARA COMPLETAR EN CAMPO)", margin, 150);
       doc.setFont("helvetica", "normal");
-      
-      const checkItems = [
-          "Vigor Vegetal (1-9): ________",
-          "Homogeneidad (1-9): ________",
-          "Altura Promedio (cm): ________",
-          "Población Real (pl/m2): ________",
-          "Estado Sanitario: ________________________________________________"
-      ];
-      
+      const checkItems = ["Vigor Vegetal (1-9): ________", "Homogeneidad (1-9): ________", "Altura Promedio (cm): ________", "Población Real (pl/m2): ________", "Estado Sanitario: ________________________________________________"];
       let y = 160;
-      checkItems.forEach(item => {
-          doc.text(item, margin, y);
-          y += 10;
-      });
-      
-      doc.rect(margin, 210, pageWidth - (margin*2), 40); // Observaciones box
+      checkItems.forEach(item => { doc.text(item, margin, y); y += 10; });
+      doc.rect(margin, 210, pageWidth - (margin*2), 40);
       doc.text("OBSERVACIONES TÉCNICAS ADICIONALES:", margin + 2, 217);
-      
-      // FOOTER
       doc.setFontSize(8);
       doc.setTextColor(150, 150, 150);
       doc.text(`ID Único de Trazabilidad: ${plot.id}`, margin, doc.internal.pageSize.getHeight() - 15);
       doc.text("PatagonianC LTDA © 2025 - Red Cooperativa del Cáñamo", margin, doc.internal.pageSize.getHeight() - 10);
-      
       doc.save(`Reporte_Campo_${plot.name.replace(/\s+/g, '_')}.pdf`);
   };
 
@@ -399,12 +387,9 @@ export default function PlotDetails() {
         </div>
       </div>
 
-      {/* ALERT BOX AI INSIGHT */}
       {aiInsight && (
           <div className="bg-slate-900 dark:bg-hemp-600 p-6 rounded-[32px] text-white shadow-2xl animate-in slide-in-from-top-4 flex items-start gap-5 relative overflow-hidden border border-white/10">
-              <div className="p-3 bg-white/10 rounded-2xl">
-                  <Terminal size={24}/>
-              </div>
+              <div className="p-3 bg-white/10 rounded-2xl"><Terminal size={24}/></div>
               <div className="flex-1">
                   <div className="flex items-center justify-between mb-1">
                       <p className="text-[9px] font-black uppercase tracking-[0.3em] opacity-60">Nucleus AI Diagnosis v5.0</p>
@@ -416,7 +401,6 @@ export default function PlotDetails() {
           </div>
       )}
 
-      {/* HEADER TRAZABILIDAD */}
       <div className="bg-white dark:bg-slate-900 rounded-[40px] shadow-sm border dark:border-slate-800 p-10 relative overflow-hidden">
           <div className="flex flex-col md:flex-row justify-between items-start mb-10 gap-6">
               <div className="flex-1">
@@ -466,19 +450,12 @@ export default function PlotDetails() {
           {activeTab === 'records' && (
             <div className="space-y-8 animate-in fade-in">
                 <div className="bg-white dark:bg-slate-900 p-8 rounded-[40px] border dark:border-slate-800 shadow-sm">
-                    <div className="flex justify-between items-center mb-8">
-                        <div>
-                            <h3 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-tighter italic">Curva de Crecimiento</h3>
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Evolución de altura vs Tiempo (Fenología)</p>
-                        </div>
-                    </div>
-                    <div className="h-[350px] w-full">
+                    <div><h3 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-tighter italic">Curva de Crecimiento</h3><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Evolución de altura vs Tiempo (Fenología)</p></div>
+                    <div className="h-[350px] w-full mt-8">
                         {chartData.length > 0 ? (
                             <ResponsiveContainer width="100%" height="100%">
                                 <AreaChart data={chartData}>
-                                    <defs>
-                                        <linearGradient id="colorHeight" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#16a34a" stopOpacity={0.3}/><stop offset="95%" stopColor="#16a34a" stopOpacity={0}/></linearGradient>
-                                    </defs>
+                                    <defs><linearGradient id="colorHeight" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#16a34a" stopOpacity={0.3}/><stop offset="95%" stopColor="#16a34a" stopOpacity={0}/></linearGradient></defs>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                                     <XAxis dataKey="fecha" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 'bold'}} />
                                     <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 'bold'}} />
@@ -486,28 +463,17 @@ export default function PlotDetails() {
                                     <Area type="monotone" dataKey="altura" stroke="#16a34a" strokeWidth={4} fillOpacity={1} fill="url(#colorHeight)" />
                                 </AreaChart>
                             </ResponsiveContainer>
-                        ) : (
-                            <div className="h-full flex flex-col items-center justify-center text-slate-300 italic"><Activity size={48} className="mb-2 opacity-20"/> Sin datos suficientes.</div>
-                        )}
+                        ) : <div className="h-full flex flex-col items-center justify-center text-slate-300 italic"><Activity size={48} className="mb-2 opacity-20"/> Sin datos suficientes.</div>}
                     </div>
                 </div>
-
                 <div className="bg-white dark:bg-slate-900 rounded-[40px] shadow-sm border dark:border-slate-800 overflow-hidden">
                     <div className="px-10 py-6 border-b dark:border-slate-800 flex flex-col md:flex-row justify-between items-center bg-gray-50/50 dark:bg-slate-950/50 gap-4">
                         <div className="flex items-center space-x-6">
                             <h2 className="font-black text-gray-900 dark:text-white uppercase text-[10px] tracking-[0.3em] flex items-center"><Activity size={18} className="mr-3 text-hemp-600"/> Monitoreos Técnicos</h2>
                             <div className="flex items-center bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-xl px-3 py-1.5 shadow-inner">
                                 <Filter size={12} className="text-gray-400 mr-2"/>
-                                <select 
-                                    className="bg-transparent text-[10px] font-black uppercase outline-none border-none cursor-pointer text-slate-600 dark:text-slate-300"
-                                    value={recordsFilterStage}
-                                    onChange={(e) => { setRecordsFilterStage(e.target.value); setRecordsPage(1); }}
-                                >
-                                    <option value="all">Todas las Etapas</option>
-                                    <option value="Vegetativo">Vegetativo</option>
-                                    <option value="Floración">Floración</option>
-                                    <option value="Maduración">Maduración</option>
-                                    <option value="Cosecha">Cosecha</option>
+                                <select className="bg-transparent text-[10px] font-black uppercase outline-none border-none cursor-pointer text-slate-600 dark:text-slate-300" value={recordsFilterStage} onChange={(e) => { setRecordsFilterStage(e.target.value); setRecordsPage(1); }}>
+                                    <option value="all">Todas las Etapas</option><option value="Vegetativo">Vegetativo</option><option value="Floración">Floración</option><option value="Maduración">Maduración</option><option value="Cosecha">Cosecha</option>
                                 </select>
                             </div>
                         </div>
@@ -518,10 +484,7 @@ export default function PlotDetails() {
                             <thead className="bg-gray-50/50 dark:bg-slate-950/50 text-gray-400 uppercase text-[9px] font-black tracking-widest border-b dark:border-slate-800"><tr><th className="px-10 py-5">Fecha / Hora</th><th className="px-10 py-5">Etapa</th><th className="px-10 py-5 text-center">Altura</th><th className="px-10 py-5 text-center">Vigor (1-9)</th><th className="px-10 py-5 text-center">Temp/Hum</th><th className="px-10 py-5 text-right">Detalle</th></tr></thead>
                             <tbody className="divide-y divide-gray-100 dark:divide-slate-800 font-bold uppercase text-[11px]">{paginatedHistory.map(r => (
                                 <tr key={r.id} className="hover:bg-gray-50 dark:hover:bg-slate-800 cursor-pointer" onClick={() => { setEditingRecordId(r.id); setRecordForm(r); setIsViewMode(true); setIsRecordModalOpen(true); }}>
-                                    <td className="px-10 py-6 font-black text-gray-800 dark:text-white tracking-tighter">
-                                        {r.date}
-                                        <span className="block text-[8px] text-slate-400 font-bold mt-1 tracking-widest">{r.time || '--:--'} HS</span>
-                                    </td>
+                                    <td className="px-10 py-6 font-black text-gray-800 dark:text-white tracking-tighter">{r.date}<span className="block text-[8px] text-slate-400 font-bold mt-1 tracking-widest">{r.time || '--:--'} HS</span></td>
                                     <td className="px-10 py-6"><span className="px-3 py-1 rounded-lg text-[9px] font-black uppercase border bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-100 dark:border-green-900/30">{r.stage}</span></td>
                                     <td className="px-10 py-6 text-center font-black text-gray-900 dark:text-white">{r.plantHeight} cm</td>
                                     <td className="px-10 py-6 text-center font-black text-emerald-600">{r.vigor || '-'}</td>
@@ -531,27 +494,7 @@ export default function PlotDetails() {
                             ))}</tbody>
                         </table>
                     </div>
-                    {totalPages > 1 && (
-                        <div className="px-10 py-4 border-t dark:border-slate-800 flex justify-between items-center bg-gray-50/30 dark:bg-slate-950/30">
-                            <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Página {recordsPage} de {totalPages}</span>
-                            <div className="flex gap-2">
-                                <button 
-                                    disabled={recordsPage === 1}
-                                    onClick={() => setRecordsPage(prev => prev - 1)}
-                                    className="p-2 rounded-lg bg-white dark:bg-slate-900 border dark:border-slate-800 text-slate-500 disabled:opacity-30 hover:text-hemp-600 transition shadow-sm"
-                                >
-                                    <ChevronLeft size={16}/>
-                                </button>
-                                <button 
-                                    disabled={recordsPage === totalPages}
-                                    onClick={() => setRecordsPage(prev => prev + 1)}
-                                    className="p-2 rounded-lg bg-white dark:bg-slate-900 border dark:border-slate-800 text-slate-500 disabled:opacity-30 hover:text-hemp-600 transition shadow-sm"
-                                >
-                                    <ChevronRight size={16}/>
-                                </button>
-                            </div>
-                        </div>
-                    )}
+                    {totalPages > 1 && <div className="px-10 py-4 border-t dark:border-slate-800 flex justify-between items-center bg-gray-50/30 dark:bg-slate-950/30"><span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Página {recordsPage} de {totalPages}</span><div className="flex gap-2"><button disabled={recordsPage === 1} onClick={() => setRecordsPage(prev => prev - 1)} className="p-2 rounded-lg bg-white dark:bg-slate-900 border dark:border-slate-800 text-slate-500 disabled:opacity-30 hover:text-hemp-600 transition shadow-sm"><ChevronLeft size={16}/></button><button disabled={recordsPage === totalPages} onClick={() => setRecordsPage(prev => prev + 1)} className="p-2 rounded-lg bg-white dark:bg-slate-900 border dark:border-slate-800 text-slate-500 disabled:opacity-30 hover:text-hemp-600 transition shadow-sm"><ChevronRight size={16}/></button></div></div>}
                 </div>
             </div>
           )}
@@ -559,26 +502,8 @@ export default function PlotDetails() {
           {activeTab === 'map' && (
               <div className="space-y-8 animate-in fade-in">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      <div className="md:col-span-2 bg-white dark:bg-slate-900 rounded-[40px] border dark:border-slate-800 shadow-sm overflow-hidden h-[600px] relative">
-                          <MapEditor 
-                            initialCenter={plot.coordinates} 
-                            initialPolygon={plot.polygon} 
-                            referencePolygon={location?.polygon}
-                            readOnly={true} 
-                            height="100%" 
-                          />
-                      </div>
-                      <div className="space-y-6">
-                          <div className="bg-white dark:bg-slate-900 p-8 rounded-[40px] border dark:border-slate-800 shadow-sm">
-                              <h3 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-widest mb-6 flex items-center"><Navigation size={18} className="mr-2 text-emerald-600"/> Datos Geofísicos</h3>
-                              <div className="space-y-4">
-                                  <div className="bg-emerald-50 dark:bg-emerald-900/10 p-5 rounded-3xl border border-emerald-100 dark:border-emerald-900/30">
-                                      <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mb-1">Superficie Perimetral</p>
-                                      <p className="text-3xl font-black text-emerald-800 dark:text-emerald-300">{plot.surfaceArea} <span className="text-sm">{plot.surfaceUnit}</span></p>
-                                  </div>
-                              </div>
-                          </div>
-                      </div>
+                      <div className="md:col-span-2 bg-white dark:bg-slate-900 rounded-[40px] border dark:border-slate-800 shadow-sm overflow-hidden h-[600px] relative"><MapEditor initialCenter={plot.coordinates} initialPolygon={plot.polygon} referencePolygon={location?.polygon} readOnly={true} height="100%" /></div>
+                      <div className="space-y-6"><div className="bg-white dark:bg-slate-900 p-8 rounded-[40px] border dark:border-slate-800 shadow-sm"><h3 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-widest mb-6 flex items-center"><Navigation size={18} className="mr-2 text-emerald-600"/> Datos Geofísicos</h3><div className="bg-emerald-50 dark:bg-emerald-900/10 p-5 rounded-3xl border border-emerald-100 dark:border-emerald-900/30"><p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mb-1">Superficie Perimetral</p><p className="text-3xl font-black text-emerald-800 dark:text-emerald-300">{plot.surfaceArea} <span className="text-sm">{plot.surfaceUnit}</span></p></div></div></div>
                   </div>
               </div>
           )}
@@ -586,48 +511,9 @@ export default function PlotDetails() {
           {activeTab === 'astro' && (
               <div className="animate-in fade-in space-y-8">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      <div className="bg-gradient-to-br from-amber-500 to-orange-700 p-10 rounded-[48px] text-white shadow-2xl relative overflow-hidden">
-                           <div className="relative z-10">
-                               <Sun size={48} className="mb-6 opacity-40"/>
-                               <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-60">Duración del Día (Fotoperiodo)</p>
-                               <h3 className="text-5xl font-black italic tracking-tighter mt-2">{astroData?.formatted || '12h 00m'}</h3>
-                               <div className="mt-8 flex items-center gap-6">
-                                   <div><p className="text-[9px] uppercase font-black opacity-50">Salida</p><p className="font-black">{astroData?.sunrise?.split('T')[1].substring(0,5) || '--:--'}</p></div>
-                                   <div><p className="text-[9px] uppercase font-black opacity-50">Ocaso</p><p className="font-black">{astroData?.sunset?.split('T')[1].substring(0,5) || '--:--'}</p></div>
-                               </div>
-                           </div>
-                           <Activity className="absolute -bottom-10 -right-10 w-64 h-64 opacity-5 pointer-events-none" />
-                      </div>
-
-                      <div className="bg-slate-900 p-10 rounded-[48px] text-white shadow-2xl flex flex-col justify-between">
-                           <div>
-                               <Moon size={32} className="text-blue-400 mb-6"/>
-                               <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Estado de Influencia Lunar</p>
-                               <h3 className="text-4xl font-black italic tracking-tighter mt-2">{calculateLunarPhase(new Date().toISOString())}</h3>
-                           </div>
-                           <div className="bg-white/5 p-4 rounded-2xl border border-white/10 mt-6">
-                               <p className="text-[9px] font-bold text-slate-400 leading-relaxed italic">
-                                   "El ciclo lunar afecta la presión osmótica de la planta, influyendo en la absorción de nutrientes y rinde final."
-                               </p>
-                           </div>
-                      </div>
-
-                      <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 p-10 rounded-[48px] shadow-sm flex flex-col">
-                           <div className="flex justify-between items-center mb-6">
-                               <Thermometer size={28} className="text-orange-500"/>
-                               <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Atmósfera Actual</span>
-                           </div>
-                           <div className="space-y-6">
-                               <div>
-                                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Temperatura Ambiente</p>
-                                   <p className="text-4xl font-black dark:text-white">{autoWeather?.current?.temperature_2m || '--'}°C</p>
-                               </div>
-                               <div>
-                                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Humedad Relativa</p>
-                                   <p className="text-4xl font-black dark:text-white">{autoWeather?.current?.relative_humidity_2m || '--'}%</p>
-                               </div>
-                           </div>
-                      </div>
+                      <div className="bg-gradient-to-br from-amber-500 to-orange-700 p-10 rounded-[48px] text-white shadow-2xl relative overflow-hidden"><div className="relative z-10"><Sun size={48} className="mb-6 opacity-40"/><p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-60">Duración del Día (Fotoperiodo)</p><h3 className="text-5xl font-black italic tracking-tighter mt-2">{astroData?.formatted || '12h 00m'}</h3><div className="mt-8 flex items-center gap-6"><div><p className="text-[9px] uppercase font-black opacity-50">Salida</p><p className="font-black">{astroData?.sunrise?.split('T')[1].substring(0,5) || '--:--'}</p></div><div><p className="text-[9px] uppercase font-black opacity-50">Ocaso</p><p className="font-black">{astroData?.sunset?.split('T')[1].substring(0,5) || '--:--'}</p></div></div></div><Activity className="absolute -bottom-10 -right-10 w-64 h-64 opacity-5 pointer-events-none" /></div>
+                      <div className="bg-slate-900 p-10 rounded-[48px] text-white shadow-2xl flex flex-col justify-between"><div><Moon size={32} className="text-blue-400 mb-6"/><p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Estado de Influencia Lunar</p><h3 className="text-4xl font-black italic tracking-tighter mt-2">{calculateLunarPhase(new Date().toISOString().split('T')[0])}</h3></div><div className="bg-white/5 p-4 rounded-2xl border border-white/10 mt-6"><p className="text-[9px] font-bold text-slate-400 leading-relaxed italic">"El ciclo lunar afecta la presión osmótica de la planta, influyendo en la absorción de nutrientes y rinde final."</p></div></div>
+                      <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 p-10 rounded-[48px] shadow-sm flex flex-col"><div className="flex justify-between items-center mb-6"><Thermometer size={28} className="text-orange-500"/><span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Atmósfera Actual</span></div><div className="space-y-6"><div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Temperatura Ambiente</p><p className="text-4xl font-black dark:text-white">{autoWeather?.current?.temperature_2m || '--'}°C</p></div><div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Humedad Relativa</p><p className="text-4xl font-black dark:text-white">{autoWeather?.current?.relative_humidity_2m || '--'}%</p></div></div></div>
                   </div>
               </div>
           )}
@@ -639,228 +525,87 @@ export default function PlotDetails() {
                           <div className="bg-white dark:bg-slate-900 p-8 rounded-[40px] border dark:border-slate-800 shadow-sm sticky top-6">
                               <h3 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-tighter italic mb-6">Nueva Entrada <span className="text-hemp-600">Bitácora</span></h3>
                               <form onSubmit={handleSaveLog} className="space-y-4">
-                                  <div>
-                                      <label className={labelClass}>Fecha y Hora</label>
-                                      <div className="grid grid-cols-2 gap-2">
-                                          <input type="date" className={inputStyle} value={logForm.date} onChange={e => setLogForm({...logForm, date: e.target.value})} />
-                                          <input type="time" className={inputStyle} value={logForm.time} onChange={e => setLogForm({...logForm, time: e.target.value})} />
+                                  <div className="bg-blue-50 dark:bg-slate-950 p-4 rounded-2xl border border-blue-100 dark:border-slate-800 mb-4 flex justify-between items-center">
+                                      <div className="text-center flex-1 border-r dark:border-slate-800">
+                                          <p className="text-[8px] font-black text-blue-400 uppercase">Temp/Hum</p>
+                                          <p className="text-xs font-black dark:text-white">{isFetchingConditions ? '...' : `${logForm.temperature}° / ${logForm.humidity}%`}</p>
                                       </div>
-                                  </div>
-                                  <div>
-                                      <label className={labelClass}>Observación Técnica</label>
-                                      <textarea 
-                                          required 
-                                          className={`${inputStyle} h-32 resize-none text-xs`} 
-                                          placeholder="Describa el evento, plaga detectada o labor realizada..."
-                                          value={logForm.note}
-                                          onChange={e => setLogForm({...logForm, note: e.target.value})}
-                                      />
-                                  </div>
-                                  <div>
-                                      <label className={`${labelClass} flex justify-between items-center`}>
-                                          Captura Visual
-                                          {isUploading && <Loader2 size={12} className="animate-spin text-hemp-600"/>}
-                                      </label>
-                                      <div className="relative group cursor-pointer">
-                                          <input type="file" accept="image/*" onChange={handlePhotoUpload} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
-                                          <div className="border-2 border-dashed dark:border-slate-800 rounded-2xl p-6 flex flex-col items-center justify-center bg-gray-50 dark:bg-slate-950 group-hover:bg-hemp-50 transition-colors">
-                                              {logForm.photoUrl ? (
-                                                  <img src={logForm.photoUrl} className="w-full h-32 object-cover rounded-xl shadow-md" />
-                                              ) : (
-                                                  <>
-                                                      <Camera size={24} className="text-slate-300 mb-2"/>
-                                                      <span className="text-[9px] font-black uppercase text-slate-400">Subir Evidencia</span>
-                                                  </>
-                                              )}
-                                          </div>
+                                      <div className="text-center flex-1">
+                                          <p className="text-[8px] font-black text-blue-400 uppercase">Luna</p>
+                                          <p className="text-xs font-black dark:text-white">{isFetchingConditions ? '...' : logForm.lunarPhase}</p>
                                       </div>
+                                      <button type="button" onClick={() => syncEnvironmentalData(logForm.date!, (data) => setLogForm(p => ({...p, ...data})))} className="p-1.5 bg-white dark:bg-slate-800 rounded-lg text-blue-600 ml-2 shadow-sm"><RefreshCw size={14} className={isFetchingConditions ? 'animate-spin' : ''}/></button>
                                   </div>
-                                  <button type="submit" disabled={isSaving} className="w-full bg-slate-900 dark:bg-hemp-600 text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl hover:scale-[1.02] transition-all disabled:opacity-50">
-                                      {isSaving ? "Sincronizando..." : "Sellar Entrada"}
-                                  </button>
+                                  <div><label className={labelClass}>Fecha y Hora</label><div className="grid grid-cols-2 gap-2"><input type="date" className={inputStyle} value={logForm.date} onChange={e => {setLogForm({...logForm, date: e.target.value}); syncEnvironmentalData(e.target.value, (data) => setLogForm(p => ({...p, ...data})));}} /><input type="time" className={inputStyle} value={logForm.time} onChange={e => setLogForm({...logForm, time: e.target.value})} /></div></div>
+                                  <div><label className={labelClass}>Observación Técnica</label><textarea required className={`${inputStyle} h-32 resize-none text-xs`} placeholder="Describa el evento, plaga detectada o labor realizada..." value={logForm.note} onChange={e => setLogForm({...logForm, note: e.target.value})} /></div>
+                                  <div><label className={`${labelClass} flex justify-between items-center`}>Captura Visual{isUploading && <Loader2 size={12} className="animate-spin text-hemp-600"/>}</label><div className="relative group cursor-pointer"><input type="file" accept="image/*" onChange={handlePhotoUpload} className="absolute inset-0 opacity-0 cursor-pointer z-10" /><div className="border-2 border-dashed dark:border-slate-800 rounded-2xl p-6 flex flex-col items-center justify-center bg-gray-50 dark:bg-slate-950 group-hover:bg-hemp-50 transition-colors">{logForm.photoUrl ? <img src={logForm.photoUrl} className="w-full h-32 object-cover rounded-xl shadow-md" /> : <><Camera size={24} className="text-slate-300 mb-2"/><span className="text-[9px] font-black uppercase text-slate-400">Subir Evidencia</span></>}</div></div></div>
+                                  <button type="submit" disabled={isSaving || isFetchingConditions} className="w-full bg-slate-900 dark:bg-hemp-600 text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl hover:scale-[1.02] transition-all disabled:opacity-50">{isSaving ? "Sincronizando..." : "Sellar Entrada"}</button>
                               </form>
                           </div>
                       </div>
-
                       <div className="lg:col-span-2 space-y-6">
                           <h3 className="text-xs font-black uppercase tracking-[0.3em] dark:text-white flex items-center"><MessageSquare size={16} className="mr-2 text-hemp-600"/> Historial Multimedia</h3>
-                          {plotLogs.length === 0 ? (
-                              <div className="bg-white dark:bg-slate-900 p-20 rounded-[40px] border border-dashed dark:border-slate-800 text-center text-slate-400">
-                                  <ImageIcon size={48} className="mx-auto mb-4 opacity-20"/>
-                                  <p className="font-black uppercase tracking-widest text-xs">Sin registros multimedia aún.</p>
-                              </div>
-                          ) : (
-                              <div className="space-y-4">
-                                  {plotLogs.map(log => (
+                          {plotLogs.length === 0 ? <div className="bg-white dark:bg-slate-900 p-20 rounded-[40px] border border-dashed dark:border-slate-800 text-center text-slate-400"><ImageIcon size={48} className="mx-auto mb-4 opacity-20"/><p className="font-black uppercase tracking-widest text-xs">Sin registros multimedia aún.</p></div> : (
+                              <div className="space-y-4">{plotLogs.map(log => (
                                       <div key={log.id} className="bg-white dark:bg-slate-900 p-6 rounded-[32px] border dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow group">
-                                          <div className="flex justify-between items-start mb-4">
-                                              <div className="flex items-center gap-3">
-                                                  <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-xl text-slate-500"><Clock size={16}/></div>
-                                                  <div>
-                                                      <p className="text-[10px] font-black text-gray-800 dark:text-white uppercase tracking-tighter">{log.date}</p>
-                                                      <p className="text-[9px] font-bold text-slate-400 uppercase">{log.time || '--:--'} hs</p>
-                                                  </div>
-                                              </div>
-                                              <button onClick={() => { if(window.confirm("¿Eliminar entrada?")) deleteLog(log.id); }} className="p-2 text-slate-200 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"><Trash2 size={16}/></button>
-                                          </div>
-                                          <div className="flex flex-col md:flex-row gap-6">
-                                              {log.photoUrl && (
-                                                  <div className="w-full md:w-48 h-32 rounded-2xl overflow-hidden cursor-pointer shadow-lg border border-white/10" onClick={() => setPreviewPhoto(log.photoUrl)}>
-                                                      <img src={log.photoUrl} className="w-full h-full object-cover hover:scale-110 transition-transform duration-500" />
-                                                  </div>
-                                              )}
-                                              <div className="flex-1">
-                                                  <p className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-relaxed">{log.note}</p>
-                                              </div>
-                                          </div>
+                                          <div className="flex justify-between items-start mb-4"><div className="flex items-center gap-3"><div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-xl text-slate-500"><Clock size={16}/></div><div><p className="text-[10px] font-black text-gray-800 dark:text-white uppercase tracking-tighter">{log.date}</p><p className="text-[9px] font-bold text-slate-400 uppercase">{log.time || '--:--'} hs</p></div></div><button onClick={() => { if(window.confirm("¿Eliminar entrada?")) deleteLog(log.id); }} className="p-2 text-slate-200 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"><Trash2 size={16}/></button></div>
+                                          <div className="flex flex-col md:flex-row gap-6">{log.photoUrl && <div className="w-full md:w-48 h-32 rounded-2xl overflow-hidden cursor-pointer shadow-lg border border-white/10" onClick={() => setPreviewPhoto(log.photoUrl)}><img src={log.photoUrl} className="w-full h-full object-cover hover:scale-110 transition-transform duration-500" /></div>}<div className="flex-1"><p className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-relaxed">{log.note}</p><div className="mt-4 flex gap-4 text-[9px] font-black uppercase text-slate-400"><span>{log.temperature}°C / {log.humidity}% Hum</span><span>Luna: {log.lunarPhase}</span></div></div></div>
                                       </div>
-                                  ))}
-                              </div>
+                                  ))}</div>
                           )}
                       </div>
                   </div>
               </div>
           )}
-
           {activeTab === 'water' && <HydricBalance locationId={plot.locationId} plotId={plot.id} startDate={plot.sowingDate} />}
       </div>
 
-      {/* MODAL QR CODE */}
       {isQrModalOpen && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[110] p-4">
-              <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-sm w-full p-10 shadow-2xl text-center animate-in zoom-in-95">
-                   <div className="mb-6 flex justify-center">
-                        <div className="bg-hemp-600 p-4 rounded-[28px] text-white shadow-xl">
-                            <QrCode size={48}/>
-                        </div>
-                   </div>
-                   <h3 className="text-2xl font-black dark:text-white uppercase tracking-tighter mb-2 italic">Etiqueta Identificatoria</h3>
-                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-8">Escanear para acceder a trazabilidad</p>
-                   
-                   <div className="bg-white p-6 rounded-3xl border-4 border-gray-100 shadow-inner inline-block mb-8">
-                       <img 
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${window.location.origin}/#/trace/${plot.id}`} 
-                        alt="QR Code"
-                        className="w-40 h-40"
-                       />
-                   </div>
-                   
-                   <div className="text-left bg-gray-50 dark:bg-slate-800 p-4 rounded-2xl border dark:border-slate-700 mb-8">
-                       <p className="text-[9px] font-black text-gray-400 uppercase mb-1">ID Parcelario:</p>
-                       <p className="text-xs font-black dark:text-white font-mono">{plot.id}</p>
-                   </div>
-
-                   <div className="flex gap-3">
-                       <button onClick={() => window.print()} className="flex-1 bg-hemp-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg flex items-center justify-center">
-                           <Printer size={16} className="mr-2"/> Imprimir
-                       </button>
-                       <button onClick={() => setIsQrModalOpen(false)} className="px-6 bg-gray-100 dark:bg-slate-800 text-gray-500 rounded-2xl font-black text-xs uppercase transition-all">Cerrar</button>
-                   </div>
-              </div>
-          </div>
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[110] p-4"><div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-sm w-full p-10 shadow-2xl text-center animate-in zoom-in-95"><div className="mb-6 flex justify-center"><div className="bg-hemp-600 p-4 rounded-[28px] text-white shadow-xl"><QrCode size={48}/></div></div><h3 className="text-2xl font-black dark:text-white uppercase tracking-tighter mb-2 italic">Etiqueta Identificatoria</h3><p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-8">Escanear para acceder a trazabilidad</p><div className="bg-white p-6 rounded-3xl border-4 border-gray-100 shadow-inner inline-block mb-8"><img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${window.location.origin}/#/trace/${plot.id}`} alt="QR Code" className="w-40 h-40"/></div><div className="text-left bg-gray-50 dark:bg-slate-800 p-4 rounded-2xl border dark:border-slate-700 mb-8"><p className="text-[9px] font-black text-gray-400 uppercase mb-1">ID Parcelario:</p><p className="text-xs font-black dark:text-white font-mono">{plot.id}</p></div><div className="flex gap-3"><button onClick={() => window.print()} className="flex-1 bg-hemp-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg flex items-center justify-center"><Printer size={16} className="mr-2"/> Imprimir</button><button onClick={() => setIsQrModalOpen(false)} className="px-6 bg-gray-100 dark:bg-slate-800 text-gray-500 rounded-2xl font-black text-xs uppercase transition-all">Cerrar</button></div></div></div>
       )}
 
-      {/* MODAL INFORME PERIÓDICO */}
       {isRecordModalOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[100] p-4">
           <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-6xl w-full p-10 shadow-2xl max-h-[95vh] overflow-y-auto border border-white/10 animate-in zoom-in-95">
-            <div className="flex justify-between items-center mb-8">
-                <div className="flex items-center gap-4">
-                    <div className="bg-hemp-600 p-3 rounded-2xl text-white shadow-lg"><Activity size={24}/></div>
-                    <div>
-                        <h2 className="text-2xl font-black dark:text-white uppercase tracking-tighter italic">Informe periódico <span className="text-hemp-600">Nucleus Trace</span></h2>
-                        {isFetchingConditions && <div className="flex items-center text-[9px] font-black text-blue-500 uppercase tracking-widest mt-1"><Loader2 className="animate-spin mr-1.5" size={10}/> Capturando Red Nucleus GFS...</div>}
-                    </div>
-                </div>
-                <button onClick={() => setIsRecordModalOpen(false)} className="p-2 text-slate-400 hover:bg-slate-100 rounded-full transition"><X size={28}/></button>
-            </div>
-            
+            <div className="flex justify-between items-center mb-8"><div className="flex items-center gap-4"><div className="bg-hemp-600 p-3 rounded-2xl text-white shadow-lg"><Activity size={24}/></div><div><h2 className="text-2xl font-black dark:text-white uppercase tracking-tighter italic">Informe periódico <span className="text-hemp-600">Nucleus Trace</span></h2>{isFetchingConditions && <div className="flex items-center text-[9px] font-black text-blue-500 uppercase tracking-widest mt-1"><Loader2 className="animate-spin mr-1.5" size={10}/> Capturando Red Nucleus GFS...</div>}</div></div><button onClick={() => setIsRecordModalOpen(false)} className="p-2 text-slate-400 hover:bg-slate-100 rounded-full transition"><X size={28}/></button></div>
             <form onSubmit={handleSaveRecord} className="space-y-8">
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                     <div className="bg-slate-50 dark:bg-slate-950 p-6 rounded-3xl border dark:border-slate-800 space-y-4">
                         <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 border-b dark:border-slate-800 pb-2 flex items-center"><Sun size={14} className="mr-2"/> Ambiente & Tiempo</h3>
-                        <div>
-                            <label className={labelClass}>Fecha de Muestreo</label>
-                            <input type="date" required disabled={isViewMode} className={inputStyle} value={recordForm.date} onChange={e => { setRecordForm({...recordForm, date: e.target.value}); if (!isViewMode) syncCurrentConditions(e.target.value); }} />
-                        </div>
-                        <div>
-                            <label className={labelClass}>Hora de Muestreo</label>
-                            <input type="time" required disabled={isViewMode} className={inputStyle} value={recordForm.time} onChange={e => setRecordForm({...recordForm, time: e.target.value})} />
-                        </div>
+                        <div><label className={labelClass}>Fecha de Muestreo</label><input type="date" required disabled={isViewMode} className={inputStyle} value={recordForm.date} onChange={e => { setRecordForm({...recordForm, date: e.target.value}); if (!isViewMode) syncEnvironmentalData(e.target.value, (data) => setRecordForm(p => ({...p, ...data}))); }} /></div>
+                        <div><label className={labelClass}>Hora de Muestreo</label><input type="time" required disabled={isViewMode} className={inputStyle} value={recordForm.time} onChange={e => setRecordForm({...recordForm, time: e.target.value})} /></div>
                         <div><label className={labelClass}>Fase Fisiológica</label><select required disabled={isViewMode} className={inputStyle} value={recordForm.stage} onChange={e => setRecordForm({...recordForm, stage: e.target.value as any})}><option value="Vegetativo">Vegetativo</option><option value="Floración">Floración</option><option value="Maduración">Maduración</option><option value="Cosecha">Cosecha</option></select></div>
-                        
-                        <div className="grid grid-cols-2 gap-2">
-                            <div className="bg-orange-500 p-3 rounded-xl text-white text-center">
-                                <p className="text-[8px] font-black uppercase opacity-60">Temp.</p>
-                                <p className="text-sm font-black">{recordForm.temperature}°C</p>
-                            </div>
-                            <div className="bg-blue-600 p-3 rounded-xl text-white text-center">
-                                <p className="text-[8px] font-black uppercase opacity-60">Hum.</p>
-                                <p className="text-sm font-black">{recordForm.humidity}%</p>
-                            </div>
-                        </div>
-                        <div className="bg-slate-900 p-4 rounded-xl text-white text-center border border-white/10 flex flex-col justify-center gap-2">
-                            <div>
-                                <p className="text-[8px] font-black uppercase opacity-60">Luz Solar / Fotoperiodo</p>
-                                <p className="text-lg font-black">{recordForm.lightHours} h</p>
-                            </div>
-                            <div className="border-t border-white/10 pt-2">
-                                <p className="text-[8px] font-black uppercase opacity-60">Luna</p>
-                                <p className="text-xs font-black text-amber-400 uppercase tracking-widest">{recordForm.lunarPhase || 'S/D'}</p>
-                            </div>
-                        </div>
+                        <div className="grid grid-cols-2 gap-2"><div className="bg-orange-500 p-3 rounded-xl text-white text-center"><p className="text-[8px] font-black uppercase opacity-60">Temp.</p><p className="text-sm font-black">{recordForm.temperature}°C</p></div><div className="bg-blue-600 p-3 rounded-xl text-white text-center"><p className="text-[8px] font-black uppercase opacity-60">Hum.</p><p className="text-sm font-black">{recordForm.humidity}%</p></div></div>
+                        <div className="bg-slate-900 p-4 rounded-xl text-white text-center border border-white/10 flex flex-col justify-center gap-2"><div><p className="text-[8px] font-black uppercase opacity-60">Luz Solar / Fotoperiodo</p><p className="text-lg font-black">{recordForm.lightHours} h</p></div><div className="border-t border-white/10 pt-2"><p className="text-[8px] font-black uppercase opacity-60">Luna</p><p className="text-xs font-black text-amber-400 uppercase tracking-widest">{recordForm.lunarPhase || 'S/D'}</p></div></div>
                     </div>
-
                     <div className="lg:col-span-2 space-y-6">
                         <div className="bg-white dark:bg-slate-900 p-6 rounded-[32px] border dark:border-slate-800 shadow-sm grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="md:col-span-2 border-b dark:border-slate-800 pb-2"><h3 className="text-[10px] font-black text-emerald-600 uppercase tracking-widest flex items-center"><Target size={14} className="mr-2"/> Evaluación Vegetal (1-9)</h3></div>
                             <div><label className={labelClass}>Población (Pl/m²)</label><input type="number" step="0.1" disabled={isViewMode} className={inputStyle} value={recordForm.plantsPerMeter} onChange={e => setRecordForm({...recordForm, plantsPerMeter: Number(e.target.value)})} /></div>
                             <div><label className={labelClass}>Altura Media (cm)</label><input type="number" step="0.1" disabled={isViewMode} className={inputStyle} value={recordForm.plantHeight} onChange={e => setRecordForm({...recordForm, plantHeight: Number(e.target.value)})} /></div>
-                            
                             <ScaleSelect label="Vigor (1-9)" value={recordForm.vigor} onChange={(v: number) => setRecordForm({...recordForm, vigor: v})} disabled={isViewMode}/>
                             <ScaleSelect label="Homogeneidad (1-9)" value={recordForm.uniformity} onChange={(v: number) => setRecordForm({...recordForm, uniformity: v})} disabled={isViewMode}/>
                             <ScaleSelect label="Encamado (Pour 1-9)" value={recordForm.lodging} onChange={(v: number) => setRecordForm({...recordForm, lodging: v})} disabled={isViewMode}/>
                             <ScaleSelect label="Daño Aves (1-9)" value={recordForm.birdDamage} onChange={(v: number) => setRecordForm({...recordForm, birdDamage: v})} disabled={isViewMode}/>
                         </div>
-
-                        <div className="bg-amber-50 dark:bg-amber-900/10 p-6 rounded-[32px] border border-amber-100 dark:border-amber-900/30 grid grid-cols-2 gap-4">
-                            <div className="col-span-2 border-b border-amber-100 dark:border-amber-900/30 pb-2"><h3 className="text-[10px] font-black text-amber-700 dark:text-amber-400 uppercase tracking-widest flex items-center"><AlertCircle size={14} className="mr-2"/> Sanidad (1-9)</h3></div>
-                            <ScaleSelect label="Enfermedades (1-9)" value={recordForm.diseasesScore} onChange={(v: number) => setRecordForm({...recordForm, diseasesScore: v})} disabled={isViewMode}/>
-                            <ScaleSelect label="Plagas / Parásitos (1-9)" value={recordForm.pestsScore} onChange={(v: number) => setRecordForm({...recordForm, pestsScore: v})} disabled={isViewMode}/>
-                        </div>
+                        <div className="bg-amber-50 dark:bg-amber-900/10 p-6 rounded-[32px] border border-amber-100 dark:border-amber-900/30 grid grid-cols-2 gap-4"><div className="col-span-2 border-b border-amber-100 dark:border-amber-900/30 pb-2"><h3 className="text-[10px] font-black text-amber-700 dark:text-amber-400 uppercase tracking-widest flex items-center"><AlertCircle size={14} className="mr-2"/> Sanidad (1-9)</h3></div><ScaleSelect label="Enfermedades (1-9)" value={recordForm.diseasesScore} onChange={(v: number) => setRecordForm({...recordForm, diseasesScore: v})} disabled={isViewMode}/><ScaleSelect label="Plagas / Parásitos (1-9)" value={recordForm.pestsScore} onChange={(v: number) => setRecordForm({...recordForm, pestsScore: v})} disabled={isViewMode}/></div>
                     </div>
-
                     <div className="bg-slate-900 p-6 rounded-[32px] text-white space-y-4">
                         <h3 className="text-[10px] font-black text-hemp-400 uppercase tracking-widest mb-4 border-b border-white/10 pb-2 flex items-center"><FlaskConical size={14} className="mr-2"/> Datos de Cosecha</h3>
                         <div><label className="text-[9px] uppercase font-black text-slate-400">Plena Floración (50%)</label><input type="date" className="w-full bg-white/5 border border-white/10 p-2.5 rounded-xl text-xs outline-none focus:ring-1 focus:ring-hemp-500" value={recordForm.floweringDate} onChange={e => setRecordForm({...recordForm, floweringDate: e.target.value})} /></div>
                         <div><label className="text-[9px] uppercase font-black text-slate-400">Rendimiento Semillas (g)</label><input type="number" className="w-full bg-white/5 border border-white/10 p-2.5 rounded-xl text-xs outline-none focus:ring-1 focus:ring-hemp-500" value={recordForm.seedYield} onChange={e => setRecordForm({...recordForm, seedYield: Number(e.target.value)})} /></div>
                         <div><label className="text-[9px] uppercase font-black text-slate-400">Peso Tallo / Biomasa (g)</label><input type="number" className="w-full bg-white/5 border border-white/10 p-2.5 rounded-xl text-xs outline-none focus:ring-1 focus:ring-hemp-500" value={recordForm.stemWeight} onChange={e => setRecordForm({...recordForm, stemWeight: Number(e.target.value)})} /></div>
-                        
-                        <div className="pt-4 space-y-3">
-                            <label className="text-[9px] uppercase font-black text-hemp-400">Calidad Semilla</label>
-                            <div className="grid grid-cols-2 gap-2">
-                                <div><p className="text-[8px] text-slate-500 font-bold uppercase mb-1">Germinación %</p><input type="number" className="w-full bg-white/10 border-none p-2 rounded-lg text-xs" value={recordForm.seedQualityGermination} onChange={e => setRecordForm({...recordForm, seedQualityGermination: Number(e.target.value)})} /></div>
-                                <div><p className="text-[8px] text-slate-500 font-bold uppercase mb-1">No Conforme %</p><input type="number" className="w-full bg-white/10 border-none p-2 rounded-lg text-xs" value={recordForm.seedQualityNonConformity} onChange={e => setRecordForm({...recordForm, seedQualityNonConformity: Number(e.target.value)})} /></div>
-                            </div>
-                        </div>
+                        <div className="pt-4 space-y-3"><label className="text-[9px] uppercase font-black text-hemp-400">Calidad Semilla</label><div className="grid grid-cols-2 gap-2"><div><p className="text-[8px] text-slate-500 font-bold uppercase mb-1">Germinación %</p><input type="number" className="w-full bg-white/10 border-none p-2 rounded-lg text-xs" value={recordForm.seedQualityGermination} onChange={e => setRecordForm({...recordForm, seedQualityGermination: Number(e.target.value)})} /></div><div><p className="text-[8px] text-slate-500 font-bold uppercase mb-1">No Conforme %</p><input type="number" className="w-full bg-white/10 border-none p-2 rounded-lg text-xs" value={recordForm.seedQualityNonConformity} onChange={e => setRecordForm({...recordForm, seedQualityNonConformity: Number(e.target.value)})} /></div></div></div>
                     </div>
                 </div>
-
-                {!isViewMode && <button type="submit" disabled={isSaving || isFetchingConditions} className="w-full bg-slate-900 dark:bg-hemp-600 text-white py-5 rounded-[28px] font-black text-xs uppercase tracking-[0.3em] shadow-2xl flex items-center justify-center hover:scale-[1.01] transition-all disabled:opacity-50">
-                    {isSaving ? <Loader2 className="animate-spin mr-2"/> : <Save className="mr-2"/>} 
-                    Sellar Informe periódico Nucleus
-                </button>}
+                {!isViewMode && <button type="submit" disabled={isSaving || isFetchingConditions} className="w-full bg-slate-900 dark:bg-hemp-600 text-white py-5 rounded-[28px] font-black text-xs uppercase tracking-[0.3em] shadow-2xl flex items-center justify-center hover:scale-[1.01] transition-all disabled:opacity-50">{isSaving ? <Loader2 className="animate-spin mr-2"/> : <Save className="mr-2"/>} Sellar Informe periódico Nucleus</button>}
             </form>
           </div>
         </div>
       )}
 
-      {/* PHOTO PREVIEW */}
       {previewPhoto && (
-          <div className="fixed inset-0 bg-black/95 backdrop-blur-xl z-[200] flex items-center justify-center p-4" onClick={() => setPreviewPhoto(null)}>
-              <div className="absolute top-6 right-6 p-2 bg-white/10 rounded-full text-white hover:bg-white/20 transition-all cursor-pointer"><X size={32}/></div>
-              <img src={previewPhoto} className="max-w-full max-h-full rounded-3xl shadow-2xl object-contain animate-in zoom-in-90" />
-          </div>
+          <div className="fixed inset-0 bg-black/95 backdrop-blur-xl z-[200] flex items-center justify-center p-4" onClick={() => setPreviewPhoto(null)}><div className="absolute top-6 right-6 p-2 bg-white/10 rounded-full text-white hover:bg-white/20 transition-all cursor-pointer"><X size={32}/></div><img src={previewPhoto} className="max-w-full max-h-full rounded-3xl shadow-2xl object-contain animate-in zoom-in-90" /></div>
       )}
     </div>
   );

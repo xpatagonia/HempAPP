@@ -77,28 +77,8 @@ export default function Settings() {
                       </div>
                       <h3 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-tighter italic">Limpieza de <span className="text-amber-600">Transacciones e Inventario</span></h3>
                   </div>
-
-                  <p className="text-sm text-slate-500 dark:text-slate-400 mb-8 leading-relaxed">
-                      Este proceso elimina todos los datos operativos dinámicos para comenzar una nueva campaña o corregir errores masivos de carga.
-                  </p>
-
-                  <button 
-                      onClick={() => {
-                        const sql = `-- PROTOCOLO DE LIMPIEZA
-DELETE FROM public.field_logs;
-DELETE FROM public.trial_records;
-DELETE FROM public.seed_movements;
-DELETE FROM public.seed_batches;
-DELETE FROM public.hydric_records;
-DELETE FROM public.tasks;
-NOTIFY pgrst, 'reload schema';`;
-                        navigator.clipboard.writeText(sql);
-                        alert("☢️ SCRIPT DE LIMPIEZA COPIADO.");
-                      }}
-                      className="w-full bg-slate-900 dark:bg-amber-600 text-white py-5 rounded-[24px] font-black text-xs uppercase tracking-[0.2em] shadow-xl hover:bg-black dark:hover:bg-amber-700 transition-all flex items-center justify-center"
-                  >
-                      <Eraser size={20} className="mr-2"/> Copiar Script de Limpieza
-                  </button>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mb-8 leading-relaxed">Este proceso elimina todos los datos operativos dinámicos para comenzar una nueva campaña o corregir errores masivos de carga.</p>
+                  <button onClick={() => { const sql = `-- PROTOCOLO DE LIMPIEZA\nDELETE FROM public.field_logs;\nDELETE FROM public.trial_records;\nDELETE FROM public.seed_movements;\nDELETE FROM public.seed_batches;\nDELETE FROM public.hydric_records;\nDELETE FROM public.tasks;\nNOTIFY pgrst, 'reload schema';`; navigator.clipboard.writeText(sql); alert("☢️ SCRIPT DE LIMPIEZA COPIADO."); }} className="w-full bg-slate-900 dark:bg-amber-600 text-white py-5 rounded-[24px] font-black text-xs uppercase tracking-[0.2em] shadow-xl hover:bg-black dark:hover:bg-amber-700 transition-all flex items-center justify-center"><Eraser size={20} className="mr-2"/> Copiar Script de Limpieza</button>
               </div>
           </div>
       )}
@@ -106,68 +86,9 @@ NOTIFY pgrst, 'reload schema';`;
       {activeTab === 'database' && (
           <div className="space-y-6">
               <div className="bg-slate-900 border border-slate-800 p-8 rounded-[40px] shadow-2xl relative overflow-hidden">
-                  <div className="flex items-center space-x-3 mb-6">
-                      <Shield className="text-hemp-500" size={24}/>
-                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Protocolo de Reparación V41.1</h3>
-                  </div>
-                  
-                  <div className="bg-amber-900/20 border border-amber-500/30 p-4 rounded-2xl mb-6 text-amber-200 text-xs leading-relaxed">
-                      <p className="font-black mb-2 flex items-center uppercase"><RefreshCw className="mr-2" size={14}/> REPARACIÓN DE TABLAS Y PERMISOS RLS</p>
-                      Este script asegura que la tabla de Bitácora (field_logs) sea pública para que los técnicos puedan insertar datos y fotos sin errores de autenticación.
-                  </div>
-
-                  <button onClick={() => {
-                      const sql = `-- PROTOCOLO V41.1: REPARACIÓN BITÁCORA, HIDRIC Y RLS
--- 1. Crear Tablas si no existen
-CREATE TABLE IF NOT EXISTS public.field_logs (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    plot_id UUID REFERENCES public.plots(id) ON DELETE CASCADE,
-    date DATE NOT NULL,
-    time TEXT,
-    note TEXT,
-    photo_url TEXT
-);
-
-CREATE TABLE IF NOT EXISTS public.hydric_records (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    location_id UUID REFERENCES public.locations(id) ON DELETE CASCADE,
-    plot_id UUID REFERENCES public.plots(id) ON DELETE CASCADE,
-    date DATE NOT NULL,
-    time TEXT,
-    type TEXT,
-    amount_mm NUMERIC,
-    notes TEXT,
-    created_by UUID
-);
-
--- 2. Asegurar que la columna photo_url exista
-ALTER TABLE IF EXISTS public.field_logs ADD COLUMN IF NOT EXISTS photo_url TEXT;
-
--- 3. Habilitar y configurar RLS para permitir escritura pública/autenticada
-ALTER TABLE public.field_logs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.hydric_records ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "Permitir todo a anonimos en logs" ON public.field_logs;
-CREATE POLICY "Permitir todo a anonimos en logs" ON public.field_logs FOR ALL USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "Permitir todo a anonimos en hidric" ON public.hydric_records;
-CREATE POLICY "Permitir todo a anonimos en hidric" ON public.hydric_records FOR ALL USING (true) WITH CHECK (true);
-
-NOTIFY pgrst, 'reload schema';`;
-                      navigator.clipboard.writeText(sql.trim());
-                      alert("Script V41.1 Copiado. Péguelo en el SQL Editor de Supabase y presione RUN.");
-                  }} className="w-full bg-amber-600 hover:bg-amber-700 text-white py-4 rounded-2xl font-black text-xs uppercase shadow-xl flex items-center justify-center transition-all mb-8">
-                      <RefreshCw size={18} className="mr-2"/> Copiar Script V41.1 (Reparar Todo)
-                  </button>
-                  
-                  <div className="mt-4 p-4 bg-white/5 border border-white/10 rounded-2xl">
-                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-2">Estructura Verificada:</p>
-                      <pre className="text-[9px] text-emerald-400 font-mono overflow-x-auto">
-{`field_logs -> Permisos ALL (INSERT/SELECT/DELETE)
-hydric_records -> Permisos ALL
-photo_url -> Tipo TEXT (soporte base64)`}
-                      </pre>
-                  </div>
+                  <div className="flex items-center space-x-3 mb-6"><Shield className="text-hemp-500" size={24}/><h3 className="font-black text-white uppercase text-sm tracking-widest">Protocolo de Reparación V41.1</h3></div>
+                  <div className="bg-amber-900/20 border border-amber-500/30 p-4 rounded-2xl mb-6 text-amber-200 text-xs leading-relaxed"><p className="font-black mb-2 flex items-center uppercase"><RefreshCw className="mr-2" size={14}/> REPARACIÓN DE TABLAS Y PERMISOS RLS</p>Este script asegura que la tabla de Bitácora (field_logs) soporte datos ambientales y sea pública para que los técnicos puedan insertar datos y fotos sin errores.</div>
+                  <button onClick={() => { const sql = `-- PROTOCOLO V41.1: REPARACIÓN BITÁCORA, HIDRIC Y RLS\n-- 1. Crear Tablas si no existen\nCREATE TABLE IF NOT EXISTS public.field_logs (\n    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n    plot_id UUID REFERENCES public.plots(id) ON DELETE CASCADE,\n    date DATE NOT NULL,\n    time TEXT,\n    note TEXT,\n    photo_url TEXT,\n    temperature NUMERIC,\n    humidity NUMERIC,\n    lunar_phase TEXT,\n    light_hours NUMERIC\n);\n\nALTER TABLE public.field_logs ADD COLUMN IF NOT EXISTS temperature NUMERIC;\nALTER TABLE public.field_logs ADD COLUMN IF NOT EXISTS humidity NUMERIC;\nALTER TABLE public.field_logs ADD COLUMN IF NOT EXISTS lunar_phase TEXT;\nALTER TABLE public.field_logs ADD COLUMN IF NOT EXISTS light_hours NUMERIC;\n\nALTER TABLE public.field_logs ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS "Permitir todo a anonimos en logs" ON public.field_logs;\nCREATE POLICY "Permitir todo a anonimos en logs" ON public.field_logs FOR ALL USING (true) WITH CHECK (true);\n\nNOTIFY pgrst, 'reload schema';`; navigator.clipboard.writeText(sql.trim()); alert("Script V41.1 Copiado. Péguelo en el SQL Editor de Supabase y presione RUN."); }} className="w-full bg-amber-600 hover:bg-amber-700 text-white py-4 rounded-2xl font-black text-xs uppercase shadow-xl flex items-center justify-center transition-all mb-8"><RefreshCw size={18} className="mr-2"/> Copiar Script V41.1 (Reparar Todo)</button>
               </div>
           </div>
       )}

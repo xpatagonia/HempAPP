@@ -238,6 +238,10 @@ export interface FieldLog {
   time?: string; 
   note: string;
   photoUrl?: string;
+  temperature?: number;
+  humidity?: number;
+  lunarPhase?: string;
+  lightHours?: number;
 }
 
 export interface Resource {
