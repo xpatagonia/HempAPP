@@ -25,8 +25,8 @@ export default function Login() {
   return (
     <div className="min-h-screen bg-white dark:bg-slate-950 flex flex-col md:flex-row items-stretch overflow-hidden font-sans">
       
-      {/* Lado Izquierdo: Branding Corporativo Minimalista */}
-      <div className="hidden lg:flex lg:w-1/2 bg-[#DDDB03] relative p-16 flex-col justify-between overflow-hidden">
+      {/* Lado Izquierdo: Branding Corporativo con color Lima #DDDB03 */}
+      <div className="hidden lg:flex lg:w-1/2 bg-brand relative p-16 flex-col justify-between overflow-hidden">
           <div className="relative z-10">
               <div className="mb-16">
                   <h1 className="text-7xl font-black text-slate-900 tracking-tighter italic uppercase leading-[0.85]">
@@ -53,17 +53,14 @@ export default function Login() {
               </div>
           </div>
           
-          {/* Elementos Decorativos de Marca */}
           <div className="absolute -right-20 -bottom-20 w-[500px] h-[500px] bg-black/5 rounded-full border-[60px] border-black/5"></div>
-          <div className="absolute -top-10 -left-10 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
       </div>
 
-      {/* Lado Derecho: Acceso a Terminal */}
+      {/* Lado Derecho: Botonera y Acceso en Verde */}
       <div className="flex-1 flex flex-col items-center justify-center p-8 md:p-16">
         <div className="w-full max-w-md space-y-12">
             <div className="lg:hidden text-center mb-8">
-                <h1 className="text-5xl font-black text-[#DDDB03] italic uppercase tracking-tighter">{appName}</h1>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mt-2">La Red Cooperativa del Cáñamo Industrial Argentino</p>
+                <h1 className="text-5xl font-black text-brand italic uppercase tracking-tighter">{appName}</h1>
             </div>
 
             <div className="space-y-3">
@@ -79,11 +76,11 @@ export default function Login() {
                 )}
                 
                 <div className="space-y-1 group">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1 transition-colors group-focus-within:text-[#DDDB03]">ID de Operario (Email)</label>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1 transition-colors group-focus-within:text-hemp-600">ID de Operario (Email)</label>
                     <input 
                       required 
                       type="email" 
-                      className="w-full px-0 py-4 bg-transparent border-b-2 border-slate-100 dark:border-slate-800 focus:border-[#DDDB03] outline-none transition-all dark:text-white font-mono text-sm" 
+                      className="w-full px-0 py-4 bg-transparent border-b-2 border-slate-100 dark:border-slate-800 focus:border-hemp-600 outline-none transition-all dark:text-white font-mono text-sm" 
                       placeholder="usuario@red-nucleus.com" 
                       value={email} 
                       onChange={e => setEmail(e.target.value)} 
@@ -91,11 +88,11 @@ export default function Login() {
                 </div>
 
                 <div className="space-y-1 group">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1 transition-colors group-focus-within:text-[#DDDB03]">Clave de Enlace</label>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1 transition-colors group-focus-within:text-hemp-600">Clave de Enlace</label>
                     <input 
                       required 
                       type="password" 
-                      className="w-full px-0 py-4 bg-transparent border-b-2 border-slate-100 dark:border-slate-800 focus:border-[#DDDB03] outline-none transition-all dark:text-white font-mono text-sm" 
+                      className="w-full px-0 py-4 bg-transparent border-b-2 border-slate-100 dark:border-slate-800 focus:border-hemp-600 outline-none transition-all dark:text-white font-mono text-sm" 
                       placeholder="••••••••" 
                       value={password} 
                       onChange={e => setPassword(e.target.value)} 
@@ -105,7 +102,7 @@ export default function Login() {
                 <button 
                   type="submit" 
                   disabled={isLoading} 
-                  className="w-full bg-slate-900 dark:bg-[#DDDB03] text-white dark:text-slate-900 py-6 rounded-2xl font-black text-xs uppercase tracking-[0.3em] hover:bg-black dark:hover:brightness-110 active:scale-[0.98] transition-all shadow-[0_20px_50px_-15px_rgba(221,219,3,0.3)] disabled:opacity-50 flex items-center justify-center group"
+                  className="w-full bg-hemp-600 hover:bg-hemp-700 text-white py-6 rounded-2xl font-black text-xs uppercase tracking-[0.3em] active:scale-[0.98] transition-all shadow-[0_20px_50px_-15px_rgba(22,163,74,0.3)] disabled:opacity-50 flex items-center justify-center group"
                 >
                     {isLoading ? <Loader2 className="animate-spin" size={20} /> : (
                         <>Sincronizar Acceso <ArrowRight size={18} className="ml-3 group-hover:translate-x-2 transition-transform" /></>
@@ -117,7 +114,7 @@ export default function Login() {
                 <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest text-center">
                     ¿No posee acceso técnico autorizado? 
                 </p>
-                <Link to="/register-producer" className="w-full py-4 border-2 border-slate-100 dark:border-slate-800 rounded-2xl text-[10px] font-black uppercase tracking-widest text-center hover:bg-slate-50 dark:hover:bg-slate-900 hover:border-[#DDDB03] transition-all">
+                <Link to="/register-producer" className="w-full py-4 border-2 border-slate-100 dark:border-slate-800 rounded-2xl text-[10px] font-black uppercase tracking-widest text-center hover:bg-slate-50 dark:hover:bg-slate-900 hover:border-brand transition-all">
                     Postularme como Productor de la Red
                 </Link>
             </div>
