@@ -6,7 +6,7 @@ import {
   Save, Database, RefreshCw, Lock, Settings as SettingsIcon, 
   CheckCircle2, Layout, Trash2, RotateCcw, Shield, 
   AlertTriangle, FlaskConical, CheckCircle, XCircle, Info, Search, FileCode, Flame, Eraser
-} from 'lucide-center';
+} from 'lucide-react';
 
 export default function Settings() {
   const { currentUser, appName, appLogo, updateBranding, refreshData } = useAppContext();
@@ -108,16 +108,17 @@ NOTIFY pgrst, 'reload schema';`;
               <div className="bg-slate-900 border border-slate-800 p-8 rounded-[40px] shadow-2xl relative overflow-hidden">
                   <div className="flex items-center space-x-3 mb-6">
                       <Shield className="text-hemp-500" size={24}/>
-                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Protocolo de Reparación V41</h3>
+                      <h3 className="font-black text-white uppercase text-sm tracking-widest">Protocolo de Reparación V41.1</h3>
                   </div>
                   
                   <div className="bg-amber-900/20 border border-amber-500/30 p-4 rounded-2xl mb-6 text-amber-200 text-xs leading-relaxed">
-                      <p className="font-black mb-2 flex items-center uppercase"><RefreshCw className="mr-2" size={14}/> REPARACIÓN DE TABLAS MULTIMEDIA</p>
-                      Este script asegura que la tabla de Bitácora (field_logs) exista con soporte para fotos en alta resolución (base64) y vinculación por UUID.
+                      <p className="font-black mb-2 flex items-center uppercase"><RefreshCw className="mr-2" size={14}/> REPARACIÓN DE TABLAS Y PERMISOS RLS</p>
+                      Este script asegura que la tabla de Bitácora (field_logs) sea pública para que los técnicos puedan insertar datos y fotos sin errores de autenticación.
                   </div>
 
                   <button onClick={() => {
-                      const sql = `-- PROTOCOLO V41: REPARACIÓN BITÁCORA E HIDRIC RECORDS
+                      const sql = `-- PROTOCOLO V41.1: REPARACIÓN BITÁCORA, HIDRIC Y RLS
+-- 1. Crear Tablas si no existen
 CREATE TABLE IF NOT EXISTS public.field_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     plot_id UUID REFERENCES public.plots(id) ON DELETE CASCADE,
@@ -139,20 +140,32 @@ CREATE TABLE IF NOT EXISTS public.hydric_records (
     created_by UUID
 );
 
+-- 2. Asegurar que la columna photo_url exista
 ALTER TABLE IF EXISTS public.field_logs ADD COLUMN IF NOT EXISTS photo_url TEXT;
+
+-- 3. Habilitar y configurar RLS para permitir escritura pública/autenticada
+ALTER TABLE public.field_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.hydric_records ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Permitir todo a anonimos en logs" ON public.field_logs;
+CREATE POLICY "Permitir todo a anonimos en logs" ON public.field_logs FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Permitir todo a anonimos en hidric" ON public.hydric_records;
+CREATE POLICY "Permitir todo a anonimos en hidric" ON public.hydric_records FOR ALL USING (true) WITH CHECK (true);
 
 NOTIFY pgrst, 'reload schema';`;
                       navigator.clipboard.writeText(sql.trim());
-                      alert("Script V41 Copiado. Péguelo en el SQL Editor de Supabase y presione RUN.");
+                      alert("Script V41.1 Copiado. Péguelo en el SQL Editor de Supabase y presione RUN.");
                   }} className="w-full bg-amber-600 hover:bg-amber-700 text-white py-4 rounded-2xl font-black text-xs uppercase shadow-xl flex items-center justify-center transition-all mb-8">
-                      <RefreshCw size={18} className="mr-2"/> Copiar Script V41 (Reparar Bitácora)
+                      <RefreshCw size={18} className="mr-2"/> Copiar Script V41.1 (Reparar Todo)
                   </button>
                   
                   <div className="mt-4 p-4 bg-white/5 border border-white/10 rounded-2xl">
-                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-2">Tablas a verificar/crear:</p>
+                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-2">Estructura Verificada:</p>
                       <pre className="text-[9px] text-emerald-400 font-mono overflow-x-auto">
-{`field_logs (id, plot_id, date, time, note, photo_url)
-hydric_records (id, location_id, plot_id, date, amount_mm...)`}
+{`field_logs -> Permisos ALL (INSERT/SELECT/DELETE)
+hydric_records -> Permisos ALL
+photo_url -> Tipo TEXT (soporte base64)`}
                       </pre>
                   </div>
               </div>

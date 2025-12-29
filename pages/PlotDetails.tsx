@@ -206,6 +206,11 @@ export default function PlotDetails() {
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (file) {
+          // Validamos tamaño (Límite sugerido 2MB para base64 en Supabase texto)
+          if (file.size > 2 * 1024 * 1024) {
+              alert("⚠️ La imagen es muy pesada (>2MB). Por favor, redúzcala o tome una foto de menor resolución.");
+              return;
+          }
           setIsUploading(true);
           const reader = new FileReader();
           reader.onloadend = () => {
@@ -240,10 +245,10 @@ export default function PlotDetails() {
               });
               alert("✅ Entrada de bitácora registrada con éxito.");
           } else {
-              alert("❌ Error: No se pudo guardar en el servidor. Verifique si el tamaño de la foto es excesivo.");
+              alert("❌ Error de Servidor: La base de datos rechazó el registro. Por favor, ejecute el Script V41.1 en Ajustes -> SQL Nucleus.");
           }
       } catch (err) {
-          alert("❌ Fallo de conexión al intentar guardar la bitácora.");
+          alert("❌ Fallo de conexión o tiempo de espera agotado.");
       } finally { setIsSaving(false); }
   };
 
