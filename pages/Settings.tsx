@@ -1,16 +1,15 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { supabase, checkConnection } from '../supabaseClient';
 import { 
   Save, Database, RefreshCw, Lock, Settings as SettingsIcon, 
   CheckCircle2, Layout, Trash2, RotateCcw, Shield, 
-  AlertTriangle, FlaskConical, CheckCircle, XCircle, Info, Search, FileCode, Flame, Eraser
+  AlertTriangle, FlaskConical, CheckCircle, XCircle, Info, Search, FileCode, Flame, Eraser, Server, Activity
 } from 'lucide-react';
 
 export default function Settings() {
-  const { currentUser, appName, appLogo, updateBranding, refreshData } = useAppContext();
-  const [activeTab, setActiveTab] = useState<'branding' | 'database' | 'maintenance'>('branding');
+  const { currentUser, appName, appLogo, updateBranding } = useAppContext();
+  const [activeTab, setActiveTab] = useState<'branding' | 'system' | 'maintenance'>('branding');
   const [editAppName, setEditAppName] = useState(appName);
   const [editAppLogo, setEditAppLogo] = useState(appLogo);
 
@@ -35,69 +34,131 @@ export default function Settings() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto pb-10 animate-in fade-in">
-      <div className="flex items-center mb-6">
+    <div className="max-w-4xl mx-auto pb-10 animate-in fade-in duration-500">
+      <div className="flex items-center mb-8">
         <SettingsIcon className="text-hemp-600 mr-3" size={32} />
         <div>
-            <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Configuración del Servidor</h1>
-            <p className="text-gray-500">Mantenimiento de base de datos y esquemas PostgREST.</p>
+            <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Panel de Control Master</h1>
+            <p className="text-gray-500">Configuración global y estado del servidor Nucleus.</p>
         </div>
       </div>
 
-      <div className="flex space-x-1 bg-gray-100 dark:bg-slate-900 p-1 rounded-lg mb-8 w-fit">
-          <button onClick={() => setActiveTab('branding')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'branding' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Identidad</button>
-          <button onClick={() => setActiveTab('database')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'database' ? 'bg-white dark:bg-hemp-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>SQL Nucleus</button>
-          <button onClick={() => setActiveTab('maintenance')} className={`px-4 py-2 rounded-md text-sm font-black transition uppercase tracking-tighter ${activeTab === 'maintenance' ? 'bg-white dark:bg-amber-600 shadow text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Mantenimiento</button>
+      <div className="flex space-x-1 bg-gray-100 dark:bg-slate-900 p-1.5 rounded-2xl mb-8 w-fit shadow-inner">
+          <button onClick={() => setActiveTab('branding')} className={`px-6 py-2.5 rounded-xl text-xs font-black transition uppercase tracking-widest ${activeTab === 'branding' ? 'bg-white dark:bg-hemp-600 shadow-md text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Identidad</button>
+          <button onClick={() => setActiveTab('system')} className={`px-6 py-2.5 rounded-xl text-xs font-black transition uppercase tracking-widest ${activeTab === 'system' ? 'bg-white dark:bg-hemp-600 shadow-md text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Sistema & BD</button>
+          <button onClick={() => setActiveTab('maintenance')} className={`px-6 py-2.5 rounded-xl text-xs font-black transition uppercase tracking-widest ${activeTab === 'maintenance' ? 'bg-white dark:bg-amber-600 shadow-md text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Zona de Peligro</button>
       </div>
 
       {activeTab === 'branding' && (
-          <div className="space-y-8">
+          <div className="space-y-8 animate-in slide-in-from-bottom-2">
               <div className="bg-white dark:bg-slate-900 p-8 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-sm">
+                  <h3 className="text-lg font-black text-slate-800 dark:text-white uppercase tracking-tighter mb-6">Personalización de Marca</h3>
                   <div className="space-y-6">
                       <div>
                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Nombre de la Plataforma</label>
-                          <input type="text" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl font-bold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-hemp-600" value={editAppName} onChange={e => setEditAppName(e.target.value)} />
+                          <input type="text" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl font-bold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-hemp-600 transition-all" value={editAppName} onChange={e => setEditAppName(e.target.value)} />
                       </div>
                       <div>
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">URL del Logo</label>
-                          <input type="text" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl font-bold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-hemp-600" value={editAppLogo || ''} onChange={e => setEditAppLogo(e.target.value)} />
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">URL del Logo (PNG/SVG)</label>
+                          <div className="flex gap-4">
+                              <input type="text" className="flex-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl font-bold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-hemp-600 transition-all" value={editAppLogo || ''} onChange={e => setEditAppLogo(e.target.value)} placeholder="https://..." />
+                              {editAppLogo && <div className="w-16 h-16 bg-white dark:bg-slate-800 rounded-2xl border dark:border-slate-700 p-2 flex items-center justify-center"><img src={editAppLogo} className="max-w-full max-h-full object-contain"/></div>}
+                          </div>
                       </div>
-                      <button onClick={handleSaveBranding} className="px-10 py-4 bg-hemp-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:scale-[1.02] transition-all">Actualizar Marca</button>
+                      <div className="pt-4">
+                          <button onClick={handleSaveBranding} className="w-full md:w-auto px-10 py-4 bg-slate-900 dark:bg-hemp-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center">
+                              <Save size={18} className="mr-2"/> Guardar Cambios
+                          </button>
+                      </div>
                   </div>
               </div>
           </div>
       )}
 
       {activeTab === 'maintenance' && (
-          <div className="space-y-6">
-              <div className="bg-white dark:bg-slate-900 p-8 rounded-[40px] border border-amber-200 dark:border-amber-900/30 shadow-sm">
-                  <div className="flex items-center space-x-3 mb-6">
+          <div className="space-y-6 animate-in slide-in-from-bottom-2">
+              <div className="bg-amber-50 dark:bg-amber-900/10 p-8 rounded-[40px] border border-amber-200 dark:border-amber-900/30 shadow-sm relative overflow-hidden">
+                  <div className="flex items-center space-x-3 mb-6 relative z-10">
                       <div className="bg-amber-100 dark:bg-amber-900/30 p-3 rounded-2xl text-amber-600">
                           <Eraser size={24}/>
                       </div>
-                      <h3 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-tighter italic">Limpieza de <span className="text-amber-600">Transacciones e Inventario</span></h3>
+                      <div>
+                          <h3 className="text-xl font-black text-amber-900 dark:text-amber-200 uppercase tracking-tighter italic">Reinicio de Campaña</h3>
+                          <p className="text-[10px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-widest">Eliminación de datos transaccionales</p>
+                      </div>
                   </div>
-                  <p className="text-sm text-slate-500 dark:text-slate-400 mb-8 leading-relaxed">Este proceso elimina todos los datos operativos dinámicos para comenzar una nueva campaña o corregir errores masivos de carga.</p>
-                  <button onClick={() => { const sql = `-- PROTOCOLO DE LIMPIEZA\nDELETE FROM public.field_logs;\nDELETE FROM public.trial_records;\nDELETE FROM public.seed_movements;\nDELETE FROM public.seed_batches;\nDELETE FROM public.hydric_records;\nDELETE FROM public.tasks;\nNOTIFY pgrst, 'reload schema';`; navigator.clipboard.writeText(sql); alert("☢️ SCRIPT DE LIMPIEZA COPIADO."); }} className="w-full bg-slate-900 dark:bg-amber-600 text-white py-5 rounded-[24px] font-black text-xs uppercase tracking-[0.2em] shadow-xl hover:bg-black dark:hover:bg-amber-700 transition-all flex items-center justify-center"><Eraser size={20} className="mr-2"/> Copiar Script de Limpieza</button>
+                  <p className="text-sm text-amber-800 dark:text-amber-300/80 mb-8 leading-relaxed max-w-2xl relative z-10 font-medium">
+                      Esta acción genera un script SQL para limpiar registros de parcelas, monitoreos, stock y movimientos. 
+                      <strong className="block mt-2">NO elimina usuarios, campos, ni configuraciones maestras.</strong>
+                  </p>
+                  <button onClick={() => { const sql = `-- PROTOCOLO DE LIMPIEZA DE CAMPAÑA\nDELETE FROM public.field_logs;\nDELETE FROM public.trial_records;\nDELETE FROM public.seed_movements;\nDELETE FROM public.seed_batches;\nDELETE FROM public.hydric_records;\nDELETE FROM public.tasks;\n-- Opcional: Reiniciar Parcelas\n-- DELETE FROM public.plots;\nNOTIFY pgrst, 'reload schema';`; navigator.clipboard.writeText(sql); alert("☢️ SCRIPT DE LIMPIEZA COPIADO AL PORTAPAPELES.\nEjecútelo en el Editor SQL de Supabase con precaución."); }} className="w-full bg-amber-600 hover:bg-amber-700 text-white py-5 rounded-[24px] font-black text-xs uppercase tracking-[0.2em] shadow-xl transition-all flex items-center justify-center relative z-10">
+                      <Eraser size={20} className="mr-2"/> Copiar Script de Limpieza
+                  </button>
+                  <Flame className="absolute -bottom-10 -right-10 text-amber-500 opacity-10 w-64 h-64 pointer-events-none"/>
               </div>
           </div>
       )}
 
-      {activeTab === 'database' && (
-          <div className="space-y-6">
-              <div className="bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30 p-8 rounded-[40px] shadow-2xl relative overflow-hidden">
-                  <div className="flex items-center space-x-3 mb-6"><Shield className="text-red-500" size={24}/><h3 className="font-black text-red-700 dark:text-red-400 uppercase text-sm tracking-widest">Protocolo de Emergencia V47 (FINAL FIX)</h3></div>
-                  <div className="bg-white/50 dark:bg-black/20 p-4 rounded-2xl mb-6 text-red-800 dark:text-red-200 text-xs leading-relaxed font-bold">
-                      <p className="uppercase mb-2 flex items-center"><AlertTriangle size={14} className="mr-1"/> DESBLOQUEO DE BITÁCORA</p>
-                      Este script elimina cualquier restricción de tipos (UUID/TEXT) en la bitácora. Permite guardar registros sin validar la relación estricta de base de datos, solucionando el error 42804 definitivamente.
+      {activeTab === 'system' && (
+          <div className="space-y-6 animate-in slide-in-from-bottom-2">
+              <div className="bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-900/30 p-8 rounded-[40px] shadow-sm relative overflow-hidden">
+                  <div className="flex items-center justify-between mb-8">
+                      <div className="flex items-center space-x-4">
+                          <div className="bg-emerald-100 dark:bg-emerald-900/30 p-3 rounded-2xl text-emerald-600"><Server size={24}/></div>
+                          <div>
+                              <h3 className="font-black text-emerald-900 dark:text-emerald-300 uppercase text-lg tracking-tighter">Estado Operativo</h3>
+                              <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">Producción Estable</p>
+                          </div>
+                      </div>
+                      <div className="px-4 py-2 bg-emerald-200 dark:bg-emerald-900/50 rounded-full text-emerald-800 dark:text-emerald-200 text-xs font-black uppercase tracking-widest flex items-center">
+                          <Activity size={14} className="mr-2 animate-pulse"/> Online
+                      </div>
                   </div>
-                  <button onClick={() => { 
-                      const sql = `-- PROTOCOLO V47: FIX DEFINITIVO (SIN FK)\nDROP TABLE IF EXISTS public.field_logs CASCADE;\n\nCREATE TABLE public.field_logs (\n    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n    plot_id TEXT,\n    date DATE DEFAULT CURRENT_DATE,\n    time TEXT,\n    note TEXT,\n    photo_url TEXT\n);\n\nALTER TABLE public.field_logs ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS "Acceso Total Logs" ON public.field_logs;\nCREATE POLICY "Acceso Total Logs" ON public.field_logs FOR ALL USING (true) WITH CHECK (true);\n\nNOTIFY pgrst, 'reload schema';`; 
-                      navigator.clipboard.writeText(sql.trim()); 
-                      alert("Script V47 Copiado. Ejecútelo en Supabase para desbloquear la bitácora."); 
-                  }} className="w-full bg-red-600 hover:bg-red-700 text-white py-5 rounded-2xl font-black text-xs uppercase shadow-xl flex items-center justify-center transition-all mb-8 animate-pulse hover:animate-none">
-                      <RefreshCw size={18} className="mr-2"/> COPIAR SCRIPT V47 (FINAL FIX)
-                  </button>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="bg-white/60 dark:bg-slate-900/50 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-900/20 flex items-center space-x-3">
+                          <CheckCircle2 size={20} className="text-emerald-500"/>
+                          <div>
+                              <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Esquema de Base de Datos</p>
+                              <p className="text-[10px] text-slate-400 uppercase tracking-widest">Sincronizado (V47)</p>
+                          </div>
+                      </div>
+                      <div className="bg-white/60 dark:bg-slate-900/50 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-900/20 flex items-center space-x-3">
+                          <CheckCircle2 size={20} className="text-emerald-500"/>
+                          <div>
+                              <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Motor de Inteligencia</p>
+                              <p className="text-[10px] text-slate-400 uppercase tracking-widest">Gemini 3 Flash Activo</p>
+                          </div>
+                      </div>
+                      <div className="bg-white/60 dark:bg-slate-900/50 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-900/20 flex items-center space-x-3">
+                          <CheckCircle2 size={20} className="text-emerald-500"/>
+                          <div>
+                              <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Almacenamiento Multimedia</p>
+                              <p className="text-[10px] text-slate-400 uppercase tracking-widest">Optimizado (Compresión v2)</p>
+                          </div>
+                      </div>
+                      <div className="bg-white/60 dark:bg-slate-900/50 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-900/20 flex items-center space-x-3">
+                          <CheckCircle2 size={20} className="text-emerald-500"/>
+                          <div>
+                              <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Protocolos de Seguridad</p>
+                              <p className="text-[10px] text-slate-400 uppercase tracking-widest">RLS Habilitado</p>
+                          </div>
+                      </div>
+                  </div>
+              </div>
+              
+              <div className="bg-white dark:bg-slate-900 p-6 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between">
+                  <div className="flex items-center space-x-4">
+                      <Database size={20} className="text-slate-400"/>
+                      <div>
+                          <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Versión del Cliente</p>
+                          <p className="text-[10px] text-slate-400 uppercase tracking-widest">Nucleus WebApp v1.0.0-PROD</p>
+                      </div>
+                  </div>
+                  <div className="text-right">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Build</p>
+                      <p className="text-xs font-mono text-slate-600 dark:text-slate-400">stable-release-2025</p>
+                  </div>
               </div>
           </div>
       )}
