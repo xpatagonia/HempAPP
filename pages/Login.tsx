@@ -5,7 +5,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { ArrowRight, AlertCircle, Loader2 } from 'lucide-react';
 
 export default function Login() {
-  const { login, appName } = useAppContext();
+  const { login } = useAppContext();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -25,21 +25,21 @@ export default function Login() {
   return (
     <div className="min-h-screen bg-white dark:bg-slate-950 flex flex-col md:flex-row items-stretch overflow-hidden font-sans">
       
-      {/* Lado Izquierdo: Branding Corporativo con color Lima #DDDB03 */}
-      <div className="hidden lg:flex lg:w-1/2 bg-brand relative p-16 flex-col justify-between overflow-hidden">
+      {/* Lado Izquierdo: Branding Corporativo Rediseñado */}
+      <div className="hidden lg:flex lg:w-1/2 bg-slate-950 relative p-16 flex-col justify-between overflow-hidden border-r border-white/5">
           <div className="relative z-10">
               <div className="mb-16">
-                  <h1 className="text-7xl font-black text-slate-900 tracking-tighter italic uppercase leading-[0.85]">
-                      {appName} <br />
-                      <span className="opacity-30 text-5xl">Nucleus</span>
+                  <h1 className="text-7xl font-black text-hemp-500 tracking-tighter italic uppercase leading-[0.85]">
+                      HempC <span className="text-white">APP</span><br />
+                      <span className="text-2xl opacity-60 text-white lowercase font-medium tracking-widest">(Agroindustria Inteligente)</span>
                   </h1>
               </div>
               <div className="space-y-6 max-w-lg">
-                  <h2 className="text-5xl font-black text-slate-900 leading-[1.1] tracking-tighter uppercase italic">
+                  <h2 className="text-5xl font-black text-white leading-[1.1] tracking-tighter uppercase italic">
                       La Red Cooperativa <br />del Cáñamo <br />Industrial Argentino
                   </h2>
-                  <div className="h-1.5 w-32 bg-slate-900 mt-8"></div>
-                  <p className="text-slate-900 text-xl font-bold leading-relaxed opacity-80 pt-4">
+                  <div className="h-1.5 w-32 bg-hemp-600 mt-8"></div>
+                  <p className="text-white text-xl font-bold leading-relaxed opacity-90 pt-4">
                       Trazabilidad, Innovación y Bioeconomía. <br />
                       Impulsado por PatagonianC LTDA.
                   </p>
@@ -48,23 +48,23 @@ export default function Login() {
 
           <div className="relative z-10">
               <div className="flex flex-col space-y-2">
-                  <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.4em]">Industria 4.0 & Sostenibilidad</p>
-                  <p className="text-[10px] font-bold text-slate-900/60 uppercase tracking-widest">PatagonianC © 2025</p>
+                  <p className="text-[10px] font-black text-white uppercase tracking-[0.4em] opacity-40">Industria 4.0 & Sostenibilidad</p>
+                  <p className="text-[10px] font-bold text-white/20 uppercase tracking-widest">PatagonianC © 2025</p>
               </div>
           </div>
           
-          <div className="absolute -right-20 -bottom-20 w-[500px] h-[500px] bg-black/5 rounded-full border-[60px] border-black/5"></div>
+          <div className="absolute -right-20 -bottom-20 w-[500px] h-[500px] bg-hemp-600/5 rounded-full border-[60px] border-white/5"></div>
       </div>
 
-      {/* Lado Derecho: Botonera y Acceso en Verde */}
-      <div className="flex-1 flex flex-col items-center justify-center p-8 md:p-16">
+      {/* Lado Derecho: Formulario de Acceso */}
+      <div className="flex-1 flex flex-col items-center justify-center p-8 md:p-16 bg-white dark:bg-slate-950">
         <div className="w-full max-w-md space-y-12">
             <div className="lg:hidden text-center mb-8">
-                <h1 className="text-5xl font-black text-brand italic uppercase tracking-tighter">{appName}</h1>
+                <h1 className="text-5xl font-black text-hemp-600 italic uppercase tracking-tighter">HempC APP</h1>
             </div>
 
             <div className="space-y-3">
-                <h2 className="text-4xl font-black text-slate-900 dark:text-white uppercase tracking-tighter italic">Ingreso de Personal</h2>
+                <h2 className="text-4xl font-black text-slate-900 dark:text-white uppercase tracking-tighter italic leading-none">Ingreso de Personal</h2>
                 <p className="text-slate-400 font-bold uppercase text-[11px] tracking-[0.25em]">Autenticación de Terminal Nucleus</p>
             </div>
 
@@ -114,7 +114,7 @@ export default function Login() {
                 <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest text-center">
                     ¿No posee acceso técnico autorizado? 
                 </p>
-                <Link to="/register-producer" className="w-full py-4 border-2 border-slate-100 dark:border-slate-800 rounded-2xl text-[10px] font-black uppercase tracking-widest text-center hover:bg-slate-50 dark:hover:bg-slate-900 hover:border-brand transition-all">
+                <Link to="/register-producer" className="w-full py-4 border-2 border-slate-100 dark:border-slate-800 rounded-2xl text-[10px] font-black uppercase tracking-widest text-center hover:bg-slate-50 dark:hover:bg-slate-900 hover:border-hemp-600 transition-all">
                     Postularme como Productor de la Red
                 </Link>
             </div>
