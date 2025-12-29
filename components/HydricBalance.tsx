@@ -1,8 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAppContext } from '../context/AppContext';
-/* Added missing Save import */
-import { Droplets, CloudRain, Plus, X, Trash2, Info, Loader2, RefreshCw, AlertCircle, TrendingUp, Waves, Check, Sparkles, Clock, Save } from 'lucide-react';
+import { Droplets, CloudRain, Plus, X, Trash2, Info, Loader2, RefreshCw, AlertCircle, TrendingUp, Waves, Check, Sparkles, Clock, Save, ArrowUp, ArrowDown } from 'lucide-react';
 
 interface HydricBalanceProps {
     locationId: string;
@@ -18,6 +17,7 @@ export default function HydricBalance({ locationId, plotId, startDate }: HydricB
     const [isLoadingAuto, setIsLoadingAuto] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [autoRain, setAutoRain] = useState(0);
+    const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
     const [formData, setFormData] = useState({ 
         date: new Date().toISOString().split('T')[0], 
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
@@ -32,14 +32,22 @@ export default function HydricBalance({ locationId, plotId, startDate }: HydricB
     });
 
     const manualRecords = useMemo(() => {
-        return hydricRecords.filter(h => {
+        const data = hydricRecords.filter(h => {
             const matchLoc = h.locationId === locationId;
             const matchPlot = plotId ? h.plotId === plotId : !h.plotId;
             return matchLoc && matchPlot;
-        }).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [hydricRecords, locationId, plotId]);
+        });
+        
+        return data.sort((a, b) => {
+             const dateA = new Date(a.date + (a.time ? 'T' + a.time : '')).getTime();
+             const dateB = new Date(b.date + (b.time ? 'T' + b.time : '')).getTime();
+             return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
+        });
+    }, [hydricRecords, locationId, plotId, sortOrder]);
 
     const totalManual = useMemo(() => manualRecords.reduce((sum, r) => sum + r.amountMm, 0), [manualRecords]);
+
+    const toggleSort = () => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
 
     // EFECTO: CARGA DE PLUVIÓMETRO AUTOMÁTICO (HISTÓRICO ACUMULADO)
     useEffect(() => {
@@ -193,7 +201,9 @@ export default function HydricBalance({ locationId, plotId, startDate }: HydricB
                 <table className="w-full text-sm text-left">
                     <thead className="bg-slate-50 dark:bg-slate-950 text-[10px] font-black uppercase tracking-widest text-slate-400 border-b dark:border-slate-800">
                         <tr>
-                            <th className="px-8 py-5">Fecha / Registro</th>
+                            <th className="px-8 py-5 cursor-pointer hover:text-hemp-600 transition-colors flex items-center gap-2" onClick={toggleSort}>
+                                Fecha / Registro {sortOrder === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>}
+                            </th>
                             <th className="px-8 py-5">Fuente</th>
                             <th className="px-8 py-5 text-center">Cantidad</th>
                             <th className="px-8 py-5">Notas</th>

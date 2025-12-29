@@ -12,7 +12,7 @@ import {
   Camera, Image as ImageIcon, MessageSquare, ClipboardList, User, Calendar, Ruler, Maximize2, Download, Scale, Wind, Bird, CheckCircle2,
   RefreshCw, Globe, Layers, Save, Thermometer, Droplets, Waves, QrCode, Printer, Loader2, Zap, Sparkles, Link as LinkIcon, Sun,
   TrendingUp, ArrowUpRight, Beaker, FileUp, Moon, Sunrise, Sunset, ZapOff, Archive, Navigation, Scan, Target, FlaskConical, ClipboardCheck,
-  ChevronLeft, ChevronRight, Filter, Bot, Terminal, FileText
+  ChevronLeft, ChevronRight, Filter, Bot, Terminal, FileText, ArrowUp, ArrowDown
 } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
 import WeatherWidget from '../components/WeatherWidget';
@@ -83,6 +83,7 @@ export default function PlotDetails() {
 
   const [recordsPage, setRecordsPage] = useState(1);
   const [recordsFilterStage, setRecordsFilterStage] = useState('all');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const recordsPerPage = 8;
   
   const [astroData, setAstroData] = useState<any>(null);
@@ -104,8 +105,13 @@ export default function PlotDetails() {
   });
 
   const filteredHistory = useMemo(() => {
-    return history.filter(r => recordsFilterStage === 'all' || r.stage === recordsFilterStage);
-  }, [history, recordsFilterStage]);
+    let data = history.filter(r => recordsFilterStage === 'all' || r.stage === recordsFilterStage);
+    return data.sort((a, b) => {
+        const dateA = new Date(a.date + (a.time ? 'T' + a.time : '')).getTime();
+        const dateB = new Date(b.date + (b.time ? 'T' + b.time : '')).getTime();
+        return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
+    });
+  }, [history, recordsFilterStage, sortOrder]);
 
   const paginatedHistory = useMemo(() => {
     const start = (recordsPage - 1) * recordsPerPage;
@@ -113,6 +119,8 @@ export default function PlotDetails() {
   }, [filteredHistory, recordsPage]);
 
   const totalPages = Math.ceil(filteredHistory.length / recordsPerPage);
+
+  const toggleSort = () => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
 
   const biologicalProgress = useMemo(() => {
     if (!plot || !variety) return 0;
@@ -230,7 +238,7 @@ export default function PlotDetails() {
                   const canvas = document.createElement('canvas');
                   let width = img.width;
                   let height = img.height;
-                  const MAX_WIDTH = 800; // Máximo 800px para evitar payloads gigantes
+                  const MAX_WIDTH = 800; // Reducimos tamaño
                   const MAX_HEIGHT = 800;
 
                   if (width > height) {
@@ -250,7 +258,7 @@ export default function PlotDetails() {
                   const ctx = canvas.getContext('2d');
                   ctx?.drawImage(img, 0, 0, width, height);
                   
-                  // Comprimir a JPEG calidad 0.5 (Media Calidad, Alto Rendimiento)
+                  // Calidad media para asegurar payload ligero
                   const dataUrl = canvas.toDataURL('image/jpeg', 0.5);
                   setLogForm(prev => ({ ...prev, photoUrl: dataUrl }));
                   setIsUploading(false);
@@ -495,7 +503,18 @@ export default function PlotDetails() {
                     </div>
                     <div className="overflow-x-auto">
                         <table className="min-w-full text-sm text-left">
-                            <thead className="bg-gray-50 dark:bg-slate-950/50 text-gray-400 uppercase text-[9px] font-black tracking-widest border-b dark:border-slate-800"><tr><th className="px-10 py-5">Fecha / Hora</th><th className="px-10 py-5">Etapa</th><th className="px-10 py-5 text-center">Altura</th><th className="px-10 py-5 text-center">Vigor (1-9)</th><th className="px-10 py-5 text-center">Temp/Hum</th><th className="px-10 py-5 text-right">Detalle</th></tr></thead>
+                            <thead className="bg-gray-50 dark:bg-slate-950/50 text-gray-400 uppercase text-[9px] font-black tracking-widest border-b dark:border-slate-800">
+                                <tr>
+                                    <th className="px-10 py-5 cursor-pointer hover:text-hemp-600 transition-colors flex items-center gap-2" onClick={toggleSort}>
+                                        Fecha / Hora {sortOrder === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>}
+                                    </th>
+                                    <th className="px-10 py-5">Etapa</th>
+                                    <th className="px-10 py-5 text-center">Altura</th>
+                                    <th className="px-10 py-5 text-center">Vigor (1-9)</th>
+                                    <th className="px-10 py-5 text-center">Temp/Hum</th>
+                                    <th className="px-10 py-5 text-right">Detalle</th>
+                                </tr>
+                            </thead>
                             <tbody className="divide-y divide-gray-100 dark:divide-slate-800 font-bold uppercase text-[11px]">{paginatedHistory.map(r => (
                                 <tr key={r.id} className="hover:bg-gray-50 dark:hover:bg-slate-800 cursor-pointer" onClick={() => { setEditingRecordId(r.id); setRecordForm(r); setIsViewMode(true); setIsRecordModalOpen(true); }}>
                                     <td className="px-10 py-6 font-black text-gray-800 dark:text-white tracking-tighter">{r.date}<span className="block text-[8px] text-slate-400 font-bold mt-1 tracking-widest">{r.time || '--:--'} HS</span></td>
