@@ -168,21 +168,38 @@ export default function PlotDetails() {
       try {
           const lat = location.coordinates.lat;
           const lng = location.coordinates.lng;
-          const wRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m&timezone=auto`);
-          const wData = await wRes.json();
+          
+          const isToday = targetDate === new Date().toISOString().split('T')[0];
+          let temp = 0;
+          let hum = 0;
+
+          if (isToday) {
+              const wRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m&timezone=auto`);
+              const wData = await wRes.json();
+              temp = Math.round(wData.current?.temperature_2m || 0);
+              hum = Math.round(wData.current?.relative_humidity_2m || 0);
+          } else {
+              const wRes = await fetch(`https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lng}&start_date=${targetDate}&end_date=${targetDate}&hourly=temperature_2m,relative_humidity_2m&timezone=auto`);
+              const wData = await wRes.json();
+              if (wData.hourly) {
+                  temp = Math.round(wData.hourly.temperature_2m.reduce((a:number,b:number)=>a+b,0) / 24);
+                  hum = Math.round(wData.hourly.relative_humidity_2m.reduce((a:number,b:number)=>a+b,0) / 24);
+              }
+          }
+
           const aRes = await fetch(`https://api.sunrise-sunset.org/json?lat=${lat}&lng=${lng}&date=${targetDate}&formatted=0`);
           const aData = await aRes.json();
           const lunar = calculateLunarPhase(targetDate);
           
-          if (wData.current && aData.results) {
-              setRecordForm(prev => ({
-                  ...prev,
-                  temperature: Math.round(wData.current.temperature_2m),
-                  humidity: Math.round(wData.current.relative_humidity_2m),
-                  lightHours: parseFloat((aData.results.day_length / 3600).toFixed(2)),
-                  lunarPhase: lunar
-              }));
-          }
+          const hours = aData.results ? parseFloat((aData.results.day_length / 3600).toFixed(2)) : 12;
+          
+          setRecordForm(prev => ({
+              ...prev,
+              temperature: temp,
+              humidity: hum,
+              lightHours: hours,
+              lunarPhase: lunar
+          }));
       } catch (err) { console.error("Sync Error:", err); } finally { setIsFetchingConditions(false); }
   };
 
@@ -782,9 +799,15 @@ export default function PlotDetails() {
                                 <p className="text-sm font-black">{recordForm.humidity}%</p>
                             </div>
                         </div>
-                        <div className="bg-slate-900 p-4 rounded-xl text-white text-center border border-white/10">
-                            <p className="text-[8px] font-black uppercase opacity-60">Luz Solar / Fotoperiodo</p>
-                            <p className="text-lg font-black">{recordForm.lightHours} h</p>
+                        <div className="bg-slate-900 p-4 rounded-xl text-white text-center border border-white/10 flex flex-col justify-center gap-2">
+                            <div>
+                                <p className="text-[8px] font-black uppercase opacity-60">Luz Solar / Fotoperiodo</p>
+                                <p className="text-lg font-black">{recordForm.lightHours} h</p>
+                            </div>
+                            <div className="border-t border-white/10 pt-2">
+                                <p className="text-[8px] font-black uppercase opacity-60">Luna</p>
+                                <p className="text-xs font-black text-amber-400 uppercase tracking-widest">{recordForm.lunarPhase || 'S/D'}</p>
+                            </div>
                         </div>
                     </div>
 
