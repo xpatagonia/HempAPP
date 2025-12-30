@@ -4,14 +4,16 @@ import { useAppContext } from '../context/AppContext';
 import { 
   Save, Database, RefreshCw, Lock, Settings as SettingsIcon, 
   CheckCircle2, Layout, Trash2, RotateCcw, Shield, 
-  AlertTriangle, FlaskConical, CheckCircle, XCircle, Info, Search, FileCode, Flame, Eraser, Server, Activity
+  AlertTriangle, FlaskConical, CheckCircle, XCircle, Info, Search, FileCode, Flame, Eraser, Server, Activity, DownloadCloud, FileJson
 } from 'lucide-react';
+import { supabase } from '../supabaseClient';
 
 export default function Settings() {
   const { currentUser, appName, appLogo, updateBranding } = useAppContext();
   const [activeTab, setActiveTab] = useState<'branding' | 'system' | 'maintenance'>('branding');
   const [editAppName, setEditAppName] = useState(appName);
   const [editAppLogo, setEditAppLogo] = useState(appLogo);
+  const [isBackingUp, setIsBackingUp] = useState(false);
 
   useEffect(() => {
       setEditAppName(appName);
@@ -31,6 +33,49 @@ export default function Settings() {
   const handleSaveBranding = () => {
       updateBranding(editAppName, editAppLogo);
       alert("✅ Identidad corporativa actualizada.");
+  };
+
+  const handleFullBackup = async () => {
+      setIsBackingUp(true);
+      try {
+          const tables = [
+              'users', 'projects', 'varieties', 'locations', 'plots', 
+              'trial_records', 'field_logs', 'tasks', 'seed_batches', 
+              'seed_movements', 'suppliers', 'clients', 'resources', 
+              'storage_points', 'hydric_records'
+          ];
+          
+          const backupData: any = {
+              timestamp: new Date().toISOString(),
+              appName: appName,
+              version: '1.0.0-PROD',
+              data: {}
+          };
+
+          for (const table of tables) {
+              const { data, error } = await supabase.from(table).select('*');
+              if (!error) {
+                  backupData.data[table] = data;
+              }
+          }
+
+          const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `Nucleus_Backup_${new Date().toISOString().split('T')[0]}.json`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+          
+          alert("✅ Snapshot de datos descargado correctamente.");
+      } catch (e) {
+          alert("Error al generar copia de seguridad.");
+          console.error(e);
+      } finally {
+          setIsBackingUp(false);
+      }
   };
 
   return (
@@ -101,6 +146,28 @@ export default function Settings() {
 
       {activeTab === 'system' && (
           <div className="space-y-6 animate-in slide-in-from-bottom-2">
+              {/* BACKUP SECTION */}
+              <div className="bg-slate-900 dark:bg-hemp-600 text-white p-8 rounded-[40px] shadow-2xl relative overflow-hidden flex flex-col md:flex-row justify-between items-center gap-6">
+                  <div className="relative z-10">
+                      <div className="flex items-center gap-3 mb-2">
+                          <Database size={24} className="text-hemp-400 dark:text-white"/>
+                          <h3 className="text-xl font-black uppercase tracking-tighter italic">Copia de Seguridad</h3>
+                      </div>
+                      <p className="text-xs text-slate-400 dark:text-white/80 font-medium max-w-md leading-relaxed">
+                          Genera un archivo JSON ("Snapshot") con toda la información actual de la base de datos (Parcelas, Usuarios, Monitoreos, etc.) para resguardo local.
+                      </p>
+                  </div>
+                  <button 
+                    onClick={handleFullBackup}
+                    disabled={isBackingUp}
+                    className="relative z-10 bg-white text-slate-900 px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg flex items-center hover:scale-[1.02] transition-all disabled:opacity-50"
+                  >
+                      {isBackingUp ? <RefreshCw className="animate-spin mr-2" size={18}/> : <DownloadCloud className="mr-2" size={18}/>}
+                      {isBackingUp ? 'Generando...' : 'Descargar Snapshot'}
+                  </button>
+                  <FileJson className="absolute -right-10 -bottom-10 w-64 h-64 text-white opacity-5 pointer-events-none"/>
+              </div>
+
               <div className="bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-900/30 p-8 rounded-[40px] shadow-sm relative overflow-hidden">
                   <div className="flex items-center justify-between mb-8">
                       <div className="flex items-center space-x-4">
