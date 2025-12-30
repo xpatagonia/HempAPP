@@ -85,12 +85,22 @@ export default function Locations() {
   const isSuperAdmin = currentUser?.role === 'super_admin';
   const isAdmin = currentUser?.role === 'admin' || isSuperAdmin;
   const isClient = currentUser?.role === 'client';
-  const canManage = isAdmin || isClient;
+  const isTechnician = currentUser?.role === 'technician';
+  const canManage = isAdmin || isClient || isTechnician;
 
   const visibleLocations = locations.filter(l => {
       let matches = true;
-      if (isClient && currentUser.clientId) matches = (l.clientId === currentUser.clientId || l.responsibleIds?.includes(currentUser.id));
-      else if (!isAdmin) matches = l.responsibleIds?.includes(currentUser?.id || '');
+      
+      if (isAdmin) {
+          matches = true;
+      } else if ((isClient || isTechnician) && currentUser.clientId) {
+          // El usuario ve campos de su organización O donde es responsable explícito
+          matches = (l.clientId === currentUser.clientId) || (l.responsibleIds?.includes(currentUser.id));
+      } else {
+          // Freelancers sin organización solo ven asignaciones directas
+          matches = l.responsibleIds?.includes(currentUser.id || '');
+      }
+
       if (searchTerm) {
           const lowerTerm = searchTerm.toLowerCase();
           matches = matches && (l.name.toLowerCase().includes(lowerTerm) || l.city?.toLowerCase().includes(lowerTerm));
@@ -160,7 +170,13 @@ export default function Locations() {
     const payload: any = {
       ...cleanFormData,
       coordinates, 
-      id: editingId || Date.now().toString()
+      id: editingId || Date.now().toString(),
+      // Si no es admin y tiene cliente asociado, se asigna automáticamente
+      clientId: (!isAdmin && currentUser.clientId) ? currentUser.clientId : cleanFormData.clientId,
+      // Si no es admin, se auto-asigna como responsable para no perder visibilidad
+      responsibleIds: (!isAdmin && !cleanFormData.responsibleIds?.includes(currentUser.id)) 
+          ? [...(cleanFormData.responsibleIds || []), currentUser.id] 
+          : cleanFormData.responsibleIds
     };
 
     try {
@@ -231,7 +247,7 @@ export default function Locations() {
                     <WeatherWidget lat={loc.coordinates?.lat || 0} lng={loc.coordinates?.lng || 0} compact={true}/>
                 </div>
                 <div className="absolute bottom-4 right-4 flex space-x-1">
-                    {isAdmin && <button onClick={() => handleEdit(loc)} className="p-2.5 bg-white dark:bg-slate-800 rounded-xl text-gray-500 hover:text-hemp-600 shadow-lg border dark:border-slate-700 transition"><Edit2 size={16} /></button>}
+                    {canManage && <button onClick={() => handleEdit(loc)} className="p-2.5 bg-white dark:bg-slate-800 rounded-xl text-gray-500 hover:text-hemp-600 shadow-lg border dark:border-slate-700 transition"><Edit2 size={16} /></button>}
                     {isSuperAdmin && <button onClick={() => { if(window.confirm("¿Eliminar sitio?")) deleteLocation(loc.id); }} className="p-2.5 bg-white dark:bg-slate-800 text-gray-500 hover:text-red-600 shadow-lg border dark:border-slate-700 transition"><Trash2 size={16} /></button>}
                 </div>
             </div>
@@ -321,13 +337,16 @@ export default function Locations() {
                           </div>
                       </div>
 
-                      <div className="bg-blue-50 dark:bg-blue-900/10 p-6 rounded-[32px] border border-blue-100 dark:border-blue-900/30">
-                          <h3 className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest mb-4 flex items-center"><Building size={14} className="mr-2"/> Atribución de Propiedad</h3>
-                          <div className="space-y-4">
-                            <input placeholder="Nombre Propietario / Titular" className={inputClass} value={formData.ownerName} onChange={e => setFormData({...formData, ownerName: e.target.value})} />
-                            <select className={inputClass} value={formData.clientId || ''} onChange={e => setFormData({...formData, clientId: e.target.value})}><option value="">Asignar a Socio de Red...</option>{clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+                      {/* Atribución de Propiedad: Visible solo para Admin para cambiar dueño, o visible pero disabled para otros */}
+                      {isAdmin && (
+                          <div className="bg-blue-50 dark:bg-blue-900/10 p-6 rounded-[32px] border border-blue-100 dark:border-blue-900/30">
+                              <h3 className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest mb-4 flex items-center"><Building size={14} className="mr-2"/> Atribución de Propiedad</h3>
+                              <div className="space-y-4">
+                                <input placeholder="Nombre Propietario / Titular" className={inputClass} value={formData.ownerName} onChange={e => setFormData({...formData, ownerName: e.target.value})} />
+                                <select className={inputClass} value={formData.clientId || ''} onChange={e => setFormData({...formData, clientId: e.target.value})}><option value="">Asignar a Socio de Red...</option>{clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+                              </div>
                           </div>
-                      </div>
+                      )}
                   </div>
 
                   <div className="flex flex-col h-full">

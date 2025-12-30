@@ -83,6 +83,7 @@ export default function Plots() {
   const isSuperAdmin = currentUser?.role === 'super_admin';
   const isAdmin = currentUser?.role === 'admin' || isSuperAdmin;
   const isClient = currentUser?.role === 'client';
+  const isTechnician = currentUser?.role === 'technician';
 
   const resetForm = () => {
     setFormData({ 
@@ -95,13 +96,24 @@ export default function Plots() {
   const availableBatches = useMemo(() => {
       return seedBatches.filter(b => {
           if (!b.isActive || b.remainingQuantity <= 0) return false;
-          if (isClient && currentUser?.clientId) {
+          // Filtrado por permisos de stock
+          if ((isClient || isTechnician) && currentUser?.clientId) {
               const storage = storagePoints.find(s => s.id === b.storagePointId);
               if (storage && storage.clientId && storage.clientId !== currentUser.clientId) return false;
           }
           return true;
       });
-  }, [seedBatches, isClient, currentUser, storagePoints]);
+  }, [seedBatches, isClient, isTechnician, currentUser, storagePoints]);
+
+  const availableLocations = useMemo(() => {
+      return locations.filter(l => {
+          if (isAdmin) return true;
+          if ((isClient || isTechnician) && currentUser?.clientId) {
+              return l.clientId === currentUser.clientId || l.responsibleIds?.includes(currentUser.id);
+          }
+          return l.responsibleIds?.includes(currentUser.id || '');
+      });
+  }, [locations, isAdmin, isClient, isTechnician, currentUser]);
 
   useEffect(() => {
     if (formData.seedBatchId) {
@@ -128,13 +140,16 @@ export default function Plots() {
       const matchStatus = filterStatus === 'all' || p.status === filterStatus;
       
       let hasAccess = isAdmin;
-      if (isClient && currentUser?.clientId) {
+      
+      if ((isClient || isTechnician) && currentUser?.clientId) {
           const loc = locations.find(l => l.id === p.locationId);
-          hasAccess = loc?.clientId === currentUser.clientId;
+          hasAccess = loc?.clientId === currentUser.clientId || p.responsibleIds?.includes(currentUser.id);
+      } else if (!isAdmin) {
+          hasAccess = p.responsibleIds?.includes(currentUser?.id || '');
       }
       
-      return matchSearch && matchLoc && matchType && matchStatus && (hasAccess || p.responsibleIds?.includes(currentUser?.id || ''));
-  }), [plots, searchTerm, filterLoc, filterType, filterStatus, isAdmin, isClient, currentUser, locations]);
+      return matchSearch && matchLoc && matchType && matchStatus && hasAccess;
+  }), [plots, searchTerm, filterLoc, filterType, filterStatus, isAdmin, isClient, isTechnician, currentUser, locations]);
 
   const handleSubmitAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -158,7 +173,8 @@ export default function Plots() {
         const payload = {
             ...formData,
             id: crypto.randomUUID(),
-            responsibleIds: [currentUser?.id || ''],
+            // Auto-asignación de responsable si no es admin
+            responsibleIds: (!isAdmin && currentUser) ? [currentUser.id] : [],
             surfaceArea: Number(formData.surfaceArea),
             density: Number(formData.density),
             coordinates,
@@ -253,7 +269,7 @@ export default function Plots() {
           </div>
           <select className="px-4 py-2 bg-gray-50 dark:bg-slate-950 border-none rounded-xl text-xs font-black uppercase dark:text-white" value={filterLoc} onChange={e => setFilterLoc(e.target.value)}>
               <option value="all">Todos los Campos</option>
-              {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+              {availableLocations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
           </select>
           <select className="px-4 py-2 bg-gray-50 dark:bg-slate-950 border-none rounded-xl text-xs font-black uppercase dark:text-white" value={filterType} onChange={e => setFilterType(e.target.value as any)}>
               <option value="all">Tipos (Todos)</option>
@@ -303,7 +319,7 @@ export default function Plots() {
                                   <td className="px-8 py-6 text-right">
                                       <div className="flex items-center justify-end space-x-3">
                                           <span className={`px-3 py-1 rounded-full text-[8px] font-black shadow-sm border ${p.status === 'Activa' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-gray-100 text-gray-500'}`}>{p.status}</span>
-                                          {isSuperAdmin && (
+                                          {isAdmin && (
                                               <button onClick={(e) => handleDeletePlot(e, p.id)} className="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all">
                                                   <Trash2 size={16}/>
                                               </button>
@@ -334,7 +350,7 @@ export default function Plots() {
                               <div className="bg-gray-50 dark:bg-slate-950 p-2 rounded-xl text-center"><p className="text-[8px] font-black text-gray-400 uppercase">Genética</p><p className="text-xs font-black text-hemp-600 truncate px-1">{varieties.find(v => v.id === p.varietyId)?.name}</p></div>
                           </div>
                       </Link>
-                      {isSuperAdmin && (
+                      {isAdmin && (
                           <button onClick={(e) => handleDeletePlot(e, p.id)} className="absolute top-4 right-4 p-2.5 bg-red-600 text-white rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity shadow-lg hover:bg-red-700">
                               <Trash2 size={16}/>
                           </button>
@@ -373,8 +389,9 @@ export default function Plots() {
                                           <label className={labelClass}>Campo / Establecimiento *</label>
                                           <select required className={inputClass} value={formData.locationId} onChange={e => setFormData({...formData, locationId: e.target.value})}>
                                               <option value="">Seleccionar sitio...</option>
-                                              {locations.map(l => <option key={l.id} value={l.id}>{l.name} ({l.city})</option>)}
+                                              {availableLocations.map(l => <option key={l.id} value={l.id}>{l.name} ({l.city})</option>)}
                                           </select>
+                                          {availableLocations.length === 0 && <p className="text-[9px] text-red-500 mt-1 font-bold">No tienes campos asignados. Contacta al administrador.</p>}
                                       </div>
                                       <div>
                                           <label className={labelClass}>Campaña / Proyecto</label>
