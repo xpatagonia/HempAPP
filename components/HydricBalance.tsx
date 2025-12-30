@@ -21,6 +21,7 @@ export default function HydricBalance({ locationId, plotId, startDate }: HydricB
     const [formData, setFormData] = useState({ 
         date: new Date().toISOString().split('T')[0], 
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+        endTime: '',
         type: 'Lluvia' as 'Lluvia' | 'Riego', 
         amountMm: 0, 
         notes: '' 
@@ -116,6 +117,7 @@ export default function HydricBalance({ locationId, plotId, startDate }: HydricB
         try {
             const success = await addHydricRecord({
                 ...formData,
+                endTime: formData.type === 'Riego' ? formData.endTime : undefined,
                 id: Date.now().toString(),
                 locationId,
                 plotId,
@@ -216,7 +218,7 @@ export default function HydricBalance({ locationId, plotId, startDate }: HydricB
                         ) : manualRecords.map(r => (
                             <tr key={r.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                                 <td className="px-8 py-5 font-black text-gray-800 dark:text-gray-200">
-                                    {r.date} <span className="text-[10px] text-slate-400 font-bold ml-2 uppercase tracking-tighter">{r.time || '--:--'} hs</span>
+                                    {r.date} <span className="text-[10px] text-slate-400 font-bold ml-2 uppercase tracking-tighter">{r.time || '--:--'}{r.endTime ? ` - ${r.endTime}` : ''} hs</span>
                                 </td>
                                 <td className="px-8 py-5">
                                     <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest shadow-sm ${r.type === 'Lluvia' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
@@ -251,16 +253,35 @@ export default function HydricBalance({ locationId, plotId, startDate }: HydricB
                                     <button type="button" onClick={() => setFormData({...formData, type: 'Riego'})} className={`py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border ${formData.type === 'Riego' ? 'bg-emerald-600 text-white border-emerald-600 shadow-lg' : 'bg-white dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700 hover:bg-slate-50'}`}>Riego Activo</button>
                                 </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Fecha</label>
-                                    <input type="date" required className="w-full border dark:border-slate-800 border-slate-200 p-3 rounded-2xl text-sm font-black bg-gray-50 dark:bg-slate-950 dark:text-white" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} />
+                            
+                            {formData.type === 'Riego' ? (
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Hora Inicio</label>
+                                        <input type="time" required className="w-full border dark:border-slate-800 border-slate-200 p-3 rounded-2xl text-sm font-black bg-gray-50 dark:bg-slate-950 dark:text-white" value={formData.time} onChange={e => setFormData({...formData, time: e.target.value})} />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Hora Fin</label>
+                                        <input type="time" required className="w-full border dark:border-slate-800 border-slate-200 p-3 rounded-2xl text-sm font-black bg-gray-50 dark:bg-slate-950 dark:text-white" value={formData.endTime} onChange={e => setFormData({...formData, endTime: e.target.value})} />
+                                    </div>
+                                    <div className="col-span-2">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Fecha</label>
+                                        <input type="date" required className="w-full border dark:border-slate-800 border-slate-200 p-3 rounded-2xl text-sm font-black bg-gray-50 dark:bg-slate-950 dark:text-white" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} />
+                                    </div>
                                 </div>
-                                <div>
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Hora</label>
-                                    <input type="time" required className="w-full border dark:border-slate-800 border-slate-200 p-3 rounded-2xl text-sm font-black bg-gray-50 dark:bg-slate-950 dark:text-white" value={formData.time} onChange={e => setFormData({...formData, time: e.target.value})} />
+                            ) : (
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Fecha</label>
+                                        <input type="date" required className="w-full border dark:border-slate-800 border-slate-200 p-3 rounded-2xl text-sm font-black bg-gray-50 dark:bg-slate-950 dark:text-white" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Hora Registro</label>
+                                        <input type="time" required className="w-full border dark:border-slate-800 border-slate-200 p-3 rounded-2xl text-sm font-black bg-gray-50 dark:bg-slate-950 dark:text-white" value={formData.time} onChange={e => setFormData({...formData, time: e.target.value})} />
+                                    </div>
                                 </div>
-                            </div>
+                            )}
+
                             <div>
                                 <div className="flex justify-between items-center mb-2">
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Milímetros (MM)</label>

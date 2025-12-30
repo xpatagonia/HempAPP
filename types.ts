@@ -47,6 +47,7 @@ export interface HydricRecord {
   plotId?: string; 
   date: string;
   time?: string;
+  endTime?: string; // Nuevo campo para fin de riego
   type: 'Lluvia' | 'Riego';
   amountMm: number;
   notes?: string;

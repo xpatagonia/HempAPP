@@ -161,6 +161,7 @@ const MANUAL_MAP: Record<string, string> = {
     createdByName: 'created_by_name',
     plotId: 'plot_id',
     amountMm: 'amount_mm',
+    endTime: 'end_time',
     targetLocationId: 'target_location_id',
     dispatchTime: 'dispatch_time',
     transportGuideNumber: 'transport_guide_number',
