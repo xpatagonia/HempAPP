@@ -154,8 +154,11 @@ export default function Locations() {
     const finalLng = parseFloat(formData.lng || '0');
     const coordinates = (!isNaN(finalLat) && !isNaN(finalLng) && finalLat !== 0) ? { lat: finalLat, lng: finalLng } : null;
 
+    // Destructuramos para quitar lat/lng que son solo del estado local del formulario
+    const { lat, lng, ...cleanFormData } = formData;
+
     const payload: any = {
-      ...formData,
+      ...cleanFormData,
       coordinates, 
       id: editingId || Date.now().toString()
     };
