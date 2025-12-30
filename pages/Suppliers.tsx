@@ -316,6 +316,106 @@ export default function Suppliers() {
           </div>
         </div>
       )}
+
+      {/* MODAL VISUALIZACIÓN */}
+      {viewSupplier && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[70] p-4">
+            <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-4xl w-full p-10 shadow-2xl animate-in zoom-in-95 border border-white/10 max-h-[95vh] overflow-y-auto">
+                <div className="flex justify-between items-center mb-8">
+                    <div className="flex items-center gap-4">
+                        <div className="bg-hemp-600 p-3 rounded-2xl text-white shadow-lg"><ShoppingBag size={24}/></div>
+                        <div>
+                            <h2 className="text-2xl font-black text-slate-800 dark:text-white uppercase tracking-tighter italic">{viewSupplier.name}</h2>
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center">
+                                {viewSupplier.isOfficialPartner && <ShieldCheck size={12} className="text-blue-500 mr-1"/>}
+                                Ficha de Proveedor Certificado
+                            </p>
+                        </div>
+                    </div>
+                    <button onClick={() => setViewSupplier(null)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition text-slate-400"><X size={28}/></button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    {/* Columna Izquierda: Datos y Contacto */}
+                    <div className="space-y-6">
+                        <div className="bg-gray-50 dark:bg-slate-950 p-6 rounded-[32px] border dark:border-slate-800">
+                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Perfil Corporativo</p>
+                            <div className="space-y-3">
+                                <div>
+                                    <p className="text-[9px] font-bold text-slate-500 uppercase">Razón Social</p>
+                                    <p className="text-sm font-black text-slate-800 dark:text-slate-200">{viewSupplier.legalName || '-'}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[9px] font-bold text-slate-500 uppercase">CUIT / TAX ID</p>
+                                    <p className="text-sm font-black text-slate-800 dark:text-slate-200">{viewSupplier.cuit || '-'}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[9px] font-bold text-slate-500 uppercase">Categoría</p>
+                                    <span className={`px-2 py-1 rounded text-[9px] font-black uppercase border inline-block mt-1 ${getCategoryColor(viewSupplier.category)}`}>{viewSupplier.category}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-blue-50 dark:bg-blue-900/10 p-6 rounded-[32px] border border-blue-100 dark:border-blue-900/30">
+                            <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest mb-4">Canales de Contacto</p>
+                            <div className="space-y-3">
+                                <div className="flex items-center">
+                                    <Mail size={14} className="text-blue-500 mr-2"/>
+                                    <a href={`mailto:${viewSupplier.email}`} className="text-xs font-bold text-blue-800 dark:text-blue-200 hover:underline truncate">{viewSupplier.email || 'S/D'}</a>
+                                </div>
+                                <div className="flex items-center">
+                                    <Phone size={14} className="text-green-500 mr-2"/>
+                                    <a href={`https://wa.me/${viewSupplier.whatsapp?.replace(/\D/g,'')}`} target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-800 dark:text-blue-200 hover:underline">{viewSupplier.whatsapp || 'S/D'}</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Columna Central y Derecha: Mapa y Catálogo */}
+                    <div className="md:col-span-2 space-y-6">
+                        <div className="bg-slate-100 dark:bg-slate-950 rounded-[32px] overflow-hidden h-48 border dark:border-slate-800 relative">
+                             {viewSupplier.coordinates ? (
+                                 <MapEditor initialCenter={viewSupplier.coordinates} initialPolygon={[]} readOnly={true} height="100%"/>
+                             ) : (
+                                 <div className="h-full flex items-center justify-center text-slate-400 text-xs font-black uppercase tracking-widest">Sin Geolocalización</div>
+                             )}
+                             <div className="absolute bottom-4 left-4 bg-white/90 dark:bg-slate-900/90 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest backdrop-blur-md border dark:border-slate-700 shadow-sm">
+                                 <MapPin size={12} className="inline mr-1 text-red-500"/> {viewSupplier.city}, {viewSupplier.province}
+                             </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-emerald-50 dark:bg-emerald-900/10 p-5 rounded-[24px] border border-emerald-100 dark:border-emerald-900/30">
+                                <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mb-1">Catálogo Activo</p>
+                                <p className="text-3xl font-black text-emerald-800 dark:text-emerald-300">{providedVarieties.length} <span className="text-xs text-emerald-600">Variedades</span></p>
+                            </div>
+                            <div className="bg-amber-50 dark:bg-amber-900/10 p-5 rounded-[24px] border border-amber-100 dark:border-amber-900/30">
+                                <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest mb-1">Volumen Histórico</p>
+                                <p className="text-3xl font-black text-amber-800 dark:text-amber-300">{totalStockProvided.toLocaleString()} <span className="text-xs text-amber-600">KG</span></p>
+                            </div>
+                        </div>
+
+                        <div className="bg-white dark:bg-slate-900 p-6 rounded-[32px] border border-gray-100 dark:border-slate-800">
+                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Genética Suministrada</p>
+                            <div className="flex flex-wrap gap-2">
+                                {providedVarieties.length > 0 ? providedVarieties.map(v => (
+                                    <span key={v.id} className="px-3 py-1.5 bg-gray-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg text-[10px] font-black uppercase border border-gray-200 dark:border-slate-700 flex items-center">
+                                        <Sprout size={10} className="mr-1.5 text-hemp-500"/> {v.name}
+                                    </span>
+                                )) : <span className="text-xs text-slate-400 italic">No hay variedades registradas.</span>}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div className="mt-8 pt-6 border-t dark:border-slate-800 flex justify-end">
+                    <button onClick={() => setViewSupplier(null)} className="px-10 py-4 bg-slate-900 dark:bg-hemp-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-[1.02] transition-all shadow-xl">
+                        Cerrar Ficha
+                    </button>
+                </div>
+            </div>
+        </div>
+      )}
     </div>
   );
 }
