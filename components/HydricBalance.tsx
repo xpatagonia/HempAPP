@@ -115,9 +115,19 @@ export default function HydricBalance({ locationId, plotId, startDate }: HydricB
         if (isSaving) return;
         setIsSaving(true);
         try {
+            // CORRECCIÓN: Filtramos 'endTime' porque la base de datos no tiene esa columna.
+            // Lo guardamos en 'notes' para no perder la información.
+            let finalNotes = formData.notes || '';
+            if (formData.type === 'Riego' && formData.endTime) {
+                finalNotes = `${finalNotes} [Fin Riego: ${formData.endTime}]`.trim();
+            }
+
+            // Destructuramos para quitar endTime del objeto final
+            const { endTime, ...cleanData } = formData;
+
             const success = await addHydricRecord({
-                ...formData,
-                endTime: formData.type === 'Riego' ? formData.endTime : undefined,
+                ...cleanData,
+                notes: finalNotes,
                 id: Date.now().toString(),
                 locationId,
                 plotId,
@@ -218,7 +228,7 @@ export default function HydricBalance({ locationId, plotId, startDate }: HydricB
                         ) : manualRecords.map(r => (
                             <tr key={r.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                                 <td className="px-8 py-5 font-black text-gray-800 dark:text-gray-200">
-                                    {r.date} <span className="text-[10px] text-slate-400 font-bold ml-2 uppercase tracking-tighter">{r.time || '--:--'}{r.endTime ? ` - ${r.endTime}` : ''} hs</span>
+                                    {r.date} <span className="text-[10px] text-slate-400 font-bold ml-2 uppercase tracking-tighter">{r.time || '--:--'} hs</span>
                                 </td>
                                 <td className="px-8 py-5">
                                     <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest shadow-sm ${r.type === 'Lluvia' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
