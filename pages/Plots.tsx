@@ -170,8 +170,11 @@ export default function Plots() {
         const finalLng = parseFloat(formData.lng || '0');
         const coordinates = (!isNaN(finalLat) && !isNaN(finalLng) && finalLat !== 0) ? { lat: finalLat, lng: finalLng } : null;
 
+        // Eliminamos lat y lng del objeto que va a la BD, ya que no existen como columnas
+        const { lat, lng, ...cleanFormData } = formData;
+
         const payload = {
-            ...formData,
+            ...cleanFormData,
             id: crypto.randomUUID(),
             // Auto-asignación de responsable si no es admin
             responsibleIds: (!isAdmin && currentUser) ? [currentUser.id] : [],
