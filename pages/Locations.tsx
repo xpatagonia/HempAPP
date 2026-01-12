@@ -90,17 +90,13 @@ export default function Locations() {
 
   const visibleLocations = locations.filter(l => {
       let matches = true;
-      
       if (isAdmin) {
           matches = true;
       } else if ((isClient || isTechnician) && currentUser.clientId) {
-          // El usuario ve campos de su organización O donde es responsable explícito
           matches = (l.clientId === currentUser.clientId) || (l.responsibleIds?.includes(currentUser.id));
       } else {
-          // Freelancers sin organización solo ven asignaciones directas
           matches = l.responsibleIds?.includes(currentUser.id || '');
       }
-
       if (searchTerm) {
           const lowerTerm = searchTerm.toLowerCase();
           matches = matches && (l.name.toLowerCase().includes(lowerTerm) || l.city?.toLowerCase().includes(lowerTerm));
@@ -164,16 +160,13 @@ export default function Locations() {
     const finalLng = parseFloat(formData.lng || '0');
     const coordinates = (!isNaN(finalLat) && !isNaN(finalLng) && finalLat !== 0) ? { lat: finalLat, lng: finalLng } : null;
 
-    // Destructuramos para quitar lat/lng que son solo del estado local del formulario
     const { lat, lng, ...cleanFormData } = formData;
 
     const payload: any = {
       ...cleanFormData,
       coordinates, 
       id: editingId || Date.now().toString(),
-      // Si no es admin y tiene cliente asociado, se asigna automáticamente
       clientId: (!isAdmin && currentUser.clientId) ? currentUser.clientId : cleanFormData.clientId,
-      // Si no es admin, se auto-asigna como responsable para no perder visibilidad
       responsibleIds: (!isAdmin && !cleanFormData.responsibleIds?.includes(currentUser.id)) 
           ? [...(cleanFormData.responsibleIds || []), currentUser.id] 
           : cleanFormData.responsibleIds
@@ -208,30 +201,30 @@ export default function Locations() {
 
   return (
     <div className="animate-in fade-in duration-500">
-      <div className="bg-white dark:bg-slate-900 rounded-[32px] shadow-sm border border-gray-200 dark:border-slate-800 p-8 mb-8">
-          <div className="flex justify-between items-start mb-8">
+      <div className="bg-white dark:bg-slate-900 rounded-[32px] shadow-sm border border-gray-200 dark:border-slate-800 p-6 md:p-8 mb-8">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
               <div>
-                  <h1 className="text-3xl font-black text-gray-800 dark:text-white flex items-center uppercase tracking-tighter italic">
+                  <h1 className="text-2xl md:text-3xl font-black text-gray-800 dark:text-white flex items-center uppercase tracking-tighter italic">
                       <LayoutDashboard className="mr-3 text-hemp-600" size={32}/> Gestión de Campos
                   </h1>
                   <p className="text-sm text-gray-500">Centro de control de establecimientos productivos.</p>
               </div>
               {canManage && (
-                <button onClick={() => { resetForm(); setIsModalOpen(true); }} className="bg-hemp-600 text-white px-6 py-3 rounded-2xl flex items-center hover:bg-hemp-700 transition shadow-xl font-black text-xs uppercase tracking-widest">
+                <button onClick={() => { resetForm(); setIsModalOpen(true); }} className="w-full md:w-auto bg-hemp-600 text-white px-6 py-3 rounded-2xl flex items-center justify-center hover:bg-hemp-700 transition shadow-xl font-black text-xs uppercase tracking-widest">
                   <Plus size={18} className="mr-2" /> Nuevo Campo
                 </button>
               )}
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
               <div className="bg-gray-50 dark:bg-slate-950 rounded-2xl p-5 border border-gray-100 dark:border-slate-800"><div className="text-[10px] font-black text-gray-400 uppercase mb-1 tracking-widest">Establecimientos</div><div className="text-3xl font-black text-gray-800 dark:text-white">{stats.totalLocs}</div></div>
               <div className="bg-blue-50 dark:bg-blue-900/10 rounded-2xl p-5 border border-blue-100 dark:border-blue-900/20"><div className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase mb-1 tracking-widest">Superficie Declarada</div><div className="text-3xl font-black text-blue-900 dark:text-blue-300">{stats.totalHa.toFixed(1)} ha</div></div>
               <div className="bg-green-50 dark:bg-green-900/10 rounded-2xl p-5 border border-green-100 dark:border-green-900/20"><div className="flex justify-between items-center mb-1"><div className="text-[10px] font-black text-green-700 dark:text-green-400 uppercase tracking-widest">Ocupación Activa</div><span className="text-xs font-bold text-green-600">{stats.occupancyRate.toFixed(1)}%</span></div><div className="w-full bg-green-200 dark:bg-slate-800 rounded-full h-2 mb-2"><div className="bg-green-600 h-2 rounded-full" style={{width: `${Math.min(stats.occupancyRate, 100)}%`}}></div></div><div className="text-xs text-green-800 dark:text-green-500 font-bold">{stats.occupiedHa.toFixed(1)} ha sembradas</div></div>
           </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-4 mb-8">
+      <div className="flex flex-col md:flex-row gap-4 mb-8">
           <div className="relative flex-1"><Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} /><input type="text" placeholder="Buscar campo por nombre o ciudad..." className="w-full pl-12 pr-4 py-3.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl focus:ring-2 focus:ring-hemp-500 outline-none text-sm dark:text-white" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /></div>
-          <div className="relative w-full sm:w-72"><Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} /><select className="w-full pl-12 pr-4 py-3.5 border border-gray-200 dark:border-slate-800 rounded-2xl focus:ring-2 focus:ring-hemp-500 outline-none text-xs font-black uppercase appearance-none bg-white dark:bg-slate-900 dark:text-white tracking-widest" value={filterProvince} onChange={e => setFilterProvince(e.target.value)}><option value="">Todas las Provincias</option>{Object.keys(ARG_GEO).sort().map(p => ( <option key={p} value={p}>{p}</option> ))}</select></div>
+          <div className="relative w-full md:w-72"><Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} /><select className="w-full pl-12 pr-4 py-3.5 border border-gray-200 dark:border-slate-800 rounded-2xl focus:ring-2 focus:ring-hemp-500 outline-none text-xs font-black uppercase appearance-none bg-white dark:bg-slate-900 dark:text-white tracking-widest" value={filterProvince} onChange={e => setFilterProvince(e.target.value)}><option value="">Todas las Provincias</option>{Object.keys(ARG_GEO).sort().map(p => ( <option key={p} value={p}>{p}</option> ))}</select></div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -284,19 +277,19 @@ export default function Locations() {
 
        {isModalOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-5xl w-full p-10 shadow-2xl max-h-[95vh] overflow-y-auto animate-in zoom-in-95">
+          <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-5xl w-full p-6 md:p-10 shadow-2xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95">
             <div className="flex justify-between items-center mb-8">
                 <div className="flex items-center gap-4">
                     <div className="bg-hemp-600 p-3 rounded-2xl text-white shadow-lg"><Globe size={28}/></div>
                     <div>
-                        <h2 className="text-3xl font-black dark:text-white uppercase tracking-tighter italic">Lanzar <span className="text-hemp-600">Establecimiento</span></h2>
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Protocolo de alta georreferenciada para establecimientos</p>
+                        <h2 className="text-2xl md:text-3xl font-black dark:text-white uppercase tracking-tighter italic">Lanzar <span className="text-hemp-600">Establecimiento</span></h2>
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Protocolo de alta georreferenciada</p>
                     </div>
                 </div>
                 <button onClick={() => !isSaving && setIsModalOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition text-slate-400"><X size={28}/></button>
             </div>
             <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-10">
                   <div className="space-y-6">
                       <div className="bg-gray-50 dark:bg-slate-950 p-6 rounded-[32px] border dark:border-slate-800">
                           <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6 border-b dark:border-slate-800 pb-3 flex items-center"><Info size={14} className="mr-2 text-hemp-500"/> Ficha Primaria</h3>
@@ -305,7 +298,7 @@ export default function Locations() {
                                 <label className="text-[9px] font-black uppercase text-gray-400 ml-1 mb-1 block">Nombre Comercial / Fantasía *</label>
                                 <input required placeholder="Ej: Don Pedro / Campo Norte" className={inputClass} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value.toUpperCase()})} />
                               </div>
-                              <div className="grid grid-cols-2 gap-4">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                   <div>
                                     <label className="text-[9px] font-black uppercase text-gray-400 ml-1 mb-1 block">Provincia *</label>
                                     <select required className={inputClass} value={formData.province} onChange={e => setFormData({...formData, province: e.target.value})}><option value="">Seleccionar...</option>{Object.keys(ARG_GEO).sort().map(p => ( <option key={p} value={p}>{p}</option> ))}</select>
@@ -321,7 +314,7 @@ export default function Locations() {
 
                       <div className="bg-emerald-50 dark:bg-emerald-900/10 p-6 rounded-[32px] border border-emerald-100 dark:border-emerald-900/30">
                           <h3 className="text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-widest mb-6 border-b border-emerald-100 dark:border-emerald-900/30 pb-3 flex items-center"><Waves size={14} className="mr-2"/> Especificaciones Técnicas</h3>
-                          <div className="grid grid-cols-2 gap-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label className="text-[9px] font-black uppercase text-emerald-800 dark:text-emerald-300 ml-1 mb-1 block">Tipo de Suelo Principal</label>
                                     <select className={inputClass} value={formData.soilType} onChange={e => setFormData({...formData, soilType: e.target.value})}>
@@ -337,7 +330,6 @@ export default function Locations() {
                           </div>
                       </div>
 
-                      {/* Atribución de Propiedad: Visible solo para Admin para cambiar dueño, o visible pero disabled para otros */}
                       {isAdmin && (
                           <div className="bg-blue-50 dark:bg-blue-900/10 p-6 rounded-[32px] border border-blue-100 dark:border-blue-900/30">
                               <h3 className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest mb-4 flex items-center"><Building size={14} className="mr-2"/> Atribución de Propiedad</h3>

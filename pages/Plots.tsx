@@ -363,12 +363,12 @@ export default function Plots() {
       {/* MODAL ALTA DE UNIDAD */}
       {isAddModalOpen && (
           <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[60] p-4">
-              <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-6xl w-full p-10 shadow-2xl max-h-[95vh] overflow-y-auto animate-in zoom-in-95 border border-white/10">
+              <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-6xl w-full p-6 md:p-10 shadow-2xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95 border border-white/10">
                   <div className="flex justify-between items-center mb-8">
                       <div className="flex items-center gap-4">
                           <div className="bg-hemp-600 p-3 rounded-2xl text-white shadow-lg"><Sprout size={28}/></div>
                           <div>
-                              <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter italic">Lanzar <span className="text-hemp-600">Unidad Productiva</span></h2>
+                              <h2 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter italic">Lanzar <span className="text-hemp-600">Unidad Productiva</span></h2>
                               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Protocolo de alta técnica y trazabilidad de siembra</p>
                           </div>
                       </div>
@@ -376,7 +376,7 @@ export default function Plots() {
                   </div>
 
                   <form onSubmit={handleSubmitAdd} className="space-y-8">
-                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
                           <div className="space-y-6">
                               <div className="bg-slate-50 dark:bg-slate-950 p-6 rounded-[32px] border dark:border-slate-800">
                                   <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-6 border-b dark:border-slate-800 pb-3 flex items-center"><MapPin size={14} className="mr-2 text-hemp-500"/> Atribución Territorial</h3>
@@ -466,7 +466,7 @@ export default function Plots() {
                               </div>
                           </div>
 
-                          <div className="bg-slate-900 rounded-[32px] p-6 flex flex-col h-full border border-slate-800 relative overflow-hidden">
+                          <div className="bg-slate-900 rounded-[32px] p-6 flex flex-col h-full border border-slate-800 relative overflow-hidden min-h-[400px]">
                               <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center justify-between">
                                   <div className="flex items-center"><Globe size={14} className="mr-2 text-blue-500"/> Polígono de la Parcela</div>
                                   <div className="flex gap-2">
@@ -475,7 +475,7 @@ export default function Plots() {
                                   </div>
                               </h3>
                               
-                              <div className="flex-1 rounded-[24px] overflow-hidden mb-6 bg-slate-800 shadow-inner min-h-[300px]">
+                              <div className="flex-1 rounded-[24px] overflow-hidden mb-6 bg-slate-800 shadow-inner min-h-[250px]">
                                   <MapEditor 
                                       initialCenter={formData.lat && formData.lng ? { lat: parseFloat(formData.lat), lng: parseFloat(formData.lng) } : undefined} 
                                       initialPolygon={formData.polygon || []} 

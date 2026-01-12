@@ -398,13 +398,13 @@ export default function PlotDetails() {
         </Link>
         <div className="flex gap-2">
             <button onClick={generateFieldReport} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-2xl text-blue-600 hover:text-blue-700 shadow-sm transition-all flex items-center gap-2 px-6 text-xs font-black uppercase tracking-widest">
-                <FileText size={18}/> Reporte de Campo
+                <FileText size={18}/> <span className="hidden md:inline">Reporte de Campo</span>
             </button>
             <button onClick={handleIAAnalysis} disabled={isAnalyzing || history.length === 0} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-2xl text-hemp-600 hover:text-hemp-700 shadow-sm transition-all flex items-center gap-2 px-6 text-xs font-black uppercase tracking-widest disabled:opacity-30">
-                {isAnalyzing ? <Loader2 className="animate-spin" size={18}/> : <Bot size={18}/>} Diagnóstico IA
+                {isAnalyzing ? <Loader2 className="animate-spin" size={18}/> : <Bot size={18}/>} <span className="hidden md:inline">Diagnóstico IA</span>
             </button>
             <button onClick={() => setIsQrModalOpen(true)} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-2xl text-slate-500 hover:text-hemp-600 shadow-sm transition-all flex items-center gap-2 px-6 text-xs font-black uppercase tracking-widest">
-                <QrCode size={18}/> Generar Etiqueta QR
+                <QrCode size={18}/> <span className="hidden md:inline">Etiqueta QR</span>
             </button>
         </div>
       </div>
@@ -588,8 +588,8 @@ export default function PlotDetails() {
 
       {isRecordModalOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[100] p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-6xl w-full p-10 shadow-2xl max-h-[95vh] overflow-y-auto border border-white/10 animate-in zoom-in-95">
-            <div className="flex justify-between items-center mb-8"><div className="flex items-center gap-4"><div className="bg-hemp-600 p-3 rounded-2xl text-white shadow-lg"><Activity size={24}/></div><div><h2 className="text-2xl font-black dark:text-white uppercase tracking-tighter italic">Informe periódico <span className="text-hemp-600">Nucleus Trace</span></h2>{isFetchingConditions && <div className="flex items-center text-[9px] font-black text-blue-500 uppercase tracking-widest mt-1"><Loader2 className="animate-spin mr-1.5" size={10}/> Capturando Red Nucleus GFS...</div>}</div></div><button onClick={() => setIsRecordModalOpen(false)} className="p-2 text-slate-400 hover:bg-slate-100 rounded-full transition"><X size={28}/></button></div>
+          <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-6xl w-full p-6 md:p-10 shadow-2xl max-h-[90vh] overflow-y-auto border border-white/10 animate-in zoom-in-95">
+            <div className="flex justify-between items-center mb-8"><div className="flex items-center gap-4"><div className="bg-hemp-600 p-3 rounded-2xl text-white shadow-lg"><Activity size={24}/></div><div><h2 className="text-2xl md:text-3xl font-black dark:text-white uppercase tracking-tighter italic">Informe periódico <span className="text-hemp-600">Nucleus Trace</span></h2>{isFetchingConditions && <div className="flex items-center text-[9px] font-black text-blue-500 uppercase tracking-widest mt-1"><Loader2 className="animate-spin mr-1.5" size={10}/> Capturando Red Nucleus GFS...</div>}</div></div><button onClick={() => setIsRecordModalOpen(false)} className="p-2 text-slate-400 hover:bg-slate-100 rounded-full transition"><X size={28}/></button></div>
             <form onSubmit={handleSaveRecord} className="space-y-8">
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                     <div className="bg-slate-50 dark:bg-slate-950 p-6 rounded-3xl border dark:border-slate-800 space-y-4">

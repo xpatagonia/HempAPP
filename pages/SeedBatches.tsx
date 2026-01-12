@@ -371,12 +371,12 @@ export default function SeedBatches() {
       {/* MODAL INGRESO LOTE */}
       {isBatchModalOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[60] p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-5xl w-full p-10 shadow-2xl max-h-[95vh] overflow-y-auto animate-in zoom-in-95 border border-white/10">
+          <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-5xl w-full p-6 md:p-10 shadow-2xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95 border border-white/10">
             <div className="flex justify-between items-center mb-8">
                 <div className="flex items-center gap-4">
                     <div className="bg-hemp-600 p-3 rounded-2xl text-white shadow-lg"><Archive size={24}/></div>
                     <div>
-                        <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter italic">Ingresar <span className="text-hemp-600">Lote Industrial</span></h2>
+                        <h2 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter italic">Ingresar <span className="text-hemp-600">Lote Industrial</span></h2>
                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Protocolo de recepción de semilla certificada</p>
                     </div>
                 </div>
@@ -384,7 +384,7 @@ export default function SeedBatches() {
             </div>
             
             <form onSubmit={handleBatchSubmit} className="space-y-8">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
                     <div className="bg-slate-50 dark:bg-slate-950 p-6 rounded-[32px] border dark:border-slate-800 space-y-4">
                         <h3 className="text-[10px] font-black text-hemp-600 uppercase tracking-widest mb-4 flex items-center border-b dark:border-slate-800 pb-2"><Building size={14} className="mr-2"/> Origen del Material</h3>
                         <div>
@@ -462,12 +462,12 @@ export default function SeedBatches() {
       {/* MODAL DESPACHO */}
       {isMoveModalOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[60] p-4">
-            <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-6xl w-full p-10 shadow-2xl max-h-[95vh] overflow-y-auto animate-in zoom-in-95 border border-white/10">
+            <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-6xl w-full p-6 md:p-10 shadow-2xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95 border border-white/10">
                 <div className="flex justify-between items-center mb-8">
                     <div className="flex items-center gap-4">
                         <div className="bg-blue-600 p-3 rounded-2xl text-white shadow-lg"><Truck size={28}/></div>
                         <div>
-                            <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter italic">Generar <span className="text-blue-600">Remito de Salida</span></h2>
+                            <h2 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter italic">Generar <span className="text-blue-600">Remito de Salida</span></h2>
                             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Trazabilidad en tránsito hacia socios de red</p>
                         </div>
                     </div>
@@ -475,7 +475,7 @@ export default function SeedBatches() {
                 </div>
 
                 <form onSubmit={handleMoveSubmit} className="space-y-8">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
                         <div className="space-y-6">
                             <div className="bg-slate-50 dark:bg-slate-950 p-6 rounded-[32px] border dark:border-slate-800">
                                 <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 border-b dark:border-slate-800 pb-2">Selección de Material</h3>

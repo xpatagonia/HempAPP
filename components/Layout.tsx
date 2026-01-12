@@ -107,7 +107,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
       </aside>
 
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-        <header className="h-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-8 flex items-center justify-between z-40 sticky top-0">
+        <header className="h-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-4 md:px-8 flex items-center justify-between z-40 sticky top-0">
           <div className="flex items-center space-x-4">
               <button onClick={() => setIsMobileOpen(true)} className="lg:hidden p-2 text-slate-500 hover:bg-slate-100 rounded-xl"><Menu size={24}/></button>
               <div className="hidden md:flex items-center space-x-2 text-slate-400 font-bold text-xs uppercase tracking-widest">
@@ -116,7 +116,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
           </div>
           
           <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-1 mr-4 border-r pr-4 border-slate-200 dark:border-slate-800">
+              <div className="flex items-center space-x-1 mr-2 md:mr-4 border-r pr-2 md:pr-4 border-slate-200 dark:border-slate-800">
                   <button className="p-2.5 text-slate-400 hover:text-hemp-600 hover:bg-hemp-50 dark:hover:bg-slate-800 rounded-xl transition-all relative">
                       <Bell size={20} />
                       <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-slate-900"></span>
@@ -124,12 +124,12 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
               </div>
               <button onClick={toggleTheme} className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all flex items-center space-x-2 px-4 shadow-inner">
                   {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-                  <span className="text-[10px] font-black uppercase tracking-widest">{theme === 'dark' ? 'Ligth' : 'Dark'}</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest hidden md:inline">{theme === 'dark' ? 'Ligth' : 'Dark'}</span>
               </button>
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-6 lg:p-10 scroll-smooth">
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-6 lg:p-10 scroll-smooth">
           {children}
         </div>
       </main>
