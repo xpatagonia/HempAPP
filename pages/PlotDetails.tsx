@@ -21,7 +21,7 @@ import { GoogleGenAI } from "@google/genai";
 import jsPDF from 'jspdf';
 
 const KPI = ({ label, value, icon: Icon, color, subtext }: any) => (
-    <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 p-6 rounded-[32px] shadow-sm flex items-start space-x-4 hover:shadow-md transition-shadow relative overflow-hidden group">
+    <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 p-6 rounded-[32px] shadow-sm flex items-start space-x-4 hover:shadow-md transition-shadow relative overflow-hidden group h-full">
         <div className={`p-4 rounded-2xl ${color} bg-opacity-10 text-${color.split('-')[1]}-600 group-hover:scale-110 transition-transform`}>
             {Icon ? <Icon size={24} /> : <Activity size={24} />}
         </div>
@@ -452,7 +452,8 @@ export default function PlotDetails() {
               </div>
           </div>
           
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-6">
+              <KPI label="Carga de Siembra" value={`${(plot.usedSeedValue || 0).toLocaleString()} ${(plot.usedSeedUnit || 'kg').toUpperCase()}`} icon={Scale} color="bg-purple-100" subtext="Insumo Inicial" />
               <KPI label="Huella Hídrica" value={`${(hydricRecords.filter(h => h.plotId === plot.id).reduce((s, r) => s + r.amountMm, 0)).toFixed(1)} mm`} icon={Waves} color="bg-blue-100" />
               <KPI label="Acumulación Térmica" value={`${agronomyStats.totalGdd} GDD`} icon={Thermometer} color="bg-orange-100" />
               <KPI label="Crecimiento Act." value={`${agronomyStats.avgGrowth} cm/d`} icon={TrendingUp} color="bg-emerald-100" subtext={`Fase: ${agronomyStats.currentPhase}`} />
