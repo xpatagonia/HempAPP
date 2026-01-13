@@ -128,12 +128,18 @@ export default function MapEditor({ initialPolygon = [], initialCenter, referenc
 
             <MapContainer 
                 center={[center.lat, center.lng]} 
-                zoom={15} 
+                zoom={15}
+                maxZoom={25} // Permite zoom profundo digital
                 style={{ height: "100%", width: "100%" }}
                 scrollWheelZoom={true}
             >
                 <MapResizer />
-                <TileLayer attribution='&copy; OSM' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                <TileLayer 
+                    attribution='&copy; OSM' 
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" 
+                    maxZoom={25} // Límite de zoom del visor
+                    maxNativeZoom={19} // Límite real de las imágenes (luego escala digitalmente)
+                />
                 {!readOnly && <MapEvents onAddPoint={handleAddPoint} />}
                 <MapRecenter center={center} polygon={polygon.length > 2 ? polygon : undefined} />
 

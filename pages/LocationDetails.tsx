@@ -7,6 +7,17 @@ import WeatherWidget from '../components/WeatherWidget';
 import MapEditor from '../components/MapEditor';
 import HydricBalance from '../components/HydricBalance';
 
+// Función auxiliar para generar colores consistentes basados en texto (nombre de la parcela)
+const stringToColor = (str: string) => {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    // Colores vibrantes pero legibles (HSL)
+    const h = Math.abs(hash) % 360;
+    return `hsl(${h}, 70%, 45%)`;
+};
+
 export default function LocationDetails() {
     const { id } = useParams<{ id: string }>();
     const { locations, plots, varieties, clients, seedMovements, seedBatches, currentUser } = useAppContext();
@@ -27,7 +38,7 @@ export default function LocationDetails() {
                 id: p.id,
                 polygon: p.polygon!,
                 label: `${p.name} (${p.surfaceArea} ${p.surfaceUnit})`,
-                color: '#16a34a' // Green for active plots
+                color: stringToColor(p.name) // Color único por nombre
             }));
     }, [locationPlots]);
 
@@ -107,10 +118,18 @@ export default function LocationDetails() {
                                     <div className="col-span-2 p-12 text-center text-gray-400 italic font-medium">No hay cultivos asignados a este sitio.</div>
                                 ) : locationPlots.map(p => {
                                     const vari = varieties.find(v => v.id === p.varietyId);
+                                    // Usamos el mismo generador de color que en el mapa
+                                    const plotColor = stringToColor(p.name);
+                                    
                                     return (
-                                        <Link key={p.id} to={`/plots/${p.id}`} className="bg-white dark:bg-slate-800/50 p-5 rounded-3xl border border-gray-100 dark:border-slate-800 hover:border-hemp-500 hover:shadow-lg transition-all group">
+                                        <Link key={p.id} to={`/plots/${p.id}`} className="bg-white dark:bg-slate-800/50 p-5 rounded-3xl border border-gray-100 dark:border-slate-800 hover:border-hemp-500 hover:shadow-lg transition-all group relative overflow-hidden">
+                                            {/* Indicador visual de color de referencia */}
+                                            <div className="absolute top-0 right-0 w-3 h-3 rounded-bl-xl" style={{ backgroundColor: plotColor }}></div>
+                                            
                                             <div className="flex justify-between items-start mb-4">
-                                                <div className="p-3 bg-hemp-50 dark:bg-hemp-900/20 rounded-2xl text-hemp-600"><Sprout size={20}/></div>
+                                                <div className="p-3 rounded-2xl text-white" style={{ backgroundColor: plotColor }}>
+                                                    <Sprout size={20}/>
+                                                </div>
                                                 <span className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border ${p.status === 'Activa' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-500'}`}>{p.status}</span>
                                             </div>
                                             <h4 className="font-black text-gray-800 dark:text-white uppercase tracking-tighter text-lg leading-tight group-hover:text-hemp-600 transition-colors">{p.name}</h4>
