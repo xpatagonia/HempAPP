@@ -23,7 +23,7 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-white dark:bg-slate-950 flex flex-col md:flex-row items-stretch overflow-hidden font-sans">
+    <div className="min-h-screen bg-white flex flex-col md:flex-row items-stretch overflow-hidden font-sans">
       
       {/* Lado Izquierdo: Branding Corporativo con Fondo Institucional #DDDB03 */}
       <div className="hidden lg:flex lg:w-1/2 bg-[#DDDB03] relative p-20 flex-col justify-between overflow-hidden shadow-2xl">
@@ -113,8 +113,8 @@ export default function Login() {
           <div className="absolute top-[-10%] left-[-10%] w-[400px] h-[400px] bg-slate-900/5 rounded-full blur-[100px]"></div>
       </div>
 
-      {/* Lado Derecho: Formulario de Acceso */}
-      <div className="flex-1 flex flex-col items-center justify-center p-8 md:p-16 bg-slate-50 dark:bg-slate-950">
+      {/* Lado Derecho: Formulario de Acceso (Light Mode Forzado) */}
+      <div className="flex-1 flex flex-col items-center justify-center p-8 md:p-16 bg-slate-50">
         <div className="w-full max-w-md space-y-12">
             <div className="lg:hidden text-center mb-8">
                 <h1 className="text-5xl font-black text-hemp-600 italic uppercase tracking-tighter leading-none">HempC APP</h1>
@@ -122,36 +122,36 @@ export default function Login() {
             </div>
 
             <div className="space-y-4">
-                <h2 className="text-4xl font-black text-slate-900 dark:text-white uppercase tracking-tighter italic leading-none">Acceso a la Red</h2>
+                <h2 className="text-4xl font-black text-slate-900 uppercase tracking-tighter italic leading-none">Acceso a la Red</h2>
                 <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.3em]">Autenticación de Terminal Autorizada</p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-8">
                 {error && (
-                    <div className="bg-red-50 dark:bg-red-900/10 text-red-600 dark:text-red-400 p-5 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center border border-red-100 dark:border-red-900/20 animate-in shake duration-300">
+                    <div className="bg-red-50 text-red-600 p-5 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center border border-red-100 animate-in shake duration-300">
                         <AlertCircle size={18} className="mr-3 flex-shrink-0"/>
                         {error}
                     </div>
                 )}
                 
                 <div className="space-y-2 group">
-                    <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest ml-1 transition-colors group-focus-within:text-hemp-600">ID Operario / Email</label>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1 transition-colors group-focus-within:text-hemp-600">ID Operario / Email</label>
                     <input 
                       required 
                       type="email" 
-                      className="w-full px-5 py-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl focus:ring-4 focus:ring-hemp-600/10 focus:border-hemp-600 outline-none transition-all dark:text-white font-bold" 
-                      placeholder="usuario@red-hempc.com" 
+                      className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-hemp-600/10 focus:border-hemp-600 outline-none transition-all text-slate-900 font-bold placeholder-slate-300" 
+                      placeholder="usuario@hempc.com.ar" 
                       value={email} 
                       onChange={e => setEmail(e.target.value)} 
                     />
                 </div>
 
                 <div className="space-y-2 group">
-                    <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest ml-1 transition-colors group-focus-within:text-hemp-600">Clave de Enlace</label>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1 transition-colors group-focus-within:text-hemp-600">Clave de Enlace</label>
                     <input 
                       required 
                       type="password" 
-                      className="w-full px-5 py-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl focus:ring-4 focus:ring-hemp-600/10 focus:border-hemp-600 outline-none transition-all dark:text-white font-bold" 
+                      className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-hemp-600/10 focus:border-hemp-600 outline-none transition-all text-slate-900 font-bold placeholder-slate-300" 
                       placeholder="••••••••" 
                       value={password} 
                       onChange={e => setPassword(e.target.value)} 
@@ -169,7 +169,7 @@ export default function Login() {
                 </button>
             </form>
 
-            <div className="pt-12 border-t border-slate-200 dark:border-slate-900 flex flex-col space-y-4 text-center">
+            <div className="pt-12 border-t border-slate-200 flex flex-col space-y-4 text-center">
                 <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">
                     ¿Nuevo productor en la zona? 
                 </p>

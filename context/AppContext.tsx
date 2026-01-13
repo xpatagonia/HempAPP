@@ -132,7 +132,7 @@ const toSnakeCase = (obj: any): any => {
     return obj;
 }
 
-export const AppProvider = ({ children }: { children: ReactNode }) => {
+export const AppProvider = ({ children }: { children?: ReactNode }) => {
     // State definitions
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [theme, setTheme] = useState<'light'|'dark'>('light');
