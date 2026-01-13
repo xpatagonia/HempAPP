@@ -36,25 +36,53 @@ const ARG_GEO: Record<string, string[]> = {
 const SOIL_TYPES = ["Franco", "Franco Arenoso", "Franco Arcilloso", "Arenoso", "Arcilloso", "Limoso", "Sustrato Controlado"];
 const IRRIGATION_SYSTEMS = ["Secano (Lluvia)", "Pivot Central", "Goteo", "Aspersión", "Gravedad / Surcos", "Microaspersión"];
 
+// Algoritmo de cálculo de área geodésica (Shoelace en esfera)
+const calculateGeodesicArea = (latLngs: { lat: number, lng: number }[]) => {
+    const R = 6378137; // Radio tierra en metros
+    const toRad = (x: number) => x * Math.PI / 180;
+    let area = 0;
+    
+    if (latLngs.length > 2) {
+        for (let i = 0; i < latLngs.length; i++) {
+            const p1 = latLngs[i];
+            const p2 = latLngs[(i + 1) % latLngs.length];
+            area += (toRad(p2.lng) - toRad(p1.lng)) * (2 + Math.sin(toRad(p1.lat)) + Math.sin(toRad(p2.lat)));
+        }
+        area = area * R * R / 2.0;
+    }
+    return Math.abs(area); // Metros cuadrados
+};
+
 const parseKML = (kmlText: string): { lat: number, lng: number }[] | null => {
     try {
         const parser = new DOMParser();
         const xmlDoc = parser.parseFromString(kmlText, "text/xml");
-        const allCoords = Array.from(xmlDoc.querySelectorAll("*")).filter(el => el.tagName.toLowerCase().endsWith('coordinates'));
-        if (allCoords.length === 0) return null;
-        allCoords.sort((a, b) => (b.textContent?.length || 0) - (a.textContent?.length || 0));
-        const targetNode = allCoords[0];
-        const text = targetNode.textContent || "";
-        const rawPoints = text.trim().split(/\s+/);
+        
+        // Buscar coordenadas en Placemark -> Polygon -> outerBoundaryIs -> LinearRing -> coordinates
+        // Para ser más genéricos, buscamos cualquier tag "coordinates" y tomamos el que tenga más datos
+        const coordinates = xmlDoc.getElementsByTagName("coordinates");
+        let coordsText = "";
+        
+        for(let i=0; i<coordinates.length; i++) {
+            const text = coordinates[i].textContent || "";
+            if(text.length > coordsText.length) coordsText = text;
+        }
+
+        if (!coordsText) return null;
+
+        // KML coordinates are separated by whitespace (space or newline)
+        const rawPoints = coordsText.trim().split(/\s+/);
         const latLngs = rawPoints.map(point => {
             const parts = point.split(',');
             if (parts.length >= 2) {
+                // KML format is: Longitude,Latitude,Altitude
                 const lng = parseFloat(parts[0]);
                 const lat = parseFloat(parts[1]);
                 if (!isNaN(lat) && !isNaN(lng)) return { lat, lng };
             }
             return null;
         }).filter((p): p is { lat: number, lng: number } => p !== null);
+
         return latLngs.length >= 3 ? latLngs : null;
     } catch (e) {
         console.error("Error parsing KML", e);
@@ -126,21 +154,25 @@ export default function Locations() {
           const text = event.target?.result as string;
           const poly = parseKML(text);
           if (poly && poly.length > 2) {
-              const R = 6371000;
-              const toRad = (x: number) => x * Math.PI / 180;
-              let area = 0;
+              // Calcular centroide
               const lats = poly.map(p => p.lat);
               const lngs = poly.map(p => p.lng);
               const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
               const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
-              for (let i = 0; i < poly.length; i++) {
-                  const j = (i + 1) % poly.length;
-                  const p1 = poly[i];
-                  const p2 = poly[j];
-                  area += (toRad(p2.lng) - toRad(p1.lng)) * (2 + Math.sin(toRad(p1.lat)) + Math.sin(toRad(p2.lat)));
-              }
-              area = Math.abs(area * R * R / 2) / 10000;
-              setFormData(prev => ({ ...prev, polygon: poly, capacityHa: Number(area.toFixed(2)), lat: centerLat.toFixed(6), lng: centerLng.toFixed(6) }));
+              
+              // Calcular área en Ha
+              const areaM2 = calculateGeodesicArea(poly);
+              const areaHa = areaM2 / 10000;
+
+              setFormData(prev => ({ 
+                  ...prev, 
+                  polygon: poly, 
+                  capacityHa: Number(areaHa.toFixed(2)), 
+                  lat: centerLat.toFixed(6), 
+                  lng: centerLng.toFixed(6) 
+              }));
+          } else {
+              alert("No se encontró un polígono válido en el archivo KML. Asegúrese de que contenga coordenadas geográficas (Lat/Lon).");
           }
           if (fileInputRef.current) fileInputRef.current.value = '';
       };

@@ -78,6 +78,24 @@ export default function Settings() {
       }
   };
 
+  const handleFixSchema = () => {
+      const sql = `
+-- FIX V42: AGREGAR COLUMNAS FALTANTES PARA COLOR Y SEMILLAS
+alter table public.plots add column if not exists color text default '#16a34a';
+alter table public.plots add column if not exists used_seed_value numeric;
+alter table public.plots add column if not exists used_seed_unit text;
+
+-- FIX: VALIDAR COLUMNAS EN OTRAS TABLAS
+alter table public.seed_batches add column if not exists supplier_id uuid; -- Puede no ser FK estricta si no se migró data
+alter table public.seed_movements add column if not exists origin_storage_id uuid;
+
+-- NOTIFICAR CAMBIO
+NOTIFY pgrst, 'reload schema';
+`;
+      navigator.clipboard.writeText(sql);
+      alert("✅ SCRIPT COPIADO AL PORTAPAPELES.\n\nInstrucciones:\n1. Ve al Editor SQL de Supabase.\n2. Pega el código (Ctrl+V).\n3. Ejecuta 'Run'.\nEsto solucionará el error de 'color column not found'.");
+  };
+
   return (
     <div className="max-w-4xl mx-auto pb-10 animate-in fade-in duration-500">
       <div className="flex items-center mb-8">
@@ -146,6 +164,28 @@ export default function Settings() {
 
       {activeTab === 'system' && (
           <div className="space-y-6 animate-in slide-in-from-bottom-2">
+              
+              {/* FIX DATABASE BUTTON */}
+              <div className="bg-blue-600 p-8 rounded-[40px] shadow-xl text-white relative overflow-hidden group hover:scale-[1.01] transition-all cursor-pointer border border-blue-500" onClick={handleFixSchema}>
+                  <div className="flex justify-between items-center relative z-10">
+                      <div>
+                          <div className="flex items-center gap-3 mb-2">
+                              <Database size={24} className="text-white"/>
+                              <h3 className="text-xl font-black uppercase tracking-tighter italic">Actualizar Esquema SQL (V42)</h3>
+                          </div>
+                          <p className="text-xs text-blue-100 font-medium max-w-md">
+                              Soluciona errores de columnas faltantes ('color', 'seed_value') agregando los campos necesarios a la base de datos sin borrar información.
+                          </p>
+                      </div>
+                      <div className="bg-white/20 p-3 rounded-full">
+                          <FileCode size={24}/>
+                      </div>
+                  </div>
+                  <div className="mt-6 flex items-center text-[10px] font-black uppercase tracking-widest bg-white/10 w-fit px-4 py-2 rounded-full border border-white/20">
+                      Clic para copiar Script de Reparación
+                  </div>
+              </div>
+
               {/* BACKUP SECTION */}
               <div className="bg-slate-900 dark:bg-hemp-600 text-white p-8 rounded-[40px] shadow-2xl relative overflow-hidden flex flex-col md:flex-row justify-between items-center gap-6">
                   <div className="relative z-10">
