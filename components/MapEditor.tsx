@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, Polygon, Marker, useMapEvents, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Polygon, Marker, useMapEvents, useMap, Tooltip } from 'react-leaflet';
 import { Trash2, MapPin, MousePointer, Maximize } from 'lucide-react';
 import L from 'leaflet';
 
@@ -20,6 +20,7 @@ interface MapEditorProps {
     initialPolygon?: { lat: number, lng: number }[];
     initialCenter?: { lat: number, lng: number };
     referencePolygon?: { lat: number, lng: number }[]; 
+    extraPolygons?: { id: string, polygon: { lat: number, lng: number }[], label?: string, color?: string }[];
     onPolygonChange?: (polygon: { lat: number, lng: number }[], areaHa: number, center: { lat: number, lng: number }, perimeterM: number) => void;
     readOnly?: boolean;
     height?: string;
@@ -65,7 +66,7 @@ const MapRecenter = ({ center, polygon }: { center: { lat: number, lng: number }
     return null;
 };
 
-export default function MapEditor({ initialPolygon = [], initialCenter, referencePolygon = [], onPolygonChange, readOnly = false, height = "400px" }: MapEditorProps) {
+export default function MapEditor({ initialPolygon = [], initialCenter, referencePolygon = [], extraPolygons = [], onPolygonChange, readOnly = false, height = "400px" }: MapEditorProps) {
     const [polygon, setPolygon] = useState<{ lat: number, lng: number }[]>(initialPolygon);
     
     const [center, setCenter] = useState<{ lat: number, lng: number }>(() => {
@@ -140,9 +141,27 @@ export default function MapEditor({ initialPolygon = [], initialCenter, referenc
                     <Polygon positions={referencePolygon} pathOptions={{ color: '#ef4444', fillColor: 'transparent', weight: 2, dashArray: '5, 10' }} />
                 )}
 
+                {/* Main Polygon (Location Boundary) */}
                 {polygon.length > 1 && (
-                    <Polygon positions={polygon} pathOptions={{ color: '#16a34a', fillColor: '#16a34a', fillOpacity: 0.3, weight: 3 }} />
+                    <Polygon positions={polygon} pathOptions={{ color: '#2563eb', fillColor: '#3b82f6', fillOpacity: 0.1, weight: 3 }}>
+                         {readOnly && <Tooltip direction="center" offset={[0, 0]} opacity={0.7} permanent>Establecimiento</Tooltip>}
+                    </Polygon>
                 )}
+
+                {/* Extra Polygons (Plots/Units) */}
+                {extraPolygons.map(layer => (
+                    <Polygon 
+                        key={layer.id} 
+                        positions={layer.polygon} 
+                        pathOptions={{ color: layer.color || '#16a34a', fillColor: layer.color || '#22c55e', fillOpacity: 0.5, weight: 2 }}
+                    >
+                        {layer.label && (
+                            <Tooltip sticky direction="top" className="font-bold text-xs uppercase">
+                                {layer.label}
+                            </Tooltip>
+                        )}
+                    </Polygon>
+                ))}
 
                 {polygon.length > 0 && !readOnly && polygon.map((pos, idx) => ( 
                     <Marker key={`marker-${idx}`} position={[pos.lat, pos.lng]} /> 

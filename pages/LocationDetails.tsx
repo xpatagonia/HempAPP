@@ -20,6 +20,17 @@ export default function LocationDetails() {
         return seedMovements.filter(m => m.targetLocationId === id).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [seedMovements, id]);
 
+    const activePlotLayers = useMemo(() => {
+        return locationPlots
+            .filter(p => p.status === 'Activa' && p.polygon && p.polygon.length > 2)
+            .map(p => ({
+                id: p.id,
+                polygon: p.polygon!,
+                label: `${p.name} (${p.surfaceArea} ${p.surfaceUnit})`,
+                color: '#16a34a' // Green for active plots
+            }));
+    }, [locationPlots]);
+
     const occupiedArea = locationPlots.reduce((sum, p) => {
         let area = p.surfaceArea || 0;
         if(p.surfaceUnit === 'm2') area = area / 10000;
@@ -118,7 +129,13 @@ export default function LocationDetails() {
                             </div>
                             <div className="h-80 w-full bg-slate-100">
                                 {location.polygon && location.polygon.length > 2 ? (
-                                    <MapEditor initialCenter={location.coordinates} initialPolygon={location.polygon} readOnly={true} height="100%"/>
+                                    <MapEditor 
+                                        initialCenter={location.coordinates} 
+                                        initialPolygon={location.polygon} 
+                                        extraPolygons={activePlotLayers}
+                                        readOnly={true} 
+                                        height="100%"
+                                    />
                                 ) : (
                                     <div className="h-full flex items-center justify-center text-gray-400 bg-gray-50 italic text-xs">Sin delimitación perimetral configurada.</div>
                                 )}
