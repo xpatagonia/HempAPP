@@ -7,7 +7,7 @@ import {
   ChevronRight, LayoutGrid, List, Tag, FlaskConical, 
   Trash2, Edit2, QrCode, X, Save, Search, Filter, 
   MapPin, Calendar, Sprout, Printer, Activity, Plus, Loader2, Info, FolderKanban, FileUp,
-  Link as LinkIcon, Scale, Box, Weight, Archive, Globe, LayoutDashboard, Eye
+  Link as LinkIcon, Scale, Box, Weight, Archive, Globe, LayoutDashboard, Eye, Palette
 } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
 
@@ -38,6 +38,15 @@ const parseKML = (kmlText: string): { lat: number, lng: number }[] | null => {
 };
 
 type MassUnit = 'gr' | 'kg' | 'tn';
+
+const COLOR_PALETTE = [
+    { color: '#16a34a', label: 'Verde (Estándar)' },
+    { color: '#dc2626', label: 'Rojo (Alerta)' },
+    { color: '#2563eb', label: 'Azul (Ensayo)' },
+    { color: '#d97706', label: 'Naranja (Producción)' },
+    { color: '#9333ea', label: 'Violeta (Genética)' },
+    { color: '#0891b2', label: 'Cian (Riego)' },
+];
 
 export default function Plots() {
   const { 
@@ -77,7 +86,8 @@ export default function Plots() {
       lng: '',
       polygon: [],
       usedSeedValue: 0,
-      usedSeedUnit: 'kg'
+      usedSeedUnit: 'kg',
+      color: '#16a34a'
   });
 
   const isSuperAdmin = currentUser?.role === 'super_admin';
@@ -89,7 +99,8 @@ export default function Plots() {
     setFormData({ 
       name: '', type: 'Ensayo', locationId: '', projectId: '', varietyId: '', seedBatchId: '', 
       status: 'Activa', sowingDate: new Date().toISOString().split('T')[0], surfaceArea: 0, 
-      surfaceUnit: 'ha', density: 0, lat: '', lng: '', polygon: [], usedSeedValue: 0, usedSeedUnit: 'kg' 
+      surfaceUnit: 'ha', density: 0, lat: '', lng: '', polygon: [], usedSeedValue: 0, usedSeedUnit: 'kg',
+      color: '#16a34a'
     });
   };
 
@@ -308,8 +319,13 @@ export default function Plots() {
                           return (
                               <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer group" onClick={() => window.location.hash = `#/plots/${p.id}`}>
                                   <td className="px-8 py-6">
-                                      <div className="font-black text-gray-800 dark:text-white tracking-tighter text-sm">{p.name}</div>
-                                      <div className="text-[9px] text-gray-400 font-black flex items-center mt-1"><Tag size={10} className="mr-1.5 text-hemp-600"/> {p.type}</div>
+                                      <div className="flex items-center gap-3">
+                                          <div className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: p.color || '#16a34a' }}></div>
+                                          <div>
+                                              <div className="font-black text-gray-800 dark:text-white tracking-tighter text-sm">{p.name}</div>
+                                              <div className="text-[9px] text-gray-400 font-black flex items-center mt-1"><Tag size={10} className="mr-1.5 text-hemp-600"/> {p.type}</div>
+                                          </div>
+                                      </div>
                                   </td>
                                   <td className="px-8 py-6">
                                       <div className="text-gray-600 dark:text-gray-300 font-bold">{loc?.name || 'S/D'}</div>
@@ -340,9 +356,10 @@ export default function Plots() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredPlots.map(p => (
                   <div key={p.id} className="relative group">
-                      <Link to={`/plots/${p.id}`} className="bg-white dark:bg-slate-900 p-6 rounded-[40px] shadow-sm border border-gray-100 dark:border-slate-800 hover:shadow-xl transition-all flex flex-col h-full">
-                          <div className="flex justify-between items-start mb-6">
-                              <div className="p-4 bg-hemp-50 dark:bg-hemp-900/20 rounded-2xl text-hemp-600"><Sprout size={24}/></div>
+                      <Link to={`/plots/${p.id}`} className="bg-white dark:bg-slate-900 p-6 rounded-[40px] shadow-sm border border-gray-100 dark:border-slate-800 hover:shadow-xl transition-all flex flex-col h-full overflow-hidden">
+                          <div className="absolute top-0 right-0 w-16 h-16 opacity-10 rounded-bl-[40px]" style={{ backgroundColor: p.color || '#16a34a' }}></div>
+                          <div className="flex justify-between items-start mb-6 relative z-10">
+                              <div className="p-4 rounded-2xl text-white shadow-lg" style={{ backgroundColor: p.color || '#16a34a' }}><Sprout size={24}/></div>
                               <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${p.status === 'Activa' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>{p.status}</span>
                           </div>
                           <h3 className="text-xl font-black text-gray-800 dark:text-white uppercase tracking-tighter italic group-hover:text-hemp-600 transition-colors">{p.name}</h3>
@@ -354,7 +371,7 @@ export default function Plots() {
                           </div>
                       </Link>
                       {isAdmin && (
-                          <button onClick={(e) => handleDeletePlot(e, p.id)} className="absolute top-4 right-4 p-2.5 bg-red-600 text-white rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity shadow-lg hover:bg-red-700">
+                          <button onClick={(e) => handleDeletePlot(e, p.id)} className="absolute top-4 right-14 p-2.5 text-red-400 hover:text-red-600 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity">
                               <Trash2 size={16}/>
                           </button>
                       )}
@@ -469,29 +486,46 @@ export default function Plots() {
                               </div>
                           </div>
 
-                          <div className="bg-slate-900 rounded-[32px] p-6 flex flex-col h-full border border-slate-800 relative overflow-hidden min-h-[400px]">
-                              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center justify-between">
-                                  <div className="flex items-center"><Globe size={14} className="mr-2 text-blue-500"/> Polígono de la Parcela</div>
-                                  <div className="flex gap-2">
-                                      <input type="file" accept=".kml" ref={fileInputRef} className="hidden" onChange={handleKMLUpload} />
-                                      <button type="button" onClick={() => fileInputRef.current?.click()} className="p-1.5 bg-white/5 text-slate-300 rounded-lg hover:bg-white/10 transition"><FileUp size={14}/></button>
+                          <div className="flex flex-col gap-6">
+                              <div className="bg-slate-50 dark:bg-slate-950 p-6 rounded-[32px] border dark:border-slate-800">
+                                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center"><Palette size={14} className="mr-2"/> Identidad Visual</h3>
+                                  <div className="space-y-4">
+                                      <div className="flex items-center gap-3">
+                                          <input type="color" className="w-12 h-12 rounded-xl border-none cursor-pointer bg-transparent" value={formData.color} onChange={e => setFormData({...formData, color: e.target.value})} />
+                                          <span className="text-xs font-black uppercase">{formData.color}</span>
+                                      </div>
+                                      <div className="flex flex-wrap gap-2">
+                                          {COLOR_PALETTE.map((swatch) => (
+                                              <button key={swatch.color} type="button" title={swatch.label} onClick={() => setFormData({...formData, color: swatch.color})} className="w-6 h-6 rounded-full border border-gray-200 dark:border-slate-700 hover:scale-110 transition-transform" style={{ backgroundColor: swatch.color }}></button>
+                                          ))}
+                                      </div>
                                   </div>
-                              </h3>
-                              
-                              <div className="flex-1 rounded-[24px] overflow-hidden mb-6 bg-slate-800 shadow-inner min-h-[250px]">
-                                  <MapEditor 
-                                      initialCenter={formData.lat && formData.lng ? { lat: parseFloat(formData.lat), lng: parseFloat(formData.lng) } : undefined} 
-                                      initialPolygon={formData.polygon || []} 
-                                      onPolygonChange={handlePolygonChange} 
-                                      height="100%" 
-                                  />
                               </div>
 
-                              <div className="grid grid-cols-2 gap-4">
-                                  <input placeholder="Latitud" className="bg-white/5 border-none p-3 rounded-xl text-xs text-white outline-none focus:ring-1 focus:ring-hemp-500" value={formData.lat} onChange={e => setFormData({...formData, lat: e.target.value})} />
-                                  <input placeholder="Longitud" className="bg-white/5 border-none p-3 rounded-xl text-xs text-white outline-none focus:ring-1 focus:ring-hemp-500" value={formData.lng} onChange={e => setFormData({...formData, lng: e.target.value})} />
+                              <div className="bg-slate-900 rounded-[32px] p-6 flex flex-col flex-1 border border-slate-800 relative overflow-hidden min-h-[300px]">
+                                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center justify-between">
+                                      <div className="flex items-center"><Globe size={14} className="mr-2 text-blue-500"/> Polígono de la Parcela</div>
+                                      <div className="flex gap-2">
+                                          <input type="file" accept=".kml" ref={fileInputRef} className="hidden" onChange={handleKMLUpload} />
+                                          <button type="button" onClick={() => fileInputRef.current?.click()} className="p-1.5 bg-white/5 text-slate-300 rounded-lg hover:bg-white/10 transition"><FileUp size={14}/></button>
+                                      </div>
+                                  </h3>
+                                  
+                                  <div className="flex-1 rounded-[24px] overflow-hidden mb-6 bg-slate-800 shadow-inner min-h-[150px]">
+                                      <MapEditor 
+                                          initialCenter={formData.lat && formData.lng ? { lat: parseFloat(formData.lat), lng: parseFloat(formData.lng) } : undefined} 
+                                          initialPolygon={formData.polygon || []} 
+                                          onPolygonChange={handlePolygonChange} 
+                                          height="100%" 
+                                      />
+                                  </div>
+
+                                  <div className="grid grid-cols-2 gap-4">
+                                      <input placeholder="Latitud" className="bg-white/5 border-none p-3 rounded-xl text-xs text-white outline-none focus:ring-1 focus:ring-hemp-500" value={formData.lat} onChange={e => setFormData({...formData, lat: e.target.value})} />
+                                      <input placeholder="Longitud" className="bg-white/5 border-none p-3 rounded-xl text-xs text-white outline-none focus:ring-1 focus:ring-hemp-500" value={formData.lng} onChange={e => setFormData({...formData, lng: e.target.value})} />
+                                  </div>
+                                  <Activity className="absolute -bottom-10 -right-10 w-48 h-48 text-hemp-600 opacity-5 pointer-events-none" />
                               </div>
-                              <Activity className="absolute -bottom-10 -right-10 w-48 h-48 text-hemp-600 opacity-5 pointer-events-none" />
                           </div>
                       </div>
 

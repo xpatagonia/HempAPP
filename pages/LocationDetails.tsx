@@ -38,7 +38,7 @@ export default function LocationDetails() {
                 id: p.id,
                 polygon: p.polygon!,
                 label: `${p.name} (${p.surfaceArea} ${p.surfaceUnit})`,
-                color: stringToColor(p.name) // Color único por nombre
+                color: p.color || stringToColor(p.name) // Usa color manual o genera uno
             }));
     }, [locationPlots]);
 
@@ -119,7 +119,7 @@ export default function LocationDetails() {
                                 ) : locationPlots.map(p => {
                                     const vari = varieties.find(v => v.id === p.varietyId);
                                     // Usamos el mismo generador de color que en el mapa
-                                    const plotColor = stringToColor(p.name);
+                                    const plotColor = p.color || stringToColor(p.name);
                                     
                                     return (
                                         <Link key={p.id} to={`/plots/${p.id}`} className="bg-white dark:bg-slate-800/50 p-5 rounded-3xl border border-gray-100 dark:border-slate-800 hover:border-hemp-500 hover:shadow-lg transition-all group relative overflow-hidden">

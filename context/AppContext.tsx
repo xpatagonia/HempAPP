@@ -209,7 +209,8 @@ const MANUAL_MAP: Record<string, string> = {
     harvestPlantCount: 'harvest_plant_count',
     seedYield: 'seed_yield',
     seedQualityGermination: 'seed_quality_germination',
-    seedQualityNonConformity: 'seed_quality_non_conformity'
+    seedQualityNonConformity: 'seed_quality_non_conformity',
+    color: 'color'
 };
 
 const toSnakeCase = (obj: any) => {

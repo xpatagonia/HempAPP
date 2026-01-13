@@ -145,6 +145,7 @@ export interface Plot {
   irrigationType?: string;
   usedSeedValue?: number;
   usedSeedUnit?: 'gr' | 'kg' | 'tn';
+  color?: string; // Nuevo campo para el color de referencia
 }
 
 export interface SeedBatch {
