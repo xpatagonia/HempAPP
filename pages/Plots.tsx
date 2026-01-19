@@ -553,7 +553,9 @@ export default function Plots() {
                                       <div className="flex items-center"><Globe size={14} className="mr-2 text-blue-500"/> Polígono de la Parcela</div>
                                       <div className="flex gap-2">
                                           <input type="file" accept=".kml" ref={fileInputRef} className="hidden" onChange={handleKMLUpload} />
-                                          <button type="button" onClick={() => fileInputRef.current?.click()} className="p-1.5 bg-white/5 text-slate-300 rounded-lg hover:bg-white/10 transition"><FileUp size={14}/></button>
+                                          <button type="button" onClick={() => fileInputRef.current?.click()} className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-[10px] font-black uppercase tracking-widest shadow-md flex items-center hover:bg-blue-700 transition">
+                                              <FileUp size={14} className="mr-1.5"/> Importar KML
+                                          </button>
                                       </div>
                                   </h3>
                                   
