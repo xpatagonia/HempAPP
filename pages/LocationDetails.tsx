@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
-import { ArrowLeft, MapPin, Globe, Droplets, User, Building, ExternalLink, Ruler, Sprout, ChevronRight, Waves, CloudRain, Package, CheckCircle2, Truck, ClipboardCheck, Info, Tag, Activity, Archive, Landmark, Warehouse, AlertCircle, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, MapPin, Globe, Droplets, User, Building, ExternalLink, Ruler, Sprout, ChevronRight, Waves, CloudRain, Package, CheckCircle2, Truck, ClipboardCheck, Info, Tag, Activity, Archive, Landmark, Warehouse, AlertCircle, AlertTriangle, LayoutGrid, Box } from 'lucide-react';
 import WeatherWidget from '../components/WeatherWidget';
 import MapEditor from '../components/MapEditor';
 import HydricBalance from '../components/HydricBalance';
@@ -26,7 +26,8 @@ export default function LocationDetails() {
     const location = locations.find(l => l.id === id);
     const locationPlots = plots.filter(p => p.locationId === id);
     
-    // --- LÓGICA CORREGIDA DE INVENTARIO ---
+    // --- LÓGICA DE INVENTARIO ---
+    
     // 1. Identificamos los depósitos vinculados a este campo (mismo dueño)
     const linkedStorages = useMemo(() => {
         if (!location) return [];
@@ -39,56 +40,63 @@ export default function LocationDetails() {
         });
     }, [location, storagePoints]);
 
-    // 2. Filtramos movimientos hacia cualquiera de esos depósitos vinculados
+    // 2. STOCK REAL (Basado en Lotes actuales, no en histórico de movimientos)
+    // Esto corrige el error de "Sin Datos" si el stock se cargó por inventario inicial.
+    const stockInventory = useMemo(() => {
+        const linkedIds = linkedStorages.map(s => s.id);
+        
+        // Filtramos lotes que estén físicamente en los depósitos vinculados
+        const batchesInScope = seedBatches.filter(b => 
+            linkedIds.includes(b.storagePointId || '') && b.remainingQuantity > 0
+        );
+
+        // Agrupación por Variedad (Consolidado)
+        const consolidated: Record<string, { variety: string, totalKg: number, count: number }> = {};
+        
+        batchesInScope.forEach(b => {
+            const varId = b.varietyId;
+            const varName = varieties.find(v => v.id === varId)?.name || 'Desconocida';
+            
+            if (!consolidated[varId]) {
+                consolidated[varId] = { variety: varName, totalKg: 0, count: 0 };
+            }
+            consolidated[varId].totalKg += b.remainingQuantity;
+            consolidated[varId].count += 1;
+        });
+
+        // Agrupación por Depósito (Desglose)
+        const byStorage: Record<string, { name: string, city: string, items: { variety: string, kg: number, batchCode: string }[] }> = {};
+        
+        batchesInScope.forEach(b => {
+            const sp = storagePoints.find(s => s.id === b.storagePointId);
+            if (!sp) return;
+            
+            const varName = varieties.find(v => v.id === b.varietyId)?.name || 'Desconocida';
+            
+            if (!byStorage[sp.id]) {
+                byStorage[sp.id] = { name: sp.name, city: sp.city || '', items: [] };
+            }
+            byStorage[sp.id].items.push({ 
+                variety: varName, 
+                kg: b.remainingQuantity,
+                batchCode: b.batchCode 
+            });
+        });
+
+        return {
+            consolidated: Object.values(consolidated),
+            byStorage: Object.values(byStorage),
+            hasStock: batchesInScope.length > 0
+        };
+    }, [seedBatches, linkedStorages, varieties, storagePoints]);
+
+    // 3. Historial de Movimientos (Solo informativo/auditoría)
     const receivedMaterials = useMemo(() => {
         const linkedIds = linkedStorages.map(s => s.id);
         return seedMovements
             .filter(m => linkedIds.includes(m.targetLocationId))
             .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [seedMovements, linkedStorages]);
-
-    // 3. Balance Global del Propietario (Recibido en sus depósitos - Usado en TODOS sus campos)
-    const stockBalance = useMemo(() => {
-        const balance: Record<string, { variety: string, received: number, used: number }> = {};
-        const ownerClientId = location?.clientId || null;
-
-        // A. Sumar Recepciones (Stock Entrante en depósitos del dueño)
-        receivedMaterials.forEach(m => {
-            if(m.status !== 'Recibido') return; // Solo contar lo que ya llegó físicamente
-            const batch = seedBatches.find(b => b.id === m.batchId);
-            const varId = batch?.varietyId || 'unknown';
-            const varName = varieties.find(v => v.id === varId)?.name || 'Desconocida';
-
-            if (!balance[varId]) balance[varId] = { variety: varName, received: 0, used: 0 };
-            balance[varId].received += m.quantity;
-        });
-
-        // B. Restar Uso (Siembra) en TODOS los campos del mismo dueño
-        const ownerPlots = plots.filter(p => {
-            const plotLoc = locations.find(l => l.id === p.locationId);
-            const plotOwnerId = plotLoc?.clientId || null;
-            return plotOwnerId === ownerClientId;
-        });
-
-        ownerPlots.forEach(p => {
-            if (p.usedSeedValue && p.varietyId) {
-                const varId = p.varietyId;
-                // Solo restamos si tenemos registro de esa variedad en el balance (o si queremos mostrar negativo)
-                if (!balance[varId]) {
-                     const varName = varieties.find(v => v.id === varId)?.name || 'Desconocida';
-                     balance[varId] = { variety: varName, received: 0, used: 0 };
-                }
-                
-                let usedKg = Number(p.usedSeedValue);
-                if (p.usedSeedUnit === 'gr') usedKg = usedKg / 1000;
-                if (p.usedSeedUnit === 'tn') usedKg = usedKg * 1000;
-                
-                balance[varId].used += usedKg;
-            }
-        });
-
-        return Object.values(balance);
-    }, [receivedMaterials, plots, varieties, seedBatches, location, locations]);
 
     const activePlotLayers = useMemo(() => {
         return locationPlots
@@ -244,82 +252,122 @@ export default function LocationDetails() {
 
             {activeTab === 'stock' && (
                 <div className="animate-in fade-in slide-in-from-top-2 space-y-8">
-                    {/* PANEL DE BALANCE (NUEVO) */}
-                    <div className="bg-white dark:bg-slate-900 rounded-[40px] shadow-sm border dark:border-slate-800 p-8">
-                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-                            <div>
-                                <h2 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-tighter flex items-center">
-                                    <Package size={20} className="mr-2 text-amber-600"/> Stock Disponible para Uso
-                                </h2>
-                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Consolidado de depósitos del titular: {ownerLabel}</p>
-                            </div>
-                            
-                            <div className="flex items-center gap-2">
-                                {linkedStorages.length > 0 ? (
-                                    linkedStorages.map(sp => (
-                                        <div key={sp.id} className="bg-gray-50 dark:bg-slate-950 px-3 py-1 rounded-full border dark:border-slate-800 flex items-center text-[9px] font-black text-slate-500 uppercase tracking-widest">
-                                            <Warehouse size={10} className="mr-1.5 text-hemp-500"/> {sp.name}
-                                        </div>
-                                    ))
-                                ) : (
-                                    <span className="bg-red-50 text-red-600 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border border-red-100 flex items-center">
-                                        <AlertTriangle size={12} className="mr-1"/> Sin Depósitos Vinculados
-                                    </span>
-                                )}
-                            </div>
+                    {/* ENCABEZADO Y ALERTAS */}
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                        <div>
+                            <h2 className="text-2xl font-black text-slate-800 dark:text-white uppercase tracking-tighter flex items-center italic">
+                                <Package size={24} className="mr-2 text-amber-600"/> Inventario & Stock
+                            </h2>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Recursos disponibles en depósitos del titular: {ownerLabel}</p>
                         </div>
                         
-                        {linkedStorages.length === 0 && (
-                            <div className="mb-6 bg-amber-50 dark:bg-amber-900/20 p-4 rounded-2xl border border-amber-100 dark:border-amber-900/30 flex items-start gap-3">
-                                <AlertCircle className="text-amber-600 flex-shrink-0" size={20}/>
-                                <div>
-                                    <p className="text-xs font-black text-amber-800 dark:text-amber-200 uppercase tracking-widest mb-1">Error de Vinculación Logística</p>
-                                    <p className="text-xs text-amber-700 dark:text-amber-300 font-medium leading-relaxed">
-                                        Este campo pertenece a <strong>{ownerLabel}</strong>, pero no se encontraron depósitos asignados a este mismo propietario. 
-                                        Para ver el stock, asegúrese de que el Depósito tenga asignado el mismo "Socio Propietario" que este Campo en la sección de Configuración de Nodos.
-                                    </p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                            {linkedStorages.length > 0 ? (
+                                linkedStorages.map(sp => (
+                                    <div key={sp.id} className="bg-white dark:bg-slate-900 px-4 py-2 rounded-xl border dark:border-slate-800 flex items-center text-[10px] font-black text-slate-500 uppercase tracking-widest shadow-sm">
+                                        <Warehouse size={12} className="mr-2 text-hemp-500"/> {sp.name}
+                                    </div>
+                                ))
+                            ) : (
+                                <span className="bg-red-50 text-red-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border border-red-100 flex items-center">
+                                    <AlertTriangle size={14} className="mr-2"/> Sin Depósitos Vinculados
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                    
+                    {linkedStorages.length === 0 && (
+                        <div className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-2xl border border-amber-100 dark:border-amber-900/30 flex items-start gap-3">
+                            <AlertCircle className="text-amber-600 flex-shrink-0" size={20}/>
+                            <div>
+                                <p className="text-xs font-black text-amber-800 dark:text-amber-200 uppercase tracking-widest mb-1">Error de Vinculación Logística</p>
+                                <p className="text-xs text-amber-700 dark:text-amber-300 font-medium leading-relaxed">
+                                    Este campo pertenece a <strong>{ownerLabel}</strong>, pero no se encontraron depósitos asignados a este mismo propietario. 
+                                    Para ver el stock, asegúrese de que el Depósito tenga asignado el mismo "Socio Propietario" que este Campo en la sección de Configuración de Nodos.
+                                </p>
+                            </div>
+                        </div>
+                    )}
+                    
+                    {!stockInventory.hasStock && linkedStorages.length > 0 && (
+                        <div className="p-12 text-center bg-gray-50 dark:bg-slate-950 rounded-[40px] border border-dashed dark:border-slate-800 flex flex-col items-center">
+                            <Package size={32} className="text-gray-300 mb-2"/>
+                            <p className="text-gray-400 italic font-medium">No hay stock de semillas disponible en los depósitos vinculados.</p>
+                            <Link to="/seed-batches" className="mt-4 text-[10px] font-black text-hemp-600 uppercase tracking-widest hover:underline">Gestionar Inventario Logístico</Link>
+                        </div>
+                    )}
+
+                    {/* SECCIÓN 1: STOCK CONSOLIDADO */}
+                    {stockInventory.hasStock && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {stockInventory.consolidated.map((item, idx) => (
+                                <div key={idx} className="bg-white dark:bg-slate-900 p-6 rounded-[32px] border border-gray-100 dark:border-slate-800 shadow-sm relative overflow-hidden group hover:shadow-md transition-shadow">
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-2xl text-amber-600">
+                                            <Sprout size={24}/>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Variedad</p>
+                                            <p className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-tighter">{item.variety}</p>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="space-y-1">
+                                        <p className="text-4xl font-black text-slate-900 dark:text-white tracking-tighter">{item.totalKg.toLocaleString()} <span className="text-lg text-slate-400">kg</span></p>
+                                        <p className="text-[10px] font-bold text-green-600 uppercase tracking-widest flex items-center">
+                                            <CheckCircle2 size={10} className="mr-1"/> Disponible para siembra
+                                        </p>
+                                    </div>
+                                    
+                                    <div className="mt-4 pt-4 border-t dark:border-slate-800">
+                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{item.count} Lotes identificados</p>
+                                    </div>
                                 </div>
-                            </div>
-                        )}
-                        
-                        {stockBalance.length === 0 ? (
-                            <div className="p-12 text-center bg-gray-50 dark:bg-slate-950 rounded-3xl border border-dashed dark:border-slate-800 flex flex-col items-center">
-                                <Package size={32} className="text-gray-300 mb-2"/>
-                                <p className="text-gray-400 italic font-medium">No se detectaron existencias ni movimientos en los depósitos vinculados.</p>
-                                {linkedStorages.length > 0 && <Link to="/seed-batches" className="mt-4 text-[10px] font-black text-hemp-600 uppercase tracking-widest hover:underline">Gestionar Inventario Logístico</Link>}
-                            </div>
-                        ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {stockBalance.map((item, idx) => (
-                                    <div key={idx} className="bg-gray-50 dark:bg-slate-950 p-6 rounded-[32px] border dark:border-slate-800 relative overflow-hidden">
-                                        <div className="relative z-10">
-                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{item.variety}</p>
-                                            <div className="flex justify-between items-end mb-4">
-                                                <div>
-                                                    <p className="text-2xl font-black text-slate-800 dark:text-white">{(item.received - item.used).toFixed(1)} <span className="text-sm">kg</span></p>
-                                                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">En Depósito</p>
-                                                </div>
-                                                <div className="text-right space-y-1">
-                                                    <p className="text-[10px] font-black text-green-600 flex items-center justify-end"><ArrowLeft size={10} className="mr-1 rotate-45"/> {item.received} kg Ingresados</p>
-                                                    <p className="text-[10px] font-black text-red-500 flex items-center justify-end"><Sprout size={10} className="mr-1"/> {item.used.toFixed(1)} kg Sembrados</p>
-                                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* SECCIÓN 2: DESGLOSE POR ALMACÉN */}
+                    {stockInventory.hasStock && (
+                        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4">
+                            <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest flex items-center">
+                                <LayoutGrid size={16} className="mr-2"/> Desglose por Almacén
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {stockInventory.byStorage.map((store, idx) => (
+                                    <div key={idx} className="bg-white dark:bg-slate-900 p-6 rounded-[32px] border border-gray-100 dark:border-slate-800 shadow-sm flex flex-col">
+                                        <div className="flex items-center justify-between mb-4 pb-4 border-b dark:border-slate-800">
+                                            <div>
+                                                <h4 className="font-black text-slate-800 dark:text-white uppercase tracking-tighter">{store.name}</h4>
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center"><MapPin size={10} className="mr-1"/> {store.city}</p>
                                             </div>
-                                            <div className="w-full bg-gray-200 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-                                                <div 
-                                                    className="h-full bg-amber-500" 
-                                                    style={{ width: `${Math.min(100, Math.max(0, ((item.received - item.used) / item.received) * 100))}%` }}
-                                                ></div>
-                                            </div>
+                                            <Warehouse size={20} className="text-slate-300"/>
+                                        </div>
+                                        <div className="space-y-3 flex-1">
+                                            {store.items.map((it, i) => (
+                                                <div key={i} className="flex justify-between items-center bg-gray-50 dark:bg-slate-950/50 p-3 rounded-2xl border border-transparent hover:border-gray-200 dark:hover:border-slate-700 transition-colors">
+                                                    <div>
+                                                        <p className="text-xs font-black text-slate-700 dark:text-slate-300 uppercase">{it.variety}</p>
+                                                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Lote: {it.batchCode}</p>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <p className="text-sm font-black text-hemp-600">{it.kg.toLocaleString()} kg</p>
+                                                    </div>
+                                                </div>
+                                            ))}
                                         </div>
                                     </div>
                                 ))}
                             </div>
-                        )}
-                    </div>
+                        </div>
+                    )}
 
+                    {/* SECCIÓN 3: HISTORIAL DE REMITOS */}
                     <div className="bg-white dark:bg-slate-900 rounded-[40px] shadow-sm border dark:border-slate-800 overflow-hidden">
                         <div className="p-8 border-b dark:border-slate-800 bg-gray-50/50 dark:bg-slate-950/50">
-                            <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest">Historial de Remitos (Entrantes a Depósitos Vinculados)</h3>
+                            <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest flex items-center">
+                                <Box size={16} className="mr-2"/> Historial de Ingresos (Remitos)
+                            </h3>
                         </div>
                         <div className="p-8">
                              <div className="overflow-x-auto">
@@ -350,7 +398,7 @@ export default function LocationDetails() {
                                                          <div className="font-black text-gray-800 dark:text-white uppercase tracking-tighter">{vari?.name}</div>
                                                          <div className="text-[9px] text-gray-400 font-bold uppercase mt-0.5">Lote: {batch?.batchCode}</div>
                                                      </td>
-                                                     <td className="px-8 py-5 text-center font-black text-hemp-600 text-base">{m.quantity} kg</td>
+                                                     <td className="px-8 py-5 text-center font-black text-hemp-600 text-base">{m.quantity.toLocaleString()} kg</td>
                                                      <td className="px-8 py-5 text-right">
                                                          <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase inline-flex items-center shadow-sm ${m.status === 'Recibido' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
                                                             {m.status === 'Recibido' ? <CheckCircle2 size={10} className="mr-1.5"/> : <Truck size={10} className="mr-1.5"/>}
