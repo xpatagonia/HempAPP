@@ -31,6 +31,41 @@ export default function LocationDetails() {
         return seedMovements.filter(m => m.targetLocationId === id).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [seedMovements, id]);
 
+    // Cálculo del balance de stock en campo (Recibido - Sembrado)
+    const stockBalance = useMemo(() => {
+        const balance: Record<string, { variety: string, received: number, used: number }> = {};
+
+        // Sumar lo recibido
+        receivedMaterials.forEach(m => {
+            if(m.status !== 'Recibido') return;
+            const batch = seedBatches.find(b => b.id === m.batchId);
+            const varId = batch?.varietyId || 'unknown';
+            const varName = varieties.find(v => v.id === varId)?.name || 'Desconocida';
+
+            if (!balance[varId]) balance[varId] = { variety: varName, received: 0, used: 0 };
+            balance[varId].received += m.quantity;
+        });
+
+        // Restar lo sembrado (según parcelas activas)
+        locationPlots.forEach(p => {
+            if (p.usedSeedValue && p.varietyId) {
+                const varId = p.varietyId;
+                const varName = varieties.find(v => v.id === varId)?.name || 'Desconocida';
+                
+                if (!balance[varId]) balance[varId] = { variety: varName, received: 0, used: 0 };
+                
+                // Normalizar a KG
+                let usedKg = p.usedSeedValue;
+                if (p.usedSeedUnit === 'gr') usedKg = usedKg / 1000;
+                if (p.usedSeedUnit === 'tn') usedKg = usedKg * 1000;
+                
+                balance[varId].used += usedKg;
+            }
+        });
+
+        return Object.values(balance);
+    }, [receivedMaterials, locationPlots, varieties, seedBatches]);
+
     const activePlotLayers = useMemo(() => {
         return locationPlots
             .filter(p => p.status === 'Activa' && p.polygon && p.polygon.length > 2)
@@ -130,7 +165,7 @@ export default function LocationDetails() {
                                                 <div className="p-3 rounded-2xl text-white" style={{ backgroundColor: plotColor }}>
                                                     <Sprout size={20}/>
                                                 </div>
-                                                <span className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border ${p.status === 'Activa' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-500'}`}>{p.status}</span>
+                                                <span className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border ${p.status === 'Activa' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-gray-50 text-gray-500'}`}>{p.status}</span>
                                             </div>
                                             <h4 className="font-black text-gray-800 dark:text-white uppercase tracking-tighter text-lg leading-tight group-hover:text-hemp-600 transition-colors">{p.name}</h4>
                                             <div className="mt-2 flex items-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">
@@ -191,16 +226,49 @@ export default function LocationDetails() {
             )}
 
             {activeTab === 'stock' && (
-                <div className="animate-in fade-in slide-in-from-top-2">
-                    <div className="bg-white dark:bg-slate-900 rounded-[40px] shadow-sm border dark:border-slate-800 overflow-hidden">
-                        <div className="p-10 border-b dark:border-slate-800 bg-gray-50/50 dark:bg-slate-950/50">
-                            <div className="flex items-center space-x-4">
-                                <div className="bg-amber-600 p-4 rounded-3xl text-white shadow-lg"><Package size={32}/></div>
-                                <div>
-                                    <h2 className="text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Inventario en Campo</h2>
-                                    <p className="text-sm text-slate-400 font-bold uppercase tracking-widest mt-1">Control de remitos y stock disponible para siembra</p>
-                                </div>
+                <div className="animate-in fade-in slide-in-from-top-2 space-y-8">
+                    {/* PANEL DE BALANCE (NUEVO) */}
+                    <div className="bg-white dark:bg-slate-900 rounded-[40px] shadow-sm border dark:border-slate-800 p-8">
+                        <h2 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-tighter mb-6 flex items-center">
+                            <Package size={20} className="mr-2 text-amber-600"/> Balance de Stock en Sitio
+                        </h2>
+                        
+                        {stockBalance.length === 0 ? (
+                            <div className="p-8 text-center bg-gray-50 dark:bg-slate-950 rounded-3xl border border-dashed dark:border-slate-800 text-gray-400 italic">
+                                No hay movimientos de semillas registrados en este campo.
                             </div>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {stockBalance.map((item, idx) => (
+                                    <div key={idx} className="bg-gray-50 dark:bg-slate-950 p-6 rounded-[32px] border dark:border-slate-800 relative overflow-hidden">
+                                        <div className="relative z-10">
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{item.variety}</p>
+                                            <div className="flex justify-between items-end mb-4">
+                                                <div>
+                                                    <p className="text-2xl font-black text-slate-800 dark:text-white">{(item.received - item.used).toFixed(1)} <span className="text-sm">kg</span></p>
+                                                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Disponible</p>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="text-xs font-black text-green-600">+{item.received} kg Recibido</p>
+                                                    <p className="text-xs font-black text-red-500">-{item.used} kg Sembrado</p>
+                                                </div>
+                                            </div>
+                                            <div className="w-full bg-gray-200 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                                                <div 
+                                                    className="h-full bg-amber-500" 
+                                                    style={{ width: `${Math.min(100, Math.max(0, ((item.received - item.used) / item.received) * 100))}%` }}
+                                                ></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="bg-white dark:bg-slate-900 rounded-[40px] shadow-sm border dark:border-slate-800 overflow-hidden">
+                        <div className="p-8 border-b dark:border-slate-800 bg-gray-50/50 dark:bg-slate-950/50">
+                            <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest">Historial de Recepción (Logística)</h3>
                         </div>
                         <div className="p-8">
                              <div className="overflow-x-auto">
