@@ -8,7 +8,7 @@ import {
   Loader2, Search, Eye, Info, CheckCircle, Filter, FilterX, ArrowUpRight,
   Building, User, Calendar, FileText, Globe, ClipboardList, ShieldCheck, Warehouse,
   Plus, CheckCircle2, Navigation, Smartphone, UserCheck, Barcode, FlaskConical, Scale, ClipboardCheck,
-  Map as MapIcon, Route, Compass, Weight
+  Map as MapIcon, Route, Compass, Weight, LayoutGrid, List
 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 
@@ -36,6 +36,7 @@ export default function SeedBatches() {
   
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<'inventory' | 'logistics'>((searchParams.get('tab') as any) || 'inventory');
+  const [viewMode, setViewMode] = useState<'batches' | 'warehouses'>('batches'); // Nuevo estado para alternar vista
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const [searchTerm, setSearchTerm] = useState(searchParams.get('variety') || '');
@@ -95,6 +96,36 @@ export default function SeedBatches() {
       return matchesSearch;
   }), [seedBatches, searchTerm, varieties, isClient, isTech, currentUser, storagePoints]);
 
+  // Lógica de agrupación por Almacén para el contador detallado
+  const stockByWarehouse = useMemo(() => {
+      const grouped: Record<string, { storage: any, items: Record<string, number>, totalKg: number }> = {};
+
+      filteredBatches.forEach(b => {
+          if (b.remainingQuantity <= 0) return; // Solo contar stock positivo
+          
+          const sp = storagePoints.find(s => s.id === b.storagePointId);
+          const spId = sp ? sp.id : 'unknown';
+          const varietyName = varieties.find(v => v.id === b.varietyId)?.name || 'Genética S/D';
+
+          if (!grouped[spId]) {
+              grouped[spId] = {
+                  storage: sp,
+                  items: {},
+                  totalKg: 0
+              };
+          }
+
+          if (!grouped[spId].items[varietyName]) {
+              grouped[spId].items[varietyName] = 0;
+          }
+
+          grouped[spId].items[varietyName] += b.remainingQuantity;
+          grouped[spId].totalKg += b.remainingQuantity;
+      });
+
+      return Object.values(grouped);
+  }, [filteredBatches, storagePoints, varieties]);
+
   const filteredMovements = useMemo(() => seedMovements.filter(m => {
       if (isClient && currentUser?.clientId) {
           if (m.clientId !== currentUser.clientId) return false;
@@ -139,8 +170,6 @@ export default function SeedBatches() {
       }
       setIsSubmitting(true);
       try {
-          // LIMPIEZA DE PAYLOAD PARA LA BASE DE DATOS
-          // El supplierId se usa solo para filtrar en el formulario, no existe en la tabla seed_batches
           const { inputValue, supplierId, ...baseData } = batchFormData;
           
           const payload = { 
@@ -180,8 +209,6 @@ export default function SeedBatches() {
       setIsSubmitting(true);
       try {
           const { inputValue, ...cleanMoveData } = moveFormData;
-
-          // CORRECCIÓN: Si el cliente es 'INTERNAL', enviamos null para evitar fallos de FK UUID
           const finalClientId = cleanMoveData.clientId === 'INTERNAL' ? null : cleanMoveData.clientId;
 
           const movePayload = { 
@@ -195,9 +222,17 @@ export default function SeedBatches() {
           
           const success = await addSeedMovement(movePayload);
           if (success) {
-              await updateSeedBatch({ ...batch, remainingQuantity: batch.remainingQuantity - calculatedMoveKg });
+              // --- CORRECCIÓN CRÍTICA: DESCUENTO DE STOCK ---
+              // Restamos la cantidad movida del lote original inmediatamente
+              const newQuantity = Math.max(0, batch.remainingQuantity - calculatedMoveKg);
+              // Actualizamos el lote original con redondeo para evitar decimales flotantes
+              await updateSeedBatch({ 
+                  ...batch, 
+                  remainingQuantity: Number(newQuantity.toFixed(3)) 
+              });
+              
               setIsMoveModalOpen(false);
-              alert("✅ Despacho registrado. El material está en tránsito.");
+              alert(`✅ Despacho registrado. Se han descontado ${calculatedMoveKg} kg del lote en ${storagePoints.find(s=>s.id === batch.storagePointId)?.name}.`);
           }
       } catch (err) {
           alert("Error de comunicación logística.");
@@ -214,6 +249,7 @@ export default function SeedBatches() {
           if (updateSuccess) {
               const originalBatch = seedBatches.find(b => b.id === move.batchId);
               if (originalBatch) {
+                  // Creamos un nuevo lote en el destino (clonando datos genéticos del original)
                   const localBatchPayload: SeedBatch = {
                       ...originalBatch,
                       id: crypto.randomUUID(),
@@ -226,7 +262,7 @@ export default function SeedBatches() {
                       isActive: true
                   };
                   await addSeedBatch(localBatchPayload);
-                  alert("✅ Recepción confirmada e inventario actualizado.");
+                  alert("✅ Recepción confirmada e inventario actualizado en destino.");
               }
           }
       } finally { setIsSubmitting(false); }
@@ -280,46 +316,83 @@ export default function SeedBatches() {
       </div>
 
       {activeTab === 'inventory' ? (
-          <div className="bg-white dark:bg-slate-900 rounded-[32px] shadow-sm border dark:border-slate-800 overflow-hidden overflow-x-auto">
-              <table className="min-w-full text-sm text-left">
-                  <thead className="bg-gray-50 dark:bg-slate-950/50 text-gray-500 uppercase text-[10px] font-black tracking-widest border-b dark:border-slate-800">
-                      <tr>
-                          <th className="px-8 py-5">Lote Industrial</th>
-                          <th className="px-8 py-5">Nodo Logístico</th>
-                          <th className="px-8 py-5 text-center">Disponible</th>
-                          <th className="px-8 py-5 text-right">Acciones</th>
-                      </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100 dark:divide-slate-800 font-bold">
-                      {filteredBatches.length === 0 ? (
-                          <tr><td colSpan={4} className="p-12 text-center text-gray-400 italic">Sin existencias registradas.</td></tr>
-                      ) : filteredBatches.map(batch => {
-                          const v = varieties.find(v => v.id === batch.varietyId);
-                          const sp = storagePoints.find(s => s.id === batch.storagePointId);
-                          return (
-                              <tr key={batch.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors group">
-                                  <td className="px-8 py-5">
-                                      <div className="font-black text-gray-800 dark:text-gray-200 uppercase tracking-tighter">{batch.batchCode}</div>
-                                      <div className="text-[9px] text-hemp-600 font-black uppercase tracking-widest">{v?.name || 'S/D'}</div>
-                                  </td>
-                                  <td className="px-8 py-5">
-                                      <div className="font-black text-slate-700 dark:text-slate-300 uppercase truncate max-w-[200px]">{sp?.name || 'ALMACÉN CENTRAL'}</div>
-                                      <div className="text-[9px] text-gray-400 uppercase font-black">{sp?.city || '-'}</div>
-                                  </td>
-                                  <td className="px-8 py-5 text-center">
-                                      <span className={`px-4 py-1.5 rounded-full font-black text-xs ${batch.remainingQuantity <= 0 ? 'bg-gray-100 text-gray-400' : 'bg-green-100 text-green-700 shadow-sm'}`}>{batch.remainingQuantity.toLocaleString()} kg</span>
-                                  </td>
-                                  <td className="px-8 py-5 text-right">
-                                      <div className="flex justify-end space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                          <button onClick={() => handleOpenView(batch)} className="p-2 text-gray-400 hover:text-blue-600 bg-white dark:bg-slate-800 rounded-xl shadow-sm border dark:border-slate-700 transition"><Eye size={16}/></button>
-                                          {isAdmin && <button onClick={() => { setBatchFormData({...batch, inputValue: batch.initialQuantity}); setEditingBatchId(batch.id); setIsBatchModalOpen(true); }} className="p-2 text-gray-400 hover:text-hemp-600 bg-white dark:bg-slate-800 rounded-xl shadow-sm border dark:border-slate-700 transition"><Edit2 size={16}/></button>}
-                                      </div>
-                                  </td>
+          <div className="space-y-4">
+              <div className="flex justify-end">
+                  <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-xl p-1 flex">
+                      <button onClick={() => setViewMode('batches')} className={`p-2 rounded-lg transition-all ${viewMode === 'batches' ? 'bg-hemp-50 text-hemp-600' : 'text-slate-400 hover:text-slate-600'}`} title="Vista Lista"><List size={20}/></button>
+                      <button onClick={() => setViewMode('warehouses')} className={`p-2 rounded-lg transition-all ${viewMode === 'warehouses' ? 'bg-hemp-50 text-hemp-600' : 'text-slate-400 hover:text-slate-600'}`} title="Vista Almacén"><LayoutGrid size={20}/></button>
+                  </div>
+              </div>
+
+              {viewMode === 'batches' ? (
+                  <div className="bg-white dark:bg-slate-900 rounded-[32px] shadow-sm border dark:border-slate-800 overflow-hidden overflow-x-auto animate-in fade-in">
+                      <table className="min-w-full text-sm text-left">
+                          <thead className="bg-gray-50 dark:bg-slate-950/50 text-gray-500 uppercase text-[10px] font-black tracking-widest border-b dark:border-slate-800">
+                              <tr>
+                                  <th className="px-8 py-5">Lote Industrial</th>
+                                  <th className="px-8 py-5">Nodo Logístico</th>
+                                  <th className="px-8 py-5 text-center">Disponible</th>
+                                  <th className="px-8 py-5 text-right">Acciones</th>
                               </tr>
-                          )
-                      })}
-                  </tbody>
-              </table>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100 dark:divide-slate-800 font-bold">
+                              {filteredBatches.length === 0 ? (
+                                  <tr><td colSpan={4} className="p-12 text-center text-gray-400 italic">Sin existencias registradas.</td></tr>
+                              ) : filteredBatches.map(batch => {
+                                  const v = varieties.find(v => v.id === batch.varietyId);
+                                  const sp = storagePoints.find(s => s.id === batch.storagePointId);
+                                  return (
+                                      <tr key={batch.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors group">
+                                          <td className="px-8 py-5">
+                                              <div className="font-black text-gray-800 dark:text-gray-200 uppercase tracking-tighter">{batch.batchCode}</div>
+                                              <div className="text-[9px] text-hemp-600 font-black uppercase tracking-widest">{v?.name || 'S/D'}</div>
+                                          </td>
+                                          <td className="px-8 py-5">
+                                              <div className="font-black text-slate-700 dark:text-slate-300 uppercase truncate max-w-[200px]">{sp?.name || 'ALMACÉN CENTRAL'}</div>
+                                              <div className="text-[9px] text-gray-400 uppercase font-black">{sp?.city || '-'}</div>
+                                          </td>
+                                          <td className="px-8 py-5 text-center">
+                                              <span className={`px-4 py-1.5 rounded-full font-black text-xs ${batch.remainingQuantity <= 0 ? 'bg-gray-100 text-gray-400' : 'bg-green-100 text-green-700 shadow-sm'}`}>{batch.remainingQuantity.toLocaleString()} kg</span>
+                                          </td>
+                                          <td className="px-8 py-5 text-right">
+                                              <div className="flex justify-end space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                  <button onClick={() => handleOpenView(batch)} className="p-2 text-gray-400 hover:text-blue-600 bg-white dark:bg-slate-800 rounded-xl shadow-sm border dark:border-slate-700 transition"><Eye size={16}/></button>
+                                                  {isAdmin && <button onClick={() => { setBatchFormData({...batch, inputValue: batch.initialQuantity}); setEditingBatchId(batch.id); setIsBatchModalOpen(true); }} className="p-2 text-gray-400 hover:text-hemp-600 bg-white dark:bg-slate-800 rounded-xl shadow-sm border dark:border-slate-700 transition"><Edit2 size={16}/></button>}
+                                              </div>
+                                          </td>
+                                      </tr>
+                                  )
+                              })}
+                          </tbody>
+                      </table>
+                  </div>
+              ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in">
+                      {stockByWarehouse.length === 0 ? (
+                          <div className="col-span-3 p-12 text-center text-gray-400 italic">No hay stock disponible agrupado.</div>
+                      ) : stockByWarehouse.map((group, idx) => (
+                          <div key={idx} className="bg-white dark:bg-slate-900 rounded-[32px] shadow-sm border dark:border-slate-800 p-6 flex flex-col">
+                              <div className="flex items-start justify-between mb-4 pb-4 border-b dark:border-slate-800">
+                                  <div>
+                                      <h3 className="font-black text-slate-800 dark:text-white uppercase tracking-tighter text-lg">{group.storage?.name || 'Ubicación Desconocida'}</h3>
+                                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest flex items-center"><MapPin size={10} className="mr-1"/> {group.storage?.city || 'S/D'}</p>
+                                  </div>
+                                  <div className="bg-hemp-50 dark:bg-hemp-900/20 text-hemp-600 px-3 py-1 rounded-xl text-xs font-black">
+                                      {group.totalKg.toLocaleString()} kg
+                                  </div>
+                              </div>
+                              <div className="space-y-2 flex-1 overflow-y-auto max-h-[200px] custom-scrollbar">
+                                  {Object.entries(group.items).map(([variety, qty]) => (
+                                      <div key={variety} className="flex justify-between items-center bg-gray-50 dark:bg-slate-950/50 p-2 rounded-lg">
+                                          <span className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase">{variety}</span>
+                                          <span className="text-xs font-black text-slate-800 dark:text-white">{qty.toLocaleString()} kg</span>
+                                      </div>
+                                  ))}
+                              </div>
+                          </div>
+                      ))}
+                  </div>
+              )}
           </div>
       ) : (
           <div className="bg-white dark:bg-slate-900 rounded-[32px] shadow-sm border dark:border-slate-800 overflow-hidden overflow-x-auto">
