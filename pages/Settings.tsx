@@ -10,7 +10,7 @@ import { supabase } from '../supabaseClient';
 
 export default function Settings() {
   const { currentUser, appName, appLogo, updateBranding } = useAppContext();
-  // CAMBIO: Tab por defecto 'system' para asegurar que el usuario vea el botón de actualización
+  // Forzamos la pestaña 'system' por defecto para ver el botón inmediatamente
   const [activeTab, setActiveTab] = useState<'branding' | 'system' | 'maintenance'>('system');
   const [editAppName, setEditAppName] = useState(appName);
   const [editAppLogo, setEditAppLogo] = useState(appLogo);
@@ -81,8 +81,8 @@ export default function Settings() {
 
   const handleFixSchema = () => {
       const sql = `
--- FIX V44: REPARACIÓN INTEGRAL DE STOCK E INSUMOS
--- Ejecutar en SQL Editor de Supabase para habilitar nuevas funciones
+-- FIX V45: REPARACIÓN DE ESTRUCTURA (FORCE UPDATE)
+-- Ejecutar para habilitar stock por depósito e insumos utilizados
 
 -- 1. Campos de Parcelas (Plots) - Consumo de Semilla
 alter table public.plots add column if not exists color text default '#16a34a';
@@ -107,7 +107,7 @@ alter table public.storage_points add column if not exists node_code text;
 NOTIFY pgrst, 'reload schema';
 `;
       navigator.clipboard.writeText(sql);
-      alert("✅ SCRIPT V44 COPIADO.\n\nInstrucciones:\n1. Ve al Editor SQL de Supabase.\n2. Pega el código (Ctrl+V).\n3. Ejecuta 'Run'.\n\nSi no haces esto, los datos de stock y consumo NO SE GUARDARÁN.");
+      alert("✅ SCRIPT V45 COPIADO.\n\nInstrucciones:\n1. Ve al Editor SQL de Supabase.\n2. Pega el código (Ctrl+V).\n3. Ejecuta 'Run'.\n\nSi no haces esto, los datos de stock NO SE GUARDARÁN.");
   };
 
   return (
@@ -179,16 +179,16 @@ NOTIFY pgrst, 'reload schema';
       {activeTab === 'system' && (
           <div className="space-y-6 animate-in slide-in-from-bottom-2">
               
-              {/* FIX DATABASE BUTTON */}
+              {/* FIX DATABASE BUTTON - VERSION 45 */}
               <div className="bg-blue-600 p-8 rounded-[40px] shadow-xl text-white relative overflow-hidden group hover:scale-[1.01] transition-all cursor-pointer border border-blue-500" onClick={handleFixSchema}>
                   <div className="flex justify-between items-center relative z-10">
                       <div>
                           <div className="flex items-center gap-3 mb-2">
                               <Database size={24} className="text-white"/>
-                              <h3 className="text-xl font-black uppercase tracking-tighter italic">Actualizar Esquema SQL (V44 - REPARACIÓN)</h3>
+                              <h3 className="text-xl font-black uppercase tracking-tighter italic">Actualizar Esquema SQL (V45)</h3>
                           </div>
                           <p className="text-xs text-blue-100 font-medium max-w-md">
-                              Soluciona error "Sin datos en Stock". Repara columnas 'storage_point_id' y 'used_seed_value' necesarias para el inventario.
+                              Haga clic aquí para reparar la base de datos y visualizar el stock. (Versión 45)
                           </p>
                       </div>
                       <div className="bg-white/20 p-3 rounded-full animate-pulse">
@@ -196,7 +196,7 @@ NOTIFY pgrst, 'reload schema';
                       </div>
                   </div>
                   <div className="mt-6 flex items-center text-[10px] font-black uppercase tracking-widest bg-white/10 w-fit px-4 py-2 rounded-full border border-white/20">
-                      Clic para copiar Script de Reparación
+                      Clic para copiar Script
                   </div>
               </div>
 
