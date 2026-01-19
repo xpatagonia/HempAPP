@@ -4,13 +4,13 @@ import { useAppContext } from '../context/AppContext';
 import { 
   Save, Database, RefreshCw, Lock, Settings as SettingsIcon, 
   CheckCircle2, Layout, Trash2, RotateCcw, Shield, 
-  AlertTriangle, FlaskConical, CheckCircle, XCircle, Info, Search, FileCode, Flame, Eraser, Server, Activity, DownloadCloud, FileJson
+  AlertTriangle, FlaskConical, CheckCircle, XCircle, Info, Search, FileCode, Flame, Eraser, Server, Activity, DownloadCloud, FileJson, Zap
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
 export default function Settings() {
   const { currentUser, appName, appLogo, updateBranding } = useAppContext();
-  // V46: Mantenemos 'system' por defecto para acceso rápido al script
+  // V47: Forzamos 'system' tab por defecto
   const [activeTab, setActiveTab] = useState<'branding' | 'system' | 'maintenance'>('system');
   const [editAppName, setEditAppName] = useState(appName);
   const [editAppLogo, setEditAppLogo] = useState(appLogo);
@@ -81,10 +81,10 @@ export default function Settings() {
 
   const handleFixSchema = () => {
       const sql = `
--- FIX V46: MIGRACIÓN DE DATOS (CRÍTICO PARA VER STOCK)
--- Este script crea las columnas faltantes Y ASIGNA un depósito por defecto a los lotes huérfanos.
+-- FIX V47: MIGRACIÓN FINAL (RECUPERACIÓN DE STOCK)
+-- Ejecutar para reparar estructura y visualizar inventario oculto
 
--- 1. ASEGURAR COLUMNAS (ESTRUCTURA)
+-- 1. ESTRUCTURA (Columnas faltantes)
 alter table public.plots add column if not exists color text default '#16a34a';
 alter table public.plots add column if not exists used_seed_value numeric default 0;
 alter table public.plots add column if not exists used_seed_unit text default 'kg';
@@ -97,22 +97,23 @@ alter table public.seed_movements add column if not exists client_id uuid;
 alter table public.storage_points add column if not exists client_id uuid;
 alter table public.storage_points add column if not exists node_code text;
 
--- 2. MIGRACIÓN DE DATOS (DATA FIX)
--- Si no existen depósitos, creamos uno genérico para que el stock no desaparezca.
+-- 2. ASEGURAR DEPÓSITO POR DEFECTO
+-- Si no hay depósitos, crea uno para no perder los datos
 INSERT INTO public.storage_points (id, name, type, node_code, address, city)
-SELECT 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'Depósito General (Migración)', 'Propio', 'MIG-001', 'Sede Central', 'General'
+SELECT 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'Depósito General (Recuperado)', 'Propio', 'REC-001', 'Sede Central', 'General'
 WHERE NOT EXISTS (SELECT 1 FROM public.storage_points);
 
--- Asignar todos los lotes sin depósito al primer depósito disponible
+-- 3. VINCULAR STOCK HUÉRFANO
+-- Asigna lotes sin ubicación al primer depósito que encuentre
 UPDATE public.seed_batches
 SET storage_point_id = (SELECT id FROM public.storage_points LIMIT 1)
 WHERE storage_point_id IS NULL;
 
--- 3. ACTUALIZAR CACHÉ
+-- 4. REFRESCAR API
 NOTIFY pgrst, 'reload schema';
 `;
       navigator.clipboard.writeText(sql);
-      alert("✅ SCRIPT V46 COPIADO (CON MIGRACIÓN).\n\nInstrucciones:\n1. Ve a Supabase > SQL Editor.\n2. Pega y Ejecuta.\n3. Tus datos de stock antiguos aparecerán asignados al 'Depósito General'.");
+      alert("✅ SCRIPT V47 COPIADO.\n\nEste script:\n1. Crea columnas faltantes.\n2. Crea un depósito por defecto si no existe.\n3. Mueve todo el stock 'invisible' a ese depósito.\n\nEjecútelo en Supabase SQL Editor ahora.");
   };
 
   return (
@@ -184,24 +185,24 @@ NOTIFY pgrst, 'reload schema';
       {activeTab === 'system' && (
           <div className="space-y-6 animate-in slide-in-from-bottom-2">
               
-              {/* FIX DATABASE BUTTON - VERSION 46 MIGRATION */}
-              <div className="bg-blue-600 p-8 rounded-[40px] shadow-xl text-white relative overflow-hidden group hover:scale-[1.01] transition-all cursor-pointer border border-blue-500" onClick={handleFixSchema}>
+              {/* FIX DATABASE BUTTON - VERSION 47 (PURPLE) */}
+              <div className="bg-purple-600 p-8 rounded-[40px] shadow-xl text-white relative overflow-hidden group hover:scale-[1.01] transition-all cursor-pointer border border-purple-500" onClick={handleFixSchema}>
                   <div className="flex justify-between items-center relative z-10">
                       <div>
                           <div className="flex items-center gap-3 mb-2">
-                              <Database size={24} className="text-white"/>
-                              <h3 className="text-xl font-black uppercase tracking-tighter italic">Actualizar Esquema SQL (V46 - MIGRACIÓN)</h3>
+                              <Zap size={24} className="text-yellow-300 fill-yellow-300 animate-pulse"/>
+                              <h3 className="text-xl font-black uppercase tracking-tighter italic">Actualizar Esquema SQL (V47)</h3>
                           </div>
-                          <p className="text-xs text-blue-100 font-medium max-w-md">
-                              Repara la base de datos y <strong>MUEVE AUTOMÁTICAMENTE</strong> el stock antiguo a un depósito visible para que no se pierda.
+                          <p className="text-xs text-purple-100 font-medium max-w-md">
+                              Script definitivo de recuperación de stock. Mueve lotes huérfanos y asegura la integridad de datos.
                           </p>
                       </div>
-                      <div className="bg-white/20 p-3 rounded-full animate-pulse">
+                      <div className="bg-white/20 p-3 rounded-full">
                           <FileCode size={24}/>
                       </div>
                   </div>
                   <div className="mt-6 flex items-center text-[10px] font-black uppercase tracking-widest bg-white/10 w-fit px-4 py-2 rounded-full border border-white/20">
-                      Clic para copiar Script V46
+                      Clic para copiar Script V47
                   </div>
               </div>
 
@@ -278,7 +279,7 @@ NOTIFY pgrst, 'reload schema';
                       <Database size={20} className="text-slate-400"/>
                       <div>
                           <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Versión del Cliente</p>
-                          <p className="text-[10px] text-slate-400 uppercase tracking-widest">Nucleus WebApp v1.0.1-FIX</p>
+                          <p className="text-[10px] text-slate-400 uppercase tracking-widest">Nucleus WebApp v1.0.2-FIX</p>
                       </div>
                   </div>
                   <div className="text-right">
