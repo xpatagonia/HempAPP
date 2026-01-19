@@ -10,7 +10,8 @@ import { supabase } from '../supabaseClient';
 
 export default function Settings() {
   const { currentUser, appName, appLogo, updateBranding } = useAppContext();
-  const [activeTab, setActiveTab] = useState<'branding' | 'system' | 'maintenance'>('branding');
+  // CAMBIO: Tab por defecto 'system' para asegurar que el usuario vea el botón de actualización
+  const [activeTab, setActiveTab] = useState<'branding' | 'system' | 'maintenance'>('system');
   const [editAppName, setEditAppName] = useState(appName);
   const [editAppLogo, setEditAppLogo] = useState(appLogo);
   const [isBackingUp, setIsBackingUp] = useState(false);
@@ -184,7 +185,7 @@ NOTIFY pgrst, 'reload schema';
                       <div>
                           <div className="flex items-center gap-3 mb-2">
                               <Database size={24} className="text-white"/>
-                              <h3 className="text-xl font-black uppercase tracking-tighter italic">Actualizar Esquema SQL (V44)</h3>
+                              <h3 className="text-xl font-black uppercase tracking-tighter italic">Actualizar Esquema SQL (V44 - REPARACIÓN)</h3>
                           </div>
                           <p className="text-xs text-blue-100 font-medium max-w-md">
                               Soluciona error "Sin datos en Stock". Repara columnas 'storage_point_id' y 'used_seed_value' necesarias para el inventario.
