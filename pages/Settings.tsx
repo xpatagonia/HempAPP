@@ -80,28 +80,37 @@ export default function Settings() {
 
   const handleFixSchema = () => {
       const sql = `
--- FIX V43: ACTUALIZACIÓN CRÍTICA DE ESQUEMA PARA INVENTARIO Y SIEMBRA
--- Ejecutar en SQL Editor de Supabase para habilitar nuevas funciones
+-- FIX V44: REPARACIÓN INTEGRAL DE STOCK E INSUMOS
+-- Ejecutar en SQL Editor de Supabase
 
--- 1. Campos de Parcelas (Plots)
+-- 1. Tabla PLOTS (Parcelas)
+-- Asegura que podamos guardar cuánto se sembró y el color
 alter table public.plots add column if not exists color text default '#16a34a';
-alter table public.plots add column if not exists used_seed_value numeric;
+alter table public.plots add column if not exists used_seed_value numeric default 0;
 alter table public.plots add column if not exists used_seed_unit text default 'kg';
 
--- 2. Campos de Lotes de Semilla (Seed Batches)
+-- 2. Tabla SEED_BATCHES (Lotes de Semilla)
+-- Asegura la trazabilidad con proveedor y categoría
 alter table public.seed_batches add column if not exists supplier_id uuid; 
 alter table public.seed_batches add column if not exists category text;
 alter table public.seed_batches add column if not exists label_serial_number text;
+alter table public.seed_batches add column if not exists storage_point_id uuid; -- Vital para saber dónde está
 
--- 3. Campos de Movimientos (Logística)
+-- 3. Tabla SEED_MOVEMENTS (Movimientos)
+-- Asegura el flujo logístico
 alter table public.seed_movements add column if not exists origin_storage_id uuid;
 alter table public.seed_movements add column if not exists client_id uuid;
 
--- 4. Actualizar caché de API
+-- 4. Tabla STORAGE_POINTS (Depósitos)
+-- Asegura que los depósitos tengan dueño
+alter table public.storage_points add column if not exists client_id uuid;
+alter table public.storage_points add column if not exists node_code text;
+
+-- 5. Recargar Caché de API
 NOTIFY pgrst, 'reload schema';
 `;
       navigator.clipboard.writeText(sql);
-      alert("✅ SCRIPT COPIADO AL PORTAPAPELES.\n\nInstrucciones:\n1. Ve al Editor SQL de Supabase.\n2. Pega el código (Ctrl+V).\n3. Ejecuta 'Run'.\nEsto es OBLIGATORIO para que funcione el registro de siembra y cálculo de stock.");
+      alert("✅ SCRIPT COPIADO.\n\nInstrucciones:\n1. Ve al Editor SQL de Supabase.\n2. Pega (Ctrl+V).\n3. Dale 'Run'.\n\nSi no haces esto, los datos de stock no se guardarán.");
   };
 
   return (
@@ -179,10 +188,10 @@ NOTIFY pgrst, 'reload schema';
                       <div>
                           <div className="flex items-center gap-3 mb-2">
                               <Database size={24} className="text-white"/>
-                              <h3 className="text-xl font-black uppercase tracking-tighter italic">Actualizar Esquema SQL (V43)</h3>
+                              <h3 className="text-xl font-black uppercase tracking-tighter italic">Actualizar Esquema SQL (V44)</h3>
                           </div>
                           <p className="text-xs text-blue-100 font-medium max-w-md">
-                              Soluciona errores de columnas faltantes ('color', 'used_seed_value'). Ejecute esto si ve errores al guardar lotes o si el stock en campo aparece vacío.
+                              Soluciona errores de columnas faltantes ('used_seed_value', 'storage_point_id'). Ejecute esto si ve errores al guardar lotes o si el stock en campo aparece vacío.
                           </p>
                       </div>
                       <div className="bg-white/20 p-3 rounded-full animate-pulse">

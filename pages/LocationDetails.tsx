@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
-import { ArrowLeft, MapPin, Globe, Droplets, User, Building, ExternalLink, Ruler, Sprout, ChevronRight, Waves, CloudRain, Package, CheckCircle2, Truck, ClipboardCheck, Info, Tag, Activity, Archive, Landmark, Warehouse, AlertCircle, AlertTriangle, LayoutGrid, Box } from 'lucide-react';
+import { ArrowLeft, MapPin, Globe, Droplets, User, Building, ExternalLink, Ruler, Sprout, ChevronRight, Waves, CloudRain, Package, CheckCircle2, Truck, ClipboardCheck, Info, Tag, Activity, Archive, Landmark, Warehouse, AlertCircle, AlertTriangle, LayoutGrid, Box, TrendingDown } from 'lucide-react';
 import WeatherWidget from '../components/WeatherWidget';
 import MapEditor from '../components/MapEditor';
 import HydricBalance from '../components/HydricBalance';
@@ -32,10 +32,11 @@ export default function LocationDetails() {
     const linkedStorages = useMemo(() => {
         if (!location) return [];
         // Normalizamos: null, undefined y "" son tratados como "Sin Cliente" (Propio/Interno)
-        const ownerClientId = location.clientId || null;
+        // Usamos un string mágico 'INTERNAL' para poder comparar nulls de forma segura
+        const ownerClientId = location.clientId || 'INTERNAL';
         
         return storagePoints.filter(sp => {
-            const spOwnerId = sp.clientId || null;
+            const spOwnerId = sp.clientId || 'INTERNAL';
             return spOwnerId === ownerClientId;
         });
     }, [location, storagePoints]);
@@ -90,7 +91,22 @@ export default function LocationDetails() {
         };
     }, [seedBatches, linkedStorages, varieties, storagePoints]);
 
-    // 3. Historial de Movimientos (Solo informativo/auditoría)
+    // 3. Consumo en Campo (Lo que ya se sembró)
+    const consumedStock = useMemo(() => {
+        return locationPlots.reduce((acc, p) => {
+            let usedKg = Number(p.usedSeedValue || 0);
+            if(p.usedSeedUnit === 'gr') usedKg /= 1000;
+            if(p.usedSeedUnit === 'tn') usedKg *= 1000;
+            
+            const varName = varieties.find(v => v.id === p.varietyId)?.name || 'Genética S/D';
+            
+            if (!acc[varName]) acc[varName] = 0;
+            acc[varName] += usedKg;
+            return acc;
+        }, {} as Record<string, number>);
+    }, [locationPlots, varieties]);
+
+    // 4. Historial de Movimientos (Solo informativo/auditoría)
     const receivedMaterials = useMemo(() => {
         const linkedIds = linkedStorages.map(s => s.id);
         return seedMovements
@@ -327,7 +343,30 @@ export default function LocationDetails() {
                         </div>
                     )}
 
-                    {/* SECCIÓN 2: DESGLOSE POR ALMACÉN */}
+                    {/* SECCIÓN 2: INSUMOS YA APLICADOS */}
+                    {Object.keys(consumedStock).length > 0 && (
+                        <div className="bg-blue-50 dark:bg-blue-900/10 p-8 rounded-[40px] border border-blue-100 dark:border-blue-900/30">
+                            <h3 className="text-sm font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest flex items-center mb-6">
+                                <TrendingDown size={16} className="mr-2"/> Insumos Aplicados (Consumo Histórico)
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                {Object.entries(consumedStock).map(([variety, kg]) => (
+                                    <div key={variety} className="bg-white/60 dark:bg-slate-900/50 p-4 rounded-3xl flex justify-between items-center">
+                                        <div>
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Semilla</p>
+                                            <p className="text-sm font-black text-slate-800 dark:text-white">{variety}</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-xl font-black text-blue-600">{(kg as number).toFixed(1)} <span className="text-xs">kg</span></p>
+                                            <p className="text-[9px] font-bold text-blue-400 uppercase tracking-widest">Usado</p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* SECCIÓN 3: DESGLOSE POR ALMACÉN */}
                     {stockInventory.hasStock && (
                         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4">
                             <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest flex items-center">
@@ -362,7 +401,7 @@ export default function LocationDetails() {
                         </div>
                     )}
 
-                    {/* SECCIÓN 3: HISTORIAL DE REMITOS */}
+                    {/* SECCIÓN 4: HISTORIAL DE REMITOS */}
                     <div className="bg-white dark:bg-slate-900 rounded-[40px] shadow-sm border dark:border-slate-800 overflow-hidden">
                         <div className="p-8 border-b dark:border-slate-800 bg-gray-50/50 dark:bg-slate-950/50">
                             <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest flex items-center">
