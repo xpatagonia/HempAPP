@@ -10,7 +10,7 @@ import { supabase } from '../supabaseClient';
 
 export default function Settings() {
   const { currentUser, appName, appLogo, updateBranding } = useAppContext();
-  // V47: Forzamos 'system' tab por defecto
+  // V47: Forzamos 'system' tab por defecto para encontrar el botón rápido
   const [activeTab, setActiveTab] = useState<'branding' | 'system' | 'maintenance'>('system');
   const [editAppName, setEditAppName] = useState(appName);
   const [editAppLogo, setEditAppLogo] = useState(appLogo);
@@ -81,39 +81,42 @@ export default function Settings() {
 
   const handleFixSchema = () => {
       const sql = `
--- FIX V47: MIGRACIÓN FINAL (RECUPERACIÓN DE STOCK)
+-- FIX V47: MIGRACIÓN FINAL (RECUPERACIÓN DE STOCK Y COLUMNAS)
 -- Ejecutar para reparar estructura y visualizar inventario oculto
 
--- 1. ESTRUCTURA (Columnas faltantes)
+-- 1. ESTRUCTURA (Columnas faltantes para Parcelas y Lotes)
 alter table public.plots add column if not exists color text default '#16a34a';
 alter table public.plots add column if not exists used_seed_value numeric default 0;
 alter table public.plots add column if not exists used_seed_unit text default 'kg';
+
 alter table public.seed_batches add column if not exists supplier_id uuid; 
 alter table public.seed_batches add column if not exists category text;
 alter table public.seed_batches add column if not exists label_serial_number text;
 alter table public.seed_batches add column if not exists storage_point_id uuid; 
+
 alter table public.seed_movements add column if not exists origin_storage_id uuid;
 alter table public.seed_movements add column if not exists client_id uuid;
+
 alter table public.storage_points add column if not exists client_id uuid;
 alter table public.storage_points add column if not exists node_code text;
 
 -- 2. ASEGURAR DEPÓSITO POR DEFECTO
--- Si no hay depósitos, crea uno para no perder los datos
+-- Si no hay depósitos, crea uno para no perder los datos huérfanos
 INSERT INTO public.storage_points (id, name, type, node_code, address, city)
 SELECT 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'Depósito General (Recuperado)', 'Propio', 'REC-001', 'Sede Central', 'General'
 WHERE NOT EXISTS (SELECT 1 FROM public.storage_points);
 
--- 3. VINCULAR STOCK HUÉRFANO
--- Asigna lotes sin ubicación al primer depósito que encuentre
+-- 3. VINCULAR STOCK HUÉRFANO (DATA FIX)
+-- Asigna lotes sin ubicación al primer depósito que encuentre para hacerlos visibles
 UPDATE public.seed_batches
 SET storage_point_id = (SELECT id FROM public.storage_points LIMIT 1)
 WHERE storage_point_id IS NULL;
 
--- 4. REFRESCAR API
+-- 4. REFRESCAR API DE SUPABASE
 NOTIFY pgrst, 'reload schema';
 `;
       navigator.clipboard.writeText(sql);
-      alert("✅ SCRIPT V47 COPIADO.\n\nEste script:\n1. Crea columnas faltantes.\n2. Crea un depósito por defecto si no existe.\n3. Mueve todo el stock 'invisible' a ese depósito.\n\nEjecútelo en Supabase SQL Editor ahora.");
+      alert("✅ SCRIPT V47 COPIADO.\n\nEste script:\n1. Crea columnas faltantes (color, seed_value).\n2. Crea un depósito por defecto si no existe.\n3. Mueve todo el stock 'invisible' a ese depósito.\n\nEjecútelo en Supabase SQL Editor ahora.");
   };
 
   return (
@@ -194,7 +197,7 @@ NOTIFY pgrst, 'reload schema';
                               <h3 className="text-xl font-black uppercase tracking-tighter italic">Actualizar Esquema SQL (V47)</h3>
                           </div>
                           <p className="text-xs text-purple-100 font-medium max-w-md">
-                              Script definitivo de recuperación de stock. Mueve lotes huérfanos y asegura la integridad de datos.
+                              Script definitivo de recuperación de stock y corrección de columnas faltantes. Mueve lotes huérfanos.
                           </p>
                       </div>
                       <div className="bg-white/20 p-3 rounded-full">
