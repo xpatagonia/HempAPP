@@ -80,20 +80,28 @@ export default function Settings() {
 
   const handleFixSchema = () => {
       const sql = `
--- FIX V42: AGREGAR COLUMNAS FALTANTES PARA COLOR Y SEMILLAS
+-- FIX V43: ACTUALIZACIÓN CRÍTICA DE ESQUEMA PARA INVENTARIO Y SIEMBRA
+-- Ejecutar en SQL Editor de Supabase para habilitar nuevas funciones
+
+-- 1. Campos de Parcelas (Plots)
 alter table public.plots add column if not exists color text default '#16a34a';
 alter table public.plots add column if not exists used_seed_value numeric;
-alter table public.plots add column if not exists used_seed_unit text;
+alter table public.plots add column if not exists used_seed_unit text default 'kg';
 
--- FIX: VALIDAR COLUMNAS EN OTRAS TABLAS
-alter table public.seed_batches add column if not exists supplier_id uuid; -- Puede no ser FK estricta si no se migró data
+-- 2. Campos de Lotes de Semilla (Seed Batches)
+alter table public.seed_batches add column if not exists supplier_id uuid; 
+alter table public.seed_batches add column if not exists category text;
+alter table public.seed_batches add column if not exists label_serial_number text;
+
+-- 3. Campos de Movimientos (Logística)
 alter table public.seed_movements add column if not exists origin_storage_id uuid;
+alter table public.seed_movements add column if not exists client_id uuid;
 
--- NOTIFICAR CAMBIO
+-- 4. Actualizar caché de API
 NOTIFY pgrst, 'reload schema';
 `;
       navigator.clipboard.writeText(sql);
-      alert("✅ SCRIPT COPIADO AL PORTAPAPELES.\n\nInstrucciones:\n1. Ve al Editor SQL de Supabase.\n2. Pega el código (Ctrl+V).\n3. Ejecuta 'Run'.\nEsto solucionará el error de 'color column not found'.");
+      alert("✅ SCRIPT COPIADO AL PORTAPAPELES.\n\nInstrucciones:\n1. Ve al Editor SQL de Supabase.\n2. Pega el código (Ctrl+V).\n3. Ejecuta 'Run'.\nEsto es OBLIGATORIO para que funcione el registro de siembra y cálculo de stock.");
   };
 
   return (
@@ -171,13 +179,13 @@ NOTIFY pgrst, 'reload schema';
                       <div>
                           <div className="flex items-center gap-3 mb-2">
                               <Database size={24} className="text-white"/>
-                              <h3 className="text-xl font-black uppercase tracking-tighter italic">Actualizar Esquema SQL (V42)</h3>
+                              <h3 className="text-xl font-black uppercase tracking-tighter italic">Actualizar Esquema SQL (V43)</h3>
                           </div>
                           <p className="text-xs text-blue-100 font-medium max-w-md">
-                              Soluciona errores de columnas faltantes ('color', 'seed_value') agregando los campos necesarios a la base de datos sin borrar información.
+                              Soluciona errores de columnas faltantes ('color', 'used_seed_value'). Ejecute esto si ve errores al guardar lotes o si el stock en campo aparece vacío.
                           </p>
                       </div>
-                      <div className="bg-white/20 p-3 rounded-full">
+                      <div className="bg-white/20 p-3 rounded-full animate-pulse">
                           <FileCode size={24}/>
                       </div>
                   </div>

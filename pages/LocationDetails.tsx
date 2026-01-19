@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
-import { ArrowLeft, MapPin, Globe, Droplets, User, Building, ExternalLink, Ruler, Sprout, ChevronRight, Waves, CloudRain, Package, CheckCircle2, Truck, ClipboardCheck, Info, Tag, Activity, Archive, Landmark, Warehouse } from 'lucide-react';
+import { ArrowLeft, MapPin, Globe, Droplets, User, Building, ExternalLink, Ruler, Sprout, ChevronRight, Waves, CloudRain, Package, CheckCircle2, Truck, ClipboardCheck, Info, Tag, Activity, Archive, Landmark, Warehouse, AlertCircle, AlertTriangle } from 'lucide-react';
 import WeatherWidget from '../components/WeatherWidget';
 import MapEditor from '../components/MapEditor';
 import HydricBalance from '../components/HydricBalance';
@@ -30,12 +30,12 @@ export default function LocationDetails() {
     // 1. Identificamos los depósitos vinculados a este campo (mismo dueño)
     const linkedStorages = useMemo(() => {
         if (!location) return [];
-        const ownerClientId = location.clientId;
+        // Normalizamos: null, undefined y "" son tratados como "Sin Cliente" (Propio/Interno)
+        const ownerClientId = location.clientId || null;
+        
         return storagePoints.filter(sp => {
-            // Si el campo tiene dueño (Cliente), buscar depósitos de ese cliente
-            if (ownerClientId) return sp.clientId === ownerClientId;
-            // Si el campo es interno (sin cliente), buscar depósitos internos (sin cliente)
-            return !sp.clientId; 
+            const spOwnerId = sp.clientId || null;
+            return spOwnerId === ownerClientId;
         });
     }, [location, storagePoints]);
 
@@ -48,12 +48,11 @@ export default function LocationDetails() {
     }, [seedMovements, linkedStorages]);
 
     // 3. Balance Global del Propietario (Recibido en sus depósitos - Usado en TODOS sus campos)
-    // Esto es necesario porque si el cliente tiene 2 campos y 1 depósito, el stock es compartido.
     const stockBalance = useMemo(() => {
         const balance: Record<string, { variety: string, received: number, used: number }> = {};
-        const ownerClientId = location?.clientId;
+        const ownerClientId = location?.clientId || null;
 
-        // A. Sumar Recepciones (Stock Entrante)
+        // A. Sumar Recepciones (Stock Entrante en depósitos del dueño)
         receivedMaterials.forEach(m => {
             if(m.status !== 'Recibido') return; // Solo contar lo que ya llegó físicamente
             const batch = seedBatches.find(b => b.id === m.batchId);
@@ -67,20 +66,24 @@ export default function LocationDetails() {
         // B. Restar Uso (Siembra) en TODOS los campos del mismo dueño
         const ownerPlots = plots.filter(p => {
             const plotLoc = locations.find(l => l.id === p.locationId);
-            if (ownerClientId) return plotLoc?.clientId === ownerClientId;
-            return !plotLoc?.clientId; // Internal plots
+            const plotOwnerId = plotLoc?.clientId || null;
+            return plotOwnerId === ownerClientId;
         });
 
         ownerPlots.forEach(p => {
             if (p.usedSeedValue && p.varietyId) {
                 const varId = p.varietyId;
-                // Solo restamos si tenemos registro de esa variedad en el balance (para no mostrar negativos fantasmas)
-                if (balance[varId]) {
-                    let usedKg = p.usedSeedValue;
-                    if (p.usedSeedUnit === 'gr') usedKg = usedKg / 1000;
-                    if (p.usedSeedUnit === 'tn') usedKg = usedKg * 1000;
-                    balance[varId].used += usedKg;
+                // Solo restamos si tenemos registro de esa variedad en el balance (o si queremos mostrar negativo)
+                if (!balance[varId]) {
+                     const varName = varieties.find(v => v.id === varId)?.name || 'Desconocida';
+                     balance[varId] = { variety: varName, received: 0, used: 0 };
                 }
+                
+                let usedKg = Number(p.usedSeedValue);
+                if (p.usedSeedUnit === 'gr') usedKg = usedKg / 1000;
+                if (p.usedSeedUnit === 'tn') usedKg = usedKg * 1000;
+                
+                balance[varId].used += usedKg;
             }
         });
 
@@ -99,6 +102,7 @@ export default function LocationDetails() {
     }, [locationPlots]);
     
     const client = clients.find(c => c.id === location?.clientId);
+    const ownerLabel = client ? client.name : 'Planta Central (Propio)';
 
     if (!location) return <div className="p-10 text-center">Establecimiento no encontrado.</div>;
 
@@ -243,20 +247,46 @@ export default function LocationDetails() {
                     {/* PANEL DE BALANCE (NUEVO) */}
                     <div className="bg-white dark:bg-slate-900 rounded-[40px] shadow-sm border dark:border-slate-800 p-8">
                         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-                            <h2 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-tighter flex items-center">
-                                <Package size={20} className="mr-2 text-amber-600"/> Stock Disponible para Uso
-                            </h2>
-                            <div className="text-[10px] font-bold text-gray-400 bg-gray-50 dark:bg-slate-950 px-3 py-1 rounded-full uppercase tracking-widest flex items-center">
-                                <Warehouse size={12} className="mr-1.5"/>
-                                Vinculado a {linkedStorages.length} Depósitos
+                            <div>
+                                <h2 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-tighter flex items-center">
+                                    <Package size={20} className="mr-2 text-amber-600"/> Stock Disponible para Uso
+                                </h2>
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Consolidado de depósitos del titular: {ownerLabel}</p>
+                            </div>
+                            
+                            <div className="flex items-center gap-2">
+                                {linkedStorages.length > 0 ? (
+                                    linkedStorages.map(sp => (
+                                        <div key={sp.id} className="bg-gray-50 dark:bg-slate-950 px-3 py-1 rounded-full border dark:border-slate-800 flex items-center text-[9px] font-black text-slate-500 uppercase tracking-widest">
+                                            <Warehouse size={10} className="mr-1.5 text-hemp-500"/> {sp.name}
+                                        </div>
+                                    ))
+                                ) : (
+                                    <span className="bg-red-50 text-red-600 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border border-red-100 flex items-center">
+                                        <AlertTriangle size={12} className="mr-1"/> Sin Depósitos Vinculados
+                                    </span>
+                                )}
                             </div>
                         </div>
+                        
+                        {linkedStorages.length === 0 && (
+                            <div className="mb-6 bg-amber-50 dark:bg-amber-900/20 p-4 rounded-2xl border border-amber-100 dark:border-amber-900/30 flex items-start gap-3">
+                                <AlertCircle className="text-amber-600 flex-shrink-0" size={20}/>
+                                <div>
+                                    <p className="text-xs font-black text-amber-800 dark:text-amber-200 uppercase tracking-widest mb-1">Error de Vinculación Logística</p>
+                                    <p className="text-xs text-amber-700 dark:text-amber-300 font-medium leading-relaxed">
+                                        Este campo pertenece a <strong>{ownerLabel}</strong>, pero no se encontraron depósitos asignados a este mismo propietario. 
+                                        Para ver el stock, asegúrese de que el Depósito tenga asignado el mismo "Socio Propietario" que este Campo en la sección de Configuración de Nodos.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
                         
                         {stockBalance.length === 0 ? (
                             <div className="p-12 text-center bg-gray-50 dark:bg-slate-950 rounded-3xl border border-dashed dark:border-slate-800 flex flex-col items-center">
                                 <Package size={32} className="text-gray-300 mb-2"/>
-                                <p className="text-gray-400 italic font-medium">No se detectaron existencias en los depósitos de este propietario.</p>
-                                <Link to="/seed-batches" className="mt-4 text-[10px] font-black text-hemp-600 uppercase tracking-widest hover:underline">Gestionar Inventario Logístico</Link>
+                                <p className="text-gray-400 italic font-medium">No se detectaron existencias ni movimientos en los depósitos vinculados.</p>
+                                {linkedStorages.length > 0 && <Link to="/seed-batches" className="mt-4 text-[10px] font-black text-hemp-600 uppercase tracking-widest hover:underline">Gestionar Inventario Logístico</Link>}
                             </div>
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -271,7 +301,7 @@ export default function LocationDetails() {
                                                 </div>
                                                 <div className="text-right space-y-1">
                                                     <p className="text-[10px] font-black text-green-600 flex items-center justify-end"><ArrowLeft size={10} className="mr-1 rotate-45"/> {item.received} kg Ingresados</p>
-                                                    <p className="text-[10px] font-black text-red-500 flex items-center justify-end"><Sprout size={10} className="mr-1"/> {item.used} kg Sembrados</p>
+                                                    <p className="text-[10px] font-black text-red-500 flex items-center justify-end"><Sprout size={10} className="mr-1"/> {item.used.toFixed(1)} kg Sembrados</p>
                                                 </div>
                                             </div>
                                             <div className="w-full bg-gray-200 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
@@ -289,7 +319,7 @@ export default function LocationDetails() {
 
                     <div className="bg-white dark:bg-slate-900 rounded-[40px] shadow-sm border dark:border-slate-800 overflow-hidden">
                         <div className="p-8 border-b dark:border-slate-800 bg-gray-50/50 dark:bg-slate-950/50">
-                            <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest">Historial de Remitos (Entrantes)</h3>
+                            <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest">Historial de Remitos (Entrantes a Depósitos Vinculados)</h3>
                         </div>
                         <div className="p-8">
                              <div className="overflow-x-auto">
