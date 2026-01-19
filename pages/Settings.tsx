@@ -10,7 +10,7 @@ import { supabase } from '../supabaseClient';
 
 export default function Settings() {
   const { currentUser, appName, appLogo, updateBranding } = useAppContext();
-  // Forzamos la pestaña 'system' por defecto para ver el botón inmediatamente
+  // V46: Mantenemos 'system' por defecto para acceso rápido al script
   const [activeTab, setActiveTab] = useState<'branding' | 'system' | 'maintenance'>('system');
   const [editAppName, setEditAppName] = useState(appName);
   const [editAppLogo, setEditAppLogo] = useState(appLogo);
@@ -81,33 +81,38 @@ export default function Settings() {
 
   const handleFixSchema = () => {
       const sql = `
--- FIX V45: REPARACIÓN DE ESTRUCTURA (FORCE UPDATE)
--- Ejecutar para habilitar stock por depósito e insumos utilizados
+-- FIX V46: MIGRACIÓN DE DATOS (CRÍTICO PARA VER STOCK)
+-- Este script crea las columnas faltantes Y ASIGNA un depósito por defecto a los lotes huérfanos.
 
--- 1. Campos de Parcelas (Plots) - Consumo de Semilla
+-- 1. ASEGURAR COLUMNAS (ESTRUCTURA)
 alter table public.plots add column if not exists color text default '#16a34a';
 alter table public.plots add column if not exists used_seed_value numeric default 0;
 alter table public.plots add column if not exists used_seed_unit text default 'kg';
-
--- 2. Campos de Lotes de Semilla (Seed Batches) - Ubicación y Origen
 alter table public.seed_batches add column if not exists supplier_id uuid; 
 alter table public.seed_batches add column if not exists category text;
 alter table public.seed_batches add column if not exists label_serial_number text;
-alter table public.seed_batches add column if not exists storage_point_id uuid; -- CRÍTICO: Indica dónde está el stock
-
--- 3. Campos de Movimientos (Seed Movements)
+alter table public.seed_batches add column if not exists storage_point_id uuid; 
 alter table public.seed_movements add column if not exists origin_storage_id uuid;
 alter table public.seed_movements add column if not exists client_id uuid;
-
--- 4. Campos de Depósitos (Storage Points)
 alter table public.storage_points add column if not exists client_id uuid;
 alter table public.storage_points add column if not exists node_code text;
 
--- 5. Actualizar caché de API
+-- 2. MIGRACIÓN DE DATOS (DATA FIX)
+-- Si no existen depósitos, creamos uno genérico para que el stock no desaparezca.
+INSERT INTO public.storage_points (id, name, type, node_code, address, city)
+SELECT 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'Depósito General (Migración)', 'Propio', 'MIG-001', 'Sede Central', 'General'
+WHERE NOT EXISTS (SELECT 1 FROM public.storage_points);
+
+-- Asignar todos los lotes sin depósito al primer depósito disponible
+UPDATE public.seed_batches
+SET storage_point_id = (SELECT id FROM public.storage_points LIMIT 1)
+WHERE storage_point_id IS NULL;
+
+-- 3. ACTUALIZAR CACHÉ
 NOTIFY pgrst, 'reload schema';
 `;
       navigator.clipboard.writeText(sql);
-      alert("✅ SCRIPT V45 COPIADO.\n\nInstrucciones:\n1. Ve al Editor SQL de Supabase.\n2. Pega el código (Ctrl+V).\n3. Ejecuta 'Run'.\n\nSi no haces esto, los datos de stock NO SE GUARDARÁN.");
+      alert("✅ SCRIPT V46 COPIADO (CON MIGRACIÓN).\n\nInstrucciones:\n1. Ve a Supabase > SQL Editor.\n2. Pega y Ejecuta.\n3. Tus datos de stock antiguos aparecerán asignados al 'Depósito General'.");
   };
 
   return (
@@ -179,16 +184,16 @@ NOTIFY pgrst, 'reload schema';
       {activeTab === 'system' && (
           <div className="space-y-6 animate-in slide-in-from-bottom-2">
               
-              {/* FIX DATABASE BUTTON - VERSION 45 */}
+              {/* FIX DATABASE BUTTON - VERSION 46 MIGRATION */}
               <div className="bg-blue-600 p-8 rounded-[40px] shadow-xl text-white relative overflow-hidden group hover:scale-[1.01] transition-all cursor-pointer border border-blue-500" onClick={handleFixSchema}>
                   <div className="flex justify-between items-center relative z-10">
                       <div>
                           <div className="flex items-center gap-3 mb-2">
                               <Database size={24} className="text-white"/>
-                              <h3 className="text-xl font-black uppercase tracking-tighter italic">Actualizar Esquema SQL (V45)</h3>
+                              <h3 className="text-xl font-black uppercase tracking-tighter italic">Actualizar Esquema SQL (V46 - MIGRACIÓN)</h3>
                           </div>
                           <p className="text-xs text-blue-100 font-medium max-w-md">
-                              Haga clic aquí para reparar la base de datos y visualizar el stock. (Versión 45)
+                              Repara la base de datos y <strong>MUEVE AUTOMÁTICAMENTE</strong> el stock antiguo a un depósito visible para que no se pierda.
                           </p>
                       </div>
                       <div className="bg-white/20 p-3 rounded-full animate-pulse">
@@ -196,7 +201,7 @@ NOTIFY pgrst, 'reload schema';
                       </div>
                   </div>
                   <div className="mt-6 flex items-center text-[10px] font-black uppercase tracking-widest bg-white/10 w-fit px-4 py-2 rounded-full border border-white/20">
-                      Clic para copiar Script
+                      Clic para copiar Script V46
                   </div>
               </div>
 
@@ -273,7 +278,7 @@ NOTIFY pgrst, 'reload schema';
                       <Database size={20} className="text-slate-400"/>
                       <div>
                           <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Versión del Cliente</p>
-                          <p className="text-[10px] text-slate-400 uppercase tracking-widest">Nucleus WebApp v1.0.0-PROD</p>
+                          <p className="text-[10px] text-slate-400 uppercase tracking-widest">Nucleus WebApp v1.0.1-FIX</p>
                       </div>
                   </div>
                   <div className="text-right">
