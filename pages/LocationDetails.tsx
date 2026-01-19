@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
-import { ArrowLeft, MapPin, Globe, Droplets, User, Building, ExternalLink, Ruler, Sprout, ChevronRight, Waves, CloudRain, Package, CheckCircle2, Truck, ClipboardCheck, Info, Tag, Activity, Archive, Landmark } from 'lucide-react';
+import { ArrowLeft, MapPin, Globe, Droplets, User, Building, ExternalLink, Ruler, Sprout, ChevronRight, Waves, CloudRain, Package, CheckCircle2, Truck, ClipboardCheck, Info, Tag, Activity, Archive, Landmark, Warehouse } from 'lucide-react';
 import WeatherWidget from '../components/WeatherWidget';
 import MapEditor from '../components/MapEditor';
 import HydricBalance from '../components/HydricBalance';
@@ -20,24 +20,42 @@ const stringToColor = (str: string) => {
 
 export default function LocationDetails() {
     const { id } = useParams<{ id: string }>();
-    const { locations, plots, varieties, clients, seedMovements, seedBatches, currentUser } = useAppContext();
+    const { locations, plots, varieties, clients, seedMovements, seedBatches, currentUser, storagePoints } = useAppContext();
     const [activeTab, setActiveTab] = useState<'info' | 'water' | 'stock'>('info');
 
     const location = locations.find(l => l.id === id);
     const locationPlots = plots.filter(p => p.locationId === id);
     
-    // Filtramos movimientos de semillas enviados a este campo
-    const receivedMaterials = useMemo(() => {
-        return seedMovements.filter(m => m.targetLocationId === id).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [seedMovements, id]);
+    // --- LÓGICA CORREGIDA DE INVENTARIO ---
+    // 1. Identificamos los depósitos vinculados a este campo (mismo dueño)
+    const linkedStorages = useMemo(() => {
+        if (!location) return [];
+        const ownerClientId = location.clientId;
+        return storagePoints.filter(sp => {
+            // Si el campo tiene dueño (Cliente), buscar depósitos de ese cliente
+            if (ownerClientId) return sp.clientId === ownerClientId;
+            // Si el campo es interno (sin cliente), buscar depósitos internos (sin cliente)
+            return !sp.clientId; 
+        });
+    }, [location, storagePoints]);
 
-    // Cálculo del balance de stock en campo (Recibido - Sembrado)
+    // 2. Filtramos movimientos hacia cualquiera de esos depósitos vinculados
+    const receivedMaterials = useMemo(() => {
+        const linkedIds = linkedStorages.map(s => s.id);
+        return seedMovements
+            .filter(m => linkedIds.includes(m.targetLocationId))
+            .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }, [seedMovements, linkedStorages]);
+
+    // 3. Balance Global del Propietario (Recibido en sus depósitos - Usado en TODOS sus campos)
+    // Esto es necesario porque si el cliente tiene 2 campos y 1 depósito, el stock es compartido.
     const stockBalance = useMemo(() => {
         const balance: Record<string, { variety: string, received: number, used: number }> = {};
+        const ownerClientId = location?.clientId;
 
-        // Sumar lo recibido
+        // A. Sumar Recepciones (Stock Entrante)
         receivedMaterials.forEach(m => {
-            if(m.status !== 'Recibido') return;
+            if(m.status !== 'Recibido') return; // Solo contar lo que ya llegó físicamente
             const batch = seedBatches.find(b => b.id === m.batchId);
             const varId = batch?.varietyId || 'unknown';
             const varName = varieties.find(v => v.id === varId)?.name || 'Desconocida';
@@ -46,25 +64,28 @@ export default function LocationDetails() {
             balance[varId].received += m.quantity;
         });
 
-        // Restar lo sembrado (según parcelas activas)
-        locationPlots.forEach(p => {
+        // B. Restar Uso (Siembra) en TODOS los campos del mismo dueño
+        const ownerPlots = plots.filter(p => {
+            const plotLoc = locations.find(l => l.id === p.locationId);
+            if (ownerClientId) return plotLoc?.clientId === ownerClientId;
+            return !plotLoc?.clientId; // Internal plots
+        });
+
+        ownerPlots.forEach(p => {
             if (p.usedSeedValue && p.varietyId) {
                 const varId = p.varietyId;
-                const varName = varieties.find(v => v.id === varId)?.name || 'Desconocida';
-                
-                if (!balance[varId]) balance[varId] = { variety: varName, received: 0, used: 0 };
-                
-                // Normalizar a KG
-                let usedKg = p.usedSeedValue;
-                if (p.usedSeedUnit === 'gr') usedKg = usedKg / 1000;
-                if (p.usedSeedUnit === 'tn') usedKg = usedKg * 1000;
-                
-                balance[varId].used += usedKg;
+                // Solo restamos si tenemos registro de esa variedad en el balance (para no mostrar negativos fantasmas)
+                if (balance[varId]) {
+                    let usedKg = p.usedSeedValue;
+                    if (p.usedSeedUnit === 'gr') usedKg = usedKg / 1000;
+                    if (p.usedSeedUnit === 'tn') usedKg = usedKg * 1000;
+                    balance[varId].used += usedKg;
+                }
             }
         });
 
         return Object.values(balance);
-    }, [receivedMaterials, locationPlots, varieties, seedBatches]);
+    }, [receivedMaterials, plots, varieties, seedBatches, location, locations]);
 
     const activePlotLayers = useMemo(() => {
         return locationPlots
@@ -73,15 +94,9 @@ export default function LocationDetails() {
                 id: p.id,
                 polygon: p.polygon!,
                 label: `${p.name} (${p.surfaceArea} ${p.surfaceUnit})`,
-                color: p.color || stringToColor(p.name) // Usa color manual o genera uno
+                color: p.color || stringToColor(p.name)
             }));
     }, [locationPlots]);
-
-    const occupiedArea = locationPlots.reduce((sum, p) => {
-        let area = p.surfaceArea || 0;
-        if(p.surfaceUnit === 'm2') area = area / 10000;
-        return sum + area;
-    }, 0);
     
     const client = clients.find(c => c.id === location?.clientId);
 
@@ -153,12 +168,10 @@ export default function LocationDetails() {
                                     <div className="col-span-2 p-12 text-center text-gray-400 italic font-medium">No hay cultivos asignados a este sitio.</div>
                                 ) : locationPlots.map(p => {
                                     const vari = varieties.find(v => v.id === p.varietyId);
-                                    // Usamos el mismo generador de color que en el mapa
                                     const plotColor = p.color || stringToColor(p.name);
                                     
                                     return (
                                         <Link key={p.id} to={`/plots/${p.id}`} className="bg-white dark:bg-slate-800/50 p-5 rounded-3xl border border-gray-100 dark:border-slate-800 hover:border-hemp-500 hover:shadow-lg transition-all group relative overflow-hidden">
-                                            {/* Indicador visual de color de referencia */}
                                             <div className="absolute top-0 right-0 w-3 h-3 rounded-bl-xl" style={{ backgroundColor: plotColor }}></div>
                                             
                                             <div className="flex justify-between items-start mb-4">
@@ -218,7 +231,7 @@ export default function LocationDetails() {
                                     </div>
                                 </div>
                             ) : (
-                                <div className="text-gray-400 text-sm italic">Sin socio comercial asignado.</div>
+                                <div className="text-gray-400 text-sm italic">Sin socio comercial asignado (Propio).</div>
                             )}
                         </div>
                     </div>
@@ -229,13 +242,21 @@ export default function LocationDetails() {
                 <div className="animate-in fade-in slide-in-from-top-2 space-y-8">
                     {/* PANEL DE BALANCE (NUEVO) */}
                     <div className="bg-white dark:bg-slate-900 rounded-[40px] shadow-sm border dark:border-slate-800 p-8">
-                        <h2 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-tighter mb-6 flex items-center">
-                            <Package size={20} className="mr-2 text-amber-600"/> Balance de Stock en Sitio
-                        </h2>
+                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                            <h2 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-tighter flex items-center">
+                                <Package size={20} className="mr-2 text-amber-600"/> Stock Disponible para Uso
+                            </h2>
+                            <div className="text-[10px] font-bold text-gray-400 bg-gray-50 dark:bg-slate-950 px-3 py-1 rounded-full uppercase tracking-widest flex items-center">
+                                <Warehouse size={12} className="mr-1.5"/>
+                                Vinculado a {linkedStorages.length} Depósitos
+                            </div>
+                        </div>
                         
                         {stockBalance.length === 0 ? (
-                            <div className="p-8 text-center bg-gray-50 dark:bg-slate-950 rounded-3xl border border-dashed dark:border-slate-800 text-gray-400 italic">
-                                No hay movimientos de semillas registrados en este campo.
+                            <div className="p-12 text-center bg-gray-50 dark:bg-slate-950 rounded-3xl border border-dashed dark:border-slate-800 flex flex-col items-center">
+                                <Package size={32} className="text-gray-300 mb-2"/>
+                                <p className="text-gray-400 italic font-medium">No se detectaron existencias en los depósitos de este propietario.</p>
+                                <Link to="/seed-batches" className="mt-4 text-[10px] font-black text-hemp-600 uppercase tracking-widest hover:underline">Gestionar Inventario Logístico</Link>
                             </div>
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -246,11 +267,11 @@ export default function LocationDetails() {
                                             <div className="flex justify-between items-end mb-4">
                                                 <div>
                                                     <p className="text-2xl font-black text-slate-800 dark:text-white">{(item.received - item.used).toFixed(1)} <span className="text-sm">kg</span></p>
-                                                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Disponible</p>
+                                                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">En Depósito</p>
                                                 </div>
-                                                <div className="text-right">
-                                                    <p className="text-xs font-black text-green-600">+{item.received} kg Recibido</p>
-                                                    <p className="text-xs font-black text-red-500">-{item.used} kg Sembrado</p>
+                                                <div className="text-right space-y-1">
+                                                    <p className="text-[10px] font-black text-green-600 flex items-center justify-end"><ArrowLeft size={10} className="mr-1 rotate-45"/> {item.received} kg Ingresados</p>
+                                                    <p className="text-[10px] font-black text-red-500 flex items-center justify-end"><Sprout size={10} className="mr-1"/> {item.used} kg Sembrados</p>
                                                 </div>
                                             </div>
                                             <div className="w-full bg-gray-200 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
@@ -268,7 +289,7 @@ export default function LocationDetails() {
 
                     <div className="bg-white dark:bg-slate-900 rounded-[40px] shadow-sm border dark:border-slate-800 overflow-hidden">
                         <div className="p-8 border-b dark:border-slate-800 bg-gray-50/50 dark:bg-slate-950/50">
-                            <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest">Historial de Recepción (Logística)</h3>
+                            <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest">Historial de Remitos (Entrantes)</h3>
                         </div>
                         <div className="p-8">
                              <div className="overflow-x-auto">
@@ -277,6 +298,7 @@ export default function LocationDetails() {
                                          <tr>
                                              <th className="px-8 py-5">Fecha Recepción</th>
                                              <th className="px-8 py-5">Remito / Guía</th>
+                                             <th className="px-8 py-5">Depósito Destino</th>
                                              <th className="px-8 py-5">Material (Lote)</th>
                                              <th className="px-8 py-5 text-center">Cantidad</th>
                                              <th className="px-8 py-5 text-right">Estatus</th>
@@ -284,14 +306,16 @@ export default function LocationDetails() {
                                      </thead>
                                      <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
                                          {receivedMaterials.length === 0 ? (
-                                             <tr><td colSpan={5} className="p-12 text-center text-gray-400 italic">No se han registrado envíos a este sitio.</td></tr>
+                                             <tr><td colSpan={6} className="p-12 text-center text-gray-400 italic">No hay remitos vinculados a los depósitos de este campo.</td></tr>
                                          ) : receivedMaterials.map(m => {
                                              const batch = seedBatches.find(b => b.id === m.batchId);
                                              const vari = varieties.find(v => v.id === batch?.varietyId);
+                                             const storage = storagePoints.find(s => s.id === m.targetLocationId);
                                              return (
                                                  <tr key={m.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors">
                                                      <td className="px-8 py-5 font-black text-gray-800 dark:text-gray-300">{m.date}</td>
                                                      <td className="px-8 py-5 font-mono text-blue-600 font-bold">{m.transportGuideNumber || 'S/N'}</td>
+                                                     <td className="px-8 py-5 text-xs font-bold text-slate-500 uppercase">{storage?.name || 'Desc.'}</td>
                                                      <td className="px-8 py-5">
                                                          <div className="font-black text-gray-800 dark:text-white uppercase tracking-tighter">{vari?.name}</div>
                                                          <div className="text-[9px] text-gray-400 font-bold uppercase mt-0.5">Lote: {batch?.batchCode}</div>
