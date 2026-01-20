@@ -4,14 +4,14 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ mode }) => {
   // Carga todas las variables de entorno sin importar el prefijo VITE_
-  // Fixed: Cast process to any to avoid 'cwd' does not exist on type 'Process' error
   const env = loadEnv(mode, (process as any).cwd(), '');
+  const buildTime = new Date().toISOString();
   
   return {
     plugins: [react()],
     define: {
-      // Mapeo directo y robusto de la variable process.env.API_KEY
-      'process.env.API_KEY': JSON.stringify(env.API_KEY || (process as any).env.API_KEY)
+      'process.env.API_KEY': JSON.stringify(env.API_KEY || (process as any).env.API_KEY),
+      'process.env.BUILD_TIME': JSON.stringify(buildTime)
     },
     build: {
       chunkSizeWarningLimit: 3000,

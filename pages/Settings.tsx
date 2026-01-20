@@ -4,21 +4,23 @@ import { useAppContext } from '../context/AppContext';
 import { 
   Save, Database, RefreshCw, Lock, Settings as SettingsIcon, 
   CheckCircle2, Layout, Trash2, RotateCcw, Shield, 
-  AlertTriangle, FlaskConical, CheckCircle, XCircle, Info, Search, FileCode, Flame, Eraser, Server, Activity, DownloadCloud, FileJson, Zap, HardDrive, Radiation, Satellite
+  AlertTriangle, FlaskConical, CheckCircle, XCircle, Info, Search, FileCode, Flame, Eraser, Server, Activity, DownloadCloud, FileJson, Zap, HardDrive, Radiation, Satellite, Radio
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
 export default function Settings() {
   const { currentUser, appName, appLogo, updateBranding } = useAppContext();
-  // V54: Forzamos 'system' tab por defecto
+  // V55: Forzamos 'system' tab por defecto
   const [activeTab, setActiveTab] = useState<'branding' | 'system' | 'maintenance'>('system');
   const [editAppName, setEditAppName] = useState(appName);
   const [editAppLogo, setEditAppLogo] = useState(appLogo);
   const [isBackingUp, setIsBackingUp] = useState(false);
 
+  // @ts-ignore
+  const buildTime = process.env.BUILD_TIME || 'Unknown';
+
   useEffect(() => {
-      // Log con timestamp para verificar caché
-      console.log(`--- SETTINGS MODULE V54 (BLUE BOOK) LOADED AT ${new Date().toISOString()} ---`);
+      console.log(`--- SETTINGS MODULE V55 (CYAN) LOADED ---`);
       setEditAppName(appName);
       setEditAppLogo(appLogo);
   }, [appName, appLogo]);
@@ -83,7 +85,7 @@ export default function Settings() {
 
   const handleFixSchema = () => {
       const sql = `
--- FIX V54: BLUE BOOK PROTOCOL (MIGRACIÓN FINAL)
+-- FIX V55: CYAN STORM (MIGRACIÓN FINAL)
 -- Ejecutar para reparar estructura y visualizar inventario oculto
 
 -- 1. ESTRUCTURA (Columnas faltantes para Parcelas y Lotes)
@@ -103,13 +105,11 @@ alter table public.storage_points add column if not exists client_id uuid;
 alter table public.storage_points add column if not exists node_code text;
 
 -- 2. ASEGURAR DEPÓSITO POR DEFECTO
--- Si no hay depósitos, crea uno para no perder los datos huérfanos
 INSERT INTO public.storage_points (id, name, type, node_code, address, city)
 SELECT 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'Depósito General (Recuperado)', 'Propio', 'REC-001', 'Sede Central', 'General'
 WHERE NOT EXISTS (SELECT 1 FROM public.storage_points);
 
--- 3. VINCULAR STOCK HUÉRFANO (DATA FIX)
--- Asigna lotes sin ubicación al primer depósito que encuentre para hacerlos visibles
+-- 3. VINCULAR STOCK HUÉRFANO
 UPDATE public.seed_batches
 SET storage_point_id = (SELECT id FROM public.storage_points LIMIT 1)
 WHERE storage_point_id IS NULL;
@@ -118,7 +118,7 @@ WHERE storage_point_id IS NULL;
 NOTIFY pgrst, 'reload schema';
 `;
       navigator.clipboard.writeText(sql);
-      alert("✅ SCRIPT V54 (BLUE BOOK) COPIADO.\n\nSi ves el botón AZUL, Vercel ha reconectado el repositorio exitosamente.\n\nPasos:\n1. Ve a Supabase > SQL Editor.\n2. Pega y ejecuta (RUN).\n3. Recarga la app.");
+      alert("✅ SCRIPT V55 (CYAN) COPIADO.\n\nSi ves el botón CYAN NEÓN, el caché ha sido eliminado exitosamente.\n\nPasos:\n1. Ve a Supabase > SQL Editor.\n2. Pega y ejecuta (RUN).\n3. Recarga la app.");
   };
 
   return (
@@ -190,16 +190,16 @@ NOTIFY pgrst, 'reload schema';
       {activeTab === 'system' && (
           <div className="space-y-6 animate-in slide-in-from-bottom-2">
               
-              {/* FIX DATABASE BUTTON - VERSION 54 (BLUE BOOK - DEEP BLUE) */}
-              <div className="bg-gradient-to-r from-blue-700 to-indigo-800 p-8 rounded-[40px] shadow-xl text-white relative overflow-hidden group hover:scale-[1.01] transition-all cursor-pointer border border-blue-500 ring-4 ring-blue-200 dark:ring-blue-900" onClick={handleFixSchema}>
+              {/* FIX DATABASE BUTTON - VERSION 55 (CYAN NEON) */}
+              <div className="bg-cyan-500 p-8 rounded-[40px] shadow-xl text-white relative overflow-hidden group hover:scale-[1.01] transition-all cursor-pointer border border-cyan-400 ring-4 ring-cyan-200 dark:ring-cyan-900" onClick={handleFixSchema}>
                   <div className="flex justify-between items-center relative z-10">
                       <div>
                           <div className="flex items-center gap-3 mb-2">
-                              <Satellite size={28} className="text-white animate-pulse"/>
-                              <h3 className="text-xl font-black uppercase tracking-tighter italic">V54: PROYECTO BLUE BOOK</h3>
+                              <Radio size={28} className="text-white animate-pulse"/>
+                              <h3 className="text-xl font-black uppercase tracking-tighter italic">V55: CYAN STORM</h3>
                           </div>
-                          <p className="text-xs text-blue-100 font-medium max-w-md">
-                              <strong>RECONEXIÓN ESTABLECIDA:</strong> Si ves este panel <span className="underline">AZUL</span>, Vercel ha vuelto a enlazarse con GitHub correctamente.
+                          <p className="text-xs text-white font-medium max-w-md">
+                              <strong>ESTADO: EN LÍNEA.</strong> Si ves este panel <span className="underline">CYAN BRILLANTE</span>, Vercel ha eliminado el caché obsoleto y está sirviendo la última versión del código.
                           </p>
                       </div>
                       <div className="bg-white/20 p-4 rounded-full border border-white/20">
@@ -207,11 +207,11 @@ NOTIFY pgrst, 'reload schema';
                       </div>
                   </div>
                   <div className="mt-8 flex items-center">
-                      <span className="text-[10px] font-black uppercase tracking-[0.2em] bg-white text-blue-900 px-6 py-3 rounded-full hover:bg-blue-50 transition shadow-lg">
-                          Copiar SQL V54
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em] bg-white text-cyan-700 px-6 py-3 rounded-full hover:bg-cyan-50 transition shadow-lg">
+                          Copiar SQL V55
                       </span>
                   </div>
-                  <Activity className="absolute -bottom-10 -right-10 w-64 h-64 text-white opacity-10 pointer-events-none"/>
+                  <Activity className="absolute -bottom-10 -right-10 w-64 h-64 text-white opacity-20 pointer-events-none"/>
               </div>
 
               {/* BACKUP SECTION */}
@@ -254,7 +254,7 @@ NOTIFY pgrst, 'reload schema';
                           <CheckCircle2 size={20} className="text-emerald-500"/>
                           <div>
                               <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Esquema de Base de Datos</p>
-                              <p className="text-[10px] text-slate-400 uppercase tracking-widest">Sincronizado (V54)</p>
+                              <p className="text-[10px] text-slate-400 uppercase tracking-widest">Sincronizado (V55)</p>
                           </div>
                       </div>
                       <div className="bg-white/60 dark:bg-slate-900/50 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-900/20 flex items-center space-x-3">
@@ -272,12 +272,12 @@ NOTIFY pgrst, 'reload schema';
                       <Database size={20} className="text-slate-400"/>
                       <div>
                           <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Versión del Cliente</p>
-                          <p className="text-[10px] text-slate-400 uppercase tracking-widest">Nucleus WebApp v1.0.8-BLUEBOOK</p>
+                          <p className="text-[10px] text-slate-400 uppercase tracking-widest">Nucleus WebApp v1.0.9-CYAN</p>
                       </div>
                   </div>
                   <div className="text-right">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Build</p>
-                      <p className="text-xs font-mono text-slate-600 dark:text-slate-400">stable-release-2025-v54</p>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Build Time</p>
+                      <p className="text-xs font-mono text-slate-600 dark:text-slate-400">{buildTime}</p>
                   </div>
               </div>
           </div>
