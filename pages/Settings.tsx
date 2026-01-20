@@ -10,7 +10,7 @@ import { supabase } from '../supabaseClient';
 
 export default function Settings() {
   const { currentUser, appName, appLogo, updateBranding } = useAppContext();
-  // V52: Forzamos 'system' tab por defecto
+  // V53: Forzamos 'system' tab por defecto
   const [activeTab, setActiveTab] = useState<'branding' | 'system' | 'maintenance'>('system');
   const [editAppName, setEditAppName] = useState(appName);
   const [editAppLogo, setEditAppLogo] = useState(appLogo);
@@ -18,7 +18,7 @@ export default function Settings() {
 
   useEffect(() => {
       // Log con timestamp para verificar caché
-      console.log(`--- SETTINGS MODULE V52 (PURPLE) LOADED AT ${new Date().toISOString()} ---`);
+      console.log(`--- SETTINGS MODULE V53 (PHOENIX) LOADED AT ${new Date().toISOString()} ---`);
       setEditAppName(appName);
       setEditAppLogo(appLogo);
   }, [appName, appLogo]);
@@ -83,7 +83,7 @@ export default function Settings() {
 
   const handleFixSchema = () => {
       const sql = `
--- FIX V52: MIGRACIÓN FINAL (FORZADO)
+-- FIX V53: PROTOCOLO FENIX (MIGRACIÓN FINAL)
 -- Ejecutar para reparar estructura y visualizar inventario oculto
 
 -- 1. ESTRUCTURA (Columnas faltantes para Parcelas y Lotes)
@@ -118,7 +118,7 @@ WHERE storage_point_id IS NULL;
 NOTIFY pgrst, 'reload schema';
 `;
       navigator.clipboard.writeText(sql);
-      alert("✅ SCRIPT V52 COPIADO.\n\nSi ves el botón PÚRPURA, la actualización funcionó.\n\nPasos:\n1. Ve a Supabase > SQL Editor.\n2. Pega y ejecuta (RUN).\n3. Recarga la app.");
+      alert("✅ SCRIPT V53 (FENIX) COPIADO.\n\nSi ves el botón NARANJA, la actualización funcionó.\n\nPasos:\n1. Ve a Supabase > SQL Editor.\n2. Pega y ejecuta (RUN).\n3. Recarga la app.");
   };
 
   return (
@@ -190,16 +190,16 @@ NOTIFY pgrst, 'reload schema';
       {activeTab === 'system' && (
           <div className="space-y-6 animate-in slide-in-from-bottom-2">
               
-              {/* FIX DATABASE BUTTON - VERSION 52 (PURPLE CARD) */}
-              <div className="bg-purple-900 p-8 rounded-[40px] shadow-xl text-white relative overflow-hidden group hover:scale-[1.01] transition-all cursor-pointer border border-purple-700 ring-4 ring-purple-500/30" onClick={handleFixSchema}>
+              {/* FIX DATABASE BUTTON - VERSION 53 (PHOENIX - ORANGE/RED) */}
+              <div className="bg-gradient-to-r from-orange-600 to-red-600 p-8 rounded-[40px] shadow-xl text-white relative overflow-hidden group hover:scale-[1.01] transition-all cursor-pointer border border-orange-500 ring-4 ring-orange-200 dark:ring-orange-900" onClick={handleFixSchema}>
                   <div className="flex justify-between items-center relative z-10">
                       <div>
                           <div className="flex items-center gap-3 mb-2">
-                              <Radiation size={28} className="text-white animate-spin-slow"/>
-                              <h3 className="text-xl font-black uppercase tracking-tighter italic">V52: MIGRACIÓN CRÍTICA</h3>
+                              <Flame size={28} className="text-white animate-pulse"/>
+                              <h3 className="text-xl font-black uppercase tracking-tighter italic">V53: PROTOCOLO FENIX</h3>
                           </div>
-                          <p className="text-xs text-purple-200 font-medium max-w-md">
-                              <strong>FORCE DEPLOY:</strong> Si ves este panel PÚRPURA, Vercel ha actualizado correctamente. Ejecuta el script para arreglar el stock.
+                          <p className="text-xs text-orange-100 font-medium max-w-md">
+                              <strong>RECONEXIÓN EXITOSA:</strong> Si ves este panel <span className="underline">NARANJA</span>, Vercel ha sincronizado correctamente el código V53. Haz clic para copiar el script SQL.
                           </p>
                       </div>
                       <div className="bg-white/20 p-4 rounded-full border border-white/20">
@@ -207,8 +207,8 @@ NOTIFY pgrst, 'reload schema';
                       </div>
                   </div>
                   <div className="mt-8 flex items-center">
-                      <span className="text-[10px] font-black uppercase tracking-[0.2em] bg-white text-purple-900 px-6 py-3 rounded-full hover:bg-purple-100 transition shadow-lg">
-                          Copiar SQL V52
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em] bg-white text-orange-900 px-6 py-3 rounded-full hover:bg-orange-50 transition shadow-lg">
+                          Copiar SQL V53
                       </span>
                   </div>
                   <Activity className="absolute -bottom-10 -right-10 w-64 h-64 text-white opacity-10 pointer-events-none"/>
@@ -254,7 +254,7 @@ NOTIFY pgrst, 'reload schema';
                           <CheckCircle2 size={20} className="text-emerald-500"/>
                           <div>
                               <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Esquema de Base de Datos</p>
-                              <p className="text-[10px] text-slate-400 uppercase tracking-widest">Sincronizado (V52)</p>
+                              <p className="text-[10px] text-slate-400 uppercase tracking-widest">Sincronizado (V53)</p>
                           </div>
                       </div>
                       <div className="bg-white/60 dark:bg-slate-900/50 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-900/20 flex items-center space-x-3">
@@ -272,12 +272,12 @@ NOTIFY pgrst, 'reload schema';
                       <Database size={20} className="text-slate-400"/>
                       <div>
                           <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Versión del Cliente</p>
-                          <p className="text-[10px] text-slate-400 uppercase tracking-widest">Nucleus WebApp v1.0.6-FORCE</p>
+                          <p className="text-[10px] text-slate-400 uppercase tracking-widest">Nucleus WebApp v1.0.7-PHOENIX</p>
                       </div>
                   </div>
                   <div className="text-right">
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Build</p>
-                      <p className="text-xs font-mono text-slate-600 dark:text-slate-400">stable-release-2025-v52</p>
+                      <p className="text-xs font-mono text-slate-600 dark:text-slate-400">stable-release-2025-v53</p>
                   </div>
               </div>
           </div>

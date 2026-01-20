@@ -29,9 +29,12 @@ export default function Login() {
       <div className="hidden lg:flex lg:w-1/2 bg-[#DDDB03] relative p-20 flex-col justify-between overflow-hidden shadow-2xl">
           <div className="relative z-10">
               <div className="mb-12">
-                  <h1 className="text-7xl font-black text-hemp-700 tracking-tighter italic uppercase leading-none drop-shadow-sm">
-                      HempC <span className="text-slate-900">APP</span>
-                  </h1>
+                  <div className="flex items-center gap-3">
+                      <h1 className="text-7xl font-black text-hemp-700 tracking-tighter italic uppercase leading-none drop-shadow-sm">
+                          HempC <span className="text-slate-900">APP</span>
+                      </h1>
+                      <span className="bg-slate-900 text-white text-[10px] px-2 py-1 rounded font-black uppercase tracking-widest">v53</span>
+                  </div>
                   <p className="text-slate-800 mt-2 text-sm font-black tracking-widest opacity-80">
                       www.hempc.com.ar
                   </p>
