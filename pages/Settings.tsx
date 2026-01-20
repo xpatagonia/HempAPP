@@ -10,7 +10,7 @@ import { supabase } from '../supabaseClient';
 
 export default function Settings() {
   const { currentUser, appName, appLogo, updateBranding } = useAppContext();
-  // V47: Forzamos 'system' tab por defecto para encontrar el botón rápido
+  // V48: Forzamos 'system' tab por defecto
   const [activeTab, setActiveTab] = useState<'branding' | 'system' | 'maintenance'>('system');
   const [editAppName, setEditAppName] = useState(appName);
   const [editAppLogo, setEditAppLogo] = useState(appLogo);
@@ -81,7 +81,7 @@ export default function Settings() {
 
   const handleFixSchema = () => {
       const sql = `
--- FIX V47: MIGRACIÓN FINAL (RECUPERACIÓN DE STOCK Y COLUMNAS)
+-- FIX V48: MIGRACIÓN CRÍTICA (RECUPERACIÓN DE STOCK)
 -- Ejecutar para reparar estructura y visualizar inventario oculto
 
 -- 1. ESTRUCTURA (Columnas faltantes para Parcelas y Lotes)
@@ -116,7 +116,7 @@ WHERE storage_point_id IS NULL;
 NOTIFY pgrst, 'reload schema';
 `;
       navigator.clipboard.writeText(sql);
-      alert("✅ SCRIPT V47 COPIADO.\n\nEste script:\n1. Crea columnas faltantes (color, seed_value).\n2. Crea un depósito por defecto si no existe.\n3. Mueve todo el stock 'invisible' a ese depósito.\n\nEjecútelo en Supabase SQL Editor ahora.");
+      alert("✅ SCRIPT V48 COPIADO AL PORTAPAPELES.\n\nInstrucciones:\n1. Ve a Supabase > SQL Editor.\n2. Pega el script.\n3. Ejecútalo (Run).\n4. Vuelve aquí y recarga la página. Tu stock aparecerá en 'Depósito General (Recuperado)'.");
   };
 
   return (
@@ -188,24 +188,24 @@ NOTIFY pgrst, 'reload schema';
       {activeTab === 'system' && (
           <div className="space-y-6 animate-in slide-in-from-bottom-2">
               
-              {/* FIX DATABASE BUTTON - VERSION 47 (PURPLE) */}
-              <div className="bg-purple-600 p-8 rounded-[40px] shadow-xl text-white relative overflow-hidden group hover:scale-[1.01] transition-all cursor-pointer border border-purple-500" onClick={handleFixSchema}>
+              {/* FIX DATABASE BUTTON - VERSION 48 (RED FLASH) */}
+              <div className="bg-red-600 p-8 rounded-[40px] shadow-xl text-white relative overflow-hidden group hover:scale-[1.01] transition-all cursor-pointer border border-red-500 ring-4 ring-red-200 dark:ring-red-900" onClick={handleFixSchema}>
                   <div className="flex justify-between items-center relative z-10">
                       <div>
                           <div className="flex items-center gap-3 mb-2">
-                              <Zap size={24} className="text-yellow-300 fill-yellow-300 animate-pulse"/>
-                              <h3 className="text-xl font-black uppercase tracking-tighter italic">Actualizar Esquema SQL (V47)</h3>
+                              <Zap size={28} className="text-yellow-300 fill-yellow-300 animate-bounce"/>
+                              <h3 className="text-xl font-black uppercase tracking-tighter italic">Ejecutar Migración SQL (V48)</h3>
                           </div>
-                          <p className="text-xs text-purple-100 font-medium max-w-md">
-                              Script definitivo de recuperación de stock y corrección de columnas faltantes. Mueve lotes huérfanos.
+                          <p className="text-xs text-red-100 font-medium max-w-md">
+                              <strong>ACCIÓN REQUERIDA:</strong> Este script recupera el stock "invisible" asignándolo a un depósito por defecto.
                           </p>
                       </div>
-                      <div className="bg-white/20 p-3 rounded-full">
-                          <FileCode size={24}/>
+                      <div className="bg-white/20 p-4 rounded-full animate-pulse">
+                          <FileCode size={32}/>
                       </div>
                   </div>
-                  <div className="mt-6 flex items-center text-[10px] font-black uppercase tracking-widest bg-white/10 w-fit px-4 py-2 rounded-full border border-white/20">
-                      Clic para copiar Script V47
+                  <div className="mt-6 flex items-center text-[10px] font-black uppercase tracking-widest bg-black/20 w-fit px-4 py-2 rounded-full border border-white/20">
+                      Clic para copiar Script V48
                   </div>
               </div>
 
@@ -250,7 +250,7 @@ NOTIFY pgrst, 'reload schema';
                           <CheckCircle2 size={20} className="text-emerald-500"/>
                           <div>
                               <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Esquema de Base de Datos</p>
-                              <p className="text-[10px] text-slate-400 uppercase tracking-widest">Sincronizado (V47)</p>
+                              <p className="text-[10px] text-slate-400 uppercase tracking-widest">Sincronizado (V48)</p>
                           </div>
                       </div>
                       <div className="bg-white/60 dark:bg-slate-900/50 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-900/20 flex items-center space-x-3">
@@ -282,7 +282,7 @@ NOTIFY pgrst, 'reload schema';
                       <Database size={20} className="text-slate-400"/>
                       <div>
                           <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Versión del Cliente</p>
-                          <p className="text-[10px] text-slate-400 uppercase tracking-widest">Nucleus WebApp v1.0.2-FIX</p>
+                          <p className="text-[10px] text-slate-400 uppercase tracking-widest">Nucleus WebApp v1.0.3-FIX</p>
                       </div>
                   </div>
                   <div className="text-right">
