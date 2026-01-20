@@ -4,19 +4,20 @@ import { useAppContext } from '../context/AppContext';
 import { 
   Save, Database, RefreshCw, Lock, Settings as SettingsIcon, 
   CheckCircle2, Layout, Trash2, RotateCcw, Shield, 
-  AlertTriangle, FlaskConical, CheckCircle, XCircle, Info, Search, FileCode, Flame, Eraser, Server, Activity, DownloadCloud, FileJson, Zap
+  AlertTriangle, FlaskConical, CheckCircle, XCircle, Info, Search, FileCode, Flame, Eraser, Server, Activity, DownloadCloud, FileJson, Zap, HardDrive
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
 export default function Settings() {
   const { currentUser, appName, appLogo, updateBranding } = useAppContext();
-  // V48: Forzamos 'system' tab por defecto
+  // V50: Forzamos 'system' tab por defecto
   const [activeTab, setActiveTab] = useState<'branding' | 'system' | 'maintenance'>('system');
   const [editAppName, setEditAppName] = useState(appName);
   const [editAppLogo, setEditAppLogo] = useState(appLogo);
   const [isBackingUp, setIsBackingUp] = useState(false);
 
   useEffect(() => {
+      console.log("--- SETTINGS MODULE LOADED: V50 (CACHE BUSTER) ---");
       setEditAppName(appName);
       setEditAppLogo(appLogo);
   }, [appName, appLogo]);
@@ -81,7 +82,7 @@ export default function Settings() {
 
   const handleFixSchema = () => {
       const sql = `
--- FIX V48: MIGRACIÓN CRÍTICA (RECUPERACIÓN DE STOCK)
+-- FIX V50: MIGRACIÓN MAESTRA (RED DEPOSITOS Y STOCK)
 -- Ejecutar para reparar estructura y visualizar inventario oculto
 
 -- 1. ESTRUCTURA (Columnas faltantes para Parcelas y Lotes)
@@ -116,7 +117,7 @@ WHERE storage_point_id IS NULL;
 NOTIFY pgrst, 'reload schema';
 `;
       navigator.clipboard.writeText(sql);
-      alert("✅ SCRIPT V48 COPIADO AL PORTAPAPELES.\n\nInstrucciones:\n1. Ve a Supabase > SQL Editor.\n2. Pega el script.\n3. Ejecútalo (Run).\n4. Vuelve aquí y recarga la página. Tu stock aparecerá en 'Depósito General (Recuperado)'.");
+      alert("✅ SCRIPT V50 COPIADO AL PORTAPAPELES.\n\nInstrucciones:\n1. Ve a Supabase > SQL Editor.\n2. Pega el script.\n3. Ejecútalo (Run).\n4. Vuelve aquí y recarga la página.");
   };
 
   return (
@@ -188,47 +189,49 @@ NOTIFY pgrst, 'reload schema';
       {activeTab === 'system' && (
           <div className="space-y-6 animate-in slide-in-from-bottom-2">
               
-              {/* FIX DATABASE BUTTON - VERSION 48 (RED FLASH) */}
-              <div className="bg-red-600 p-8 rounded-[40px] shadow-xl text-white relative overflow-hidden group hover:scale-[1.01] transition-all cursor-pointer border border-red-500 ring-4 ring-red-200 dark:ring-red-900" onClick={handleFixSchema}>
+              {/* FIX DATABASE BUTTON - VERSION 50 (BLACK CARD) */}
+              <div className="bg-slate-900 p-10 rounded-[40px] shadow-2xl text-white relative overflow-hidden group hover:scale-[1.01] transition-all cursor-pointer border-2 border-white/20" onClick={handleFixSchema}>
                   <div className="flex justify-between items-center relative z-10">
                       <div>
                           <div className="flex items-center gap-3 mb-2">
-                              <Zap size={28} className="text-yellow-300 fill-yellow-300 animate-bounce"/>
-                              <h3 className="text-xl font-black uppercase tracking-tighter italic">Ejecutar Migración SQL (V48)</h3>
+                              <HardDrive size={32} className="text-white animate-pulse"/>
+                              <h3 className="text-2xl font-black uppercase tracking-tighter italic">ACTUALIZACIÓN MAESTRA V50</h3>
                           </div>
-                          <p className="text-xs text-red-100 font-medium max-w-md">
-                              <strong>ACCIÓN REQUERIDA:</strong> Este script recupera el stock "invisible" asignándolo a un depósito por defecto.
+                          <p className="text-sm text-slate-400 font-medium max-w-md">
+                              Script definitivo de recuperación de stock. Mueve lotes huérfanos y asegura la integridad de datos.
                           </p>
                       </div>
-                      <div className="bg-white/20 p-4 rounded-full animate-pulse">
+                      <div className="bg-white/10 p-4 rounded-full border border-white/10">
                           <FileCode size={32}/>
                       </div>
                   </div>
-                  <div className="mt-6 flex items-center text-[10px] font-black uppercase tracking-widest bg-black/20 w-fit px-4 py-2 rounded-full border border-white/20">
-                      Clic para copiar Script V48
+                  <div className="mt-8 flex items-center">
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em] bg-white text-slate-900 px-6 py-3 rounded-full hover:bg-slate-200 transition">
+                          Copiar Script V50 (Final Fix)
+                      </span>
                   </div>
+                  <Activity className="absolute -bottom-10 -right-10 w-64 h-64 text-white opacity-5 pointer-events-none"/>
               </div>
 
               {/* BACKUP SECTION */}
-              <div className="bg-slate-900 dark:bg-hemp-600 text-white p-8 rounded-[40px] shadow-2xl relative overflow-hidden flex flex-col md:flex-row justify-between items-center gap-6">
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-8 rounded-[40px] shadow-sm relative overflow-hidden flex flex-col md:flex-row justify-between items-center gap-6">
                   <div className="relative z-10">
                       <div className="flex items-center gap-3 mb-2">
-                          <Database size={24} className="text-hemp-400 dark:text-white"/>
-                          <h3 className="text-xl font-black uppercase tracking-tighter italic">Copia de Seguridad</h3>
+                          <Database size={24} className="text-slate-700 dark:text-white"/>
+                          <h3 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-tighter italic">Copia de Seguridad</h3>
                       </div>
-                      <p className="text-xs text-slate-400 dark:text-white/80 font-medium max-w-md leading-relaxed">
+                      <p className="text-xs text-slate-500 dark:text-slate-400 font-medium max-w-md leading-relaxed">
                           Genera un archivo JSON ("Snapshot") con toda la información actual de la base de datos (Parcelas, Usuarios, Monitoreos, etc.) para resguardo local.
                       </p>
                   </div>
                   <button 
                     onClick={handleFullBackup}
                     disabled={isBackingUp}
-                    className="relative z-10 bg-white text-slate-900 px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg flex items-center hover:scale-[1.02] transition-all disabled:opacity-50"
+                    className="relative z-10 bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg flex items-center hover:scale-[1.02] transition-all disabled:opacity-50"
                   >
                       {isBackingUp ? <RefreshCw className="animate-spin mr-2" size={18}/> : <DownloadCloud className="mr-2" size={18}/>}
                       {isBackingUp ? 'Generando...' : 'Descargar Snapshot'}
                   </button>
-                  <FileJson className="absolute -right-10 -bottom-10 w-64 h-64 text-white opacity-5 pointer-events-none"/>
               </div>
 
               <div className="bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-900/30 p-8 rounded-[40px] shadow-sm relative overflow-hidden">
@@ -250,7 +253,7 @@ NOTIFY pgrst, 'reload schema';
                           <CheckCircle2 size={20} className="text-emerald-500"/>
                           <div>
                               <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Esquema de Base de Datos</p>
-                              <p className="text-[10px] text-slate-400 uppercase tracking-widest">Sincronizado (V48)</p>
+                              <p className="text-[10px] text-slate-400 uppercase tracking-widest">Sincronizado (V50)</p>
                           </div>
                       </div>
                       <div className="bg-white/60 dark:bg-slate-900/50 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-900/20 flex items-center space-x-3">
@@ -258,20 +261,6 @@ NOTIFY pgrst, 'reload schema';
                           <div>
                               <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Motor de Inteligencia</p>
                               <p className="text-[10px] text-slate-400 uppercase tracking-widest">Gemini 3 Flash Activo</p>
-                          </div>
-                      </div>
-                      <div className="bg-white/60 dark:bg-slate-900/50 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-900/20 flex items-center space-x-3">
-                          <CheckCircle2 size={20} className="text-emerald-500"/>
-                          <div>
-                              <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Almacenamiento Multimedia</p>
-                              <p className="text-[10px] text-slate-400 uppercase tracking-widest">Optimizado (Compresión v2)</p>
-                          </div>
-                      </div>
-                      <div className="bg-white/60 dark:bg-slate-900/50 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-900/20 flex items-center space-x-3">
-                          <CheckCircle2 size={20} className="text-emerald-500"/>
-                          <div>
-                              <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Protocolos de Seguridad</p>
-                              <p className="text-[10px] text-slate-400 uppercase tracking-widest">RLS Habilitado</p>
                           </div>
                       </div>
                   </div>
@@ -282,7 +271,7 @@ NOTIFY pgrst, 'reload schema';
                       <Database size={20} className="text-slate-400"/>
                       <div>
                           <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Versión del Cliente</p>
-                          <p className="text-[10px] text-slate-400 uppercase tracking-widest">Nucleus WebApp v1.0.3-FIX</p>
+                          <p className="text-[10px] text-slate-400 uppercase tracking-widest">Nucleus WebApp v1.0.5-FINAL</p>
                       </div>
                   </div>
                   <div className="text-right">
