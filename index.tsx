@@ -3,8 +3,8 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 
-// CACHE BUSTER V53 - PHOENIX PROTOCOL
-console.log('%c NUCLEUS APP V53 (PHOENIX) BOOT SEQUENCE INITIATED ', 'background: #ea580c; color: #fff; font-weight: bold; padding: 4px; border-radius: 4px;');
+// CACHE BUSTER V54 - PROJECT BLUE BOOK
+console.log('%c NUCLEUS APP V54 (BLUE BOOK) SYSTEM LINK RESTORED ', 'background: #2563eb; color: #fff; font-weight: bold; padding: 4px; border-radius: 4px;');
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
