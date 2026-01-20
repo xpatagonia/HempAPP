@@ -4,20 +4,21 @@ import { useAppContext } from '../context/AppContext';
 import { 
   Save, Database, RefreshCw, Lock, Settings as SettingsIcon, 
   CheckCircle2, Layout, Trash2, RotateCcw, Shield, 
-  AlertTriangle, FlaskConical, CheckCircle, XCircle, Info, Search, FileCode, Flame, Eraser, Server, Activity, DownloadCloud, FileJson, Zap, HardDrive
+  AlertTriangle, FlaskConical, CheckCircle, XCircle, Info, Search, FileCode, Flame, Eraser, Server, Activity, DownloadCloud, FileJson, Zap, HardDrive, Radiation
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
 export default function Settings() {
   const { currentUser, appName, appLogo, updateBranding } = useAppContext();
-  // V50: Forzamos 'system' tab por defecto
+  // V51: Forzamos 'system' tab por defecto
   const [activeTab, setActiveTab] = useState<'branding' | 'system' | 'maintenance'>('system');
   const [editAppName, setEditAppName] = useState(appName);
   const [editAppLogo, setEditAppLogo] = useState(appLogo);
   const [isBackingUp, setIsBackingUp] = useState(false);
 
   useEffect(() => {
-      console.log("--- SETTINGS MODULE LOADED: V50 (CACHE BUSTER) ---");
+      // Log con timestamp para verificar caché
+      console.log(`--- SETTINGS MODULE V51 LOADED AT ${new Date().toISOString()} ---`);
       setEditAppName(appName);
       setEditAppLogo(appLogo);
   }, [appName, appLogo]);
@@ -82,7 +83,7 @@ export default function Settings() {
 
   const handleFixSchema = () => {
       const sql = `
--- FIX V50: MIGRACIÓN MAESTRA (RED DEPOSITOS Y STOCK)
+-- FIX V51: MIGRACIÓN FINAL (FORZADO)
 -- Ejecutar para reparar estructura y visualizar inventario oculto
 
 -- 1. ESTRUCTURA (Columnas faltantes para Parcelas y Lotes)
@@ -117,7 +118,7 @@ WHERE storage_point_id IS NULL;
 NOTIFY pgrst, 'reload schema';
 `;
       navigator.clipboard.writeText(sql);
-      alert("✅ SCRIPT V50 COPIADO AL PORTAPAPELES.\n\nInstrucciones:\n1. Ve a Supabase > SQL Editor.\n2. Pega el script.\n3. Ejecútalo (Run).\n4. Vuelve aquí y recarga la página.");
+      alert("✅ SCRIPT V51 COPIADO.\n\nSi Vercel sigue mostrando versiones viejas:\n1. Ve al Dashboard de Vercel.\n2. Redeploy.\n3. Desmarca 'Use existing Build Cache'.");
   };
 
   return (
@@ -189,28 +190,28 @@ NOTIFY pgrst, 'reload schema';
       {activeTab === 'system' && (
           <div className="space-y-6 animate-in slide-in-from-bottom-2">
               
-              {/* FIX DATABASE BUTTON - VERSION 50 (BLACK CARD) */}
-              <div className="bg-slate-900 p-10 rounded-[40px] shadow-2xl text-white relative overflow-hidden group hover:scale-[1.01] transition-all cursor-pointer border-2 border-white/20" onClick={handleFixSchema}>
+              {/* FIX DATABASE BUTTON - VERSION 51 (PINK CARD) */}
+              <div className="bg-pink-600 p-8 rounded-[40px] shadow-xl text-white relative overflow-hidden group hover:scale-[1.01] transition-all cursor-pointer border border-pink-500 ring-4 ring-pink-200 dark:ring-pink-900" onClick={handleFixSchema}>
                   <div className="flex justify-between items-center relative z-10">
                       <div>
                           <div className="flex items-center gap-3 mb-2">
-                              <HardDrive size={32} className="text-white animate-pulse"/>
-                              <h3 className="text-2xl font-black uppercase tracking-tighter italic">ACTUALIZACIÓN MAESTRA V50</h3>
+                              <Radiation size={28} className="text-white animate-spin-slow"/>
+                              <h3 className="text-xl font-black uppercase tracking-tighter italic">Ejecutar Migración SQL (V51)</h3>
                           </div>
-                          <p className="text-sm text-slate-400 font-medium max-w-md">
-                              Script definitivo de recuperación de stock. Mueve lotes huérfanos y asegura la integridad de datos.
+                          <p className="text-xs text-pink-100 font-medium max-w-md">
+                              <strong>CACHE BUSTER:</strong> Esta versión fuerza la actualización visual. El script SQL asegura la visibilidad del stock.
                           </p>
                       </div>
-                      <div className="bg-white/10 p-4 rounded-full border border-white/10">
+                      <div className="bg-white/20 p-4 rounded-full border border-white/20">
                           <FileCode size={32}/>
                       </div>
                   </div>
                   <div className="mt-8 flex items-center">
-                      <span className="text-[10px] font-black uppercase tracking-[0.2em] bg-white text-slate-900 px-6 py-3 rounded-full hover:bg-slate-200 transition">
-                          Copiar Script V50 (Final Fix)
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em] bg-white text-pink-900 px-6 py-3 rounded-full hover:bg-pink-100 transition shadow-lg">
+                          Copiar Script V51
                       </span>
                   </div>
-                  <Activity className="absolute -bottom-10 -right-10 w-64 h-64 text-white opacity-5 pointer-events-none"/>
+                  <Activity className="absolute -bottom-10 -right-10 w-64 h-64 text-white opacity-10 pointer-events-none"/>
               </div>
 
               {/* BACKUP SECTION */}
@@ -253,7 +254,7 @@ NOTIFY pgrst, 'reload schema';
                           <CheckCircle2 size={20} className="text-emerald-500"/>
                           <div>
                               <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Esquema de Base de Datos</p>
-                              <p className="text-[10px] text-slate-400 uppercase tracking-widest">Sincronizado (V50)</p>
+                              <p className="text-[10px] text-slate-400 uppercase tracking-widest">Sincronizado (V51)</p>
                           </div>
                       </div>
                       <div className="bg-white/60 dark:bg-slate-900/50 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-900/20 flex items-center space-x-3">
