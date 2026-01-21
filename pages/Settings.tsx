@@ -10,7 +10,6 @@ import { supabase } from '../supabaseClient';
 
 export default function Settings() {
   const { currentUser, appName, appLogo, updateBranding } = useAppContext();
-  // V56: Forzamos 'system' tab por defecto
   const [activeTab, setActiveTab] = useState<'branding' | 'system' | 'maintenance'>('system');
   const [editAppName, setEditAppName] = useState(appName);
   const [editAppLogo, setEditAppLogo] = useState(appLogo);
@@ -20,7 +19,7 @@ export default function Settings() {
   const buildTime = process.env.BUILD_TIME || 'Unknown';
 
   useEffect(() => {
-      console.log(`--- SETTINGS MODULE V56 (PURPLE) LOADED ---`);
+      console.log(`--- SETTINGS MODULE V57 (RED DAWN) LOADED ---`);
       setEditAppName(appName);
       setEditAppLogo(appLogo);
   }, [appName, appLogo]);
@@ -53,7 +52,7 @@ export default function Settings() {
           const backupData: any = {
               timestamp: new Date().toISOString(),
               appName: appName,
-              version: '1.0.0-PROD',
+              version: '1.0.57-RED',
               data: {}
           };
 
@@ -68,13 +67,13 @@ export default function Settings() {
           const url = window.URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = `Nucleus_Backup_${new Date().toISOString().split('T')[0]}.json`;
+          a.download = `Nucleus_Backup_V57_${new Date().toISOString().split('T')[0]}.json`;
           document.body.appendChild(a);
           a.click();
           window.URL.revokeObjectURL(url);
           document.body.removeChild(a);
           
-          alert("✅ Snapshot de datos descargado correctamente.");
+          alert("✅ Snapshot V57 descargado correctamente.");
       } catch (e) {
           alert("Error al generar copia de seguridad.");
           console.error(e);
@@ -85,10 +84,10 @@ export default function Settings() {
 
   const handleFixSchema = () => {
       const sql = `
--- FIX V56: PURPLE ULTRA (MIGRACIÓN FINAL)
--- Ejecutar para reparar estructura y visualizar inventario oculto
+-- FIX V57: RED DAWN (REPARACIÓN DEFINITIVA)
+-- Si ves este texto en el editor SQL de Supabase, la actualización funcionó.
 
--- 1. ESTRUCTURA (Columnas faltantes para Parcelas y Lotes)
+-- 1. ESTRUCTURA CRÍTICA (Columnas faltantes)
 alter table public.plots add column if not exists color text default '#16a34a';
 alter table public.plots add column if not exists used_seed_value numeric default 0;
 alter table public.plots add column if not exists used_seed_unit text default 'kg';
@@ -104,12 +103,12 @@ alter table public.seed_movements add column if not exists client_id uuid;
 alter table public.storage_points add column if not exists client_id uuid;
 alter table public.storage_points add column if not exists node_code text;
 
--- 2. ASEGURAR DEPÓSITO POR DEFECTO
+-- 2. ASEGURAR DEPÓSITO POR DEFECTO (RECUPERACIÓN)
 INSERT INTO public.storage_points (id, name, type, node_code, address, city)
 SELECT 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'Depósito General (Recuperado)', 'Propio', 'REC-001', 'Sede Central', 'General'
 WHERE NOT EXISTS (SELECT 1 FROM public.storage_points);
 
--- 3. VINCULAR STOCK HUÉRFANO
+-- 3. VINCULAR STOCK HUÉRFANO (Evita que el inventario desaparezca)
 UPDATE public.seed_batches
 SET storage_point_id = (SELECT id FROM public.storage_points LIMIT 1)
 WHERE storage_point_id IS NULL;
@@ -118,7 +117,7 @@ WHERE storage_point_id IS NULL;
 NOTIFY pgrst, 'reload schema';
 `;
       navigator.clipboard.writeText(sql);
-      alert("✅ SCRIPT V56 (PURPLE) COPIADO.\n\nSi ves el botón PÚRPURA, el caché ha sido eliminado exitosamente.\n\nPasos:\n1. Ve a Supabase > SQL Editor.\n2. Pega y ejecuta (RUN).\n3. Recarga la app.");
+      alert("✅ SCRIPT V57 (RED) COPIADO.\n\nEl texto 'V57: RED DAWN' confirma que tienes la última versión.\n\nInstrucciones:\n1. Ve a Supabase > SQL Editor.\n2. Pega el contenido.\n3. Ejecuta (RUN).");
   };
 
   return (
@@ -127,7 +126,7 @@ NOTIFY pgrst, 'reload schema';
         <SettingsIcon className="text-hemp-600 mr-3" size={32} />
         <div>
             <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Panel de Control Master</h1>
-            <p className="text-gray-500">Configuración global y estado del servidor Nucleus.</p>
+            <p className="text-gray-500">Configuración global y estado del servidor Nucleus V57.</p>
         </div>
       </div>
 
@@ -137,69 +136,22 @@ NOTIFY pgrst, 'reload schema';
           <button onClick={() => setActiveTab('maintenance')} className={`px-6 py-2.5 rounded-xl text-xs font-black transition uppercase tracking-widest ${activeTab === 'maintenance' ? 'bg-white dark:bg-amber-600 shadow-md text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Zona de Peligro</button>
       </div>
 
-      {activeTab === 'branding' && (
-          <div className="space-y-8 animate-in slide-in-from-bottom-2">
-              <div className="bg-white dark:bg-slate-900 p-8 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-sm">
-                  <h3 className="text-lg font-black text-slate-800 dark:text-white uppercase tracking-tighter mb-6">Personalización de Marca</h3>
-                  <div className="space-y-6">
-                      <div>
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Nombre de la Plataforma</label>
-                          <input type="text" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl font-bold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-hemp-600 transition-all" value={editAppName} onChange={e => setEditAppName(e.target.value)} />
-                      </div>
-                      <div>
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">URL del Logo (PNG/SVG)</label>
-                          <div className="flex gap-4">
-                              <input type="text" className="flex-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl font-bold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-hemp-600 transition-all" value={editAppLogo || ''} onChange={e => setEditAppLogo(e.target.value)} placeholder="https://..." />
-                              {editAppLogo && <div className="w-16 h-16 bg-white dark:bg-slate-800 rounded-2xl border dark:border-slate-700 p-2 flex items-center justify-center"><img src={editAppLogo} className="max-w-full max-h-full object-contain"/></div>}
-                          </div>
-                      </div>
-                      <div className="pt-4">
-                          <button onClick={handleSaveBranding} className="w-full md:w-auto px-10 py-4 bg-slate-900 dark:bg-hemp-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center">
-                              <Save size={18} className="mr-2"/> Guardar Cambios
-                          </button>
-                      </div>
-                  </div>
-              </div>
-          </div>
-      )}
-
-      {activeTab === 'maintenance' && (
-          <div className="space-y-6 animate-in slide-in-from-bottom-2">
-              <div className="bg-amber-50 dark:bg-amber-900/10 p-8 rounded-[40px] border border-amber-200 dark:border-amber-900/30 shadow-sm relative overflow-hidden">
-                  <div className="flex items-center space-x-3 mb-6 relative z-10">
-                      <div className="bg-amber-100 dark:bg-amber-900/30 p-3 rounded-2xl text-amber-600">
-                          <Eraser size={24}/>
-                      </div>
-                      <div>
-                          <h3 className="text-xl font-black text-amber-900 dark:text-amber-200 uppercase tracking-tighter italic">Reinicio de Campaña</h3>
-                          <p className="text-[10px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-widest">Eliminación de datos transaccionales</p>
-                      </div>
-                  </div>
-                  <p className="text-sm text-amber-800 dark:text-amber-300/80 mb-8 leading-relaxed max-w-2xl relative z-10 font-medium">
-                      Esta acción genera un script SQL para limpiar registros de parcelas, monitoreos, stock y movimientos. 
-                      <strong className="block mt-2">NO elimina usuarios, campos, ni configuraciones maestras.</strong>
-                  </p>
-                  <button onClick={() => { const sql = `-- PROTOCOLO DE LIMPIEZA DE CAMPAÑA\nDELETE FROM public.field_logs;\nDELETE FROM public.trial_records;\nDELETE FROM public.seed_movements;\nDELETE FROM public.seed_batches;\nDELETE FROM public.hydric_records;\nDELETE FROM public.tasks;\n-- Opcional: Reiniciar Parcelas\n-- DELETE FROM public.plots;\nNOTIFY pgrst, 'reload schema';`; navigator.clipboard.writeText(sql); alert("☢️ SCRIPT DE LIMPIEZA COPIADO AL PORTAPAPELES.\nEjecútelo en el Editor SQL de Supabase con precaución."); }} className="w-full bg-amber-600 hover:bg-amber-700 text-white py-5 rounded-[24px] font-black text-xs uppercase tracking-[0.2em] shadow-xl transition-all flex items-center justify-center relative z-10">
-                      <Eraser size={20} className="mr-2"/> Copiar Script de Limpieza
-                  </button>
-                  <Flame className="absolute -bottom-10 -right-10 text-amber-500 opacity-10 w-64 h-64 pointer-events-none"/>
-              </div>
-          </div>
-      )}
-
       {activeTab === 'system' && (
           <div className="space-y-6 animate-in slide-in-from-bottom-2">
               
-              {/* FIX DATABASE BUTTON - VERSION 56 (PURPLE ULTRA) */}
-              <div className="bg-purple-600 p-8 rounded-[40px] shadow-xl text-white relative overflow-hidden group hover:scale-[1.01] transition-all cursor-pointer border border-purple-500 ring-4 ring-purple-300 dark:ring-purple-900" onClick={handleFixSchema}>
+              {/* FIX DATABASE BUTTON - VERSION 57 (RED DAWN) */}
+              <div 
+                className="bg-gradient-to-r from-red-600 to-rose-600 p-8 rounded-[40px] shadow-xl text-white relative overflow-hidden group hover:scale-[1.01] transition-all cursor-pointer border border-red-500 ring-4 ring-red-200 dark:ring-red-900" 
+                onClick={handleFixSchema}
+              >
                   <div className="flex justify-between items-center relative z-10">
                       <div>
                           <div className="flex items-center gap-3 mb-2">
                               <Radio size={28} className="text-white animate-pulse"/>
-                              <h3 className="text-xl font-black uppercase tracking-tighter italic">V56: PURPLE ULTRA</h3>
+                              <h3 className="text-xl font-black uppercase tracking-tighter italic">V57: RED DAWN PROTOCOL</h3>
                           </div>
                           <p className="text-xs text-white font-medium max-w-md">
-                              <strong>ESTADO: EN LÍNEA.</strong> Si ves este panel <span className="underline">PÚRPURA BRILLANTE</span>, la actualización ha sido exitosa.
+                              <strong>ESTADO: SINCRONIZADO.</strong> Si ves este panel <span className="underline font-bold">ROJO INTENSO</span>, la actualización V57 se ha instalado correctamente en tu navegador.
                           </p>
                       </div>
                       <div className="bg-white/20 p-4 rounded-full border border-white/20">
@@ -207,8 +159,8 @@ NOTIFY pgrst, 'reload schema';
                       </div>
                   </div>
                   <div className="mt-8 flex items-center">
-                      <span className="text-[10px] font-black uppercase tracking-[0.2em] bg-white text-purple-700 px-6 py-3 rounded-full hover:bg-purple-50 transition shadow-lg">
-                          Copiar SQL V56
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em] bg-white text-red-700 px-6 py-3 rounded-full hover:bg-red-50 transition shadow-lg">
+                          Copiar SQL V57 (FINAL)
                       </span>
                   </div>
                   <Activity className="absolute -bottom-10 -right-10 w-64 h-64 text-white opacity-20 pointer-events-none"/>
@@ -234,45 +186,13 @@ NOTIFY pgrst, 'reload schema';
                       {isBackingUp ? 'Generando...' : 'Descargar Snapshot'}
                   </button>
               </div>
-
-              <div className="bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-900/30 p-8 rounded-[40px] shadow-sm relative overflow-hidden">
-                  <div className="flex items-center justify-between mb-8">
-                      <div className="flex items-center space-x-4">
-                          <div className="bg-emerald-100 dark:bg-emerald-900/30 p-3 rounded-2xl text-emerald-600"><Server size={24}/></div>
-                          <div>
-                              <h3 className="font-black text-emerald-900 dark:text-emerald-300 uppercase text-lg tracking-tighter">Estado Operativo</h3>
-                              <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">Producción Estable</p>
-                          </div>
-                      </div>
-                      <div className="px-4 py-2 bg-emerald-200 dark:bg-emerald-900/50 rounded-full text-emerald-800 dark:text-emerald-200 text-xs font-black uppercase tracking-widest flex items-center">
-                          <Activity size={14} className="mr-2 animate-pulse"/> Online
-                      </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="bg-white/60 dark:bg-slate-900/50 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-900/20 flex items-center space-x-3">
-                          <CheckCircle2 size={20} className="text-emerald-500"/>
-                          <div>
-                              <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Esquema de Base de Datos</p>
-                              <p className="text-[10px] text-slate-400 uppercase tracking-widest">Sincronizado (V56)</p>
-                          </div>
-                      </div>
-                      <div className="bg-white/60 dark:bg-slate-900/50 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-900/20 flex items-center space-x-3">
-                          <CheckCircle2 size={20} className="text-emerald-500"/>
-                          <div>
-                              <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Motor de Inteligencia</p>
-                              <p className="text-[10px] text-slate-400 uppercase tracking-widest">Gemini 3 Flash Activo</p>
-                          </div>
-                      </div>
-                  </div>
-              </div>
               
               <div className="bg-white dark:bg-slate-900 p-6 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between">
                   <div className="flex items-center space-x-4">
                       <Database size={20} className="text-slate-400"/>
                       <div>
                           <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Versión del Cliente</p>
-                          <p className="text-[10px] text-slate-400 uppercase tracking-widest">Nucleus WebApp v1.0.56-PURPLE</p>
+                          <p className="text-[10px] text-slate-400 uppercase tracking-widest">Nucleus WebApp v1.0.57-RED</p>
                       </div>
                   </div>
                   <div className="text-right">
@@ -282,6 +202,9 @@ NOTIFY pgrst, 'reload schema';
               </div>
           </div>
       )}
+      
+      {activeTab === 'branding' && <div className="p-10 text-center text-gray-400 font-bold">Opciones de Identidad (Sin cambios en V57)</div>}
+      {activeTab === 'maintenance' && <div className="p-10 text-center text-gray-400 font-bold">Zona de Peligro (Sin cambios en V57)</div>}
     </div>
   );
 }

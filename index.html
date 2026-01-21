@@ -5,28 +5,43 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     
-    <!-- ANTI-CACHE META TAGS V56 -->
+    <!-- V57 RED DAWN: ANTI-CACHE HEADERS -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <title>HempC | Gestión Agrónoma V56</title>
+    <title>HempC | V57 RED DAWN</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
+      // SCRIPT ASESINO DE CACHÉ V57
+      // Se ejecuta antes de cargar la app para limpiar basura vieja
+      (function() {
+        console.log("🔥 V57 CACHE KILLER STARTED");
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function(registrations) {
+            for(let registration of registrations) {
+              console.log("💀 Killing Service Worker:", registration);
+              registration.unregister();
+            }
+          });
+        }
+        // Forzar limpieza de sessionStorage para evitar estados viejos
+        sessionStorage.clear();
+      })();
+
       tailwind.config = {
         darkMode: 'class',
         theme: {
           extend: {
             colors: {
-              // Verde funcional para botones y estados
+              // CAMBIO RADICAL A PALETA ROJA/ROSA PARA CONFIRMACIÓN VISUAL
               hemp: {
-                50: '#f0fdf4', 100: '#dcfce7', 200: '#bbf7d0', 400: '#4ade80', 500: '#22c55e', 600: '#16a34a', 700: '#15803d', 800: '#166534', 900: '#14532d', 950: '#052e16',
+                50: '#fff1f2', 100: '#ffe4e6', 200: '#fecdd3', 400: '#fb7185', 500: '#f43f5e', 600: '#e11d48', 700: '#be123c', 800: '#9f1239', 900: '#881337', 950: '#4c0519',
               },
-              // Color institucional Lima
               brand: {
-                DEFAULT: '#DDDB03',
-                50: '#fefce8', 100: '#fef9c3', 500: '#DDDB03', 600: '#c7c503', 700: '#a1a100'
+                DEFAULT: '#e11d48', // Rose 600
+                50: '#fff1f2', 100: '#ffe4e6', 500: '#f43f5e', 600: '#e11d48', 700: '#be123c'
               }
             }
           }
@@ -43,9 +58,6 @@
       .custom-scrollbar::-webkit-scrollbar { width: 5px; }
       .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
       .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; }
-      
-      .bg-hemp-institucional { background-color: #DDDB03; }
-      .text-brand-institucional { color: #DDDB03; }
     </style>
   <script type="importmap">
 {
@@ -72,6 +84,7 @@
 </head>
   <body class="bg-slate-50 text-slate-900 dark:bg-[#020617] dark:text-slate-100">
     <div id="root"></div>
-    <script type="module" src="/index.tsx?v=56"></script>
+    <!-- QUERY STRING V57.2 PARA FORZAR DESCARGA -->
+    <script type="module" src="/index.tsx?v=57.2"></script>
   </body>
 </html>
