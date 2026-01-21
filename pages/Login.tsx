@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { useNavigate, Link } from 'react-router-dom';
-import { ArrowRight, AlertCircle, Loader2, Leaf, Globe, Mail, Code, QrCode, Smartphone } from 'lucide-react';
+import { ArrowRight, AlertCircle, Loader2, Leaf, Globe, Mail, Code, QrCode, Smartphone, RefreshCw } from 'lucide-react';
 
 export default function Login() {
   const { login, appName } = useAppContext();
@@ -22,6 +22,17 @@ export default function Login() {
     } catch (err) { setError('Error de conexión con el servidor.'); setIsLoading(false); }
   };
 
+  const handleForceRefresh = () => {
+      if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function(registrations) {
+              for(let registration of registrations) {
+                  registration.unregister();
+              }
+          });
+      }
+      window.location.reload();
+  };
+
   return (
     <div className="min-h-screen bg-white flex flex-col md:flex-row items-stretch overflow-hidden font-sans">
       
@@ -33,7 +44,7 @@ export default function Login() {
                       <h1 className="text-7xl font-black text-hemp-700 tracking-tighter italic uppercase leading-none drop-shadow-sm">
                           HempC <span className="text-slate-900">APP</span>
                       </h1>
-                      <span className="bg-slate-900 text-white text-[10px] px-2 py-1 rounded font-black uppercase tracking-widest">v54</span>
+                      <span className="bg-cyan-500 text-white text-[10px] px-2 py-1 rounded font-black uppercase tracking-widest shadow-sm">v55</span>
                   </div>
                   <p className="text-slate-800 mt-2 text-sm font-black tracking-widest opacity-80">
                       www.hempc.com.ar
@@ -124,9 +135,14 @@ export default function Login() {
                 <p className="text-slate-400 text-sm font-bold uppercase tracking-widest mt-2" style={{ fontFamily: 'Arial, sans-serif' }}>Agroindustria Inteligente</p>
             </div>
 
-            <div className="space-y-4">
-                <h2 className="text-4xl font-black text-slate-900 uppercase tracking-tighter italic leading-none">Acceso a la Red</h2>
-                <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.3em]">Autenticación de Terminal Autorizada</p>
+            <div className="flex justify-between items-end">
+                <div className="space-y-4">
+                    <h2 className="text-4xl font-black text-slate-900 uppercase tracking-tighter italic leading-none">Acceso a la Red</h2>
+                    <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.3em]">Autenticación de Terminal Autorizada</p>
+                </div>
+                <button onClick={handleForceRefresh} className="p-2 text-slate-300 hover:text-cyan-600 hover:bg-cyan-50 rounded-full transition-all" title="Forzar Recarga V55">
+                    <RefreshCw size={16} />
+                </button>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-8">
