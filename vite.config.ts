@@ -11,16 +11,16 @@ export default defineConfig(({ mode }) => {
     define: {
       'process.env.API_KEY': JSON.stringify(env.API_KEY || (process as any).env.API_KEY),
       'process.env.BUILD_TIME': JSON.stringify(buildTime),
-      'process.env.APP_VERSION': JSON.stringify('V200-BLACKOUT')
+      'process.env.APP_VERSION': JSON.stringify('V300-CRIMSON')
     },
     build: {
       chunkSizeWarningLimit: 3000, 
       rollupOptions: {
         output: {
-          // CAMBIO NUCLEAR V200: Hash único
-          entryFileNames: `assets/[name]-V200-[hash].js`,
-          chunkFileNames: `assets/[name]-V200-[hash].js`,
-          assetFileNames: `assets/[name]-V200-[hash].[ext]`
+          // CAMBIO RADICAL V300: Prefijo CRIMSON para obligar a Cloudflare a buscar archivos nuevos
+          entryFileNames: `assets/CRIMSON-[name]-[hash].js`,
+          chunkFileNames: `assets/CRIMSON-[name]-[hash].js`,
+          assetFileNames: `assets/CRIMSON-[name]-[hash].[ext]`
         }
       }
     }

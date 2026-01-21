@@ -19,7 +19,7 @@ export default function Settings() {
   const buildTime = process.env.BUILD_TIME || 'Unknown';
 
   useEffect(() => {
-      console.log(`--- SETTINGS MODULE V200 (BLACKOUT) LOADED ---`);
+      console.log(`--- SETTINGS MODULE V300 (CRIMSON) LOADED ---`);
       setEditAppName(appName);
       setEditAppLogo(appLogo);
   }, [appName, appLogo]);
@@ -52,7 +52,7 @@ export default function Settings() {
           const backupData: any = {
               timestamp: new Date().toISOString(),
               appName: appName,
-              version: '2.0.2-BLACKOUT',
+              version: '3.0.0-CRIMSON',
               data: {}
           };
 
@@ -67,13 +67,13 @@ export default function Settings() {
           const url = window.URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = `Nucleus_Backup_V200_${new Date().toISOString().split('T')[0]}.json`;
+          a.download = `Nucleus_Backup_V300_${new Date().toISOString().split('T')[0]}.json`;
           document.body.appendChild(a);
           a.click();
           window.URL.revokeObjectURL(url);
           document.body.removeChild(a);
           
-          alert("✅ Snapshot V200 descargado correctamente.");
+          alert("✅ Snapshot V300 descargado correctamente.");
       } catch (e) {
           alert("Error al generar copia de seguridad.");
           console.error(e);
@@ -84,40 +84,54 @@ export default function Settings() {
 
   const handleFixSchema = () => {
       const sql = `
--- FIX V200: BLACKOUT PROTOCOL (SQL DEFINITIVO)
--- Si ves este texto en negro y verde, has vencido a la caché de Cloudflare.
+-- FIX V300: CRIMSON GUARD (FINAL SQL MIGRATION)
+-- Este script es seguro para ejecutar múltiples veces (Idempotente)
 
--- 1. ESTRUCTURA CRÍTICA (Columnas faltantes)
-alter table public.plots add column if not exists color text default '#16a34a';
-alter table public.plots add column if not exists used_seed_value numeric default 0;
-alter table public.plots add column if not exists used_seed_unit text default 'kg';
+-- 1. Actualización de Tablas Principales
+DO $$ 
+BEGIN 
+    -- Plots / Parcelas
+    ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS color text DEFAULT '#16a34a';
+    ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS used_seed_value numeric DEFAULT 0;
+    ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS used_seed_unit text DEFAULT 'kg';
 
-alter table public.seed_batches add column if not exists supplier_id uuid; 
-alter table public.seed_batches add column if not exists category text;
-alter table public.seed_batches add column if not exists label_serial_number text;
-alter table public.seed_batches add column if not exists storage_point_id uuid; 
+    -- Seed Batches / Lotes
+    ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS supplier_id uuid; 
+    ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS category text;
+    ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS label_serial_number text;
+    ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS storage_point_id uuid; 
 
-alter table public.seed_movements add column if not exists origin_storage_id uuid;
-alter table public.seed_movements add column if not exists client_id uuid;
+    -- Movimientos
+    ALTER TABLE public.seed_movements ADD COLUMN IF NOT EXISTS origin_storage_id uuid;
+    ALTER TABLE public.seed_movements ADD COLUMN IF NOT EXISTS client_id uuid;
 
-alter table public.storage_points add column if not exists client_id uuid;
-alter table public.storage_points add column if not exists node_code text;
+    -- Puntos de Almacenamiento
+    ALTER TABLE public.storage_points ADD COLUMN IF NOT EXISTS client_id uuid;
+    ALTER TABLE public.storage_points ADD COLUMN IF NOT EXISTS node_code text;
+    ALTER TABLE public.storage_points ADD COLUMN IF NOT EXISTS responsible_user_id uuid;
+    ALTER TABLE public.storage_points ADD COLUMN IF NOT EXISTS surface_m2 numeric;
+    ALTER TABLE public.storage_points ADD COLUMN IF NOT EXISTS coordinates jsonb;
 
--- 2. ASEGURAR DEPÓSITO POR DEFECTO (RECUPERACIÓN)
+    -- Clientes
+    ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS coordinates jsonb;
+    ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS related_user_id uuid;
+END $$;
+
+-- 2. Asegurar Existencia de Depósito Default (Recuperación de Stock Huérfano)
 INSERT INTO public.storage_points (id, name, type, node_code, address, city)
 SELECT 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'Depósito General (Recuperado)', 'Propio', 'REC-001', 'Sede Central', 'General'
 WHERE NOT EXISTS (SELECT 1 FROM public.storage_points);
 
--- 3. VINCULAR STOCK HUÉRFANO (Evita que el inventario desaparezca)
+-- 3. Vincular Stock Huérfano
 UPDATE public.seed_batches
 SET storage_point_id = (SELECT id FROM public.storage_points LIMIT 1)
 WHERE storage_point_id IS NULL;
 
--- 4. REFRESCAR API DE SUPABASE
+-- 4. Notificar a PostgREST
 NOTIFY pgrst, 'reload schema';
 `;
       navigator.clipboard.writeText(sql);
-      alert("⚫ SCRIPT V200 (BLACKOUT) COPIADO.\n\nInstrucciones:\n1. Ve a Supabase > SQL Editor.\n2. Pega el contenido.\n3. Ejecuta (RUN).");
+      alert("🔴 SCRIPT V300 (CRIMSON) COPIADO AL PORTAPAPELES.\n\nEste script arreglará la base de datos V42/Vxx.\n\nInstrucciones:\n1. Ve a Supabase > SQL Editor.\n2. Pega el contenido.\n3. Ejecuta (RUN).");
   };
 
   const handleHardReset = () => {
@@ -142,7 +156,7 @@ NOTIFY pgrst, 'reload schema';
         <SettingsIcon className="text-hemp-500 mr-3" size={32} />
         <div>
             <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Panel de Control Master</h1>
-            <p className="text-gray-500">Configuración global y estado del servidor Nucleus V200.</p>
+            <p className="text-gray-500">Configuración global y estado del servidor Nucleus V300.</p>
         </div>
       </div>
 
@@ -155,31 +169,31 @@ NOTIFY pgrst, 'reload schema';
       {activeTab === 'system' && (
           <div className="space-y-6 animate-in slide-in-from-bottom-2">
               
-              {/* FIX DATABASE BUTTON - VERSION 200 (BLACKOUT) */}
+              {/* FIX DATABASE BUTTON - VERSION 300 (CRIMSON) */}
               <div 
-                className="bg-black border border-green-500 p-8 rounded-[40px] shadow-2xl text-green-500 relative overflow-hidden group hover:scale-[1.01] transition-all cursor-pointer ring-4 ring-green-900/30" 
+                className="bg-[#2a0a0a] border border-red-600 p-8 rounded-[40px] shadow-2xl text-red-500 relative overflow-hidden group hover:scale-[1.01] transition-all cursor-pointer ring-4 ring-red-900/30" 
                 onClick={handleFixSchema}
               >
                   <div className="flex justify-between items-center relative z-10">
                       <div>
                           <div className="flex items-center gap-3 mb-2">
-                              <Radio size={28} className="text-green-500 animate-pulse"/>
-                              <h3 className="text-2xl font-black uppercase tracking-tighter italic text-green-400">V200: BLACKOUT</h3>
+                              <Radio size={28} className="text-red-500 animate-pulse"/>
+                              <h3 className="text-2xl font-black uppercase tracking-tighter italic text-red-500">V300: CRIMSON SQL</h3>
                           </div>
-                          <p className="text-xs text-green-300 font-medium max-w-md">
-                              <strong>ESTADO: OPERACIONAL.</strong> Si ves este panel <span className="underline font-bold text-green-400">NEGRO Y VERDE</span>, la actualización V200 está activa.
+                          <p className="text-xs text-red-300 font-medium max-w-md">
+                              <strong>ESTADO: CRÍTICO.</strong> Si ves este panel <span className="underline font-bold text-red-500">ROJO SANGRE</span>, has roto la caché de Cloudflare. Pulsa para copiar el SQL Maestro.
                           </p>
                       </div>
-                      <div className="bg-green-900/30 p-4 rounded-full border border-green-500/30">
+                      <div className="bg-red-900/30 p-4 rounded-full border border-red-500/30">
                           <FileCode size={32}/>
                       </div>
                   </div>
                   <div className="mt-8 flex items-center">
-                      <span className="text-[10px] font-black uppercase tracking-[0.2em] bg-green-600 text-black px-6 py-3 rounded-full hover:bg-green-500 transition shadow-lg shadow-green-900/50">
-                          Copiar SQL V200 (FINAL)
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em] bg-red-600 text-white px-6 py-3 rounded-full hover:bg-red-500 transition shadow-lg shadow-red-900/50">
+                          Copiar SQL V300 (FIX)
                       </span>
                   </div>
-                  <Activity className="absolute -bottom-10 -right-10 w-64 h-64 text-green-900 opacity-20 pointer-events-none"/>
+                  <Activity className="absolute -bottom-10 -right-10 w-64 h-64 text-red-900 opacity-20 pointer-events-none"/>
               </div>
 
               {/* Botón de Pánico */}
@@ -217,7 +231,7 @@ NOTIFY pgrst, 'reload schema';
                       <Database size={20} className="text-slate-400"/>
                       <div>
                           <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Versión del Cliente</p>
-                          <p className="text-[10px] text-slate-400 uppercase tracking-widest">Nucleus WebApp v2.0.2-BLACKOUT</p>
+                          <p className="text-[10px] text-slate-400 uppercase tracking-widest">Nucleus WebApp v3.0.0-CRIMSON</p>
                       </div>
                   </div>
                   <div className="text-right">
@@ -228,8 +242,8 @@ NOTIFY pgrst, 'reload schema';
           </div>
       )}
       
-      {activeTab === 'branding' && <div className="p-10 text-center text-gray-400 font-bold">Opciones de Identidad (Sin cambios en V200)</div>}
-      {activeTab === 'maintenance' && <div className="p-10 text-center text-gray-400 font-bold">Zona de Peligro (Sin cambios en V200)</div>}
+      {activeTab === 'branding' && <div className="p-10 text-center text-gray-400 font-bold">Opciones de Identidad (Sin cambios en V300)</div>}
+      {activeTab === 'maintenance' && <div className="p-10 text-center text-gray-400 font-bold">Zona de Peligro (Sin cambios en V300)</div>}
     </div>
   );
 }
