@@ -19,7 +19,7 @@ export default function Settings() {
   const buildTime = process.env.BUILD_TIME || 'Unknown';
 
   useEffect(() => {
-      console.log(`--- SETTINGS MODULE V57 (RED DAWN) LOADED ---`);
+      console.log(`--- SETTINGS MODULE V100 (ORANGE HORIZON) LOADED ---`);
       setEditAppName(appName);
       setEditAppLogo(appLogo);
   }, [appName, appLogo]);
@@ -52,7 +52,7 @@ export default function Settings() {
           const backupData: any = {
               timestamp: new Date().toISOString(),
               appName: appName,
-              version: '1.0.57-RED',
+              version: '2.0.0-ORANGE',
               data: {}
           };
 
@@ -67,13 +67,13 @@ export default function Settings() {
           const url = window.URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = `Nucleus_Backup_V57_${new Date().toISOString().split('T')[0]}.json`;
+          a.download = `Nucleus_Backup_V100_${new Date().toISOString().split('T')[0]}.json`;
           document.body.appendChild(a);
           a.click();
           window.URL.revokeObjectURL(url);
           document.body.removeChild(a);
           
-          alert("✅ Snapshot V57 descargado correctamente.");
+          alert("✅ Snapshot V100 descargado correctamente.");
       } catch (e) {
           alert("Error al generar copia de seguridad.");
           console.error(e);
@@ -84,8 +84,8 @@ export default function Settings() {
 
   const handleFixSchema = () => {
       const sql = `
--- FIX V57: RED DAWN (REPARACIÓN DEFINITIVA)
--- Si ves este texto en el editor SQL de Supabase, la actualización funcionó.
+-- FIX V100: ORANGE HORIZON (VERSIÓN FINAL DEFINITIVA)
+-- Si ves este texto en el editor SQL, la actualización V100 ha sido exitosa.
 
 -- 1. ESTRUCTURA CRÍTICA (Columnas faltantes)
 alter table public.plots add column if not exists color text default '#16a34a';
@@ -117,8 +117,23 @@ WHERE storage_point_id IS NULL;
 NOTIFY pgrst, 'reload schema';
 `;
       navigator.clipboard.writeText(sql);
-      alert("✅ SCRIPT V57 (RED) COPIADO.\n\nEl texto 'V57: RED DAWN' confirma que tienes la última versión.\n\nInstrucciones:\n1. Ve a Supabase > SQL Editor.\n2. Pega el contenido.\n3. Ejecuta (RUN).");
+      alert("🍊 SCRIPT V100 (ORANGE) COPIADO.\n\nInstrucciones:\n1. Ve a Supabase > SQL Editor.\n2. Pega el contenido.\n3. Ejecuta (RUN).");
   };
+
+  const handleHardReset = () => {
+      if(window.confirm("ATENCIÓN: Esto borrará la memoria local del navegador y recargará la aplicación. Usar solo si hay problemas de visualización.")) {
+          localStorage.clear();
+          sessionStorage.clear();
+          if ('serviceWorker' in navigator) {
+              navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                  for(let registration of registrations) {
+                      registration.unregister();
+                  }
+              });
+          }
+          window.location.reload();
+      }
+  }
 
   return (
     <div className="max-w-4xl mx-auto pb-10 animate-in fade-in duration-500">
@@ -126,7 +141,7 @@ NOTIFY pgrst, 'reload schema';
         <SettingsIcon className="text-hemp-600 mr-3" size={32} />
         <div>
             <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Panel de Control Master</h1>
-            <p className="text-gray-500">Configuración global y estado del servidor Nucleus V57.</p>
+            <p className="text-gray-500">Configuración global y estado del servidor Nucleus V100.</p>
         </div>
       </div>
 
@@ -139,19 +154,19 @@ NOTIFY pgrst, 'reload schema';
       {activeTab === 'system' && (
           <div className="space-y-6 animate-in slide-in-from-bottom-2">
               
-              {/* FIX DATABASE BUTTON - VERSION 57 (RED DAWN) */}
+              {/* FIX DATABASE BUTTON - VERSION 100 (ORANGE HORIZON) */}
               <div 
-                className="bg-gradient-to-r from-red-600 to-rose-600 p-8 rounded-[40px] shadow-xl text-white relative overflow-hidden group hover:scale-[1.01] transition-all cursor-pointer border border-red-500 ring-4 ring-red-200 dark:ring-red-900" 
+                className="bg-gradient-to-r from-orange-500 to-amber-600 p-8 rounded-[40px] shadow-xl text-white relative overflow-hidden group hover:scale-[1.01] transition-all cursor-pointer border border-orange-400 ring-4 ring-orange-200 dark:ring-orange-900" 
                 onClick={handleFixSchema}
               >
                   <div className="flex justify-between items-center relative z-10">
                       <div>
                           <div className="flex items-center gap-3 mb-2">
                               <Radio size={28} className="text-white animate-pulse"/>
-                              <h3 className="text-xl font-black uppercase tracking-tighter italic">V57: RED DAWN PROTOCOL</h3>
+                              <h3 className="text-2xl font-black uppercase tracking-tighter italic">V100: ORANGE HORIZON</h3>
                           </div>
                           <p className="text-xs text-white font-medium max-w-md">
-                              <strong>ESTADO: SINCRONIZADO.</strong> Si ves este panel <span className="underline font-bold">ROJO INTENSO</span>, la actualización V57 se ha instalado correctamente en tu navegador.
+                              <strong>ESTADO: SINCRONIZADO.</strong> Si ves este panel <span className="underline font-bold text-yellow-200">NARANJA INTENSO</span>, la caché ha sido purgada correctamente.
                           </p>
                       </div>
                       <div className="bg-white/20 p-4 rounded-full border border-white/20">
@@ -159,11 +174,20 @@ NOTIFY pgrst, 'reload schema';
                       </div>
                   </div>
                   <div className="mt-8 flex items-center">
-                      <span className="text-[10px] font-black uppercase tracking-[0.2em] bg-white text-red-700 px-6 py-3 rounded-full hover:bg-red-50 transition shadow-lg">
-                          Copiar SQL V57 (FINAL)
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em] bg-white text-orange-600 px-6 py-3 rounded-full hover:bg-orange-50 transition shadow-lg">
+                          Copiar SQL V100 (FINAL)
                       </span>
                   </div>
                   <Activity className="absolute -bottom-10 -right-10 w-64 h-64 text-white opacity-20 pointer-events-none"/>
+              </div>
+
+              {/* Botón de Pánico */}
+              <div className="bg-red-50 dark:bg-red-900/10 p-6 rounded-[32px] border border-red-200 dark:border-red-900/30 flex items-center justify-between">
+                  <div>
+                      <h4 className="text-red-700 dark:text-red-400 font-black uppercase text-xs tracking-widest mb-1">Botón de Pánico (Local)</h4>
+                      <p className="text-[10px] text-red-600/70 dark:text-red-400/70 font-medium">Si la app sigue mostrando datos viejos, pulsa aquí.</p>
+                  </div>
+                  <button onClick={handleHardReset} className="bg-red-600 text-white px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest shadow-md hover:bg-red-700">Hard Reset</button>
               </div>
 
               {/* BACKUP SECTION */}
@@ -192,7 +216,7 @@ NOTIFY pgrst, 'reload schema';
                       <Database size={20} className="text-slate-400"/>
                       <div>
                           <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Versión del Cliente</p>
-                          <p className="text-[10px] text-slate-400 uppercase tracking-widest">Nucleus WebApp v1.0.57-RED</p>
+                          <p className="text-[10px] text-slate-400 uppercase tracking-widest">Nucleus WebApp v2.0.0-ORANGE</p>
                       </div>
                   </div>
                   <div className="text-right">
@@ -203,8 +227,8 @@ NOTIFY pgrst, 'reload schema';
           </div>
       )}
       
-      {activeTab === 'branding' && <div className="p-10 text-center text-gray-400 font-bold">Opciones de Identidad (Sin cambios en V57)</div>}
-      {activeTab === 'maintenance' && <div className="p-10 text-center text-gray-400 font-bold">Zona de Peligro (Sin cambios en V57)</div>}
+      {activeTab === 'branding' && <div className="p-10 text-center text-gray-400 font-bold">Opciones de Identidad (Sin cambios en V100)</div>}
+      {activeTab === 'maintenance' && <div className="p-10 text-center text-gray-400 font-bold">Zona de Peligro (Sin cambios en V100)</div>}
     </div>
   );
 }

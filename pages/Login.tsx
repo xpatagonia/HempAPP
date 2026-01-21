@@ -23,24 +23,26 @@ export default function Login() {
   };
 
   const handleForceRefresh = () => {
-      // V57: Reload agresivo ignorando caché
-      window.location.reload();
+      // V100: Reload agresivo
+      if(window.confirm("¿Recargar aplicación para obtener la última versión?")) {
+          window.location.reload();
+      }
   };
 
   return (
     <div className="min-h-screen bg-white flex flex-col md:flex-row items-stretch overflow-hidden font-sans">
       
-      {/* Lado Izquierdo: Branding Corporativo con Fondo ROJO INTENSO (V57) */}
-      <div className="hidden lg:flex lg:w-1/2 bg-rose-600 relative p-20 flex-col justify-between overflow-hidden shadow-2xl">
+      {/* Lado Izquierdo: Branding Corporativo con Fondo NARANJA V100 */}
+      <div className="hidden lg:flex lg:w-1/2 bg-orange-600 relative p-20 flex-col justify-between overflow-hidden shadow-2xl">
           <div className="relative z-10">
               <div className="mb-12">
                   <div className="flex items-center gap-3">
                       <h1 className="text-7xl font-black text-white tracking-tighter italic uppercase leading-none drop-shadow-sm">
-                          HempC <span className="text-rose-200">APP</span>
+                          HempC <span className="text-orange-200">APP</span>
                       </h1>
-                      <span className="bg-white text-rose-600 text-[10px] px-2 py-1 rounded font-black uppercase tracking-widest shadow-sm">v57 RED</span>
+                      <span className="bg-white text-orange-600 text-[10px] px-2 py-1 rounded font-black uppercase tracking-widest shadow-sm">v100 ORANGE</span>
                   </div>
-                  <p className="text-rose-100 mt-2 text-sm font-black tracking-widest opacity-80">
+                  <p className="text-orange-100 mt-2 text-sm font-black tracking-widest opacity-80">
                       www.hempc.com.ar
                   </p>
                   <p className="text-white mt-8 text-3xl font-bold italic tracking-tight drop-shadow-sm" style={{ fontFamily: 'Arial, sans-serif' }}>
@@ -75,16 +77,16 @@ export default function Login() {
       <div className="flex-1 flex flex-col items-center justify-center p-8 md:p-16 bg-slate-50">
         <div className="w-full max-w-md space-y-12">
             <div className="lg:hidden text-center mb-8">
-                <h1 className="text-5xl font-black text-rose-600 italic uppercase tracking-tighter leading-none">HempC APP</h1>
-                <span className="bg-rose-600 text-white text-[9px] px-2 py-0.5 rounded font-bold uppercase">V57</span>
+                <h1 className="text-5xl font-black text-orange-600 italic uppercase tracking-tighter leading-none">HempC APP</h1>
+                <span className="bg-orange-600 text-white text-[9px] px-2 py-0.5 rounded font-bold uppercase">V100</span>
             </div>
 
             <div className="flex justify-between items-end">
                 <div className="space-y-4">
-                    <h2 className="text-4xl font-black text-slate-900 uppercase tracking-tighter italic leading-none">Acceso V57</h2>
+                    <h2 className="text-4xl font-black text-slate-900 uppercase tracking-tighter italic leading-none">Acceso V100</h2>
                     <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.3em]">Autenticación Segura</p>
                 </div>
-                <button onClick={handleForceRefresh} className="p-2 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-full transition-all" title="Forzar Recarga V57">
+                <button onClick={handleForceRefresh} className="p-2 text-slate-300 hover:text-orange-600 hover:bg-orange-50 rounded-full transition-all" title="Forzar Recarga V100">
                     <RefreshCw size={16} />
                 </button>
             </div>
@@ -98,11 +100,11 @@ export default function Login() {
                 )}
                 
                 <div className="space-y-2 group">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1 transition-colors group-focus-within:text-rose-600">ID Operario / Email</label>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1 transition-colors group-focus-within:text-orange-600">ID Operario / Email</label>
                     <input 
                       required 
                       type="email" 
-                      className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-rose-600/10 focus:border-rose-600 outline-none transition-all text-slate-900 font-bold placeholder-slate-300" 
+                      className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-600/10 focus:border-orange-600 outline-none transition-all text-slate-900 font-bold placeholder-slate-300" 
                       placeholder="usuario@hempc.com.ar" 
                       value={email} 
                       onChange={e => setEmail(e.target.value)} 
@@ -110,11 +112,11 @@ export default function Login() {
                 </div>
 
                 <div className="space-y-2 group">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1 transition-colors group-focus-within:text-rose-600">Clave de Enlace</label>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1 transition-colors group-focus-within:text-orange-600">Clave de Enlace</label>
                     <input 
                       required 
                       type="password" 
-                      className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-rose-600/10 focus:border-rose-600 outline-none transition-all text-slate-900 font-bold placeholder-slate-300" 
+                      className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-600/10 focus:border-orange-600 outline-none transition-all text-slate-900 font-bold placeholder-slate-300" 
                       placeholder="••••••••" 
                       value={password} 
                       onChange={e => setPassword(e.target.value)} 
@@ -124,7 +126,7 @@ export default function Login() {
                 <button 
                   type="submit" 
                   disabled={isLoading} 
-                  className="w-full bg-rose-600 hover:bg-rose-700 text-white py-5 rounded-2xl font-black text-xs uppercase tracking-[0.3em] active:scale-[0.98] transition-all shadow-xl shadow-rose-600/20 disabled:opacity-50 flex items-center justify-center group"
+                  className="w-full bg-orange-600 hover:bg-orange-700 text-white py-5 rounded-2xl font-black text-xs uppercase tracking-[0.3em] active:scale-[0.98] transition-all shadow-xl shadow-orange-600/20 disabled:opacity-50 flex items-center justify-center group"
                 >
                     {isLoading ? <Loader2 className="animate-spin" size={20} /> : (
                         <>Sincronizar Acceso <ArrowRight size={18} className="ml-3 group-hover:translate-x-2 transition-transform" /></>
@@ -134,7 +136,7 @@ export default function Login() {
 
             <div className="pt-12 border-t border-slate-200 flex flex-col space-y-4 text-center">
                 <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                    Sistema actualizado: Protocolo Red Dawn
+                    Sistema actualizado: Protocolo Orange Horizon
                 </p>
             </div>
         </div>

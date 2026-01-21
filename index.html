@@ -5,29 +5,34 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     
-    <!-- V57 RED DAWN: ANTI-CACHE HEADERS -->
+    <!-- V100 NUCLEAR CACHE HEADERS -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <title>HempC | V57 RED DAWN</title>
+    <title>HempC | V100 ORANGE</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-      // SCRIPT ASESINO DE CACHÉ V57
-      // Se ejecuta antes de cargar la app para limpiar basura vieja
+      // LIMPIEZA AGRESIVA V100
       (function() {
-        console.log("🔥 V57 CACHE KILLER STARTED");
-        if ('serviceWorker' in navigator) {
-          navigator.serviceWorker.getRegistrations().then(function(registrations) {
-            for(let registration of registrations) {
-              console.log("💀 Killing Service Worker:", registration);
-              registration.unregister();
+        console.log("🍊 V100 NUCLEAR PROTOCOL STARTED");
+        try {
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                    for(let registration of registrations) {
+                        registration.unregister();
+                        console.log("Unregistered SW:", registration);
+                    }
+                });
             }
-          });
-        }
-        // Forzar limpieza de sessionStorage para evitar estados viejos
-        sessionStorage.clear();
+            // Limpiar cachés de API antiguas
+            if ('caches' in window) {
+                caches.keys().then(function(names) {
+                    for (let name of names) caches.delete(name);
+                });
+            }
+        } catch(e) { console.log(e); }
       })();
 
       tailwind.config = {
@@ -35,13 +40,13 @@
         theme: {
           extend: {
             colors: {
-              // CAMBIO RADICAL A PALETA ROJA/ROSA PARA CONFIRMACIÓN VISUAL
+              // PALETA NUCLEAR V100: ORANGE / AMBER
               hemp: {
-                50: '#fff1f2', 100: '#ffe4e6', 200: '#fecdd3', 400: '#fb7185', 500: '#f43f5e', 600: '#e11d48', 700: '#be123c', 800: '#9f1239', 900: '#881337', 950: '#4c0519',
+                50: '#fff7ed', 100: '#ffedd5', 200: '#fed7aa', 400: '#fb923c', 500: '#f97316', 600: '#ea580c', 700: '#c2410c', 800: '#9a3412', 900: '#7c2d12', 950: '#431407',
               },
               brand: {
-                DEFAULT: '#e11d48', // Rose 600
-                50: '#fff1f2', 100: '#ffe4e6', 500: '#f43f5e', 600: '#e11d48', 700: '#be123c'
+                DEFAULT: '#ea580c', 
+                50: '#fff7ed', 100: '#ffedd5', 500: '#f97316', 600: '#ea580c', 700: '#c2410c'
               }
             }
           }
@@ -53,7 +58,7 @@
       body { 
         font-family: 'Inter', sans-serif; 
         margin: 0; 
-        transition: background-color 0.3s ease;
+        background-color: #fff7ed; /* Orange 50 de fondo por defecto */
       }
       .custom-scrollbar::-webkit-scrollbar { width: 5px; }
       .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
@@ -82,9 +87,14 @@
 }
 </script>
 </head>
-  <body class="bg-slate-50 text-slate-900 dark:bg-[#020617] dark:text-slate-100">
-    <div id="root"></div>
-    <!-- QUERY STRING V57.2 PARA FORZAR DESCARGA -->
-    <script type="module" src="/index.tsx?v=57.2"></script>
+  <body class="bg-orange-50 text-slate-900 dark:bg-[#0c0a09] dark:text-slate-100">
+    <div id="root">
+        <!-- Indicador de carga visual para confirmar versión nueva si React tarda -->
+        <div style="display: flex; justify-content: center; align-items: center; height: 100vh; flex-direction: column; color: #ea580c;">
+            <h1 style="font-weight: 900; font-size: 24px; font-family: sans-serif;">CARGANDO V100...</h1>
+        </div>
+    </div>
+    <!-- QUERY STRING V100.0 -->
+    <script type="module" src="/index.tsx?v=100.0"></script>
   </body>
 </html>
