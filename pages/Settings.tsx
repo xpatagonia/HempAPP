@@ -19,7 +19,7 @@ export default function Settings() {
   const buildTime = process.env.BUILD_TIME || 'Unknown';
 
   useEffect(() => {
-      console.log(`--- SETTINGS MODULE V100 (ORANGE HORIZON) LOADED ---`);
+      console.log(`--- SETTINGS MODULE V101 (BLUE PROTOCOL) LOADED ---`);
       setEditAppName(appName);
       setEditAppLogo(appLogo);
   }, [appName, appLogo]);
@@ -52,7 +52,7 @@ export default function Settings() {
           const backupData: any = {
               timestamp: new Date().toISOString(),
               appName: appName,
-              version: '2.0.0-ORANGE',
+              version: '2.0.1-BLUE',
               data: {}
           };
 
@@ -67,13 +67,13 @@ export default function Settings() {
           const url = window.URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = `Nucleus_Backup_V100_${new Date().toISOString().split('T')[0]}.json`;
+          a.download = `Nucleus_Backup_V101_${new Date().toISOString().split('T')[0]}.json`;
           document.body.appendChild(a);
           a.click();
           window.URL.revokeObjectURL(url);
           document.body.removeChild(a);
           
-          alert("✅ Snapshot V100 descargado correctamente.");
+          alert("✅ Snapshot V101 descargado correctamente.");
       } catch (e) {
           alert("Error al generar copia de seguridad.");
           console.error(e);
@@ -84,8 +84,8 @@ export default function Settings() {
 
   const handleFixSchema = () => {
       const sql = `
--- FIX V100: ORANGE HORIZON (VERSIÓN FINAL DEFINITIVA)
--- Si ves este texto en el editor SQL, la actualización V100 ha sido exitosa.
+-- FIX V101: BLUE PROTOCOL (SQL DEFINITIVO)
+-- Si ves este texto en azul, has vencido a la caché de Cloudflare.
 
 -- 1. ESTRUCTURA CRÍTICA (Columnas faltantes)
 alter table public.plots add column if not exists color text default '#16a34a';
@@ -117,7 +117,7 @@ WHERE storage_point_id IS NULL;
 NOTIFY pgrst, 'reload schema';
 `;
       navigator.clipboard.writeText(sql);
-      alert("🍊 SCRIPT V100 (ORANGE) COPIADO.\n\nInstrucciones:\n1. Ve a Supabase > SQL Editor.\n2. Pega el contenido.\n3. Ejecuta (RUN).");
+      alert("🔵 SCRIPT V101 (BLUE) COPIADO.\n\nInstrucciones:\n1. Ve a Supabase > SQL Editor.\n2. Pega el contenido.\n3. Ejecuta (RUN).");
   };
 
   const handleHardReset = () => {
@@ -141,7 +141,7 @@ NOTIFY pgrst, 'reload schema';
         <SettingsIcon className="text-hemp-600 mr-3" size={32} />
         <div>
             <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Panel de Control Master</h1>
-            <p className="text-gray-500">Configuración global y estado del servidor Nucleus V100.</p>
+            <p className="text-gray-500">Configuración global y estado del servidor Nucleus V101.</p>
         </div>
       </div>
 
@@ -154,19 +154,19 @@ NOTIFY pgrst, 'reload schema';
       {activeTab === 'system' && (
           <div className="space-y-6 animate-in slide-in-from-bottom-2">
               
-              {/* FIX DATABASE BUTTON - VERSION 100 (ORANGE HORIZON) */}
+              {/* FIX DATABASE BUTTON - VERSION 101 (BLUE PROTOCOL) */}
               <div 
-                className="bg-gradient-to-r from-orange-500 to-amber-600 p-8 rounded-[40px] shadow-xl text-white relative overflow-hidden group hover:scale-[1.01] transition-all cursor-pointer border border-orange-400 ring-4 ring-orange-200 dark:ring-orange-900" 
+                className="bg-gradient-to-r from-blue-600 to-cyan-600 p-8 rounded-[40px] shadow-xl text-white relative overflow-hidden group hover:scale-[1.01] transition-all cursor-pointer border border-blue-400 ring-4 ring-blue-200 dark:ring-blue-900" 
                 onClick={handleFixSchema}
               >
                   <div className="flex justify-between items-center relative z-10">
                       <div>
                           <div className="flex items-center gap-3 mb-2">
                               <Radio size={28} className="text-white animate-pulse"/>
-                              <h3 className="text-2xl font-black uppercase tracking-tighter italic">V100: ORANGE HORIZON</h3>
+                              <h3 className="text-2xl font-black uppercase tracking-tighter italic">V101: BLUE PROTOCOL</h3>
                           </div>
                           <p className="text-xs text-white font-medium max-w-md">
-                              <strong>ESTADO: SINCRONIZADO.</strong> Si ves este panel <span className="underline font-bold text-yellow-200">NARANJA INTENSO</span>, la caché ha sido purgada correctamente.
+                              <strong>ESTADO: SINCRONIZADO.</strong> Si ves este panel <span className="underline font-bold text-cyan-200">AZUL NEÓN</span>, la actualización V101 está activa.
                           </p>
                       </div>
                       <div className="bg-white/20 p-4 rounded-full border border-white/20">
@@ -174,8 +174,8 @@ NOTIFY pgrst, 'reload schema';
                       </div>
                   </div>
                   <div className="mt-8 flex items-center">
-                      <span className="text-[10px] font-black uppercase tracking-[0.2em] bg-white text-orange-600 px-6 py-3 rounded-full hover:bg-orange-50 transition shadow-lg">
-                          Copiar SQL V100 (FINAL)
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em] bg-white text-blue-600 px-6 py-3 rounded-full hover:bg-blue-50 transition shadow-lg">
+                          Copiar SQL V101 (FINAL)
                       </span>
                   </div>
                   <Activity className="absolute -bottom-10 -right-10 w-64 h-64 text-white opacity-20 pointer-events-none"/>
@@ -216,7 +216,7 @@ NOTIFY pgrst, 'reload schema';
                       <Database size={20} className="text-slate-400"/>
                       <div>
                           <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Versión del Cliente</p>
-                          <p className="text-[10px] text-slate-400 uppercase tracking-widest">Nucleus WebApp v2.0.0-ORANGE</p>
+                          <p className="text-[10px] text-slate-400 uppercase tracking-widest">Nucleus WebApp v2.0.1-BLUE</p>
                       </div>
                   </div>
                   <div className="text-right">
@@ -227,8 +227,8 @@ NOTIFY pgrst, 'reload schema';
           </div>
       )}
       
-      {activeTab === 'branding' && <div className="p-10 text-center text-gray-400 font-bold">Opciones de Identidad (Sin cambios en V100)</div>}
-      {activeTab === 'maintenance' && <div className="p-10 text-center text-gray-400 font-bold">Zona de Peligro (Sin cambios en V100)</div>}
+      {activeTab === 'branding' && <div className="p-10 text-center text-gray-400 font-bold">Opciones de Identidad (Sin cambios en V101)</div>}
+      {activeTab === 'maintenance' && <div className="p-10 text-center text-gray-400 font-bold">Zona de Peligro (Sin cambios en V101)</div>}
     </div>
   );
 }

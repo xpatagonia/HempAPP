@@ -3,11 +3,11 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 
-// CACHE BUSTER V100 - OPERATION ORANGE HORIZON
+// CACHE BUSTER V101 - OPERATION BLUE PROTOCOL
 // @ts-ignore
 const buildTime = process.env.BUILD_TIME || 'UNKNOWN';
-console.log(`%c NUCLEUS APP V100 (ORANGE) LOADED `, 'background: #ea580c; color: #fff; font-weight: bold; padding: 4px; border-radius: 4px; font-size: 14px;');
-console.log(`%c BUILD TIME: ${buildTime} `, 'background: #333; color: #fb923c; font-family: monospace;');
+console.log(`%c NUCLEUS APP V101 (BLUE) LOADED `, 'background: #2563eb; color: #fff; font-weight: bold; padding: 4px; border-radius: 4px; font-size: 14px;');
+console.log(`%c BUILD TIME: ${buildTime} `, 'background: #333; color: #60a5fa; font-family: monospace;');
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
