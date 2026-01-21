@@ -19,7 +19,7 @@ export default function Settings() {
   const buildTime = process.env.BUILD_TIME || 'Unknown';
 
   useEffect(() => {
-      console.log(`--- SETTINGS MODULE V101 (BLUE PROTOCOL) LOADED ---`);
+      console.log(`--- SETTINGS MODULE V200 (BLACKOUT) LOADED ---`);
       setEditAppName(appName);
       setEditAppLogo(appLogo);
   }, [appName, appLogo]);
@@ -27,7 +27,7 @@ export default function Settings() {
   if (currentUser?.role !== 'super_admin') {
       return (
           <div className="flex flex-col items-center justify-center h-[50vh] text-center space-y-4">
-              <div className="bg-red-100 p-4 rounded-full"><Lock size={48} className="text-red-500" /></div>
+              <div className="bg-red-900/20 p-4 rounded-full"><Lock size={48} className="text-red-500" /></div>
               <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Acceso Denegado</h2>
               <p className="text-gray-500">Zona reservada para Master Administrador.</p>
           </div>
@@ -52,7 +52,7 @@ export default function Settings() {
           const backupData: any = {
               timestamp: new Date().toISOString(),
               appName: appName,
-              version: '2.0.1-BLUE',
+              version: '2.0.2-BLACKOUT',
               data: {}
           };
 
@@ -67,13 +67,13 @@ export default function Settings() {
           const url = window.URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = `Nucleus_Backup_V101_${new Date().toISOString().split('T')[0]}.json`;
+          a.download = `Nucleus_Backup_V200_${new Date().toISOString().split('T')[0]}.json`;
           document.body.appendChild(a);
           a.click();
           window.URL.revokeObjectURL(url);
           document.body.removeChild(a);
           
-          alert("✅ Snapshot V101 descargado correctamente.");
+          alert("✅ Snapshot V200 descargado correctamente.");
       } catch (e) {
           alert("Error al generar copia de seguridad.");
           console.error(e);
@@ -84,8 +84,8 @@ export default function Settings() {
 
   const handleFixSchema = () => {
       const sql = `
--- FIX V101: BLUE PROTOCOL (SQL DEFINITIVO)
--- Si ves este texto en azul, has vencido a la caché de Cloudflare.
+-- FIX V200: BLACKOUT PROTOCOL (SQL DEFINITIVO)
+-- Si ves este texto en negro y verde, has vencido a la caché de Cloudflare.
 
 -- 1. ESTRUCTURA CRÍTICA (Columnas faltantes)
 alter table public.plots add column if not exists color text default '#16a34a';
@@ -117,7 +117,7 @@ WHERE storage_point_id IS NULL;
 NOTIFY pgrst, 'reload schema';
 `;
       navigator.clipboard.writeText(sql);
-      alert("🔵 SCRIPT V101 (BLUE) COPIADO.\n\nInstrucciones:\n1. Ve a Supabase > SQL Editor.\n2. Pega el contenido.\n3. Ejecuta (RUN).");
+      alert("⚫ SCRIPT V200 (BLACKOUT) COPIADO.\n\nInstrucciones:\n1. Ve a Supabase > SQL Editor.\n2. Pega el contenido.\n3. Ejecuta (RUN).");
   };
 
   const handleHardReset = () => {
@@ -131,21 +131,22 @@ NOTIFY pgrst, 'reload schema';
                   }
               });
           }
-          window.location.reload();
+          // Force reload with unique timestamp to bust Cloudflare cache
+          window.location.href = window.location.origin + '?t=' + Date.now();
       }
   }
 
   return (
     <div className="max-w-4xl mx-auto pb-10 animate-in fade-in duration-500">
       <div className="flex items-center mb-8">
-        <SettingsIcon className="text-hemp-600 mr-3" size={32} />
+        <SettingsIcon className="text-hemp-500 mr-3" size={32} />
         <div>
             <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Panel de Control Master</h1>
-            <p className="text-gray-500">Configuración global y estado del servidor Nucleus V101.</p>
+            <p className="text-gray-500">Configuración global y estado del servidor Nucleus V200.</p>
         </div>
       </div>
 
-      <div className="flex space-x-1 bg-gray-100 dark:bg-slate-900 p-1.5 rounded-2xl mb-8 w-fit shadow-inner">
+      <div className="flex space-x-1 bg-gray-100 dark:bg-slate-900 p-1.5 rounded-2xl mb-8 w-fit shadow-inner border dark:border-slate-800">
           <button onClick={() => setActiveTab('branding')} className={`px-6 py-2.5 rounded-xl text-xs font-black transition uppercase tracking-widest ${activeTab === 'branding' ? 'bg-white dark:bg-hemp-600 shadow-md text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Identidad</button>
           <button onClick={() => setActiveTab('system')} className={`px-6 py-2.5 rounded-xl text-xs font-black transition uppercase tracking-widest ${activeTab === 'system' ? 'bg-white dark:bg-hemp-600 shadow-md text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Sistema & BD</button>
           <button onClick={() => setActiveTab('maintenance')} className={`px-6 py-2.5 rounded-xl text-xs font-black transition uppercase tracking-widest ${activeTab === 'maintenance' ? 'bg-white dark:bg-amber-600 shadow-md text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Zona de Peligro</button>
@@ -154,31 +155,31 @@ NOTIFY pgrst, 'reload schema';
       {activeTab === 'system' && (
           <div className="space-y-6 animate-in slide-in-from-bottom-2">
               
-              {/* FIX DATABASE BUTTON - VERSION 101 (BLUE PROTOCOL) */}
+              {/* FIX DATABASE BUTTON - VERSION 200 (BLACKOUT) */}
               <div 
-                className="bg-gradient-to-r from-blue-600 to-cyan-600 p-8 rounded-[40px] shadow-xl text-white relative overflow-hidden group hover:scale-[1.01] transition-all cursor-pointer border border-blue-400 ring-4 ring-blue-200 dark:ring-blue-900" 
+                className="bg-black border border-green-500 p-8 rounded-[40px] shadow-2xl text-green-500 relative overflow-hidden group hover:scale-[1.01] transition-all cursor-pointer ring-4 ring-green-900/30" 
                 onClick={handleFixSchema}
               >
                   <div className="flex justify-between items-center relative z-10">
                       <div>
                           <div className="flex items-center gap-3 mb-2">
-                              <Radio size={28} className="text-white animate-pulse"/>
-                              <h3 className="text-2xl font-black uppercase tracking-tighter italic">V101: BLUE PROTOCOL</h3>
+                              <Radio size={28} className="text-green-500 animate-pulse"/>
+                              <h3 className="text-2xl font-black uppercase tracking-tighter italic text-green-400">V200: BLACKOUT</h3>
                           </div>
-                          <p className="text-xs text-white font-medium max-w-md">
-                              <strong>ESTADO: SINCRONIZADO.</strong> Si ves este panel <span className="underline font-bold text-cyan-200">AZUL NEÓN</span>, la actualización V101 está activa.
+                          <p className="text-xs text-green-300 font-medium max-w-md">
+                              <strong>ESTADO: OPERACIONAL.</strong> Si ves este panel <span className="underline font-bold text-green-400">NEGRO Y VERDE</span>, la actualización V200 está activa.
                           </p>
                       </div>
-                      <div className="bg-white/20 p-4 rounded-full border border-white/20">
+                      <div className="bg-green-900/30 p-4 rounded-full border border-green-500/30">
                           <FileCode size={32}/>
                       </div>
                   </div>
                   <div className="mt-8 flex items-center">
-                      <span className="text-[10px] font-black uppercase tracking-[0.2em] bg-white text-blue-600 px-6 py-3 rounded-full hover:bg-blue-50 transition shadow-lg">
-                          Copiar SQL V101 (FINAL)
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em] bg-green-600 text-black px-6 py-3 rounded-full hover:bg-green-500 transition shadow-lg shadow-green-900/50">
+                          Copiar SQL V200 (FINAL)
                       </span>
                   </div>
-                  <Activity className="absolute -bottom-10 -right-10 w-64 h-64 text-white opacity-20 pointer-events-none"/>
+                  <Activity className="absolute -bottom-10 -right-10 w-64 h-64 text-green-900 opacity-20 pointer-events-none"/>
               </div>
 
               {/* Botón de Pánico */}
@@ -216,7 +217,7 @@ NOTIFY pgrst, 'reload schema';
                       <Database size={20} className="text-slate-400"/>
                       <div>
                           <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Versión del Cliente</p>
-                          <p className="text-[10px] text-slate-400 uppercase tracking-widest">Nucleus WebApp v2.0.1-BLUE</p>
+                          <p className="text-[10px] text-slate-400 uppercase tracking-widest">Nucleus WebApp v2.0.2-BLACKOUT</p>
                       </div>
                   </div>
                   <div className="text-right">
@@ -227,8 +228,8 @@ NOTIFY pgrst, 'reload schema';
           </div>
       )}
       
-      {activeTab === 'branding' && <div className="p-10 text-center text-gray-400 font-bold">Opciones de Identidad (Sin cambios en V101)</div>}
-      {activeTab === 'maintenance' && <div className="p-10 text-center text-gray-400 font-bold">Zona de Peligro (Sin cambios en V101)</div>}
+      {activeTab === 'branding' && <div className="p-10 text-center text-gray-400 font-bold">Opciones de Identidad (Sin cambios en V200)</div>}
+      {activeTab === 'maintenance' && <div className="p-10 text-center text-gray-400 font-bold">Zona de Peligro (Sin cambios en V200)</div>}
     </div>
   );
 }

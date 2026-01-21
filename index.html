@@ -1,48 +1,32 @@
 
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" class="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     
-    <!-- V101 ANTI-CLOUDFLARE HEADERS -->
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0" />
+    <!-- V200 BLACKOUT HEADERS -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
-    <meta http-equiv="Cloudflare-CDN-Cache-Control" content="no-cache" />
-    <meta http-equiv="CDN-Cache-Control" content="no-cache" />
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <title>HempC | V101 BLUE</title>
+    <title>HempC | V200 BLACKOUT</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-      // LIMPIEZA V101
-      (function() {
-        console.log("🔵 V101 BLUE PROTOCOL STARTED");
-        try {
-            if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.getRegistrations().then(function(registrations) {
-                    for(let registration of registrations) {
-                        registration.unregister();
-                    }
-                });
-            }
-            localStorage.removeItem('ht_version'); // Limpiar versión vieja local
-        } catch(e) { console.log(e); }
-      })();
-
+      // CONFIGURACIÓN TAILWIND DARK MODE DEFAULT
       tailwind.config = {
         darkMode: 'class',
         theme: {
           extend: {
             colors: {
-              // PALETA NUCLEAR V101: BLUE / CYAN
+              // PALETA V200: NEGRO / VERDE NEON (MATRIX)
               hemp: {
-                50: '#eff6ff', 100: '#dbeafe', 200: '#bfdbfe', 400: '#60a5fa', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8', 800: '#1e40af', 900: '#1e3a8a', 950: '#172554',
+                50: '#f0fdf4', 100: '#dcfce7', 200: '#bbf7d0', 400: '#4ade80', 500: '#22c55e', 600: '#16a34a', 700: '#15803d', 800: '#166534', 900: '#14532d', 950: '#052e16',
               },
               brand: {
-                DEFAULT: '#2563eb', 
-                50: '#eff6ff', 100: '#dbeafe', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8'
+                DEFAULT: '#00ff00', // NEON GREEN
+                50: '#f0fdf4', 100: '#dcfce7', 500: '#22c55e', 600: '#16a34a', 700: '#15803d'
               }
             }
           }
@@ -54,11 +38,11 @@
       body { 
         font-family: 'Inter', sans-serif; 
         margin: 0; 
-        background-color: #eff6ff; /* Blue 50 */
+        background-color: #000000; /* BLACK BACKGROUND DEFAULT */
+        color: #e2e8f0;
       }
       .custom-scrollbar::-webkit-scrollbar { width: 5px; }
-      .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-      .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; }
+      .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
     </style>
   <script type="importmap">
 {
@@ -83,13 +67,42 @@
 }
 </script>
 </head>
-  <body class="bg-blue-50 text-slate-900 dark:bg-[#020617] dark:text-slate-100">
+  <body class="bg-black text-slate-200">
     <div id="root">
-        <div style="display: flex; justify-content: center; align-items: center; height: 100vh; flex-direction: column; color: #2563eb;">
-            <h1 style="font-weight: 900; font-size: 24px; font-family: sans-serif;">CARGANDO V101 (BLUE)...</h1>
+        <div style="display: flex; justify-content: center; align-items: center; height: 100vh; flex-direction: column; background: #000; color: #00ff00;">
+            <h1 style="font-weight: 900; font-size: 32px; font-family: monospace; letter-spacing: -2px;">V200 BLACKOUT</h1>
+            <p style="font-family: monospace; opacity: 0.7;">INITIALIZING PROTOCOL...</p>
         </div>
     </div>
-    <!-- QUERY STRING V101.0 -->
-    <script type="module" src="/index.tsx?v=101.0"></script>
+    <!-- QUERY STRING V200.0 -->
+    <script type="module" src="/index.tsx?v=200.0"></script>
+    <script>
+      // AUTO-CACHE BUSTER V200
+      (function() {
+        var currentVersion = 'V200';
+        var storedVersion = localStorage.getItem('app_v_check');
+        
+        if (storedVersion !== currentVersion) {
+            console.log("⚠️ Version Mismatch. Clearing cache and upgrading to " + currentVersion);
+            
+            // 1. Clear Storage
+            localStorage.setItem('app_v_check', currentVersion);
+            
+            // 2. Kill Service Workers
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                    for(let registration of registrations) registration.unregister();
+                });
+            }
+
+            // 3. Clear Caches API
+            if ('caches' in window) {
+                caches.keys().then(function(names) {
+                    for (let name of names) caches.delete(name);
+                });
+            }
+        }
+      })();
+    </script>
   </body>
 </html>
