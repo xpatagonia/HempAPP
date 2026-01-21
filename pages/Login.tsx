@@ -44,7 +44,7 @@ export default function Login() {
                       <h1 className="text-7xl font-black text-hemp-700 tracking-tighter italic uppercase leading-none drop-shadow-sm">
                           HempC <span className="text-slate-900">APP</span>
                       </h1>
-                      <span className="bg-cyan-500 text-white text-[10px] px-2 py-1 rounded font-black uppercase tracking-widest shadow-sm">v55</span>
+                      <span className="bg-purple-600 text-white text-[10px] px-2 py-1 rounded font-black uppercase tracking-widest shadow-sm">v56 ULTRA</span>
                   </div>
                   <p className="text-slate-800 mt-2 text-sm font-black tracking-widest opacity-80">
                       www.hempc.com.ar
@@ -140,7 +140,7 @@ export default function Login() {
                     <h2 className="text-4xl font-black text-slate-900 uppercase tracking-tighter italic leading-none">Acceso a la Red</h2>
                     <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.3em]">Autenticación de Terminal Autorizada</p>
                 </div>
-                <button onClick={handleForceRefresh} className="p-2 text-slate-300 hover:text-cyan-600 hover:bg-cyan-50 rounded-full transition-all" title="Forzar Recarga V55">
+                <button onClick={handleForceRefresh} className="p-2 text-slate-300 hover:text-purple-600 hover:bg-purple-50 rounded-full transition-all" title="Forzar Recarga V56">
                     <RefreshCw size={16} />
                 </button>
             </div>
