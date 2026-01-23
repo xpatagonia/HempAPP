@@ -5,29 +5,23 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     
-    <!-- V300 CRIMSON HEADERS -->
+    <!-- Cache Control para forzar actualización en clientes -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <title>HempC | V300 CRIMSON</title>
+    <title>HempC | Nucleus V700</title>
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-      // CONFIGURACIÓN TAILWIND V300
       tailwind.config = {
         darkMode: 'class',
         theme: {
           extend: {
             colors: {
-              // PALETA V300: ROJO CARMESÍ / DARK MODE
-              hemp: {
-                50: '#fef2f2', 100: '#fee2e2', 200: '#fecaca', 400: '#f87171', 500: '#ef4444', 600: '#dc2626', 700: '#b91c1c', 800: '#991b1b', 900: '#7f1d1d', 950: '#450a0a',
-              },
-              brand: {
-                DEFAULT: '#dc2626', // CRIMSON RED
-                50: '#fef2f2', 100: '#fee2e2', 500: '#ef4444', 600: '#dc2626', 700: '#b91c1c'
-              }
+              hemp: { 50: '#f0fdf4', 100: '#dcfce7', 200: '#bbf7d0', 400: '#4ade80', 500: '#22c55e', 600: '#16a34a', 700: '#15803d', 800: '#166534', 900: '#14532d', 950: '#052e16' },
+              brand: { DEFAULT: '#16a34a', 50: '#f0fdf4', 100: '#dcfce7', 500: '#22c55e', 600: '#16a34a', 700: '#15803d' }
             }
           }
         }
@@ -35,63 +29,40 @@
     </script>
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-      body { 
-        font-family: 'Inter', sans-serif; 
-        margin: 0; 
-        background-color: #0f0505; /* DARK RED-BLACK BACKGROUND */
-        color: #e2e8f0;
-      }
+      body { font-family: 'Inter', sans-serif; background-color: #000; color: #fff; }
       .custom-scrollbar::-webkit-scrollbar { width: 5px; }
-      .custom-scrollbar::-webkit-scrollbar-thumb { background: #7f1d1d; border-radius: 10px; }
+      .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
     </style>
-  <script type="importmap">
+<script type="importmap">
 {
   "imports": {
-    "react": "https://esm.sh/react@^19.2.3",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "react-router-dom": "https://esm.sh/react-router-dom@^7.11.0",
-    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
-    "recharts": "https://esm.sh/recharts@^3.6.0",
-    "xlsx": "https://esm.sh/xlsx@^0.18.5",
-    "vite": "https://esm.sh/vite@^7.3.0",
+    "react-router-dom": "https://esm.sh/react-router-dom@^7.12.0",
     "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.89.0",
-    "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
-    "react-leaflet": "https://esm.sh/react-leaflet@^5.0.0",
-    "leaflet": "https://esm.sh/leaflet@^1.9.4",
+    "vite": "https://esm.sh/vite@^7.3.1",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3",
+    "@google/genai": "https://esm.sh/@google/genai@^1.38.0",
+    "recharts": "https://esm.sh/recharts@^3.7.0",
+    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "jspdf-autotable": "https://esm.sh/jspdf-autotable@^5.0.7",
     "leaflet/": "https://esm.sh/leaflet@^1.9.4/",
-    "jspdf": "https://esm.sh/jspdf@^3.0.4",
-    "jspdf-autotable": "https://esm.sh/jspdf-autotable@^5.0.2"
+    "leaflet": "https://esm.sh/leaflet@^1.9.4",
+    "jspdf": "https://esm.sh/jspdf@^4.0.0",
+    "react-leaflet": "https://esm.sh/react-leaflet@^5.0.0",
+    "xlsx": "https://esm.sh/xlsx@^0.18.5",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.91.0"
   }
 }
 </script>
 </head>
-  <body class="bg-[#0f0505] text-slate-200">
+  <body class="bg-black text-white">
     <div id="root">
-        <div style="display: flex; justify-content: center; align-items: center; height: 100vh; flex-direction: column; background: #0f0505; color: #dc2626;">
-            <h1 style="font-weight: 900; font-size: 32px; font-family: monospace; letter-spacing: -2px;">V300 CRIMSON</h1>
-            <p style="font-family: monospace; opacity: 0.7;">FORCING CACHE FLUSH...</p>
+        <div style="display: flex; justify-content: center; align-items: center; height: 100vh; flex-direction: column; background: #000; color: #fff;">
+            <h1 style="font-weight: 900; font-size: 32px; font-family: sans-serif; letter-spacing: -1px;">CARGANDO NUCLEUS...</h1>
+            <p style="font-family: monospace; opacity: 0.5;">V700 PRODUCTION FIX</p>
         </div>
     </div>
-    <!-- QUERY STRING V300.0 -->
-    <script type="module" src="/index.tsx?v=300.0"></script>
-    <script>
-      // AUTO-CACHE BUSTER V300
-      (function() {
-        var currentVersion = 'V300';
-        var storedVersion = localStorage.getItem('app_v_check');
-        
-        if (storedVersion !== currentVersion) {
-            console.log("🔴 V300 CRIMSON: Cleaning old cache layers.");
-            localStorage.setItem('app_v_check', currentVersion);
-            if ('caches' in window) {
-                caches.keys().then(function(names) {
-                    for (let name of names) caches.delete(name);
-                });
-            }
-        }
-      })();
-    </script>
+    <script type="module" src="/index.tsx?v=700.1"></script>
   </body>
 </html>
