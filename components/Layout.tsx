@@ -6,21 +6,23 @@ import {
   LayoutDashboard, Sprout, Menu, Leaf, LogOut, 
   UserCircle, Calendar, Sun, Moon, 
   Tractor, BookOpen, Bot, Settings, 
-  FolderKanban, CheckSquare, BarChart3, Users, Warehouse, Package, X, Bell, Globe, Building, ShieldAlert, FileText, BrainCircuit
+  FolderKanban, CheckSquare, BarChart3, Users, Warehouse, Package, X, Bell, Globe, Building, ShieldAlert, FileText, BrainCircuit, Activity, FlaskConical, DownloadCloud
 } from 'lucide-react';
 
-const NavItem = ({ to, icon: Icon, label, badge }: any) => {
+const NavItem = ({ to, icon: Icon, label, badge, special }: any) => {
   const location = useLocation();
   const isActive = location.pathname === to;
   return (
     <Link to={to} className={`flex items-center justify-between px-4 py-2.5 rounded-xl transition-all ${
         isActive 
           ? 'bg-hemp-600 text-white shadow-lg shadow-hemp-600/20' 
-          : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800/50'
+          : special 
+            ? 'text-blue-500 bg-blue-50 dark:bg-blue-900/10 hover:bg-blue-100 dark:hover:bg-blue-900/30' 
+            : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800/50'
       }`}>
       <div className="flex items-center space-x-3">
-        <Icon size={20} className={isActive ? 'text-white' : 'text-slate-400'} />
-        <span className="font-bold text-sm tracking-tight">{label}</span>
+        <Icon size={20} className={isActive ? 'text-white' : special ? 'text-blue-500' : 'text-slate-400'} />
+        <span className={`font-bold text-sm tracking-tight ${special ? 'uppercase text-xs' : ''}`}>{label}</span>
       </div>
       {badge && <span className="text-[9px] font-black bg-amber-500 text-white px-1.5 py-0.5 rounded-full">{badge}</span>}
     </Link>
@@ -37,20 +39,23 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
   const isClient = currentUser.role === 'client';
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-950">
+    <div className="flex h-screen overflow-hidden bg-slate-5 dark:bg-slate-950">
       {/* OVERLAY MOBILE */}
       {isMobileOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden backdrop-blur-sm" onClick={() => setIsMobileOpen(false)}></div>}
 
       {/* SIDEBAR */}
       <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col transition-transform duration-300 lg:translate-x-0 ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="h-20 flex items-center justify-between px-8 border-b border-slate-100 dark:border-slate-800">
-          <div className="flex items-center space-x-3">
+        <div className="h-20 flex items-center justify-between px-8 border-b border-slate-100 dark:border-slate-800 relative overflow-hidden">
+          <div className="flex items-center space-x-3 relative z-10">
              <div className="bg-hemp-600 p-2 rounded-xl text-white shadow-lg shadow-hemp-600/30 overflow-hidden flex items-center justify-center min-w-[38px] min-h-[38px]">
                 {appLogo ? <img src={appLogo} alt="Logo" className="w-full h-full object-contain" /> : <Leaf size={22} />}
              </div>
              <span className="text-2xl font-black tracking-tighter dark:text-white truncate" title={appName}>{appName}</span>
           </div>
-          <button className="lg:hidden" onClick={() => setIsMobileOpen(false)}><X size={20} className="text-slate-400"/></button>
+          <button className="lg:hidden relative z-10" onClick={() => setIsMobileOpen(false)}><X size={20} className="text-slate-400"/></button>
+          
+          {/* Version Indicator */}
+          <div className="absolute top-0 right-0 bg-blue-600 text-white text-[8px] font-black px-2 py-0.5 rounded-bl-lg z-20">V7.0.6</div>
         </div>
 
         <nav className="flex-1 px-4 py-8 space-y-1 overflow-y-auto custom-scrollbar">
@@ -59,6 +64,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
           <NavItem to="/advisor" icon={Bot} label="AI Terminal" />
           
           <div className="pt-8 pb-3 px-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Manejo Técnico</div>
+          <NavItem to="/trials-lite" icon={FlaskConical} label="Gestión Ensayos (Lite)" />
           <NavItem to="/locations" icon={Tractor} label="Campos & Sitios" />
           <NavItem to="/plots" icon={Sprout} label="Unidades Prod." />
           <NavItem to="/tasks" icon={CheckSquare} label="Labores" badge={pendingTasksCount > 0 ? pendingTasksCount : null} />
@@ -85,6 +91,12 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
           <div className="pt-8 pb-3 px-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Sistema</div>
           <NavItem to="/analytics" icon={BarChart3} label="Comparativa Genética" />
           <NavItem to="/integrity" icon={ShieldAlert} label="Integridad Datos" />
+          
+          {/* SNAPSHOT SHORTCUT */}
+          {currentUser.role === 'super_admin' && (
+             <NavItem to="/settings" icon={DownloadCloud} label="Backup & Snapshot" special={true} />
+          )}
+          
           {!isClient && <NavItem to="/users" icon={Users} label="Equipo" />}
           {currentUser.role === 'super_admin' && <NavItem to="/settings" icon={Settings} label="Admin Server" />}
         </nav>
