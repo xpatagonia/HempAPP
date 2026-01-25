@@ -39,7 +39,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
   const isClient = currentUser.role === 'client';
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-5 dark:bg-slate-950">
+    <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
       {/* OVERLAY MOBILE */}
       {isMobileOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden backdrop-blur-sm" onClick={() => setIsMobileOpen(false)}></div>}
 
@@ -50,7 +50,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
              <div className="bg-hemp-600 p-2 rounded-xl text-white shadow-lg shadow-hemp-600/30 overflow-hidden flex items-center justify-center min-w-[38px] min-h-[38px]">
                 {appLogo ? <img src={appLogo} alt="Logo" className="w-full h-full object-contain" /> : <Leaf size={22} />}
              </div>
-             <span className="text-2xl font-black tracking-tighter dark:text-white truncate" title={appName}>{appName}</span>
+             <span className="text-2xl font-black tracking-tighter text-slate-900 dark:text-white truncate" title={appName}>{appName}</span>
           </div>
           <button className="lg:hidden relative z-10" onClick={() => setIsMobileOpen(false)}><X size={20} className="text-slate-400"/></button>
           
