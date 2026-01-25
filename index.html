@@ -5,13 +5,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     
-    <!-- Cache Control para forzar actualización en clientes -->
+    <!-- Cache Control V7.0.5 -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <title>HempC | Nucleus V700</title>
+    <title>HempC | Nucleus V7.0.5</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -36,33 +36,37 @@
 <script type="importmap">
 {
   "imports": {
-    "react-router-dom": "https://esm.sh/react-router-dom@^7.12.0",
-    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
-    "vite": "https://esm.sh/vite@^7.3.1",
-    "react/": "https://esm.sh/react@^19.2.3/",
     "react": "https://esm.sh/react@^19.2.3",
-    "@google/genai": "https://esm.sh/@google/genai@^1.38.0",
-    "recharts": "https://esm.sh/recharts@^3.7.0",
-    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
     "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "jspdf-autotable": "https://esm.sh/jspdf-autotable@^5.0.7",
-    "leaflet/": "https://esm.sh/leaflet@^1.9.4/",
-    "leaflet": "https://esm.sh/leaflet@^1.9.4",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react-router-dom": "https://esm.sh/react-router-dom@^7.12.0",
+    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
+    "recharts": "https://esm.sh/recharts@^3.7.0",
+    "@google/genai": "https://esm.sh/@google/genai@^1.38.0",
     "jspdf": "https://esm.sh/jspdf@^4.0.0",
+    "vite": "https://esm.sh/vite@^7.3.1",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.91.0",
     "react-leaflet": "https://esm.sh/react-leaflet@^5.0.0",
+    "leaflet": "https://esm.sh/leaflet@^1.9.4",
+    "leaflet/": "https://esm.sh/leaflet@^1.9.4/",
     "xlsx": "https://esm.sh/xlsx@^0.18.5",
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.91.0"
+    "jspdf-autotable": "https://esm.sh/jspdf-autotable@^5.0.7"
   }
 }
 </script>
 </head>
   <body class="bg-black text-white">
     <div id="root">
-        <div style="display: flex; justify-content: center; align-items: center; height: 100vh; flex-direction: column; background: #000; color: #fff;">
-            <h1 style="font-weight: 900; font-size: 32px; font-family: sans-serif; letter-spacing: -1px;">CARGANDO NUCLEUS...</h1>
-            <p style="font-family: monospace; opacity: 0.5;">V700 PRODUCTION FIX</p>
+        <!-- Pantalla de carga CYAN V7.0.5 -->
+        <div style="display: flex; justify-content: center; align-items: center; height: 100vh; flex-direction: column; background: #083344; color: #a5f3fc;">
+            <h1 style="font-weight: 900; font-size: 32px; font-family: sans-serif; letter-spacing: -1px; text-transform: uppercase;">Nucleus V7.0.5</h1>
+            <p style="font-family: monospace; opacity: 0.8; font-weight: bold; margin-top: 10px;">ESTABLISHING UPLINK...</p>
+            <div style="margin-top: 30px; width: 50px; height: 50px; border: 5px solid #06b6d4; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+            <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
         </div>
     </div>
-    <script type="module" src="/index.tsx?v=700.1"></script>
+    <!-- FIX CRITICO: Eliminado ?v=... para permitir build exitoso -->
+    <script type="module" src="/index.tsx"></script>
   </body>
 </html>
