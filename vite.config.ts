@@ -9,8 +9,8 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     define: {
-      // V7.0.5 - STABLE BUILD FIX
-      '__APP_VERSION__': JSON.stringify('V7.0.5-STABLE'),
+      // V7.0.6 - STABLE BUILD FIX
+      '__APP_VERSION__': JSON.stringify('V7.0.6-STABLE'),
       '__API_KEY__': JSON.stringify(env.API_KEY || ''),
       '__BUILD_TIME__': JSON.stringify(new Date().toISOString())
     },
