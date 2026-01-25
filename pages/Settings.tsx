@@ -4,25 +4,19 @@ import { useAppContext } from '../context/AppContext';
 import { 
   Save, Database, RefreshCw, Lock, Settings as SettingsIcon, 
   CheckCircle2, Layout, Trash2, RotateCcw, Shield, 
-  AlertTriangle, FlaskConical, CheckCircle, XCircle, Info, Search, FileCode, Flame, Eraser, Server, Activity, DownloadCloud, FileJson, Zap, HardDrive, Radiation, Satellite, Radio
+  AlertTriangle, FlaskConical, CheckCircle, XCircle, Info, Search, FileCode, Flame, Eraser, Server, Activity, DownloadCloud, FileJson, Zap, HardDrive, Radiation, Satellite, Radio, Archive
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
 export default function Settings() {
   const { currentUser, appName, appLogo, updateBranding } = useAppContext();
   const [activeTab, setActiveTab] = useState<'branding' | 'system' | 'maintenance'>('system');
-  const [editAppName, setEditAppName] = useState(appName);
-  const [editAppLogo, setEditAppLogo] = useState(appLogo);
   const [isBackingUp, setIsBackingUp] = useState(false);
 
   // @ts-ignore
-  const buildTime = process.env.BUILD_TIME || 'Unknown';
-
-  useEffect(() => {
-      console.log(`--- SETTINGS MODULE V300 (CRIMSON) LOADED ---`);
-      setEditAppName(appName);
-      setEditAppLogo(appLogo);
-  }, [appName, appLogo]);
+  const buildTime = typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : 'Local Dev';
+  // @ts-ignore
+  const appVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'V7.0.4';
 
   if (currentUser?.role !== 'super_admin') {
       return (
@@ -33,11 +27,6 @@ export default function Settings() {
           </div>
       );
   }
-
-  const handleSaveBranding = () => {
-      updateBranding(editAppName, editAppLogo);
-      alert("✅ Identidad corporativa actualizada.");
-  };
 
   const handleFullBackup = async () => {
       setIsBackingUp(true);
@@ -52,13 +41,14 @@ export default function Settings() {
           const backupData: any = {
               timestamp: new Date().toISOString(),
               appName: appName,
-              version: '3.0.0-CRIMSON',
+              version: appVersion,
+              environment: 'production_snapshot',
               data: {}
           };
 
           for (const table of tables) {
               const { data, error } = await supabase.from(table).select('*');
-              if (!error) {
+              if (!error && data) {
                   backupData.data[table] = data;
               }
           }
@@ -67,13 +57,13 @@ export default function Settings() {
           const url = window.URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = `Nucleus_Backup_V300_${new Date().toISOString().split('T')[0]}.json`;
+          a.download = `HempC_Nucleus_SNAPSHOT_${new Date().toISOString().split('T')[0]}.json`;
           document.body.appendChild(a);
           a.click();
           window.URL.revokeObjectURL(url);
           document.body.removeChild(a);
           
-          alert("✅ Snapshot V300 descargado correctamente.");
+          alert("✅ SNAPSHOT CREADO. Guarde este archivo en un lugar seguro antes de reinstalar Vercel.");
       } catch (e) {
           alert("Error al generar copia de seguridad.");
           console.error(e);
@@ -84,166 +74,348 @@ export default function Settings() {
 
   const handleFixSchema = () => {
       const sql = `
--- FIX V300: CRIMSON GUARD (FINAL SQL MIGRATION)
--- Este script es seguro para ejecutar múltiples veces (Idempotente)
+-- MASTER SCHEMA INIT V7.0.6
+-- Ejecutar en Supabase SQL Editor para inicializar o reparar la estructura
 
--- 1. Actualización de Tablas Principales
-DO $$ 
-BEGIN 
-    -- Plots / Parcelas
-    ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS color text DEFAULT '#16a34a';
-    ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS used_seed_value numeric DEFAULT 0;
-    ALTER TABLE public.plots ADD COLUMN IF NOT EXISTS used_seed_unit text DEFAULT 'kg';
+-- 1. EXTENSIONS
+create extension if not exists "uuid-ossp";
 
-    -- Seed Batches / Lotes
-    ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS supplier_id uuid; 
-    ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS category text;
-    ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS label_serial_number text;
-    ALTER TABLE public.seed_batches ADD COLUMN IF NOT EXISTS storage_point_id uuid; 
+-- 2. TABLES & COLUMNS (Idempotent)
 
-    -- Movimientos
-    ALTER TABLE public.seed_movements ADD COLUMN IF NOT EXISTS origin_storage_id uuid;
-    ALTER TABLE public.seed_movements ADD COLUMN IF NOT EXISTS client_id uuid;
+-- USERS
+create table if not exists public.users (id text primary key);
+alter table public.users add column if not exists name text;
+alter table public.users add column if not exists email text;
+alter table public.users add column if not exists role text;
+alter table public.users add column if not exists password text;
+alter table public.users add column if not exists job_title text;
+alter table public.users add column if not exists phone text;
+alter table public.users add column if not exists avatar text;
+alter table public.users add column if not exists client_id text;
+alter table public.users add column if not exists is_network_member boolean default false;
 
-    -- Puntos de Almacenamiento
-    ALTER TABLE public.storage_points ADD COLUMN IF NOT EXISTS client_id uuid;
-    ALTER TABLE public.storage_points ADD COLUMN IF NOT EXISTS node_code text;
-    ALTER TABLE public.storage_points ADD COLUMN IF NOT EXISTS responsible_user_id uuid;
-    ALTER TABLE public.storage_points ADD COLUMN IF NOT EXISTS surface_m2 numeric;
-    ALTER TABLE public.storage_points ADD COLUMN IF NOT EXISTS coordinates jsonb;
+-- CLIENTS
+create table if not exists public.clients (id text primary key);
+alter table public.clients add column if not exists name text;
+alter table public.clients add column if not exists type text;
+alter table public.clients add column if not exists contact_name text;
+alter table public.clients add column if not exists contact_phone text;
+alter table public.clients add column if not exists email text;
+alter table public.clients add column if not exists address text;
+alter table public.clients add column if not exists total_hectares numeric;
+alter table public.clients add column if not exists is_network_member boolean;
+alter table public.clients add column if not exists membership_level text;
+alter table public.clients add column if not exists contract_date text;
+alter table public.clients add column if not exists cuit text;
+alter table public.clients add column if not exists notes text;
+alter table public.clients add column if not exists related_user_id text;
+alter table public.clients add column if not exists coordinates jsonb;
 
-    -- Clientes
-    ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS coordinates jsonb;
-    ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS related_user_id uuid;
-END $$;
+-- SUPPLIERS
+create table if not exists public.suppliers (id text primary key);
+alter table public.suppliers add column if not exists name text;
+alter table public.suppliers add column if not exists category text;
+alter table public.suppliers add column if not exists legal_name text;
+alter table public.suppliers add column if not exists cuit text;
+alter table public.suppliers add column if not exists country text;
+alter table public.suppliers add column if not exists province text;
+alter table public.suppliers add column if not exists city text;
+alter table public.suppliers add column if not exists address text;
+alter table public.suppliers add column if not exists postal_code text;
+alter table public.suppliers add column if not exists whatsapp text;
+alter table public.suppliers add column if not exists email text;
+alter table public.suppliers add column if not exists commercial_contact text;
+alter table public.suppliers add column if not exists logistics_contact text;
+alter table public.suppliers add column if not exists website text;
+alter table public.suppliers add column if not exists notes text;
+alter table public.suppliers add column if not exists is_official_partner boolean default false;
+alter table public.suppliers add column if not exists coordinates jsonb;
 
--- 2. Asegurar Existencia de Depósito Default (Recuperación de Stock Huérfano)
-INSERT INTO public.storage_points (id, name, type, node_code, address, city)
-SELECT 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'Depósito General (Recuperado)', 'Propio', 'REC-001', 'Sede Central', 'General'
-WHERE NOT EXISTS (SELECT 1 FROM public.storage_points);
+-- STORAGE POINTS
+create table if not exists public.storage_points (id text primary key);
+alter table public.storage_points add column if not exists name text;
+alter table public.storage_points add column if not exists node_code text;
+alter table public.storage_points add column if not exists type text;
+alter table public.storage_points add column if not exists address text;
+alter table public.storage_points add column if not exists city text;
+alter table public.storage_points add column if not exists province text;
+alter table public.storage_points add column if not exists coordinates jsonb;
+alter table public.storage_points add column if not exists responsible_user_id text;
+alter table public.storage_points add column if not exists client_id text;
+alter table public.storage_points add column if not exists surface_m2 numeric;
+alter table public.storage_points add column if not exists conditions text;
+alter table public.storage_points add column if not exists notes text;
 
--- 3. Vincular Stock Huérfano
-UPDATE public.seed_batches
-SET storage_point_id = (SELECT id FROM public.storage_points LIMIT 1)
-WHERE storage_point_id IS NULL;
+-- VARIETIES
+create table if not exists public.varieties (id text primary key);
+alter table public.varieties add column if not exists supplier_id text;
+alter table public.varieties add column if not exists name text;
+alter table public.varieties add column if not exists usage text;
+alter table public.varieties add column if not exists cycle_days numeric;
+alter table public.varieties add column if not exists expected_thc numeric;
+alter table public.varieties add column if not exists knowledge_base text;
+alter table public.varieties add column if not exists notes text;
 
--- 4. Notificar a PostgREST
-NOTIFY pgrst, 'reload schema';
+-- SEED BATCHES
+create table if not exists public.seed_batches (id text primary key);
+alter table public.seed_batches add column if not exists variety_id text;
+alter table public.seed_batches add column if not exists supplier_id text;
+alter table public.seed_batches add column if not exists batch_code text;
+alter table public.seed_batches add column if not exists label_serial_number text;
+alter table public.seed_batches add column if not exists category text;
+alter table public.seed_batches add column if not exists analysis_date text;
+alter table public.seed_batches add column if not exists purity numeric;
+alter table public.seed_batches add column if not exists germination numeric;
+alter table public.seed_batches add column if not exists gs1_code text;
+alter table public.seed_batches add column if not exists certification_number text;
+alter table public.seed_batches add column if not exists purchase_order text;
+alter table public.seed_batches add column if not exists purchase_date text;
+alter table public.seed_batches add column if not exists price_per_kg numeric;
+alter table public.seed_batches add column if not exists initial_quantity numeric;
+alter table public.seed_batches add column if not exists remaining_quantity numeric;
+alter table public.seed_batches add column if not exists storage_conditions text;
+alter table public.seed_batches add column if not exists storage_point_id text;
+alter table public.seed_batches add column if not exists logistics_responsible text;
+alter table public.seed_batches add column if not exists notes text;
+alter table public.seed_batches add column if not exists is_active boolean;
+alter table public.seed_batches add column if not exists created_at text;
+
+-- SEED MOVEMENTS
+create table if not exists public.seed_movements (id text primary key);
+alter table public.seed_movements add column if not exists batch_id text;
+alter table public.seed_movements add column if not exists client_id text;
+alter table public.seed_movements add column if not exists target_location_id text;
+alter table public.seed_movements add column if not exists quantity numeric;
+alter table public.seed_movements add column if not exists date text;
+alter table public.seed_movements add column if not exists dispatch_time text;
+alter table public.seed_movements add column if not exists transport_guide_number text;
+alter table public.seed_movements add column if not exists transport_type text;
+alter table public.seed_movements add column if not exists driver_name text;
+alter table public.seed_movements add column if not exists driver_dni text;
+alter table public.seed_movements add column if not exists vehicle_plate text;
+alter table public.seed_movements add column if not exists vehicle_model text;
+alter table public.seed_movements add column if not exists transport_company text;
+alter table public.seed_movements add column if not exists recipient_name text;
+alter table public.seed_movements add column if not exists recipient_dni text;
+alter table public.seed_movements add column if not exists route_itinerary text;
+alter table public.seed_movements add column if not exists status text;
+alter table public.seed_movements add column if not exists origin_storage_id text;
+alter table public.seed_movements add column if not exists route_google_link text;
+alter table public.seed_movements add column if not exists estimated_distance_km numeric;
+
+-- LOCATIONS
+create table if not exists public.locations (id text primary key);
+alter table public.locations add column if not exists name text;
+alter table public.locations add column if not exists province text;
+alter table public.locations add column if not exists city text;
+alter table public.locations add column if not exists address text;
+alter table public.locations add column if not exists soil_type text;
+alter table public.locations add column if not exists climate text;
+alter table public.locations add column if not exists responsible_person text;
+alter table public.locations add column if not exists coordinates jsonb;
+alter table public.locations add column if not exists polygon jsonb;
+alter table public.locations add column if not exists client_id text;
+alter table public.locations add column if not exists owner_name text;
+alter table public.locations add column if not exists owner_legal_name text;
+alter table public.locations add column if not exists owner_cuit text;
+alter table public.locations add column if not exists owner_contact text;
+alter table public.locations add column if not exists owner_type text;
+alter table public.locations add column if not exists capacity_ha numeric;
+alter table public.locations add column if not exists irrigation_system text;
+alter table public.locations add column if not exists responsible_ids text[];
+
+-- PROJECTS
+create table if not exists public.projects (id text primary key);
+alter table public.projects add column if not exists name text;
+alter table public.projects add column if not exists description text;
+alter table public.projects add column if not exists start_date text;
+alter table public.projects add column if not exists status text;
+alter table public.projects add column if not exists director_id text;
+alter table public.projects add column if not exists responsible_ids text[];
+
+-- PLOTS
+create table if not exists public.plots (id text primary key);
+alter table public.plots add column if not exists location_id text;
+alter table public.plots add column if not exists project_id text;
+alter table public.plots add column if not exists variety_id text;
+alter table public.plots add column if not exists seed_batch_id text;
+alter table public.plots add column if not exists name text;
+alter table public.plots add column if not exists type text;
+alter table public.plots add column if not exists block text;
+alter table public.plots add column if not exists replicate numeric;
+alter table public.plots add column if not exists surface_area numeric;
+alter table public.plots add column if not exists surface_unit text;
+alter table public.plots add column if not exists density numeric;
+alter table public.plots add column if not exists status text;
+alter table public.plots add column if not exists sowing_date text;
+alter table public.plots add column if not exists owner_name text;
+alter table public.plots add column if not exists responsible_ids text[];
+alter table public.plots add column if not exists row_distance numeric;
+alter table public.plots add column if not exists perimeter numeric;
+alter table public.plots add column if not exists observations text;
+alter table public.plots add column if not exists coordinates jsonb;
+alter table public.plots add column if not exists polygon jsonb;
+alter table public.plots add column if not exists irrigation_type text;
+alter table public.plots add column if not exists used_seed_value numeric;
+alter table public.plots add column if not exists used_seed_unit text;
+alter table public.plots add column if not exists color text default '#16a34a';
+
+-- TRIAL RECORDS
+create table if not exists public.trial_records (id text primary key);
+alter table public.trial_records add column if not exists plot_id text;
+alter table public.trial_records add column if not exists date text;
+alter table public.trial_records add column if not exists time text;
+alter table public.trial_records add column if not exists stage text;
+alter table public.trial_records add column if not exists temperature numeric;
+alter table public.trial_records add column if not exists humidity numeric;
+alter table public.trial_records add column if not exists plant_height numeric;
+alter table public.trial_records add column if not exists plants_per_meter numeric;
+alter table public.trial_records add column if not exists uniformity numeric;
+alter table public.trial_records add column if not exists vigor numeric;
+alter table public.trial_records add column if not exists lodging numeric;
+alter table public.trial_records add column if not exists bird_damage numeric;
+alter table public.trial_records add column if not exists diseases_score numeric;
+alter table public.trial_records add column if not exists pests_score numeric;
+alter table public.trial_records add column if not exists harvest_plant_count numeric;
+alter table public.trial_records add column if not exists seed_yield numeric;
+alter table public.trial_records add column if not exists seed_quality_germination numeric;
+alter table public.trial_records add column if not exists seed_quality_non_conformity numeric;
+alter table public.trial_records add column if not exists stem_weight numeric;
+alter table public.trial_records add column if not exists leaf_weight numeric;
+alter table public.trial_records add column if not exists fresh_weight numeric;
+alter table public.trial_records add column if not exists yield numeric;
+alter table public.trial_records add column if not exists replicate numeric;
+alter table public.trial_records add column if not exists emergence_date text;
+alter table public.trial_records add column if not exists flowering_date text;
+alter table public.trial_records add column if not exists harvest_date text;
+alter table public.trial_records add column if not exists diseases text;
+alter table public.trial_records add column if not exists pests text;
+alter table public.trial_records add column if not exists created_by text;
+alter table public.trial_records add column if not exists created_by_name text;
+alter table public.trial_records add column if not exists light_hours numeric;
+alter table public.trial_records add column if not exists lunar_phase text;
+
+-- FIELD LOGS
+create table if not exists public.field_logs (id text primary key);
+alter table public.field_logs add column if not exists plot_id text;
+alter table public.field_logs add column if not exists date text;
+alter table public.field_logs add column if not exists time text;
+alter table public.field_logs add column if not exists note text;
+alter table public.field_logs add column if not exists photo_url text;
+
+-- HYDRIC RECORDS
+create table if not exists public.hydric_records (id text primary key);
+alter table public.hydric_records add column if not exists location_id text;
+alter table public.hydric_records add column if not exists plot_id text;
+alter table public.hydric_records add column if not exists date text;
+alter table public.hydric_records add column if not exists time text;
+alter table public.hydric_records add column if not exists end_time text;
+alter table public.hydric_records add column if not exists type text;
+alter table public.hydric_records add column if not exists amount_mm numeric;
+alter table public.hydric_records add column if not exists notes text;
+alter table public.hydric_records add column if not exists created_by text;
+
+-- TASKS
+create table if not exists public.tasks (id text primary key);
+alter table public.tasks add column if not exists title text;
+alter table public.tasks add column if not exists description text;
+alter table public.tasks add column if not exists status text;
+alter table public.tasks add column if not exists priority text;
+alter table public.tasks add column if not exists assigned_to_ids text[];
+alter table public.tasks add column if not exists due_date text;
+alter table public.tasks add column if not exists plot_id text;
+alter table public.tasks add column if not exists created_by text;
+
+-- RESOURCES
+create table if not exists public.resources (id text primary key);
+alter table public.resources add column if not exists name text;
+alter table public.resources add column if not exists type text;
+alter table public.resources add column if not exists unit text;
+alter table public.resources add column if not exists cost_per_unit numeric;
+alter table public.resources add column if not exists stock numeric;
 `;
       navigator.clipboard.writeText(sql);
-      alert("🔴 SCRIPT V300 (CRIMSON) COPIADO AL PORTAPAPELES.\n\nEste script arreglará la base de datos V42/Vxx.\n\nInstrucciones:\n1. Ve a Supabase > SQL Editor.\n2. Pega el contenido.\n3. Ejecuta (RUN).");
+      alert("Script SQL Maestro copiado al portapapeles. Ejecútalo en Supabase para sincronizar todas las tablas.");
   };
 
-  const handleHardReset = () => {
-      if(window.confirm("ATENCIÓN: Esto borrará la memoria local del navegador y recargará la aplicación. Usar solo si hay problemas de visualización.")) {
-          localStorage.clear();
-          sessionStorage.clear();
-          if ('serviceWorker' in navigator) {
-              navigator.serviceWorker.getRegistrations().then(function(registrations) {
-                  for(let registration of registrations) {
-                      registration.unregister();
-                  }
-              });
-          }
-          // Force reload with unique timestamp to bust Cloudflare cache
-          window.location.href = window.location.origin + '?t=' + Date.now();
-      }
-  }
-
   return (
-    <div className="max-w-4xl mx-auto pb-10 animate-in fade-in duration-500">
+    <div className="max-w-4xl mx-auto pb-20 animate-in fade-in duration-500">
       <div className="flex items-center mb-8">
         <SettingsIcon className="text-hemp-500 mr-3" size={32} />
         <div>
-            <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Panel de Control Master</h1>
-            <p className="text-gray-500">Configuración global y estado del servidor Nucleus V300.</p>
+            <h1 className="text-2xl font-black text-gray-800 dark:text-white">Panel de Control Master</h1>
+            <p className="text-gray-500">Versión del Sistema: <span className="font-mono text-hemp-600">{appVersion}</span></p>
         </div>
       </div>
 
       <div className="flex space-x-1 bg-gray-100 dark:bg-slate-900 p-1.5 rounded-2xl mb-8 w-fit shadow-inner border dark:border-slate-800">
-          <button onClick={() => setActiveTab('branding')} className={`px-6 py-2.5 rounded-xl text-xs font-black transition uppercase tracking-widest ${activeTab === 'branding' ? 'bg-white dark:bg-hemp-600 shadow-md text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Identidad</button>
-          <button onClick={() => setActiveTab('system')} className={`px-6 py-2.5 rounded-xl text-xs font-black transition uppercase tracking-widest ${activeTab === 'system' ? 'bg-white dark:bg-hemp-600 shadow-md text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Sistema & BD</button>
-          <button onClick={() => setActiveTab('maintenance')} className={`px-6 py-2.5 rounded-xl text-xs font-black transition uppercase tracking-widest ${activeTab === 'maintenance' ? 'bg-white dark:bg-amber-600 shadow-md text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Zona de Peligro</button>
+          <button onClick={() => setActiveTab('system')} className={`px-6 py-2.5 rounded-xl text-xs font-black transition uppercase tracking-widest ${activeTab === 'system' ? 'bg-white dark:bg-hemp-600 shadow-md text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Sistema & Datos</button>
+          <button onClick={() => setActiveTab('maintenance')} className={`px-6 py-2.5 rounded-xl text-xs font-black transition uppercase tracking-widest ${activeTab === 'maintenance' ? 'bg-white dark:bg-amber-600 shadow-md text-gray-800 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}>Mantenimiento</button>
       </div>
 
       {activeTab === 'system' && (
           <div className="space-y-6 animate-in slide-in-from-bottom-2">
               
-              {/* FIX DATABASE BUTTON - VERSION 300 (CRIMSON) */}
-              <div 
-                className="bg-[#2a0a0a] border border-red-600 p-8 rounded-[40px] shadow-2xl text-red-500 relative overflow-hidden group hover:scale-[1.01] transition-all cursor-pointer ring-4 ring-red-900/30" 
-                onClick={handleFixSchema}
-              >
-                  <div className="flex justify-between items-center relative z-10">
+              {/* SNAPSHOT CARD */}
+              <div className="bg-gradient-to-r from-slate-900 to-slate-800 dark:from-slate-800 dark:to-slate-900 p-8 rounded-[40px] shadow-2xl relative overflow-hidden text-white border border-slate-700">
+                  <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-8">
                       <div>
                           <div className="flex items-center gap-3 mb-2">
-                              <Radio size={28} className="text-red-500 animate-pulse"/>
-                              <h3 className="text-2xl font-black uppercase tracking-tighter italic text-red-500">V300: CRIMSON SQL</h3>
+                              <div className="p-3 bg-blue-500/20 rounded-xl"><Archive size={24} className="text-blue-400"/></div>
+                              <h3 className="text-2xl font-black uppercase tracking-tighter italic">Snapshot de Seguridad</h3>
                           </div>
-                          <p className="text-xs text-red-300 font-medium max-w-md">
-                              <strong>ESTADO: CRÍTICO.</strong> Si ves este panel <span className="underline font-bold text-red-500">ROJO SANGRE</span>, has roto la caché de Cloudflare. Pulsa para copiar el SQL Maestro.
+                          <p className="text-sm text-slate-400 font-medium max-w-md leading-relaxed">
+                              Genera un archivo JSON completo con toda la base de datos actual. 
+                              <br/><strong className="text-white">Obligatorio antes de realizar migraciones o borrar proyectos en Vercel.</strong>
                           </p>
                       </div>
-                      <div className="bg-red-900/30 p-4 rounded-full border border-red-500/30">
-                          <FileCode size={32}/>
-                      </div>
+                      <button 
+                        onClick={handleFullBackup}
+                        disabled={isBackingUp}
+                        className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg flex items-center transition-all disabled:opacity-50 hover:scale-105"
+                      >
+                          {isBackingUp ? <RefreshCw className="animate-spin mr-2" size={18}/> : <DownloadCloud className="mr-2" size={18}/>}
+                          {isBackingUp ? 'Generando Archivo...' : 'Descargar Snapshot'}
+                      </button>
                   </div>
-                  <div className="mt-8 flex items-center">
-                      <span className="text-[10px] font-black uppercase tracking-[0.2em] bg-red-600 text-white px-6 py-3 rounded-full hover:bg-red-500 transition shadow-lg shadow-red-900/50">
-                          Copiar SQL V300 (FIX)
-                      </span>
-                  </div>
-                  <Activity className="absolute -bottom-10 -right-10 w-64 h-64 text-red-900 opacity-20 pointer-events-none"/>
+                  <Database className="absolute -right-10 -bottom-10 w-64 h-64 text-white opacity-5 pointer-events-none"/>
               </div>
 
-              {/* Botón de Pánico */}
-              <div className="bg-red-50 dark:bg-red-900/10 p-6 rounded-[32px] border border-red-200 dark:border-red-900/30 flex items-center justify-between">
-                  <div>
-                      <h4 className="text-red-700 dark:text-red-400 font-black uppercase text-xs tracking-widest mb-1">Botón de Pánico (Local)</h4>
-                      <p className="text-[10px] text-red-600/70 dark:text-red-400/70 font-medium">Si la app sigue mostrando datos viejos, pulsa aquí.</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="bg-white dark:bg-slate-900 p-6 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-sm">
+                      <div className="flex items-center gap-3 mb-4">
+                          <FileCode className="text-hemp-600" size={24}/>
+                          <h4 className="font-black text-slate-800 dark:text-white uppercase text-sm tracking-widest">Esquema SQL Maestro</h4>
+                      </div>
+                      <p className="text-xs text-slate-500 mb-6">Si la app muestra errores de columnas faltantes, copia el script de reparación completo.</p>
+                      <button onClick={handleFixSchema} className="w-full py-3 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-black uppercase tracking-widest transition">
+                          Copiar SQL Fix
+                      </button>
                   </div>
-                  <button onClick={handleHardReset} className="bg-red-600 text-white px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest shadow-md hover:bg-red-700">Hard Reset</button>
-              </div>
 
-              {/* BACKUP SECTION */}
-              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-8 rounded-[40px] shadow-sm relative overflow-hidden flex flex-col md:flex-row justify-between items-center gap-6">
-                  <div className="relative z-10">
-                      <div className="flex items-center gap-3 mb-2">
-                          <Database size={24} className="text-slate-700 dark:text-white"/>
-                          <h3 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-tighter italic">Copia de Seguridad</h3>
-                      </div>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 font-medium max-w-md leading-relaxed">
-                          Genera un archivo JSON ("Snapshot") con toda la información actual de la base de datos (Parcelas, Usuarios, Monitoreos, etc.) para resguardo local.
-                      </p>
-                  </div>
-                  <button 
-                    onClick={handleFullBackup}
-                    disabled={isBackingUp}
-                    className="relative z-10 bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg flex items-center hover:scale-[1.02] transition-all disabled:opacity-50"
-                  >
-                      {isBackingUp ? <RefreshCw className="animate-spin mr-2" size={18}/> : <DownloadCloud className="mr-2" size={18}/>}
-                      {isBackingUp ? 'Generando...' : 'Descargar Snapshot'}
-                  </button>
-              </div>
-              
-              <div className="bg-white dark:bg-slate-900 p-6 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between">
-                  <div className="flex items-center space-x-4">
-                      <Database size={20} className="text-slate-400"/>
-                      <div>
-                          <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Versión del Cliente</p>
-                          <p className="text-[10px] text-slate-400 uppercase tracking-widest">Nucleus WebApp v3.0.0-CRIMSON</p>
-                      </div>
-                  </div>
-                  <div className="text-right">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Build Time</p>
-                      <p className="text-xs font-mono text-slate-600 dark:text-slate-400">{buildTime}</p>
+                  <div className="bg-white dark:bg-slate-900 p-6 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-center text-center">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Build Timestamp</p>
+                      <p className="text-xs font-mono text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-950 p-2 rounded-lg">{buildTime}</p>
                   </div>
               </div>
           </div>
       )}
       
-      {activeTab === 'branding' && <div className="p-10 text-center text-gray-400 font-bold">Opciones de Identidad (Sin cambios en V300)</div>}
-      {activeTab === 'maintenance' && <div className="p-10 text-center text-gray-400 font-bold">Zona de Peligro (Sin cambios en V300)</div>}
+      {activeTab === 'maintenance' && (
+          <div className="bg-red-50 dark:bg-red-900/10 p-8 rounded-[40px] border border-red-200 dark:border-red-900/30 text-center animate-in fade-in">
+              <AlertTriangle size={48} className="mx-auto text-red-500 mb-4"/>
+              <h3 className="text-xl font-black text-red-700 dark:text-red-400 uppercase tracking-widest mb-2">Zona de Peligro</h3>
+              <p className="text-sm text-red-600/70 dark:text-red-400/70 mb-6 max-w-md mx-auto">
+                  Estas acciones afectan el almacenamiento local del navegador. No borran datos del servidor, pero pueden cerrar tu sesión.
+              </p>
+              <button 
+                onClick={() => { if(window.confirm("¿Reiniciar caché local?")) { localStorage.clear(); window.location.reload(); } }}
+                className="bg-red-600 hover:bg-red-700 text-white px-8 py-3 rounded-xl text-xs font-black uppercase tracking-widest shadow-lg transition"
+              >
+                  Forzar Reinicio Local
+              </button>
+          </div>
+      )}
     </div>
   );
 }
