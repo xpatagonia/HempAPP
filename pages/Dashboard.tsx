@@ -1,6 +1,6 @@
 
 import React, { useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
@@ -9,7 +9,7 @@ import {
 import { 
   Activity, Globe, ShieldCheck, ChevronRight, 
   Bot, Sprout, TrendingUp, AlertTriangle, 
-  Calendar, ArrowUpRight, Zap, Target, AlertCircle, Clock
+  Calendar, ArrowUpRight, Zap, Target, AlertCircle, Clock, FlaskConical, Plus, ClipboardList
 } from 'lucide-react';
 
 const MetricCard = ({ label, value, trend, icon: Icon, colorClass, subtext }: any) => (
@@ -32,6 +32,7 @@ const MetricCard = ({ label, value, trend, icon: Icon, colorClass, subtext }: an
 
 export default function Dashboard() {
   const { varieties, locations, plots, currentUser, getLatestRecord, trialRecords, tasks, appName } = useAppContext();
+  const navigate = useNavigate();
 
   const relevantPlots = currentUser?.role === 'client' ? plots.filter(p => p.responsibleIds?.includes(currentUser?.id || '')) : plots;
   const pendingTasks = tasks.filter(t => t.status === 'Pendiente').length;
@@ -92,6 +93,24 @@ export default function Dashboard() {
                 <Bot size={18} className="mr-2 group-hover:rotate-12 transition-transform" /> Consultar HempAI
             </Link>
         </div>
+      </div>
+
+      {/* ACCESS CARD FOR SIMPLE TRIAL MANAGER */}
+      <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 rounded-[32px] p-8 text-white shadow-xl flex items-center justify-between relative overflow-hidden group cursor-pointer hover:scale-[1.01] transition-all" onClick={() => navigate('/trials-lite')}>
+          <div className="relative z-10">
+              <div className="flex items-center gap-3 mb-2">
+                  <div className="bg-white/20 p-2 rounded-xl backdrop-blur-sm"><ClipboardList size={24}/></div>
+                  <h2 className="text-3xl font-black italic uppercase tracking-tighter">Estación de Carga Rápida</h2>
+              </div>
+              <p className="text-emerald-100 font-medium text-sm max-w-lg mb-6">
+                  Modo optimizado para tablets y móviles. Accede a la cola de trabajo priorizada y registra datos biométricos en campo con un solo toque.
+              </p>
+              <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest bg-white text-emerald-800 w-fit px-6 py-3 rounded-2xl shadow-lg border border-white/30 hover:bg-emerald-50 transition-colors">
+                  <Plus size={16}/> Iniciar Recorrida de Campo
+              </div>
+          </div>
+          <FlaskConical size={180} className="absolute -right-6 -bottom-10 text-emerald-800 opacity-20 rotate-12 group-hover:rotate-0 transition-transform duration-500"/>
+          <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-400 opacity-20 blur-[80px] rounded-full"></div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
