@@ -2,10 +2,10 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, AlertCircle, Loader2, RefreshCw, Zap, ShieldCheck } from 'lucide-react';
+import { ArrowRight, AlertCircle, Loader2, RefreshCw, Zap, ShieldCheck, Leaf } from 'lucide-react';
 
 export default function Login() {
-  const { login } = useAppContext();
+  const { login, appName, appLogo } = useAppContext();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -23,107 +23,116 @@ export default function Login() {
   };
 
   const handleForceRefresh = () => {
-      if(window.confirm("¿Forzar recarga V7.0.6?")) {
-          window.location.href = window.location.origin + '?v=706';
+      if(window.confirm("¿Forzar recarga del sistema?")) {
+          window.location.reload();
       }
   };
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row items-stretch overflow-hidden font-sans">
+    <div className="min-h-screen flex flex-col md:flex-row items-stretch overflow-hidden font-sans bg-white">
       
-      {/* Lado Izquierdo: Branding Brand Color #DDDB00 */}
-      <div className="hidden lg:flex lg:w-1/2 bg-[#DDDB00] relative p-20 flex-col justify-between overflow-hidden shadow-2xl border-r border-yellow-500/20">
+      {/* Lado Izquierdo: Branding White Background & Brand Green Typography */}
+      <div className="hidden lg:flex lg:w-3/5 bg-white relative p-20 flex-col justify-between overflow-hidden border-r border-slate-100">
           <div className="relative z-10 flex flex-col h-full justify-center">
               
-              {/* LOGO SECTION */}
-              <div className="mb-10">
-                  {/* Reemplaza este src por la ruta de tu logo, ej: "/logo.png" si está en la carpeta public */}
-                  <img 
-                    src="https://cdn-icons-png.flaticon.com/512/628/628283.png" 
-                    alt="HempC Logo" 
-                    className="h-24 w-auto object-contain mb-6 drop-shadow-sm"
-                  />
+              {/* DYNAMIC LOGO SECTION */}
+              <div className="mb-12">
+                  {appLogo ? (
+                    <img 
+                      src={appLogo} 
+                      alt={appName} 
+                      className="h-32 w-auto object-contain mb-8"
+                    />
+                  ) : (
+                    <div className="bg-[#006633] p-6 rounded-[28px] w-fit mb-8 shadow-xl shadow-green-900/20">
+                        <Leaf size={48} className="text-white" />
+                    </div>
+                  )}
                   
-                  <h1 className="text-8xl font-black text-[#006633] tracking-tighter italic uppercase leading-none drop-shadow-sm">
-                      HempC
+                  <h1 className="text-9xl font-black text-[#006633] tracking-tighter italic uppercase leading-none">
+                      {appName}
                   </h1>
               </div>
 
               <div className="space-y-8">
-                  <p className="text-[#006633] text-2xl font-black tracking-tight leading-tight max-w-lg border-l-8 border-[#006633] pl-6">
+                  <p className="text-[#006633] text-3xl font-black tracking-tight leading-tight max-w-lg border-l-8 border-[#006633] pl-8 italic">
                       Red Cooperativa de Agricultores de Cáñamo Industrial Argentina
                   </p>
                   
-                  <div className="h-px w-32 bg-[#006633] opacity-50"></div>
+                  <div className="h-1 w-48 bg-[#006633] opacity-30 rounded-full"></div>
 
-                  <h2 className="text-4xl font-black text-[#006633] leading-tight tracking-tighter uppercase italic">
+                  <h2 className="text-5xl font-black text-[#006633] leading-tight tracking-tighter uppercase italic opacity-80">
                       Plataforma Inteligente <br />
                       de trazabilidad y gestión
                   </h2>
                   
-                  <p className="text-[#006633] text-xl font-bold leading-relaxed max-w-md opacity-90">
+                  <p className="text-slate-400 text-2xl font-bold leading-relaxed max-w-md">
                       de la bio economía del Cáñamo Industrial
                   </p>
               </div>
           </div>
           
-          {/* Decorative Elements */}
-          <div className="absolute -right-20 -bottom-20 w-[600px] h-[600px] bg-white/20 rounded-full blur-[100px]"></div>
-          <div className="absolute top-20 right-20 opacity-10">
-              <Zap size={120} className="text-[#006633] rotate-12"/>
+          {/* Decorative Elements (Subtle) */}
+          <div className="absolute -right-20 -bottom-20 w-[600px] h-[600px] bg-slate-50 rounded-full blur-[120px] opacity-60"></div>
+          <div className="absolute top-20 right-20 opacity-5">
+              <Zap size={180} className="text-[#006633] rotate-12"/>
           </div>
       </div>
 
       {/* Lado Derecho: Formulario */}
-      <div className="flex-1 flex flex-col items-center justify-center p-8 md:p-16 bg-white dark:bg-slate-950 transition-colors duration-500">
-        <div className="w-full max-w-md space-y-10">
+      <div className="flex-1 flex flex-col items-center justify-center p-8 md:p-16 bg-slate-50 dark:bg-slate-950 transition-colors duration-500">
+        <div className="w-full max-w-md space-y-12">
             
             {/* Mobile Header Only */}
-            <div className="lg:hidden text-center mb-8">
-                <div className="inline-block bg-[#DDDB00] p-4 rounded-3xl mb-4 shadow-lg transform rotate-3">
-                    <h1 className="text-4xl font-black text-[#006633] italic uppercase tracking-tighter leading-none">HempC</h1>
+            <div className="lg:hidden text-center mb-12">
+                <div className="inline-block bg-white p-6 rounded-3xl mb-4 shadow-xl border border-slate-100">
+                    {appLogo ? (
+                        <img src={appLogo} alt={appName} className="h-16 object-contain" />
+                    ) : (
+                        <h1 className="text-4xl font-black text-[#006633] italic uppercase tracking-tighter leading-none">{appName}</h1>
+                    )}
                 </div>
-                <p className="text-slate-400 font-bold text-xs uppercase tracking-[0.3em]">Red Cooperativa Argentina</p>
+                <p className="text-[#006633] font-black text-xs uppercase tracking-[0.3em]">Red Cooperativa Argentina</p>
             </div>
 
-            <div className="flex justify-between items-end border-b border-slate-100 dark:border-slate-800 pb-4">
+            <div className="flex justify-between items-end border-b-2 border-white dark:border-slate-800 pb-6">
                 <div className="space-y-2">
-                    <h2 className="text-4xl font-black text-slate-900 dark:text-white uppercase tracking-tighter italic leading-none">Iniciar Sesión</h2>
-                    <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.2em] flex items-center gap-2">
-                        <ShieldCheck size={14} className="text-[#006633]"/> Acceso Seguro
+                    <h2 className="text-5xl font-black text-slate-900 dark:text-white uppercase tracking-tighter italic leading-none">Acceso</h2>
+                    <p className="text-slate-400 font-bold uppercase text-xs tracking-[0.2em] flex items-center gap-2">
+                        <ShieldCheck size={16} className="text-[#006633]"/> Nodo Nucleus Seguro
                     </p>
                 </div>
-                <button onClick={handleForceRefresh} className="p-2 text-slate-300 hover:text-slate-600 dark:hover:text-white rounded-full transition-all" title="Recargar Sistema">
-                    <RefreshCw size={18} />
+                <button onClick={handleForceRefresh} className="p-3 text-slate-300 hover:text-[#006633] dark:hover:text-white rounded-2xl bg-white dark:bg-slate-900 shadow-sm transition-all" title="Recargar Sistema">
+                    <RefreshCw size={20} />
                 </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-8">
                 {error && (
-                    <div className="bg-red-50 text-red-600 p-4 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center border border-red-100 animate-in slide-in-from-top-2">
-                        <AlertCircle size={18} className="mr-3 flex-shrink-0"/>
+                    <div className="bg-red-50 text-red-600 p-5 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center border border-red-100 animate-in slide-in-from-top-2 shadow-sm">
+                        <AlertCircle size={20} className="mr-4 flex-shrink-0"/>
                         {error}
                     </div>
                 )}
                 
-                <div className="space-y-2 group">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 group-focus-within:text-[#006633] transition-colors">Usuario / Email</label>
+                <div className="space-y-3 group">
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1 group-focus-within:text-[#006633] transition-colors">Identificador / Email</label>
                     <input 
                       required 
                       type="email" 
-                      className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl focus:ring-2 focus:ring-[#006633] outline-none transition-all text-slate-900 dark:text-white font-bold placeholder-slate-400" 
+                      className="w-full px-6 py-5 bg-white dark:bg-slate-900 border-2 border-white dark:border-slate-800 rounded-3xl focus:ring-4 focus:ring-[#006633]/10 focus:border-[#006633] outline-none transition-all text-slate-900 dark:text-white font-bold placeholder-slate-300 shadow-sm" 
                       placeholder="usuario@hempc.com.ar" 
                       value={email} 
                       onChange={e => setEmail(e.target.value)} 
                     />
                 </div>
 
-                <div className="space-y-2 group">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 group-focus-within:text-[#006633] transition-colors">Contraseña</label>
+                <div className="space-y-3 group">
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1 group-focus-within:text-[#006633] transition-colors">Contraseña Técnica</label>
                     <input 
                       required 
                       type="password" 
-                      className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl focus:ring-2 focus:ring-[#006633] outline-none transition-all text-slate-900 dark:text-white font-bold placeholder-slate-400" 
+                      className="w-full px-6 py-5 bg-white dark:bg-slate-900 border-2 border-white dark:border-slate-800 rounded-3xl focus:ring-4 focus:ring-[#006633]/10 focus:border-[#006633] outline-none transition-all text-slate-900 dark:text-white font-bold placeholder-slate-300 shadow-sm" 
                       placeholder="••••••••" 
                       value={password} 
                       onChange={e => setPassword(e.target.value)} 
@@ -133,17 +142,17 @@ export default function Login() {
                 <button 
                   type="submit" 
                   disabled={isLoading} 
-                  className="w-full bg-[#006633] hover:bg-[#004d26] text-white py-5 rounded-2xl font-black text-xs uppercase tracking-[0.3em] active:scale-[0.98] transition-all shadow-xl disabled:opacity-50 flex items-center justify-center group"
+                  className="w-full bg-[#006633] hover:bg-[#004d26] text-white py-6 rounded-[32px] font-black text-xs uppercase tracking-[0.4em] active:scale-[0.98] transition-all shadow-2xl shadow-green-900/20 disabled:opacity-50 flex items-center justify-center group"
                 >
-                    {isLoading ? <Loader2 className="animate-spin" size={20} /> : (
-                        <>Ingresar <ArrowRight size={18} className="ml-3 group-hover:translate-x-2 transition-transform" /></>
+                    {isLoading ? <Loader2 className="animate-spin" size={24} /> : (
+                        <>Ingresar <ArrowRight size={22} className="ml-4 group-hover:translate-x-3 transition-transform" /></>
                     )}
                 </button>
             </form>
 
-            <div className="pt-8 text-center">
-                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest opacity-60">
-                    &copy; 2025 PatagonianC LTDA
+            <div className="pt-12 text-center">
+                <p className="text-slate-300 text-[10px] font-bold uppercase tracking-widest">
+                    &copy; 2025 PatagonianC LTDA | Red Industrial
                 </p>
             </div>
         </div>
