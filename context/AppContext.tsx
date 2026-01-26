@@ -18,7 +18,7 @@ interface AppContextType {
   toggleTheme: () => void;
   appName: string;
   appLogo: string;
-  updateBranding: (name: string, logo: string) => void;
+  updateBranding: (name: string, logo: string) => Promise<void>;
   varieties: Variety[];
   addVariety: (v: Variety) => Promise<boolean>;
   updateVariety: (v: Variety) => Promise<boolean>;
@@ -159,7 +159,26 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                     const { data } = await supabase.from(table).select('*');
                     if(data) setter(toCamelCase(data));
                 };
+                
+                // Fetch Branding
+                const fetchSettings = async () => {
+                    try {
+                        const { data } = await supabase.from('platform_settings').select('*').maybeSingle();
+                        if (data) {
+                            if (data.app_name) {
+                                setAppName(data.app_name);
+                                localStorage.setItem('ht_app_name', data.app_name);
+                            }
+                            if (data.app_logo) {
+                                setAppLogo(data.app_logo);
+                                localStorage.setItem('ht_app_logo', data.app_logo);
+                            }
+                        }
+                    } catch(err) { console.error('Error fetching settings', err); }
+                };
+
                 await Promise.all([
+                    fetchSettings(),
                     fetchTable('users', setUsersList),
                     fetchTable('varieties', setVarieties),
                     fetchTable('locations', setLocations),
@@ -223,11 +242,24 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         });
     };
 
-    const updateBranding = (name: string, logo: string) => {
+    const updateBranding = async (name: string, logo: string) => {
         setAppName(name);
         setAppLogo(logo);
         localStorage.setItem('ht_app_name', name);
         localStorage.setItem('ht_app_logo', logo);
+        
+        try {
+            // Check if row exists (using singleton ID 1 usually, or just checking if any exist)
+            const { data } = await supabase.from('platform_settings').select('id').maybeSingle();
+            
+            if (data) {
+                await supabase.from('platform_settings').update({ app_name: name, app_logo: logo }).eq('id', data.id);
+            } else {
+                await supabase.from('platform_settings').insert({ app_name: name, app_logo: logo });
+            }
+        } catch (e) {
+            console.error("Failed to sync branding with DB", e);
+        }
     };
 
     const crud = async (table: string, item: any, action: 'insert' | 'update' | 'delete', idField = 'id') => {
