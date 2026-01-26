@@ -5,13 +5,8 @@ declare const __APP_VERSION__: string;
 declare const __API_KEY__: string;
 declare const __BUILD_TIME__: string;
 
-// Fix: Declaring process.env to support the hard requirement of process.env.API_KEY
-declare var process: {
-  env: {
-    API_KEY: string;
-    [key: string]: string;
-  };
-};
+// Fix: Removed conflicting manual declaration of 'process'.
+// It is already declared in the environment (likely via @types/node).
 
 interface ImportMetaEnv {
   readonly VITE_SUPABASE_URL: string
