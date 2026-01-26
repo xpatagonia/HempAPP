@@ -21,3 +21,6 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv
 }
+
+// Fix: Declare react-router-dom module to resolve missing exported members errors
+declare module 'react-router-dom';
