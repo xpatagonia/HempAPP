@@ -45,17 +45,14 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
 
       {/* SIDEBAR */}
       <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col transition-transform duration-300 lg:translate-x-0 ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="h-20 flex items-center justify-between px-8 border-b border-slate-100 dark:border-slate-800 relative overflow-hidden">
-          <div className="flex items-center space-x-3 relative z-10">
-             <div className="bg-hemp-600 p-2 rounded-xl text-white shadow-lg shadow-hemp-600/30 overflow-hidden flex items-center justify-center min-w-[38px] min-h-[38px]">
-                {appLogo ? <img src={appLogo} alt="Logo" className="w-full h-full object-contain" /> : <Leaf size={22} />}
+        <div className="h-24 flex items-center justify-between px-6 border-b border-slate-100 dark:border-slate-800 relative overflow-hidden">
+          <div className="flex items-center space-x-3 relative z-10 w-full">
+             <div className="bg-white dark:bg-slate-800 p-2 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm overflow-hidden flex items-center justify-center min-w-[48px] h-[48px]">
+                {appLogo ? <img src={appLogo} alt="Logo" className="w-full h-full object-contain" /> : <Leaf size={24} className="text-hemp-600" />}
              </div>
-             <span className="text-2xl font-black tracking-tighter text-slate-900 dark:text-white truncate" title={appName}>{appName}</span>
+             <span className="text-xl font-black tracking-tighter text-slate-900 dark:text-white truncate uppercase italic" title={appName}>{appName}</span>
           </div>
-          <button className="lg:hidden relative z-10" onClick={() => setIsMobileOpen(false)}><X size={20} className="text-slate-400"/></button>
-          
-          {/* Version Indicator */}
-          <div className="absolute top-0 right-0 bg-blue-600 text-white text-[8px] font-black px-2 py-0.5 rounded-bl-lg z-20">V7.0.6</div>
+          <button className="lg:hidden relative z-10 p-2 text-slate-400" onClick={() => setIsMobileOpen(false)}><X size={20}/></button>
         </div>
 
         <nav className="flex-1 px-4 py-8 space-y-1 overflow-y-auto custom-scrollbar">
@@ -91,11 +88,6 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
           <div className="pt-8 pb-3 px-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Sistema</div>
           <NavItem to="/analytics" icon={BarChart3} label="Comparativa Genética" />
           <NavItem to="/integrity" icon={ShieldAlert} label="Integridad Datos" />
-          
-          {/* SNAPSHOT SHORTCUT */}
-          {currentUser.role === 'super_admin' && (
-             <NavItem to="/settings" icon={DownloadCloud} label="Backup & Snapshot" special={true} />
-          )}
           
           {!isClient && <NavItem to="/users" icon={Users} label="Equipo" />}
           {currentUser.role === 'super_admin' && <NavItem to="/settings" icon={Settings} label="Admin Server" />}
