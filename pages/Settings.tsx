@@ -1,10 +1,9 @@
-
 import React, { useState, useRef } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { 
   Save, Database, RefreshCw, Lock, Settings as SettingsIcon, 
   Trash2, RotateCcw, Shield, Image as ImageIcon,
-  AlertTriangle, CheckCircle, XCircle, Info, FileCode, Server, DownloadCloud, Archive, Upload, Palette
+  AlertTriangle, CheckCircle, XCircle, Info, FileCode, Server, DownloadCloud, Archive, Upload, Palette, Loader2
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
@@ -12,6 +11,7 @@ export default function Settings() {
   const { currentUser, appName, appLogo, updateBranding } = useAppContext();
   const [activeTab, setActiveTab] = useState<'branding' | 'system' | 'maintenance'>('branding');
   const [isBackingUp, setIsBackingUp] = useState(false);
+  const [isSavingBranding, setIsSavingBranding] = useState(false);
   const [tempName, setTempName] = useState(appName);
   const [tempLogo, setTempLogo] = useState(appLogo);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -46,9 +46,14 @@ export default function Settings() {
     }
   };
 
-  const handleSaveBranding = () => {
-    updateBranding(tempName, tempLogo);
-    alert("✅ Identidad visual actualizada correctamente.");
+  const handleSaveBranding = async () => {
+    setIsSavingBranding(true);
+    try {
+        await updateBranding(tempName, tempLogo);
+        alert("✅ Identidad visual actualizada correctamente en la red.");
+    } finally {
+        setIsSavingBranding(false);
+    }
   };
 
   const handleFullBackup = async () => {
@@ -58,7 +63,7 @@ export default function Settings() {
               'users', 'projects', 'varieties', 'locations', 'plots', 
               'trial_records', 'field_logs', 'tasks', 'seed_batches', 
               'seed_movements', 'suppliers', 'clients', 'resources', 
-              'storage_points', 'hydric_records'
+              'storage_points', 'hydric_records', 'platform_settings'
           ];
           const backupData: any = { timestamp: new Date().toISOString(), appName, version: appVersion, data: {} };
           for (const table of tables) {
@@ -136,8 +141,9 @@ export default function Settings() {
                       </div>
                   </div>
                   <div className="mt-8 pt-6 border-t dark:border-slate-800 flex justify-end">
-                      <button onClick={handleSaveBranding} className="bg-hemp-600 text-white px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg hover:bg-hemp-700 transition">
-                          <Save size={16} className="mr-2 inline"/> Aplicar Identidad
+                      <button onClick={handleSaveBranding} disabled={isSavingBranding} className="bg-hemp-600 text-white px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg hover:bg-hemp-700 transition flex items-center disabled:opacity-50">
+                          {isSavingBranding ? <Loader2 size={16} className="animate-spin mr-2"/> : <Save size={16} className="mr-2"/>}
+                          Aplicar Identidad
                       </button>
                   </div>
               </div>
