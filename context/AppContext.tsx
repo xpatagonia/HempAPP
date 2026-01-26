@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase, checkConnection } from '../supabaseClient';
 import { 
@@ -8,7 +7,6 @@ import {
 } from '../types';
 
 interface AppContextType {
-  // User & Auth
   currentUser: User | null;
   usersList: User[];
   login: (email: string, password: string) => Promise<boolean>;
@@ -16,85 +14,66 @@ interface AppContextType {
   addUser: (user: User) => Promise<boolean>;
   updateUser: (user: User) => Promise<boolean>;
   deleteUser: (id: string) => Promise<boolean>;
-
-  // Theme & Branding
   theme: 'light' | 'dark';
   toggleTheme: () => void;
   appName: string;
   appLogo: string;
   updateBranding: (name: string, logo: string) => void;
-
-  // Domain Entities
   varieties: Variety[];
   addVariety: (v: Variety) => Promise<boolean>;
   updateVariety: (v: Variety) => Promise<boolean>;
   deleteVariety: (id: string) => Promise<boolean>;
-
   locations: Location[];
   addLocation: (l: Location) => Promise<boolean>;
   updateLocation: (l: Location) => Promise<boolean>;
   deleteLocation: (id: string) => Promise<boolean>;
-
   plots: Plot[];
   addPlot: (p: Plot) => Promise<boolean>;
   updatePlot: (p: Plot) => Promise<boolean>;
   deletePlot: (id: string) => Promise<boolean>;
-
   trialRecords: TrialRecord[];
   getPlotHistory: (plotId: string) => TrialRecord[];
   getLatestRecord: (plotId: string) => TrialRecord | undefined;
   addTrialRecord: (r: TrialRecord) => Promise<boolean>;
   updateTrialRecord: (r: TrialRecord) => Promise<boolean>;
   deleteTrialRecord: (id: string) => Promise<boolean>;
-
   tasks: Task[];
   addTask: (t: Task) => Promise<boolean>;
   updateTask: (t: Task) => Promise<boolean>;
   deleteTask: (id: string) => Promise<boolean>;
-
   projects: Project[];
   addProject: (p: Project) => Promise<boolean>;
   updateProject: (p: Project) => Promise<boolean>;
   deleteProject: (id: string) => Promise<boolean>;
-
   clients: Client[];
   addClient: (c: Client, teamIds?: string[]) => Promise<boolean>;
   updateClient: (c: Client, teamIds?: string[]) => Promise<boolean>;
   deleteClient: (id: string) => Promise<boolean>;
-
   suppliers: Supplier[];
   addSupplier: (s: Supplier) => Promise<string | null>;
   updateSupplier: (s: Supplier) => Promise<boolean>;
   deleteSupplier: (id: string) => Promise<boolean>;
-
   seedBatches: SeedBatch[];
   addSeedBatch: (b: SeedBatch) => Promise<boolean>;
   updateSeedBatch: (b: SeedBatch) => Promise<boolean>;
   deleteSeedBatch: (id: string) => Promise<boolean>;
-
   seedMovements: SeedMovement[];
   addSeedMovement: (m: SeedMovement) => Promise<boolean>;
   updateSeedMovement: (m: SeedMovement) => Promise<boolean>;
-
   resources: Resource[];
   addResource: (r: Resource) => Promise<boolean>;
   updateResource: (r: Resource) => Promise<boolean>;
   deleteResource: (id: string) => Promise<boolean>;
-
   storagePoints: StoragePoint[];
   addStoragePoint: (s: StoragePoint) => Promise<boolean>;
   updateStoragePoint: (s: StoragePoint) => Promise<boolean>;
   deleteStoragePoint: (id: string) => Promise<boolean>;
-
   hydricRecords: HydricRecord[];
   addHydricRecord: (r: HydricRecord) => Promise<boolean>;
   deleteHydricRecord: (id: string) => Promise<boolean>;
-
   logs: FieldLog[];
   addLog: (l: FieldLog) => Promise<boolean>;
   deleteLog: (id: string) => Promise<boolean>;
-
-  // System
   isRefreshing: boolean;
   refreshData: () => Promise<void>;
 }
@@ -164,6 +143,13 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         }
     }, []);
 
+    // Efecto para sincronizar metadatos del DOM con el Branding
+    useEffect(() => {
+        document.title = `${appName} | Nucleus Trace`;
+        const metaTheme = document.querySelector('meta[name="theme-color"]');
+        if (metaTheme) metaTheme.setAttribute('content', '#DDDB00');
+    }, [appName]);
+
     const refreshData = async () => {
         setIsRefreshing(true);
         try {
@@ -221,12 +207,6 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 return true; 
             }
         } catch (e) {}
-        const localUser = usersList.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
-        if (localUser) {
-            setCurrentUser(localUser);
-            localStorage.setItem('ht_session_user', JSON.stringify(localUser));
-            return true;
-        }
         return false;
     };
 
@@ -277,8 +257,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
     return (
         <AppContext.Provider value={{
-            currentUser, usersList, login, logout,
-            // Added missing user management methods to satisfy AppContextType interface
+            currentUser, usersList, login, logout, 
             addUser: (user: User) => crud('users', user, 'insert'),
             updateUser: (user: User) => crud('users', user, 'update'),
             deleteUser: (id: string) => crud('users', id, 'delete'),
