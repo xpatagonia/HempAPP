@@ -31,8 +31,8 @@ export default function Login() {
   return (
     <div className="min-h-screen flex flex-col md:flex-row items-stretch overflow-hidden font-sans bg-white">
       
-      {/* Lado Izquierdo: Branding White Background & Brand Green Typography */}
-      <div className="hidden lg:flex lg:w-3/5 bg-white relative p-20 flex-col justify-between overflow-hidden border-r border-slate-100">
+      {/* Lado Izquierdo: Branding con fondo solicitado #DDDB00 */}
+      <div className="hidden lg:flex lg:w-3/5 bg-[#DDDB00] relative p-20 flex-col justify-between overflow-hidden border-r border-yellow-500/20 shadow-inner">
           <div className="relative z-10 flex flex-col h-full justify-center">
               
               {/* DYNAMIC LOGO SECTION */}
@@ -41,15 +41,15 @@ export default function Login() {
                     <img 
                       src={appLogo} 
                       alt={appName} 
-                      className="h-32 w-auto object-contain mb-8"
+                      className="h-32 w-auto object-contain mb-8 drop-shadow-sm"
                     />
                   ) : (
-                    <div className="bg-[#006633] p-6 rounded-[28px] w-fit mb-8 shadow-xl shadow-green-900/20">
+                    <div className="bg-[#006633] p-6 rounded-[28px] w-fit mb-8 shadow-xl shadow-green-900/30">
                         <Leaf size={48} className="text-white" />
                     </div>
                   )}
                   
-                  <h1 className="text-9xl font-black text-[#006633] tracking-tighter italic uppercase leading-none">
+                  <h1 className="text-9xl font-black text-[#006633] tracking-tighter italic uppercase leading-none drop-shadow-sm">
                       {appName}
                   </h1>
               </div>
@@ -61,31 +61,31 @@ export default function Login() {
                   
                   <div className="h-1 w-48 bg-[#006633] opacity-30 rounded-full"></div>
 
-                  <h2 className="text-5xl font-black text-[#006633] leading-tight tracking-tighter uppercase italic opacity-80">
+                  <h2 className="text-5xl font-black text-[#006633] leading-tight tracking-tighter uppercase italic opacity-90">
                       Plataforma Inteligente <br />
                       de trazabilidad y gestión
                   </h2>
                   
-                  <p className="text-slate-400 text-2xl font-bold leading-relaxed max-w-md">
+                  <p className="text-[#006633]/70 text-2xl font-bold leading-relaxed max-w-md">
                       de la bio economía del Cáñamo Industrial
                   </p>
               </div>
           </div>
           
           {/* Decorative Elements (Subtle) */}
-          <div className="absolute -right-20 -bottom-20 w-[600px] h-[600px] bg-slate-50 rounded-full blur-[120px] opacity-60"></div>
-          <div className="absolute top-20 right-20 opacity-5">
+          <div className="absolute -right-20 -bottom-20 w-[600px] h-[600px] bg-white/20 rounded-full blur-[120px] opacity-60"></div>
+          <div className="absolute top-20 right-20 opacity-10">
               <Zap size={180} className="text-[#006633] rotate-12"/>
           </div>
       </div>
 
-      {/* Lado Derecho: Formulario */}
-      <div className="flex-1 flex flex-col items-center justify-center p-8 md:p-16 bg-slate-50 dark:bg-slate-950 transition-colors duration-500">
+      {/* Lado Derecho: Formulario con fondo Blanco */}
+      <div className="flex-1 flex flex-col items-center justify-center p-8 md:p-16 bg-white dark:bg-slate-950 transition-colors duration-500">
         <div className="w-full max-w-md space-y-12">
             
             {/* Mobile Header Only */}
             <div className="lg:hidden text-center mb-12">
-                <div className="inline-block bg-white p-6 rounded-3xl mb-4 shadow-xl border border-slate-100">
+                <div className="inline-block bg-[#DDDB00] p-6 rounded-3xl mb-4 shadow-xl border border-yellow-400/30">
                     {appLogo ? (
                         <img src={appLogo} alt={appName} className="h-16 object-contain" />
                     ) : (
@@ -95,14 +95,14 @@ export default function Login() {
                 <p className="text-[#006633] font-black text-xs uppercase tracking-[0.3em]">Red Cooperativa Argentina</p>
             </div>
 
-            <div className="flex justify-between items-end border-b-2 border-white dark:border-slate-800 pb-6">
+            <div className="flex justify-between items-end border-b-2 border-slate-50 dark:border-slate-800 pb-6">
                 <div className="space-y-2">
                     <h2 className="text-5xl font-black text-slate-900 dark:text-white uppercase tracking-tighter italic leading-none">Acceso</h2>
                     <p className="text-slate-400 font-bold uppercase text-xs tracking-[0.2em] flex items-center gap-2">
                         <ShieldCheck size={16} className="text-[#006633]"/> Nodo Nucleus Seguro
                     </p>
                 </div>
-                <button onClick={handleForceRefresh} className="p-3 text-slate-300 hover:text-[#006633] dark:hover:text-white rounded-2xl bg-white dark:bg-slate-900 shadow-sm transition-all" title="Recargar Sistema">
+                <button onClick={handleForceRefresh} className="p-3 text-slate-300 hover:text-[#006633] dark:hover:text-white rounded-2xl bg-slate-50 dark:bg-slate-900 shadow-sm transition-all" title="Recargar Sistema">
                     <RefreshCw size={20} />
                 </button>
             </div>
@@ -120,7 +120,7 @@ export default function Login() {
                     <input 
                       required 
                       type="email" 
-                      className="w-full px-6 py-5 bg-white dark:bg-slate-900 border-2 border-white dark:border-slate-800 rounded-3xl focus:ring-4 focus:ring-[#006633]/10 focus:border-[#006633] outline-none transition-all text-slate-900 dark:text-white font-bold placeholder-slate-300 shadow-sm" 
+                      className="w-full px-6 py-5 bg-slate-50 dark:bg-slate-900 border-2 border-slate-50 dark:border-slate-800 rounded-3xl focus:ring-4 focus:ring-[#006633]/10 focus:border-[#006633] outline-none transition-all text-slate-900 dark:text-white font-bold placeholder-slate-300 shadow-sm" 
                       placeholder="usuario@hempc.com.ar" 
                       value={email} 
                       onChange={e => setEmail(e.target.value)} 
@@ -132,7 +132,7 @@ export default function Login() {
                     <input 
                       required 
                       type="password" 
-                      className="w-full px-6 py-5 bg-white dark:bg-slate-900 border-2 border-white dark:border-slate-800 rounded-3xl focus:ring-4 focus:ring-[#006633]/10 focus:border-[#006633] outline-none transition-all text-slate-900 dark:text-white font-bold placeholder-slate-300 shadow-sm" 
+                      className="w-full px-6 py-5 bg-slate-50 dark:bg-slate-900 border-2 border-slate-50 dark:border-slate-800 rounded-3xl focus:ring-4 focus:ring-[#006633]/10 focus:border-[#006633] outline-none transition-all text-slate-900 dark:text-white font-bold placeholder-slate-300 shadow-sm" 
                       placeholder="••••••••" 
                       value={password} 
                       onChange={e => setPassword(e.target.value)} 
