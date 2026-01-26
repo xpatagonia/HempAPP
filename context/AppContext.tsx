@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase, checkConnection } from '../supabaseClient';
 import { 
@@ -106,7 +107,6 @@ export const useAppContext = () => {
   return context;
 };
 
-// Utility to convert snake_case (DB) to camelCase (App)
 const toCamelCase = (obj: any): any => {
   if (Array.isArray(obj)) return obj.map(v => toCamelCase(v));
   if (obj !== null && obj.constructor === Object) {
@@ -119,13 +119,12 @@ const toCamelCase = (obj: any): any => {
   return obj;
 };
 
-// Utility to convert camelCase (App) to snake_case (DB)
 const toSnakeCase = (obj: any): any => {
     if (Array.isArray(obj)) return obj.map(v => toSnakeCase(v));
     if (obj !== null && obj.constructor === Object) {
         return Object.keys(obj).reduce((result, key) => {
             const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
-            result[snakeKey] = toSnakeCase(obj[key]); // Recursively handle objects
+            result[snakeKey] = toSnakeCase(obj[key]);
             return result;
         }, {} as any);
     }
@@ -133,14 +132,12 @@ const toSnakeCase = (obj: any): any => {
 }
 
 export const AppProvider = ({ children }: { children?: ReactNode }) => {
-    // State definitions
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [theme, setTheme] = useState<'light'|'dark'>('light');
-    const [appName, setAppName] = useState('HempC');
-    const [appLogo, setAppLogo] = useState('');
+    const [appName, setAppName] = useState(localStorage.getItem('ht_app_name') || 'HempC');
+    const [appLogo, setAppLogo] = useState(localStorage.getItem('ht_app_logo') || '');
     const [isRefreshing, setIsRefreshing] = useState(false);
 
-    // Data States
     const [usersList, setUsersList] = useState<User[]>([]);
     const [varieties, setVarieties] = useState<Variety[]>([]);
     const [locations, setLocations] = useState<Location[]>([]);
@@ -157,35 +154,25 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     const [hydricRecords, setHydricRecords] = useState<HydricRecord[]>([]);
     const [logs, setLogs] = useState<FieldLog[]>([]);
 
-    // Effects for initial load and auth check
     useEffect(() => {
         const storedUser = localStorage.getItem('ht_session_user');
-        if (storedUser) {
-            setCurrentUser(JSON.parse(storedUser));
-        }
-        
-        // Initial data load
+        if (storedUser) setCurrentUser(JSON.parse(storedUser));
         refreshData();
-        
-        // Check theme
         if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
             setTheme('dark');
             document.documentElement.classList.add('dark');
         }
     }, []);
 
-    // Refresh Data Function
     const refreshData = async () => {
         setIsRefreshing(true);
         try {
-            // Check connection
             const connected = await checkConnection();
             if (connected) {
                 const fetchTable = async (table: string, setter: any) => {
                     const { data } = await supabase.from(table).select('*');
                     if(data) setter(toCamelCase(data));
                 };
-
                 await Promise.all([
                     fetchTable('users', setUsersList),
                     fetchTable('varieties', setVarieties),
@@ -203,8 +190,6 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                     fetchTable('hydric_records', setHydricRecords),
                     fetchTable('field_logs', setLogs),
                 ]);
-            } else {
-                console.warn("Using local data or no connection available");
             }
         } catch(e) {
             console.error("Data refresh failed", e);
@@ -213,9 +198,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         }
     };
 
-    // Implement Login
     const login = async (email: string, password: string): Promise<boolean> => {
-        // Credenciales Maestras
         if (email.toLowerCase() === 'admin@hempc.com.ar' && password === '@Admin130126@') {
             const rootUser: User = { 
                 id: 'root-user', 
@@ -229,7 +212,6 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             localStorage.setItem('ht_session_user', JSON.stringify(rootUser));
             return true;
         }
-        
         try {
             const { data, error } = await supabase.from('users').select('*').eq('email', email).eq('password', password).maybeSingle();
             if (!error && data) {
@@ -238,9 +220,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 localStorage.setItem('ht_session_user', JSON.stringify(mappedUser)); 
                 return true; 
             }
-        } catch (e) { console.error("DB Login failed"); }
-        
-        // Fallback local users check
+        } catch (e) {}
         const localUser = usersList.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
         if (localUser) {
             setCurrentUser(localUser);
@@ -266,22 +246,15 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     const updateBranding = (name: string, logo: string) => {
         setAppName(name);
         setAppLogo(logo);
+        localStorage.setItem('ht_app_name', name);
+        localStorage.setItem('ht_app_logo', logo);
     };
 
-    // Generic CRUD Helper
     const crud = async (table: string, item: any, action: 'insert' | 'update' | 'delete', idField = 'id') => {
         try {
-            // Remove helper fields for DB operation if necessary
-            // For now assuming items are clean or we clean explicitly inside specific functions if complex
             let payload = item;
-            if (action !== 'delete') {
-                payload = toSnakeCase(item);
-            } else {
-                // For delete, item is the ID string
-            }
-
+            if (action !== 'delete') payload = toSnakeCase(item);
             let error;
-            
             if (action === 'insert') {
                 const res = await supabase.from(table).insert([payload]);
                 error = res.error;
@@ -289,106 +262,45 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 const res = await supabase.from(table).update(payload).eq(idField, item[idField]);
                 error = res.error;
             } else if (action === 'delete') {
-                const res = await supabase.from(table).delete().eq(idField, item); // item is id here
+                const res = await supabase.from(table).delete().eq(idField, item);
                 error = res.error;
             }
-
             if (!error) {
-                await refreshData(); // Refresh all data to sync state
+                await refreshData();
                 return true;
             }
-            console.error(`Supabase ${action} ${table} error:`, error);
             return false;
         } catch (e) {
-            console.error(`CRUD ${action} ${table} exception:`, e);
             return false;
         }
     };
 
-    const value: AppContextType = {
-        currentUser, usersList, login, logout, 
-        theme, toggleTheme, appName, appLogo, updateBranding,
-        
-        addUser: async (u) => crud('users', u, 'insert'),
-        updateUser: async (u) => crud('users', u, 'update'),
-        deleteUser: async (id) => crud('users', id, 'delete'),
-
-        varieties,
-        addVariety: async (v) => crud('varieties', v, 'insert'),
-        updateVariety: async (v) => crud('varieties', v, 'update'),
-        deleteVariety: async (id) => crud('varieties', id, 'delete'),
-
-        locations,
-        addLocation: async (l) => crud('locations', l, 'insert'),
-        updateLocation: async (l) => crud('locations', l, 'update'),
-        deleteLocation: async (id) => crud('locations', id, 'delete'),
-
-        plots,
-        addPlot: async (p) => crud('plots', p, 'insert'),
-        updatePlot: async (p) => crud('plots', p, 'update'),
-        deletePlot: async (id) => crud('plots', id, 'delete'),
-
-        trialRecords,
-        getPlotHistory: (pid) => trialRecords.filter(r => r.plotId === pid),
-        getLatestRecord: (pid) => trialRecords.filter(r => r.plotId === pid).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0],
-        addTrialRecord: async (r) => crud('trial_records', r, 'insert'),
-        updateTrialRecord: async (r) => crud('trial_records', r, 'update'),
-        deleteTrialRecord: async (id) => crud('trial_records', id, 'delete'),
-
-        tasks,
-        addTask: async (t) => crud('tasks', t, 'insert'),
-        updateTask: async (t) => crud('tasks', t, 'update'),
-        deleteTask: async (id) => crud('tasks', id, 'delete'),
-
-        projects,
-        addProject: async (p) => crud('projects', p, 'insert'),
-        updateProject: async (p) => crud('projects', p, 'update'),
-        deleteProject: async (id) => crud('projects', id, 'delete'),
-
-        clients,
-        addClient: async (c, tIds) => { 
-            const success = await crud('clients', c, 'insert');
-            // If we needed to handle team assignments, we would do it here
-            return success; 
-        },
-        updateClient: async (c, tIds) => crud('clients', c, 'update'),
-        deleteClient: async (id) => crud('clients', id, 'delete'),
-
-        suppliers,
-        addSupplier: async (s) => { const r = await crud('suppliers', s, 'insert'); return r ? s.id : null; },
-        updateSupplier: async (s) => crud('suppliers', s, 'update'),
-        deleteSupplier: async (id) => crud('suppliers', id, 'delete'),
-
-        seedBatches,
-        addSeedBatch: async (b) => crud('seed_batches', b, 'insert'),
-        updateSeedBatch: async (b) => crud('seed_batches', b, 'update'),
-        deleteSeedBatch: async (id) => crud('seed_batches', id, 'delete'),
-
-        seedMovements,
-        addSeedMovement: async (m) => crud('seed_movements', m, 'insert'),
-        updateSeedMovement: async (m) => crud('seed_movements', m, 'update'),
-
-        resources,
-        addResource: async (r) => crud('resources', r, 'insert'),
-        updateResource: async (r) => crud('resources', r, 'update'),
-        deleteResource: async (id) => crud('resources', id, 'delete'),
-
-        storagePoints,
-        addStoragePoint: async (s) => crud('storage_points', s, 'insert'),
-        updateStoragePoint: async (s) => crud('storage_points', s, 'update'),
-        deleteStoragePoint: async (id) => crud('storage_points', id, 'delete'),
-
-        hydricRecords,
-        addHydricRecord: async (r) => crud('hydric_records', r, 'insert'),
-        deleteHydricRecord: async (id) => crud('hydric_records', id, 'delete'),
-
-        logs,
-        addLog: async (l) => crud('field_logs', l, 'insert'),
-        deleteLog: async (id) => crud('field_logs', id, 'delete'),
-
-        isRefreshing,
-        refreshData
-    };
-
-    return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+    return (
+        <AppContext.Provider value={{
+            currentUser, usersList, login, logout,
+            // Added missing user management methods to satisfy AppContextType interface
+            addUser: (user: User) => crud('users', user, 'insert'),
+            updateUser: (user: User) => crud('users', user, 'update'),
+            deleteUser: (id: string) => crud('users', id, 'delete'),
+            theme, toggleTheme, appName, appLogo, updateBranding,
+            varieties, addVariety: (v) => crud('varieties', v, 'insert'), updateVariety: (v) => crud('varieties', v, 'update'), deleteVariety: (id) => crud('varieties', id, 'delete'),
+            locations, addLocation: (l) => crud('locations', l, 'insert'), updateLocation: (l) => crud('locations', l, 'update'), deleteLocation: (id) => crud('locations', id, 'delete'),
+            plots, addPlot: (p) => crud('plots', p, 'insert'), updatePlot: (p) => crud('plots', p, 'update'), deletePlot: (id) => crud('plots', id, 'delete'),
+            trialRecords, getPlotHistory: (pid) => trialRecords.filter(r => r.plotId === pid), getLatestRecord: (pid) => trialRecords.filter(r => r.plotId === pid).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0],
+            addTrialRecord: (r) => crud('trial_records', r, 'insert'), updateTrialRecord: (r) => crud('trial_records', r, 'update'), deleteTrialRecord: (id) => crud('trial_records', id, 'delete'),
+            tasks, addTask: (t) => crud('tasks', t, 'insert'), updateTask: (t) => crud('tasks', t, 'update'), deleteTask: (id) => crud('tasks', id, 'delete'),
+            projects, addProject: (p) => crud('projects', p, 'insert'), updateProject: (p) => crud('projects', p, 'update'), deleteProject: (id) => crud('projects', id, 'delete'),
+            clients, addClient: (c) => crud('clients', c, 'insert'), updateClient: (c) => crud('clients', c, 'update'), deleteClient: (id) => crud('clients', id, 'delete'),
+            suppliers, addSupplier: async (s) => { const r = await crud('suppliers', s, 'insert'); return r ? s.id : null; }, updateSupplier: (s) => crud('suppliers', s, 'update'), deleteSupplier: (id) => crud('suppliers', id, 'delete'),
+            seedBatches, addSeedBatch: (b) => crud('seed_batches', b, 'insert'), updateSeedBatch: (b) => crud('seed_batches', b, 'update'), deleteSeedBatch: (id) => crud('seed_batches', id, 'delete'),
+            seedMovements, addSeedMovement: (m) => crud('seed_movements', m, 'insert'), updateSeedMovement: (m) => crud('seed_movements', m, 'update'),
+            resources, addResource: (r) => crud('resources', r, 'insert'), updateResource: (r) => crud('resources', r, 'update'), deleteResource: (id) => crud('resources', id, 'delete'),
+            storagePoints, addStoragePoint: (s) => crud('storage_points', s, 'insert'), updateStoragePoint: (s) => crud('storage_points', s, 'update'), deleteStoragePoint: (id) => crud('storage_points', id, 'delete'),
+            hydricRecords, addHydricRecord: (r) => crud('hydric_records', r, 'insert'), deleteHydricRecord: (id) => crud('hydric_records', id, 'delete'),
+            logs, addLog: (l) => crud('field_logs', l, 'insert'), deleteLog: (id) => crud('field_logs', id, 'delete'),
+            isRefreshing, refreshData
+        }}>
+            {children}
+        </AppContext.Provider>
+    );
 };
