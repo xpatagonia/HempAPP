@@ -1,8 +1,7 @@
-
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, AlertCircle, Loader2, RefreshCw, Zap, ShieldCheck, Leaf } from 'lucide-react';
+import { ArrowRight, AlertCircle, Loader2, RefreshCw, Zap, ShieldCheck, Leaf, Smartphone } from 'lucide-react';
 
 export default function Login() {
   const { login, appName, appLogo } = useAppContext();
@@ -11,6 +10,9 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  // Get current URL for QR Code
+  const currentUrl = window.location.origin;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,10 +73,32 @@ export default function Login() {
                   </p>
               </div>
           </div>
+
+          {/* QR CODE SECTION (NEW) */}
+          <div className="absolute bottom-12 left-20 z-20 animate-in slide-in-from-bottom-6 duration-1000">
+              <div className="bg-white/20 backdrop-blur-md border border-white/40 p-4 rounded-3xl flex items-center gap-5 shadow-xl max-w-sm">
+                  <div className="bg-white p-2 rounded-2xl shadow-inner">
+                      <img 
+                          src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(currentUrl)}`} 
+                          alt="Mobile Login QR" 
+                          className="w-20 h-20 mix-blend-multiply opacity-90"
+                      />
+                  </div>
+                  <div>
+                      <div className="flex items-center gap-2 mb-1 text-[#006633]">
+                          <Smartphone size={18} />
+                          <p className="font-black text-xs uppercase tracking-widest">Mobile Access</p>
+                      </div>
+                      <p className="text-[#006633] text-[10px] font-bold leading-tight max-w-[140px]">
+                          Escanea para operar la estación de campo desde tu celular.
+                      </p>
+                  </div>
+              </div>
+          </div>
           
           {/* Decorative Elements (Subtle) */}
-          <div className="absolute -right-20 -bottom-20 w-[600px] h-[600px] bg-white/20 rounded-full blur-[120px] opacity-60"></div>
-          <div className="absolute top-20 right-20 opacity-10">
+          <div className="absolute -right-20 -bottom-20 w-[600px] h-[600px] bg-white/20 rounded-full blur-[120px] opacity-60 pointer-events-none"></div>
+          <div className="absolute top-20 right-20 opacity-10 pointer-events-none">
               <Zap size={180} className="text-[#006633] rotate-12"/>
           </div>
       </div>
