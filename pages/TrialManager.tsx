@@ -37,7 +37,8 @@ export default function TrialManager() {
           
           const lastRecord = pRecords[0];
           const lastDate = lastRecord ? new Date(lastRecord.date).getTime() : 0;
-          const daysSince = lastRecord ? Math.floor((Date.now() - lastDate) / (1000 * 60 * 60 * 24)) : 999; // 999 si nunca se visitó
+          // Si nunca se visitó, ponemos un número alto de días
+          const daysSince = lastRecord ? Math.floor((Date.now() - lastDate) / (1000 * 60 * 60 * 24)) : 999; 
           
           return {
               plot: p,
