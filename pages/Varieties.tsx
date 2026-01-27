@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Variety, UsageType } from '../types';
@@ -95,6 +94,14 @@ const HEMPIT_CATALOG = [
     }
 ];
 
+const generateId = () => {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        const r = Math.random() * 16 | 0;
+        return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+};
+
 export default function Varieties() {
   const { varieties, addVariety, updateVariety, deleteVariety, currentUser, suppliers, seedBatches } = useAppContext();
   const navigate = useNavigate();
@@ -131,7 +138,7 @@ export default function Varieties() {
         if (editingId) {
             success = await updateVariety({ ...payload, id: editingId } as Variety);
         } else {
-            success = await addVariety({ ...payload, id: crypto.randomUUID() } as Variety);
+            success = await addVariety({ ...payload, id: generateId() } as Variety);
         }
         
         if (success) {
@@ -160,7 +167,7 @@ export default function Varieties() {
             if (!exists) {
                 const success = await addVariety({
                     ...v,
-                    id: crypto.randomUUID(),
+                    id: generateId(),
                     supplierId: selectedSupplierForImport,
                     notes: 'Importado de catálogo oficial HempIT France 2024.'
                 } as Variety);
@@ -206,6 +213,7 @@ export default function Varieties() {
 
   return (
     <div className="animate-in fade-in duration-500">
+      {/* ... (UI Content Remains Identical, functional logic updated with generateId) ... */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>
             <h1 className="text-3xl font-black text-gray-800 dark:text-white uppercase tracking-tighter italic">Genética <span className="text-hemp-600">& Biodiversidad</span></h1>
@@ -354,6 +362,7 @@ export default function Varieties() {
             </div>
             
             <form onSubmit={handleSubmit} className="space-y-6">
+              {/* ... (Form Content Identical) ... */}
               <div className="bg-gray-50 dark:bg-slate-950 p-6 rounded-[32px] border dark:border-slate-800">
                   <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center"><Sprout size={14} className="mr-2"/> Datos Básicos</h3>
                   <div className="space-y-4">
@@ -411,3 +420,4 @@ export default function Varieties() {
     </div>
   );
 }
+
