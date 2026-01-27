@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
@@ -11,9 +10,9 @@ import {
 } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
 
-// Algoritmo de cálculo de área geodésica (Shoelace en esfera)
+// Algoritmo de cálculo de área geodésica
 const calculateGeodesicArea = (latLngs: { lat: number, lng: number }[]) => {
-    const R = 6378137; // Radio tierra en metros
+    const R = 6378137; 
     const toRad = (x: number) => x * Math.PI / 180;
     let area = 0;
     
@@ -25,43 +24,44 @@ const calculateGeodesicArea = (latLngs: { lat: number, lng: number }[]) => {
         }
         area = area * R * R / 2.0;
     }
-    return Math.abs(area); // Metros cuadrados
+    return Math.abs(area); 
 };
 
 const parseKML = (kmlText: string): { lat: number, lng: number }[] | null => {
     try {
         const parser = new DOMParser();
         const xmlDoc = parser.parseFromString(kmlText, "text/xml");
-        
-        // Buscar coordenadas en Placemark -> Polygon
         const coordinates = xmlDoc.getElementsByTagName("coordinates");
         let coordsText = "";
-        
-        // Intentar encontrar el polígono más grande si hay varios
         for(let i=0; i<coordinates.length; i++) {
             const text = coordinates[i].textContent || "";
             if(text.length > coordsText.length) coordsText = text;
         }
-
         if (!coordsText) return null;
-
         const rawPoints = coordsText.trim().split(/\s+/);
         const latLngs = rawPoints.map(point => {
             const parts = point.split(',');
             if (parts.length >= 2) {
-                // KML es Longitud, Latitud, Altitud
                 const lng = parseFloat(parts[0]);
                 const lat = parseFloat(parts[1]);
                 if (!isNaN(lat) && !isNaN(lng)) return { lat, lng };
             }
             return null;
         }).filter((p): p is { lat: number, lng: number } => p !== null);
-
         return latLngs.length >= 3 ? latLngs : null;
     } catch (e) {
         console.error("Error parsing KML", e);
         return null;
     }
+};
+
+// Generador ID Compatible
+const generateId = () => {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        const r = Math.random() * 16 | 0;
+        return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
 };
 
 type MassUnit = 'gr' | 'kg' | 'tn';
@@ -88,14 +88,11 @@ export default function Plots() {
   const [filterType, setFilterType] = useState<'all' | 'Ensayo' | 'Producción'>('all');
   const [filterStatus, setFilterStatus] = useState('all');
 
-  // Modal States
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editingPlot, setEditingPlot] = useState<Plot | null>(null);
-  const [qrPlot, setQrPlot] = useState<Plot | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Form State para Alta
   const [formData, setFormData] = useState<any>({
       name: '',
       type: 'Ensayo',
@@ -134,7 +131,6 @@ export default function Plots() {
   const availableBatches = useMemo(() => {
       return seedBatches.filter(b => {
           if (!b.isActive || b.remainingQuantity <= 0) return false;
-          // Filtrado por permisos de stock
           if ((isClient || isTechnician) && currentUser?.clientId) {
               const storage = storagePoints.find(s => s.id === b.storagePointId);
               if (storage && storage.clientId && storage.clientId !== currentUser.clientId) return false;
@@ -208,13 +204,11 @@ export default function Plots() {
         const finalLng = parseFloat(formData.lng || '0');
         const coordinates = (!isNaN(finalLat) && !isNaN(finalLng) && finalLat !== 0) ? { lat: finalLat, lng: finalLng } : null;
 
-        // Eliminamos lat y lng del objeto que va a la BD, ya que no existen como columnas
         const { lat, lng, ...cleanFormData } = formData;
 
         const payload = {
             ...cleanFormData,
-            id: crypto.randomUUID(),
-            // Auto-asignación de responsable si no es admin
+            id: generateId(),
             responsibleIds: (!isAdmin && currentUser) ? [currentUser.id] : [],
             surfaceArea: Number(formData.surfaceArea),
             density: Number(formData.density),
@@ -249,33 +243,20 @@ export default function Plots() {
           const text = event.target?.result as string;
           const poly = parseKML(text);
           if (poly && poly.length > 2) {
-              // Calcular centroide
               const lats = poly.map(p => p.lat);
               const lngs = poly.map(p => p.lng);
               const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
               const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
-              
-              // Calcular área en m2
               const areaM2 = calculateGeodesicArea(poly);
-              
-              // Decidir unidad (si > 10000m2 -> Ha, sino m2)
               let areaVal = areaM2;
               let unit = 'm2';
               if (areaM2 > 9000) {
                   areaVal = areaM2 / 10000;
                   unit = 'ha';
               }
-
-              setFormData((prev: any) => ({ 
-                  ...prev, 
-                  polygon: poly, 
-                  surfaceArea: Number(areaVal.toFixed(2)), 
-                  surfaceUnit: unit,
-                  lat: centerLat.toFixed(6), 
-                  lng: centerLng.toFixed(6) 
-              }));
+              setFormData((prev: any) => ({ ...prev, polygon: poly, surfaceArea: Number(areaVal.toFixed(2)), surfaceUnit: unit, lat: centerLat.toFixed(6), lng: centerLng.toFixed(6) }));
           } else {
-              alert("No se pudo extraer un polígono válido del KML. Verifique el formato.");
+              alert("No se pudo extraer un polígono válido del KML.");
           }
           if (fileInputRef.current) fileInputRef.current.value = '';
       };
@@ -287,7 +268,7 @@ export default function Plots() {
           ...prev, 
           polygon: newPoly, 
           surfaceArea: areaHa > 0 ? Number(areaHa.toFixed(2)) : prev.surfaceArea, 
-          surfaceUnit: 'ha', // El editor devuelve hectáreas por defecto
+          surfaceUnit: 'ha', 
           lat: center.lat.toFixed(6), 
           lng: center.lng.toFixed(6) 
       }));
@@ -295,7 +276,7 @@ export default function Plots() {
 
   const handleDeletePlot = (e: React.MouseEvent, id: string) => {
       e.stopPropagation();
-      if (window.confirm("¿Está seguro de eliminar esta unidad productiva? Esta acción no se puede deshacer y borrará todo el historial de monitoreo.")) {
+      if (window.confirm("¿Está seguro de eliminar esta unidad productiva?")) {
           deletePlot(id);
       }
   };
@@ -321,7 +302,6 @@ export default function Plots() {
         </div>
       </div>
 
-      {/* FILTROS */}
       <div className="bg-white dark:bg-slate-900 p-4 rounded-3xl shadow-sm border dark:border-slate-800 grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/>
@@ -343,7 +323,6 @@ export default function Plots() {
           </select>
       </div>
 
-      {/* LISTADO */}
       {viewMode === 'table' ? (
           <div className="bg-white dark:bg-slate-900 rounded-[32px] shadow-sm border dark:border-slate-800 overflow-hidden overflow-x-auto">
               <table className="min-w-full text-sm text-left">
@@ -426,7 +405,6 @@ export default function Plots() {
           </div>
       )}
 
-      {/* MODAL ALTA DE UNIDAD */}
       {isAddModalOpen && (
           <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[60] p-4">
               <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-6xl w-full p-6 md:p-10 shadow-2xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95 border border-white/10">
