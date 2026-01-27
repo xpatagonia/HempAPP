@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Client, RoleType, User, MembershipLevel, UserRole } from '../types';
@@ -19,6 +18,14 @@ const PRESET_AVATARS = [
     "https://api.dicebear.com/7.x/avataaars/svg?seed=Preston&backgroundColor=c0aede",
     "https://api.dicebear.com/7.x/avataaars/svg?seed=Milo&backgroundColor=b6e3f4"
 ];
+
+const generateId = () => {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        const r = Math.random() * 16 | 0;
+        return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+};
 
 export default function Clients() {
   const { 
@@ -69,7 +76,7 @@ export default function Clients() {
         const coordinates = (!isNaN(finalLat) && !isNaN(finalLng)) ? { lat: finalLat, lng: finalLng } : null;
 
         const clientPayload = {
-            id: editingId || crypto.randomUUID(),
+            id: editingId || generateId(),
             name: formData.name!.trim(),
             type: formData.type,
             contactName: formData.contactName?.trim(),
@@ -147,6 +154,7 @@ export default function Clients() {
 
   return (
     <div className="animate-in fade-in duration-500">
+      {/* ... (UI Content Identical, uses generateId() in handleSubmit) ... */}
       <div className="flex justify-between items-center mb-6">
         <div>
             <h1 className="text-2xl font-black text-gray-800 dark:text-white uppercase tracking-tight italic">
@@ -278,6 +286,7 @@ export default function Clients() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-8">
+              {/* ... (Form Content Remains Identical) ... */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div className="space-y-6">
                     <div className="bg-slate-50 dark:bg-slate-950 p-6 rounded-[32px] border dark:border-slate-800">
