@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { StoragePoint } from '../types';
@@ -13,27 +12,16 @@ import MapEditor from '../components/MapEditor';
 const parseCoordinate = (input: string): string => {
     if (!input) return '';
     const clean = input.trim().toUpperCase();
-    
-    // Si ya es decimal, lo devolvemos limpio
     const isDecimal = /^-?[\d.]+$/.test(clean);
     if (isDecimal) return clean;
-
-    // Regex para capturar Grados° Minutos' Segundos" Hemisferio
-    // Soporta formatos como 43°15'23"S, 43 15 23 S, 43:15:23 S
     const dmsRegex = /(\d+)[°\s:]+(\d+)['\s:]+(\d+(?:\.\d+)?)["\s]*([NSEW])?/i;
     const match = clean.match(dmsRegex);
-
     if (match) {
         let deg = parseFloat(match[1]);
         let min = parseFloat(match[2]);
         let sec = parseFloat(match[3]);
         let dir = match[4] || '';
-        
-        // Si no hay dirección explícita pero hay un signo menos o letras específicas
-        if (!dir) {
-            if (clean.includes('S') || clean.includes('W') || clean.startsWith('-')) dir = 'S';
-        }
-
+        if (!dir) { if (clean.includes('S') || clean.includes('W') || clean.startsWith('-')) dir = 'S'; }
         let decimal = deg + (min / 60) + (sec / 3600);
         if (dir === 'S' || dir === 'W' || clean.includes('S') || clean.includes('W')) {
             decimal = decimal * -1;
@@ -41,6 +29,14 @@ const parseCoordinate = (input: string): string => {
         return decimal.toFixed(7);
     }
     return input;
+};
+
+const generateId = () => {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        const r = Math.random() * 16 | 0;
+        return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
 };
 
 export default function Storage() {
@@ -111,7 +107,7 @@ export default function Storage() {
         const coordinates = (!isNaN(finalLat) && !isNaN(finalLng)) ? { lat: finalLat, lng: finalLng } : undefined;
 
         const payload = { 
-            id: editingId || crypto.randomUUID(),
+            id: editingId || generateId(),
             name: formData.name.trim(),
             nodeCode: formData.nodeCode.trim().toUpperCase(),
             type: formData.type,
@@ -170,6 +166,7 @@ export default function Storage() {
 
   return (
     <div className="animate-in fade-in duration-500">
+      {/* UI Remains the same, functional logic updated with generateId() */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>
             <h1 className="text-2xl font-black text-gray-800 dark:text-white uppercase tracking-tight italic">Nodos <span className="text-hemp-600">Logísticos</span></h1>
@@ -272,6 +269,7 @@ export default function Storage() {
             </div>
             
             <form onSubmit={handleSubmit} className="space-y-6">
+                {/* ... (Form Content Identical, uses handleSubmit with generateId) ... */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
                     <div className="space-y-6">
                         <div className="bg-gray-50 dark:bg-slate-950 p-6 rounded-[32px] border dark:border-slate-800">
