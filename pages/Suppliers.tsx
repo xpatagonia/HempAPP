@@ -2,11 +2,9 @@ import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Supplier, SupplierCategory } from '../types';
 import { 
-  Plus, Edit2, Trash2, Building, MapPin, Phone, Mail, 
-  Tag, X, MessageCircle, ShieldCheck, ShoppingBag, Eye,
-  Sprout, Navigation, Save, Loader2
+  Plus, Edit2, Trash2, Building, MapPin, Mail, Globe, 
+  Search, Save, Loader2, X, Briefcase, Truck, Users, Sprout
 } from 'lucide-react';
-import MapEditor from '../components/MapEditor';
 
 const generateId = () => {
     if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
@@ -17,29 +15,31 @@ const generateId = () => {
 };
 
 export default function Suppliers() {
-  const { suppliers, addSupplier, updateSupplier, deleteSupplier, currentUser, varieties, seedBatches } = useAppContext();
+  const { suppliers, addSupplier, updateSupplier, deleteSupplier, currentUser } = useAppContext();
+  
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [viewSupplier, setViewSupplier] = useState<Supplier | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterCategory, setFilterCategory] = useState('all');
 
   const [formData, setFormData] = useState<Partial<Supplier> & { lat: string, lng: string }>({
-    name: '', category: 'Semillas', legalName: '', cuit: '', country: 'Argentina', province: '', city: '', address: '', postalCode: '',
-    whatsapp: '', email: '', commercialContact: '', website: '', isOfficialPartner: false,
-    lat: '', lng: ''
+    name: '', category: 'Insumos', legalName: '', cuit: '', country: '', province: '', city: '', address: '',
+    whatsapp: '', email: '', commercialContact: '', logisticsContact: '', website: '', notes: '',
+    isOfficialPartner: false, lat: '', lng: ''
   });
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
 
-  const providedVarieties = useMemo(() => 
-    viewSupplier ? varieties.filter(v => v.supplierId === viewSupplier.id) : []
-  , [viewSupplier, varieties]);
-
-  const totalStockProvided = useMemo(() => {
-    if (!viewSupplier) return 0;
-    const varIds = varieties.filter(v => v.supplierId === viewSupplier.id).map(v => v.id);
-    return seedBatches.filter(b => varIds.includes(b.varietyId)).reduce((s, b) => s + b.initialQuantity, 0);
-  }, [viewSupplier, seedBatches, varieties]);
+  const filteredSuppliers = useMemo(() => {
+      return suppliers.filter(s => {
+          const matchSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                              (s.legalName || '').toLowerCase().includes(searchTerm.toLowerCase());
+          const matchCategory = filterCategory === 'all' || s.category === filterCategory;
+          return matchSearch && matchCategory;
+      });
+  }, [suppliers, searchTerm, filterCategory]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,85 +49,84 @@ export default function Suppliers() {
     try {
         const finalLat = parseFloat(formData.lat.replace(',', '.'));
         const finalLng = parseFloat(formData.lng.replace(',', '.'));
-        const coordinates = (!isNaN(finalLat) && !isNaN(finalLng)) ? { lat: finalLat, lng: finalLng } : null;
+        const coordinates = (!isNaN(finalLat) && !isNaN(finalLng)) ? { lat: finalLat, lng: finalLng } : undefined;
 
-        const payload = {
+        const payload: Supplier = {
             id: editingId || generateId(),
             name: formData.name!.trim(),
-            category: formData.category,
-            legalName: formData.legalName?.trim(),
-            cuit: formData.cuit?.trim(),
+            category: formData.category as SupplierCategory,
+            legalName: formData.legalName,
+            cuit: formData.cuit,
             country: formData.country,
             province: formData.province,
             city: formData.city,
             address: formData.address,
-            postalCode: formData.postalCode,
             whatsapp: formData.whatsapp,
             email: formData.email,
             commercialContact: formData.commercialContact,
+            logisticsContact: formData.logisticsContact,
             website: formData.website,
+            notes: formData.notes,
             isOfficialPartner: formData.isOfficialPartner,
             coordinates
-        } as Supplier;
+        };
 
         let success = false;
         if (editingId) {
             success = await updateSupplier(payload);
         } else {
-            const newId = await addSupplier(payload);
-            success = !!newId;
+            const res = await addSupplier(payload);
+            success = !!res;
         }
 
         if (success) {
             setIsModalOpen(false);
             resetForm();
         } else {
-            throw new Error("El servidor de datos rechazó el registro.");
+            alert("Error al guardar proveedor.");
         }
-    } catch (err: any) {
-        alert("ERROR CRÍTICO: " + err.message);
-    } finally {
-        setIsSaving(false);
+    } catch (err: any) { 
+        alert("ERROR OPERATIVO: " + err.message);
+    } finally { 
+        setIsSaving(false); 
     }
   };
 
   const resetForm = () => {
     setFormData({ 
-        name: '', category: 'Semillas', legalName: '', cuit: '', country: 'Argentina', province: '', city: '', address: '', postalCode: '',
-        whatsapp: '', email: '', commercialContact: '', website: '', isOfficialPartner: false,
-        lat: '', lng: ''
+        name: '', category: 'Insumos', legalName: '', cuit: '', country: '', province: '', city: '', address: '',
+        whatsapp: '', email: '', commercialContact: '', logisticsContact: '', website: '', notes: '',
+        isOfficialPartner: false, lat: '', lng: ''
     });
     setEditingId(null);
   };
 
-  const handleMapChange = (poly: { lat: number, lng: number }[]) => {
-      if (poly.length > 0) {
-          setFormData(prev => ({ 
-              ...prev, 
-              lat: poly[0].lat.toFixed(7), 
-              lng: poly[0].lng.toFixed(7) 
-          }));
+  const handleEdit = (s: Supplier) => {
+      setFormData({
+          ...s,
+          lat: s.coordinates?.lat.toString() || '',
+          lng: s.coordinates?.lng.toString() || ''
+      });
+      setEditingId(s.id);
+      setIsModalOpen(true);
+  };
+
+  const handleDelete = (id: string) => {
+      if (window.confirm("¿Está seguro de eliminar este proveedor?")) {
+          deleteSupplier(id);
       }
   };
 
-  const getCategoryColor = (cat: SupplierCategory) => {
-      switch(cat) {
-          case 'Semillas': return 'bg-emerald-50 text-emerald-700 border-emerald-100';
-          case 'Insumos': return 'bg-amber-50 text-amber-700 border-amber-100';
-          case 'Servicios': return 'bg-blue-50 text-blue-700 border-blue-100';
-          case 'Recursos Humanos': return 'bg-purple-50 text-purple-700 border-purple-100';
-          default: return 'bg-gray-50 text-gray-700 border-gray-100';
-      }
-  };
-
-  const inputClass = "w-full border border-gray-300 dark:border-slate-800 bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 p-2.5 rounded-xl focus:ring-2 focus:ring-hemp-500 outline-none transition-all";
+  const inputClass = "w-full border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 p-2.5 rounded-xl focus:ring-2 focus:ring-hemp-500 outline-none transition-all placeholder-gray-400";
 
   return (
     <div className="animate-in fade-in duration-500">
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>
-            <h1 className="text-2xl font-black text-gray-800 dark:text-white uppercase tracking-tight italic">Administración de <span className="text-hemp-600">Suministros</span></h1>
-            <p className="text-sm text-gray-500">Gestión de cadena de valor y trazabilidad logística.</p>
+            <h1 className="text-2xl font-black text-gray-800 dark:text-white uppercase tracking-tight italic">
+                Red de <span className="text-hemp-600">Proveedores</span>
+            </h1>
+            <p className="text-sm text-gray-500">Gestión de partners estratégicos y cadena de suministro.</p>
         </div>
         {isAdmin && (
           <button onClick={() => { resetForm(); setIsModalOpen(true); }} className="bg-hemp-600 text-white px-6 py-3 rounded-2xl flex items-center hover:bg-hemp-700 transition shadow-xl font-black text-xs uppercase tracking-widest">
@@ -136,260 +135,163 @@ export default function Suppliers() {
         )}
       </div>
 
+      <div className="bg-white dark:bg-slate-900 p-4 rounded-[24px] shadow-sm border dark:border-slate-800 flex flex-col md:flex-row gap-4 mb-6">
+          <div className="relative flex-1">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18}/>
+              <input 
+                type="text" 
+                placeholder="Buscar por nombre o razón social..." 
+                className="w-full pl-12 pr-4 py-3 bg-gray-50 dark:bg-slate-950 border border-transparent focus:bg-white dark:focus:bg-slate-900 border-slate-100 dark:border-slate-800 rounded-xl outline-none focus:ring-2 focus:ring-hemp-500 transition-all text-sm font-medium"
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+              />
+          </div>
+          <div className="flex gap-2">
+              <select className="px-4 py-3 bg-gray-50 dark:bg-slate-950 border-slate-100 dark:border-slate-800 rounded-xl text-[10px] font-black uppercase tracking-widest outline-none dark:text-white" value={filterCategory} onChange={e => setFilterCategory(e.target.value)}>
+                  <option value="all">Todas las Categorías</option>
+                  <option value="Semillas">Semillas</option>
+                  <option value="Insumos">Insumos</option>
+                  <option value="Servicios">Servicios</option>
+                  <option value="Recursos Humanos">RRHH</option>
+              </select>
+          </div>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {suppliers.map(supplier => (
-            <div key={supplier.id} className="bg-white dark:bg-slate-900 p-0 rounded-[32px] shadow-sm border border-gray-100 dark:border-slate-800 hover:shadow-xl transition-all relative group flex flex-col h-full overflow-hidden">
-              
-              <div className="h-32 bg-slate-100 dark:bg-slate-800 relative">
-                  {supplier.coordinates && supplier.coordinates.lat ? (
-                      <iframe width="100%" height="100%" frameBorder="0" scrolling="no" src={`https://maps.google.com/maps?q=${supplier.coordinates.lat},${supplier.coordinates.lng}&z=14&output=embed`} className="opacity-80 group-hover:opacity-100 transition-opacity"></iframe>
-                  ) : (
-                      <div className="flex items-center justify-center h-full text-slate-400 text-[10px] font-black uppercase tracking-widest bg-slate-50 dark:bg-slate-950">
-                          <MapPin size={16} className="mr-2 opacity-50"/> Localización S/D
-                      </div>
-                  )}
-                  <div className={`absolute top-4 left-4 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border flex items-center gap-1.5 shadow-sm ${getCategoryColor(supplier.category)}`}>
-                      {supplier.category}
-                  </div>
-                  {supplier.isOfficialPartner && (
-                      <div className="absolute top-4 right-4 bg-blue-600 text-white p-1.5 rounded-xl shadow-lg" title="Socio Oficial">
-                          <ShieldCheck size={14}/>
-                      </div>
-                  )}
-              </div>
+        {filteredSuppliers.map(s => (
+            <div key={s.id} className="bg-white dark:bg-slate-900 p-6 rounded-[32px] shadow-sm border border-gray-100 dark:border-slate-800 hover:shadow-xl transition-all relative group flex flex-col h-full">
+                {isAdmin && (
+                    <div className="absolute top-6 right-6 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                        <button onClick={() => handleEdit(s)} className="p-2 text-gray-400 hover:text-hemp-600 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 transition"><Edit2 size={16} /></button>
+                        <button onClick={() => handleDelete(s.id)} className="p-2 text-gray-400 hover:text-red-600 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 transition"><Trash2 size={16} /></button>
+                    </div>
+                )}
 
-              <div className="p-6 flex flex-col flex-1">
-                  <div className="flex justify-between items-start mb-6">
-                      <div className="min-w-0">
-                          <h3 className="text-xl font-black text-gray-800 dark:text-white leading-tight uppercase tracking-tighter truncate">{supplier.name}</h3>
-                          <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mt-1 truncate">{supplier.legalName || 'Persona Jurídica N/A'}</p>
-                      </div>
-                      {isAdmin && (
-                          <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                              <button onClick={() => setViewSupplier(supplier)} className="text-gray-400 hover:text-blue-600 p-2 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 transition"><Eye size={14}/></button>
-                              <button onClick={() => { 
-                                  setFormData({
-                                      ...supplier,
-                                      lat: supplier.coordinates?.lat.toString() || '',
-                                      lng: supplier.coordinates?.lng.toString() || ''
-                                  }); 
-                                  setEditingId(supplier.id); 
-                                  setIsModalOpen(true); 
-                                }} className="text-gray-400 hover:text-hemp-600 p-2 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 transition"><Edit2 size={14} /></button>
-                                <button onClick={() => { if(window.confirm("¿Eliminar este proveedor?")) deleteSupplier(supplier.id); }} className="text-gray-400 hover:text-red-600 p-2 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 transition"><Trash2 size={14} /></button>
-                          </div>
-                      )}
-                  </div>
+                <div className="flex items-center space-x-4 mb-6">
+                    <div className={`p-4 rounded-2xl ${s.isOfficialPartner ? 'bg-hemp-50 text-hemp-600' : 'bg-slate-50 text-slate-500'} dark:bg-slate-800`}>
+                        {s.category === 'Semillas' ? <Sprout size={24}/> : 
+                         s.category === 'Insumos' ? <Briefcase size={24}/> : 
+                         s.category === 'Servicios' ? <Truck size={24}/> : <Users size={24}/>}
+                    </div>
+                    <div className="min-w-0">
+                        <h3 className="text-lg font-black text-gray-800 dark:text-white leading-none uppercase tracking-tighter truncate" title={s.name}>{s.name}</h3>
+                        <span className="text-[10px] uppercase font-black text-gray-400 mt-1 block tracking-widest">{s.category}</span>
+                    </div>
+                </div>
 
-                  <div className="space-y-3 mb-6 flex-1">
-                      <div className="flex items-center justify-between bg-gray-50 dark:bg-slate-950 p-3 rounded-2xl border dark:border-slate-800">
-                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Catálogo</span>
-                          <span className="text-sm font-black text-slate-700 dark:text-slate-300">{varieties.filter(v => v.supplierId === supplier.id).length} Variedades</span>
-                      </div>
-                      
-                      <div className="flex flex-wrap gap-2">
-                          {supplier.whatsapp && (
-                              <a href={`https://wa.me/${supplier.whatsapp.replace(/\D/g,'')}`} target="_blank" rel="noreferrer" className="flex items-center text-[10px] font-black uppercase text-white bg-green-600 px-3 py-1.5 rounded-full hover:bg-green-700 transition">
-                                  <MessageCircle size={10} className="mr-1.5"/> Chat
-                              </a>
-                          )}
-                          {supplier.email && (
-                              <a href={`mailto:${supplier.email}`} className="flex items-center text-[10px] font-black uppercase text-white bg-blue-600 px-3 py-1.5 rounded-full hover:bg-blue-700 transition">
-                                  <Mail size={10} className="mr-1.5"/> Email
-                              </a>
-                          )}
-                      </div>
-                  </div>
-                  
-                  <div className="pt-4 border-t dark:border-slate-800 flex justify-between items-center text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                      <span className="flex items-center truncate max-w-[150px]"><MapPin size={10} className="mr-1.5 text-red-500 flex-shrink-0"/> {supplier.city || 'Ubicación S/D'}</span>
-                      <button onClick={() => setViewSupplier(supplier)} className="text-hemp-600 hover:underline flex-shrink-0">Auditoría →</button>
-                  </div>
-              </div>
+                <div className="space-y-3 flex-1">
+                    <div className="flex items-start text-xs text-gray-500">
+                        <MapPin size={14} className="mr-2 mt-0.5 text-slate-400 flex-shrink-0"/>
+                        <span className="line-clamp-2">{s.city ? `${s.city}, ${s.country}` : 'Ubicación no especificada'}</span>
+                    </div>
+                    <div className="flex items-center text-xs text-gray-500">
+                        <Building size={14} className="mr-2 text-slate-400 flex-shrink-0"/>
+                        <span className="truncate">{s.legalName || s.name}</span>
+                    </div>
+                    {s.email && (
+                        <div className="flex items-center text-xs text-gray-500">
+                            <Mail size={14} className="mr-2 text-slate-400 flex-shrink-0"/>
+                            <a href={`mailto:${s.email}`} className="truncate hover:text-hemp-600">{s.email}</a>
+                        </div>
+                    )}
+                </div>
+
+                {s.isOfficialPartner && (
+                    <div className="mt-4 pt-4 border-t dark:border-slate-800">
+                        <span className="text-[9px] font-black text-white bg-hemp-600 px-3 py-1 rounded-full uppercase tracking-widest inline-flex items-center">
+                            Partner Oficial
+                        </span>
+                    </div>
+                )}
             </div>
         ))}
       </div>
 
-      {/* MODAL CREAR/EDITAR - Mantiene estructura UI pero usa generateId() */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-5xl w-full p-10 shadow-2xl max-h-[95vh] overflow-y-auto animate-in zoom-in-95">
+          <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-4xl w-full p-10 shadow-2xl animate-in zoom-in-95 border border-white/10 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-8">
-                <h2 className="text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tighter italic">Gestionar <span className="text-hemp-600">Proveedor</span></h2>
+                <div className="flex items-center gap-4">
+                    <div className="bg-hemp-600 p-3 rounded-2xl text-white shadow-lg"><Briefcase size={28}/></div>
+                    <div>
+                        <h2 className="text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tighter italic">Gestión de <span className="text-hemp-600">Proveedor</span></h2>
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Alta de entidad en la cadena de valor</p>
+                    </div>
+                </div>
                 <button onClick={() => { if(!isSaving) setIsModalOpen(false); }} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition text-slate-400"><X size={28}/></button>
             </div>
-            
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div className="lg:col-span-2 space-y-6">
-                    <div className="bg-gray-50 dark:bg-slate-950 p-6 rounded-[32px] border dark:border-slate-800">
-                        <div className="flex justify-between items-center mb-4">
-                            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center"><Building size={14} className="mr-2"/> Datos Jurídicos</h3>
-                            <label className="flex items-center space-x-2 cursor-pointer bg-blue-50 dark:bg-blue-900/20 px-3 py-1.5 rounded-full border border-blue-100 dark:border-blue-800">
-                                <input type="checkbox" className="rounded text-blue-500 focus:ring-blue-400" checked={formData.isOfficialPartner} onChange={e => setFormData({...formData, isOfficialPartner: e.target.checked})} />
-                                <span className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-tighter">Socio Certificado</span>
-                            </label>
+
+            <form onSubmit={handleSubmit} className="space-y-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="space-y-5">
+                        <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b dark:border-slate-800 pb-2">Datos Comerciales</h3>
+                        <div>
+                            <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Nombre Comercial *</label>
+                            <input required type="text" className={inputClass} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="md:col-span-2">
-                                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1 mb-1.5">Razón Social *</label>
-                                <input required type="text" className={inputClass} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Ej: Fertilizantes del Norte S.A." />
-                            </div>
+                        <div>
+                            <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Razón Social</label>
+                            <input type="text" className={inputClass} value={formData.legalName} onChange={e => setFormData({...formData, legalName: e.target.value})} />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1 mb-1.5">Categoría</label>
+                                <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Categoría</label>
                                 <select className={inputClass} value={formData.category} onChange={e => setFormData({...formData, category: e.target.value as SupplierCategory})}>
-                                    <option value="Semillas">Semillas (Genética)</option>
-                                    <option value="Insumos">Insumos (Fert/Fito)</option>
-                                    <option value="Servicios">Servicios (Log/Maq)</option>
-                                    <option value="Recursos Humanos">RRHH / Contratistas</option>
+                                    <option value="Semillas">Semillas</option>
+                                    <option value="Insumos">Insumos</option>
+                                    <option value="Servicios">Servicios</option>
+                                    <option value="Recursos Humanos">RRHH</option>
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1 mb-1.5">CUIT / TAX ID</label>
-                                <input type="text" className={inputClass} value={formData.cuit} onChange={e => setFormData({...formData, cuit: e.target.value})} placeholder="00-00000000-0" />
+                                <label className="text-[9px] font-black uppercase text-slate-400 ml-1">CUIT / ID</label>
+                                <input type="text" className={inputClass} value={formData.cuit} onChange={e => setFormData({...formData, cuit: e.target.value})} />
                             </div>
+                        </div>
+                        <div className="flex items-center space-x-2 pt-2">
+                            <input type="checkbox" id="isOfficial" className="rounded text-hemp-600 focus:ring-hemp-500" checked={formData.isOfficialPartner} onChange={e => setFormData({...formData, isOfficialPartner: e.target.checked})} />
+                            <label htmlFor="isOfficial" className="text-xs font-bold text-slate-700 dark:text-slate-300 select-none">Proveedor Oficial / Partner Certificado</label>
                         </div>
                     </div>
 
-                    <div className="bg-emerald-50/50 dark:bg-emerald-900/10 p-6 rounded-[32px] border border-emerald-100 dark:border-emerald-900/30">
-                         <h3 className="text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-[0.2em] mb-4 flex items-center"><Phone size={14} className="mr-2"/> Enlace de Comunicación</h3>
-                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-5">
+                        <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b dark:border-slate-800 pb-2">Ubicación y Contacto</h3>
+                        <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1 mb-1.5">Contacto Comercial</label>
-                                <input type="text" className={inputClass} value={formData.commercialContact} onChange={e => setFormData({...formData, commercialContact: e.target.value})} />
-                            </div>
-                            <div>
-                                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1 mb-1.5">WhatsApp Logística</label>
-                                <div className="relative">
-                                    <MessageCircle className="absolute left-3 top-1/2 -translate-y-1/2 text-green-600" size={16}/>
-                                    <input type="text" className={`${inputClass} pl-10`} value={formData.whatsapp} onChange={e => setFormData({...formData, whatsapp: e.target.value})} placeholder="+54 9 11..." />
-                                </div>
-                            </div>
-                            <div className="md:col-span-2">
-                                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1 mb-1.5">Email de Operaciones</label>
-                                <div className="relative">
-                                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-500" size={16}/>
-                                    <input type="email" className={`${inputClass} pl-10`} value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="logistica@empresa.com" />
-                                </div>
-                            </div>
-                         </div>
-                    </div>
-                </div>
-
-                <div className="space-y-6">
-                    <div className="bg-blue-50/50 dark:bg-blue-900/10 p-6 rounded-[32px] border border-blue-100 dark:border-blue-900/30 flex flex-col h-full">
-                        <h3 className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-[0.2em] mb-4 flex items-center"><Navigation size={14} className="mr-2"/> Georreferencia de Carga</h3>
-                        <div className="space-y-4 mb-4">
-                            <div className="grid grid-cols-2 gap-2">
-                                <input type="text" placeholder="Ciudad" className={inputClass} value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})} />
-                                <input type="text" placeholder="C.P." className={inputClass} value={formData.postalCode} onChange={e => setFormData({...formData, postalCode: e.target.value})} />
-                            </div>
-                            <input type="text" placeholder="Dirección Exacta" className={inputClass} value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} />
-                        </div>
-                        
-                        <div className="flex-1 min-h-[200px] rounded-2xl overflow-hidden border dark:border-slate-800 shadow-inner group/map relative">
-                             <MapEditor 
-                                initialCenter={formData.lat && formData.lng ? { lat: parseFloat(formData.lat.replace(',','.')), lng: parseFloat(formData.lng.replace(',','.')) } : undefined} 
-                                initialPolygon={formData.lat && formData.lng ? [{ lat: parseFloat(formData.lat.replace(',','.')), lng: parseFloat(formData.lng.replace(',','.')) }] : []} 
-                                onPolygonChange={handleMapChange} 
-                                height="100%" 
-                             />
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-3 mt-4">
-                            <div>
-                                <label className="block text-[9px] font-black text-blue-900 dark:text-blue-400 mb-1 flex items-center uppercase tracking-widest">Latitud</label>
-                                <input type="text" className={`${inputClass} text-xs h-9 bg-white/50`} value={formData.lat} onChange={e => setFormData({...formData, lat: e.target.value})} placeholder="-34.0000" />
+                                <label className="text-[9px] font-black uppercase text-slate-400 ml-1">País</label>
+                                <input type="text" className={inputClass} value={formData.country} onChange={e => setFormData({...formData, country: e.target.value})} />
                             </div>
                             <div>
-                                <label className="block text-[9px] font-black text-blue-900 dark:text-blue-400 mb-1 flex items-center uppercase tracking-widest">Longitud</label>
-                                <input type="text" className={`${inputClass} text-xs h-9 bg-white/50`} value={formData.lng} onChange={e => setFormData({...formData, lng: e.target.value})} placeholder="-58.0000" />
+                                <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Ciudad</label>
+                                <input type="text" className={inputClass} value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})} />
                             </div>
                         </div>
-                    </div>
-                </div>
-              </div>
-
-              <div className="flex justify-end space-x-3 pt-8 border-t dark:border-slate-800 mt-4">
-                <button type="button" disabled={isSaving} onClick={() => setIsModalOpen(false)} className="px-8 py-3 text-slate-400 font-black uppercase text-[10px] tracking-widest hover:text-slate-600 transition">Cancelar</button>
-                <button type="submit" disabled={isSaving} className="bg-slate-900 dark:bg-hemp-600 text-white px-10 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl flex items-center hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50">
-                    {isSaving ? <Loader2 className="animate-spin mr-2" size={18}/> : <Save className="mr-2" size={18}/>}
-                    {editingId ? 'Actualizar' : 'Finalizar Registro'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {viewSupplier && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[70] p-4">
-            <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-4xl w-full p-10 shadow-2xl animate-in zoom-in-95 border border-white/10 max-h-[95vh] overflow-y-auto">
-                <div className="flex justify-between items-center mb-8">
-                    <div className="flex items-center gap-4">
-                        <div className="bg-hemp-600 p-3 rounded-2xl text-white shadow-lg"><ShoppingBag size={24}/></div>
                         <div>
-                            <h2 className="text-2xl font-black text-slate-800 dark:text-white uppercase tracking-tighter italic">{viewSupplier.name}</h2>
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center">
-                                {viewSupplier.isOfficialPartner && <ShieldCheck size={12} className="text-blue-500 mr-1"/>}
-                                Ficha de Proveedor Certificado
-                            </p>
-                        </div>
-                    </div>
-                    <button onClick={() => setViewSupplier(null)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition text-slate-400"><X size={28}/></button>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                    {/* ... (View Content identical to previous, just wrapped in correct component) ... */}
-                    <div className="space-y-6">
-                        <div className="bg-gray-50 dark:bg-slate-950 p-6 rounded-[32px] border dark:border-slate-800">
-                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Perfil Corporativo</p>
-                            <div className="space-y-3">
-                                <div><p className="text-[9px] font-bold text-slate-500 uppercase">Razón Social</p><p className="text-sm font-black text-slate-800 dark:text-slate-200">{viewSupplier.legalName || '-'}</p></div>
-                                <div><p className="text-[9px] font-bold text-slate-500 uppercase">CUIT / TAX ID</p><p className="text-sm font-black text-slate-800 dark:text-slate-200">{viewSupplier.cuit || '-'}</p></div>
-                                <div><p className="text-[9px] font-bold text-slate-500 uppercase">Categoría</p><span className={`px-2 py-1 rounded text-[9px] font-black uppercase border inline-block mt-1 ${getCategoryColor(viewSupplier.category)}`}>{viewSupplier.category}</span></div>
-                            </div>
-                        </div>
-                        <div className="bg-blue-50 dark:bg-blue-900/10 p-6 rounded-[32px] border border-blue-100 dark:border-blue-900/30">
-                            <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest mb-4">Canales de Contacto</p>
-                            <div className="space-y-3">
-                                <div className="flex items-center"><Mail size={14} className="text-blue-500 mr-2"/><a href={`mailto:${viewSupplier.email}`} className="text-xs font-bold text-blue-800 dark:text-blue-200 hover:underline truncate">{viewSupplier.email || 'S/D'}</a></div>
-                                <div className="flex items-center"><Phone size={14} className="text-green-500 mr-2"/><a href={`https://wa.me/${viewSupplier.whatsapp?.replace(/\D/g,'')}`} target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-800 dark:text-blue-200 hover:underline">{viewSupplier.whatsapp || 'S/D'}</a></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="md:col-span-2 space-y-6">
-                        <div className="bg-slate-100 dark:bg-slate-950 rounded-[32px] overflow-hidden h-48 border dark:border-slate-800 relative">
-                             {viewSupplier.coordinates ? (
-                                 <MapEditor initialCenter={viewSupplier.coordinates} initialPolygon={[]} readOnly={true} height="100%"/>
-                             ) : (
-                                 <div className="h-full flex items-center justify-center text-slate-400 text-xs font-black uppercase tracking-widest">Sin Geolocalización</div>
-                             )}
-                             <div className="absolute bottom-4 left-4 bg-white/90 dark:bg-slate-900/90 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest backdrop-blur-md border dark:border-slate-700 shadow-sm">
-                                 <MapPin size={12} className="inline mr-1 text-red-500"/> {viewSupplier.city}, {viewSupplier.province}
-                             </div>
+                            <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Email Contacto</label>
+                            <input type="email" className={inputClass} value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
-                            <div className="bg-emerald-50 dark:bg-emerald-900/10 p-5 rounded-[24px] border border-emerald-100 dark:border-emerald-900/30"><p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mb-1">Catálogo Activo</p><p className="text-3xl font-black text-emerald-800 dark:text-emerald-300">{providedVarieties.length} <span className="text-xs text-emerald-600">Variedades</span></p></div>
-                            <div className="bg-amber-50 dark:bg-amber-900/10 p-5 rounded-[24px] border border-amber-100 dark:border-amber-900/30"><p className="text-[9px] font-black text-amber-600 uppercase tracking-widest mb-1">Volumen Histórico</p><p className="text-3xl font-black text-amber-800 dark:text-amber-300">{totalStockProvided.toLocaleString()} <span className="text-xs text-amber-600">KG</span></p></div>
-                        </div>
-                        <div className="bg-white dark:bg-slate-900 p-6 rounded-[32px] border border-gray-100 dark:border-slate-800">
-                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Genética Suministrada</p>
-                            <div className="flex flex-wrap gap-2">
-                                {providedVarieties.length > 0 ? providedVarieties.map(v => (
-                                    <span key={v.id} className="px-3 py-1.5 bg-gray-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg text-[10px] font-black uppercase border border-gray-200 dark:border-slate-700 flex items-center">
-                                        <Sprout size={10} className="mr-1.5 text-hemp-500"/> {v.name}
-                                    </span>
-                                )) : <span className="text-xs text-slate-400 italic">No hay variedades registradas.</span>}
+                            <div>
+                                <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Teléfono / WA</label>
+                                <input type="text" className={inputClass} value={formData.whatsapp} onChange={e => setFormData({...formData, whatsapp: e.target.value})} />
+                            </div>
+                            <div>
+                                <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Sitio Web</label>
+                                <input type="text" className={inputClass} value={formData.website} onChange={e => setFormData({...formData, website: e.target.value})} />
                             </div>
                         </div>
                     </div>
                 </div>
-                
-                <div className="mt-8 pt-6 border-t dark:border-slate-800 flex justify-end">
-                    <button onClick={() => setViewSupplier(null)} className="px-10 py-4 bg-slate-900 dark:bg-hemp-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-[1.02] transition-all shadow-xl">Cerrar Ficha</button>
+
+                <div className="pt-4 border-t dark:border-slate-800 flex justify-end space-x-3">
+                    <button type="button" disabled={isSaving} onClick={() => setIsModalOpen(false)} className="px-8 py-3 text-slate-400 font-black uppercase text-[10px] tracking-widest hover:text-slate-600 transition">Cancelar</button>
+                    <button type="submit" disabled={isSaving} className="bg-slate-900 dark:bg-hemp-600 text-white px-10 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl flex items-center hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50">
+                        {isSaving ? <Loader2 className="animate-spin mr-2" size={18}/> : <Save className="mr-2" size={18}/>}
+                        Guardar Proveedor
+                    </button>
                 </div>
-            </div>
+            </form>
+          </div>
         </div>
       )}
     </div>
