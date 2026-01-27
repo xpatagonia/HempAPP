@@ -8,6 +8,13 @@ import {
   Wind, Bug, Skull
 } from 'lucide-react';
 
+const fastUUID = () => {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
+};
+
 export default function TrialManager() {
   const { plots, trialRecords, addTrialRecord, currentUser, locations, varieties } = useAppContext();
   const [selectedPlotId, setSelectedPlotId] = useState<string>('');
@@ -79,9 +86,12 @@ export default function TrialManager() {
     e.preventDefault();
     if (!selectedPlotId) return;
 
+    // Use fastUUID to prevent crash on non-secure contexts where crypto.randomUUID is undefined
+    const newId = (window.crypto as any).randomUUID ? (window.crypto as any).randomUUID() : fastUUID();
+
     const success = await addTrialRecord({
         ...formData,
-        id: crypto.randomUUID(),
+        id: newId,
         plotId: selectedPlotId,
         createdBy: currentUser?.id,
         createdByName: currentUser?.name
@@ -149,35 +159,41 @@ export default function TrialManager() {
                   </h3>
               </div>
               <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
-                  {plotQueue.map((item) => (
-                      <button
-                        key={item.plot.id}
-                        onClick={() => setSelectedPlotId(item.plot.id)}
-                        className={`w-full p-4 rounded-2xl text-left transition-all border group relative overflow-hidden ${
-                            selectedPlotId === item.plot.id 
-                            ? 'bg-emerald-600 border-emerald-500 text-white shadow-md' 
-                            : 'bg-white dark:bg-slate-800 border-transparent hover:border-emerald-200 dark:hover:border-emerald-900 hover:bg-emerald-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300'
-                        }`}
-                      >
-                          <div className="flex justify-between items-start mb-1 relative z-10">
-                              <span className="font-black uppercase tracking-tighter text-sm truncate pr-2">{item.plot.name}</span>
-                              {item.daysSince > 7 ? (
-                                  <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase flex items-center flex-shrink-0 ${selectedPlotId === item.plot.id ? 'bg-white/20 text-white' : 'bg-red-100 text-red-600'}`}>
-                                      <AlertTriangle size={8} className="mr-1"/> +{item.daysSince}d
-                                  </span>
-                              ) : (
-                                  <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase flex-shrink-0 ${selectedPlotId === item.plot.id ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'}`}>
-                                      Hace {item.daysSince}d
-                                  </span>
-                              )}
-                          </div>
-                          <p className={`text-[10px] uppercase font-bold tracking-widest relative z-10 truncate ${selectedPlotId === item.plot.id ? 'text-emerald-100' : 'text-slate-400'}`}>
-                              {item.locationName}
-                          </p>
-                          {/* Indicador visual de urgencia */}
-                          <div className={`absolute bottom-0 left-0 h-1 transition-all ${item.daysSince > 7 ? 'bg-red-500' : 'bg-emerald-400'} opacity-30`} style={{ width: `${Math.min(item.daysSince * 10, 100)}%` }}></div>
-                      </button>
-                  ))}
+                  {plotQueue.length === 0 ? (
+                      <div className="p-4 text-center text-slate-400 text-xs font-bold italic">
+                          No hay parcelas activas.
+                      </div>
+                  ) : (
+                      plotQueue.map((item) => (
+                          <button
+                            key={item.plot.id}
+                            onClick={() => setSelectedPlotId(item.plot.id)}
+                            className={`w-full p-4 rounded-2xl text-left transition-all border group relative overflow-hidden ${
+                                selectedPlotId === item.plot.id 
+                                ? 'bg-emerald-600 border-emerald-500 text-white shadow-md' 
+                                : 'bg-white dark:bg-slate-800 border-transparent hover:border-emerald-200 dark:hover:border-emerald-900 hover:bg-emerald-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300'
+                            }`}
+                          >
+                              <div className="flex justify-between items-start mb-1 relative z-10">
+                                  <span className="font-black uppercase tracking-tighter text-sm truncate pr-2">{item.plot.name}</span>
+                                  {item.daysSince > 7 ? (
+                                      <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase flex items-center flex-shrink-0 ${selectedPlotId === item.plot.id ? 'bg-white/20 text-white' : 'bg-red-100 text-red-600'}`}>
+                                          <AlertTriangle size={8} className="mr-1"/> +{item.daysSince}d
+                                      </span>
+                                  ) : (
+                                      <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase flex-shrink-0 ${selectedPlotId === item.plot.id ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'}`}>
+                                          Hace {item.daysSince}d
+                                      </span>
+                                  )}
+                              </div>
+                              <p className={`text-[10px] uppercase font-bold tracking-widest relative z-10 truncate ${selectedPlotId === item.plot.id ? 'text-emerald-100' : 'text-slate-400'}`}>
+                                  {item.locationName}
+                              </p>
+                              {/* Indicador visual de urgencia */}
+                              <div className={`absolute bottom-0 left-0 h-1 transition-all ${item.daysSince > 7 ? 'bg-red-500' : 'bg-emerald-400'} opacity-30`} style={{ width: `${Math.min(item.daysSince * 10, 100)}%` }}></div>
+                          </button>
+                      ))
+                  )}
               </div>
           </div>
 
