@@ -69,8 +69,7 @@ export default function Login() {
                   </h2>
                   
                   <p className="text-[#006633]/70 text-2xl font-bold leading-relaxed max-w-md">
-                      de la bio economía del Cáñamo Industrial
-                  </p>
+                    </p>
               </div>
           </div>
 
