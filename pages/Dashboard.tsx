@@ -95,7 +95,7 @@ export default function Dashboard() {
       </div>
 
       {/* ACCESS CARD FOR SIMPLE TRIAL MANAGER */}
-      <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 rounded-[32px] p-8 text-white shadow-xl flex items-center justify-between relative overflow-hidden group cursor-pointer hover:scale-[1.01] transition-all" onClick={() => navigate('/trials-lite')}>
+      <Link to="/trials-lite" className="bg-gradient-to-r from-emerald-600 to-emerald-500 rounded-[32px] p-8 text-white shadow-xl flex items-center justify-between relative overflow-hidden group cursor-pointer hover:scale-[1.01] transition-all block">
           <div className="relative z-10">
               <div className="flex items-center gap-3 mb-2">
                   <div className="bg-white/20 p-2 rounded-xl backdrop-blur-sm"><ClipboardList size={24}/></div>
@@ -110,7 +110,7 @@ export default function Dashboard() {
           </div>
           <FlaskConical size={180} className="absolute -right-6 -bottom-10 text-emerald-800 opacity-20 rotate-12 group-hover:rotate-0 transition-transform duration-500"/>
           <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-400 opacity-20 blur-[80px] rounded-full"></div>
-      </div>
+      </Link>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <MetricCard label="Ensayos Activos" value={relevantPlots.filter(p => p.status === 'Activa').length} trend="+24%" icon={Activity} colorClass="bg-hemp-600" subtext="8 unidades en etapa reproductiva" />
