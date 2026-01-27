@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
@@ -7,6 +6,14 @@ import {
     Landmark, Sprout, Waves, ShieldCheck
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
+
+const generateId = () => {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        const r = Math.random() * 16 | 0;
+        return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+};
 
 export default function PublicRegistration() {
     const { addClient, appName } = useAppContext();
@@ -37,7 +44,7 @@ export default function PublicRegistration() {
         setIsSaving(true);
         try {
             const success = await addClient({
-                id: crypto.randomUUID(),
+                id: generateId(),
                 name: formData.name,
                 contactName: formData.contactName,
                 contactPhone: formData.phone,
