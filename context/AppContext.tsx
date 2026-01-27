@@ -137,9 +137,16 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         const storedUser = localStorage.getItem('ht_session_user');
         if (storedUser) setCurrentUser(JSON.parse(storedUser));
         refreshData();
-        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        
+        // FIX: Default to LIGHT mode unless 'dark' is explicitly saved in localStorage.
+        // Removed auto-detection of system preference to satisfy user request.
+        const savedTheme = localStorage.getItem('ht_theme') as 'light' | 'dark';
+        if (savedTheme === 'dark') {
             setTheme('dark');
             document.documentElement.classList.add('dark');
+        } else {
+            setTheme('light');
+            document.documentElement.classList.remove('dark');
         }
     }, []);
 
@@ -238,6 +245,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         setTheme(prev => {
             const next = prev === 'light' ? 'dark' : 'light';
             document.documentElement.classList.toggle('dark', next === 'dark');
+            localStorage.setItem('ht_theme', next); // Persist selection
             return next;
         });
     };
@@ -249,9 +257,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         localStorage.setItem('ht_app_logo', logo);
         
         try {
-            // Check if row exists (using singleton ID 1 usually, or just checking if any exist)
             const { data } = await supabase.from('platform_settings').select('id').maybeSingle();
-            
             if (data) {
                 await supabase.from('platform_settings').update({ app_name: name, app_logo: logo }).eq('id', data.id);
             } else {
