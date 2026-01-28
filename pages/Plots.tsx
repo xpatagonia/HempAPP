@@ -130,7 +130,9 @@ export default function Plots() {
 
   const availableBatches = useMemo(() => {
       return seedBatches.filter(b => {
-          if (!b.isActive || b.remainingQuantity <= 0) return false;
+          // FIX: Filter out dust/floating point errors (< 1 gram) to hide "1.38e-17" lots
+          if (!b.isActive || b.remainingQuantity <= 0.001) return false;
+          
           if ((isClient || isTechnician) && currentUser?.clientId) {
               const storage = storagePoints.find(s => s.id === b.storagePointId);
               if (storage && storage.clientId && storage.clientId !== currentUser.clientId) return false;
@@ -193,8 +195,12 @@ export default function Plots() {
     }
 
     const selectedBatch = seedBatches.find(b => b.id === formData.seedBatchId);
-    if (selectedBatch && calculatedUsedKg > selectedBatch.remainingQuantity) {
-        alert(`STOCK INSUFICIENTE: El lote posee ${selectedBatch.remainingQuantity} kg.`);
+    
+    // FIX: Add small epsilon to float comparison to prevent errors when consuming exact remaining amount
+    // e.g. 25.0 vs 25.00000000001
+    const epsilon = 0.0001; 
+    if (selectedBatch && calculatedUsedKg > (selectedBatch.remainingQuantity + epsilon)) {
+        alert(`STOCK INSUFICIENTE: El lote posee ${Number(selectedBatch.remainingQuantity.toFixed(3))} kg.`);
         return;
     }
 
@@ -219,9 +225,11 @@ export default function Plots() {
         const success = await addPlot(payload);
         
         if (success && selectedBatch && calculatedUsedKg > 0) {
+            // FIX: Ensure we don't go below zero due to float math and round strictly
+            const newRemaining = Math.max(0, selectedBatch.remainingQuantity - calculatedUsedKg);
             await updateSeedBatch({
                 ...selectedBatch,
-                remainingQuantity: selectedBatch.remainingQuantity - calculatedUsedKg
+                remainingQuantity: Number(newRemaining.toFixed(3)) // Force round to 3 decimals
             });
         }
 
@@ -455,7 +463,9 @@ export default function Plots() {
                                           <select className={inputClass} value={formData.seedBatchId} onChange={e => setFormData({...formData, seedBatchId: e.target.value})}>
                                               <option value="">Seleccione stock disponible...</option>
                                               {availableBatches.map(b => (
-                                                  <option key={b.id} value={b.id}>{b.batchCode} ({b.remainingQuantity} kg restantes)</option>
+                                                  <option key={b.id} value={b.id}>
+                                                      {b.batchCode} ({Number(b.remainingQuantity.toFixed(3))} kg restantes)
+                                                  </option>
                                               ))}
                                           </select>
                                       </div>
@@ -493,14 +503,14 @@ export default function Plots() {
                                   <div>
                                       <label className={labelClass}>Dosis Real Utilizada</label>
                                       <div className="flex gap-2">
-                                          <input type="number" step="0.1" className={`${inputClass} flex-1 font-black text-blue-700`} value={formData.usedSeedValue} onChange={e => setFormData({...formData, usedSeedValue: Number(e.target.value)})} />
+                                          <input type="number" step="0.001" min="0" className={`${inputClass} flex-1 font-black text-blue-700`} value={formData.usedSeedValue} onChange={e => setFormData({...formData, usedSeedValue: Number(e.target.value)})} />
                                           <select className="w-20 bg-white dark:bg-slate-800 border rounded-xl text-[10px] font-black uppercase" value={formData.usedSeedUnit} onChange={e => setFormData({...formData, usedSeedUnit: e.target.value as any})}>
                                               <option value="kg">KG</option>
                                               <option value="gr">GR</option>
                                               <option value="tn">TN</option>
                                           </select>
                                       </div>
-                                      <p className="text-[9px] text-blue-500 font-bold mt-2 uppercase">Equivalente: {calculatedUsedKg.toFixed(2)} KG</p>
+                                      <p className="text-[9px] text-blue-500 font-bold mt-2 uppercase">Equivalente: {calculatedUsedKg.toFixed(3)} KG</p>
                                   </div>
                               </div>
                               
