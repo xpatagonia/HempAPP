@@ -211,19 +211,8 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     };
 
     const login = async (email: string, password: string): Promise<boolean> => {
-        if (email.toLowerCase() === 'admin@hempc.com.ar' && password === '@Admin130126@') {
-            const rootUser: User = { 
-                id: 'root-user', 
-                name: 'Super Administrador (Master)', 
-                email: 'admin@hempc.com.ar', 
-                role: 'super_admin', 
-                isNetworkMember: true, 
-                jobTitle: 'Director de Sistema' 
-            };
-            setCurrentUser(rootUser);
-            localStorage.setItem('ht_session_user', JSON.stringify(rootUser));
-            return true;
-        }
+        // SECURITY UPDATE: Hardcoded root credentials removed for GitHub compliance.
+        // Authentication now relies 100% on Supabase DB check.
         try {
             const { data, error } = await supabase.from('users').select('*').eq('email', email).eq('password', password).maybeSingle();
             if (!error && data) {
