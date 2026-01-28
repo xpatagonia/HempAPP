@@ -171,7 +171,8 @@ export default function SeedBatches() {
 
   const handleBatchSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
-      if (!batchFormData.varietyId || !batchFormData.batchCode || calculatedEntryKg <= 0 || isSubmitting) {
+      // Relaxed check: calculatedEntryKg must be > 0 (float safe)
+      if (!batchFormData.varietyId || !batchFormData.batchCode || calculatedEntryKg <= 0.000001 || isSubmitting) {
           alert("Por favor complete los campos obligatorios y asegure que la cantidad sea mayor a 0.");
           return;
       }
@@ -182,8 +183,8 @@ export default function SeedBatches() {
           const payload = { 
             ...baseData, 
             id: editingBatchId || generateId(), 
-            initialQuantity: Number(calculatedEntryKg),
-            remainingQuantity: editingBatchId ? Number(batchFormData.remainingQuantity || 0) : Number(calculatedEntryKg), 
+            initialQuantity: Number(calculatedEntryKg.toFixed(3)), // Enforce 3 decimals
+            remainingQuantity: editingBatchId ? Number(batchFormData.remainingQuantity || 0) : Number(calculatedEntryKg.toFixed(3)), 
             pricePerKg: Number(batchFormData.pricePerKg || 0), 
             isActive: true, 
             createdAt: batchFormData.createdAt || new Date().toISOString() 
@@ -204,8 +205,10 @@ export default function SeedBatches() {
       e.preventDefault();
       const batch = seedBatches.find(b => b.id === moveFormData.batchId);
       
-      if (!batch || calculatedMoveKg > batch.remainingQuantity) {
-          alert(`Error: Stock insuficiente. El lote posee ${batch?.remainingQuantity || 0} kg.`);
+      // FIX: Add epsilon for float comparison safety
+      const epsilon = 0.0001;
+      if (!batch || calculatedMoveKg > (batch.remainingQuantity + epsilon)) {
+          alert(`Error: Stock insuficiente. El lote posee ${Number(batch?.remainingQuantity.toFixed(3)) || 0} kg.`);
           return;
       }
       if (!moveFormData.targetLocationId) {
@@ -223,7 +226,7 @@ export default function SeedBatches() {
               clientId: finalClientId,
               id: generateId(), 
               status: 'En Tránsito', 
-              quantity: Number(calculatedMoveKg),
+              quantity: Number(calculatedMoveKg.toFixed(3)),
               originStorageId: batch.storagePointId
           } as SeedMovement;
           
@@ -236,7 +239,7 @@ export default function SeedBatches() {
               });
               
               setIsMoveModalOpen(false);
-              alert(`✅ Despacho registrado. Se han descontado ${calculatedMoveKg} kg del lote.`);
+              alert(`✅ Despacho registrado. Se han descontado ${calculatedMoveKg.toFixed(3)} kg del lote.`);
           }
       } catch (err) {
           alert("Error de comunicación logística.");
@@ -516,7 +519,7 @@ export default function SeedBatches() {
                         <div className="space-y-4">
                             <label className={labelClass}>Masa Inicial *</label>
                             <div className="flex gap-2">
-                                <input required type="number" step="0.001" className={`${inputClass} flex-1 text-2xl font-black text-emerald-700`} value={batchFormData.inputValue} onChange={e => setBatchFormData({...batchFormData, inputValue: Number(e.target.value)})} />
+                                <input required type="number" step="any" min="0" className={`${inputClass} flex-1 text-2xl font-black text-emerald-700`} value={batchFormData.inputValue} onChange={e => setBatchFormData({...batchFormData, inputValue: Number(e.target.value)})} />
                                 <select className="w-24 bg-white dark:bg-slate-800 border border-emerald-200 dark:border-slate-700 rounded-xl text-[10px] font-black uppercase text-center" value={entryUnit} onChange={e => setEntryUnit(e.target.value as MassUnit)}>
                                     <option value="gr">GR</option>
                                     <option value="kg">KG</option>
@@ -579,7 +582,7 @@ export default function SeedBatches() {
                                     <div>
                                         <label className={labelClass}>Masa a Despachar *</label>
                                         <div className="flex gap-2">
-                                            <input required type="number" step="0.001" className={`${inputClass} flex-1 text-xl font-black`} value={moveFormData.inputValue} onChange={e => setMoveFormData({...moveFormData, inputValue: Number(e.target.value)})} />
+                                            <input required type="number" step="any" min="0" className={`${inputClass} flex-1 text-xl font-black`} value={moveFormData.inputValue} onChange={e => setMoveFormData({...moveFormData, inputValue: Number(e.target.value)})} />
                                             <select className="w-20 bg-gray-100 dark:bg-slate-800 rounded-xl text-[9px] font-black uppercase text-center" value={moveUnit} onChange={e => setMoveUnit(e.target.value as MassUnit)}>
                                                 <option value="gr">GR</option>
                                                 <option value="kg">KG</option>
