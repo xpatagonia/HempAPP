@@ -503,7 +503,7 @@ export default function Plots() {
                                   <div>
                                       <label className={labelClass}>Dosis Real Utilizada</label>
                                       <div className="flex gap-2">
-                                          <input type="number" step="0.001" min="0" className={`${inputClass} flex-1 font-black text-blue-700`} value={formData.usedSeedValue} onChange={e => setFormData({...formData, usedSeedValue: Number(e.target.value)})} />
+                                          <input type="number" step="any" min="0" className={`${inputClass} flex-1 font-black text-blue-700`} value={formData.usedSeedValue} onChange={e => setFormData({...formData, usedSeedValue: Number(e.target.value)})} />
                                           <select className="w-20 bg-white dark:bg-slate-800 border rounded-xl text-[10px] font-black uppercase" value={formData.usedSeedUnit} onChange={e => setFormData({...formData, usedSeedUnit: e.target.value as any})}>
                                               <option value="kg">KG</option>
                                               <option value="gr">GR</option>
