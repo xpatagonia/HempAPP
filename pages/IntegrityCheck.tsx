@@ -1,11 +1,10 @@
-
 import React, { useMemo, useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { 
     ShieldAlert, AlertCircle, CheckCircle2, 
     Zap, Package, Sprout, MapPin, 
     Activity, RefreshCw, Trash2, Edit2, ShieldCheck,
-    ChevronRight, ExternalLink, ArrowRight, Loader2
+    ChevronRight, ExternalLink, ArrowRight, Loader2, Scale
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -15,6 +14,7 @@ export default function IntegrityCheck() {
         updateSeedBatch, isRefreshing, refreshData 
     } = useAppContext();
     const [isFixing, setIsFixing] = useState(false);
+    const [isFixingPrecision, setIsFixingPrecision] = useState(false);
 
     const audit = useMemo(() => {
         const issues: any[] = [];
@@ -26,6 +26,11 @@ export default function IntegrityCheck() {
             }
             if (b.isActive && b.remainingQuantity === 0) {
                 issues.push({ id: `b-z-${b.id}`, level: 'warning', cat: 'Inventario', item: b.batchCode, msg: 'Lote activo pero sin existencias', type: 'empty-batch', data: b });
+            }
+            // DETECTAR ERRORES FLOTANTES (Ej: 1.38e-17)
+            const rounded = Number(b.remainingQuantity.toFixed(3));
+            if (Math.abs(b.remainingQuantity - rounded) > 0.000001) {
+                 issues.push({ id: `b-fp-${b.id}`, level: 'warning', cat: 'Precisión', item: b.batchCode, msg: `Basura decimal detectada: ${b.remainingQuantity}`, type: 'precision-batch', data: b });
             }
         });
 
@@ -60,7 +65,8 @@ export default function IntegrityCheck() {
             issues,
             criticalCount: issues.filter(i => i.level === 'critical').length,
             warningCount: issues.filter(i => i.level === 'warning').length,
-            totalCount: issues.length
+            totalCount: issues.length,
+            precisionIssues: issues.filter(i => i.type === 'precision-batch')
         };
     }, [seedBatches, plots, locations, trialRecords]);
 
@@ -77,6 +83,27 @@ export default function IntegrityCheck() {
             await refreshData();
         } finally {
             setIsFixing(false);
+        }
+    };
+
+    const handleFixPrecision = async () => {
+        const targets = audit.precisionIssues;
+        if (targets.length === 0) return;
+
+        setIsFixingPrecision(true);
+        try {
+            let fixed = 0;
+            for (const issue of targets) {
+                const cleanQty = Number(issue.data.remainingQuantity.toFixed(3));
+                await updateSeedBatch({ ...issue.data, remainingQuantity: cleanQty });
+                fixed++;
+            }
+            alert(`✅ Se corrigieron ${fixed} lotes con errores de coma flotante.`);
+            await refreshData();
+        } catch (e) {
+            alert("Error al sanear base de datos.");
+        } finally {
+            setIsFixingPrecision(false);
         }
     };
 
@@ -134,25 +161,48 @@ export default function IntegrityCheck() {
                 </div>
             </div>
 
-            {audit.warningCount > 0 && audit.issues.some(i => i.type === 'empty-batch') && (
-                <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 p-6 rounded-[32px] flex flex-col md:flex-row justify-between items-center gap-4">
-                    <div className="flex items-center">
-                        <div className="bg-amber-100 dark:bg-amber-900/30 p-3 rounded-2xl mr-4"><Zap className="text-amber-600" size={24}/></div>
-                        <div>
-                            <h4 className="font-black text-amber-900 dark:text-amber-200 uppercase text-xs tracking-widest">Optimización de Interfaz</h4>
-                            <p className="text-xs text-amber-700 dark:text-amber-400 font-bold">Se detectaron lotes sin stock marcados como 'Activos'. Esto sobrecarga los selectores de siembra.</p>
+            {/* AUTO FIXERS SECTION */}
+            <div className="space-y-4">
+                {audit.precisionIssues.length > 0 && (
+                    <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30 p-6 rounded-[32px] flex flex-col md:flex-row justify-between items-center gap-4 animate-in slide-in-from-top-2">
+                        <div className="flex items-center">
+                            <div className="bg-blue-100 dark:bg-blue-900/30 p-3 rounded-2xl mr-4"><Scale className="text-blue-600" size={24}/></div>
+                            <div>
+                                <h4 className="font-black text-blue-900 dark:text-blue-200 uppercase text-xs tracking-widest">Errores de Precisión Decimal</h4>
+                                <p className="text-xs text-blue-700 dark:text-blue-400 font-bold">Se detectaron {audit.precisionIssues.length} lotes con residuos matemáticos (ej: 1.38e-17). Esto impide operaciones exactas.</p>
+                            </div>
                         </div>
+                        <button 
+                            onClick={handleFixPrecision}
+                            disabled={isFixingPrecision}
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg flex items-center transition-all disabled:opacity-50"
+                        >
+                            {isFixingPrecision ? <Loader2 className="animate-spin mr-2" size={14}/> : <ShieldCheck className="mr-2" size={14}/>}
+                            Sanear Decimales
+                        </button>
                     </div>
-                    <button 
-                        onClick={handleAutoFixEmptyBatches}
-                        disabled={isFixing}
-                        className="bg-amber-600 hover:bg-amber-700 text-white px-8 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg flex items-center transition-all disabled:opacity-50"
-                    >
-                        {isFixing ? <Loader2 className="animate-spin mr-2" size={14}/> : <ShieldCheck className="mr-2" size={14}/>}
-                        Limpiar Lotes Vacíos
-                    </button>
-                </div>
-            )}
+                )}
+
+                {audit.warningCount > 0 && audit.issues.some(i => i.type === 'empty-batch') && (
+                    <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 p-6 rounded-[32px] flex flex-col md:flex-row justify-between items-center gap-4">
+                        <div className="flex items-center">
+                            <div className="bg-amber-100 dark:bg-amber-900/30 p-3 rounded-2xl mr-4"><Zap className="text-amber-600" size={24}/></div>
+                            <div>
+                                <h4 className="font-black text-amber-900 dark:text-amber-200 uppercase text-xs tracking-widest">Optimización de Interfaz</h4>
+                                <p className="text-xs text-amber-700 dark:text-amber-400 font-bold">Se detectaron lotes sin stock marcados como 'Activos'. Esto sobrecarga los selectores de siembra.</p>
+                            </div>
+                        </div>
+                        <button 
+                            onClick={handleAutoFixEmptyBatches}
+                            disabled={isFixing}
+                            className="bg-amber-600 hover:bg-amber-700 text-white px-8 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg flex items-center transition-all disabled:opacity-50"
+                        >
+                            {isFixing ? <Loader2 className="animate-spin mr-2" size={14}/> : <ShieldCheck className="mr-2" size={14}/>}
+                            Limpiar Lotes Vacíos
+                        </button>
+                    </div>
+                )}
+            </div>
 
             <div className="bg-white dark:bg-slate-900 rounded-[40px] shadow-sm border border-gray-100 dark:border-slate-800 overflow-hidden">
                 <div className="px-10 py-6 border-b dark:border-slate-800 flex justify-between items-center bg-gray-50/50 dark:bg-slate-950/50">
