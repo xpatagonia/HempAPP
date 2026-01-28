@@ -388,19 +388,19 @@ export default function SeedBatches() {
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in">
                       {stockByWarehouse.length === 0 ? (
                           <div className="col-span-3 p-12 text-center text-gray-400 italic">No hay stock disponible agrupado.</div>
-                      ) : stockByWarehouse.map((group, idx) => (
+                      ) : stockByWarehouse.map((group: any, idx) => (
                           <div key={idx} className="bg-white dark:bg-slate-900 rounded-[32px] shadow-sm border dark:border-slate-800 p-6 flex flex-col">
                               <div className="flex items-start justify-between mb-4 pb-4 border-b dark:border-slate-800">
                                   <div>
                                       <h3 className="font-black text-slate-800 dark:text-white uppercase tracking-tighter text-lg">{group.storage?.name || 'Ubicación Desconocida'}</h3>
-                                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest flex items-center"><MapPin size={10} className="mr-1"/> {group.storage?.city || 'S/D'}</p>
+                                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center"><MapPin size={10} className="mr-1"/> {group.storage?.city || 'S/D'}</p>
                                   </div>
                                   <div className="bg-hemp-50 dark:bg-hemp-900/20 text-hemp-600 px-3 py-1 rounded-xl text-xs font-black">
                                       {Number(group.totalKg.toFixed(2)).toLocaleString()} kg
                                   </div>
                               </div>
                               <div className="space-y-2 flex-1 overflow-y-auto max-h-[200px] custom-scrollbar">
-                                  {Object.entries(group.items).map(([variety, qty]) => (
+                                  {Object.entries(group.items).map(([variety, qty]: [string, any]) => (
                                       <div key={variety} className="flex justify-between items-center bg-gray-50 dark:bg-slate-950/50 p-2 rounded-lg">
                                           <span className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase">{variety}</span>
                                           <span className="text-xs font-black text-slate-800 dark:text-white">{Number(qty.toFixed(3)).toLocaleString()} kg</span>
