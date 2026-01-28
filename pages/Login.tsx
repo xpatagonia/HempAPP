@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, AlertCircle, Loader2, RefreshCw, Zap, ShieldCheck, Leaf, Smartphone } from 'lucide-react';
+import { ArrowRight, AlertCircle, Loader2, RefreshCw, Zap, ShieldCheck, Leaf, Smartphone, Wifi, WifiOff } from 'lucide-react';
+import { checkConnection } from '../supabaseClient';
 
 export default function Login() {
   const { login, appName, appLogo } = useAppContext();
@@ -10,12 +11,25 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
 
   // Get current URL for QR Code
   const currentUrl = window.location.origin;
 
+  useEffect(() => {
+      const verify = async () => {
+          const isConnected = await checkConnection();
+          setConnectionStatus(isConnected ? 'connected' : 'disconnected');
+      };
+      verify();
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (connectionStatus === 'disconnected') {
+        setError('Sin conexión a base de datos. Verifique sus variables de entorno (.env).');
+        return;
+    }
     setError(''); setIsLoading(true);
     try {
         const success = await login(email, password);
@@ -69,7 +83,8 @@ export default function Login() {
                   </h2>
                   
                   <p className="text-[#006633]/70 text-2xl font-bold leading-relaxed max-w-md">
-                    </p>
+                      de la bio economía del Cáñamo Industrial
+                  </p>
               </div>
           </div>
 
@@ -103,7 +118,7 @@ export default function Login() {
       </div>
 
       {/* Lado Derecho: Formulario con fondo Blanco */}
-      <div className="flex-1 flex flex-col items-center justify-center p-8 md:p-16 bg-white dark:bg-slate-950 transition-colors duration-500">
+      <div className="flex-1 flex flex-col items-center justify-center p-8 md:p-16 bg-white dark:bg-slate-950 transition-colors duration-500 relative">
         <div className="w-full max-w-md space-y-12">
             
             {/* Mobile Header Only */}
@@ -164,7 +179,7 @@ export default function Login() {
 
                 <button 
                   type="submit" 
-                  disabled={isLoading} 
+                  disabled={isLoading || connectionStatus === 'disconnected'} 
                   className="w-full bg-[#006633] hover:bg-[#004d26] text-white py-6 rounded-[32px] font-black text-xs uppercase tracking-[0.4em] active:scale-[0.98] transition-all shadow-2xl shadow-green-900/20 disabled:opacity-50 flex items-center justify-center group"
                 >
                     {isLoading ? <Loader2 className="animate-spin" size={24} /> : (
@@ -173,7 +188,22 @@ export default function Login() {
                 </button>
             </form>
 
-            <div className="pt-12 text-center">
+            <div className="pt-8 text-center space-y-4">
+                {/* Connection Status Indicator */}
+                <div className={`inline-flex items-center px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all ${
+                    connectionStatus === 'connected' ? 'bg-green-50 text-green-700 border-green-200' :
+                    connectionStatus === 'disconnected' ? 'bg-red-50 text-red-600 border-red-200' :
+                    'bg-slate-50 text-slate-500 border-slate-200'
+                }`}>
+                    {connectionStatus === 'checking' && <Loader2 size={12} className="mr-2 animate-spin"/>}
+                    {connectionStatus === 'connected' && <Wifi size={12} className="mr-2"/>}
+                    {connectionStatus === 'disconnected' && <WifiOff size={12} className="mr-2"/>}
+                    
+                    {connectionStatus === 'checking' && 'Verificando Red...'}
+                    {connectionStatus === 'connected' && 'Sistema Online'}
+                    {connectionStatus === 'disconnected' && 'Sin Conexión DB'}
+                </div>
+
                 <p className="text-slate-300 text-[10px] font-bold uppercase tracking-widest">
                     &copy; 2025 PatagonianC LTDA | Red Industrial
                 </p>
