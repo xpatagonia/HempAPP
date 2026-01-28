@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { 
@@ -27,9 +28,9 @@ export default function IntegrityCheck() {
             if (b.isActive && b.remainingQuantity === 0) {
                 issues.push({ id: `b-z-${b.id}`, level: 'warning', cat: 'Inventario', item: b.batchCode, msg: 'Lote activo pero sin existencias', type: 'empty-batch', data: b });
             }
-            // DETECTAR ERRORES FLOTANTES (Ej: 1.38e-17)
+            // DETECTAR ERRORES FLOTANTES (Ej: 1.38e-17) y Errores de Redondeo (Ej: 0.12499999)
             const rounded = Number(b.remainingQuantity.toFixed(3));
-            if (Math.abs(b.remainingQuantity - rounded) > 0.000001) {
+            if (Math.abs(b.remainingQuantity - rounded) > 0.0000001) {
                  issues.push({ id: `b-fp-${b.id}`, level: 'warning', cat: 'Precisión', item: b.batchCode, msg: `Basura decimal detectada: ${b.remainingQuantity}`, type: 'precision-batch', data: b });
             }
         });
