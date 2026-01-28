@@ -107,7 +107,8 @@ export default function SeedBatches() {
       const grouped: Record<string, { storage: any, items: Record<string, number>, totalKg: number }> = {};
 
       filteredBatches.forEach(b => {
-          if (b.remainingQuantity <= 0) return;
+          // FIX: Floating point precision check. Ignore dust < 1g
+          if (b.remainingQuantity <= 0.001) return;
           
           const sp = storagePoints.find(s => s.id === b.storagePointId);
           const spId = sp ? sp.id : 'unknown';
@@ -285,8 +286,6 @@ export default function SeedBatches() {
 
   return (
     <div className="animate-in fade-in duration-500 space-y-8">
-      {/* ... (Render code similar to original but using generateId() where appropriate implicitly via handlers) ... */}
-      {/* Note: The UI structure remains identical, only the internal handlers for UUID generation changed */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
             <h1 className="text-3xl font-black text-gray-800 dark:text-white uppercase tracking-tighter italic">Inventario <span className="text-hemp-600">& Logística</span></h1>
@@ -301,7 +300,7 @@ export default function SeedBatches() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <MetricCard label="Stock Disponible Red" value={`${stats.totalKg.toLocaleString()} kg`} icon={Package} colorClass="bg-blue-500" />
+          <MetricCard label="Stock Disponible Red" value={`${stats.totalKg.toLocaleString(undefined, {maximumFractionDigits: 0})} kg`} icon={Package} colorClass="bg-blue-500" />
           <MetricCard label="Almacenes Activos" value={storagePoints.length} icon={Warehouse} colorClass="bg-hemp-500" />
           <MetricCard label="Cargas en Tránsito" value={stats.activeTransits} icon={Truck} colorClass="bg-purple-500" />
       </div>
@@ -345,6 +344,8 @@ export default function SeedBatches() {
                               ) : filteredBatches.map(batch => {
                                   const v = varieties.find(v => v.id === batch.varietyId);
                                   const sp = storagePoints.find(s => s.id === batch.storagePointId);
+                                  // FIX: Display rounded number to avoid scientific notation
+                                  const displayQty = Number(batch.remainingQuantity.toFixed(3));
                                   return (
                                       <tr key={batch.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors group">
                                           <td className="px-8 py-5">
@@ -356,7 +357,7 @@ export default function SeedBatches() {
                                               <div className="text-[9px] text-gray-400 uppercase font-black">{sp?.city || '-'}</div>
                                           </td>
                                           <td className="px-8 py-5 text-center">
-                                              <span className={`px-4 py-1.5 rounded-full font-black text-xs ${batch.remainingQuantity <= 0 ? 'bg-gray-100 text-gray-400' : 'bg-green-100 text-green-700 shadow-sm'}`}>{batch.remainingQuantity.toLocaleString()} kg</span>
+                                              <span className={`px-4 py-1.5 rounded-full font-black text-xs ${batch.remainingQuantity <= 0.001 ? 'bg-gray-100 text-gray-400' : 'bg-green-100 text-green-700 shadow-sm'}`}>{displayQty.toLocaleString()} kg</span>
                                           </td>
                                           <td className="px-8 py-5 text-right">
                                               <div className="flex justify-end space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -382,14 +383,14 @@ export default function SeedBatches() {
                                       <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest flex items-center"><MapPin size={10} className="mr-1"/> {group.storage?.city || 'S/D'}</p>
                                   </div>
                                   <div className="bg-hemp-50 dark:bg-hemp-900/20 text-hemp-600 px-3 py-1 rounded-xl text-xs font-black">
-                                      {group.totalKg.toLocaleString()} kg
+                                      {Number(group.totalKg.toFixed(2)).toLocaleString()} kg
                                   </div>
                               </div>
                               <div className="space-y-2 flex-1 overflow-y-auto max-h-[200px] custom-scrollbar">
                                   {Object.entries(group.items).map(([variety, qty]) => (
                                       <div key={variety} className="flex justify-between items-center bg-gray-50 dark:bg-slate-950/50 p-2 rounded-lg">
                                           <span className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase">{variety}</span>
-                                          <span className="text-xs font-black text-slate-800 dark:text-white">{qty.toLocaleString()} kg</span>
+                                          <span className="text-xs font-black text-slate-800 dark:text-white">{Number(qty.toFixed(3)).toLocaleString()} kg</span>
                                       </div>
                                   ))}
                               </div>
@@ -563,12 +564,13 @@ export default function SeedBatches() {
                                         <label className={labelClass}>Lote de Semilla *</label>
                                         <select required className={inputClass} value={moveFormData.batchId} onChange={e => setMoveFormData({...moveFormData, batchId: e.target.value})}>
                                             <option value="">Seleccione stock...</option>
-                                            {seedBatches.filter(b => b.remainingQuantity > 0).map(b => {
+                                            {/* FIX: Filter out tiny floating point leftovers */}
+                                            {seedBatches.filter(b => b.remainingQuantity > 0.001).map(b => {
                                                 const v = varieties.find(v => v.id === b.varietyId);
                                                 const sp = storagePoints.find(s => s.id === b.storagePointId);
                                                 return (
                                                     <option key={b.id} value={b.id}>
-                                                        {b.batchCode} - {v?.name} ({b.remainingQuantity}kg en {sp?.name})
+                                                        {b.batchCode} - {v?.name} ({Number(b.remainingQuantity.toFixed(3))}kg en {sp?.name})
                                                     </option>
                                                 );
                                             })}
@@ -674,7 +676,7 @@ export default function SeedBatches() {
                       </div>
                       <div className="bg-gray-50 dark:bg-slate-950 p-4 rounded-3xl border dark:border-slate-800">
                           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Existencias</p>
-                          <p className="text-lg font-black text-slate-700 dark:text-slate-300">{selectedBatch.remainingQuantity.toLocaleString()} KG</p>
+                          <p className="text-lg font-black text-slate-700 dark:text-slate-300">{Number(selectedBatch.remainingQuantity.toFixed(3)).toLocaleString()} KG</p>
                       </div>
                       <div className="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-3xl border border-blue-100 dark:border-blue-900/30">
                           <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1">Categoría</p>
@@ -699,4 +701,3 @@ export default function SeedBatches() {
     </div>
   );
 }
-
