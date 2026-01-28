@@ -196,11 +196,13 @@ export default function Plots() {
 
     const selectedBatch = seedBatches.find(b => b.id === formData.seedBatchId);
     
-    // FIX: Add small epsilon to float comparison to prevent errors when consuming exact remaining amount
-    // e.g. 25.0 vs 25.00000000001
+    // FIX: Math Safe Comparison
     const epsilon = 0.0001; 
-    if (selectedBatch && calculatedUsedKg > (selectedBatch.remainingQuantity + epsilon)) {
-        alert(`STOCK INSUFICIENTE: El lote posee ${Number(selectedBatch.remainingQuantity.toFixed(3))} kg.`);
+    const currentStock = Number(selectedBatch?.remainingQuantity || 0);
+    const usage = Number(calculatedUsedKg);
+
+    if (selectedBatch && usage > (currentStock + epsilon)) {
+        alert(`STOCK INSUFICIENTE: El lote posee ${currentStock.toFixed(3)} kg y se requieren ${usage.toFixed(3)} kg.`);
         return;
     }
 
@@ -224,12 +226,19 @@ export default function Plots() {
 
         const success = await addPlot(payload);
         
-        if (success && selectedBatch && calculatedUsedKg > 0) {
-            // FIX: Ensure we don't go below zero due to float math and round strictly
-            const newRemaining = Math.max(0, selectedBatch.remainingQuantity - calculatedUsedKg);
+        if (success && selectedBatch && usage > 0) {
+            // FIX: Robust Floating Point Subtraction
+            // 150g (0.150) - 25g (0.025) = 0.125
+            // Round to 3 decimals to avoid 0.1249999999
+            let newRemaining = currentStock - usage;
+            newRemaining = Math.round(newRemaining * 1000) / 1000;
+            
+            // Safety cap at 0
+            if (newRemaining < 0) newRemaining = 0;
+
             await updateSeedBatch({
                 ...selectedBatch,
-                remainingQuantity: Number(newRemaining.toFixed(3)) // Force round to 3 decimals
+                remainingQuantity: newRemaining
             });
         }
 
@@ -510,7 +519,9 @@ export default function Plots() {
                                               <option value="tn">TN</option>
                                           </select>
                                       </div>
-                                      <p className="text-[9px] text-blue-500 font-bold mt-2 uppercase">Equivalente: {calculatedUsedKg.toFixed(3)} KG</p>
+                                      <p className="text-[9px] text-blue-500 font-bold mt-2 uppercase bg-blue-100/50 p-2 rounded-lg">
+                                          Se descontarán: {calculatedUsedKg.toFixed(3)} KG del stock
+                                      </p>
                                   </div>
                               </div>
                               
