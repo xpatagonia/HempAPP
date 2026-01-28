@@ -60,7 +60,7 @@ export default function SeedBatches() {
   const [moveUnit, setMoveUnit] = useState<MassUnit>('kg');
 
   const [batchFormData, setBatchFormData] = useState<any>({
-    varietyId: '', supplierId: '', batchCode: '', initialQuantity: 0, inputValue: 0, purchaseDate: new Date().toISOString().split('T')[0], pricePerKg: 0, storagePointId: '', isActive: true,
+    varietyId: '', supplierId: '', batchCode: '', initialQuantity: 0, remainingQuantity: 0, inputValue: 0, purchaseDate: new Date().toISOString().split('T')[0], pricePerKg: 0, storagePointId: '', isActive: true,
     labelSerialNumber: '', category: 'C1', certificationNumber: '', gs1Code: '', analysisDate: '', germination: 90, purity: 99, notes: ''
   });
 
@@ -172,7 +172,7 @@ export default function SeedBatches() {
   const handleBatchSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
       // Relaxed check: calculatedEntryKg must be > 0 (float safe)
-      if (!batchFormData.varietyId || !batchFormData.batchCode || calculatedEntryKg <= 0.000001 || isSubmitting) {
+      if (!batchFormData.varietyId || !batchFormData.batchCode || (calculatedEntryKg <= 0.000001 && !editingBatchId) || isSubmitting) {
           alert("Por favor complete los campos obligatorios y asegure que la cantidad sea mayor a 0.");
           return;
       }
@@ -184,7 +184,7 @@ export default function SeedBatches() {
             ...baseData, 
             id: editingBatchId || generateId(), 
             initialQuantity: Number(calculatedEntryKg.toFixed(3)), // Enforce 3 decimals
-            // FIX: Sanitizing floating point ghosts on save
+            // FIX: Allow explicit correction of remainingQuantity during edit
             remainingQuantity: editingBatchId 
                 ? Number(Number(batchFormData.remainingQuantity || 0).toFixed(3)) 
                 : Number(calculatedEntryKg.toFixed(3)), 
@@ -210,8 +210,11 @@ export default function SeedBatches() {
       
       // FIX: Add epsilon for float comparison safety
       const epsilon = 0.0001;
-      if (!batch || calculatedMoveKg > (batch.remainingQuantity + epsilon)) {
-          alert(`Error: Stock insuficiente. El lote posee ${Number(batch?.remainingQuantity.toFixed(3)) || 0} kg.`);
+      const currentStock = Number(batch?.remainingQuantity || 0);
+      const usage = Number(calculatedMoveKg);
+
+      if (!batch || usage > (currentStock + epsilon)) {
+          alert(`Error: Stock insuficiente. El lote posee ${currentStock.toFixed(3)} kg.`);
           return;
       }
       if (!moveFormData.targetLocationId) {
@@ -229,20 +232,24 @@ export default function SeedBatches() {
               clientId: finalClientId,
               id: generateId(), 
               status: 'En Tránsito', 
-              quantity: Number(calculatedMoveKg.toFixed(3)),
+              quantity: Number(usage.toFixed(3)),
               originStorageId: batch.storagePointId
           } as SeedMovement;
           
           const success = await addSeedMovement(movePayload);
           if (success) {
-              const newQuantity = Math.max(0, batch.remainingQuantity - calculatedMoveKg);
+              // Calculate remaining with strict rounding
+              let newQuantity = currentStock - usage;
+              newQuantity = Math.round(newQuantity * 1000) / 1000;
+              if (newQuantity < 0) newQuantity = 0;
+
               await updateSeedBatch({ 
                   ...batch, 
-                  remainingQuantity: Number(newQuantity.toFixed(3)) 
+                  remainingQuantity: newQuantity
               });
               
               setIsMoveModalOpen(false);
-              alert(`✅ Despacho registrado. Se han descontado ${calculatedMoveKg.toFixed(3)} kg del lote.`);
+              alert(`✅ Despacho registrado. Se han descontado ${usage.toFixed(3)} kg del lote.`);
           }
       } catch (err) {
           alert("Error de comunicación logística.");
@@ -453,7 +460,6 @@ export default function SeedBatches() {
       )}
 
       {/* MODALES CON FORMS ACTUALIZADOS */}
-      {/* ... (Rest of the JSX remains the same, just utilizing the new ID generation logic in handlers) ... */}
       {/* MODAL INGRESO LOTE */}
       {isBatchModalOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[60] p-4">
@@ -529,6 +535,21 @@ export default function SeedBatches() {
                                     <option value="tn">TN</option>
                                 </select>
                             </div>
+                            
+                            {editingBatchId && (
+                                <div className="bg-white/50 dark:bg-slate-900/50 p-3 rounded-2xl border border-red-200 dark:border-red-900 flex flex-col gap-2">
+                                    <label className="text-[9px] font-black text-red-500 uppercase tracking-widest">Corrección Manual de Stock (KG)</label>
+                                    <input 
+                                        type="number" 
+                                        step="0.001" 
+                                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2 rounded-xl text-lg font-black text-slate-800 dark:text-white"
+                                        value={batchFormData.remainingQuantity} 
+                                        onChange={e => setBatchFormData({...batchFormData, remainingQuantity: Number(e.target.value)})} 
+                                    />
+                                    <p className="text-[8px] text-slate-400 font-medium italic">* Modificar solo para corregir errores de cálculo.</p>
+                                </div>
+                            )}
+
                             <div className="bg-white/50 dark:bg-slate-900/50 p-3 rounded-2xl border border-dashed border-emerald-200 dark:border-slate-800 flex justify-between items-center px-4">
                                 <span className="text-[8px] font-black text-slate-400 uppercase">Carga Real:</span>
                                 <span className="text-sm font-black text-emerald-600">{calculatedEntryKg.toLocaleString()} KG</span>
