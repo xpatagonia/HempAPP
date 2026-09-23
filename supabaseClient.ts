@@ -1,57 +1,69 @@
-
 import { createClient } from '@supabase/supabase-js';
 
 // ------------------------------------------------------------------
-// CONFIGURACIÓN CENTRAL DE CONEXIÓN (HYBRID MODE)
+// CONFIGURACIÓN CENTRAL DE CONEXIÓN A SUPABASE (HYBRID MODE)
 // ------------------------------------------------------------------
 
-// NOTA DE SEGURIDAD:
-// Se han eliminado las credenciales hardcoded para permitir el push a repositorios públicos/privados.
-// GitHub bloquea commits que contienen JWTs reales.
-// La aplicación leerá las claves desde:
-// 1. Variables de entorno (Vite)
-// 2. LocalStorage (Configuración manual en UI)
-
 const env = (import.meta as any).env || {};
-let SUPABASE_URL = env.VITE_SUPABASE_URL || '';
-let SUPABASE_ANON_KEY = env.VITE_SUPABASE_ANON_KEY || '';
 
-const isPlaceholder = (str: string) => !str || str.includes('placeholder') || str === '';
+export const getStoredCredentials = () => {
+  let url = env.VITE_SUPABASE_URL || '';
+  let key = env.VITE_SUPABASE_ANON_KEY || '';
 
-// Permitir anulación manual desde UI si las credenciales de entorno fallan
-if (isPlaceholder(SUPABASE_URL) || isPlaceholder(SUPABASE_ANON_KEY)) {
+  if (typeof window !== 'undefined') {
     const storedUrl = localStorage.getItem('hemp_sb_url');
     const storedKey = localStorage.getItem('hemp_sb_key');
     if (storedUrl && storedKey) {
-        SUPABASE_URL = storedUrl.trim();
-        SUPABASE_ANON_KEY = storedKey.trim();
+      url = storedUrl.trim();
+      key = storedKey.trim();
     }
-}
+  }
 
-// Valores por defecto seguros (no son claves reales) para evitar crash inicial
-const finalUrl = SUPABASE_URL || 'https://placeholder.supabase.co';
-const finalKey = SUPABASE_ANON_KEY || 'placeholder-key';
+  return {
+    url,
+    key,
+    isConfigured: Boolean(url && key && !url.includes('placeholder'))
+  };
+};
+
+const creds = getStoredCredentials();
+const finalUrl = creds.url || 'https://placeholder.supabase.co';
+const finalKey = creds.key || 'placeholder-key';
 
 export const supabase = createClient(
   finalUrl, 
   finalKey,
   {
-      auth: {
-          persistSession: true,
-          autoRefreshToken: true,
-          detectSessionInUrl: true
-      }
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true
+    }
   }
 );
 
-export const checkConnection = async () => {
-    if (isPlaceholder(finalUrl) || isPlaceholder(finalKey)) return false;
-    try {
-        const { error } = await supabase.from('users').select('id').limit(1);
-        // Códigos exitosos aunque falten datos o permisos: 42P01 (no existe tabla), 401 (auth), PGRST116 (vacío)
-        if (!error || ['42P01', 'PGRST116', '401'].includes(error.code)) return true; 
-        return false;
-    } catch (e) {
-        return false;
-    }
+export const saveSupabaseCredentials = (url: string, key: string): void => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('hemp_sb_url', url.trim());
+    localStorage.setItem('hemp_sb_key', key.trim());
+  }
+};
+
+export const clearSupabaseCredentials = (): void => {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('hemp_sb_url');
+    localStorage.removeItem('hemp_sb_key');
+  }
+};
+
+export const checkConnection = async (): Promise<boolean> => {
+  const current = getStoredCredentials();
+  if (!current.isConfigured) return false;
+  try {
+    const { error } = await supabase.from('users').select('id').limit(1);
+    if (!error || ['42P01', 'PGRST116', '401'].includes(error.code)) return true; 
+    return false;
+  } catch (e) {
+    return false;
+  }
 };

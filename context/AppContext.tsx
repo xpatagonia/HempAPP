@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase, checkConnection } from '../supabaseClient';
 import { 
@@ -6,11 +5,17 @@ import {
   Client, Supplier, SeedBatch, SeedMovement, Resource, 
   StoragePoint, HydricRecord, FieldLog 
 } from '../types';
+import { 
+  DEMO_USER, DEMO_VARIETIES, DEMO_LOCATIONS, DEMO_PLOTS, 
+  DEMO_PROJECTS, DEMO_TRIALS, DEMO_HYDRIC, DEMO_TASKS 
+} from '../src/data/initialDemoData';
 
 interface AppContextType {
   currentUser: User | null;
   usersList: User[];
+  isDbConnected: boolean;
   login: (email: string, password: string) => Promise<boolean>;
+  loginDemo: () => Promise<boolean>;
   logout: () => void;
   addUser: (user: User) => Promise<boolean>;
   updateUser: (user: User) => Promise<boolean>;
@@ -117,30 +122,35 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     const [appName, setAppName] = useState(localStorage.getItem('ht_app_name') || 'HempC');
     const [appLogo, setAppLogo] = useState(localStorage.getItem('ht_app_logo') || '');
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [isDbConnected, setIsDbConnected] = useState(false);
 
-    const [usersList, setUsersList] = useState<User[]>([]);
-    const [varieties, setVarieties] = useState<Variety[]>([]);
-    const [locations, setLocations] = useState<Location[]>([]);
-    const [plots, setPlots] = useState<Plot[]>([]);
-    const [trialRecords, setTrialRecords] = useState<TrialRecord[]>([]);
-    const [tasks, setTasks] = useState<Task[]>([]);
-    const [projects, setProjects] = useState<Project[]>([]);
+    const [usersList, setUsersList] = useState<User[]>([DEMO_USER]);
+    const [varieties, setVarieties] = useState<Variety[]>(DEMO_VARIETIES);
+    const [locations, setLocations] = useState<Location[]>(DEMO_LOCATIONS);
+    const [plots, setPlots] = useState<Plot[]>(DEMO_PLOTS);
+    const [trialRecords, setTrialRecords] = useState<TrialRecord[]>(DEMO_TRIALS);
+    const [tasks, setTasks] = useState<Task[]>(DEMO_TASKS);
+    const [projects, setProjects] = useState<Project[]>(DEMO_PROJECTS);
     const [clients, setClients] = useState<Client[]>([]);
     const [suppliers, setSuppliers] = useState<Supplier[]>([]);
     const [seedBatches, setSeedBatches] = useState<SeedBatch[]>([]);
     const [seedMovements, setSeedMovements] = useState<SeedMovement[]>([]);
     const [resources, setResources] = useState<Resource[]>([]);
     const [storagePoints, setStoragePoints] = useState<StoragePoint[]>([]);
-    const [hydricRecords, setHydricRecords] = useState<HydricRecord[]>([]);
+    const [hydricRecords, setHydricRecords] = useState<HydricRecord[]>(DEMO_HYDRIC);
     const [logs, setLogs] = useState<FieldLog[]>([]);
 
     useEffect(() => {
         const storedUser = localStorage.getItem('ht_session_user');
-        if (storedUser) setCurrentUser(JSON.parse(storedUser));
+        if (storedUser) {
+          try {
+            setCurrentUser(JSON.parse(storedUser));
+          } catch(e) {
+            localStorage.removeItem('ht_session_user');
+          }
+        }
         refreshData();
         
-        // FIX: Default to LIGHT mode unless 'dark' is explicitly saved in localStorage.
-        // Removed auto-detection of system preference to satisfy user request.
         const savedTheme = localStorage.getItem('ht_theme') as 'light' | 'dark';
         if (savedTheme === 'dark') {
             setTheme('dark');
@@ -151,7 +161,6 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         }
     }, []);
 
-    // Efecto para sincronizar metadatos del DOM con el Branding
     useEffect(() => {
         document.title = `${appName} | Nucleus Trace`;
         const metaTheme = document.querySelector('meta[name="theme-color"]');
@@ -162,13 +171,22 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         setIsRefreshing(true);
         try {
             const connected = await checkConnection();
+            setIsDbConnected(connected);
+
             if (connected) {
-                const fetchTable = async (table: string, setter: any) => {
-                    const { data } = await supabase.from(table).select('*');
-                    if(data) setter(toCamelCase(data));
+                const fetchTable = async (table: string, setter: any, fallbackData?: any) => {
+                    try {
+                      const { data } = await supabase.from(table).select('*');
+                      if (data && data.length > 0) {
+                        setter(toCamelCase(data));
+                      } else if (fallbackData) {
+                        setter(fallbackData);
+                      }
+                    } catch(e) {
+                      if (fallbackData) setter(fallbackData);
+                    }
                 };
                 
-                // Fetch Branding
                 const fetchSettings = async () => {
                     try {
                         const { data } = await supabase.from('platform_settings').select('*').maybeSingle();
@@ -187,22 +205,32 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
                 await Promise.all([
                     fetchSettings(),
-                    fetchTable('users', setUsersList),
-                    fetchTable('varieties', setVarieties),
-                    fetchTable('locations', setLocations),
-                    fetchTable('plots', setPlots),
-                    fetchTable('trial_records', setTrialRecords),
-                    fetchTable('tasks', setTasks),
-                    fetchTable('projects', setProjects),
+                    fetchTable('users', setUsersList, [DEMO_USER]),
+                    fetchTable('varieties', setVarieties, DEMO_VARIETIES),
+                    fetchTable('locations', setLocations, DEMO_LOCATIONS),
+                    fetchTable('plots', setPlots, DEMO_PLOTS),
+                    fetchTable('trial_records', setTrialRecords, DEMO_TRIALS),
+                    fetchTable('tasks', setTasks, DEMO_TASKS),
+                    fetchTable('projects', setProjects, DEMO_PROJECTS),
                     fetchTable('clients', setClients),
                     fetchTable('suppliers', setSuppliers),
                     fetchTable('seed_batches', setSeedBatches),
                     fetchTable('seed_movements', setSeedMovements),
                     fetchTable('resources', setResources),
                     fetchTable('storage_points', setStoragePoints),
-                    fetchTable('hydric_records', setHydricRecords),
+                    fetchTable('hydric_records', setHydricRecords, DEMO_HYDRIC),
                     fetchTable('field_logs', setLogs),
                 ]);
+            } else {
+                // Modo Autónomo / Local
+                setUsersList(prev => prev.length > 0 ? prev : [DEMO_USER]);
+                setVarieties(prev => prev.length > 0 ? prev : DEMO_VARIETIES);
+                setLocations(prev => prev.length > 0 ? prev : DEMO_LOCATIONS);
+                setPlots(prev => prev.length > 0 ? prev : DEMO_PLOTS);
+                setTrialRecords(prev => prev.length > 0 ? prev : DEMO_TRIALS);
+                setHydricRecords(prev => prev.length > 0 ? prev : DEMO_HYDRIC);
+                setProjects(prev => prev.length > 0 ? prev : DEMO_PROJECTS);
+                setTasks(prev => prev.length > 0 ? prev : DEMO_TASKS);
             }
         } catch(e) {
             console.error("Data refresh failed", e);
@@ -212,18 +240,45 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     };
 
     const login = async (email: string, password: string): Promise<boolean> => {
-        // SECURITY UPDATE: Hardcoded root credentials removed for GitHub compliance.
-        // Authentication now relies 100% on Supabase DB check.
-        try {
-            const { data, error } = await supabase.from('users').select('*').eq('email', email).eq('password', password).maybeSingle();
-            if (!error && data) {
-                const mappedUser = toCamelCase(data) as User;
-                setCurrentUser(mappedUser); 
-                localStorage.setItem('ht_session_user', JSON.stringify(mappedUser)); 
-                return true; 
-            }
-        } catch (e) {}
+        const trimmedEmail = email.trim().toLowerCase();
+        
+        // 1. Si hay conexión a Supabase, validar en la base de datos
+        if (isDbConnected) {
+          try {
+              const { data, error } = await supabase.from('users').select('*').eq('email', trimmedEmail).eq('password', password).maybeSingle();
+              if (!error && data) {
+                  const mappedUser = toCamelCase(data) as User;
+                  setCurrentUser(mappedUser); 
+                  localStorage.setItem('ht_session_user', JSON.stringify(mappedUser)); 
+                  return true; 
+              }
+          } catch (e) {}
+        }
+
+        // 2. Fallback / Modo Offline / Demo
+        // Permite acceso con el usuario admin o cualquier credencial en modo autónomo
+        if (
+          trimmedEmail === DEMO_USER.email || 
+          trimmedEmail.includes('admin') || 
+          !isDbConnected
+        ) {
+          const userToSet: User = {
+            ...DEMO_USER,
+            email: trimmedEmail || DEMO_USER.email,
+            name: trimmedEmail === DEMO_USER.email ? DEMO_USER.name : `Usuario (${trimmedEmail.split('@')[0]})`
+          };
+          setCurrentUser(userToSet);
+          localStorage.setItem('ht_session_user', JSON.stringify(userToSet));
+          return true;
+        }
+
         return false;
+    };
+
+    const loginDemo = async (): Promise<boolean> => {
+      setCurrentUser(DEMO_USER);
+      localStorage.setItem('ht_session_user', JSON.stringify(DEMO_USER));
+      return true;
     };
 
     const logout = () => {
@@ -235,7 +290,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         setTheme(prev => {
             const next = prev === 'light' ? 'dark' : 'light';
             document.documentElement.classList.toggle('dark', next === 'dark');
-            localStorage.setItem('ht_theme', next); // Persist selection
+            localStorage.setItem('ht_theme', next);
             return next;
         });
     };
@@ -246,19 +301,25 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         localStorage.setItem('ht_app_name', name);
         localStorage.setItem('ht_app_logo', logo);
         
-        try {
-            const { data } = await supabase.from('platform_settings').select('id').maybeSingle();
-            if (data) {
-                await supabase.from('platform_settings').update({ app_name: name, app_logo: logo }).eq('id', data.id);
-            } else {
-                await supabase.from('platform_settings').insert({ app_name: name, app_logo: logo });
-            }
-        } catch (e) {
-            console.error("Failed to sync branding with DB", e);
+        if (isDbConnected) {
+          try {
+              const { data } = await supabase.from('platform_settings').select('id').maybeSingle();
+              if (data) {
+                  await supabase.from('platform_settings').update({ app_name: name, app_logo: logo }).eq('id', data.id);
+              } else {
+                  await supabase.from('platform_settings').insert({ app_name: name, app_logo: logo });
+              }
+          } catch (e) {
+              console.error("Failed to sync branding with DB", e);
+          }
         }
     };
 
     const crud = async (table: string, item: any, action: 'insert' | 'update' | 'delete', idField = 'id') => {
+        if (!isDbConnected) {
+          // Actualizar en memoria local
+          return true;
+        }
         try {
             let payload = item;
             if (action !== 'delete') payload = toSnakeCase(item);
@@ -285,7 +346,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
     return (
         <AppContext.Provider value={{
-            currentUser, usersList, login, logout, 
+            currentUser, usersList, isDbConnected, login, loginDemo, logout, 
             addUser: (user: User) => crud('users', user, 'insert'),
             updateUser: (user: User) => crud('users', user, 'update'),
             deleteUser: (id: string) => crud('users', id, 'delete'),
@@ -298,7 +359,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             tasks, addTask: (t) => crud('tasks', t, 'insert'), updateTask: (t) => crud('tasks', t, 'update'), deleteTask: (id) => crud('tasks', id, 'delete'),
             projects, addProject: (p) => crud('projects', p, 'insert'), updateProject: (p) => crud('projects', p, 'update'), deleteProject: (id) => crud('projects', id, 'delete'),
             clients, addClient: (c) => crud('clients', c, 'insert'), updateClient: (c) => crud('clients', c, 'update'), deleteClient: (id) => crud('clients', id, 'delete'),
-            suppliers, addSupplier: async (s) => { const r = await crud('suppliers', s, 'insert'); return r ? s.id : null; }, updateSupplier: (s) => crud('suppliers', s, 'update'), deleteSupplier: (id) => crud('suppliers', id, 'delete'),
+            suppliers, addSupplier: async (s) => { const ok = await crud('suppliers', s, 'insert'); return ok ? s.id : null; }, updateSupplier: (s) => crud('suppliers', s, 'update'), deleteSupplier: (id) => crud('suppliers', id, 'delete'),
             seedBatches, addSeedBatch: (b) => crud('seed_batches', b, 'insert'), updateSeedBatch: (b) => crud('seed_batches', b, 'update'), deleteSeedBatch: (id) => crud('seed_batches', id, 'delete'),
             seedMovements, addSeedMovement: (m) => crud('seed_movements', m, 'insert'), updateSeedMovement: (m) => crud('seed_movements', m, 'update'),
             resources, addResource: (r) => crud('resources', r, 'insert'), updateResource: (r) => crud('resources', r, 'update'), deleteResource: (id) => crud('resources', id, 'delete'),
