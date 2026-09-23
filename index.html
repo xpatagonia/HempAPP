@@ -1,22 +1,60 @@
-<script type="importmap">
-{
-  "imports": {
-    "recharts": "https://esm.sh/recharts@^3.7.0",
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "react": "https://esm.sh/react@^19.2.3",
-    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
-    "@google/genai": "https://esm.sh/@google/genai@^1.38.0",
-    "vite": "https://esm.sh/vite@^7.3.1",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "react-router-dom": "https://esm.sh/react-router-dom@^7.13.0",
-    "lucide-react": "https://esm.sh/lucide-react@^0.563.0",
-    "leaflet/": "https://esm.sh/leaflet@^1.9.4/",
-    "leaflet": "https://esm.sh/leaflet@^1.9.4",
-    "jspdf-autotable": "https://esm.sh/jspdf-autotable@^5.0.7",
-    "xlsx": "https://esm.sh/xlsx@^0.18.5",
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.91.1",
-    "react-leaflet": "https://esm.sh/react-leaflet@^5.0.0",
-    "jspdf": "https://esm.sh/jspdf@^4.0.0"
-  }
-}
-</script>
+<!DOCTYPE html>
+<html lang="es" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HempC | Red Cooperativa Nucleus</title>
+    <meta name="description" content="Plataforma de la Red Cooperativa del Cáñamo Industrial Argentino. Gestión integral de ensayos, trazabilidad y bioeconomía." />
+    <meta property="og:title" content="HempC | Red Cooperativa Nucleus" />
+    <meta property="og:description" content="Plataforma de la Red Cooperativa del Cáñamo Industrial Argentino. Gestión integral de ensayos, trazabilidad y bioeconomía." />
+
+    <!-- Cache Control -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              hemp: { 50: '#f0fdf4', 100: '#dcfce7', 200: '#bbf7d0', 400: '#4ade80', 500: '#22c55e', 600: '#16a34a', 700: '#15803d', 800: '#166534', 900: '#14532d', 950: '#052e16' },
+              brand: { DEFAULT: '#16a34a', 50: '#f0fdf4', 100: '#dcfce7', 500: '#22c55e', 600: '#16a34a', 700: '#15803d' }
+            },
+            fontFamily: {
+              sans: ['Inter', 'sans-serif'],
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      body { font-family: 'Inter', sans-serif; margin: 0; }
+      .custom-scrollbar::-webkit-scrollbar { width: 5px; }
+      .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+  </head>
+  <body class="bg-slate-50 dark:bg-black text-slate-900 dark:text-white transition-colors duration-300">
+    <div id="root">
+      <!-- Pantalla de carga BRANDED -->
+      <div style="display: flex; justify-content: center; align-items: center; height: 100vh; flex-direction: column; background: #0f172a; color: #10b981;">
+        <div style="margin-bottom: 20px; font-weight: 900; font-size: 38px; font-family: 'Inter', sans-serif; letter-spacing: -1.5px; text-transform: uppercase; border-left: 6px solid #10b981; padding-left: 18px; color: #ffffff;">
+          HempC <span style="color: #10b981;">Nucleus</span>
+        </div>
+        <p style="font-family: monospace; opacity: 0.7; font-weight: bold; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: #94a3b8;">
+          Cargando entorno Agro 4.0 & Supabase...
+        </p>
+        <div style="margin-top: 30px; width: 36px; height: 36px; border: 3px solid rgba(16, 185, 129, 0.2); border-top-color: #10b981; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+      </div>
+    </div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
