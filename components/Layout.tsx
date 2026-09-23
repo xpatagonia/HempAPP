@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Sprout, Menu, Leaf, LogOut, 
   UserCircle, Calendar, Sun, Moon, 
   Tractor, BookOpen, Bot, Settings, 
-  FolderKanban, CheckSquare, BarChart3, Users, Warehouse, Package, X, Bell, Globe, Building, ShieldAlert, FileText, BrainCircuit, Activity, FlaskConical, DownloadCloud
+  FolderKanban, CheckSquare, BarChart3, Users, Warehouse, Package, X, Bell, Globe, Building, ShieldAlert, FileText, BrainCircuit, Activity, FlaskConical, DownloadCloud, Satellite
 } from 'lucide-react';
 
 const NavItem = ({ to, icon: Icon, label, badge, special }: any) => {
@@ -57,6 +57,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
 
         <nav className="flex-1 px-4 py-8 space-y-1 overflow-y-auto custom-scrollbar">
           <NavItem to="/" icon={LayoutDashboard} label="Dashboard" />
+          <NavItem to="/agro40" icon={Satellite} label="Agro 4.0: NDVI & Suelos" special={true} />
           <NavItem to="/intelligence" icon={BrainCircuit} label="Inteligencia Agrónoma" />
           <NavItem to="/advisor" icon={Bot} label="AI Terminal" />
           

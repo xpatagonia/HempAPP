@@ -12,7 +12,7 @@ import {
   Camera, Image as ImageIcon, MessageSquare, ClipboardList, User, Calendar, Ruler, Maximize2, Download, Scale, Wind, Bird, CheckCircle2,
   RefreshCw, Globe, Layers, Save, Thermometer, Droplets, Waves, QrCode, Printer, Loader2, Zap, Sparkles, Link as LinkIcon, Sun,
   TrendingUp, ArrowUpRight, Beaker, FileUp, Moon, Sunrise, Sunset, ZapOff, Archive, Navigation, Scan, Target, FlaskConical, ClipboardCheck,
-  ChevronLeft, ChevronRight, Filter, Bot, Terminal, FileText, ArrowUp, ArrowDown
+  ChevronLeft, ChevronRight, Filter, Bot, Terminal, FileText, ArrowUp, ArrowDown, Satellite
 } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
 import WeatherWidget from '../components/WeatherWidget';
@@ -467,6 +467,10 @@ export default function PlotDetails() {
           <button onClick={() => setActiveTab('astro')} className={`px-8 py-3 font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl transition-all whitespace-nowrap ${activeTab === 'astro' ? 'bg-amber-600 text-white shadow-xl' : 'text-gray-400 hover:text-gray-600'}`}>Ciclo de Luz</button>
           <button onClick={() => setActiveTab('logs')} className={`px-8 py-3 font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl transition-all whitespace-nowrap ${activeTab === 'logs' ? 'bg-slate-800 text-white shadow-xl' : 'text-gray-400 hover:text-gray-600'}`}>Bitácora Multimedia</button>
           <button onClick={() => setActiveTab('water')} className={`px-8 py-3 font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl transition-all whitespace-nowrap ${activeTab === 'water' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}>Pluviómetro</button>
+          <Link to={`/agro40?plotId=${plot.id}`} className="px-6 py-3 font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl transition-all whitespace-nowrap bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 flex items-center space-x-1.5 border border-emerald-500/20 shadow-sm">
+              <Satellite size={14} />
+              <span>Agro 4.0: NDVI & Suelo</span>
+          </Link>
       </div>
 
       <div className="grid grid-cols-1 gap-8">

@@ -272,3 +272,54 @@ export interface Task {
   plotId?: string;
   createdBy: string;
 }
+
+export interface SoilHealthData {
+  sandPercent: number;
+  clayPercent: number;
+  siltPercent: number;
+  textureClass: string;
+  socPercent: number; // Soil Organic Carbon %
+  somPercent: number; // Soil Organic Matter % (~ soc * 1.724)
+  phWater: number;
+  cec: number; // Cation exchange capacity cmol(+)/kg
+  bulkDensity: number; // g/cm3
+  compactionRisk: 'Bajo' | 'Moderado' | 'Alto';
+  rootPenetrationPotentialMm: number;
+  surfaceTempC: number;
+  rootZoneTempC: number;
+  moistureSurfacePct: number;
+  moistureRootZonePct: number;
+  moistureDeepPct: number;
+  waterHoldingCapacityMmPerM: number;
+  dataSource: string;
+  lastUpdated: string;
+}
+
+export interface WaterEfficiencyMetrics {
+  plotAreaHa: number;
+  cycleDays: number;
+  cumulativeRainMm: number;
+  cumulativeIrrigationMm: number;
+  totalWaterAppliedMm: number;
+  totalWaterAppliedM3: number;
+  et0CumulativeMm: number;
+  hempEtcMm: number;
+  wueBiomassKgM3: number; // kg biomass / m3 water
+  wueGrainKgM3: number;   // kg grain / m3 water
+  waterSavedVsCornM3: number;
+  waterSavedVsCottonM3: number;
+  waterSavedVsAlfalfaM3: number;
+  co2CapturedTonnes: number;
+  soilRestorationIndex: number; // 0 - 100
+}
+
+export interface NDVISample {
+  date: string;
+  stage: string;
+  ndviAverage: number;
+  ndviMin: number;
+  ndviMax: number;
+  canopyCoveragePct: number;
+  biomassIndex: number;
+  stressDetected: boolean;
+}

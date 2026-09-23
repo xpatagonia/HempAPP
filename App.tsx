@@ -27,6 +27,7 @@ import Storage from './pages/Storage';
 import LogisticsMap from './pages/LogisticsMap';
 import IntegrityCheck from './pages/IntegrityCheck';
 import AgronomicIntelligence from './pages/AgronomicIntelligence';
+import Agriculture40 from './pages/Agriculture40';
 import PublicTraceability from './pages/PublicTraceability';
 import PublicRegistration from './pages/PublicRegistration';
 
@@ -60,6 +61,7 @@ export default function App() {
                   <Route path="/tasks" element={<Tasks />} />
                   <Route path="/tools" element={<Tools />} />
                   <Route path="/intelligence" element={<AgronomicIntelligence />} />
+                  <Route path="/agro40" element={<Agriculture40 />} />
                   <Route path="/analytics" element={<Analytics />} />
                   <Route path="/integrity" element={<IntegrityCheck />} />
                   <Route path="/advisor" element={<AIAdvisor />} />
