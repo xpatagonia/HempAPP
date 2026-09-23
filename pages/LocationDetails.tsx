@@ -19,7 +19,7 @@ const stringToColor = (str: string) => {
 };
 
 export default function LocationDetails() {
-    const { id } = useParams<{ id: string }>();
+    const { id } = useParams();
     const { locations, plots, varieties, clients, seedMovements, seedBatches, currentUser, storagePoints } = useAppContext();
     const [activeTab, setActiveTab] = useState<'info' | 'water' | 'stock'>('info');
 

@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 
 export default function PublicTraceability() {
-    const { id } = useParams<{ id: string }>();
+    const { id } = useParams();
     const { plots, locations, varieties, trialRecords, appName } = useAppContext();
 
     const plot = plots.find(p => p.id === id);

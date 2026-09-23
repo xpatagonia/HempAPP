@@ -9,6 +9,7 @@ import Locations from './pages/Locations';
 import LocationDetails from './pages/LocationDetails';
 import Plots from './pages/Plots';
 import PlotDetails from './pages/PlotDetails';
+import TrialManager from './pages/TrialManager';
 import Projects from './pages/Projects';
 import Users from './pages/Users';
 import Tasks from './pages/Tasks';
@@ -53,6 +54,7 @@ export default function App() {
               <Layout>
                 <Routes>
                   <Route path="/" element={<Dashboard />} />
+                  <Route path="/trials-lite" element={<TrialManager />} />
                   <Route path="/projects" element={<Projects />} />
                   <Route path="/calendar" element={<CalendarPage />} />
                   <Route path="/tasks" element={<Tasks />} />

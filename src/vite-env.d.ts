@@ -24,3 +24,8 @@ interface ImportMeta {
 
 // Fix: Declare react-router-dom module to resolve missing exported members errors
 declare module 'react-router-dom';
+
+declare module '*.png' {
+  const value: string;
+  export default value;
+}

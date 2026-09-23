@@ -5,20 +5,22 @@ import { createClient } from '@supabase/supabase-js';
 // CONFIGURACIÓN CENTRAL DE CONEXIÓN
 // ------------------------------------------------------------------
 
-// NOTA DE SEGURIDAD:
-// Las credenciales deben residir en archivos .env (e.g., .env.local) y NO en el código fuente.
-// GitHub bloqueará el push si detecta claves reales aquí.
+// NOTA DE SEGURIDAD IMPORTANTE:
+// Se han eliminado las credenciales hardcoded (PROD_URL, PROD_KEY).
+// GitHub bloquea los push si detecta claves reales en el código.
+// La aplicación ahora confía exclusivamente en las variables de entorno (.env)
+// o en la configuración manual vía LocalStorage.
 
 const env = (import.meta as any).env || {};
 
-// 1. Intentamos leer las variables de entorno
-let SUPABASE_URL = env.VITE_SUPABASE_URL;
-let SUPABASE_ANON_KEY = env.VITE_SUPABASE_ANON_KEY;
+// 1. Intentamos leer las variables de entorno estándar de Vite
+let SUPABASE_URL = env.VITE_SUPABASE_URL || '';
+let SUPABASE_ANON_KEY = env.VITE_SUPABASE_ANON_KEY || '';
 
 const isPlaceholder = (str: string) => !str || str.includes('placeholder') || str === '';
 
 // 2. Fallback: Permitir anulación manual desde LocalStorage si las variables de entorno fallan
-// Esto es útil para despliegues rápidos o pruebas sin recompilar.
+// Esto es útil para despliegues rápidos o depuración sin recompilar .env
 if (isPlaceholder(SUPABASE_URL) || isPlaceholder(SUPABASE_ANON_KEY)) {
     const storedUrl = localStorage.getItem('hemp_sb_url');
     const storedKey = localStorage.getItem('hemp_sb_key');
@@ -29,7 +31,7 @@ if (isPlaceholder(SUPABASE_URL) || isPlaceholder(SUPABASE_ANON_KEY)) {
     }
 }
 
-// Validación básica para evitar crash si no hay keys
+// Validación para evitar crash si no hay keys, usando valores dummy seguros
 const finalUrl = SUPABASE_URL || 'https://placeholder.supabase.co';
 const finalKey = SUPABASE_ANON_KEY || 'placeholder-key';
 

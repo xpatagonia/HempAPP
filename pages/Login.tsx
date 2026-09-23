@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
@@ -27,7 +28,7 @@ export default function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (connectionStatus === 'disconnected') {
-        setError('Sin conexión a base de datos. Verifique sus variables de entorno (.env).');
+        setError('Error de conexión con la base de datos. Contacte al administrador.');
         return;
     }
     setError(''); setIsLoading(true);
@@ -39,9 +40,7 @@ export default function Login() {
   };
 
   const handleForceRefresh = () => {
-      if(window.confirm("¿Forzar recarga del sistema?")) {
-          window.location.reload();
-      }
+      window.location.reload();
   };
 
   return (
@@ -177,15 +176,17 @@ export default function Login() {
                     />
                 </div>
 
-                <button 
-                  type="submit" 
-                  disabled={isLoading || connectionStatus === 'disconnected'} 
-                  className="w-full bg-[#006633] hover:bg-[#004d26] text-white py-6 rounded-[32px] font-black text-xs uppercase tracking-[0.4em] active:scale-[0.98] transition-all shadow-2xl shadow-green-900/20 disabled:opacity-50 flex items-center justify-center group"
-                >
-                    {isLoading ? <Loader2 className="animate-spin" size={24} /> : (
-                        <>Ingresar <ArrowRight size={22} className="ml-4 group-hover:translate-x-3 transition-transform" /></>
-                    )}
-                </button>
+                <div className="space-y-4">
+                    <button 
+                      type="submit" 
+                      disabled={isLoading || connectionStatus === 'disconnected'} 
+                      className="w-full bg-[#006633] hover:bg-[#004d26] text-white py-6 rounded-[32px] font-black text-xs uppercase tracking-[0.4em] active:scale-[0.98] transition-all shadow-2xl shadow-green-900/20 disabled:opacity-50 flex items-center justify-center group"
+                    >
+                        {isLoading ? <Loader2 className="animate-spin" size={24} /> : (
+                            <>Ingresar <ArrowRight size={22} className="ml-4 group-hover:translate-x-3 transition-transform" /></>
+                        )}
+                    </button>
+                </div>
             </form>
 
             <div className="pt-8 text-center space-y-4">

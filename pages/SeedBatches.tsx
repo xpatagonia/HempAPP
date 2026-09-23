@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { SeedBatch, SeedMovement } from '../types';
@@ -709,19 +710,32 @@ export default function SeedBatches() {
                           <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1">Categoría</p>
                           <p className="text-lg font-black text-blue-800 dark:text-blue-300 uppercase">{selectedBatch.category || 'N/A'}</p>
                       </div>
-                      <div className="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-3xl border border-blue-100 dark:border-blue-900/30">
-                          <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1">PG (%)</p>
-                          <p className="text-lg font-black text-blue-800 dark:text-blue-300 uppercase">{selectedBatch.germination}%</p>
+                      <div className="bg-emerald-50 dark:bg-emerald-900/10 p-4 rounded-3xl border border-emerald-100 dark:border-emerald-900/30">
+                          <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Poder Germinativo</p>
+                          <p className="text-lg font-black text-emerald-800 dark:text-emerald-300">{selectedBatch.germination ? `${selectedBatch.germination}%` : 'S/D'}</p>
                       </div>
                   </div>
 
-                  <div className="space-y-4 text-sm font-bold text-gray-500">
-                      <div className="flex items-center"><Calendar size={18} className="mr-3 opacity-50"/> Fecha Adquisición: {selectedBatch.purchaseDate || 'N/A'}</div>
-                      <div className="flex items-center"><ScanBarcode size={18} className="mr-3 opacity-50"/> Etiqueta: {selectedBatch.labelSerialNumber || 'S/N'}</div>
-                      <div className="flex items-center"><Building size={18} className="mr-3 opacity-50"/> Depósito: {storagePoints.find(s => s.id === selectedBatch.storagePointId)?.name || 'S/D'}</div>
+                  <div className="space-y-3 mb-8">
+                      {selectedBatch.storageConditions && (
+                          <div className="bg-gray-50 dark:bg-slate-950 p-4 rounded-2xl border dark:border-slate-800">
+                              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Condiciones de Almacenamiento</p>
+                              <p className="text-xs text-slate-600 dark:text-slate-300">{selectedBatch.storageConditions}</p>
+                          </div>
+                      )}
+                      {selectedBatch.notes && (
+                          <div className="bg-gray-50 dark:bg-slate-950 p-4 rounded-2xl border dark:border-slate-800">
+                              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Observaciones</p>
+                              <p className="text-xs text-slate-600 dark:text-slate-300">{selectedBatch.notes}</p>
+                          </div>
+                      )}
                   </div>
 
-                  <button onClick={() => setIsViewModalOpen(false)} className="mt-10 w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest">Cerrar Ficha Técnica</button>
+                  <div className="flex justify-end">
+                      <button onClick={() => setIsViewModalOpen(false)} className="bg-slate-900 dark:bg-blue-600 text-white px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-all">
+                          Cerrar
+                      </button>
+                  </div>
               </div>
           </div>
       )}

@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Variety, UsageType } from '../types';
@@ -420,4 +421,3 @@ export default function Varieties() {
     </div>
   );
 }
-

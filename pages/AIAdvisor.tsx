@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Send, Bot, User, Image as ImageIcon, Terminal, RefreshCw, Cpu, AlertTriangle, Sparkles, Database } from 'lucide-react';

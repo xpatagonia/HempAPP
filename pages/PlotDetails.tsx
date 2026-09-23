@@ -54,7 +54,7 @@ const fastUUID = () => {
 };
 
 export default function PlotDetails() {
-  const { id: urlId } = useParams<{ id: string }>();
+  const { id: urlId } = useParams();
   const { plots, locations, varieties, getPlotHistory, addTrialRecord, updateTrialRecord, deleteTrialRecord, currentUser, seedBatches, logs, addLog, deleteLog, hydricRecords, appName } = useAppContext();
   
   const plot = useMemo(() => plots.find(p => p.id.toLowerCase() === urlId?.toLowerCase()), [plots, urlId]);
@@ -445,7 +445,7 @@ export default function PlotDetails() {
                   <div className="h-3 bg-gray-100 dark:bg-slate-800 rounded-full overflow-hidden border dark:border-slate-700">
                       <div className="h-full bg-gradient-to-r from-hemp-600 to-emerald-400 shadow-[0_0_15px_rgba(22,163,74,0.3)] transition-all duration-1000" style={{ width: `${biologicalProgress}%` }}></div>
                   </div>
-                  <div className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase border tracking-widest flex items-center justify-center shadow-sm ${plot.status === 'Activa' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-500 border-gray-200'}`}>
+                  <div className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase border tracking-widest flex items-center justify-center shadow-sm ${plot.status === 'Activa' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-gray-50 text-gray-500 border-gray-200'}`}>
                     {plot.status === 'Activa' && <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div>}
                     {plot.status}
                   </div>
