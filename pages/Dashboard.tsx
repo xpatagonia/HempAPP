@@ -12,14 +12,14 @@ import {
   Calendar, ArrowUpRight, Zap, Target, AlertCircle, Clock, FlaskConical, Plus, ClipboardList
 } from 'lucide-react';
 
-const MetricCard = ({ label, value, trend, icon: Icon, colorClass, subtext }: any) => (
+const MetricCard = ({ label, value, trend, icon: Icon, bgClass, textClass, subtext }: any) => (
   <div className="bg-white dark:bg-slate-900 p-6 rounded-[24px] border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all group">
     <div className="flex items-center justify-between mb-4">
-        <div className={`p-3 rounded-2xl ${colorClass} bg-opacity-10 text-${colorClass.split('-')[1]}-600`}>
+        <div className={`p-3 rounded-2xl ${bgClass || 'bg-hemp-50 dark:bg-hemp-950/40'} ${textClass || 'text-hemp-600 dark:text-hemp-400'}`}>
              <Icon size={24} />
         </div>
         {trend && (
-            <span className={`flex items-center text-[10px] font-bold px-2 py-1 rounded-full ${trend.startsWith('+') ? 'bg-green-50 text-green-600' : 'bg-amber-50 text-amber-600'}`}>
+            <span className={`flex items-center text-[10px] font-bold px-2 py-1 rounded-full ${trend.startsWith('+') ? 'bg-green-50 text-green-600 dark:bg-green-950/40 dark:text-green-300' : 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-300'}`}>
                 <TrendingUp size={10} className="mr-1" /> {trend}
             </span>
         )}
@@ -82,7 +82,7 @@ export default function Dashboard() {
                 <span className="text-[10px] font-bold text-hemp-600 uppercase tracking-widest">Panel {appName}</span>
             </div>
             <h1 className="text-4xl font-black text-slate-900 dark:text-white tracking-tight">
-                Hola, {currentUser?.name.split(' ')[0]} <span className="text-slate-400 font-light">| Resumen Agrónomo</span>
+                Hola, {currentUser?.name ? currentUser.name.split(' ')[0] : 'Agrónomo'} <span className="text-slate-400 font-light">| Resumen Agrónomo</span>
             </h1>
         </div>
         <div className="flex items-center space-x-3">
@@ -114,10 +114,10 @@ export default function Dashboard() {
       </Link>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <MetricCard label="Ensayos Activos" value={relevantPlots.filter(p => p.status === 'Activa').length} trend="+24%" icon={Activity} colorClass="bg-hemp-600" subtext="8 unidades en etapa reproductiva" />
-        <MetricCard label="Tareas Pendientes" value={pendingTasks} icon={Zap} colorClass="bg-amber-500" subtext={`${tasks.filter(t => t.priority === 'Alta').length} de prioridad crítica`} />
-        <MetricCard label="Genéticas en Red" value={varieties.length} icon={Sprout} colorClass="bg-purple-600" subtext="3 nuevas variedades esta campaña" />
-        <MetricCard label="Salud del Sistema" value="98.2%" trend="Optimo" icon={ShieldCheck} colorClass="bg-blue-600" subtext="Latencia de sincronización: 40ms" />
+        <MetricCard label="Ensayos Activos" value={relevantPlots.filter(p => p.status === 'Activa').length} trend="+24%" icon={Activity} bgClass="bg-emerald-50 dark:bg-emerald-950/40" textClass="text-emerald-600 dark:text-emerald-400" subtext="8 unidades en etapa reproductiva" />
+        <MetricCard label="Tareas Pendientes" value={pendingTasks} icon={Zap} bgClass="bg-amber-50 dark:bg-amber-950/40" textClass="text-amber-600 dark:text-amber-400" subtext={`${tasks.filter(t => t.priority === 'Alta').length} de prioridad crítica`} />
+        <MetricCard label="Genéticas en Red" value={varieties.length} icon={Sprout} bgClass="bg-purple-50 dark:bg-purple-950/40" textClass="text-purple-600 dark:text-purple-400" subtext="4 variedades en registro INASE" />
+        <MetricCard label="Salud del Sistema" value="98.2%" trend="Optimo" icon={ShieldCheck} bgClass="bg-blue-50 dark:bg-blue-950/40" textClass="text-blue-600 dark:text-blue-400" subtext="Latencia de sincronización: 40ms" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

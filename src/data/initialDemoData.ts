@@ -5,12 +5,25 @@ import {
 export const DEMO_USER: User = {
   id: 'user-admin-nucleus',
   name: 'Ing. Gastón Barea (Nucleus)',
-  email: 'admin@hempc.com.ar',
+  email: 'gaston.barea.moreno@gmail.com',
   role: 'super_admin',
   jobTitle: 'Director Agronómico & Trazabilidad',
   phone: '+54 9 11 4567-8900',
   isNetworkMember: true
 };
+
+export const DEMO_USERS_LIST: User[] = [
+  DEMO_USER,
+  {
+    id: 'user-admin-secondary',
+    name: 'Admin Técnico HempC',
+    email: 'admin@hempc.com.ar',
+    role: 'super_admin',
+    jobTitle: 'Administrador de Nodo',
+    phone: '+54 9 11 4567-8901',
+    isNetworkMember: true
+  }
+];
 
 export const DEMO_VARIETIES: Variety[] = [
   {

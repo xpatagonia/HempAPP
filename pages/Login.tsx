@@ -8,9 +8,9 @@ import {
 import { checkConnection, getStoredCredentials, saveSupabaseCredentials } from '../supabaseClient';
 
 export default function Login() {
-  const { login, loginDemo, appName, appLogo, refreshData } = useAppContext();
+  const { currentUser, login, loginDemo, appName, appLogo, refreshData } = useAppContext();
   const navigate = useNavigate();
-  const [email, setEmail] = useState('admin@hempc.com.ar');
+  const [email, setEmail] = useState('gaston.barea.moreno@gmail.com');
   const [password, setPassword] = useState('admin');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -23,6 +23,12 @@ export default function Login() {
   const [configSaved, setConfigSaved] = useState(false);
 
   const currentUrl = typeof window !== 'undefined' ? window.location.origin : '';
+
+  useEffect(() => {
+    if (currentUser) {
+      navigate('/', { replace: true });
+    }
+  }, [currentUser, navigate]);
 
   useEffect(() => {
       const verify = async () => {

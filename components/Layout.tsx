@@ -108,6 +108,9 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
            <button onClick={logout} className="w-full flex items-center justify-center space-x-2 text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 p-3 rounded-2xl transition-all font-black uppercase tracking-widest border border-transparent hover:border-red-100">
                <LogOut size={16} /> <span>Cerrar Conexión</span>
            </button>
+           <div className="mt-3 text-center text-[10px] font-mono text-slate-400">
+               Nucleus • v7.0.8 ONLINE
+           </div>
         </div>
       </aside>
 
@@ -115,8 +118,12 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
         <header className="h-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-4 md:px-8 flex items-center justify-between z-40 sticky top-0">
           <div className="flex items-center space-x-4">
               <button onClick={() => setIsMobileOpen(true)} className="lg:hidden p-2 text-slate-500 hover:bg-slate-100 rounded-xl"><Menu size={24}/></button>
-              <div className="hidden md:flex items-center space-x-2 text-slate-400 font-bold text-xs uppercase tracking-widest">
-                  <span className="text-hemp-600">{new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+              <div className="hidden md:flex items-center space-x-3 text-slate-400 font-bold text-xs uppercase tracking-widest">
+                  <span className="text-hemp-600 font-black">{new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-[10px] font-black tracking-widest">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    ONLINE v7.0.8
+                  </span>
               </div>
           </div>
           

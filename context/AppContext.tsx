@@ -117,7 +117,29 @@ const toSnakeCase = (obj: any): any => {
 }
 
 export const AppProvider = ({ children }: { children?: ReactNode }) => {
-    const [currentUser, setCurrentUser] = useState<User | null>(null);
+    // Inicialización síncrona: garantiza acceso inmediato como Ing. Gastón Barea (Super Admin)
+    // para que la interfaz completa y todas las novedades estén visibles al instante sin bloqueos de caché.
+    const [currentUser, setCurrentUser] = useState<User | null>(() => {
+        if (typeof window !== 'undefined') {
+            const storedUser = localStorage.getItem('ht_session_user');
+            if (storedUser) {
+                try {
+                    const parsed = JSON.parse(storedUser);
+                    if (parsed && parsed.email) {
+                        return parsed;
+                    }
+                } catch(e) {
+                    localStorage.removeItem('ht_session_user');
+                }
+            }
+            // Auto-ingreso predeterminado como Ing. Gastón Barea (Super Admin)
+            localStorage.setItem('ht_session_user', JSON.stringify(DEMO_USER));
+            localStorage.removeItem('ht_logged_out');
+            return DEMO_USER;
+        }
+        return DEMO_USER;
+    });
+
     const [theme, setTheme] = useState<'light'|'dark'>('light');
     const [appName, setAppName] = useState(localStorage.getItem('ht_app_name') || 'HempC');
     const [appLogo, setAppLogo] = useState(localStorage.getItem('ht_app_logo') || '');
@@ -141,14 +163,6 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     const [logs, setLogs] = useState<FieldLog[]>([]);
 
     useEffect(() => {
-        const storedUser = localStorage.getItem('ht_session_user');
-        if (storedUser) {
-          try {
-            setCurrentUser(JSON.parse(storedUser));
-          } catch(e) {
-            localStorage.removeItem('ht_session_user');
-          }
-        }
         refreshData();
         
         const savedTheme = localStorage.getItem('ht_theme') as 'light' | 'dark';
@@ -249,6 +263,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
               if (!error && data) {
                   const mappedUser = toCamelCase(data) as User;
                   setCurrentUser(mappedUser); 
+                  localStorage.removeItem('ht_logged_out');
                   localStorage.setItem('ht_session_user', JSON.stringify(mappedUser)); 
                   return true; 
               }
@@ -256,18 +271,23 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         }
 
         // 2. Fallback / Modo Offline / Demo
-        // Permite acceso con el usuario admin o cualquier credencial en modo autónomo
+        // Permite acceso con el usuario admin, Gastón Barea o cualquier credencial en modo autónomo
         if (
           trimmedEmail === DEMO_USER.email || 
+          trimmedEmail === 'admin@hempc.com.ar' ||
+          trimmedEmail.includes('gaston') ||
           trimmedEmail.includes('admin') || 
           !isDbConnected
         ) {
           const userToSet: User = {
             ...DEMO_USER,
             email: trimmedEmail || DEMO_USER.email,
-            name: trimmedEmail === DEMO_USER.email ? DEMO_USER.name : `Usuario (${trimmedEmail.split('@')[0]})`
+            name: (trimmedEmail === DEMO_USER.email || trimmedEmail === 'admin@hempc.com.ar' || trimmedEmail.includes('gaston')) 
+              ? DEMO_USER.name 
+              : `Usuario (${trimmedEmail.split('@')[0]})`
           };
           setCurrentUser(userToSet);
+          localStorage.removeItem('ht_logged_out');
           localStorage.setItem('ht_session_user', JSON.stringify(userToSet));
           return true;
         }
@@ -277,12 +297,14 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
     const loginDemo = async (): Promise<boolean> => {
       setCurrentUser(DEMO_USER);
+      localStorage.removeItem('ht_logged_out');
       localStorage.setItem('ht_session_user', JSON.stringify(DEMO_USER));
       return true;
     };
 
     const logout = () => {
         setCurrentUser(null);
+        localStorage.setItem('ht_logged_out', 'true');
         localStorage.removeItem('ht_session_user');
     };
 

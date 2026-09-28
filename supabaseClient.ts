@@ -6,6 +6,15 @@ import { createClient } from '@supabase/supabase-js';
 
 const env = (import.meta as any).env || {};
 
+export const normalizeSupabaseUrl = (url: string): string => {
+  if (!url) return '';
+  const trimmed = url.trim();
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    return trimmed.replace(/\/+$/, '');
+  }
+  return `https://${trimmed}.supabase.co`;
+};
+
 export const getStoredCredentials = () => {
   let url = env.VITE_SUPABASE_URL || '';
   let key = env.VITE_SUPABASE_ANON_KEY || '';
@@ -19,6 +28,8 @@ export const getStoredCredentials = () => {
     }
   }
 
+  url = normalizeSupabaseUrl(url);
+
   return {
     url,
     key,
@@ -30,7 +41,7 @@ const creds = getStoredCredentials();
 const finalUrl = creds.url || 'https://placeholder.supabase.co';
 const finalKey = creds.key || 'placeholder-key';
 
-export const supabase = createClient(
+export let supabase = createClient(
   finalUrl, 
   finalKey,
   {
@@ -44,8 +55,16 @@ export const supabase = createClient(
 
 export const saveSupabaseCredentials = (url: string, key: string): void => {
   if (typeof window !== 'undefined') {
-    localStorage.setItem('hemp_sb_url', url.trim());
+    const cleanUrl = normalizeSupabaseUrl(url);
+    localStorage.setItem('hemp_sb_url', cleanUrl);
     localStorage.setItem('hemp_sb_key', key.trim());
+    supabase = createClient(cleanUrl, key.trim(), {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true
+      }
+    });
   }
 };
 
