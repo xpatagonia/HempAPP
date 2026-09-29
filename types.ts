@@ -455,6 +455,8 @@ export interface AgrochemicalApplication {
   totalAppliedAmount: number; // Cantidad total aplicada en el lote
   applicationMethod: 'Fertirriego' | 'Pulverización Terrestre' | 'Pulverización Aérea' | 'Incorporación Edáfica' | 'Manual / Follaje';
   batchNumber: string; // Lote de fabricación
+  expirationDate?: string; // Fecha de vencimiento
+  senasaComplianceStatus?: 'Conforme SENASA (Normativa VIGENTE)' | 'Certificación Orgánica Acreditada' | 'En Revisión Documental'; // Cumplimiento normativo
   safetyPeriodDays: number; // Días de carencia pre-cosecha
   harvestSafetyDate: string; // Fecha liberada para cosecha
   responsibleAgronomist: string; // Nombre del Ingeniero Agrónomo
