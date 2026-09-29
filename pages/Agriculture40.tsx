@@ -8,7 +8,7 @@ import {
   CloudRain, Zap, BarChart3, HelpCircle, FileText, Globe, Wind,
   Calendar, ChevronLeft, ChevronRight, Clock, Sliders, Camera,
   Plus, X, Info, Sparkles, Eye, ArrowUpRight, ArrowDownRight,
-  Plane, Check, Filter
+  Plane, Check, Filter, Flame, ShieldAlert, Award, Car, TreePine, Waves
 } from 'lucide-react';
 import { 
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, 
@@ -24,9 +24,12 @@ import {
   generateDetailedSatellitePasses,
   exportSatelliteComparisonPDF,
   exportNDVITimeSeriesPDF,
-  exportNDVITimeSeriesCSV
+  exportNDVITimeSeriesCSV,
+  calculateCarbonFootprint,
+  exportCarbonAuditPDF,
+  getRegionalCatastropheAlerts
 } from '../src/services/agro40Service';
-import { SoilHealthData, WaterEfficiencyMetrics, NDVISample, SatellitePass, DroneFlight } from '../types';
+import { SoilHealthData, WaterEfficiencyMetrics, NDVISample, SatellitePass, DroneFlight, CarbonFootprintData, CatastropheRiskAlert, CatastropheType, RiskLevel } from '../types';
 
 const MapResizer = () => {
   const map = useMap();
@@ -62,7 +65,7 @@ export default function Agriculture40() {
 
   // Estado del lote seleccionado
   const [selectedPlotId, setSelectedPlotId] = useState<string>(urlPlotId || (plots.length > 0 ? plots[0].id : ''));
-  const [activeTab, setActiveTab] = useState<'ndvi' | 'soil' | 'water' | 'simulator'>('ndvi');
+  const [activeTab, setActiveTab] = useState<'ndvi' | 'water' | 'carbon' | 'catastrophes' | 'soil' | 'simulator'>('ndvi');
   const [mapLayer, setMapLayer] = useState<'satellite' | 'ndvi_layer' | 'street'>('satellite');
   
   // Estados de datos Agro 4.0
@@ -176,7 +179,15 @@ export default function Agriculture40() {
         plotAreaHa: 1, cycleDays: 110, cumulativeRainMm: 0, cumulativeIrrigationMm: 0,
         totalWaterAppliedMm: 0, totalWaterAppliedM3: 0, et0CumulativeMm: 450, hempEtcMm: 400,
         wueBiomassKgM3: 2.8, wueGrainKgM3: 0.6, waterSavedVsCornM3: 2600, waterSavedVsCottonM3: 5300,
-        waterSavedVsAlfalfaM3: 6800, co2CapturedTonnes: 11.4, soilRestorationIndex: 85
+        waterSavedVsAlfalfaM3: 6800,
+        greenWaterFootprintM3Ha: 0,
+        blueWaterFootprintM3Ha: 0,
+        greyWaterFootprintM3Ha: 30,
+        totalWaterFootprintM3Ha: 30,
+        waterFootprintPerKgYieldLiters: 450,
+        waterBenchmarkVsCottonPct: 75,
+        waterBenchmarkVsCornPct: 40,
+        co2CapturedTonnes: 11.4, soilRestorationIndex: 85
       };
     }
     return calculateWaterEfficiency(selectedPlot, selectedVariety, totalRainMm, totalIrrigationMm, plotTrials);
@@ -300,6 +311,55 @@ export default function Agriculture40() {
   const handleDownloadPdf = () => {
     if (!selectedPlot || !soilData) return;
     exportAgro40CertificatePdf(selectedPlot, selectedLocation, selectedVariety, soilData, waterMetrics, ndviSamples);
+  };
+
+  // Huella de Carbono y Captura de CO2 de la Parcela Actual
+  const carbonData: CarbonFootprintData = useMemo(() => {
+    if (!selectedPlot) {
+      return {
+        plotId: '',
+        plotName: '',
+        areaHa: 1,
+        varietyName: '',
+        dryBiomassKgHa: 8000,
+        aboveGroundCaptureTonnesCO2Ha: 13.04,
+        belowGroundCaptureTonnesCO2Ha: 2.87,
+        totalGrossCaptureTonnesCO2Ha: 15.91,
+        totalGrossCaptureTonnesCO2Plot: 15.91,
+        fuelEmissionsTonnesCO2Ha: 0.20,
+        fertilizerEmissionsTonnesCO2Ha: 0.35,
+        irrigationEnergyEmissionsTonnesCO2Ha: 0.10,
+        totalEmissionsTonnesCO2Ha: 0.65,
+        netCarbonBalanceTonnesCO2Ha: -15.26,
+        netCarbonBalanceTonnesCO2Plot: -15.26,
+        carbonCreditsEstimated: 13.7,
+        carbonOffsetEquivalencyCars: 3.3,
+        carbonOffsetEquivalencyTrees: 694,
+        sequestrationDurabilityYears: 100,
+        mrvStatus: 'Auditado',
+        lastCalculated: new Date().toISOString()
+      };
+    }
+    return calculateCarbonFootprint(selectedPlot, selectedVariety, plotTrials);
+  }, [selectedPlot, selectedVariety, plotTrials]);
+
+  // Alertas de Catástrofes & Riesgo Agroclimático (Incendio, Sequía, Inundación, Helada, Viento)
+  const catastropheAlerts: CatastropheRiskAlert[] = useMemo(() => {
+    return getRegionalCatastropheAlerts(plots, locations);
+  }, [plots, locations]);
+
+  const [selectedCatastropheFilter, setSelectedCatastropheFilter] = useState<'all' | 'incendio' | 'sequia' | 'inundacion' | 'viento_granizo'>('all');
+  const [selectedAlertForMap, setSelectedAlertForMap] = useState<CatastropheRiskAlert | null>(null);
+
+  const filteredCatastropheAlerts = useMemo(() => {
+    if (selectedCatastropheFilter === 'all') return catastropheAlerts;
+    return catastropheAlerts.filter(a => a.type === selectedCatastropheFilter);
+  }, [catastropheAlerts, selectedCatastropheFilter]);
+
+  // Descargar Dictamen Oficial de Captura de Carbono (PDF)
+  const handleDownloadCarbonPdf = () => {
+    if (!selectedPlot) return;
+    exportCarbonAuditPDF(selectedPlot, selectedVariety, carbonData);
   };
 
   // Comparativa de consumo hídrico
@@ -439,10 +499,10 @@ export default function Agriculture40() {
       </div>
 
       {/* PESTAÑAS DE NAVEGACIÓN DENTRO DEL MÓDULO */}
-      <div className="flex items-center space-x-2 border-b border-slate-200 dark:border-slate-800 pb-2">
+      <div className="flex items-center space-x-2 border-b border-slate-200 dark:border-slate-800 pb-2 overflow-x-auto custom-scrollbar">
         <button
           onClick={() => setActiveTab('ndvi')}
-          className={`flex items-center space-x-2 px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all ${
+          className={`flex items-center space-x-2 px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all whitespace-nowrap ${
             activeTab === 'ndvi'
               ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20'
               : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
@@ -453,39 +513,63 @@ export default function Agriculture40() {
         </button>
 
         <button
-          onClick={() => setActiveTab('soil')}
-          className={`flex items-center space-x-2 px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all ${
-            activeTab === 'soil'
-              ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20'
-              : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
-          }`}
-        >
-          <Sprout size={16} />
-          <span>Salud y Restauración del Suelo</span>
-        </button>
-
-        <button
           onClick={() => setActiveTab('water')}
-          className={`flex items-center space-x-2 px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all ${
+          className={`flex items-center space-x-2 px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all whitespace-nowrap ${
             activeTab === 'water'
               ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20'
               : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
           }`}
         >
           <Droplets size={16} />
-          <span>Eficiencia Hídrica & Cultivos</span>
+          <span>Huella Hídrica & Cultivos</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('carbon')}
+          className={`flex items-center space-x-2 px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all whitespace-nowrap ${
+            activeTab === 'carbon'
+              ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20'
+              : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
+          }`}
+        >
+          <Leaf size={16} className="text-emerald-400" />
+          <span>Captura de CO₂ & Bonos MRV</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('catastrophes')}
+          className={`flex items-center space-x-2 px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all whitespace-nowrap ${
+            activeTab === 'catastrophes'
+              ? 'bg-red-600 text-white shadow-lg shadow-red-600/20'
+              : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
+          }`}
+        >
+          <Flame size={16} className={activeTab === 'catastrophes' ? 'text-yellow-300' : 'text-red-500'} />
+          <span>Alertas de Catástrofes</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('soil')}
+          className={`flex items-center space-x-2 px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all whitespace-nowrap ${
+            activeTab === 'soil'
+              ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20'
+              : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
+          }`}
+        >
+          <Sprout size={16} />
+          <span>Salud y Suelo</span>
         </button>
 
         <button
           onClick={() => setActiveTab('simulator')}
-          className={`flex items-center space-x-2 px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all ${
+          className={`flex items-center space-x-2 px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all whitespace-nowrap ${
             activeTab === 'simulator'
               ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20'
               : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
           }`}
         >
           <Zap size={16} />
-          <span>Simulador de Cuenca Hídrica</span>
+          <span>Simulador de Cuenca</span>
         </button>
       </div>
 
@@ -1463,6 +1547,486 @@ export default function Agriculture40() {
               </Link>
             </div>
 
+          </div>
+
+          {/* DESGLOSE PROTOCOLAR DE HUELLA HÍDRICA (WATER FOOTPRINT NETWORK) */}
+          <div className="bg-white dark:bg-slate-900 p-8 rounded-[36px] border border-slate-100 dark:border-slate-800 shadow-sm space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
+              <div>
+                <h3 className="font-black text-slate-900 dark:text-white uppercase tracking-tight text-lg flex items-center gap-2">
+                  <Droplets className="text-blue-500" size={22} />
+                  <span>Protocolo de Huella Hídrica (Hoekstra / Water Footprint Network)</span>
+                </h3>
+                <p className="text-xs text-slate-400 font-medium">
+                  Desglose volumétrico de agua verde, azul y gris consumida por hectárea y por unidad de cosecha.
+                </p>
+              </div>
+              <span className="text-xs font-black px-3 py-1 rounded-xl bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 w-fit">
+                Estándar WFN ISO 14046
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="p-5 bg-green-50/60 dark:bg-green-950/20 rounded-3xl border border-green-200/60 dark:border-green-900/40 space-y-2">
+                <span className="text-[10px] font-black uppercase text-green-700 dark:text-green-300">Huella Verde (Lluvia)</span>
+                <p className="text-2xl font-black text-slate-900 dark:text-white">{waterMetrics.greenWaterFootprintM3Ha.toLocaleString()} <span className="text-xs text-slate-400 font-normal">m³/ha</span></p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Agua de precipitación pluvial naturalmente evapotranspirada.</p>
+              </div>
+
+              <div className="p-5 bg-blue-50/60 dark:bg-blue-950/20 rounded-3xl border border-blue-200/60 dark:border-blue-900/40 space-y-2">
+                <span className="text-[10px] font-black uppercase text-blue-700 dark:text-blue-300">Huella Azul (Riego)</span>
+                <p className="text-2xl font-black text-slate-900 dark:text-white">{waterMetrics.blueWaterFootprintM3Ha.toLocaleString()} <span className="text-xs text-slate-400 font-normal">m³/ha</span></p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Extracción de fuentes superficiales o subterráneas presurizadas.</p>
+              </div>
+
+              <div className="p-5 bg-slate-100/70 dark:bg-slate-800/50 rounded-3xl border border-slate-200 dark:border-slate-700 space-y-2">
+                <span className="text-[10px] font-black uppercase text-slate-600 dark:text-slate-300">Huella Gris (Dilución)</span>
+                <p className="text-2xl font-black text-slate-900 dark:text-white">{waterMetrics.greyWaterFootprintM3Ha} <span className="text-xs text-slate-400 font-normal">m³/ha</span></p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Carga asimilativa mínima requerida (bajo uso de agroquímicos).</p>
+              </div>
+
+              <div className="p-5 bg-emerald-500 text-white rounded-3xl shadow-lg space-y-2">
+                <span className="text-[10px] font-black uppercase text-emerald-100">Intensidad Hídrica / kg</span>
+                <p className="text-2xl font-black">{waterMetrics.waterFootprintPerKgYieldLiters} <span className="text-xs text-emerald-100 font-normal">L / kg MS</span></p>
+                <p className="text-[11px] text-emerald-100 font-medium">Litros de agua por kilo de biomasa seca producida.</p>
+              </div>
+            </div>
+
+            <div className="p-5 bg-slate-50 dark:bg-slate-800/40 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs">
+              <div className="flex items-center space-x-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                <span className="font-bold text-slate-700 dark:text-slate-300">
+                  Eficiencia de Uso de Agua (WUE): <strong>{waterMetrics.wueBiomassKgM3} kg de materia seca / m³</strong>
+                </span>
+              </div>
+              <div className="flex items-center gap-4 text-slate-600 dark:text-slate-300 font-medium">
+                <span>Ahorro vs Algodón: <strong className="text-emerald-600 font-black">-{waterMetrics.waterBenchmarkVsCottonPct}%</strong></span>
+                <span>Ahorro vs Maíz: <strong className="text-emerald-600 font-black">-{waterMetrics.waterBenchmarkVsCornPct}%</strong></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CONTENIDO DE PESTAÑA: CAPTURA DE CO2 & HUELLA DE CARBONO (MRV) */}
+      {activeTab === 'carbon' && (
+        <div className="space-y-8 animate-in fade-in duration-300">
+          
+          {/* Encabezado y Acción Oficial */}
+          <div className="bg-gradient-to-r from-emerald-950 via-slate-900 to-slate-900 p-8 rounded-[36px] text-white border border-emerald-500/20 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-6 relative overflow-hidden">
+            <div className="space-y-2 relative z-10">
+              <div className="flex items-center space-x-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">
+                  Proyecto Huella de Carbono & Bioeconomía
+                </span>
+              </div>
+              <h3 className="text-2xl md:text-3xl font-black uppercase tracking-tight">
+                Captura Neta de CO₂ & Protocolo MRV
+              </h3>
+              <p className="text-xs text-slate-300 max-w-2xl font-medium">
+                Medición, Reporte y Verificación del balance neto de carbono por hectárea cultivada. Certificación para mercados voluntarios y bonos verdes.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3 relative z-10">
+              <button
+                onClick={handleDownloadCarbonPdf}
+                className="px-6 py-3.5 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black text-xs uppercase tracking-wider rounded-2xl shadow-lg transition active:scale-95 flex items-center gap-2"
+              >
+                <Download size={16} />
+                <span>Exportar Certificado de Carbono (PDF)</span>
+              </button>
+            </div>
+          </div>
+
+          {/* 4 KPIs de Carbono */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="bg-white dark:bg-slate-900 p-6 rounded-[28px] border border-slate-100 dark:border-slate-800 shadow-sm space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Captura Bruta Absorbida</span>
+                <Leaf size={18} className="text-emerald-500" />
+              </div>
+              <p className="text-3xl font-black text-slate-900 dark:text-white">+{carbonData.totalGrossCaptureTonnesCO2Ha} <span className="text-sm font-bold text-slate-400">t/ha</span></p>
+              <p className="text-[11px] text-slate-400 font-bold">Total Parcela: +{carbonData.totalGrossCaptureTonnesCO2Plot} t CO₂e</p>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900 p-6 rounded-[28px] border border-slate-100 dark:border-slate-800 shadow-sm space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest">Emisiones Operativas</span>
+                <Car size={18} className="text-amber-500" />
+              </div>
+              <p className="text-3xl font-black text-slate-900 dark:text-white">-{carbonData.totalEmissionsTonnesCO2Ha} <span className="text-sm font-bold text-slate-400">t/ha</span></p>
+              <p className="text-[11px] text-slate-400 font-bold">Alcance 1 (diésel) y 2/3 (insumos)</p>
+            </div>
+
+            <div className="bg-emerald-600 text-white p-6 rounded-[28px] shadow-lg space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-100">Balance Neto de Carbono</span>
+                <Award size={18} className="text-yellow-300" />
+              </div>
+              <p className="text-3xl font-black">{carbonData.netCarbonBalanceTonnesCO2Ha} <span className="text-sm font-bold text-emerald-100">t/ha</span></p>
+              <p className="text-[11px] text-emerald-100 font-bold">Sumidero Neto: Secuestro Carbono Negativo</p>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900 p-6 rounded-[28px] border border-slate-100 dark:border-slate-800 shadow-sm space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black text-purple-600 uppercase tracking-widest">Créditos de Carbono</span>
+                <Award size={18} className="text-purple-500" />
+              </div>
+              <p className="text-3xl font-black text-slate-900 dark:text-white">{carbonData.carbonCreditsEstimated} <span className="text-sm font-bold text-slate-400">Bonos</span></p>
+              <p className="text-[11px] text-slate-400 font-bold">tCO₂e certificables con buffer del 10%</p>
+            </div>
+          </div>
+
+          {/* Desglose Metodológico de Carbono */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="bg-white dark:bg-slate-900 p-8 rounded-[36px] border border-slate-100 dark:border-slate-800 shadow-sm space-y-6">
+              <h4 className="text-base font-black text-slate-900 dark:text-white uppercase tracking-tight flex items-center gap-2">
+                <Leaf size={18} className="text-emerald-500" />
+                <span>Desglose de Fijación Fotosintética y Edáfica</span>
+              </h4>
+
+              <div className="space-y-4">
+                <div className="p-4 bg-emerald-50/60 dark:bg-emerald-950/20 rounded-2xl border border-emerald-500/20 flex justify-between items-center">
+                  <div>
+                    <span className="font-bold text-xs text-slate-800 dark:text-slate-100 block">Fijación Aérea (Tallos, Follaje y Flores)</span>
+                    <span className="text-[10px] text-slate-500">1.63 kg CO₂ por cada kg de biomasa seca producida</span>
+                  </div>
+                  <span className="text-base font-black text-emerald-600">+{carbonData.aboveGroundCaptureTonnesCO2Ha} t/ha</span>
+                </div>
+
+                <div className="p-4 bg-emerald-50/60 dark:bg-emerald-950/20 rounded-2xl border border-emerald-500/20 flex justify-between items-center">
+                  <div>
+                    <span className="font-bold text-xs text-slate-800 dark:text-slate-100 block">Fijación Radicular y Carbono Orgánico (SOC)</span>
+                    <span className="text-[10px] text-slate-500">Incorporación profunda en el perfil de suelo (0 - 120 cm)</span>
+                  </div>
+                  <span className="text-base font-black text-emerald-600">+{carbonData.belowGroundCaptureTonnesCO2Ha} t/ha</span>
+                </div>
+
+                <div className="p-4 bg-amber-50/60 dark:bg-amber-950/20 rounded-2xl border border-amber-500/20 flex justify-between items-center">
+                  <div>
+                    <span className="font-bold text-xs text-slate-800 dark:text-slate-100 block">Emisiones Diésel de Labores Mecánicas</span>
+                    <span className="text-[10px] text-slate-500">Siembra, fertilización de base y cosecha mecánica</span>
+                  </div>
+                  <span className="text-base font-black text-amber-600">-{carbonData.fuelEmissionsTonnesCO2Ha} t/ha</span>
+                </div>
+
+                <div className="p-4 bg-amber-50/60 dark:bg-amber-950/20 rounded-2xl border border-amber-500/20 flex justify-between items-center">
+                  <div>
+                    <span className="font-bold text-xs text-slate-800 dark:text-slate-100 block">Insumos y Energía de Riego</span>
+                    <span className="text-[10px] text-slate-500">Huella de fabricación de fertilizantes y bombeo</span>
+                  </div>
+                  <span className="text-base font-black text-amber-600">-{(carbonData.fertilizerEmissionsTonnesCO2Ha + carbonData.irrigationEnergyEmissionsTonnesCO2Ha).toFixed(2)} t/ha</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Equivalencias Ecológicas & Durabilidad */}
+            <div className="bg-white dark:bg-slate-900 p-8 rounded-[36px] border border-slate-100 dark:border-slate-800 shadow-sm space-y-6 flex flex-col justify-between">
+              <div className="space-y-4">
+                <h4 className="text-base font-black text-slate-900 dark:text-white uppercase tracking-tight flex items-center gap-2">
+                  <TreePine size={18} className="text-emerald-500" />
+                  <span>Equivalencias Ecológicas Verificables</span>
+                </h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                  Impacto compensatorio directo del lote {selectedPlot?.name} frente a emisiones de la economía convencional:
+                </p>
+
+                <div className="grid grid-cols-2 gap-4 pt-2">
+                  <div className="p-5 bg-slate-50 dark:bg-slate-800/60 rounded-3xl space-y-1">
+                    <Car size={24} className="text-emerald-600 mb-1" />
+                    <p className="text-2xl font-black text-slate-900 dark:text-white">{carbonData.carbonOffsetEquivalencyCars}</p>
+                    <p className="text-[11px] text-slate-500 font-medium">Automóviles fuera de circulación por 1 año.</p>
+                  </div>
+
+                  <div className="p-5 bg-slate-50 dark:bg-slate-800/60 rounded-3xl space-y-1">
+                    <TreePine size={24} className="text-emerald-600 mb-1" />
+                    <p className="text-2xl font-black text-slate-900 dark:text-white">{carbonData.carbonOffsetEquivalencyTrees.toLocaleString()}</p>
+                    <p className="text-[11px] text-slate-500 font-medium">Árboles nativos en absorción equivalente.</p>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-emerald-50 dark:bg-emerald-950/30 rounded-2xl border border-emerald-500/20 text-xs">
+                  <span className="font-black text-emerald-800 dark:text-emerald-300 block mb-1">Permanencia de Retención de Carbono:</span>
+                  <span className="text-slate-600 dark:text-slate-300">
+                    Al destinarse a bioconstrucción (Hempcrete / Cañamiza), el carbono secuestrado queda mineralizado e inmovilizado por <strong>más de {carbonData.sequestrationDurabilityYears} años</strong>, sin riesgo de retorno a la atmósfera.
+                  </span>
+                </div>
+              </div>
+
+              <button
+                onClick={handleDownloadCarbonPdf}
+                className="w-full py-4 bg-slate-900 dark:bg-emerald-600 hover:bg-black dark:hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition shadow-lg flex items-center justify-center gap-2"
+              >
+                <Download size={14} />
+                <span>Descargar Dictamen Oficial de Carbono</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Tabla de Registro de Carbono de la Red */}
+          <div className="bg-white dark:bg-slate-900 p-8 rounded-[36px] border border-slate-100 dark:border-slate-800 shadow-sm space-y-4">
+            <h4 className="text-base font-black text-slate-900 dark:text-white uppercase tracking-tight">
+              Registro de Carbono por Parcela (Red Cooperativa)
+            </h4>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left">
+                <thead>
+                  <tr className="border-b border-slate-200 dark:border-slate-800 text-[10px] font-black uppercase text-slate-400">
+                    <th className="py-3 px-4">Parcela</th>
+                    <th className="py-3 px-4">Variedad</th>
+                    <th className="py-3 px-4">Superficie</th>
+                    <th className="py-3 px-4">Captura Bruta</th>
+                    <th className="py-3 px-4">Emisiones</th>
+                    <th className="py-3 px-4">Balance Neto</th>
+                    <th className="py-3 px-4">Bonos Certificables</th>
+                    <th className="py-3 px-4">Estado MRV</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-bold">
+                  {plots.map(p => {
+                    const v = varieties.find(vr => vr.id === p.varietyId);
+                    const c = calculateCarbonFootprint(p, v, trialRecords.filter(t => t.plotId === p.id));
+                    return (
+                      <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
+                        <td className="py-3 px-4 uppercase text-slate-900 dark:text-white">{p.name}</td>
+                        <td className="py-3 px-4 text-slate-500">{v?.name || 'Santhica / Futura'}</td>
+                        <td className="py-3 px-4">{c.areaHa} ha</td>
+                        <td className="py-3 px-4 text-emerald-600">+{c.totalGrossCaptureTonnesCO2Plot} t</td>
+                        <td className="py-3 px-4 text-amber-600">-{(c.totalEmissionsTonnesCO2Ha * c.areaHa).toFixed(1)} t</td>
+                        <td className="py-3 px-4 text-emerald-700 dark:text-emerald-400 font-black">{c.netCarbonBalanceTonnesCO2Plot} t CO₂e</td>
+                        <td className="py-3 px-4 text-purple-600 font-black">{c.carbonCreditsEstimated} Bonos</td>
+                        <td className="py-3 px-4">
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+                            Auditado
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CONTENIDO DE PESTAÑA: ALERTAS DE CATÁSTROFES & RIESGO AGROCLIMÁTICO */}
+      {activeTab === 'catastrophes' && (
+        <div className="space-y-8 animate-in fade-in duration-300">
+          
+          {/* Header y Filtros */}
+          <div className="bg-white dark:bg-slate-900 p-8 rounded-[36px] border border-slate-100 dark:border-slate-800 shadow-sm space-y-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-5">
+              <div className="flex items-center space-x-3">
+                <div className="p-3 bg-red-500/10 text-red-600 rounded-2xl">
+                  <Flame size={28} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
+                    Centro de Alertas de Catástrofes & Riesgo Climático
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                    Telemetría satelital y detección temprana de Incendios (FWI), Sequía extrema (SPEI), Inundación y Vientos severos.
+                  </p>
+                </div>
+              </div>
+
+              {/* Filtros por tipo de catástrofe */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={() => setSelectedCatastropheFilter('all')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition ${
+                    selectedCatastropheFilter === 'all'
+                      ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                  }`}
+                >
+                  Todas ({catastropheAlerts.length})
+                </button>
+                <button
+                  onClick={() => setSelectedCatastropheFilter('incendio')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-1.5 ${
+                    selectedCatastropheFilter === 'incendio'
+                      ? 'bg-red-600 text-white shadow-sm'
+                      : 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300 hover:bg-red-100'
+                  }`}
+                >
+                  <Flame size={13} /> Incendios
+                </button>
+                <button
+                  onClick={() => setSelectedCatastropheFilter('sequia')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-1.5 ${
+                    selectedCatastropheFilter === 'sequia'
+                      ? 'bg-amber-600 text-white shadow-sm'
+                      : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 hover:bg-amber-100'
+                  }`}
+                >
+                  <Sun size={13} /> Sequía
+                </button>
+                <button
+                  onClick={() => setSelectedCatastropheFilter('inundacion')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-1.5 ${
+                    selectedCatastropheFilter === 'inundacion'
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 hover:bg-blue-100'
+                  }`}
+                >
+                  <Waves size={13} /> Inundación
+                </button>
+                <button
+                  onClick={() => setSelectedCatastropheFilter('viento_granizo')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-1.5 ${
+                    selectedCatastropheFilter === 'viento_granizo'
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 hover:bg-indigo-100'
+                  }`}
+                >
+                  <Wind size={13} /> Viento / Ráfagas
+                </button>
+              </div>
+            </div>
+
+            {/* Dos Columnas: Lista de Alertas + Mapa de Riesgo Regional */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+              
+              {/* Feed de Alertas */}
+              <div className="lg:col-span-6 space-y-4 max-h-[680px] overflow-y-auto pr-2 custom-scrollbar">
+                {filteredCatastropheAlerts.length === 0 ? (
+                  <div className="py-12 text-center bg-slate-50 dark:bg-slate-800/40 rounded-3xl border border-dashed border-slate-200">
+                    <ShieldCheck size={32} className="mx-auto text-emerald-500 mb-2" />
+                    <p className="text-xs font-black text-slate-500 uppercase tracking-widest">
+                      Sin alertas activas para la categoría seleccionada.
+                    </p>
+                  </div>
+                ) : (
+                  filteredCatastropheAlerts.map(alert => {
+                    const isFire = alert.type === 'incendio';
+                    const isDrought = alert.type === 'sequia';
+                    const isFlood = alert.type === 'inundacion';
+                    const isWind = alert.type === 'viento_granizo';
+
+                    const borderClass = alert.level === 'Alto' ? 'border-red-500/50 bg-red-50/20 dark:bg-red-950/20' : alert.level === 'Moderado' ? 'border-amber-500/50 bg-amber-50/20 dark:bg-amber-950/20' : 'border-blue-500/50 bg-blue-50/20 dark:bg-blue-950/20';
+
+                    return (
+                      <div
+                        key={alert.id}
+                        className={`p-6 rounded-3xl border-2 transition-all space-y-3 cursor-pointer ${borderClass} hover:shadow-md`}
+                        onClick={() => setSelectedAlertForMap(alert)}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center space-x-3">
+                            <div className={`p-3 rounded-2xl flex items-center justify-center text-white ${
+                              isFire ? 'bg-red-600' : isDrought ? 'bg-amber-600' : isFlood ? 'bg-blue-600' : 'bg-indigo-600'
+                            }`}>
+                              {isFire && <Flame size={20} />}
+                              {isDrought && <Sun size={20} />}
+                              {isFlood && <Waves size={20} />}
+                              {isWind && <Wind size={20} />}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <h4 className="font-black text-slate-900 dark:text-white uppercase tracking-tight text-sm">
+                                  {alert.plotName}
+                                </h4>
+                                <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                                  alert.level === 'Alto' ? 'bg-red-500 text-white' : alert.level === 'Moderado' ? 'bg-amber-500 text-white' : 'bg-blue-500 text-white'
+                                }`}>
+                                  Riesgo {alert.level} ({alert.score}/100)
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-slate-400 font-bold">
+                                {alert.region} ({alert.province}) • Fecha: {alert.date}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                          {alert.title}
+                        </p>
+                        <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed font-medium">
+                          {alert.description}
+                        </p>
+
+                        {/* Telemetría meteorológica y de satélite */}
+                        <div className="p-3 bg-white/80 dark:bg-slate-900/80 rounded-2xl border border-slate-200/60 dark:border-slate-800/80 flex items-center justify-between gap-2 text-[11px] font-bold flex-wrap">
+                          {alert.satelliteTelemetry.temperatureC && (
+                            <span className="flex items-center text-red-500"><Thermometer size={13} className="mr-1" /> {alert.satelliteTelemetry.temperatureC}°C</span>
+                          )}
+                          {alert.satelliteTelemetry.relativeHumidityPct && (
+                            <span className="flex items-center text-blue-500"><Droplets size={13} className="mr-1" /> {alert.satelliteTelemetry.relativeHumidityPct}% Hum.</span>
+                          )}
+                          {alert.satelliteTelemetry.windSpeedKmH && (
+                            <span className="flex items-center text-indigo-500"><Wind size={13} className="mr-1" /> {alert.satelliteTelemetry.windSpeedKmH} km/h</span>
+                          )}
+                          {alert.satelliteTelemetry.fwiIndex && (
+                            <span className="flex items-center text-red-600 font-black">FWI: {alert.satelliteTelemetry.fwiIndex}</span>
+                          )}
+                          {alert.satelliteTelemetry.soilSaturationPct && (
+                            <span className="flex items-center text-blue-600 font-black">Sat. Suelo: {alert.satelliteTelemetry.soilSaturationPct}%</span>
+                          )}
+                        </div>
+
+                        {/* Medidas Preventivas de Mitigación */}
+                        <div className="p-3 bg-white/60 dark:bg-slate-900/60 rounded-2xl space-y-1.5 text-[11px]">
+                          <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Protocolo Preventivo de Mitigación:</span>
+                          <ul className="list-disc list-inside space-y-1 text-slate-700 dark:text-slate-200 font-medium">
+                            {alert.preventiveMeasures.map((m, mIdx) => (
+                              <li key={mIdx}>{m}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Mapa Regional de Riesgo Climático */}
+              <div className="lg:col-span-6 bg-slate-50 dark:bg-slate-950 p-6 rounded-[36px] border border-slate-200 dark:border-slate-800 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-black text-slate-900 dark:text-white uppercase tracking-tight text-sm flex items-center gap-2">
+                    <MapPin size={16} className="text-red-500" />
+                    <span>Mapeo Regional de Focos de Riesgo</span>
+                  </h4>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase">
+                    Red Cooperativa Argentina
+                  </span>
+                </div>
+
+                <div className="h-[520px] rounded-3xl overflow-hidden border border-slate-200 dark:border-slate-800 relative">
+                  <MapContainer
+                    center={[-34.5, -63.5]}
+                    zoom={5}
+                    scrollWheelZoom={false}
+                    className="w-full h-full"
+                  >
+                    <TileLayer
+                      url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                      attribution='&copy; Esri World Imagery'
+                    />
+
+                    {filteredCatastropheAlerts.map(alert => {
+                      const color = alert.level === 'Alto' ? '#ef4444' : alert.level === 'Moderado' ? '#f59e0b' : '#3b82f6';
+                      return (
+                        <React.Fragment key={alert.id}>
+                          <Marker position={[alert.coordinates.lat, alert.coordinates.lng]}>
+                            <LeafletTooltip direction="top" offset={[0, -10]} className="bg-slate-900 text-white rounded-xl p-2 shadow-xl border border-white/10 font-bold text-xs">
+                              <span className="font-black block uppercase text-emerald-400">{alert.plotName}</span>
+                              <span className="block text-[11px] text-slate-300 font-normal">{alert.title}</span>
+                              <span className="block text-[10px] text-amber-300 font-bold">Riesgo {alert.level} ({alert.score}/100)</span>
+                            </LeafletTooltip>
+                          </Marker>
+                        </React.Fragment>
+                      );
+                    })}
+                  </MapContainer>
+                </div>
+              </div>
+
+            </div>
           </div>
         </div>
       )}

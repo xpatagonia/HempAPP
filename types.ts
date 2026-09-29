@@ -309,9 +309,71 @@ export interface WaterEfficiencyMetrics {
   waterSavedVsCornM3: number;
   waterSavedVsCottonM3: number;
   waterSavedVsAlfalfaM3: number;
+  // Desglose Huella Hídrica (Water Footprint Network / Hoekstra)
+  greenWaterFootprintM3Ha: number; // Agua de lluvia evapotranspirada
+  blueWaterFootprintM3Ha: number;  // Agua de riego aplicada
+  greyWaterFootprintM3Ha: number;  // Dilución de lixiviados/nutrientes
+  totalWaterFootprintM3Ha: number;
+  waterFootprintPerKgYieldLiters: number; // Litros por kg producido
+  waterBenchmarkVsCottonPct: number; // Ahorro relativo vs algodón (~75-80%)
+  waterBenchmarkVsCornPct: number;   // Ahorro relativo vs maíz (~35-45%)
   co2CapturedTonnes: number;
   soilRestorationIndex: number; // 0 - 100
 }
+
+export interface CarbonFootprintData {
+  plotId: string;
+  plotName: string;
+  areaHa: number;
+  varietyName: string;
+  dryBiomassKgHa: number;
+  aboveGroundCaptureTonnesCO2Ha: number;
+  belowGroundCaptureTonnesCO2Ha: number;
+  totalGrossCaptureTonnesCO2Ha: number;
+  totalGrossCaptureTonnesCO2Plot: number;
+  fuelEmissionsTonnesCO2Ha: number;
+  fertilizerEmissionsTonnesCO2Ha: number;
+  irrigationEnergyEmissionsTonnesCO2Ha: number;
+  totalEmissionsTonnesCO2Ha: number;
+  netCarbonBalanceTonnesCO2Ha: number; // Valor negativo indica fijación neta
+  netCarbonBalanceTonnesCO2Plot: number;
+  carbonCreditsEstimated: number; // tCO2e certificables
+  carbonOffsetEquivalencyCars: number;
+  carbonOffsetEquivalencyTrees: number;
+  sequestrationDurabilityYears: number;
+  mrvStatus: 'Auditado' | 'En Proceso' | 'Verificado Satelital';
+  lastCalculated: string;
+}
+
+export type RiskLevel = 'Bajo' | 'Moderado' | 'Alto' | 'Extremo';
+export type CatastropheType = 'incendio' | 'sequia' | 'inundacion' | 'helada' | 'viento_granizo';
+
+export interface CatastropheRiskAlert {
+  id: string;
+  plotId?: string;
+  plotName: string;
+  region: string;
+  province: string;
+  coordinates: { lat: number; lng: number };
+  type: CatastropheType;
+  level: RiskLevel;
+  score: number; // 0 - 100
+  title: string;
+  description: string;
+  triggerFactors: string[];
+  preventiveMeasures: string[];
+  satelliteTelemetry: {
+    temperatureC?: number;
+    relativeHumidityPct?: number;
+    windSpeedKmH?: number;
+    soilSaturationPct?: number;
+    vegetationDrynessIndex?: number;
+    fwiIndex?: number;
+  };
+  date: string;
+  status: 'Activa' | 'En Observación' | 'Mitigada';
+}
+
 
 export interface NDVISample {
   date: string;
