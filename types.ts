@@ -356,3 +356,19 @@ export interface DroneFlight {
   ndviAverage: number;
   observations: string;
 }
+
+export interface PlotNDVIAlert {
+  plotId: string;
+  plotName: string;
+  ndvi: number;
+  date: string;
+  stage: string;
+  isCriticalLow: boolean;
+  isCriticalHigh: boolean;
+  isCritical: boolean;
+  type: 'CRITICAL_LOW' | 'CRITICAL_HIGH' | 'NORMAL';
+  title: string;
+  description: string;
+  suggestedAction: string;
+}
+

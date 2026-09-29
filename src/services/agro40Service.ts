@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { SoilHealthData, WaterEfficiencyMetrics, NDVISample, Plot, Location, Variety, TrialRecord, SatellitePass, DroneFlight } from '../../types';
+import { SoilHealthData, WaterEfficiencyMetrics, NDVISample, Plot, Location, Variety, TrialRecord, SatellitePass, DroneFlight, PlotNDVIAlert } from '../../types';
 
 // Determina la clase textural según el estándar USDA
 export const getUSDASoilTexture = (sand: number, clay: number, silt: number): string => {
@@ -586,4 +586,70 @@ export const exportSatelliteComparisonPDF = (
 
   doc.save(`Comparativa_Satelital_${plot.name.replace(/\s+/g, '_')}_${passA.date}_vs_${passB.date}.pdf`);
 };
+
+// Evalúa el estado de alerta NDVI (< 0.20 o > 0.70) para un lote
+export const getPlotNDVIAlertStatus = (
+  plot: Plot,
+  variety?: Variety,
+  trials?: TrialRecord[]
+): PlotNDVIAlert => {
+  const passes = generateDetailedSatellitePasses(plot, variety, trials);
+  
+  // Determinamos la pasada más representativa del monitoreo actual
+  let currentPass = passes[0];
+  if (plot.sowingDate) {
+    const daysSinceSowing = Math.max(0, Math.floor((Date.now() - new Date(plot.sowingDate).getTime()) / 86400000));
+    currentPass = passes.reduce((prev, curr) => 
+      Math.abs(curr.cycleDay - daysSinceSowing) < Math.abs(prev.cycleDay - daysSinceSowing) ? curr : prev
+    , passes[0]);
+  } else {
+    const defaultIdx = Math.min(Math.floor(passes.length * 0.65), passes.length - 1);
+    currentPass = passes[defaultIdx] || passes[0];
+  }
+
+  // Integración con registros de campo si existen
+  const latestTrial = trials && trials.length > 0 ? trials[trials.length - 1] : null;
+  let finalNdvi = currentPass.ndviAverage;
+  if (latestTrial?.vigor) {
+    const fieldNdvi = Number((latestTrial.vigor * 0.088).toFixed(2));
+    finalNdvi = Number(((finalNdvi * 0.6) + (fieldNdvi * 0.4)).toFixed(2));
+  }
+
+  const isCriticalLow = finalNdvi < 0.20;
+  const isCriticalHigh = finalNdvi > 0.70;
+  const isCritical = isCriticalLow || isCriticalHigh;
+
+  let type: 'CRITICAL_LOW' | 'CRITICAL_HIGH' | 'NORMAL' = 'NORMAL';
+  let title = `Monitoreo Estable en ${plot.name}`;
+  let description = `El lote ${plot.name} registra ${finalNdvi.toFixed(2)} NDVI en etapa ${currentPass.stageName}. Desarrollo normal.`;
+  let suggestedAction = 'Sostener monitoreo de rutina de campo';
+
+  if (isCriticalLow) {
+    type = 'CRITICAL_LOW';
+    title = `[ALERTA NDVI CRÍTICO] Suelo Desnudo / Fallo Vegetativo en ${plot.name}`;
+    description = `Sentinel-2 registró un índice crítico de ${finalNdvi.toFixed(2)} (< 0.20) en ${plot.name}. Posible fallo de emergencia, estrés hídrico severo o pérdida de plántulas.`;
+    suggestedAction = 'Inspección presencial urgente, verificación de líneas de riego y muestreo de suelo.';
+  } else if (isCriticalHigh) {
+    type = 'CRITICAL_HIGH';
+    title = `[ALERTA NDVI SUPERIOR] Vigor Óptimo & Cierre de Canopia en ${plot.name}`;
+    description = `Sentinel-2 registró vigor máximo de ${finalNdvi.toFixed(2)} (> 0.70) en ${plot.name}. Canopia cerrada al 100% y biomasa estimada en ${currentPass.biomassEstimateKgHa.toLocaleString()} kg/ha.`;
+    suggestedAction = 'Programar muestreo agronómico de cannabinoides/fibra y planificar fecha de corte/cosecha.';
+  }
+
+  return {
+    plotId: plot.id,
+    plotName: plot.name,
+    ndvi: finalNdvi,
+    date: currentPass.date,
+    stage: currentPass.stageName,
+    isCriticalLow,
+    isCriticalHigh,
+    isCritical,
+    type,
+    title,
+    description,
+    suggestedAction
+  };
+};
+
 

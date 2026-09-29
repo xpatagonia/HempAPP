@@ -1,5 +1,5 @@
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { 
@@ -9,8 +9,11 @@ import {
 import { 
   Activity, Globe, ShieldCheck, ChevronRight, 
   Bot, Sprout, TrendingUp, AlertTriangle, 
-  Calendar, ArrowUpRight, Zap, Target, AlertCircle, Clock, FlaskConical, Plus, ClipboardList
+  Calendar, ArrowUpRight, Zap, Target, AlertCircle, Clock, FlaskConical, Plus, ClipboardList,
+  Satellite, Sparkles, RefreshCw, CheckCircle2, CheckSquare, Eye
 } from 'lucide-react';
+import { getPlotNDVIAlertStatus } from '../src/services/agro40Service';
+import { PlotNDVIAlert, Task } from '../types';
 
 const MetricCard = ({ label, value, trend, icon: Icon, bgClass, textClass, subtext }: any) => (
   <div className="bg-white dark:bg-slate-900 p-6 rounded-[24px] border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all group">
@@ -31,11 +34,85 @@ const MetricCard = ({ label, value, trend, icon: Icon, bgClass, textClass, subte
 );
 
 export default function Dashboard() {
-  const { varieties, locations, plots, currentUser, getLatestRecord, trialRecords, tasks, appName } = useAppContext();
+  const { varieties, locations, plots, currentUser, getLatestRecord, trialRecords, tasks, addTask, appName } = useAppContext();
   const navigate = useNavigate();
 
   const relevantPlots = currentUser?.role === 'client' ? plots.filter(p => p.responsibleIds?.includes(currentUser?.id || '')) : plots;
   const pendingTasks = tasks.filter(t => t.status === 'Pendiente').length;
+
+  // Evaluación de alertas automáticas NDVI (<0.2 o >0.7) en lotes registrados
+  const plotNDVIAlerts: PlotNDVIAlert[] = useMemo(() => {
+    return relevantPlots.map(plot => {
+      const variety = varieties.find(v => v.id === plot.varietyId);
+      const trials = trialRecords.filter(t => t.plotId === plot.id);
+      return getPlotNDVIAlertStatus(plot, variety, trials);
+    });
+  }, [relevantPlots, varieties, trialRecords]);
+
+  const criticalAlerts = useMemo(() => {
+    return plotNDVIAlerts.filter(a => a.isCritical);
+  }, [plotNDVIAlerts]);
+
+  const criticalLowAlerts = useMemo(() => {
+    return plotNDVIAlerts.filter(a => a.isCriticalLow);
+  }, [plotNDVIAlerts]);
+
+  const criticalHighAlerts = useMemo(() => {
+    return plotNDVIAlerts.filter(a => a.isCriticalHigh);
+  }, [plotNDVIAlerts]);
+
+  // Estado de sincronización automática de tareas
+  const [isSyncingTasks, setIsSyncingTasks] = useState(false);
+  const [syncedMessage, setSyncedMessage] = useState<string | null>(null);
+
+  const getTaskForAlert = (alert: PlotNDVIAlert) => {
+    return tasks.find(t => 
+      t.plotId === alert.plotId && 
+      (t.title.includes('NDVI CRÍTICO') || t.title.includes('NDVI SUPERIOR') || t.title.includes('ALERTA NDVI'))
+    );
+  };
+
+  const syncNDVITasks = async () => {
+    setIsSyncingTasks(true);
+    let createdCount = 0;
+
+    for (const alert of criticalAlerts) {
+      const existing = getTaskForAlert(alert);
+      if (!existing) {
+        const plot = plots.find(p => p.id === alert.plotId);
+        const isLow = alert.isCriticalLow;
+        const newTask: Task = {
+          id: `task-ndvi-${alert.plotId}-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          title: alert.title,
+          description: `${alert.description} Acción recomendada: ${alert.suggestedAction}`,
+          status: 'Pendiente',
+          priority: 'Alta',
+          assignedToIds: plot?.responsibleIds && plot.responsibleIds.length > 0 ? plot.responsibleIds : (currentUser ? [currentUser.id] : []),
+          dueDate: new Date(Date.now() + (isLow ? 24 : 72) * 3600000).toISOString().split('T')[0],
+          plotId: alert.plotId,
+          createdBy: 'Sistema Satelital Sentinel-2'
+        };
+        await addTask(newTask);
+        createdCount++;
+      }
+    }
+
+    setIsSyncingTasks(false);
+    if (createdCount > 0) {
+      setSyncedMessage(`Se generaron ${createdCount} tareas automáticas de inspección NDVI.`);
+    } else {
+      setSyncedMessage('Todas las alertas satelitales ya tienen tarea registrada y activa.');
+    }
+    setTimeout(() => setSyncedMessage(null), 4000);
+  };
+
+  // Disparar sincronización silenciosa al cargar si hay alertas sin tarea
+  useEffect(() => {
+    const missing = criticalAlerts.filter(a => !getTaskForAlert(a));
+    if (missing.length > 0 && tasks.length > 0) {
+      syncNDVITasks();
+    }
+  }, [criticalAlerts.length, tasks.length]);
 
   const plotsAtRisk = useMemo(() => {
       const now = new Date().getTime();
@@ -122,6 +199,161 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-8">
+            {/* CENTRO DE ALERTAS AUTOMÁTICAS NDVI (SENTINEL-2) */}
+            <div className="bg-white dark:bg-slate-900 p-8 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-5">
+                    <div className="flex items-center space-x-3">
+                        <div className="p-3 bg-emerald-500/10 text-emerald-600 rounded-2xl relative">
+                            <Satellite size={24} />
+                            {criticalAlerts.length > 0 && (
+                                <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 rounded-full animate-ping"></span>
+                            )}
+                        </div>
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
+                                    Alertas Automáticas NDVI (Sentinel-2)
+                                </h2>
+                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-500/20">
+                                    Copernicus LIVE
+                                </span>
+                            </div>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                                Detección proactiva de valores críticos (&lt;0.20 Suelo Desnudo o &gt;0.70 Vigor Óptimo) conectada al sistema de tareas.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                        {criticalLowAlerts.length > 0 && (
+                            <span className="px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300 border border-red-200 dark:border-red-900/60 flex items-center gap-1.5">
+                                <AlertCircle size={14} className="text-red-500" /> {criticalLowAlerts.length} Crítico Bajo (&lt;0.2)
+                            </span>
+                        )}
+                        {criticalHighAlerts.length > 0 && (
+                            <span className="px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900/60 flex items-center gap-1.5">
+                                <Sparkles size={14} className="text-emerald-600" /> {criticalHighAlerts.length} Vigor Óptimo (&gt;0.7)
+                            </span>
+                        )}
+                        <button
+                            onClick={syncNDVITasks}
+                            disabled={isSyncingTasks}
+                            className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center gap-1.5 transition disabled:opacity-50"
+                        >
+                            <RefreshCw size={14} className={isSyncingTasks ? 'animate-spin text-emerald-600' : ''} />
+                            <span>Sincronizar Tareas</span>
+                        </button>
+                    </div>
+                </div>
+
+                {syncedMessage && (
+                    <div className="p-3 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 rounded-2xl text-xs font-bold flex items-center space-x-2 animate-in fade-in duration-300">
+                        <CheckCircle2 size={16} />
+                        <span>{syncedMessage}</span>
+                    </div>
+                )}
+
+                {/* Tarjetas de Alertas Críticas */}
+                {criticalAlerts.length === 0 ? (
+                    <div className="py-8 text-center bg-slate-50 dark:bg-slate-950/40 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800">
+                        <ShieldCheck className="mx-auto text-emerald-500 mb-2" size={32} />
+                        <p className="text-xs font-black text-slate-500 uppercase tracking-widest">
+                            Todos los lotes presentan niveles vegetativos equilibrados (0.20 - 0.70 NDVI).
+                        </p>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {criticalAlerts.map(alert => {
+                            const assignedTask = getTaskForAlert(alert);
+                            const isLow = alert.isCriticalLow;
+                            return (
+                                <div
+                                    key={alert.plotId}
+                                    className={`p-5 rounded-3xl border-2 transition-all space-y-3 relative overflow-hidden ${
+                                        isLow 
+                                            ? 'bg-red-50/40 dark:bg-red-950/20 border-red-200 dark:border-red-900/40' 
+                                            : 'bg-emerald-50/40 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/40'
+                                    }`}
+                                >
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="flex items-center space-x-3">
+                                            <div className={`p-3 rounded-2xl flex flex-col items-center justify-center font-black ${
+                                                isLow ? 'bg-red-500 text-white' : 'bg-emerald-600 text-white'
+                                            }`}>
+                                                <span className="text-[10px] uppercase font-bold tracking-tighter">NDVI</span>
+                                                <span className="text-xl leading-none">{alert.ndvi.toFixed(2)}</span>
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <h3 className="font-black text-slate-900 dark:text-white text-base tracking-tight uppercase">
+                                                        {alert.plotName}
+                                                    </h3>
+                                                    <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                                                        isLow ? 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300'
+                                                    }`}>
+                                                        {isLow ? 'Crítico < 0.20' : 'Superior > 0.70'}
+                                                    </span>
+                                                </div>
+                                                <p className="text-[11px] text-slate-400 font-bold">
+                                                    Etapa: {alert.stage} | Captura: {alert.date}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed font-medium">
+                                        {alert.description}
+                                    </p>
+
+                                    <div className="p-2.5 bg-white/80 dark:bg-slate-900/80 rounded-2xl border border-slate-200/60 dark:border-slate-800/80 text-[11px]">
+                                        <span className="font-bold text-slate-400 uppercase tracking-wider block text-[9px] mb-0.5">Acción Recomendada:</span>
+                                        <span className="font-semibold text-slate-700 dark:text-slate-200">{alert.suggestedAction}</span>
+                                    </div>
+
+                                    {/* Estado de la Tarea Asignada y Accesos Rápidos */}
+                                    <div className="pt-2 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200/60 dark:border-slate-800/60">
+                                        <div className="flex items-center gap-1.5 text-xs font-bold">
+                                            {assignedTask ? (
+                                                <Link
+                                                    to="/tasks"
+                                                    className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 bg-emerald-100/60 dark:bg-emerald-950/60 px-3 py-1 rounded-xl hover:underline text-[11px]"
+                                                >
+                                                    <CheckSquare size={13} />
+                                                    <span>Tarea Asignada ({assignedTask.priority} Prioridad)</span>
+                                                </Link>
+                                            ) : (
+                                                <button
+                                                    onClick={syncNDVITasks}
+                                                    className="flex items-center gap-1 text-slate-600 dark:text-slate-300 bg-slate-200 dark:bg-slate-800 px-3 py-1 rounded-xl text-[11px] hover:bg-slate-300 transition"
+                                                >
+                                                    <Plus size={13} /> Crear Tarea
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        <div className="flex items-center gap-2">
+                                            <Link
+                                                to={`/agro40?plotId=${alert.plotId}`}
+                                                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[11px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm transition"
+                                            >
+                                                <Satellite size={12} />
+                                                <span>Ver en Agro 4.0</span>
+                                            </Link>
+                                            <Link
+                                                to={`/plots/${alert.plotId}`}
+                                                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-[11px] font-bold uppercase transition"
+                                            >
+                                                Ficha
+                                            </Link>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
+
             {/* Monitor de Salud de Red (NUEVO) */}
             <div className="bg-white dark:bg-slate-900 p-8 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-sm">
                 <div className="flex justify-between items-center mb-6">
