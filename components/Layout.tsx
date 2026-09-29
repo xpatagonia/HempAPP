@@ -13,18 +13,18 @@ const NavItem = ({ to, icon: Icon, label, badge, special }: any) => {
   const location = useLocation();
   const isActive = location.pathname === to;
   return (
-    <Link to={to} className={`flex items-center justify-between px-4 py-2.5 rounded-xl transition-all ${
+    <Link to={to} className={`flex items-center justify-between px-4 py-3 rounded-2xl transition-all duration-200 ${
         isActive 
-          ? 'bg-hemp-600 text-white shadow-lg shadow-hemp-600/20' 
+          ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30 font-black' 
           : special 
-            ? 'text-blue-500 bg-blue-50 dark:bg-blue-900/10 hover:bg-blue-100 dark:hover:bg-blue-900/30' 
-            : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800/50'
+            ? 'text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-950/40 hover:bg-cyan-100 dark:hover:bg-cyan-900/40 border border-cyan-200 dark:border-cyan-800/60' 
+            : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white'
       }`}>
-      <div className="flex items-center space-x-3">
-        <Icon size={20} className={isActive ? 'text-white' : special ? 'text-blue-500' : 'text-slate-400'} />
-        <span className={`font-bold text-sm tracking-tight ${special ? 'uppercase text-xs' : ''}`}>{label}</span>
+      <div className="flex items-center space-x-3 min-w-0">
+        <Icon size={20} className={isActive ? 'text-white' : special ? 'text-cyan-500 dark:text-cyan-400' : 'text-slate-400 dark:text-slate-400'} />
+        <span className={`font-bold text-sm tracking-tight truncate ${special ? 'uppercase text-xs tracking-wider' : ''}`}>{label}</span>
       </div>
-      {badge && <span className="text-[9px] font-black bg-amber-500 text-white px-1.5 py-0.5 rounded-full">{badge}</span>}
+      {badge && <span className="text-xs font-mono font-black bg-amber-500 text-slate-950 px-2 py-0.5 rounded-full shrink-0 ml-2">{badge}</span>}
     </Link>
   );
 };
@@ -115,28 +115,28 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
       </aside>
 
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-        <header className="h-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-4 md:px-8 flex items-center justify-between z-40 sticky top-0">
+        <header className="h-20 bg-white/90 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800/80 px-4 md:px-8 flex items-center justify-between z-40 sticky top-0 shadow-sm">
           <div className="flex items-center space-x-4">
-              <button onClick={() => setIsMobileOpen(true)} className="lg:hidden p-2 text-slate-500 hover:bg-slate-100 rounded-xl"><Menu size={24}/></button>
-              <div className="hidden md:flex items-center space-x-3 text-slate-400 font-bold text-xs uppercase tracking-widest">
-                  <span className="text-hemp-600 font-black">{new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-[10px] font-black tracking-widest">
+              <button onClick={() => setIsMobileOpen(true)} className="lg:hidden p-3 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-2xl transition-all"><Menu size={22}/></button>
+              <div className="hidden md:flex items-center space-x-3 text-slate-500 dark:text-slate-300 font-bold text-xs uppercase tracking-wider">
+                  <span className="text-emerald-600 dark:text-emerald-400 font-black">{new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-700/80 text-emerald-800 dark:text-emerald-200 text-xs font-mono font-bold tracking-tight">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    ONLINE v7.0.8
+                    MODO CAMPO ONLINE
                   </span>
               </div>
           </div>
           
-          <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-1 mr-2 md:mr-4 border-r pr-2 md:pr-4 border-slate-200 dark:border-slate-800">
-                  <button className="p-2.5 text-slate-400 hover:text-hemp-600 hover:bg-hemp-50 dark:hover:bg-slate-800 rounded-xl transition-all relative">
+          <div className="flex items-center space-x-3">
+              <div className="flex items-center space-x-1 mr-1 md:mr-3 border-r pr-2 md:pr-4 border-slate-200 dark:border-slate-800">
+                  <button className="p-3 text-slate-500 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-2xl transition-all relative">
                       <Bell size={20} />
-                      <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-slate-900"></span>
+                      <span className="absolute top-2.5 right-2.5 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-white dark:border-slate-900"></span>
                   </button>
               </div>
-              <button onClick={toggleTheme} className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all flex items-center space-x-2 px-4 shadow-inner">
-                  {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-                  <span className="text-[10px] font-black uppercase tracking-widest hidden md:inline">{theme === 'dark' ? 'Ligth' : 'Dark'}</span>
+              <button onClick={toggleTheme} className="p-2.5 md:p-3 rounded-2xl bg-slate-100 dark:bg-slate-800/90 text-slate-700 dark:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-all flex items-center space-x-2 px-4 shadow-sm font-bold text-xs">
+                  {theme === 'dark' ? <Sun size={18} className="text-amber-400" /> : <Moon size={18} className="text-slate-700" />}
+                  <span className="font-mono text-xs font-bold hidden md:inline">{theme === 'dark' ? 'Modo Claro' : 'Modo Oscuro (Alto Contraste)'}</span>
               </button>
           </div>
         </header>

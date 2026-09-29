@@ -16,20 +16,20 @@ import { getPlotNDVIAlertStatus, exportNDVITimeSeriesPDF, generateDetailedSatell
 import { PlotNDVIAlert, Task, AgrochemicalApplication } from '../types';
 
 const MetricCard = ({ label, value, trend, icon: Icon, bgClass, textClass, subtext }: any) => (
-  <div className="bg-white dark:bg-slate-900 p-6 rounded-[24px] border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all group">
-    <div className="flex items-center justify-between mb-4">
-        <div className={`p-3 rounded-2xl ${bgClass || 'bg-hemp-50 dark:bg-hemp-950/40'} ${textClass || 'text-hemp-600 dark:text-hemp-400'}`}>
-             <Icon size={24} />
+  <div className="bg-white dark:bg-slate-900 p-5 md:p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-xl hover:border-emerald-500/30 transition-all duration-200 group">
+    <div className="flex items-center justify-between mb-3">
+        <div className={`p-3 rounded-xl ${bgClass || 'bg-emerald-50 dark:bg-emerald-950/60'} ${textClass || 'text-emerald-600 dark:text-emerald-400'} group-hover:scale-105 transition-transform`}>
+             <Icon size={22} />
         </div>
         {trend && (
-            <span className={`flex items-center text-[10px] font-bold px-2 py-1 rounded-full ${trend.startsWith('+') ? 'bg-green-50 text-green-600 dark:bg-green-950/40 dark:text-green-300' : 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-300'}`}>
-                <TrendingUp size={10} className="mr-1" /> {trend}
+            <span className={`inline-flex items-center text-xs font-mono font-bold tracking-tight ${trend.startsWith('+') ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                <TrendingUp size={12} className="mr-1" /> {trend}
             </span>
         )}
     </div>
-    <p className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">{label}</p>
-    <h3 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">{value}</h3>
-    {subtext && <p className="text-[10px] text-slate-400 mt-2 font-medium">{subtext}</p>}
+    <p className="text-slate-500 dark:text-slate-400 text-xs font-semibold uppercase tracking-wider mb-1">{label}</p>
+    <h3 className="text-3xl md:text-4xl font-black text-slate-900 dark:text-slate-100 font-mono tabular-nums tracking-tight">{value}</h3>
+    {subtext && <p className="text-xs text-slate-400 dark:text-slate-400 mt-2 font-medium">{subtext}</p>}
   </div>
 );
 
