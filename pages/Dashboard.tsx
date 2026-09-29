@@ -10,9 +10,9 @@ import {
   Activity, Globe, ShieldCheck, ChevronRight, 
   Bot, Sprout, TrendingUp, AlertTriangle, 
   Calendar, ArrowUpRight, Zap, Target, AlertCircle, Clock, FlaskConical, Plus, ClipboardList,
-  Satellite, Sparkles, RefreshCw, CheckCircle2, CheckSquare, Eye
+  Satellite, Sparkles, RefreshCw, CheckCircle2, CheckSquare, Eye, Download
 } from 'lucide-react';
-import { getPlotNDVIAlertStatus } from '../src/services/agro40Service';
+import { getPlotNDVIAlertStatus, exportNDVITimeSeriesPDF, generateDetailedSatellitePasses } from '../src/services/agro40Service';
 import { PlotNDVIAlert, Task } from '../types';
 
 const MetricCard = ({ label, value, trend, icon: Icon, bgClass, textClass, subtext }: any) => (
@@ -332,6 +332,21 @@ export default function Dashboard() {
                                         </div>
 
                                         <div className="flex items-center gap-2">
+                                            <button
+                                                onClick={() => {
+                                                    const plot = plots.find(p => p.id === alert.plotId);
+                                                    if (!plot) return;
+                                                    const variety = varieties.find(v => v.id === plot.varietyId);
+                                                    const trials = trialRecords.filter(t => t.plotId === plot.id);
+                                                    const passes = generateDetailedSatellitePasses(plot, variety, trials);
+                                                    exportNDVITimeSeriesPDF(plot, variety, passes, trials);
+                                                }}
+                                                className="px-2.5 py-1.5 bg-[#006633] hover:bg-[#004d26] text-white rounded-xl text-[11px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm transition active:scale-95"
+                                                title="Descargar Reporte Satelital NDVI en PDF"
+                                            >
+                                                <Download size={12} />
+                                                <span>PDF</span>
+                                            </button>
                                             <Link
                                                 to={`/agro40?plotId=${alert.plotId}`}
                                                 className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[11px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm transition"

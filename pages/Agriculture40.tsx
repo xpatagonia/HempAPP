@@ -22,7 +22,9 @@ import {
   generateNDVITimeline, 
   exportAgro40CertificatePdf,
   generateDetailedSatellitePasses,
-  exportSatelliteComparisonPDF
+  exportSatelliteComparisonPDF,
+  exportNDVITimeSeriesPDF,
+  exportNDVITimeSeriesCSV
 } from '../src/services/agro40Service';
 import { SoilHealthData, WaterEfficiencyMetrics, NDVISample, SatellitePass, DroneFlight } from '../types';
 
@@ -278,6 +280,18 @@ export default function Agriculture40() {
     exportSatelliteComparisonPDF(selectedPlot, selectedVariety, passA, passB);
   };
 
+  // Descargar Reporte Completo de Monitoreo NDVI en PDF
+  const handleDownloadNDVIPdf = () => {
+    if (!selectedPlot || satellitePasses.length === 0) return;
+    exportNDVITimeSeriesPDF(selectedPlot, selectedVariety, satellitePasses, plotTrials);
+  };
+
+  // Descargar Serie Temporal NDVI en formato CSV
+  const handleDownloadNDVICsv = () => {
+    if (!selectedPlot || satellitePasses.length === 0) return;
+    exportNDVITimeSeriesCSV(selectedPlot, satellitePasses);
+  };
+
   // Polígono y coordenadas del mapa
   const plotPolygon = selectedPlot?.polygon && selectedPlot.polygon.length >= 3 ? selectedPlot.polygon : null;
   const mapCenter = selectedPlot?.coordinates || selectedLocation?.coordinates || { lat: -31.42, lng: -64.18 };
@@ -519,13 +533,33 @@ export default function Agriculture40() {
               </button>
             </div>
 
-            <button
-              onClick={() => setShowInfoModal(true)}
-              className="flex items-center space-x-2 text-xs font-black text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 px-4 py-2.5 rounded-2xl border border-emerald-500/20 transition-all uppercase tracking-wider self-start sm:self-auto"
-            >
-              <HelpCircle size={16} />
-              <span>¿Cómo funciona el NDVI?</span>
-            </button>
+            <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+              <button
+                onClick={handleDownloadNDVIPdf}
+                className="flex items-center space-x-1.5 text-xs font-black text-white bg-[#006633] hover:bg-[#004d26] px-3.5 py-2.5 rounded-2xl shadow-sm transition-all uppercase tracking-wider active:scale-95"
+                title="Exportar Informe Completo de Pasadas Satelitales en PDF"
+              >
+                <Download size={14} />
+                <span>Exportar Reporte NDVI</span>
+              </button>
+
+              <button
+                onClick={handleDownloadNDVICsv}
+                className="flex items-center space-x-1.5 text-xs font-black text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 px-3.5 py-2.5 rounded-2xl transition-all uppercase tracking-wider"
+                title="Descargar Serie Temporal en formato CSV"
+              >
+                <FileText size={14} />
+                <span>CSV</span>
+              </button>
+
+              <button
+                onClick={() => setShowInfoModal(true)}
+                className="flex items-center space-x-1.5 text-xs font-black text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 px-3.5 py-2.5 rounded-2xl border border-emerald-500/20 transition-all uppercase tracking-wider"
+              >
+                <HelpCircle size={14} />
+                <span>¿Cómo funciona el NDVI?</span>
+              </button>
+            </div>
           </div>
 
           {/* SUB-MODO 1: LÍNEA DE TIEMPO (REVISITA CADA 5 DÍAS SENTINEL-2) */}
@@ -658,6 +692,28 @@ export default function Agriculture40() {
 
                   {/* Contenedor del Mapa */}
                   <div className="h-[400px] rounded-3xl overflow-hidden border border-slate-100 dark:border-slate-800 relative z-0">
+                    
+                    {/* Floating HUD Chip con telemetría espectral (sin tapar el polígono) */}
+                    {activePass && (
+                      <div className="absolute top-3 left-3 z-[400] pointer-events-none bg-slate-900/85 backdrop-blur-md text-white border border-white/10 rounded-2xl px-4 py-2.5 shadow-xl flex items-center gap-3">
+                        <div className="flex items-center gap-2">
+                          <span className={`w-3 h-3 rounded-full ${activePassColor.text.replace('text-', 'bg-')} animate-pulse`}></span>
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-wider text-slate-300">
+                              {selectedPlot?.name} • {activePass.stageName}
+                            </p>
+                            <p className="text-xs font-black flex items-center gap-1.5 text-white">
+                              <span>{activePass.satellite}</span>
+                              <span className="text-slate-400 font-normal">| {activePass.date}</span>
+                            </p>
+                          </div>
+                        </div>
+                        <div className={`px-2.5 py-1 rounded-xl text-xs font-black ${activePassColor.bg} ${activePassColor.text} border ${activePassColor.border}`}>
+                          {activePass.ndviAverage.toFixed(2)} NDVI
+                        </div>
+                      </div>
+                    )}
+
                     <MapContainer
                       center={[mapCenter.lat, mapCenter.lng]}
                       zoom={15}
@@ -706,15 +762,16 @@ export default function Agriculture40() {
                             weight: 3
                           }}
                         >
-                          <LeafletTooltip permanent direction="center" className="font-bold text-xs bg-slate-900 text-white rounded-lg p-1.5 shadow-md">
-                            {selectedPlot?.name} - {activePass?.stageName} (NDVI: {activePass?.ndviAverage.toFixed(2)})
+                          <LeafletTooltip direction="top" offset={[0, -10]} className="font-bold text-xs bg-slate-900 text-white rounded-xl p-2 shadow-xl border border-white/10">
+                            <span className="font-black text-emerald-400">{selectedPlot?.name}</span>
+                            <span className="block text-[11px] text-slate-300 font-normal">{activePass?.stageName} • NDVI: {activePass?.ndviAverage.toFixed(2)}</span>
                           </LeafletTooltip>
                         </Polygon>
                       )}
 
                       {!plotPolygon && (
                         <Marker position={[mapCenter.lat, mapCenter.lng]}>
-                          <LeafletTooltip permanent>{selectedPlot?.name}</LeafletTooltip>
+                          <LeafletTooltip direction="top" offset={[0, -10]}>{selectedPlot?.name}</LeafletTooltip>
                         </Marker>
                       )}
                     </MapContainer>

@@ -652,4 +652,142 @@ export const getPlotNDVIAlertStatus = (
   };
 };
 
+// Exporta Reporte Completo de Monitoreo NDVI Satelital (Sentinel-2) en PDF Oficial
+export const exportNDVITimeSeriesPDF = (
+  plot: Plot,
+  variety: Variety | undefined,
+  passes: SatellitePass[],
+  trials?: TrialRecord[]
+) => {
+  const doc = new jsPDF();
+  const areaHa = plot.surfaceArea || 1.0;
+
+  // Cabecera Oficial
+  doc.setFillColor(0, 102, 51);
+  doc.rect(0, 0, 210, 26, 'F');
+
+  doc.setTextColor(221, 219, 0);
+  doc.setFontSize(18);
+  doc.setFont('helvetica', 'bold');
+  doc.text('HempC | NUCLEUS AGRO 4.0', 14, 12);
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Informe Completo de Auditoría Espectral NDVI (Sentinel-2 ESA Copernicus)', 14, 20);
+
+  // Datos del Lote y Ensayo
+  doc.setFontSize(10);
+  doc.setTextColor(30, 41, 59);
+  doc.text(`Lote: ${plot.name} (${areaHa} ${plot.surfaceUnit || 'ha'})`, 14, 34);
+  doc.text(`Variedad: ${variety?.name || 'Cáñamo Industrial'} | Uso: ${variety?.usage || 'Fibra/Grano'}`, 14, 40);
+  doc.text(`Fecha de Siembra: ${plot.sowingDate || 'S/D'} | Pasadas Registradas: ${passes.length}`, 14, 46);
+  doc.text(`Fecha de Emisión: ${new Date().toLocaleDateString('es-AR')}`, 14, 52);
+
+  // Estadísticas Clave del Monitoreo
+  const maxNdvi = passes.length > 0 ? Math.max(...passes.map(p => p.ndviAverage)) : 0.8;
+  const minNdvi = passes.length > 0 ? Math.min(...passes.map(p => p.ndviAverage)) : 0.2;
+  const latestPass = passes.length > 0 ? passes[passes.length - 1] : null;
+  const maxBiomass = passes.length > 0 ? Math.max(...passes.map(p => p.biomassEstimateKgHa)) : 7500;
+
+  autoTable(doc, {
+    startY: 58,
+    head: [['Métrica de Monitoreo', 'Valor', 'Estado Agronómico']],
+    body: [
+      ['NDVI Máximo Alcanzado (Pico)', `${maxNdvi.toFixed(2)}`, maxNdvi >= 0.70 ? 'Vigor Óptimo / Canopia Cerrada' : 'Desarrollo Moderado'],
+      ['NDVI Inicial (Emergencia)', `${minNdvi.toFixed(2)}`, 'Etapa de Arraigo'],
+      ['NDVI Última Pasada', `${latestPass ? latestPass.ndviAverage.toFixed(2) : 'N/A'}`, latestPass?.stageName || 'S/D'],
+      ['Biomasa Máxima Estimada', `${maxBiomass.toLocaleString()} kg/ha`, 'Acumulación Fisiológica de Materia Seca'],
+      ['Frecuencia Orbital', 'Cada 5 días (Sentinel-2A & 2B)', 'Resolución espacial 10m / píxel']
+    ],
+    theme: 'grid',
+    headStyles: { fillColor: [0, 102, 51], textColor: [255, 255, 255], fontStyle: 'bold' },
+    styles: { fontSize: 8.5 }
+  });
+
+  // Tabla Completa de Pasadas
+  const afterFirst = (doc as any).lastAutoTable.finalY + 8;
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(0, 102, 51);
+  doc.text('Cronograma de Pasadas Satelitales (Resolución 5 días)', 14, afterFirst);
+
+  autoTable(doc, {
+    startY: afterFirst + 4,
+    head: [['Fecha', 'Satélite', 'Día', 'Etapa', 'Nub.', 'NDVI Prom.', 'Rango Mín-Máx', '% Vigor >0.7', 'Biomasa kg/ha']],
+    body: passes.map(p => [
+      p.date,
+      p.satellite.replace('Sentinel-', 'S-'),
+      `Día ${p.cycleDay}`,
+      p.stageName,
+      `${p.cloudCoveragePct}%`,
+      p.ndviAverage.toFixed(2),
+      `${p.ndviMin.toFixed(2)} - ${p.ndviMax.toFixed(2)}`,
+      `${p.optimalAreaPct}%`,
+      p.biomassEstimateKgHa.toLocaleString()
+    ]),
+    theme: 'striped',
+    headStyles: { fillColor: [40, 60, 50], textColor: [255, 255, 255], fontStyle: 'bold' },
+    styles: { fontSize: 8 }
+  });
+
+  // Conclusión Técnica
+  const afterTable = (doc as any).lastAutoTable.finalY + 8;
+  if (afterTable < 265) {
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(0, 102, 51);
+    doc.text('Dictamen Técnico Satelital:', 14, afterTable);
+
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(50, 60, 50);
+    doc.text(
+      `El cultivo en ${plot.name} presenta un registro multitemporal coherente con la fenología del cáñamo industrial. El pico foliar de ${maxNdvi.toFixed(2)} NDVI confirma una óptima tasa de intercepción lumínica y capacidad de fijación de carbono.`,
+      14,
+      afterTable + 5,
+      { maxWidth: 180 }
+    );
+  }
+
+  const pageHeight = doc.internal.pageSize.height;
+  doc.setFontSize(7.5);
+  doc.setTextColor(120, 140, 130);
+  doc.text(`Documento generado por HempC Red Cooperativa | Copernicus Open Access Hub | ${new Date().toLocaleString()}`, 14, pageHeight - 8);
+
+  doc.save(`Reporte_NDVI_${plot.name.replace(/\s+/g, '_')}_Sentinel2.pdf`);
+};
+
+// Exporta Serie Temporal NDVI en formato CSV compatible con Excel / Google Sheets
+export const exportNDVITimeSeriesCSV = (plot: Plot, passes: SatellitePass[]) => {
+  const headers = ['Fecha', 'Satelite', 'Dia_Ciclo', 'Etapa_Fenologica', 'Nubosidad_Pct', 'NDVI_Promedio', 'NDVI_Minimo', 'NDVI_Maximo', 'Area_Optima_Pct', 'Area_Moderada_Pct', 'Area_Estres_Pct', 'Cobertura_Canopia_Pct', 'Biomasa_Estimada_KgHa', 'Notas_Agro'];
+  
+  const rows = passes.map(p => [
+    p.date,
+    p.satellite,
+    p.cycleDay,
+    `"${p.stageName}"`,
+    p.cloudCoveragePct,
+    p.ndviAverage.toFixed(2),
+    p.ndviMin.toFixed(2),
+    p.ndviMax.toFixed(2),
+    p.optimalAreaPct,
+    p.moderateAreaPct,
+    p.stressedAreaPct,
+    p.canopyCoveragePct,
+    p.biomassEstimateKgHa,
+    `"${(p.notes || '').replace(/"/g, '""')}"`
+  ]);
+
+  const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+  const encodedUri = encodeURI(csvContent);
+  const link = document.createElement('a');
+  link.setAttribute('href', encodedUri);
+  link.setAttribute('download', `Datos_NDVI_${plot.name.replace(/\s+/g, '_')}_Sentinel2.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
+
 
