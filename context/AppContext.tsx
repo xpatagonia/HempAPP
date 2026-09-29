@@ -117,10 +117,12 @@ const toSnakeCase = (obj: any): any => {
 }
 
 export const AppProvider = ({ children }: { children?: ReactNode }) => {
-    // Inicialización síncrona: garantiza acceso inmediato como Ing. Gastón Barea (Super Admin)
-    // para que la interfaz completa y todas las novedades estén visibles al instante sin bloqueos de caché.
+    // Sesión persistente: solo restaura si el usuario inició sesión previamente y no cerró sesión.
     const [currentUser, setCurrentUser] = useState<User | null>(() => {
         if (typeof window !== 'undefined') {
+            const isLoggedOut = localStorage.getItem('ht_logged_out') === 'true';
+            if (isLoggedOut) return null;
+
             const storedUser = localStorage.getItem('ht_session_user');
             if (storedUser) {
                 try {
@@ -132,12 +134,9 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                     localStorage.removeItem('ht_session_user');
                 }
             }
-            // Auto-ingreso predeterminado como Ing. Gastón Barea (Super Admin)
-            localStorage.setItem('ht_session_user', JSON.stringify(DEMO_USER));
-            localStorage.removeItem('ht_logged_out');
-            return DEMO_USER;
+            return null;
         }
-        return DEMO_USER;
+        return null;
     });
 
     const [theme, setTheme] = useState<'light'|'dark'>('light');
@@ -255,41 +254,34 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
     const login = async (email: string, password: string): Promise<boolean> => {
         const trimmedEmail = email.trim().toLowerCase();
+        const trimmedPassword = password.trim();
         
-        // 1. Si hay conexión a Supabase, validar en la base de datos
-        if (isDbConnected) {
-          try {
-              const { data, error } = await supabase.from('users').select('*').eq('email', trimmedEmail).eq('password', password).maybeSingle();
-              if (!error && data) {
-                  const mappedUser = toCamelCase(data) as User;
-                  setCurrentUser(mappedUser); 
-                  localStorage.removeItem('ht_logged_out');
-                  localStorage.setItem('ht_session_user', JSON.stringify(mappedUser)); 
-                  return true; 
-              }
-          } catch (e) {}
+        // 1. Validar directamente contra los usuarios de Supabase
+        try {
+            const { data, error } = await supabase
+                .from('users')
+                .select('*')
+                .ilike('email', trimmedEmail)
+                .eq('password', trimmedPassword)
+                .maybeSingle();
+
+            if (!error && data) {
+                const mappedUser = toCamelCase(data) as User;
+                setCurrentUser(mappedUser); 
+                localStorage.removeItem('ht_logged_out');
+                localStorage.setItem('ht_session_user', JSON.stringify(mappedUser)); 
+                return true; 
+            }
+        } catch (e) {
+            console.error("Error al autenticar contra Supabase:", e);
         }
 
-        // 2. Fallback / Modo Offline / Demo
-        // Permite acceso con el usuario admin, Gastón Barea o cualquier credencial en modo autónomo
-        if (
-          trimmedEmail === DEMO_USER.email || 
-          trimmedEmail === 'admin@hempc.com.ar' ||
-          trimmedEmail.includes('gaston') ||
-          trimmedEmail.includes('admin') || 
-          !isDbConnected
-        ) {
-          const userToSet: User = {
-            ...DEMO_USER,
-            email: trimmedEmail || DEMO_USER.email,
-            name: (trimmedEmail === DEMO_USER.email || trimmedEmail === 'admin@hempc.com.ar' || trimmedEmail.includes('gaston')) 
-              ? DEMO_USER.name 
-              : `Usuario (${trimmedEmail.split('@')[0]})`
-          };
-          setCurrentUser(userToSet);
-          localStorage.removeItem('ht_logged_out');
-          localStorage.setItem('ht_session_user', JSON.stringify(userToSet));
-          return true;
+        // 2. Respaldo de contingencia únicamente si la base de datos estuviera desconectada
+        if (!isDbConnected && trimmedEmail === 'admin@hempc.com.ar' && trimmedPassword === '@Admin130126@') {
+            setCurrentUser(DEMO_USER);
+            localStorage.removeItem('ht_logged_out');
+            localStorage.setItem('ht_session_user', JSON.stringify(DEMO_USER));
+            return true;
         }
 
         return false;
