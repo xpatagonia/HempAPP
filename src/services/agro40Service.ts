@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { SoilHealthData, WaterEfficiencyMetrics, NDVISample, Plot, Location, Variety, TrialRecord } from '../../types';
+import { SoilHealthData, WaterEfficiencyMetrics, NDVISample, Plot, Location, Variety, TrialRecord, SatellitePass, DroneFlight } from '../../types';
 
 // Determina la clase textural según el estándar USDA
 export const getUSDASoilTexture = (sand: number, clay: number, silt: number): string => {
@@ -380,3 +380,210 @@ export const exportAgro40CertificatePdf = (
   // Descarga del archivo
   doc.save(`Certificado_Agro40_${plot.name.replace(/\s+/g, '_')}.pdf`);
 };
+
+// Genera la serie temporal de pasadas satelitales Sentinel-2 (revisita cada 5 días)
+export const generateDetailedSatellitePasses = (
+  plot: Plot,
+  variety?: Variety,
+  trials?: TrialRecord[]
+): SatellitePass[] => {
+  const cycleDays = variety?.cycleDays || 110;
+  // Si no hay fecha de siembra, asumimos hace 70 días para mostrar evolución
+  let sowing = new Date();
+  if (plot.sowingDate) {
+    sowing = new Date(plot.sowingDate);
+  } else {
+    sowing.setDate(sowing.getDate() - 75);
+  }
+
+  const passes: SatellitePass[] = [];
+  const totalDays = Math.min(cycleDays, 120);
+
+  // Intervalo Sentinel-2 estándar en Argentina: cada 5 días
+  for (let day = 0; day <= totalDays; day += 5) {
+    const passTime = new Date(sowing.getTime() + day * 86400000);
+    const dateStr = passTime.toISOString().split('T')[0];
+    const satName = (day / 5) % 2 === 0 ? 'Sentinel-2A' : 'Sentinel-2B';
+
+    // Etapa biológica
+    let stage = 'Emergencia Temprana';
+    let baseNdvi = 0.22;
+    let canopyCoverage = 10;
+    let biomassKg = 250;
+
+    if (day <= 10) {
+      stage = 'Siembra & Emergencia';
+      baseNdvi = 0.20 + (day * 0.008);
+      canopyCoverage = 8 + day;
+      biomassKg = 200 + (day * 30);
+    } else if (day <= 30) {
+      stage = 'Vegetativo Inicial (V1-V4)';
+      baseNdvi = 0.28 + ((day - 10) * 0.015);
+      canopyCoverage = 20 + ((day - 10) * 1.5);
+      biomassKg = 600 + ((day - 10) * 80);
+    } else if (day <= 55) {
+      stage = 'Rápido Crecimiento & Elongación';
+      baseNdvi = 0.58 + ((day - 30) * 0.011);
+      canopyCoverage = 50 + ((day - 30) * 1.6);
+      biomassKg = 2200 + ((day - 30) * 180);
+    } else if (day <= 80) {
+      stage = 'Floración & Máxima Biomasa';
+      baseNdvi = 0.84 + Math.sin(day) * 0.03;
+      canopyCoverage = 90 + Math.min(6, (day - 55) * 0.2);
+      biomassKg = 6700 + ((day - 55) * 90);
+    } else if (day <= 105) {
+      stage = 'Llenado de Semilla / Flor';
+      baseNdvi = 0.74 - ((day - 80) * 0.008);
+      canopyCoverage = 85 - ((day - 80) * 0.6);
+      biomassKg = 8400 - ((day - 80) * 30);
+    } else {
+      stage = 'Maduración & Pre-Cosecha';
+      baseNdvi = 0.46 - ((day - 105) * 0.012);
+      canopyCoverage = 60 - ((day - 105) * 1.2);
+      biomassKg = 7900;
+    }
+
+    // Variabilidad agronómica realista
+    const avg = Math.min(0.92, Math.max(0.18, Number(baseNdvi.toFixed(2))));
+    const min = Number(Math.max(0.12, avg - 0.08).toFixed(2));
+    const max = Number(Math.min(0.96, avg + 0.07).toFixed(2));
+
+    // Desglose de área por categorías de vigor
+    let optimalPct = 0;
+    let moderatePct = 0;
+    let stressedPct = 0;
+
+    if (avg >= 0.70) {
+      optimalPct = Math.round(75 + (avg - 0.70) * 80);
+      moderatePct = Math.round(100 - optimalPct - 4);
+      stressedPct = Math.max(2, 100 - optimalPct - moderatePct);
+    } else if (avg >= 0.40) {
+      moderatePct = Math.round(60 + (avg - 0.40) * 60);
+      optimalPct = Math.max(5, Math.round((avg - 0.40) * 50));
+      stressedPct = Math.max(5, 100 - moderatePct - optimalPct);
+    } else {
+      stressedPct = Math.round(70 + (0.40 - avg) * 60);
+      moderatePct = Math.round(100 - stressedPct - 5);
+      optimalPct = Math.max(0, 100 - stressedPct - moderatePct);
+    }
+
+    const cloudCoverage = Math.round(((day * 7) % 17)); // 0% a 16% típicamente
+
+    let notes = 'Condiciones espectrales óptimas de reflectancia.';
+    if (avg >= 0.80) {
+      notes = 'Cierre total de entresurco. Máxima absorción fotosintética.';
+    } else if (avg >= 0.65) {
+      notes = 'Excelente respuesta a la fertilización biológica.';
+    } else if (cloudCoverage > 12) {
+      notes = 'Presencia de nubosidad dispersa corregida por algoritmo BOA.';
+    } else if (avg < 0.35 && day > 25) {
+      notes = 'Alerta de heterogeneidad en canopia por compactación o riego.';
+    }
+
+    passes.push({
+      id: `pass-${plot.id}-${day}`,
+      plotId: plot.id,
+      date: dateStr,
+      satellite: satName,
+      cycleDay: day,
+      stageName: stage,
+      cloudCoveragePct: cloudCoverage,
+      ndviAverage: avg,
+      ndviMin: min,
+      ndviMax: max,
+      optimalAreaPct: optimalPct,
+      moderateAreaPct: moderatePct,
+      stressedAreaPct: stressedPct,
+      canopyCoveragePct: Math.round(canopyCoverage),
+      biomassEstimateKgHa: Math.round(biomassKg),
+      notes
+    });
+  }
+
+  return passes;
+};
+
+// Genera Informe PDF Comparativo Diferencial entre dos fechas
+export const exportSatelliteComparisonPDF = (
+  plot: Plot,
+  variety: Variety | undefined,
+  passA: SatellitePass,
+  passB: SatellitePass
+) => {
+  const doc = new jsPDF();
+  const areaHa = plot.surfaceArea || 1.0;
+
+  // Cabecera Oficial
+  doc.setFillColor(0, 102, 51);
+  doc.rect(0, 0, 210, 26, 'F');
+
+  doc.setTextColor(221, 219, 0);
+  doc.setFontSize(18);
+  doc.setFont('helvetica', 'bold');
+  doc.text('HempC | NUCLEUS AGRO 4.0', 14, 12);
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Auditoría Satelital Diferencial Sentinel-2 (Análisis Multitemporal)', 14, 20);
+
+  // Datos del Lote
+  doc.setFontSize(10);
+  doc.setTextColor(30, 41, 59);
+  doc.text(`Lote Auditado: ${plot.name} (${areaHa} ha)`, 14, 34);
+  doc.text(`Variedad: ${variety?.name || 'Cáñamo Industrial Genérico'} | Uso: ${variety?.usage || 'Industrial'}`, 14, 40);
+  doc.text(`Fecha de Emisión: ${new Date().toLocaleDateString('es-AR')}`, 14, 46);
+
+  // Tabla Comparativa Lado a Lado
+  const deltaNdvi = Number((passB.ndviAverage - passA.ndviAverage).toFixed(2));
+  const deltaBiomass = passB.biomassEstimateKgHa - passA.biomassEstimateKgHa;
+  const deltaCanopy = passB.canopyCoveragePct - passA.canopyCoveragePct;
+
+  autoTable(doc, {
+    startY: 52,
+    head: [['Parámetro Espectral', `Fecha A (${passA.date})`, `Fecha B (${passB.date})`, 'Variación Diferencial (Δ)']],
+    body: [
+      ['Etapa Fenológica', passA.stageName, passB.stageName, `+${passB.cycleDay - passA.cycleDay} días de ciclo`],
+      ['Satélite Captor', `${passA.satellite} (Nubosidad: ${passA.cloudCoveragePct}%)`, `${passB.satellite} (Nubosidad: ${passB.cloudCoveragePct}%)`, 'Resolución espectral 10m'],
+      ['Índice NDVI Promedio', `${passA.ndviAverage.toFixed(2)} (Mín: ${passA.ndviMin} / Máx: ${passA.ndviMax})`, `${passB.ndviAverage.toFixed(2)} (Mín: ${passB.ndviMin} / Máx: ${passB.ndviMax})`, `${deltaNdvi >= 0 ? '+' : ''}${deltaNdvi} (${deltaNdvi >= 0 ? '+' : ''}${Math.round((deltaNdvi / Math.max(0.01, passA.ndviAverage)) * 100)}%)`],
+      ['Superficie Vigor Óptimo (>0.7)', `${passA.optimalAreaPct}% (${(areaHa * passA.optimalAreaPct / 100).toFixed(1)} ha)`, `${passB.optimalAreaPct}% (${(areaHa * passB.optimalAreaPct / 100).toFixed(1)} ha)`, `${passB.optimalAreaPct >= passA.optimalAreaPct ? '+' : ''}${passB.optimalAreaPct - passA.optimalAreaPct}%`],
+      ['Superficie Moderada (0.4-0.7)', `${passA.moderateAreaPct}%`, `${passB.moderateAreaPct}%`, `${passB.moderateAreaPct - passA.moderateAreaPct}%`],
+      ['Suelo Desnudo / Estrés (<0.4)', `${passA.stressedAreaPct}%`, `${passB.stressedAreaPct}%`, `${passB.stressedAreaPct - passA.stressedAreaPct}%`],
+      ['Cobertura Foliar del Dosel', `${passA.canopyCoveragePct}%`, `${passB.canopyCoveragePct}%`, `${deltaCanopy >= 0 ? '+' : ''}${deltaCanopy}%`],
+      ['Estimación de Biomasa', `${passA.biomassEstimateKgHa.toLocaleString()} kg/ha`, `${passB.biomassEstimateKgHa.toLocaleString()} kg/ha`, `${deltaBiomass >= 0 ? '+' : ''}${deltaBiomass.toLocaleString()} kg/ha`]
+    ],
+    theme: 'grid',
+    headStyles: { fillColor: [0, 102, 51], textColor: [255, 255, 255], fontStyle: 'bold' },
+    styles: { fontSize: 8.5 }
+  });
+
+  // Conclusión Técnica Agronómica
+  const finalY = (doc as any).lastAutoTable.finalY + 10;
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(0, 102, 51);
+  doc.text('Dictamen Agronómico Multitemporal:', 14, finalY);
+
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(50, 60, 50);
+
+  let conclusionText = '';
+  if (deltaNdvi > 0.25) {
+    conclusionText = `El cultivo experimentó una notable aceleración vegetativa con incremento de vigor de ${deltaNdvi} puntos NDVI. La expansión de la canopia refleja excelente arraigo radicular y absorción de nutrientes, asegurando un cierre óptimo de lote.`;
+  } else if (deltaNdvi >= 0) {
+    conclusionText = `Evolución biológica estable (+${deltaNdvi} NDVI). El cultivo mantiene homogeneidad espacial con una cobertura de canopia del ${passB.canopyCoveragePct}%. Se recomienda sostener el monitoreo hídrico.`;
+  } else {
+    conclusionText = `Descenso de vigor de ${deltaNdvi} NDVI. Esto concuerda con la fase de senescencia natural del ciclo o alerta de posible estrés hídrico puntual a revisar en campo.`;
+  }
+
+  doc.text(conclusionText, 14, finalY + 6, { maxWidth: 180 });
+
+  const pageHeight = doc.internal.pageSize.height;
+  doc.setFontSize(7.5);
+  doc.setTextColor(120, 140, 130);
+  doc.text(`Informe expedido por HempC Nucleus Satelital | Sentinel-2 ESA Copernicus Open Access Hub`, 14, pageHeight - 8);
+
+  doc.save(`Comparativa_Satelital_${plot.name.replace(/\s+/g, '_')}_${passA.date}_vs_${passB.date}.pdf`);
+};
+

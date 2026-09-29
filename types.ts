@@ -323,3 +323,36 @@ export interface NDVISample {
   biomassIndex: number;
   stressDetected: boolean;
 }
+
+export interface SatellitePass {
+  id: string;
+  plotId: string;
+  date: string;
+  satellite: 'Sentinel-2A' | 'Sentinel-2B' | 'Landsat-9' | 'Dron Multiespectral';
+  cycleDay: number;
+  stageName: string;
+  cloudCoveragePct: number;
+  ndviAverage: number;
+  ndviMin: number;
+  ndviMax: number;
+  optimalAreaPct: number;
+  moderateAreaPct: number;
+  stressedAreaPct: number;
+  canopyCoveragePct: number;
+  biomassEstimateKgHa: number;
+  notes?: string;
+}
+
+export interface DroneFlight {
+  id: string;
+  plotId: string;
+  date: string;
+  pilotName: string;
+  droneModel: string;
+  flightAltitudeM: number;
+  resolutionCmPx: number;
+  sensorType: string;
+  mapUrl?: string;
+  ndviAverage: number;
+  observations: string;
+}
