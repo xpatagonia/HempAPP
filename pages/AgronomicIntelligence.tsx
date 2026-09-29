@@ -14,6 +14,7 @@ import 'jspdf-autotable';
 import { GoogleGenAI } from '@google/genai';
 import { getPlotAgrochemicalApplications } from '../src/services/agro40Service';
 import { AgrochemicalApplication } from '../types';
+import SenasaPDFExporterModal from '../components/SenasaPDFExporterModal';
 
 export default function AgronomicIntelligence() {
     const { plots, projects, locations, varieties, trialRecords, appName, appLogo, hydricRecords } = useAppContext();
@@ -43,6 +44,7 @@ export default function AgronomicIntelligence() {
     const [inputPlotFilter, setInputPlotFilter] = useState('all');
     const [inputCategoryFilter, setInputCategoryFilter] = useState('all');
     const [showAddModal, setShowAddModal] = useState(false);
+    const [isSenasaPdfModalOpen, setIsSenasaPdfModalOpen] = useState(false);
 
     const [newInputForm, setNewInputForm] = useState<Partial<AgrochemicalApplication>>({
         plotId: plots.length > 0 ? plots[0].id : '',
@@ -370,52 +372,9 @@ Sé riguroso, técnico, conciso y en español.`;
         }, 500);
     };
 
-    // --- EXPORTAR TRAZABILIDAD INSUMOS A PDF ---
+    // --- EXPORTAR TRAZABILIDAD INSUMOS A PDF SENASA ---
     const exportInputsPDF = () => {
-        setIsExporting('inputs_pdf');
-        setTimeout(() => {
-            const doc = new jsPDF('landscape') as any;
-            const today = new Date().toLocaleDateString();
-
-            doc.setFillColor(126, 34, 206); // Purple-700
-            doc.rect(0, 0, 297, 35, 'F');
-            doc.setTextColor(255, 255, 255);
-            doc.setFontSize(20);
-            doc.text(`${appName.toUpperCase()} - AUDITORÍA DE TRAZABILIDAD DE INSUMOS`, 14, 18);
-            doc.setFontSize(9);
-            doc.text("REGISTRO OFICIAL DE FERTILIZANTES, FITOSANITARIOS Y CUMPLIMIENTO SENASA", 14, 26);
-            doc.text(`FECHA EMISIÓN: ${today}`, 220, 26);
-
-            const tableRows = filteredInputs.map(a => [
-                a.plotName,
-                a.category,
-                a.productName,
-                a.supplierName,
-                a.batchNumber,
-                a.expirationDate || 'N/A',
-                a.senasaRegisterNumber,
-                `${a.dosagePerHa} ${a.dosageUnit}`,
-                a.responsibleAgronomist,
-                a.status
-            ]);
-
-            doc.autoTable({
-                startY: 42,
-                head: [['Parcela', 'Categoría', 'Marca Comercial', 'Proveedor', 'N° Lote', 'Vencimiento', 'Reg. SENASA', 'Dosis/ha', 'Agrónomo MP', 'Estado']],
-                body: tableRows,
-                headStyles: { fillColor: [88, 28, 135], textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold' },
-                bodyStyles: { fontSize: 7 },
-                alternateRowStyles: { fillColor: [250, 245, 255] },
-                margin: { top: 42 }
-            });
-
-            doc.setFontSize(8);
-            doc.setTextColor(120, 120, 120);
-            doc.text("Documento oficial de trazabilidad de insumos según reglamentación SENASA y Buenas Prácticas Agrícolas.", 14, doc.internal.pageSize.height - 10);
-
-            doc.save(`${appName}_Trazabilidad_Insumos_SENASA_${new Date().toISOString().split('T')[0]}.pdf`);
-            setIsExporting(null);
-        }, 500);
+        setIsSenasaPdfModalOpen(true);
     };
 
     return (
@@ -1122,6 +1081,14 @@ Sé riguroso, técnico, conciso y en español.`;
                     </div>
                 </div>
             )}
+            {/* MODAL CONFIGURACIÓN Y GENERACIÓN DE INFORME OFICIAL SENASA (PDF) */}
+            <SenasaPDFExporterModal
+                isOpen={isSenasaPdfModalOpen}
+                onClose={() => setIsSenasaPdfModalOpen(false)}
+                applications={agrochemicalApps}
+                plots={plots}
+                appName={appName}
+            />
         </div>
     );
 }
