@@ -434,3 +434,38 @@ export interface PlotNDVIAlert {
   suggestedAction: string;
 }
 
+export type ToxicologicalBand = 'Banda Verde (Banda IV - Poco Peligroso)' | 'Banda Azul (Banda III - Cuidado)' | 'Banda Amarilla (Banda II - Nocivo)' | 'Banda Roja (Banda I - Muy Tóxico)' | 'Biológico / Orgánico Certificado';
+
+export interface AgrochemicalApplication {
+  id: string;
+  plotId: string;
+  plotName: string;
+  date: string;
+  time?: string;
+  category: 'Fertilizante Edáfico' | 'Fertilizante Foliar' | 'Insecticida' | 'Fungicida' | 'Bioestimulante' | 'Enmienda Orgánica' | 'Herbicida';
+  productName: string; // Marca comercial
+  activeIngredient: string; // Principio activo o composición NPK/Biológica
+  manufacturer: string; // Fabricante / Marca / Laboratorio
+  supplierId?: string;
+  supplierName: string; // Proveedor distribuidor
+  senasaRegisterNumber: string; // Registro Oficial SENASA / INASE
+  toxicologicalClass: ToxicologicalBand;
+  dosagePerHa: number; // Dosis numérica
+  dosageUnit: 'L/ha' | 'kg/ha' | 'ml/ha' | 'g/ha' | 't/ha';
+  totalAppliedAmount: number; // Cantidad total aplicada en el lote
+  applicationMethod: 'Fertirriego' | 'Pulverización Terrestre' | 'Pulverización Aérea' | 'Incorporación Edáfica' | 'Manual / Follaje';
+  batchNumber: string; // Lote de fabricación
+  safetyPeriodDays: number; // Días de carencia pre-cosecha
+  harvestSafetyDate: string; // Fecha liberada para cosecha
+  responsibleAgronomist: string; // Nombre del Ingeniero Agrónomo
+  agronomistLicense: string; // Matrícula Profesional MP
+  weatherCondition?: {
+    temperatureC: number;
+    windSpeedKmH: number;
+    relativeHumidityPct: number;
+  };
+  notes?: string;
+  status: 'Aplicado' | 'En Carencia' | 'Apto Cosecha';
+}
+
+
