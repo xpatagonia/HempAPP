@@ -619,91 +619,150 @@ export default function Agriculture40() {
         </div>
       </div>
 
-      {/* PESTAÑAS DE NAVEGACIÓN DENTRO DEL MÓDULO */}
-      <div className="flex items-center space-x-2 border-b border-slate-200 dark:border-slate-800 pb-2 overflow-x-auto custom-scrollbar">
-        <button
-          onClick={() => setActiveTab('ndvi')}
-          className={`flex items-center space-x-2 px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all whitespace-nowrap ${
-            activeTab === 'ndvi'
-              ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20'
-              : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
-          }`}
-        >
-          <Satellite size={16} />
-          <span>Vigor Satelital (NDVI)</span>
-        </button>
+      {/* PESTAÑAS DE NAVEGACIÓN DENTRO DEL MÓDULO (SEGMENTED GRID HIGH-CONTRAST TABS) */}
+      <div className="bg-slate-100/80 dark:bg-slate-900/90 p-2 md:p-3 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm">
+        
+        {/* Selector Dropdown Rápido para Dispositivos Móviles Pequeños (< 640px) */}
+        <div className="block sm:hidden mb-2">
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1 px-1">
+            Módulo Activo Agro 4.0:
+          </label>
+          <select
+            value={activeTab}
+            onChange={(e) => setActiveTab(e.target.value as any)}
+            className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-black rounded-2xl px-4 py-3 outline-none focus:ring-2 focus:ring-emerald-500 shadow-sm"
+          >
+            <option value="ndvi">📡 Vigor Satelital (NDVI)</option>
+            <option value="water">💧 Huella Hídrica & Cultivos</option>
+            <option value="carbon">🌿 Captura CO₂ & Bonos MRV</option>
+            <option value="inputs">🧬 Trazabilidad Insumos SENASA</option>
+            <option value="catastrophes">🔥 Alertas de Catástrofes</option>
+            <option value="soil">🌱 Salud y Suelo</option>
+            <option value="simulator">⚡ Simulador de Cuenca</option>
+          </select>
+        </div>
 
-        <button
-          onClick={() => setActiveTab('water')}
-          className={`flex items-center space-x-2 px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all whitespace-nowrap ${
-            activeTab === 'water'
-              ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20'
-              : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
-          }`}
-        >
-          <Droplets size={16} />
-          <span>Huella Hídrica & Cultivos</span>
-        </button>
+        {/* Rejilla Adaptativa para Tablets y Pantallas de PC */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2">
+          <button
+            onClick={() => setActiveTab('ndvi')}
+            className={`flex flex-col items-center justify-center p-3 rounded-2xl text-center transition-all duration-200 group relative ${
+              activeTab === 'ndvi'
+                ? 'bg-emerald-600 text-white font-black shadow-lg shadow-emerald-600/30 ring-2 ring-emerald-500/50 scale-[1.02]'
+                : 'bg-white dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700/80 border border-slate-200/80 dark:border-slate-700/60'
+            }`}
+          >
+            <div className="flex items-center space-x-1.5 mb-1">
+              <Satellite size={18} className={activeTab === 'ndvi' ? 'text-white' : 'text-emerald-500'} />
+              <span className="text-xs font-black tracking-tight">NDVI Satelital</span>
+            </div>
+            <span className={`text-[10px] font-mono font-bold uppercase tracking-wider ${activeTab === 'ndvi' ? 'text-emerald-100' : 'text-slate-400 dark:text-slate-400'}`}>
+              Sentinel 10m
+            </span>
+          </button>
 
-        <button
-          onClick={() => setActiveTab('carbon')}
-          className={`flex items-center space-x-2 px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all whitespace-nowrap ${
-            activeTab === 'carbon'
-              ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20'
-              : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
-          }`}
-        >
-          <Leaf size={16} className="text-emerald-400" />
-          <span>Captura de CO₂ & Bonos MRV</span>
-        </button>
+          <button
+            onClick={() => setActiveTab('water')}
+            className={`flex flex-col items-center justify-center p-3 rounded-2xl text-center transition-all duration-200 group relative ${
+              activeTab === 'water'
+                ? 'bg-blue-600 text-white font-black shadow-lg shadow-blue-600/30 ring-2 ring-blue-500/50 scale-[1.02]'
+                : 'bg-white dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700/80 border border-slate-200/80 dark:border-slate-700/60'
+            }`}
+          >
+            <div className="flex items-center space-x-1.5 mb-1">
+              <Droplets size={18} className={activeTab === 'water' ? 'text-white' : 'text-blue-500'} />
+              <span className="text-xs font-black tracking-tight">Huella Hídrica</span>
+            </div>
+            <span className={`text-[10px] font-mono font-bold uppercase tracking-wider ${activeTab === 'water' ? 'text-blue-100' : 'text-slate-400 dark:text-slate-400'}`}>
+              WUE +45%
+            </span>
+          </button>
 
-        <button
-          onClick={() => setActiveTab('inputs')}
-          className={`flex items-center space-x-2 px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all whitespace-nowrap ${
-            activeTab === 'inputs'
-              ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/20'
-              : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
-          }`}
-        >
-          <Layers size={16} className="text-purple-300" />
-          <span>Trazabilidad Insumos & Tratamientos</span>
-        </button>
+          <button
+            onClick={() => setActiveTab('carbon')}
+            className={`flex flex-col items-center justify-center p-3 rounded-2xl text-center transition-all duration-200 group relative ${
+              activeTab === 'carbon'
+                ? 'bg-teal-600 text-white font-black shadow-lg shadow-teal-600/30 ring-2 ring-teal-500/50 scale-[1.02]'
+                : 'bg-white dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700/80 border border-slate-200/80 dark:border-slate-700/60'
+            }`}
+          >
+            <div className="flex items-center space-x-1.5 mb-1">
+              <Leaf size={18} className={activeTab === 'carbon' ? 'text-white' : 'text-teal-500'} />
+              <span className="text-xs font-black tracking-tight">Bonos CO₂ MRV</span>
+            </div>
+            <span className={`text-[10px] font-mono font-bold uppercase tracking-wider ${activeTab === 'carbon' ? 'text-teal-100' : 'text-slate-400 dark:text-slate-400'}`}>
+              IPCC Audit
+            </span>
+          </button>
 
-        <button
-          onClick={() => setActiveTab('catastrophes')}
-          className={`flex items-center space-x-2 px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all whitespace-nowrap ${
-            activeTab === 'catastrophes'
-              ? 'bg-red-600 text-white shadow-lg shadow-red-600/20'
-              : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
-          }`}
-        >
-          <Flame size={16} className={activeTab === 'catastrophes' ? 'text-yellow-300' : 'text-red-500'} />
-          <span>Alertas de Catástrofes</span>
-        </button>
+          <button
+            onClick={() => setActiveTab('inputs')}
+            className={`flex flex-col items-center justify-center p-3 rounded-2xl text-center transition-all duration-200 group relative ${
+              activeTab === 'inputs'
+                ? 'bg-purple-600 text-white font-black shadow-lg shadow-purple-600/30 ring-2 ring-purple-500/50 scale-[1.02]'
+                : 'bg-white dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700/80 border border-slate-200/80 dark:border-slate-700/60'
+            }`}
+          >
+            <div className="flex items-center space-x-1.5 mb-1">
+              <Layers size={18} className={activeTab === 'inputs' ? 'text-white' : 'text-purple-500'} />
+              <span className="text-xs font-black tracking-tight">SENASA Insumos</span>
+            </div>
+            <span className={`text-[10px] font-mono font-bold uppercase tracking-wider ${activeTab === 'inputs' ? 'text-purple-100' : 'text-slate-400 dark:text-slate-400'}`}>
+              VNM Oficial
+            </span>
+          </button>
 
-        <button
-          onClick={() => setActiveTab('soil')}
-          className={`flex items-center space-x-2 px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all whitespace-nowrap ${
-            activeTab === 'soil'
-              ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20'
-              : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
-          }`}
-        >
-          <Sprout size={16} />
-          <span>Salud y Suelo</span>
-        </button>
+          <button
+            onClick={() => setActiveTab('catastrophes')}
+            className={`flex flex-col items-center justify-center p-3 rounded-2xl text-center transition-all duration-200 group relative ${
+              activeTab === 'catastrophes'
+                ? 'bg-rose-600 text-white font-black shadow-lg shadow-rose-600/30 ring-2 ring-rose-500/50 scale-[1.02]'
+                : 'bg-white dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700/80 border border-slate-200/80 dark:border-slate-700/60'
+            }`}
+          >
+            <div className="flex items-center space-x-1.5 mb-1">
+              <Flame size={18} className={activeTab === 'catastrophes' ? 'text-yellow-300 animate-pulse' : 'text-rose-500'} />
+              <span className="text-xs font-black tracking-tight">Catástrofes</span>
+            </div>
+            <span className={`text-[10px] font-mono font-bold uppercase tracking-wider ${activeTab === 'catastrophes' ? 'text-rose-100' : 'text-slate-400 dark:text-slate-400'}`}>
+              Radar Clima
+            </span>
+          </button>
 
-        <button
-          onClick={() => setActiveTab('simulator')}
-          className={`flex items-center space-x-2 px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all whitespace-nowrap ${
-            activeTab === 'simulator'
-              ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20'
-              : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
-          }`}
-        >
-          <Zap size={16} />
-          <span>Simulador de Cuenca</span>
-        </button>
+          <button
+            onClick={() => setActiveTab('soil')}
+            className={`flex flex-col items-center justify-center p-3 rounded-2xl text-center transition-all duration-200 group relative ${
+              activeTab === 'soil'
+                ? 'bg-emerald-600 text-white font-black shadow-lg shadow-emerald-600/30 ring-2 ring-emerald-500/50 scale-[1.02]'
+                : 'bg-white dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700/80 border border-slate-200/80 dark:border-slate-700/60'
+            }`}
+          >
+            <div className="flex items-center space-x-1.5 mb-1">
+              <Sprout size={18} className={activeTab === 'soil' ? 'text-white' : 'text-emerald-500'} />
+              <span className="text-xs font-black tracking-tight">Salud y Suelo</span>
+            </div>
+            <span className={`text-[10px] font-mono font-bold uppercase tracking-wider ${activeTab === 'soil' ? 'text-emerald-100' : 'text-slate-400 dark:text-slate-400'}`}>
+              pH & Físico
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('simulator')}
+            className={`flex flex-col items-center justify-center p-3 rounded-2xl text-center transition-all duration-200 group relative ${
+              activeTab === 'simulator'
+                ? 'bg-amber-600 text-white font-black shadow-lg shadow-amber-600/30 ring-2 ring-amber-500/50 scale-[1.02]'
+                : 'bg-white dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700/80 border border-slate-200/80 dark:border-slate-700/60'
+            }`}
+          >
+            <div className="flex items-center space-x-1.5 mb-1">
+              <Zap size={18} className={activeTab === 'simulator' ? 'text-white' : 'text-amber-500'} />
+              <span className="text-xs font-black tracking-tight">Sim. Cuenca</span>
+            </div>
+            <span className={`text-[10px] font-mono font-bold uppercase tracking-wider ${activeTab === 'simulator' ? 'text-amber-100' : 'text-slate-400 dark:text-slate-400'}`}>
+              Modelo C-12
+            </span>
+          </button>
+        </div>
       </div>
 
       {/* CONTENIDO DE PESTAÑA: NDVI SATELITAL */}
