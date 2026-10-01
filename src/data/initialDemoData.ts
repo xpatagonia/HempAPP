@@ -1,5 +1,6 @@
 import { 
-  User, Location, Plot, Variety, TrialRecord, Project, Task, HydricRecord 
+  User, Location, Plot, Variety, TrialRecord, Project, Task, HydricRecord,
+  StoragePoint, Supplier
 } from '../../types';
 
 export const DEMO_USER: User = {
@@ -276,5 +277,98 @@ export const DEMO_TASKS: Task[] = [
     status: 'Pendiente',
     priority: 'Media',
     createdBy: 'user-admin-nucleus'
+  }
+];
+
+export const DEMO_STORAGE_POINTS: StoragePoint[] = [
+  {
+    id: 'sp-riocuarto',
+    name: 'Centro de Acopio & Secadero Río Cuarto',
+    nodeCode: 'NOD-RC-01',
+    type: 'Propio',
+    address: 'Parque Industrial Río Cuarto, Lote 14',
+    city: 'Río Cuarto',
+    province: 'Córdoba',
+    coordinates: { lat: -33.1350, lng: -64.3350 },
+    surfaceM2: 1200,
+    conditions: 'Humedad controlada < 12%, ventilación forzada y control térmico para biomasa y flor seca.',
+    notes: 'Nodo principal de secado y acondicionamiento de biomasa para fibra y flor.'
+  },
+  {
+    id: 'sp-pergamino',
+    name: 'Depósito Central & Banco de Semillas Pergamino',
+    nodeCode: 'NOD-PER-02',
+    type: 'Propio',
+    address: 'Ruta Nac. 8 Km 226',
+    city: 'Pergamino',
+    province: 'Buenos Aires',
+    coordinates: { lat: -33.8800, lng: -60.5900 },
+    surfaceM2: 850,
+    conditions: 'Cámara fría a 15°C para conservación de semillas certificadas INASE.',
+    notes: 'Almacenamiento de lotes de semillas USO 31, Futura 75 y Santhica 27.'
+  },
+  {
+    id: 'sp-rosario',
+    name: 'Terminal Logística Puerto Rosario',
+    nodeCode: 'NOD-ROS-03',
+    type: 'Tercerizado',
+    address: 'Zona Portuaria Sur, Terminal Fluvial',
+    city: 'Rosario',
+    province: 'Santa Fe',
+    coordinates: { lat: -32.9587, lng: -60.6558 },
+    surfaceM2: 3000,
+    conditions: 'Habilitación SENASA / Aduana para consolidación de contenedores de exportación.',
+    notes: 'Nodo de exportación y despacho de grano y fibra procesada.'
+  }
+];
+
+export const DEMO_SUPPLIERS: Supplier[] = [
+  {
+    id: 'sup-1',
+    name: 'BioGenética Andina & Semillas Certificadas',
+    category: 'Semillas',
+    legalName: 'BioGenética Andina S.A.',
+    cuit: '30-71654321-9',
+    country: 'Argentina',
+    province: 'Mendoza',
+    city: 'Luján de Cuyo',
+    address: 'Ruta Panamericana Km 18',
+    coordinates: { lat: -33.0035, lng: -68.8680 },
+    email: 'contacto@biogenetica.com.ar',
+    commercialContact: 'Lic. Sofía Carrizo',
+    isOfficialPartner: true,
+    notes: 'Proveedor oficial de germoplasma y semillas fiscalizadas con rotulado INASE.'
+  },
+  {
+    id: 'sup-2',
+    name: 'Laboratorios Cannatech Innovación',
+    category: 'Servicios',
+    legalName: 'Cannatech Laboratorios S.R.L.',
+    cuit: '30-71987654-2',
+    country: 'Argentina',
+    province: 'Buenos Aires',
+    city: 'Castelar',
+    address: 'Polo Tecnológico INTA Castelar, Edificio 4',
+    coordinates: { lat: -34.6212, lng: -58.6711 },
+    email: 'analitica@cannatech.com.ar',
+    commercialContact: 'Dr. Fernando Míguez',
+    isOfficialPartner: true,
+    notes: 'Laboratorio acreditado para análisis HPLC de cannabinoides, metales pesados y terpenos.'
+  },
+  {
+    id: 'sup-3',
+    name: 'AgroInsumos Biológicos del Litoral',
+    category: 'Insumos',
+    legalName: 'Biológicos del Litoral S.A.',
+    cuit: '30-71234567-8',
+    country: 'Argentina',
+    province: 'Santa Fe',
+    city: 'San Lorenzo',
+    address: 'Parque Industrial San Lorenzo',
+    coordinates: { lat: -32.7483, lng: -60.7325 },
+    email: 'ventas@biologicosdellitoral.com.ar',
+    commercialContact: 'Ing. Lucas Valenzuela',
+    isOfficialPartner: true,
+    notes: 'Fertilizantes orgánicos, micorrizas y bioestimulantes certificados para cáñamo.'
   }
 ];

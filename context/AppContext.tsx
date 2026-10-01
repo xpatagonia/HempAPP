@@ -7,7 +7,8 @@ import {
 } from '../types';
 import { 
   DEMO_USER, DEMO_VARIETIES, DEMO_LOCATIONS, DEMO_PLOTS, 
-  DEMO_PROJECTS, DEMO_TRIALS, DEMO_HYDRIC, DEMO_TASKS 
+  DEMO_PROJECTS, DEMO_TRIALS, DEMO_HYDRIC, DEMO_TASKS,
+  DEMO_STORAGE_POINTS, DEMO_SUPPLIERS
 } from '../src/data/initialDemoData';
 
 interface AppContextType {
@@ -153,11 +154,11 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     const [tasks, setTasks] = useState<Task[]>(DEMO_TASKS);
     const [projects, setProjects] = useState<Project[]>(DEMO_PROJECTS);
     const [clients, setClients] = useState<Client[]>([]);
-    const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+    const [suppliers, setSuppliers] = useState<Supplier[]>(DEMO_SUPPLIERS);
     const [seedBatches, setSeedBatches] = useState<SeedBatch[]>([]);
     const [seedMovements, setSeedMovements] = useState<SeedMovement[]>([]);
     const [resources, setResources] = useState<Resource[]>([]);
-    const [storagePoints, setStoragePoints] = useState<StoragePoint[]>([]);
+    const [storagePoints, setStoragePoints] = useState<StoragePoint[]>(DEMO_STORAGE_POINTS);
     const [hydricRecords, setHydricRecords] = useState<HydricRecord[]>(DEMO_HYDRIC);
     const [logs, setLogs] = useState<FieldLog[]>([]);
 
@@ -226,11 +227,11 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                     fetchTable('tasks', setTasks, DEMO_TASKS),
                     fetchTable('projects', setProjects, DEMO_PROJECTS),
                     fetchTable('clients', setClients),
-                    fetchTable('suppliers', setSuppliers),
+                    fetchTable('suppliers', setSuppliers, DEMO_SUPPLIERS),
                     fetchTable('seed_batches', setSeedBatches),
                     fetchTable('seed_movements', setSeedMovements),
                     fetchTable('resources', setResources),
-                    fetchTable('storage_points', setStoragePoints),
+                    fetchTable('storage_points', setStoragePoints, DEMO_STORAGE_POINTS),
                     fetchTable('hydric_records', setHydricRecords, DEMO_HYDRIC),
                     fetchTable('field_logs', setLogs),
                 ]);
@@ -244,6 +245,8 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 setHydricRecords(prev => prev.length > 0 ? prev : DEMO_HYDRIC);
                 setProjects(prev => prev.length > 0 ? prev : DEMO_PROJECTS);
                 setTasks(prev => prev.length > 0 ? prev : DEMO_TASKS);
+                setSuppliers(prev => prev.length > 0 ? prev : DEMO_SUPPLIERS);
+                setStoragePoints(prev => prev.length > 0 ? prev : DEMO_STORAGE_POINTS);
             }
         } catch(e) {
             console.error("Data refresh failed", e);
