@@ -4,7 +4,7 @@ import { useAppContext } from '../context/AppContext';
 import { 
     Send, Bot, User, Image as ImageIcon, Terminal, RefreshCw, 
     Cpu, AlertTriangle, Sparkles, Database, Key, CheckCircle2, 
-    X, ExternalLink, HelpCircle, ShieldCheck, Zap
+    X, ExternalLink, HelpCircle, ShieldCheck, Zap, Info
 } from 'lucide-react';
 import { 
     getActiveGeminiApiKey, 
@@ -254,9 +254,20 @@ export default function AIAdvisor() {
                                 </div>
 
                                 {msg.notice && (
-                                    <div className="mb-3 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300 text-xs font-medium flex items-start gap-2">
-                                        <AlertTriangle size={14} className="shrink-0 mt-0.5" />
-                                        <span>{msg.notice}</span>
+                                    <div className="mb-3 p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-200 text-xs font-medium flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                                        <div className="flex items-start gap-2">
+                                            <Info size={15} className="shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                                            <span>{msg.notice}</span>
+                                        </div>
+                                        {!hasActiveKey && (
+                                            <button
+                                                onClick={() => setShowKeyModal(true)}
+                                                className="shrink-0 px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-sm flex items-center gap-1 self-start sm:self-auto"
+                                            >
+                                                <Key size={11} />
+                                                <span>Conectar Gemini AI</span>
+                                            </button>
+                                        )}
                                     </div>
                                 )}
 
