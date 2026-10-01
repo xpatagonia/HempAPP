@@ -7,8 +7,9 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, (process as any).cwd(), '');
   
   // Filtrar clave de Gemini: evitar que claves de Supabase (sb_publishable...) se pasen al SDK de Google
-  const rawKey = env.GEMINI_API_KEY || env.VITE_GEMINI_API_KEY || env.API_KEY || '';
-  const geminiKey = rawKey && !rawKey.startsWith('sb_') ? rawKey : '';
+  const defaultGeminiKey = 'AQ.Ab8RN6LAEMU1tHqdCrzf4gCMrQeU3id02FXu5aAZy0vR9ouiQA';
+  const rawKey = env.GEMINI_API_KEY || env.VITE_GEMINI_API_KEY || env.API_KEY || defaultGeminiKey;
+  const geminiKey = rawKey && !rawKey.startsWith('sb_') ? rawKey : defaultGeminiKey;
 
   return {
     plugins: [react()],

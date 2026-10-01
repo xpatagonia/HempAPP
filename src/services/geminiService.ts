@@ -44,7 +44,9 @@ export function getActiveGeminiApiKey(): { key: string; source: 'user_custom' | 
     }
   } catch (e) {}
 
-  return { key: '', source: 'none' };
+  // 4. Clave de Google AI Studio del proyecto
+  const defaultKey = 'AQ.Ab8RN6LAEMU1tHqdCrzf4gCMrQeU3id02FXu5aAZy0vR9ouiQA';
+  return { key: defaultKey, source: 'environment' };
 }
 
 /**
@@ -80,7 +82,12 @@ export async function testGeminiConnection(customKey?: string): Promise<{ succes
     };
   }
 
-  const modelsToTry = ['gemini-2.5-flash', 'gemini-3.8-flash', 'gemini-flash-latest'];
+  const modelsToTry = [
+    'gemini-3.1-flash-lite',
+    'gemini-3.5-flash-lite',
+    'gemini-3.8-flash',
+    'gemini-flash-latest'
+  ];
 
   for (const model of modelsToTry) {
     try {
@@ -93,7 +100,7 @@ export async function testGeminiConnection(customKey?: string): Promise<{ succes
       if (response && (response.text || response.candidates)) {
         return {
           success: true,
-          message: `Conexión exitosa con ${model}. Respuesta recibida correctamente.`,
+          message: `Conexión exitosa con ${model}. Respuesta recibida correctamente de Google AI Studio.`,
           model: model
         };
       }
@@ -156,7 +163,12 @@ export async function queryGeminiWithAgronomicFallback({
 
   // Si tenemos una key válida en formato (no supabase), intentamos llamada en vivo
   if (key && key.length > 10 && !key.startsWith('sb_')) {
-    const models = ['gemini-2.5-flash', 'gemini-3.8-flash', 'gemini-flash-latest'];
+    const models = [
+      'gemini-3.1-flash-lite',
+      'gemini-3.5-flash-lite',
+      'gemini-3.8-flash',
+      'gemini-flash-latest'
+    ];
 
     for (const model of models) {
       try {
