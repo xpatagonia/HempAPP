@@ -411,11 +411,12 @@ export default function Agriculture40() {
     if (selectedPlot?.polygon && selectedPlot.polygon.length >= 3) {
       return selectedPlot.polygon;
     }
-    // Si la parcela no tiene polígono vectorial explícito, generamos una geometría perimetral basada en su superficie (ha) y centro
+    // Si la parcela no tiene polígono vectorial explícito, generamos una geometría perimetral basada en su superficie real y centro
     const center = mapCenter;
-    const ha = selectedPlot?.surfaceArea || 9; // ej: TW-PAR-A2 103 (9 ha)
-    // 1 ha = 10,000 m2. Para 'ha' hectáreas, lado = sqrt(ha * 10000) metros.
-    const sideMeters = Math.max(120, Math.sqrt(ha * 10000));
+    const surfaceM2 = selectedPlot?.surfaceUnit === 'm2'
+      ? (selectedPlot.surfaceArea || 9)
+      : (selectedPlot?.surfaceUnit === 'ac' ? (selectedPlot.surfaceArea || 1) * 4046.86 : (selectedPlot?.surfaceArea || 1) * 10000);
+    const sideMeters = Math.max(3, Math.sqrt(surfaceM2));
     const deltaLat = (sideMeters / 111320) / 2;
     const cosLat = Math.cos((center.lat * Math.PI) / 180);
     const deltaLng = (sideMeters / (111320 * (cosLat || 0.85))) / 2;
@@ -441,10 +442,13 @@ export default function Agriculture40() {
     });
 
     const isPointInPolygon = (pt: { lat: number; lng: number }, poly: { lat: number; lng: number }[]) => {
+      const cleanPoly = (poly.length > 3 && poly[0].lat === poly[poly.length - 1].lat && poly[0].lng === poly[poly.length - 1].lng)
+        ? poly.slice(0, poly.length - 1)
+        : poly;
       let inside = false;
-      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-        const xi = poly[i].lng, yi = poly[i].lat;
-        const xj = poly[j].lng, yj = poly[j].lat;
+      for (let i = 0, j = cleanPoly.length - 1; i < cleanPoly.length; j = i++) {
+        const xi = cleanPoly[i].lng, yi = cleanPoly[i].lat;
+        const xj = cleanPoly[j].lng, yj = cleanPoly[j].lat;
         const intersect = ((yi > pt.lat) !== (yj > pt.lat))
           && (pt.lng < (xj - xi) * (pt.lat - yi) / (yj - yi) + xi);
         if (intersect) inside = !inside;
@@ -567,6 +571,36 @@ export default function Agriculture40() {
         }
       }
     }
+
+    // Para micro-parcelas experimentales (< 100m² como ensayos de 9 m²), si ninguna celda de la cuadrícula cayó dentro, renderizamos el polígono completo como micro-píxel espectral
+    if (cells.length === 0 && plotPolygon.length >= 3) {
+      let cellNdvi = activePass.ndviAverage;
+      let cellFoliage = activePass.canopyCoveragePct;
+      let cellMoisture = Number((activePass.ndviAverage * 0.72).toFixed(2));
+      let fillColor = '#10b981';
+      let statusLabel = activePassColor.label;
+
+      if (mapLayer === 'ndvi_layer') {
+        fillColor = activePassColor.fill;
+      } else if (mapLayer === 'foliage_layer') {
+        fillColor = cellFoliage >= 85 ? '#065f46' : cellFoliage >= 70 ? '#059669' : '#34d399';
+      } else if (mapLayer === 'moisture_layer') {
+        fillColor = cellMoisture >= 0.55 ? '#0284c7' : '#38bdf8';
+      }
+
+      cells.push({
+        id: `micro-cell-plot`,
+        bounds: plotPolygon.map(p => [p.lat, p.lng]) as [number, number][],
+        center: { lat: (minLat + maxLat) / 2, lng: (minLng + maxLng) / 2 },
+        ndvi: cellNdvi,
+        foliage: cellFoliage,
+        moisture: cellMoisture,
+        fillColor,
+        statusLabel,
+        pixelSize: selectedPlot?.surfaceUnit === 'm2' ? `${selectedPlot.surfaceArea || 9} m²` : 'Micro-lote'
+      });
+    }
+
     return cells;
   }, [plotPolygon, activePass, mapLayer, selectedPlot]);
 
@@ -1623,7 +1657,7 @@ export default function Agriculture40() {
                         Teledetección del Polígono ({activePass?.date})
                       </h3>
                       <p className="text-[11px] text-slate-400 font-bold">
-                        Superposición sobre {selectedPlot?.name} ({selectedPlot?.surfaceArea || 1} ha) | Pasada {activePass?.satellite}
+                        Superposición sobre {selectedPlot?.name} ({selectedPlot?.surfaceArea || 1} {selectedPlot?.surfaceUnit || 'ha'}) | Pasada {activePass?.satellite}
                       </p>
                     </div>
 
@@ -1825,7 +1859,7 @@ export default function Agriculture40() {
                           }}
                         >
                           <LeafletTooltip direction="top" offset={[0, -10]} className="font-bold text-xs bg-slate-900 text-white rounded-xl p-2 shadow-xl border border-white/10">
-                            <span className="font-black text-emerald-400">{selectedPlot?.name} ({selectedPlot?.surfaceArea || 1} ha)</span>
+                            <span className="font-black text-emerald-400">{selectedPlot?.name} ({selectedPlot?.surfaceArea || 1} {selectedPlot?.surfaceUnit || 'ha'})</span>
                             <span className="block text-[11px] text-slate-300 font-normal">{activePass?.stageName} • NDVI Promedio: {activePass?.ndviAverage.toFixed(2)}</span>
                           </LeafletTooltip>
                         </Polygon>
@@ -1921,7 +1955,7 @@ export default function Agriculture40() {
                   <div className="space-y-3 bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
                     <div className="flex justify-between items-center text-xs font-black uppercase text-slate-500">
                       <span>Distribución de Vigor en Lote</span>
-                      <span>Total: {selectedPlot?.surfaceArea || 1} ha</span>
+                      <span>Total: {selectedPlot?.surfaceArea || 1} {selectedPlot?.surfaceUnit || 'ha'}</span>
                     </div>
 
                     {/* Barra de Distribución Segmentada */}
