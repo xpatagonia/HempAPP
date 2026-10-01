@@ -6,15 +6,25 @@ export default defineConfig(({ mode }) => {
   // FIX: Usamos (process as any) para evitar errores de tipado si @types/node falla
   const env = loadEnv(mode, (process as any).cwd(), '');
   
+  // Filtrar clave de Gemini: evitar que claves de Supabase (sb_publishable...) se pasen al SDK de Google
+  const rawKey = env.GEMINI_API_KEY || env.VITE_GEMINI_API_KEY || env.API_KEY || '';
+  const geminiKey = rawKey && !rawKey.startsWith('sb_') ? rawKey : '';
+
   return {
     plugins: [react()],
+    server: {
+      port: 3000,
+      host: '0.0.0.0'
+    },
+    preview: {
+      port: 3000,
+      host: '0.0.0.0'
+    },
     define: {
-      // V7.0.6 - STABLE BUILD FIX
-      '__APP_VERSION__': JSON.stringify('V7.0.6-STABLE'),
-      '__API_KEY__': JSON.stringify(env.API_KEY || ''),
+      '__APP_VERSION__': JSON.stringify('V7.10.1-STABLE'),
+      '__API_KEY__': JSON.stringify(geminiKey),
       '__BUILD_TIME__': JSON.stringify(new Date().toISOString()),
-      // CRITICAL FIX: Inyectar variable de entorno para que el SDK de Google funcione en navegador
-      'process.env.API_KEY': JSON.stringify(env.API_KEY || '')
+      'process.env.API_KEY': JSON.stringify(geminiKey)
     },
     build: {
       chunkSizeWarningLimit: 4000,

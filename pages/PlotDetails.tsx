@@ -18,6 +18,7 @@ import MapEditor from '../components/MapEditor';
 import WeatherWidget from '../components/WeatherWidget';
 import HydricBalance from '../components/HydricBalance';
 import { GoogleGenAI } from "@google/genai";
+import { getActiveGeminiApiKey } from '../src/services/geminiService';
 import jsPDF from 'jspdf';
 
 const KPI = ({ label, value, icon: Icon, color, subtext }: any) => (
@@ -191,13 +192,7 @@ export default function PlotDetails() {
     setIsAnalyzing(true);
     setAiInsight(null);
     try {
-        const apiKey = 
-            (typeof process !== 'undefined' && process.env?.API_KEY) || 
-            (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) ||
-            (typeof __API_KEY__ !== 'undefined' ? __API_KEY__ : '') ||
-            ((import.meta as any).env?.VITE_GEMINI_API_KEY) ||
-            ((window as any).GEMINI_API_KEY) ||
-            '';
+        const { key: apiKey } = getActiveGeminiApiKey();
 
         const historyContext = history.slice(0, 5).map(r => `Fecha: ${r.date}, Fase: ${r.stage}, Altura: ${r.plantHeight}cm, Vigor: ${r.vigor}/9, Temp: ${r.temperature}C`).join('\n');
         const prompt = `Analiza la salud agronómica de esta parcela de cáñamo industrial:

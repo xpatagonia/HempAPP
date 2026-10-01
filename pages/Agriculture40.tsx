@@ -105,6 +105,59 @@ export default function Agriculture40() {
   const [showInfoModal, setShowInfoModal] = useState<boolean>(false);
   const [showDroneModal, setShowDroneModal] = useState<boolean>(false);
 
+  // Selector Personalizable de Widgets del Dashboard Agro 4.0
+  const [showWidgetModal, setShowWidgetModal] = useState<boolean>(false);
+  const [widgetsConfig, setWidgetsConfig] = useState<{
+    waterSaved: boolean;
+    wueBiomass: boolean;
+    carbonCaptured: boolean;
+    soilRestoration: boolean;
+    ndviTrends: boolean;
+    catastropheRisk: boolean;
+  }>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('ht_agro40_kpi_widgets');
+      if (saved) {
+        try { return JSON.parse(saved); } catch (e) {}
+      }
+    }
+    return {
+      waterSaved: true,
+      wueBiomass: true,
+      carbonCaptured: true,
+      soilRestoration: true,
+      ndviTrends: true,
+      catastropheRisk: true
+    };
+  });
+
+  const toggleWidget = (key: keyof typeof widgetsConfig) => {
+    setWidgetsConfig(prev => {
+      const next = { ...prev, [key]: !prev[key] };
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('ht_agro40_kpi_widgets', JSON.stringify(next));
+      }
+      return next;
+    });
+  };
+
+  const resetWidgets = () => {
+    const defaultWidgets = {
+      waterSaved: true,
+      wueBiomass: true,
+      carbonCaptured: true,
+      soilRestoration: true,
+      ndviTrends: true,
+      catastropheRisk: true
+    };
+    setWidgetsConfig(defaultWidgets);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('ht_agro40_kpi_widgets', JSON.stringify(defaultWidgets));
+    }
+  };
+
+  const activeWidgetsCount = Object.values(widgetsConfig).filter(Boolean).length;
+
   // Vuelos de dron multiespectral registrados
   const [droneFlights, setDroneFlights] = useState<DroneFlight[]>(() => {
     if (typeof window !== 'undefined') {
@@ -556,68 +609,338 @@ export default function Agriculture40() {
         <div className="absolute -right-16 -bottom-16 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none"></div>
       </div>
 
-      {/* TARJETAS KPI DE IMPACTO AMBIENTAL Y HÍDRICO */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-slate-900 p-6 rounded-[28px] border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden group">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Ahorro vs Maíz</span>
-            <div className="p-2.5 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl">
-              <Droplets size={20} />
-            </div>
+      {/* TARJETAS KPI DE IMPACTO AMBIENTAL Y HÍDRICO (PERSONALIZABLES) */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between px-1">
+          <div className="flex items-center space-x-2">
+            <span className="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              Métricas Clave de Monitoreo
+            </span>
+            <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+              {activeWidgetsCount}/6 activas
+            </span>
           </div>
-          <div className="text-2xl font-black text-slate-900 dark:text-white">
-            {waterMetrics.waterSavedVsCornM3.toLocaleString()} <span className="text-sm font-bold text-slate-400">m³</span>
-          </div>
-          <p className="text-[11px] text-blue-600 dark:text-blue-400 font-bold mt-2">
-            ≈ {((waterMetrics.waterSavedVsCornM3 * 1000) / 1000000).toFixed(1)} Millones de Litros ahorrados
-          </p>
+
+          <button
+            onClick={() => setShowWidgetModal(true)}
+            className="flex items-center space-x-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 px-3 py-1.5 rounded-xl border border-emerald-500/20 transition-all shadow-sm"
+          >
+            <Sliders size={14} />
+            <span>Personalizar Widgets</span>
+          </button>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 p-6 rounded-[28px] border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden group">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Eficiencia de Agua (WUE)</span>
-            <div className="p-2.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl">
-              <Activity size={20} />
-            </div>
+        {activeWidgetsCount === 0 ? (
+          <div className="bg-white dark:bg-slate-900 p-8 rounded-[28px] border border-dashed border-slate-300 dark:border-slate-700 text-center space-y-3">
+            <Sliders size={28} className="mx-auto text-slate-400" />
+            <p className="text-sm font-bold text-slate-600 dark:text-slate-300">
+              Todos los widgets de métricas se encuentran ocultos.
+            </p>
+            <button
+              onClick={resetWidgets}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md"
+            >
+              Restablecer Todas las Métricas
+            </button>
           </div>
-          <div className="text-2xl font-black text-slate-900 dark:text-white">
-            {waterMetrics.wueBiomassKgM3} <span className="text-sm font-bold text-slate-400">kg biomasa/m³</span>
-          </div>
-          <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold mt-2">
-            +45% más eficiente que maíz y soja
-          </p>
-        </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+            {/* Widget 1: Ahorro vs Maíz */}
+            {widgetsConfig.waterSaved && (
+              <div className="bg-white dark:bg-slate-900 p-5 rounded-[24px] border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden group hover:border-blue-500/30 transition-all">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Ahorro vs Maíz</span>
+                  <div className="p-2 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl">
+                    <Droplets size={18} />
+                  </div>
+                </div>
+                <div className="text-xl font-black text-slate-900 dark:text-white font-mono tabular-nums">
+                  {waterMetrics.waterSavedVsCornM3.toLocaleString()} <span className="text-xs font-bold text-slate-400">m³</span>
+                </div>
+                <p className="text-[10px] text-blue-600 dark:text-blue-400 font-bold mt-1.5 truncate">
+                  ≈ {((waterMetrics.waterSavedVsCornM3 * 1000) / 1000000).toFixed(1)}M Litros ahorrados
+                </p>
+              </div>
+            )}
 
-        <div className="bg-white dark:bg-slate-900 p-6 rounded-[28px] border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden group">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Carbono Capturado</span>
-            <div className="p-2.5 bg-teal-500/10 text-teal-600 dark:text-teal-400 rounded-xl">
-              <Leaf size={20} />
-            </div>
-          </div>
-          <div className="text-2xl font-black text-slate-900 dark:text-white">
-            {waterMetrics.co2CapturedTonnes} <span className="text-sm font-bold text-slate-400">ton CO₂ eq</span>
-          </div>
-          <p className="text-[11px] text-teal-600 dark:text-teal-400 font-bold mt-2">
-            Fijación fotosintética neta en biomasa
-          </p>
-        </div>
+            {/* Widget 2: Eficiencia Hídrica WUE */}
+            {widgetsConfig.wueBiomass && (
+              <div className="bg-white dark:bg-slate-900 p-5 rounded-[24px] border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden group hover:border-emerald-500/30 transition-all">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Eficiencia (WUE)</span>
+                  <div className="p-2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl">
+                    <Activity size={18} />
+                  </div>
+                </div>
+                <div className="text-xl font-black text-slate-900 dark:text-white font-mono tabular-nums">
+                  {waterMetrics.wueBiomassKgM3} <span className="text-xs font-bold text-slate-400">kg/m³</span>
+                </div>
+                <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold mt-1.5 truncate">
+                  +45% más eficiente que soja
+                </p>
+              </div>
+            )}
 
-        <div className="bg-white dark:bg-slate-900 p-6 rounded-[28px] border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden group">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Score Restauración Suelo</span>
-            <div className="p-2.5 bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-xl">
-              <ShieldCheck size={20} />
-            </div>
+            {/* Widget 3: Captura de Carbono */}
+            {widgetsConfig.carbonCaptured && (
+              <div className="bg-white dark:bg-slate-900 p-5 rounded-[24px] border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden group hover:border-teal-500/30 transition-all">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">CO₂ Capturado</span>
+                  <div className="p-2 bg-teal-500/10 text-teal-600 dark:text-teal-400 rounded-xl">
+                    <Leaf size={18} />
+                  </div>
+                </div>
+                <div className="text-xl font-black text-slate-900 dark:text-white font-mono tabular-nums">
+                  {waterMetrics.co2CapturedTonnes} <span className="text-xs font-bold text-slate-400">ton CO₂e</span>
+                </div>
+                <p className="text-[10px] text-teal-600 dark:text-teal-400 font-bold mt-1.5 truncate">
+                  {carbonData.carbonCreditsEstimated} Créditos MRV
+                </p>
+              </div>
+            )}
+
+            {/* Widget 4: Restauración de Suelo */}
+            {widgetsConfig.soilRestoration && (
+              <div className="bg-white dark:bg-slate-900 p-5 rounded-[24px] border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden group hover:border-amber-500/30 transition-all">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Restauración</span>
+                  <div className="p-2 bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-xl">
+                    <ShieldCheck size={18} />
+                  </div>
+                </div>
+                <div className="text-xl font-black text-slate-900 dark:text-white font-mono tabular-nums">
+                  {waterMetrics.soilRestorationIndex} <span className="text-xs font-bold text-slate-400">/ 100</span>
+                </div>
+                <p className="text-[10px] text-amber-600 dark:text-amber-400 font-bold mt-1.5 truncate">
+                  Descompactación profunda
+                </p>
+              </div>
+            )}
+
+            {/* Widget 5: Tendencia NDVI Satelital */}
+            {widgetsConfig.ndviTrends && (
+              <div className="bg-white dark:bg-slate-900 p-5 rounded-[24px] border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden group hover:border-emerald-500/30 transition-all">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Vigor NDVI</span>
+                  <div className="p-2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl">
+                    <Satellite size={18} />
+                  </div>
+                </div>
+                <div className="text-xl font-black text-slate-900 dark:text-white font-mono tabular-nums flex items-baseline gap-1">
+                  <span>{(activePass?.ndviAverage || 0.76).toFixed(2)}</span>
+                  <span className="text-xs font-bold text-emerald-500">NDVI</span>
+                </div>
+                <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold mt-1.5 truncate">
+                  {activePassColor.label}
+                </p>
+              </div>
+            )}
+
+            {/* Widget 6: Alertas Climáticas Activas */}
+            {widgetsConfig.catastropheRisk && (
+              <div className="bg-white dark:bg-slate-900 p-5 rounded-[24px] border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden group hover:border-rose-500/30 transition-all">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Alerta Clima</span>
+                  <div className="p-2 bg-rose-500/10 text-rose-600 dark:text-rose-400 rounded-xl">
+                    <Flame size={18} />
+                  </div>
+                </div>
+                <div className="text-xl font-black text-slate-900 dark:text-white font-mono tabular-nums">
+                  {catastropheAlerts.filter(a => a.level === 'Extremo' || a.level === 'Alto').length}{' '}
+                  <span className="text-xs font-bold text-slate-400">Críticas</span>
+                </div>
+                <p className="text-[10px] text-rose-600 dark:text-rose-400 font-bold mt-1.5 truncate">
+                  {catastropheAlerts.length > 0 ? `${catastropheAlerts.length} monitoreos activos` : 'Sin alertas vigentes'}
+                </p>
+              </div>
+            )}
           </div>
-          <div className="text-2xl font-black text-slate-900 dark:text-white">
-            {waterMetrics.soilRestorationIndex} <span className="text-sm font-bold text-slate-400">/ 100</span>
-          </div>
-          <p className="text-[11px] text-amber-600 dark:text-amber-400 font-bold mt-2">
-            Descompactación pivotante y bioenmienda
-          </p>
-        </div>
+        )}
       </div>
+
+      {/* MODAL PERSONALIZADOR DE WIDGETS Y MÉTRICAS */}
+      {showWidgetModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-2xl max-w-lg w-full p-6 md:p-8 space-y-6 relative overflow-hidden">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
+              <div className="flex items-center space-x-3">
+                <div className="p-2.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-2xl">
+                  <Sliders size={22} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900 dark:text-white tracking-tight">
+                    Personalizar Widgets del Dashboard
+                  </h3>
+                  <p className="text-xs text-slate-400 font-medium">
+                    Activa o desactiva las métricas que deseas ver en pantalla.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowWidgetModal(false)}
+                className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-3 max-h-[60vh] overflow-y-auto custom-scrollbar pr-1">
+              {/* Opción 1: Ahorro vs Maíz */}
+              <div
+                onClick={() => toggleWidget('waterSaved')}
+                className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all cursor-pointer ${
+                  widgetsConfig.waterSaved
+                    ? 'bg-blue-50/50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800/60'
+                    : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 opacity-60'
+                }`}
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="p-2 bg-blue-500/10 text-blue-600 rounded-xl">
+                    <Droplets size={18} />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-white">Ahorro Hídrico vs Maíz</h4>
+                    <p className="text-[10px] text-slate-400">Metros cúbicos y litros preservados en la parcela</p>
+                  </div>
+                </div>
+                <div className={`w-10 h-6 rounded-full transition-colors relative flex items-center p-0.5 ${widgetsConfig.waterSaved ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'}`}>
+                  <div className={`w-5 h-5 rounded-full bg-white transition-transform ${widgetsConfig.waterSaved ? 'translate-x-4' : 'translate-x-0'}`} />
+                </div>
+              </div>
+
+              {/* Opción 2: Eficiencia de Agua (WUE) */}
+              <div
+                onClick={() => toggleWidget('wueBiomass')}
+                className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all cursor-pointer ${
+                  widgetsConfig.wueBiomass
+                    ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/60'
+                    : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 opacity-60'
+                }`}
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="p-2 bg-emerald-500/10 text-emerald-600 rounded-xl">
+                    <Activity size={18} />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-white">Eficiencia de Agua (WUE)</h4>
+                    <p className="text-[10px] text-slate-400">Kilogramos de biomasa seca por metro cúbico consumido</p>
+                  </div>
+                </div>
+                <div className={`w-10 h-6 rounded-full transition-colors relative flex items-center p-0.5 ${widgetsConfig.wueBiomass ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-700'}`}>
+                  <div className={`w-5 h-5 rounded-full bg-white transition-transform ${widgetsConfig.wueBiomass ? 'translate-x-4' : 'translate-x-0'}`} />
+                </div>
+              </div>
+
+              {/* Opción 3: Captura de Carbono */}
+              <div
+                onClick={() => toggleWidget('carbonCaptured')}
+                className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all cursor-pointer ${
+                  widgetsConfig.carbonCaptured
+                    ? 'bg-teal-50/50 dark:bg-teal-950/20 border-teal-200 dark:border-teal-800/60'
+                    : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 opacity-60'
+                }`}
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="p-2 bg-teal-500/10 text-teal-600 rounded-xl">
+                    <Leaf size={18} />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-white">Captura de CO₂ & Bonos MRV</h4>
+                    <p className="text-[10px] text-slate-400">Toneladas netas secuestradas y créditos auditables</p>
+                  </div>
+                </div>
+                <div className={`w-10 h-6 rounded-full transition-colors relative flex items-center p-0.5 ${widgetsConfig.carbonCaptured ? 'bg-teal-600' : 'bg-slate-300 dark:bg-slate-700'}`}>
+                  <div className={`w-5 h-5 rounded-full bg-white transition-transform ${widgetsConfig.carbonCaptured ? 'translate-x-4' : 'translate-x-0'}`} />
+                </div>
+              </div>
+
+              {/* Opción 4: Restauración de Suelo */}
+              <div
+                onClick={() => toggleWidget('soilRestoration')}
+                className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all cursor-pointer ${
+                  widgetsConfig.soilRestoration
+                    ? 'bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/60'
+                    : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 opacity-60'
+                }`}
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="p-2 bg-amber-500/10 text-amber-600 rounded-xl">
+                    <ShieldCheck size={18} />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-white">Score Restauración Suelo</h4>
+                    <p className="text-[10px] text-slate-400">Índice ponderado de salud física y biológica</p>
+                  </div>
+                </div>
+                <div className={`w-10 h-6 rounded-full transition-colors relative flex items-center p-0.5 ${widgetsConfig.soilRestoration ? 'bg-amber-600' : 'bg-slate-300 dark:bg-slate-700'}`}>
+                  <div className={`w-5 h-5 rounded-full bg-white transition-transform ${widgetsConfig.soilRestoration ? 'translate-x-4' : 'translate-x-0'}`} />
+                </div>
+              </div>
+
+              {/* Opción 5: Tendencia NDVI Satelital */}
+              <div
+                onClick={() => toggleWidget('ndviTrends')}
+                className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all cursor-pointer ${
+                  widgetsConfig.ndviTrends
+                    ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/60'
+                    : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 opacity-60'
+                }`}
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="p-2 bg-emerald-500/10 text-emerald-600 rounded-xl">
+                    <Satellite size={18} />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-white">Tendencia Vigor NDVI</h4>
+                    <p className="text-[10px] text-slate-400">Índice de vegetación satelital Sentinel-2 en tiempo real</p>
+                  </div>
+                </div>
+                <div className={`w-10 h-6 rounded-full transition-colors relative flex items-center p-0.5 ${widgetsConfig.ndviTrends ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-700'}`}>
+                  <div className={`w-5 h-5 rounded-full bg-white transition-transform ${widgetsConfig.ndviTrends ? 'translate-x-4' : 'translate-x-0'}`} />
+                </div>
+              </div>
+
+              {/* Opción 6: Alerta Climática */}
+              <div
+                onClick={() => toggleWidget('catastropheRisk')}
+                className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all cursor-pointer ${
+                  widgetsConfig.catastropheRisk
+                    ? 'bg-rose-50/50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800/60'
+                    : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 opacity-60'
+                }`}
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="p-2 bg-rose-500/10 text-rose-600 rounded-xl">
+                    <Flame size={18} />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-white">Alertas de Catástrofes & Clima</h4>
+                    <p className="text-[10px] text-slate-400">Riesgos regionales de incendio, sequía o helada</p>
+                  </div>
+                </div>
+                <div className={`w-10 h-6 rounded-full transition-colors relative flex items-center p-0.5 ${widgetsConfig.catastropheRisk ? 'bg-rose-600' : 'bg-slate-300 dark:bg-slate-700'}`}>
+                  <div className={`w-5 h-5 rounded-full bg-white transition-transform ${widgetsConfig.catastropheRisk ? 'translate-x-4' : 'translate-x-0'}`} />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                onClick={resetWidgets}
+                className="text-xs font-bold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 underline"
+              >
+                Restablecer Todo
+              </button>
+              <button
+                onClick={() => setShowWidgetModal(false)}
+                className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold text-xs uppercase tracking-wider transition-all shadow-md active:scale-95"
+              >
+                Listo / Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* PESTAÑAS DE NAVEGACIÓN DENTRO DEL MÓDULO (SEGMENTED GRID HIGH-CONTRAST TABS) */}
       <div className="bg-slate-100/80 dark:bg-slate-900/90 p-2 md:p-3 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm">

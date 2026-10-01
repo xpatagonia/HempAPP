@@ -12,6 +12,7 @@ import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import { GoogleGenAI } from '@google/genai';
+import { getActiveGeminiApiKey } from '../src/services/geminiService';
 import { getPlotAgrochemicalApplications } from '../src/services/agro40Service';
 import { AgrochemicalApplication } from '../types';
 import SenasaPDFExporterModal from '../components/SenasaPDFExporterModal';
@@ -215,13 +216,7 @@ export default function AgronomicIntelligence() {
     // --- AUDITORÍA INTELIGENTE CON IA ---
     const generateAiCampaignAudit = async () => {
         setIsGeneratingAi(true);
-        const apiKey = 
-            (typeof process !== 'undefined' && process.env?.API_KEY) || 
-            (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) ||
-            (typeof __API_KEY__ !== 'undefined' ? __API_KEY__ : '') ||
-            ((import.meta as any).env?.VITE_GEMINI_API_KEY) ||
-            ((window as any).GEMINI_API_KEY) ||
-            '';
+        const { key: apiKey } = getActiveGeminiApiKey();
 
         const summaryPrompt = `Actúa como Director Agronómico Senior de la red cooperativa ${appName}. 
 Genera un informe ejecutivo de inteligencia agronómica integral y recomendaciones de manejo basadas en los siguientes datos de la campaña activa:
@@ -238,7 +233,7 @@ Estructura tu análisis en:
 Sé riguroso, técnico, conciso y en español.`;
 
         let auditText = '';
-        if (apiKey && apiKey.length > 5) {
+        if (apiKey && apiKey.length > 10) {
             try {
                 const ai = new GoogleGenAI({ apiKey });
                 const res = await ai.models.generateContent({
