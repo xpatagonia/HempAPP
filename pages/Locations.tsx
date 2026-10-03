@@ -108,7 +108,7 @@ const parseKML = (kmlText: string): { lat: number, lng: number }[] | null => {
 };
 
 export default function Locations() {
-  const { locations, addLocation, updateLocation, deleteLocation, currentUser, clients, plots } = useAppContext();
+  const { locations, addLocation, updateLocation, deleteLocation, updatePlot, currentUser, clients, plots } = useAppContext();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -230,19 +230,48 @@ export default function Locations() {
     e.stopPropagation();
     if (!canManage) return;
 
+    const targetCampaign = selectedCampaign === 'all' ? '2025/2026' : selectedCampaign;
     const currentCampaigns = loc.activeCampaigns || ['2024/2025', '2025/2026'];
     let updatedCampaigns: string[];
+    let willBeActive: boolean;
 
-    if (currentCampaigns.includes(selectedCampaign)) {
-      updatedCampaigns = currentCampaigns.filter(c => c !== selectedCampaign);
+    if (currentCampaigns.includes(targetCampaign)) {
+      updatedCampaigns = currentCampaigns.filter(c => c !== targetCampaign);
+      willBeActive = false;
     } else {
-      updatedCampaigns = [...currentCampaigns, selectedCampaign];
+      updatedCampaigns = [...currentCampaigns, targetCampaign];
+      willBeActive = true;
     }
 
+    // 1. Actualizar el Campo
     await updateLocation({
       ...loc,
-      activeCampaigns: updatedCampaigns
+      activeCampaigns: updatedCampaigns,
+      status: willBeActive ? 'Activo' : (updatedCampaigns.length === 0 ? 'En Barbecho' : loc.status)
     });
+
+    // 2. Sincronizar de inmediato todas las Unidades Productivas hijas de este campo
+    const childPlots = plots.filter(p => p.locationId === loc.id);
+    for (const plot of childPlots) {
+      const plotCampaigns = plot.activeCampaigns || (plot.campaign ? [plot.campaign] : ['2025/2026']);
+      if (willBeActive) {
+        const newPlotCampaigns = Array.from(new Set([...plotCampaigns, targetCampaign]));
+        await updatePlot({
+          ...plot,
+          status: 'Activa',
+          campaign: plot.campaign || targetCampaign,
+          activeCampaigns: newPlotCampaigns
+        });
+      } else {
+        const newPlotCampaigns = plotCampaigns.filter(c => c !== targetCampaign);
+        const newStatus = (plot.campaign === targetCampaign || newPlotCampaigns.length === 0) ? 'Pausada' : plot.status;
+        await updatePlot({
+          ...plot,
+          status: newStatus as any,
+          activeCampaigns: newPlotCampaigns
+        });
+      }
+    }
   };
 
   // Alternar rápidamente estado del establecimiento (Activo <-> Inactivo/Barbecho)
@@ -810,20 +839,24 @@ export default function Locations() {
                   {/* Acciones Rápidas Inferiores */}
                   <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
                     {/* Botón para cambiar estado rápido de campaña */}
-                    {canManage && (
-                      <button
-                        onClick={(e) => handleToggleCampaign(loc, e)}
-                        className={`px-2.5 py-1.5 rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1 transition ${
-                          isActiveInSelectedCampaign
-                            ? 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
-                            : 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                        }`}
-                        title={`Activar o desactivar en campaña ${selectedCampaign}`}
-                      >
-                        <Power size={11} />
-                        <span>{isActiveInSelectedCampaign ? 'Pausar Camp.' : 'Activar Camp.'}</span>
-                      </button>
-                    )}
+                    {canManage && (() => {
+                      const effectiveCampaign = selectedCampaign === 'all' ? '2025/2026' : selectedCampaign;
+                      const isEffectiveActive = campaigns.includes(effectiveCampaign);
+                      return (
+                        <button
+                          onClick={(e) => handleToggleCampaign(loc, e)}
+                          className={`px-3 py-1.5 rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 transition shadow-sm ${
+                            isEffectiveActive
+                              ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
+                              : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20'
+                          }`}
+                          title={isEffectiveActive ? `Pausar campo y sus unidades en campaña ${effectiveCampaign}` : `Habilitar campo y sus unidades en campaña ${effectiveCampaign}`}
+                        >
+                          <Power size={11} className={isEffectiveActive ? 'text-amber-600' : 'text-white'} />
+                          <span>{isEffectiveActive ? `Pausar Camp. (${effectiveCampaign})` : `Activar Camp. (${effectiveCampaign})`}</span>
+                        </button>
+                      );
+                    })()}
 
                     <Link 
                       to={`/locations/${loc.id}`} 

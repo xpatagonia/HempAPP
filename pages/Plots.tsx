@@ -1,13 +1,13 @@
-
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
-import { Plot, Variety, Location, Project, TrialRecord, SeedBatch } from '../types';
+import { Plot, Variety, Location, Project, TrialRecord, SeedBatch, CAMPAIGNS } from '../types';
 import { 
   ChevronRight, LayoutGrid, List, Tag, FlaskConical, 
   Trash2, Edit2, QrCode, X, Save, Search, Filter, 
   MapPin, Calendar, Sprout, Printer, Activity, Plus, Loader2, Info, FolderKanban, FileUp,
-  Link as LinkIcon, Scale, Box, Weight, Archive, Globe, LayoutDashboard, Eye, Palette
+  Link as LinkIcon, Scale, Box, Weight, Archive, Globe, LayoutDashboard, Eye, Palette,
+  Power, AlertCircle, CheckCircle2, ShieldCheck, Tractor, Layers, Clock
 } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
 
@@ -68,26 +68,27 @@ const generateId = () => {
 type MassUnit = 'gr' | 'kg' | 'tn';
 
 const COLOR_PALETTE = [
-    { color: '#16a34a', label: 'Verde (Estándar)' },
-    { color: '#dc2626', label: 'Rojo (Alerta)' },
-    { color: '#2563eb', label: 'Azul (Ensayo)' },
-    { color: '#d97706', label: 'Naranja (Producción)' },
-    { color: '#9333ea', label: 'Violeta (Genética)' },
-    { color: '#0891b2', label: 'Cian (Riego)' },
+    { color: '#10b981', label: 'Verde Esmeralda' },
+    { color: '#059669', label: 'Verde Bosque' },
+    { color: '#0284c7', label: 'Azul Ensayos' },
+    { color: '#d97706', label: 'Ámbar Producción' },
+    { color: '#9333ea', label: 'Púrpura Genética' },
+    { color: '#e11d48', label: 'Rosa Alerta' },
 ];
 
 export default function Plots() {
   const { 
     plots, locations, varieties, projects, currentUser, 
     seedBatches, deletePlot, updatePlot, 
-    addPlot, updateSeedBatch, storagePoints 
+    addPlot, updateLocation, updateSeedBatch, storagePoints, appName
   } = useAppContext();
   
-  const [viewMode, setViewMode] = useState<'table' | 'gallery'>('table');
+  const [viewMode, setViewMode] = useState<'table' | 'gallery'>('gallery');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterLoc, setFilterLoc] = useState('all');
   const [filterType, setFilterType] = useState<'all' | 'Ensayo' | 'Producción'>('all');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [selectedCampaign, setSelectedCampaign] = useState<string>('2025/2026'); // Campaña por defecto
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -102,6 +103,8 @@ export default function Plots() {
       varietyId: '',
       seedBatchId: '',
       status: 'Activa',
+      campaign: '2025/2026',
+      activeCampaigns: ['2025/2026', '2026/2027'],
       sowingDate: new Date().toISOString().split('T')[0],
       surfaceArea: 0,
       surfaceUnit: 'ha',
@@ -112,28 +115,30 @@ export default function Plots() {
       polygon: [],
       usedSeedValue: 0,
       usedSeedUnit: 'kg',
-      color: '#16a34a'
+      color: '#10b981'
   });
 
   const isSuperAdmin = currentUser?.role === 'super_admin';
   const isAdmin = currentUser?.role === 'admin' || isSuperAdmin;
   const isClient = currentUser?.role === 'client';
   const isTechnician = currentUser?.role === 'technician';
+  const canManage = isAdmin || isClient || isTechnician;
 
   const resetForm = () => {
     setFormData({ 
       name: '', type: 'Ensayo', locationId: '', projectId: '', varietyId: '', seedBatchId: '', 
-      status: 'Activa', sowingDate: new Date().toISOString().split('T')[0], surfaceArea: 0, 
+      status: 'Activa', campaign: selectedCampaign === 'all' ? '2025/2026' : selectedCampaign,
+      activeCampaigns: [selectedCampaign === 'all' ? '2025/2026' : selectedCampaign],
+      sowingDate: new Date().toISOString().split('T')[0], surfaceArea: 0, 
       surfaceUnit: 'ha', density: 0, lat: '', lng: '', polygon: [], usedSeedValue: 0, usedSeedUnit: 'kg',
-      color: '#16a34a'
+      color: '#10b981'
     });
+    setEditingPlot(null);
   };
 
   const availableBatches = useMemo(() => {
       return seedBatches.filter(b => {
-          // FIX: Filter out dust/floating point errors (< 1 gram) to hide "1.38e-17" lots
           if (!b.isActive || b.remainingQuantity <= 0.001) return false;
-          
           if ((isClient || isTechnician) && currentUser?.clientId) {
               const storage = storagePoints.find(s => s.id === b.storagePointId);
               if (storage && storage.clientId && storage.clientId !== currentUser.clientId) return false;
@@ -148,7 +153,7 @@ export default function Plots() {
           if ((isClient || isTechnician) && currentUser?.clientId) {
               return l.clientId === currentUser.clientId || l.responsibleIds?.includes(currentUser.id);
           }
-          return l.responsibleIds?.includes(currentUser.id || '');
+          return l.responsibleIds?.includes(currentUser?.id || '') || false;
       });
   }, [locations, isAdmin, isClient, isTechnician, currentUser]);
 
@@ -170,23 +175,104 @@ export default function Plots() {
       }
   }, [formData.usedSeedValue, formData.usedSeedUnit]);
 
+  // Filtrado reactivo de parcelas por Campaña, Ubicación, Tipo, Estado y Búsqueda
   const filteredPlots = useMemo(() => plots.filter(p => {
       const matchSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase());
       const matchLoc = filterLoc === 'all' || p.locationId === filterLoc;
       const matchType = filterType === 'all' || p.type === filterType;
       const matchStatus = filterStatus === 'all' || p.status === filterStatus;
       
+      // Filtro de Campaña Agrícola
+      let matchCampaign = true;
+      if (selectedCampaign !== 'all') {
+        const campaigns = p.activeCampaigns || (p.campaign ? [p.campaign] : ['2025/2026']);
+        matchCampaign = campaigns.includes(selectedCampaign) || p.campaign === selectedCampaign;
+      }
+
       let hasAccess = isAdmin;
-      
       if ((isClient || isTechnician) && currentUser?.clientId) {
           const loc = locations.find(l => l.id === p.locationId);
-          hasAccess = loc?.clientId === currentUser.clientId || p.responsibleIds?.includes(currentUser.id);
+          hasAccess = loc?.clientId === currentUser.clientId || (p.responsibleIds?.includes(currentUser.id) || false);
       } else if (!isAdmin) {
-          hasAccess = p.responsibleIds?.includes(currentUser?.id || '');
+          hasAccess = p.responsibleIds?.includes(currentUser?.id || '') || false;
       }
       
-      return matchSearch && matchLoc && matchType && matchStatus && hasAccess;
-  }), [plots, searchTerm, filterLoc, filterType, filterStatus, isAdmin, isClient, isTechnician, currentUser, locations]);
+      return matchSearch && matchLoc && matchType && matchStatus && matchCampaign && hasAccess;
+  }), [plots, searchTerm, filterLoc, filterType, filterStatus, selectedCampaign, isAdmin, isClient, isTechnician, currentUser, locations]);
+
+  // Métricas de campaña para la barra de estado
+  const campaignStats = useMemo(() => {
+    const currentPlots = plots.filter(p => {
+      if (selectedCampaign === 'all') return true;
+      const campaigns = p.activeCampaigns || (p.campaign ? [p.campaign] : ['2025/2026']);
+      return campaigns.includes(selectedCampaign) || p.campaign === selectedCampaign;
+    });
+
+    const activeCount = currentPlots.filter(p => p.status === 'Activa').length;
+    const pausedCount = currentPlots.filter(p => p.status === 'Pausada' || p.status === 'En Barbecho').length;
+    
+    const totalHa = currentPlots.reduce((sum, p) => {
+      let area = p.surfaceArea || 0;
+      if (p.surfaceUnit === 'm2') area = area / 10000;
+      if (p.surfaceUnit === 'ac') area = area * 0.404686;
+      return sum + area;
+    }, 0);
+
+    const trialCount = currentPlots.filter(p => p.type === 'Ensayo').length;
+    const productionCount = currentPlots.filter(p => p.type === 'Producción').length;
+
+    return {
+      totalInCampaign: currentPlots.length,
+      activeCount,
+      pausedCount,
+      totalHa,
+      trialCount,
+      productionCount
+    };
+  }, [plots, selectedCampaign]);
+
+  // Alternar rápidamente si una Unidad Productiva está activa en la campaña actual
+  const handleTogglePlotCampaign = async (plot: Plot, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!canManage) return;
+
+    const targetCampaign = selectedCampaign === 'all' ? '2025/2026' : selectedCampaign;
+    const currentCampaigns = plot.activeCampaigns || (plot.campaign ? [plot.campaign] : ['2025/2026']);
+    const isCurrentlyActiveInCampaign = currentCampaigns.includes(targetCampaign) && plot.status === 'Activa';
+
+    let updatedCampaigns: string[];
+    let newStatus: any;
+
+    if (isCurrentlyActiveInCampaign) {
+      // Pausar en esta campaña
+      updatedCampaigns = currentCampaigns.filter(c => c !== targetCampaign);
+      newStatus = 'Pausada';
+    } else {
+      // Activar en esta campaña
+      updatedCampaigns = Array.from(new Set([...currentCampaigns, targetCampaign]));
+      newStatus = 'Activa';
+
+      // Si el Campo Padre estaba inactivo en esta campaña, activarlo también
+      const parentLoc = locations.find(l => l.id === plot.locationId);
+      if (parentLoc) {
+        const parentCampaigns = parentLoc.activeCampaigns || ['2024/2025', '2025/2026'];
+        if (!parentCampaigns.includes(targetCampaign)) {
+          await updateLocation({
+            ...parentLoc,
+            activeCampaigns: [...parentCampaigns, targetCampaign],
+            status: 'Activo'
+          });
+        }
+      }
+    }
+
+    await updatePlot({
+      ...plot,
+      status: newStatus,
+      campaign: targetCampaign,
+      activeCampaigns: updatedCampaigns
+    });
+  };
 
   const handleSubmitAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -215,26 +301,44 @@ export default function Plots() {
 
         const { lat, lng, ...cleanFormData } = formData;
 
-        const payload = {
+        const assignedCampaign = formData.campaign || (selectedCampaign === 'all' ? '2025/2026' : selectedCampaign);
+        const campaignsList = Array.from(new Set([assignedCampaign, ...(formData.activeCampaigns || [])]));
+
+        // Si el campo padre no tenía esta campaña, sincronizarlo
+        const parentLoc = locations.find(l => l.id === formData.locationId);
+        if (parentLoc) {
+          const parentCampaigns = parentLoc.activeCampaigns || ['2024/2025', '2025/2026'];
+          if (!parentCampaigns.includes(assignedCampaign)) {
+            await updateLocation({
+              ...parentLoc,
+              activeCampaigns: [...parentCampaigns, assignedCampaign],
+              status: 'Activo'
+            });
+          }
+        }
+
+        const payload: Plot = {
             ...cleanFormData,
-            id: generateId(),
-            responsibleIds: (!isAdmin && currentUser) ? [currentUser.id] : [],
+            id: editingPlot ? editingPlot.id : generateId(),
+            responsibleIds: (!isAdmin && currentUser) ? [currentUser.id] : (cleanFormData.responsibleIds || []),
             surfaceArea: Number(formData.surfaceArea),
             density: Number(formData.density),
+            campaign: assignedCampaign,
+            activeCampaigns: campaignsList,
             coordinates,
             polygon: formData.polygon || []
-        } as Plot;
+        };
 
-        const success = await addPlot(payload);
+        let success = false;
+        if (editingPlot) {
+          success = await updatePlot(payload);
+        } else {
+          success = await addPlot(payload);
+        }
         
         if (success && selectedBatch && usage > 0) {
-            // FIX: Robust Floating Point Subtraction
-            // 150g (0.150) - 25g (0.025) = 0.125
-            // Round to 3 decimals to avoid 0.1249999999
             let newRemaining = currentStock - usage;
             newRemaining = Math.round(newRemaining * 1000) / 1000;
-            
-            // Safety cap at 0
             if (newRemaining < 0) newRemaining = 0;
 
             await updateSeedBatch({
@@ -246,7 +350,6 @@ export default function Plots() {
         if (success) {
             setIsAddModalOpen(false);
             resetForm();
-            alert("✅ Unidad Productiva Registrada.");
         }
     } finally {
         setIsSaving(false);
@@ -299,295 +402,807 @@ export default function Plots() {
       }
   };
 
-  const inputClass = "w-full border border-gray-300 dark:border-slate-800 bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 p-3 rounded-xl focus:ring-2 focus:ring-hemp-500 outline-none transition-all disabled:opacity-50 font-medium text-sm";
-  const labelClass = "text-[10px] font-black uppercase mb-1.5 block text-gray-400 tracking-widest";
+  const handleEditPlot = (plot: Plot, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingPlot(plot);
+    setFormData({
+      ...plot,
+      lat: plot.coordinates?.lat?.toString() || '',
+      lng: plot.coordinates?.lng?.toString() || '',
+      polygon: plot.polygon || [],
+      campaign: plot.campaign || '2025/2026',
+      activeCampaigns: plot.activeCampaigns || (plot.campaign ? [plot.campaign] : ['2025/2026']),
+      color: plot.color || '#10b981'
+    });
+    setIsAddModalOpen(true);
+  };
+
+  const inputClass = "w-full border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 p-2.5 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all disabled:opacity-50 font-medium text-xs";
+  const labelClass = "text-[10px] font-mono font-bold uppercase mb-1 block text-slate-500 tracking-wider";
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-            <h1 className="text-3xl font-black text-gray-800 dark:text-white uppercase tracking-tighter italic">Unidades <span className="text-hemp-600">Productivas</span></h1>
-            <p className="text-sm text-gray-500">Gestión técnica de parcelas, ensayos y lotes comerciales.</p>
-        </div>
-        <div className="flex gap-2 w-full md:w-auto">
-            <div className="flex bg-white dark:bg-slate-900 p-1 rounded-xl border dark:border-slate-800 shadow-sm">
-                <button onClick={() => setViewMode('table')} className={`p-2 rounded-lg transition ${viewMode === 'table' ? 'bg-hemp-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}><List size={20}/></button>
-                <button onClick={() => setViewMode('gallery')} className={`p-2 rounded-lg transition ${viewMode === 'gallery' ? 'bg-hemp-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}><LayoutGrid size={20}/></button>
+    <div className="space-y-6 md:space-y-8 animate-in fade-in duration-500 max-w-[1600px] mx-auto pb-12">
+      
+      {/* 1. CABECERA & SELECTOR DE CAMPAÑA AGRÍCOLA */}
+      <div className="bg-white dark:bg-slate-900/90 rounded-2xl md:rounded-3xl p-6 md:p-8 border border-slate-200/80 dark:border-slate-800 shadow-sm">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div>
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                Unidades en Producción
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800/60">
+                <Calendar size={11} className="text-sky-500" />
+                Campaña: {selectedCampaign}
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60">
+                <ShieldCheck size={11} className="text-purple-500" />
+                {campaignStats.activeCount} Lotes Activos
+              </span>
             </div>
-            <button onClick={() => { resetForm(); setIsAddModalOpen(true); }} className="flex-1 md:flex-none bg-hemp-600 text-white px-6 py-3 rounded-2xl flex items-center justify-center hover:bg-hemp-700 transition shadow-xl font-black text-xs uppercase tracking-widest">
-                <Plus size={18} className="mr-2" /> Nueva Unidad
+
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black text-slate-900 dark:text-slate-50 tracking-tight flex items-baseline gap-3">
+              <span>Unidades Productivas & Parcelas</span>
+              <span className="text-base sm:text-lg font-mono font-medium text-slate-400 hidden sm:inline">
+                | {appName}
+              </span>
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1 font-medium max-w-2xl">
+              Gestión agronómica de lotes comerciales, ensayos de densidad, microparcelas y siembras activas.
+            </p>
+          </div>
+
+          {/* Acciones principales & alternador de vista */}
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200/60 dark:border-slate-700 shadow-sm">
+              <button 
+                onClick={() => setViewMode('table')} 
+                className={`p-2 rounded-lg transition ${viewMode === 'table' ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                title="Vista Tabla Técnica"
+              >
+                <List size={17}/>
+              </button>
+              <button 
+                onClick={() => setViewMode('gallery')} 
+                className={`p-2 rounded-lg transition ${viewMode === 'gallery' ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                title="Vista Tarjetas / Galería"
+              >
+                <LayoutGrid size={17}/>
+              </button>
+            </div>
+
+            {canManage && (
+              <button 
+                onClick={() => { resetForm(); setIsAddModalOpen(true); }} 
+                className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-md shadow-emerald-600/20 flex items-center gap-2 active:scale-95"
+              >
+                <Plus size={16} strokeWidth={2.5} />
+                <span>Nueva Unidad</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* BARRA DE CAMPAÑA AGRÍCOLA (SINCRONIZACIÓN CON CAMPOS) */}
+        <div className="mt-6 pt-5 border-t border-slate-100 dark:border-slate-800 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+            <span className="text-[10px] font-mono font-black uppercase text-slate-400 tracking-wider mr-1 shrink-0 flex items-center gap-1">
+              <Calendar size={12} className="text-emerald-500" />
+              Filtrar Campaña:
+            </span>
+            {CAMPAIGNS.map(camp => (
+              <button
+                key={camp}
+                onClick={() => setSelectedCampaign(camp)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all shrink-0 ${
+                  selectedCampaign === camp
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                }`}
+              >
+                {camp} {camp === '2025/2026' ? '(Actual)' : camp === '2026/2027' ? '(Próxima)' : ''}
+              </button>
+            ))}
+            <button
+              onClick={() => setSelectedCampaign('all')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all shrink-0 ${
+                selectedCampaign === 'all'
+                  ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-sm'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+              }`}
+            >
+              Todas
             </button>
+          </div>
+
+          <div className="flex items-center gap-3 text-[11px] font-mono text-slate-500 dark:text-slate-400">
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              {campaignStats.activeCount} Activas
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-amber-500" />
+              {campaignStats.pausedCount} Pausadas / Barbecho
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-sky-500" />
+              {campaignStats.totalHa.toFixed(1)} Ha Sembradas
+            </span>
+          </div>
+        </div>
+
+        {/* MÉTRICAS RÁPIDAS DE PARCELAS */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mt-6">
+          <div className="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/60 dark:border-slate-800 space-y-1">
+            <span className="text-[10px] font-mono font-bold uppercase text-slate-400 block tracking-wider">Unidades en Vista</span>
+            <p className="text-2xl font-mono font-black text-slate-900 dark:text-white">
+              {filteredPlots.length} <span className="text-xs font-normal text-slate-400">/ {plots.length} total</span>
+            </p>
+          </div>
+
+          <div className="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/60 dark:border-slate-800 space-y-1">
+            <span className="text-[10px] font-mono font-bold uppercase text-slate-400 block tracking-wider">Superficie Campaña</span>
+            <p className="text-2xl font-mono font-black text-emerald-600 dark:text-emerald-400">
+              {campaignStats.totalHa.toFixed(1)} <span className="text-xs font-normal text-slate-400">Ha</span>
+            </p>
+          </div>
+
+          <div className="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/60 dark:border-slate-800 space-y-1">
+            <span className="text-[10px] font-mono font-bold uppercase text-slate-400 block tracking-wider">Ensayos vs Comercial</span>
+            <div className="flex items-center gap-2">
+              <p className="text-2xl font-mono font-black text-purple-600 dark:text-purple-400">
+                {campaignStats.trialCount} <span className="text-xs font-normal text-slate-400">Ens.</span>
+              </p>
+              <span className="text-xs font-mono text-slate-400">/ {campaignStats.productionCount} Prod.</span>
+            </div>
+          </div>
+
+          <div className="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/60 dark:border-slate-800 space-y-1">
+            <span className="text-[10px] font-mono font-bold uppercase text-slate-400 block tracking-wider">Pausadas / Barbecho</span>
+            <p className="text-2xl font-mono font-black text-amber-600 dark:text-amber-400">
+              {campaignStats.pausedCount} <span className="text-xs font-normal text-slate-400">Lotes</span>
+            </p>
+          </div>
         </div>
       </div>
 
-      <div className="bg-white dark:bg-slate-900 p-4 rounded-3xl shadow-sm border dark:border-slate-800 grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/>
-              <input type="text" placeholder="Buscar por nombre..." className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-slate-950 border-none rounded-xl text-sm focus:ring-2 focus:ring-hemp-500 dark:text-white" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
-          </div>
-          <select className="px-4 py-2 bg-gray-50 dark:bg-slate-950 border-none rounded-xl text-xs font-black uppercase dark:text-white" value={filterLoc} onChange={e => setFilterLoc(e.target.value)}>
-              <option value="all">Todos los Campos</option>
-              {availableLocations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-          </select>
-          <select className="px-4 py-2 bg-gray-50 dark:bg-slate-950 border-none rounded-xl text-xs font-black uppercase dark:text-white" value={filterType} onChange={e => setFilterType(e.target.value as any)}>
-              <option value="all">Tipos (Todos)</option>
-              <option value="Ensayo">Solo Ensayos</option>
-              <option value="Producción">Solo Producción</option>
-          </select>
-          <select className="px-4 py-2 bg-gray-50 dark:bg-slate-950 border-none rounded-xl text-xs font-black uppercase dark:text-white" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
-              <option value="all">Estados (Todos)</option>
-              <option value="Activa">Activas</option>
-              <option value="Cosechada">Cosechadas</option>
-          </select>
+      {/* 2. BARRA DE BÚSQUEDA Y FILTROS SECUNDARIOS */}
+      <div className="bg-white dark:bg-slate-900/90 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 shadow-sm">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15}/>
+          <input 
+            type="text" 
+            placeholder="Buscar por lote o variedad..." 
+            className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 rounded-xl text-xs outline-none focus:ring-2 focus:ring-emerald-500 dark:text-white" 
+            value={searchTerm} 
+            onChange={e => setSearchTerm(e.target.value)} 
+          />
+        </div>
+
+        <select 
+          className="px-3 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 rounded-xl text-xs font-bold outline-none dark:text-white" 
+          value={filterLoc} 
+          onChange={e => setFilterLoc(e.target.value)}
+        >
+          <option value="all">Todos los Campos / Sitios</option>
+          {availableLocations.map(l => (
+            <option key={l.id} value={l.id}>{l.name} ({l.city || l.province})</option>
+          ))}
+        </select>
+
+        <select 
+          className="px-3 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 rounded-xl text-xs font-bold outline-none dark:text-white" 
+          value={filterType} 
+          onChange={e => setFilterType(e.target.value as any)}
+        >
+          <option value="all">Tipos (Todos)</option>
+          <option value="Ensayo">Solo Ensayos</option>
+          <option value="Producción">Solo Producción</option>
+        </select>
+
+        <select 
+          className="px-3 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 rounded-xl text-xs font-bold outline-none dark:text-white" 
+          value={filterStatus} 
+          onChange={e => setFilterStatus(e.target.value)}
+        >
+          <option value="all">Estados (Todos)</option>
+          <option value="Activa">Solo Activas</option>
+          <option value="Pausada">Pausadas / En Barbecho</option>
+          <option value="Cosechada">Cosechadas</option>
+        </select>
       </div>
 
+      {/* 3. VISTAS DE CONTENIDO: TABLA O GALERÍA */}
       {viewMode === 'table' ? (
-          <div className="bg-white dark:bg-slate-900 rounded-[32px] shadow-sm border dark:border-slate-800 overflow-hidden overflow-x-auto">
-              <table className="min-w-full text-sm text-left">
-                  <thead className="bg-gray-50 dark:bg-slate-950/50 text-gray-500 uppercase text-[9px] font-black tracking-widest border-b dark:border-slate-800">
-                      <tr>
-                          <th className="px-8 py-5">Nombre / Identificador</th>
-                          <th className="px-8 py-5">Campo / Sitio</th>
-                          <th className="px-8 py-5">Genética</th>
-                          <th className="px-8 py-5 text-center">Superficie</th>
-                          <th className="px-8 py-5 text-right">Acciones</th>
-                      </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100 dark:divide-slate-800 font-bold uppercase text-[11px]">
-                      {filteredPlots.length === 0 ? (
-                          <tr><td colSpan={5} className="p-20 text-center text-slate-300 italic font-bold">Sin unidades detectadas.</td></tr>
-                      ) : filteredPlots.map(p => {
-                          const loc = locations.find(l => l.id === p.locationId);
-                          const vari = varieties.find(v => v.id === p.varietyId);
-                          return (
-                              <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer group" onClick={() => window.location.hash = `#/plots/${p.id}`}>
-                                  <td className="px-8 py-6">
-                                      <div className="flex items-center gap-3">
-                                          <div className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: p.color || '#16a34a' }}></div>
-                                          <div>
-                                              <div className="font-black text-gray-800 dark:text-white tracking-tighter text-sm">{p.name}</div>
-                                              <div className="text-[9px] text-gray-400 font-black flex items-center mt-1"><Tag size={10} className="mr-1.5 text-hemp-600"/> {p.type}</div>
-                                          </div>
-                                      </div>
-                                  </td>
-                                  <td className="px-8 py-6">
-                                      <div className="text-gray-600 dark:text-gray-300 font-bold">{loc?.name || 'S/D'}</div>
-                                      <div className="text-[8px] text-slate-400">{loc?.city}</div>
-                                  </td>
-                                  <td className="px-8 py-6">
-                                      <span className="px-2 py-1 bg-hemp-50 dark:bg-hemp-900/20 text-hemp-700 dark:text-hemp-400 rounded-lg text-[9px] font-black border border-hemp-100 dark:border-hemp-900/30">{vari?.name || 'Sin Genética'}</span>
-                                  </td>
-                                  <td className="px-8 py-6 text-center text-slate-500">{p.surfaceArea} {p.surfaceUnit}</td>
-                                  <td className="px-8 py-6 text-right">
-                                      <div className="flex items-center justify-end space-x-3">
-                                          <span className={`px-3 py-1 rounded-full text-[8px] font-black shadow-sm border ${p.status === 'Activa' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-gray-100 text-gray-500'}`}>{p.status}</span>
-                                          {isAdmin && (
-                                              <button onClick={(e) => handleDeletePlot(e, p.id)} className="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all">
-                                                  <Trash2 size={16}/>
-                                              </button>
-                                          )}
-                                          <ChevronRight size={16} className="text-slate-300 group-hover:text-hemp-600 transition-colors"/>
-                                      </div>
-                                  </td>
-                              </tr>
-                          );
-                      })}
-                  </tbody>
-              </table>
-          </div>
-      ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredPlots.map(p => (
-                  <div key={p.id} className="relative group">
-                      <Link to={`/plots/${p.id}`} className="bg-white dark:bg-slate-900 p-6 rounded-[40px] shadow-sm border border-gray-100 dark:border-slate-800 hover:shadow-xl transition-all flex flex-col h-full overflow-hidden">
-                          <div className="absolute top-0 right-0 w-16 h-16 opacity-10 rounded-bl-[40px]" style={{ backgroundColor: p.color || '#16a34a' }}></div>
-                          <div className="flex justify-between items-start mb-6 relative z-10">
-                              <div className="p-4 rounded-2xl text-white shadow-lg" style={{ backgroundColor: p.color || '#16a34a' }}><Sprout size={24}/></div>
-                              <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${p.status === 'Activa' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>{p.status}</span>
-                          </div>
-                          <h3 className="text-xl font-black text-gray-800 dark:text-white uppercase tracking-tighter italic group-hover:text-hemp-600 transition-colors">{p.name}</h3>
-                          <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mt-2 flex items-center"><MapPin size={12} className="mr-1.5 text-blue-500"/> {locations.find(l => l.id === p.locationId)?.name}</p>
-                          
-                          <div className="mt-auto pt-6 grid grid-cols-2 gap-2 border-t dark:border-slate-800 mt-6">
-                              <div className="bg-gray-50 dark:bg-slate-950 p-2 rounded-xl text-center"><p className="text-[8px] font-black text-gray-400 uppercase">Superficie</p><p className="text-xs font-black dark:text-white">{p.surfaceArea} {p.surfaceUnit}</p></div>
-                              <div className="bg-gray-50 dark:bg-slate-950 p-2 rounded-xl text-center"><p className="text-[8px] font-black text-gray-400 uppercase">Genética</p><p className="text-xs font-black text-hemp-600 truncate px-1">{varieties.find(v => v.id === p.varietyId)?.name}</p></div>
-                          </div>
-                      </Link>
-                      {isAdmin && (
-                          <button onClick={(e) => handleDeletePlot(e, p.id)} className="absolute top-4 right-14 p-2.5 text-red-400 hover:text-red-600 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity">
-                              <Trash2 size={16}/>
-                          </button>
-                      )}
-                  </div>
-              ))}
-          </div>
-      )}
+        <div className="bg-white dark:bg-slate-900/90 rounded-2xl md:rounded-3xl border border-slate-200/80 dark:border-slate-800 overflow-hidden shadow-sm overflow-x-auto">
+          <table className="min-w-full text-xs text-left">
+            <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 uppercase text-[9px] font-mono font-bold tracking-widest border-b border-slate-100 dark:border-slate-800">
+              <tr>
+                <th className="px-6 py-4">Unidad / Lote</th>
+                <th className="px-6 py-4">Campo & Estado Campaña</th>
+                <th className="px-6 py-4">Campaña</th>
+                <th className="px-6 py-4">Genética</th>
+                <th className="px-6 py-4 text-center">Superficie</th>
+                <th className="px-6 py-4 text-right">Gestión de Campaña</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
+              {filteredPlots.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="p-16 text-center text-slate-400 font-mono text-xs">
+                    Sin unidades productivas para la campaña seleccionada ({selectedCampaign}).
+                  </td>
+                </tr>
+              ) : (
+                filteredPlots.map(p => {
+                  const loc = locations.find(l => l.id === p.locationId);
+                  const vari = varieties.find(v => v.id === p.varietyId);
+                  const targetCamp = selectedCampaign === 'all' ? (p.campaign || '2025/2026') : selectedCampaign;
+                  const locCampaigns = loc?.activeCampaigns || ['2024/2025', '2025/2026'];
+                  const isParentCampoActive = locCampaigns.includes(targetCamp);
+                  const isPlotActiveInCampaign = (p.activeCampaigns || [p.campaign || '2025/2026']).includes(targetCamp) && p.status === 'Activa';
 
-      {isAddModalOpen && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[60] p-4">
-              <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-6xl w-full p-6 md:p-10 shadow-2xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95 border border-white/10">
-                  <div className="flex justify-between items-center mb-8">
-                      <div className="flex items-center gap-4">
-                          <div className="bg-hemp-600 p-3 rounded-2xl text-white shadow-lg"><Sprout size={28}/></div>
+                  return (
+                    <tr 
+                      key={p.id} 
+                      className="hover:bg-slate-50 dark:hover:bg-slate-800/40 cursor-pointer group transition-colors"
+                      onClick={() => window.location.hash = `#/plots/${p.id}`}
+                    >
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2.5">
+                          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: p.color || '#10b981' }} />
                           <div>
-                              <h2 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter italic">Lanzar <span className="text-hemp-600">Unidad Productiva</span></h2>
-                              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Protocolo de alta técnica y trazabilidad de siembra</p>
+                            <span className="font-mono font-black text-slate-900 dark:text-white text-xs group-hover:text-emerald-600 transition-colors uppercase">
+                              {p.name}
+                            </span>
+                            <span className="text-[9px] font-mono text-slate-400 block mt-0.5">
+                              {p.type} · Siembra: {p.sowingDate}
+                            </span>
                           </div>
+                        </div>
+                      </td>
+
+                      <td className="px-6 py-4">
+                        <div className="font-mono font-bold text-slate-800 dark:text-slate-200 text-xs">
+                          {loc?.name || 'S/D'}
+                        </div>
+                        {!isParentCampoActive && (
+                          <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 px-1.5 py-0.5 rounded mt-0.5 border border-amber-200 dark:border-amber-800">
+                            <AlertCircle size={10} /> Campo Inactivo en {targetCamp}
+                          </span>
+                        )}
+                        {isParentCampoActive && (
+                          <span className="text-[9px] font-mono text-slate-400 block">
+                            {loc?.city || loc?.province}
+                          </span>
+                        )}
+                      </td>
+
+                      <td className="px-6 py-4">
+                        <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                          {p.campaign || targetCamp}
+                        </span>
+                      </td>
+
+                      <td className="px-6 py-4">
+                        <span className="px-2 py-1 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 rounded-lg text-[10px] font-mono font-bold border border-emerald-200 dark:border-emerald-800/60">
+                          {vari?.name || 'Genética Certificada'}
+                        </span>
+                      </td>
+
+                      <td className="px-6 py-4 text-center font-mono font-black text-slate-800 dark:text-slate-200">
+                        {p.surfaceArea} {p.surfaceUnit}
+                      </td>
+
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex items-center justify-end gap-2" onClick={e => e.stopPropagation()}>
+                          {canManage && (
+                            <button
+                              onClick={(e) => handleTogglePlotCampaign(p, e)}
+                              className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1 transition ${
+                                isPlotActiveInCampaign
+                                  ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
+                                  : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                              }`}
+                              title={isPlotActiveInCampaign ? `Pausar en campaña ${targetCamp}` : `Activar en campaña ${targetCamp}`}
+                            >
+                              <Power size={11} />
+                              <span>{isPlotActiveInCampaign ? 'Pausar' : 'Activar'}</span>
+                            </button>
+                          )}
+
+                          <span className={`px-2 py-0.5 rounded text-[9px] font-mono font-black uppercase ${
+                            p.status === 'Activa' 
+                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300' 
+                              : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                          }`}>
+                            {p.status}
+                          </span>
+
+                          {isAdmin && (
+                            <button 
+                              onClick={(e) => handleDeletePlot(e, p.id)} 
+                              className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg transition"
+                              title="Eliminar Unidad"
+                            >
+                              <Trash2 size={13}/>
+                            </button>
+                          )}
+
+                          <ChevronRight size={14} className="text-slate-400 group-hover:text-emerald-600 transition-transform group-hover:translate-x-0.5" />
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredPlots.length === 0 ? (
+            <div className="col-span-full py-16 text-center bg-white dark:bg-slate-900/90 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800 p-8 space-y-3">
+              <Sprout size={40} className="mx-auto text-slate-400" />
+              <h3 className="font-mono font-black text-base text-slate-700 dark:text-slate-300 uppercase">
+                No hay unidades registradas para esta campaña
+              </h3>
+              <p className="text-xs text-slate-500 max-w-md mx-auto font-medium">
+                Prueba cambiando el filtro de campaña ({selectedCampaign}) o crea una nueva unidad productiva.
+              </p>
+            </div>
+          ) : (
+            filteredPlots.map(p => {
+              const loc = locations.find(l => l.id === p.locationId);
+              const vari = varieties.find(v => v.id === p.varietyId);
+              const targetCamp = selectedCampaign === 'all' ? (p.campaign || '2025/2026') : selectedCampaign;
+              const locCampaigns = loc?.activeCampaigns || ['2024/2025', '2025/2026'];
+              const isParentCampoActive = locCampaigns.includes(targetCamp);
+              const isPlotActiveInCampaign = (p.activeCampaigns || [p.campaign || '2025/2026']).includes(targetCamp) && p.status === 'Activa';
+
+              return (
+                <div 
+                  key={p.id} 
+                  className={`bg-white dark:bg-slate-900/90 rounded-2xl md:rounded-3xl border transition-all flex flex-col h-full overflow-hidden group hover:shadow-md ${
+                    !isPlotActiveInCampaign || !isParentCampoActive
+                      ? 'border-slate-200/60 dark:border-slate-800/80 opacity-80 hover:opacity-100'
+                      : 'border-slate-200/80 dark:border-slate-800 hover:border-emerald-500/40'
+                  }`}
+                >
+                  <div className="p-6 flex-1 flex flex-col justify-between space-y-4">
+                    <div>
+                      {/* Cabecera de la Tarjeta */}
+                      <div className="flex justify-between items-start gap-2 mb-3">
+                        <div className="flex items-center gap-2.5">
+                          <div 
+                            className="w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-sm"
+                            style={{ backgroundColor: p.color || '#10b981' }}
+                          >
+                            <Sprout size={20} />
+                          </div>
+                          <div>
+                            <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-slate-400 block">
+                              {p.type} · Campaña {p.campaign || targetCamp}
+                            </span>
+                            <h3 className="font-mono font-black text-slate-900 dark:text-white text-base uppercase tracking-tight group-hover:text-emerald-600 transition-colors">
+                              {p.name}
+                            </h3>
+                          </div>
+                        </div>
+
+                        <span className={`px-2 py-0.5 rounded text-[9px] font-mono font-black uppercase shrink-0 ${
+                          p.status === 'Activa' 
+                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300' 
+                            : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                        }`}>
+                          {p.status}
+                        </span>
                       </div>
-                      <button onClick={() => !isSaving && setIsAddModalOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition text-slate-400"><X size={28}/></button>
+
+                      {/* Alerta si el Campo Padre está inactivo en la campaña */}
+                      {!isParentCampoActive && (
+                        <div className="mb-3 p-2 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl text-[10px] font-medium text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                          <AlertCircle size={12} className="text-amber-500 shrink-0" />
+                          <span>Campo "{loc?.name}" en Barbecho/Inactivo en {targetCamp}</span>
+                        </div>
+                      )}
+
+                      {/* Campo Padre y Localidad */}
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono flex items-center gap-1.5">
+                        <MapPin size={12} className="text-emerald-500 shrink-0" />
+                        <span>{loc?.name || 'S/D'} ({loc?.city || loc?.province})</span>
+                      </p>
+
+                      {/* Grid de Métricas de Parcela */}
+                      <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 text-[10px]">
+                        <div className="p-2.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-100 dark:border-slate-800 text-center">
+                          <span className="text-[8px] font-mono font-bold uppercase text-slate-400 block">Superficie</span>
+                          <strong className="text-xs font-mono font-black text-slate-900 dark:text-white block mt-0.5">
+                            {p.surfaceArea} {p.surfaceUnit}
+                          </strong>
+                        </div>
+
+                        <div className="p-2.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-100 dark:border-slate-800 text-center">
+                          <span className="text-[8px] font-mono font-bold uppercase text-slate-400 block">Cultivar</span>
+                          <strong className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400 truncate block mt-0.5" title={vari?.name}>
+                            {vari?.name || 'Certificada'}
+                          </strong>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Acciones Inferiores */}
+                    <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                      {canManage && (
+                        <button
+                          onClick={(e) => handleTogglePlotCampaign(p, e)}
+                          className={`px-3 py-1.5 rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 transition ${
+                            isPlotActiveInCampaign
+                              ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
+                              : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20'
+                          }`}
+                          title={isPlotActiveInCampaign ? `Pausar unidad en campaña ${targetCamp}` : `Habilitar unidad en campaña ${targetCamp}`}
+                        >
+                          <Power size={11} className={isPlotActiveInCampaign ? 'text-amber-600' : 'text-white'} />
+                          <span>{isPlotActiveInCampaign ? `Pausar (${targetCamp.slice(2)})` : `Activar (${targetCamp.slice(2)})`}</span>
+                        </button>
+                      )}
+
+                      <Link 
+                        to={`/plots/${p.id}`} 
+                        className="flex-1 py-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1 transition shadow-sm active:scale-95"
+                      >
+                        <span>Ficha Técnica</span>
+                        <ChevronRight size={13} />
+                      </Link>
+
+                      {isAdmin && (
+                        <button 
+                          onClick={(e) => handleDeletePlot(e, p.id)} 
+                          className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg transition"
+                          title="Eliminar Unidad"
+                        >
+                          <Trash2 size={14}/>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
+
+      {/* 4. MODAL DE ALTA / EDICIÓN DE UNIDAD PRODUCTIVA */}
+      {isAddModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-md flex items-center justify-center z-[60] p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl md:rounded-3xl max-w-6xl w-full p-6 md:p-8 shadow-2xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95 border border-slate-200 dark:border-slate-800">
+            <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl border border-emerald-500/20">
+                  <Sprout size={24} />
+                </div>
+                <div>
+                  <h2 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
+                    {editingPlot ? 'Editar Unidad Productiva' : 'Nueva Unidad Productiva / Parcela'}
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                    Protocolo agronómico, trazabilidad de siembra y asignación de campaña.
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => !isSaving && setIsAddModalOpen(false)} 
+                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition text-slate-400"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitAdd} className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                {/* COLUMNA 1: ATRIBUCIÓN TERRITORIAL Y CAMPAÑA */}
+                <div className="space-y-5">
+                  <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 space-y-3">
+                    <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                      <MapPin size={14} className="text-emerald-500" />
+                      <span>Atribución Territorial & Campaña</span>
+                    </h3>
+
+                    <div>
+                      <label className={labelClass}>Identificador Parcela / Lote *</label>
+                      <input 
+                        required 
+                        placeholder="Ej: LOTE-01 / SECTOR-A / SALA-INDOOR-1" 
+                        className={inputClass} 
+                        value={formData.name} 
+                        onChange={e => setFormData({ ...formData, name: e.target.value.toUpperCase() })} 
+                      />
+                    </div>
+
+                    <div>
+                      <label className={labelClass}>Campo / Sitio Padre *</label>
+                      <select 
+                        required 
+                        className={inputClass} 
+                        value={formData.locationId} 
+                        onChange={e => setFormData({ ...formData, locationId: e.target.value })}
+                      >
+                        <option value="">Seleccionar campo...</option>
+                        {availableLocations.map(l => (
+                          <option key={l.id} value={l.id}>
+                            {l.name} ({l.siteType || 'Campo'} · {l.city || l.province})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* SELECTOR DE CAMPAÑA AGRÍCOLA (REQUERIMIENTO CLAVE) */}
+                    <div>
+                      <label className={labelClass}>Campaña Agrícola Asignada *</label>
+                      <select 
+                        required 
+                        className={inputClass} 
+                        value={formData.campaign} 
+                        onChange={e => setFormData({ ...formData, campaign: e.target.value })}
+                      >
+                        {CAMPAIGNS.map(c => (
+                          <option key={c} value={c}>
+                            Campaña {c} {c === '2025/2026' ? '(Actual)' : c === '2026/2027' ? '(Próxima)' : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className={labelClass}>Tipo de Unidad</label>
+                      <select 
+                        className={inputClass} 
+                        value={formData.type} 
+                        onChange={e => setFormData({ ...formData, type: e.target.value })}
+                      >
+                        <option value="Ensayo">Ensayo / Microparcela</option>
+                        <option value="Producción">Lote Comercial / Producción</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className={labelClass}>Estado Operativo</label>
+                      <select 
+                        className={inputClass} 
+                        value={formData.status} 
+                        onChange={e => setFormData({ ...formData, status: e.target.value })}
+                      >
+                        <option value="Activa">Activa en Producción</option>
+                        <option value="Pausada">Pausada en esta Campaña</option>
+                        <option value="En Barbecho">En Barbecho / Descanso</option>
+                        <option value="Cosechada">Cosechada</option>
+                        <option value="Cancelada">Cancelada</option>
+                      </select>
+                    </div>
                   </div>
 
-                  <form onSubmit={handleSubmitAdd} className="space-y-8">
-                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
-                          <div className="space-y-6">
-                              <div className="bg-slate-50 dark:bg-slate-950 p-6 rounded-[32px] border dark:border-slate-800">
-                                  <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-6 border-b dark:border-slate-800 pb-3 flex items-center"><MapPin size={14} className="mr-2 text-hemp-500"/> Atribución Territorial</h3>
-                                  <div className="space-y-4">
-                                      <div>
-                                          <label className={labelClass}>Identificador Parcela *</label>
-                                          <input required placeholder="Ej: LOTE-01 / SECTOR-A" className={inputClass} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value.toUpperCase()})} />
-                                      </div>
-                                      <div>
-                                          <label className={labelClass}>Campo / Establecimiento *</label>
-                                          <select required className={inputClass} value={formData.locationId} onChange={e => setFormData({...formData, locationId: e.target.value})}>
-                                              <option value="">Seleccionar sitio...</option>
-                                              {availableLocations.map(l => <option key={l.id} value={l.id}>{l.name} ({l.city})</option>)}
-                                          </select>
-                                          {availableLocations.length === 0 && <p className="text-[9px] text-red-500 mt-1 font-bold">No tienes campos asignados. Contacta al administrador.</p>}
-                                      </div>
-                                      <div>
-                                          <label className={labelClass}>Campaña / Proyecto</label>
-                                          <select className={inputClass} value={formData.projectId} onChange={e => setFormData({...formData, projectId: e.target.value})}>
-                                              <option value="">Sin proyecto vinculado</option>
-                                              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                                          </select>
-                                      </div>
-                                  </div>
-                              </div>
+                  <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 space-y-3">
+                    <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                      <Palette size={14} className="text-emerald-500" />
+                      <span>Color de Identificación</span>
+                    </h3>
+                    <div className="flex items-center gap-2">
+                      {COLOR_PALETTE.map((swatch) => (
+                        <button 
+                          key={swatch.color} 
+                          type="button" 
+                          title={swatch.label} 
+                          onClick={() => setFormData({ ...formData, color: swatch.color })} 
+                          className={`w-7 h-7 rounded-full border-2 transition-transform ${
+                            formData.color === swatch.color ? 'scale-110 border-slate-900 dark:border-white shadow-md' : 'border-transparent hover:scale-105'
+                          }`} 
+                          style={{ backgroundColor: swatch.color }} 
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </div>
 
-                              <div className="bg-emerald-50 dark:bg-emerald-900/10 p-6 rounded-[32px] border border-emerald-100 dark:border-emerald-900/30">
-                                  <h3 className="text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-widest mb-6 border-b border-emerald-100 dark:border-emerald-900/30 pb-3 flex items-center"><FlaskConical size={14} className="mr-2"/> Trazabilidad Genética</h3>
-                                  <div className="space-y-4">
-                                      <div>
-                                          <label className={labelClass}>Lote Maestro de Semilla</label>
-                                          <select className={inputClass} value={formData.seedBatchId} onChange={e => setFormData({...formData, seedBatchId: e.target.value})}>
-                                              <option value="">Seleccione stock disponible...</option>
-                                              {availableBatches.map(b => (
-                                                  <option key={b.id} value={b.id}>
-                                                      {b.batchCode} ({Number(b.remainingQuantity.toFixed(3))} kg restantes)
-                                                  </option>
-                                              ))}
-                                          </select>
-                                      </div>
-                                      <div>
-                                          <label className={labelClass}>Variedad *</label>
-                                          <select required className={inputClass} value={formData.varietyId} onChange={e => setFormData({...formData, varietyId: e.target.value})}>
-                                              <option value="">Seleccionar genética...</option>
-                                              {varieties.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-                                          </select>
-                                      </div>
-                                  </div>
-                              </div>
-                          </div>
+                {/* COLUMNA 2: GENÉTICA Y PROTOCOLO DE SIEMBRA */}
+                <div className="space-y-5">
+                  <div className="p-4 bg-emerald-50 dark:bg-emerald-950/30 rounded-2xl border border-emerald-100 dark:border-emerald-900/40 space-y-3">
+                    <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5">
+                      <FlaskConical size={14} />
+                      <span>Genética & Insumos</span>
+                    </h3>
 
-                          <div className="space-y-6">
-                              <div className="bg-blue-50 dark:bg-blue-900/10 p-6 rounded-[32px] border border-blue-100 dark:border-blue-900/30">
-                                  <h3 className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest mb-6 border-b border-blue-100 dark:border-blue-800 pb-3 flex items-center"><Calendar size={14} className="mr-2"/> Protocolo de Siembra</h3>
-                                  <div className="grid grid-cols-2 gap-4 mb-4">
-                                      <div className="col-span-2">
-                                          <label className={labelClass}>Fecha de Siembra</label>
-                                          <input type="date" className={inputClass} value={formData.sowingDate} onChange={e => setFormData({...formData, sowingDate: e.target.value})} />
-                                      </div>
-                                      <div>
-                                          <label className={labelClass}>Superficie</label>
-                                          <input type="number" step="0.01" className={inputClass} value={formData.surfaceArea} onChange={e => setFormData({...formData, surfaceArea: Number(e.target.value)})} />
-                                      </div>
-                                      <div>
-                                          <label className={labelClass}>Unidad</label>
-                                          <select className={inputClass} value={formData.surfaceUnit} onChange={e => setFormData({...formData, surfaceUnit: e.target.value as any})}>
-                                              <option value="ha">Hectáreas (Ha)</option>
-                                              <option value="m2">Metros² (M2)</option>
-                                          </select>
-                                      </div>
-                                  </div>
-                                  <div>
-                                      <label className={labelClass}>Dosis Real Utilizada</label>
-                                      <div className="flex gap-2">
-                                          <input type="number" step="any" min="0" className={`${inputClass} flex-1 font-black text-blue-700`} value={formData.usedSeedValue} onChange={e => setFormData({...formData, usedSeedValue: Number(e.target.value)})} />
-                                          <select className="w-20 bg-white dark:bg-slate-800 border rounded-xl text-[10px] font-black uppercase" value={formData.usedSeedUnit} onChange={e => setFormData({...formData, usedSeedUnit: e.target.value as any})}>
-                                              <option value="kg">KG</option>
-                                              <option value="gr">GR</option>
-                                              <option value="tn">TN</option>
-                                          </select>
-                                      </div>
-                                      <p className="text-[9px] text-blue-500 font-bold mt-2 uppercase bg-blue-100/50 p-2 rounded-lg">
-                                          Se descontarán: {calculatedUsedKg.toFixed(3)} KG del stock
-                                      </p>
-                                  </div>
-                              </div>
-                              
-                              <div className="bg-slate-50 dark:bg-slate-950 p-6 rounded-[32px] border dark:border-slate-800">
-                                  <label className={labelClass}>Observaciones Iniciales</label>
-                                  <textarea className={inputClass} rows={3} value={formData.observations} onChange={e => setFormData({...formData, observations: e.target.value})} placeholder="Estado del suelo, pre-siembra, condiciones..."></textarea>
-                              </div>
-                          </div>
+                    <div>
+                      <label className={labelClass}>Variedad Genética *</label>
+                      <select 
+                        required 
+                        className={inputClass} 
+                        value={formData.varietyId} 
+                        onChange={e => setFormData({ ...formData, varietyId: e.target.value })}
+                      >
+                        <option value="">Seleccionar cultivar...</option>
+                        {varieties.map(v => (
+                          <option key={v.id} value={v.id}>{v.name} ({v.usage})</option>
+                        ))}
+                      </select>
+                    </div>
 
-                          <div className="flex flex-col gap-6">
-                              <div className="bg-slate-50 dark:bg-slate-950 p-6 rounded-[32px] border dark:border-slate-800">
-                                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center"><Palette size={14} className="mr-2"/> Identidad Visual</h3>
-                                  <div className="space-y-4">
-                                      <div className="flex items-center gap-3">
-                                          <input type="color" className="w-12 h-12 rounded-xl border-none cursor-pointer bg-transparent" value={formData.color} onChange={e => setFormData({...formData, color: e.target.value})} />
-                                          <span className="text-xs font-black uppercase">{formData.color}</span>
-                                      </div>
-                                      <div className="flex flex-wrap gap-2">
-                                          {COLOR_PALETTE.map((swatch) => (
-                                              <button key={swatch.color} type="button" title={swatch.label} onClick={() => setFormData({...formData, color: swatch.color})} className="w-6 h-6 rounded-full border border-gray-200 dark:border-slate-700 hover:scale-110 transition-transform" style={{ backgroundColor: swatch.color }}></button>
-                                          ))}
-                                      </div>
-                                  </div>
-                              </div>
+                    <div>
+                      <label className={labelClass}>Lote Maestro de Semilla (Opcional)</label>
+                      <select 
+                        className={inputClass} 
+                        value={formData.seedBatchId} 
+                        onChange={e => setFormData({ ...formData, seedBatchId: e.target.value })}
+                      >
+                        <option value="">Seleccione lote de semilla...</option>
+                        {availableBatches.map(b => (
+                          <option key={b.id} value={b.id}>
+                            {b.batchCode} ({Number(b.remainingQuantity.toFixed(3))} kg disp.)
+                          </option>
+                        ))}
+                      </select>
+                    </div>
 
-                              <div className="bg-slate-900 rounded-[32px] p-6 flex flex-col flex-1 border border-slate-800 relative overflow-hidden min-h-[300px]">
-                                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center justify-between">
-                                      <div className="flex items-center"><Globe size={14} className="mr-2 text-blue-500"/> Polígono de la Parcela</div>
-                                      <div className="flex gap-2">
-                                          <input type="file" accept=".kml" ref={fileInputRef} className="hidden" onChange={handleKMLUpload} />
-                                          <button type="button" onClick={() => fileInputRef.current?.click()} className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-[10px] font-black uppercase tracking-widest shadow-md flex items-center hover:bg-blue-700 transition">
-                                              <FileUp size={14} className="mr-1.5"/> Importar KML
-                                          </button>
-                                      </div>
-                                  </h3>
-                                  
-                                  <div className="flex-1 rounded-[24px] overflow-hidden mb-6 bg-slate-800 shadow-inner min-h-[150px]">
-                                      <MapEditor 
-                                          initialCenter={formData.lat && formData.lng ? { lat: parseFloat(formData.lat), lng: parseFloat(formData.lng) } : undefined} 
-                                          initialPolygon={formData.polygon || []} 
-                                          onPolygonChange={handlePolygonChange} 
-                                          height="100%" 
-                                      />
-                                  </div>
-
-                                  <div className="grid grid-cols-2 gap-4">
-                                      <input placeholder="Latitud" className="bg-white/5 border-none p-3 rounded-xl text-xs text-white outline-none focus:ring-1 focus:ring-hemp-500" value={formData.lat} onChange={e => setFormData({...formData, lat: e.target.value})} />
-                                      <input placeholder="Longitud" className="bg-white/5 border-none p-3 rounded-xl text-xs text-white outline-none focus:ring-1 focus:ring-hemp-500" value={formData.lng} onChange={e => setFormData({...formData, lng: e.target.value})} />
-                                  </div>
-                                  <Activity className="absolute -bottom-10 -right-10 w-48 h-48 text-hemp-600 opacity-5 pointer-events-none" />
-                              </div>
-                          </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelClass}>Dosis de Semilla</label>
+                        <input 
+                          type="number" 
+                          step="any" 
+                          min="0" 
+                          className={inputClass} 
+                          value={formData.usedSeedValue} 
+                          onChange={e => setFormData({ ...formData, usedSeedValue: Number(e.target.value) })} 
+                        />
                       </div>
-
-                      <div className="flex justify-end pt-8 border-t dark:border-slate-800">
-                          <button type="button" disabled={isSaving} onClick={() => setIsAddModalOpen(false)} className="px-8 py-3 text-slate-400 font-black uppercase text-[10px] tracking-widest hover:text-slate-600 transition">Cancelar</button>
-                          <button type="submit" disabled={isSaving} className="bg-slate-900 dark:bg-hemp-600 text-white px-12 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl flex items-center hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50">
-                              {isSaving ? <Loader2 className="animate-spin mr-2" size={18}/> : <Save className="mr-2" size={18}/>}
-                              Registrar y Confirmar Siembra
-                          </button>
+                      <div>
+                        <label className={labelClass}>Unidad Dosis</label>
+                        <select 
+                          className={inputClass} 
+                          value={formData.usedSeedUnit} 
+                          onChange={e => setFormData({ ...formData, usedSeedUnit: e.target.value as any })}
+                        >
+                          <option value="kg">KG</option>
+                          <option value="gr">GR</option>
+                          <option value="tn">TN</option>
+                        </select>
                       </div>
-                  </form>
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 space-y-3">
+                    <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                      <Calendar size={14} className="text-emerald-500" />
+                      <span>Superficie & Fecha</span>
+                    </h3>
+
+                    <div>
+                      <label className={labelClass}>Fecha de Siembra / Inicio</label>
+                      <input 
+                        type="date" 
+                        className={inputClass} 
+                        value={formData.sowingDate} 
+                        onChange={e => setFormData({ ...formData, sowingDate: e.target.value })} 
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelClass}>Superficie</label>
+                        <input 
+                          type="number" 
+                          step="0.01" 
+                          className={inputClass} 
+                          value={formData.surfaceArea} 
+                          onChange={e => setFormData({ ...formData, surfaceArea: Number(e.target.value) })} 
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Unidad</label>
+                        <select 
+                          className={inputClass} 
+                          value={formData.surfaceUnit} 
+                          onChange={e => setFormData({ ...formData, surfaceUnit: e.target.value as any })}
+                        >
+                          <option value="ha">Hectáreas (Ha)</option>
+                          <option value="m2">Metros² (M2)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className={labelClass}>Observaciones Iniciales</label>
+                      <textarea 
+                        className={`${inputClass} h-16 resize-none`} 
+                        value={formData.observations} 
+                        onChange={e => setFormData({ ...formData, observations: e.target.value })} 
+                        placeholder="Densidad objetivo, sistema de riego, laboreo..." 
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* COLUMNA 3: GEOLOCALIZACIÓN Y POLÍGONO */}
+                <div className="space-y-4 flex flex-col justify-between">
+                  <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 flex-1 flex flex-col min-h-[380px]">
+                    <div className="flex justify-between items-center mb-3">
+                      <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                        <Globe size={14} className="text-emerald-500" />
+                        <span>Polígono & Coordenadas GPS</span>
+                      </h3>
+                      <div className="flex gap-2">
+                        <input type="file" accept=".kml" ref={fileInputRef} className="hidden" onChange={handleKMLUpload} />
+                        <button 
+                          type="button" 
+                          onClick={() => fileInputRef.current?.click()} 
+                          className="px-2.5 py-1 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider border border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-1 hover:bg-slate-100"
+                        >
+                          <FileUp size={11} /> KML
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex-1 min-h-[220px] rounded-xl overflow-hidden mb-3 bg-slate-900 border border-slate-200 dark:border-slate-700">
+                      <MapEditor 
+                        initialCenter={formData.lat && formData.lng ? { lat: parseFloat(formData.lat), lng: parseFloat(formData.lng) } : undefined} 
+                        initialPolygon={formData.polygon || []} 
+                        onPolygonChange={handlePolygonChange} 
+                        height="100%" 
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelClass}>Latitud</label>
+                        <input 
+                          placeholder="-33.1235" 
+                          className={inputClass} 
+                          value={formData.lat} 
+                          onChange={e => setFormData({ ...formData, lat: e.target.value })} 
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Longitud</label>
+                        <input 
+                          placeholder="-64.3492" 
+                          className={inputClass} 
+                          value={formData.lng} 
+                          onChange={e => setFormData({ ...formData, lng: e.target.value })} 
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
               </div>
+
+              {/* Botonera de Guardado */}
+              <div className="flex justify-end pt-5 border-t border-slate-100 dark:border-slate-800 gap-3">
+                <button 
+                  type="button" 
+                  disabled={isSaving} 
+                  onClick={() => setIsAddModalOpen(false)} 
+                  className="px-5 py-2.5 text-slate-500 font-mono font-bold uppercase text-xs hover:text-slate-700"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={isSaving} 
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white px-8 py-2.5 rounded-xl font-mono font-bold text-xs uppercase tracking-wider shadow-lg shadow-emerald-600/20 flex items-center gap-2 transition disabled:opacity-50 active:scale-95"
+                >
+                  {isSaving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
+                  <span>{editingPlot ? 'Actualizar Unidad' : 'Registrar Unidad'}</span>
+                </button>
+              </div>
+            </form>
           </div>
+        </div>
       )}
+
     </div>
   );
 }

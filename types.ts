@@ -149,7 +149,7 @@ export interface Plot {
   surfaceArea?: number;
   surfaceUnit?: 'ha' | 'm2' | 'ac';
   density?: number;
-  status: 'Activa' | 'Cosechada' | 'Cancelada';
+  status: 'Activa' | 'Cosechada' | 'Cancelada' | 'Pausada' | 'En Barbecho';
   sowingDate: string;
   ownerName?: string;
   responsibleIds?: string[];
@@ -162,6 +162,8 @@ export interface Plot {
   usedSeedValue?: number;
   usedSeedUnit?: 'gr' | 'kg' | 'tn';
   color?: string; // Nuevo campo para el color de referencia
+  campaign?: string; // Campaña agrícola asignada (ej: '2025/2026')
+  activeCampaigns?: string[];
 }
 
 export interface SeedBatch {

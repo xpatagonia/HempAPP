@@ -332,33 +332,69 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         }
     };
 
-    const crud = async (table: string, item: any, action: 'insert' | 'update' | 'delete', idField = 'id') => {
-        if (!isDbConnected) {
-          // Actualizar en memoria local
-          return true;
-        }
-        try {
-            let payload = item;
-            if (action !== 'delete') payload = toSnakeCase(item);
-            let error;
+    const updateLocalState = (table: string, item: any, action: 'insert' | 'update' | 'delete', idField = 'id') => {
+        const updateList = (prev: any[]) => {
             if (action === 'insert') {
-                const res = await supabase.from(table).insert([payload]);
-                error = res.error;
-            } else if (action === 'update') {
-                const res = await supabase.from(table).update(payload).eq(idField, item[idField]);
-                error = res.error;
-            } else if (action === 'delete') {
-                const res = await supabase.from(table).delete().eq(idField, item);
-                error = res.error;
+                return [item, ...prev.filter(x => x[idField] !== item[idField])];
             }
-            if (!error) {
-                await refreshData();
-                return true;
+            if (action === 'update') {
+                return prev.map(x => (x[idField] === item[idField] ? { ...x, ...item } : x));
             }
-            return false;
-        } catch (e) {
-            return false;
+            if (action === 'delete') {
+                const targetId = typeof item === 'object' && item !== null ? item[idField] : item;
+                return prev.filter(x => x[idField] !== targetId);
+            }
+            return prev;
+        };
+
+        if (table === 'locations') {
+            setLocations(prev => {
+                const next = updateList(prev);
+                try { localStorage.setItem('ht_locations', JSON.stringify(next)); } catch (e) {}
+                return next;
+            });
+        } else if (table === 'plots') {
+            setPlots(prev => {
+                const next = updateList(prev);
+                try { localStorage.setItem('ht_plots', JSON.stringify(next)); } catch (e) {}
+                return next;
+            });
+        } else if (table === 'varieties') setVarieties(prev => updateList(prev));
+        else if (table === 'trial_records') setTrialRecords(prev => updateList(prev));
+        else if (table === 'tasks') setTasks(prev => updateList(prev));
+        else if (table === 'projects') setProjects(prev => updateList(prev));
+        else if (table === 'clients') setClients(prev => updateList(prev));
+        else if (table === 'suppliers') setSuppliers(prev => updateList(prev));
+        else if (table === 'seed_batches') setSeedBatches(prev => updateList(prev));
+        else if (table === 'seed_movements') setSeedMovements(prev => updateList(prev));
+        else if (table === 'storage_points') setStoragePoints(prev => updateList(prev));
+        else if (table === 'hydric_records') setHydricRecords(prev => updateList(prev));
+        else if (table === 'resources') setResources(prev => updateList(prev));
+        else if (table === 'field_logs') setLogs(prev => updateList(prev));
+    };
+
+    const crud = async (table: string, item: any, action: 'insert' | 'update' | 'delete', idField = 'id') => {
+        // 1. Inmediatamente actualizar estado React y persistencia local
+        updateLocalState(table, item, action, idField);
+
+        // 2. Si la base de datos Supabase está conectada, sincronizar
+        if (isDbConnected) {
+            try {
+                let payload = item;
+                if (action !== 'delete') payload = toSnakeCase(item);
+                if (action === 'insert') {
+                    await supabase.from(table).insert([payload]);
+                } else if (action === 'update') {
+                    await supabase.from(table).update(payload).eq(idField, item[idField]);
+                } else if (action === 'delete') {
+                    const targetId = typeof item === 'object' && item !== null ? item[idField] : item;
+                    await supabase.from(table).delete().eq(idField, targetId);
+                }
+            } catch (e) {
+                console.warn(`Sync warning for ${table} in ${action}:`, e);
+            }
         }
+        return true;
     };
 
     return (
