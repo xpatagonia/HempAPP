@@ -1,13 +1,17 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Location, SoilType, RoleType, Plot, SiteType, SiteStatus, CAMPAIGNS } from '../types';
+import { 
+  Location, SoilType, RoleType, Plot, SiteType, SiteStatus, CAMPAIGNS, 
+  HempLicenseCategory, HempLicenseStatus 
+} from '../types';
 import { 
   Plus, MapPin, User, Globe, Edit2, Trash2, Briefcase, Building, Landmark, 
   GraduationCap, Users, Droplets, Navigation, X, ScanBarcode, Loader2, Save, 
   Search, Filter, ExternalLink, FileUp, LayoutDashboard, Map as MapIcon, 
   ChevronRight, Info, Eye, Waves, Sprout, Tractor, FlaskConical, Sun, 
   CheckCircle2, AlertCircle, Calendar, Power, Check, SlidersHorizontal, 
-  ArrowRight, ShieldCheck, Thermometer, Warehouse, Clock
+  ArrowRight, ShieldCheck, Thermometer, Warehouse, Clock, FileText, Lock, 
+  Scale, FileSignature, CheckSquare, Layers, Award, Satellite
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import WeatherWidget from '../components/WeatherWidget';
@@ -58,7 +62,31 @@ const SITE_STATUSES: { value: SiteStatus; label: string; color: string; dot: str
   { value: 'Inactivo', label: 'Inactivo', color: 'bg-rose-50 text-rose-800 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800/60', dot: 'bg-rose-500' }
 ];
 
-// Algoritmo de cálculo de área geodésica (Shoelace en esfera)
+const HEMP_LICENSE_CATEGORIES: HempLicenseCategory[] = [
+  'Cultivo e Industrialización (Fibra y Grano)',
+  'Investigación y Desarrollo (I+D / Ensayos)',
+  'Semillero y Criadero Certificado (INASE)',
+  'Alimentos y Biomasa',
+  'Medicinal / Fitoquímicos'
+];
+
+const HEMP_LICENSE_STATUSES: HempLicenseStatus[] = [
+  'Vigente',
+  'En Trámite',
+  'Pre-Aprobada',
+  'Vencida'
+];
+
+const SECURITY_OPTIONS = [
+  'Cerco Perimetral Reglamentario',
+  'Control de Acceso / Libro de Guardia',
+  'Monitoreo CCTV / Vigilancia 24/7',
+  'Protocolo de Destrucción de Residuos Vegetales',
+  'Cartelería Reglamentaria ARICCAME',
+  'Alarma Monitoreada con Respaldo Eléctrico'
+];
+
+// Algoritmo de cálculo de área geodésica
 const calculateGeodesicArea = (latLngs: { lat: number, lng: number }[]) => {
     const R = 6378137;
     const toRad = (x: number) => x * Math.PI / 180;
@@ -112,8 +140,11 @@ export default function Locations() {
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [activeModalTab, setActiveModalTab] = useState<'general' | 'regulatory' | 'geodesy'>('general');
   const [isSaving, setIsSaving] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const fileInputRefGeneral = useRef<HTMLInputElement>(null);
+  const fileInputRefSowing = useRef<HTMLInputElement>(null);
   
   // Filtros de búsqueda
   const [searchTerm, setSearchTerm] = useState('');
@@ -132,7 +163,20 @@ export default function Locations() {
     siteType: 'Campo Extensivo',
     status: 'Activo',
     activeCampaigns: ['2025/2026', '2026/2027'],
-    notes: ''
+    notes: '',
+    // Datos regulatorios ARICCAME / INASE / SENASA
+    ariccameLicenseNumber: '',
+    ariccameLicenseCategory: 'Cultivo e Industrialización (Fibra y Grano)',
+    ariccameLicenseStatus: 'Vigente',
+    renspaNumber: '',
+    cadastralId: '',
+    landTenureType: 'Propiedad',
+    securityMeasures: ['Cerco Perimetral Reglamentario', 'Control de Acceso / Libro de Guardia'],
+    // Geodesia Declaración Jurada de Siembra
+    sowingDeclarationPolygon: [],
+    sowingDeclarationHa: 0,
+    sowingDeclarationId: '',
+    sowingDeclarationDate: new Date().toISOString().split('T')[0]
   });
 
   const isSuperAdmin = currentUser?.role === 'super_admin';
@@ -146,7 +190,6 @@ export default function Locations() {
     return locations.filter(l => {
       let matches = true;
 
-      // Permisos de usuario
       if (isAdmin) {
         matches = true;
       } else if ((isClient || isTechnician) && currentUser?.clientId) {
@@ -155,34 +198,25 @@ export default function Locations() {
         matches = l.responsibleIds?.includes(currentUser?.id || '') || false;
       }
 
-      // Filtro por término de búsqueda
       if (searchTerm) {
         const lowerTerm = searchTerm.toLowerCase();
         matches = matches && (
           l.name.toLowerCase().includes(lowerTerm) || 
           l.city?.toLowerCase().includes(lowerTerm) ||
           l.responsiblePerson?.toLowerCase().includes(lowerTerm) ||
+          (l.ariccameLicenseNumber && l.ariccameLicenseNumber.toLowerCase().includes(lowerTerm)) ||
+          (l.renspaNumber && l.renspaNumber.toLowerCase().includes(lowerTerm)) ||
           (l.siteType && l.siteType.toLowerCase().includes(lowerTerm))
         );
       }
 
-      // Filtro por Provincia
-      if (filterProvince) {
-        matches = matches && l.province === filterProvince;
-      }
-
-      // Filtro por Tipología de Sitio
-      if (filterSiteType !== 'all') {
-        matches = matches && (l.siteType === filterSiteType);
-      }
-
-      // Filtro por Estado Operativo
+      if (filterProvince) matches = matches && l.province === filterProvince;
+      if (filterSiteType !== 'all') matches = matches && (l.siteType === filterSiteType);
       if (filterStatus !== 'all') {
         const st = l.status || 'Activo';
         matches = matches && (st === filterStatus);
       }
 
-      // Filtro por Campaña Agrícola
       if (selectedCampaign !== 'all') {
         const campaigns = l.activeCampaigns || ['2024/2025', '2025/2026'];
         matches = matches && campaigns.includes(selectedCampaign);
@@ -205,6 +239,8 @@ export default function Locations() {
     const inFallowCount = locations.filter(l => l.status === 'En Barbecho').length;
 
     const totalHa = visibleLocations.reduce((sum, l) => sum + (l.capacityHa || 0), 0);
+    const totalSowingDeclaredHa = visibleLocations.reduce((sum, l) => sum + (l.sowingDeclarationHa || 0), 0);
+
     const activePlots = plots.filter(p => p.status === 'Activa' && visibleLocations.some(l => l.id === p.locationId));
     const occupiedHa = activePlots.reduce((sum, p) => {
       let area = p.surfaceArea || 0;
@@ -218,7 +254,8 @@ export default function Locations() {
       activeInSelectedCampaign,
       inPreparationCount,
       inFallowCount,
-      totalHa, 
+      totalHa,
+      totalSowingDeclaredHa,
       occupiedHa, 
       occupancyRate: totalHa > 0 ? (occupiedHa / totalHa) * 100 : 0, 
       activePlotsCount: activePlots.length 
@@ -274,17 +311,7 @@ export default function Locations() {
     }
   };
 
-  // Alternar rápidamente estado del establecimiento (Activo <-> Inactivo/Barbecho)
-  const handleToggleStatus = async (loc: Location, newStatus: SiteStatus, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!canManage) return;
-    await updateLocation({
-      ...loc,
-      status: newStatus
-    });
-  };
-
-  const handleKMLUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleKMLUploadGeneral = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
       const reader = new FileReader();
@@ -296,7 +323,6 @@ export default function Locations() {
               const lngs = poly.map(p => p.lng);
               const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
               const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
-              
               const areaM2 = calculateGeodesicArea(poly);
               const areaHa = areaM2 / 10000;
 
@@ -308,9 +334,33 @@ export default function Locations() {
                   lng: centerLng.toFixed(6) 
               }));
           } else {
-              alert("No se encontró un polígono válido en el archivo KML. Asegúrese de que contenga coordenadas geográficas (Lat/Lon).");
+              alert("No se encontró un polígono válido en el archivo KML.");
           }
-          if (fileInputRef.current) fileInputRef.current.value = '';
+          if (fileInputRefGeneral.current) fileInputRefGeneral.current.value = '';
+      };
+      reader.readAsText(file);
+  };
+
+  const handleKMLUploadSowing = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (event) => {
+          const text = event.target?.result as string;
+          const poly = parseKML(text);
+          if (poly && poly.length > 2) {
+              const areaM2 = calculateGeodesicArea(poly);
+              const areaHa = areaM2 / 10000;
+
+              setFormData(prev => ({ 
+                  ...prev, 
+                  sowingDeclarationPolygon: poly, 
+                  sowingDeclarationHa: Number(areaHa.toFixed(2))
+              }));
+          } else {
+              alert("No se encontró un polígono válido en el archivo KML.");
+          }
+          if (fileInputRefSowing.current) fileInputRefSowing.current.value = '';
       };
       reader.readAsText(file);
   };
@@ -322,6 +372,14 @@ export default function Locations() {
         capacityHa: areaHa > 0 ? Number(areaHa.toFixed(2)) : prev.capacityHa, 
         lat: center.lat.toFixed(6), 
         lng: center.lng.toFixed(6) 
+      }));
+  };
+
+  const handleSowingPolygonChange = (newPoly: { lat: number, lng: number }[], areaHa: number) => {
+      setFormData(prev => ({ 
+        ...prev, 
+        sowingDeclarationPolygon: newPoly, 
+        sowingDeclarationHa: areaHa > 0 ? Number(areaHa.toFixed(2)) : prev.sowingDeclarationHa
       }));
   };
 
@@ -368,9 +426,21 @@ export default function Locations() {
       siteType: 'Campo Extensivo',
       status: 'Activo',
       activeCampaigns: ['2025/2026', '2026/2027'],
-      notes: ''
+      notes: '',
+      ariccameLicenseNumber: '',
+      ariccameLicenseCategory: 'Cultivo e Industrialización (Fibra y Grano)',
+      ariccameLicenseStatus: 'Vigente',
+      renspaNumber: '',
+      cadastralId: '',
+      landTenureType: 'Propiedad',
+      securityMeasures: ['Cerco Perimetral Reglamentario', 'Control de Acceso / Libro de Guardia'],
+      sowingDeclarationPolygon: [],
+      sowingDeclarationHa: 0,
+      sowingDeclarationId: '',
+      sowingDeclarationDate: new Date().toISOString().split('T')[0]
     });
     setEditingId(null);
+    setActiveModalTab('general');
   };
 
   const handleEdit = (loc: Location) => {
@@ -383,13 +453,25 @@ export default function Locations() {
           siteType: loc.siteType || 'Campo Extensivo',
           status: loc.status || 'Activo',
           activeCampaigns: loc.activeCampaigns || ['2025/2026', '2026/2027'],
-          notes: loc.notes || ''
+          notes: loc.notes || '',
+          ariccameLicenseNumber: loc.ariccameLicenseNumber || '',
+          ariccameLicenseCategory: loc.ariccameLicenseCategory || 'Cultivo e Industrialización (Fibra y Grano)',
+          ariccameLicenseStatus: loc.ariccameLicenseStatus || 'Vigente',
+          renspaNumber: loc.renspaNumber || '',
+          cadastralId: loc.cadastralId || '',
+          landTenureType: loc.landTenureType || 'Propiedad',
+          securityMeasures: loc.securityMeasures || ['Cerco Perimetral Reglamentario', 'Control de Acceso / Libro de Guardia'],
+          sowingDeclarationPolygon: loc.sowingDeclarationPolygon || [],
+          sowingDeclarationHa: loc.sowingDeclarationHa || 0,
+          sowingDeclarationId: loc.sowingDeclarationId || '',
+          sowingDeclarationDate: loc.sowingDeclarationDate || new Date().toISOString().split('T')[0]
       });
       setEditingId(loc.id);
+      setActiveModalTab('general');
       setIsModalOpen(true);
   };
 
-  const inputClass = "w-full border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 p-2.5 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all disabled:opacity-50 text-xs";
+  const inputClass = "w-full border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 p-2.5 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all disabled:opacity-50 text-xs font-medium";
 
   return (
     <div className="space-y-6 md:space-y-8 animate-in fade-in duration-500 max-w-[1600px] mx-auto pb-12">
@@ -401,26 +483,26 @@ export default function Locations() {
             <div className="flex flex-wrap items-center gap-2 mb-3">
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                Infraestructura Productiva
+                Establecimientos & DDJJ Geodésica
               </span>
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800/60">
                 <Calendar size={11} className="text-sky-500" />
                 Campaña: {selectedCampaign}
               </span>
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60">
-                <ShieldCheck size={11} className="text-purple-500" />
-                {stats.activeInSelectedCampaign} Sitios Asignados
+                <Award size={11} className="text-purple-500" />
+                Marco Legal ARICCAME / INASE
               </span>
             </div>
 
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black text-slate-900 dark:text-slate-50 tracking-tight flex items-baseline gap-3">
               <span>Campos, Chacras & Sitios</span>
               <span className="text-base sm:text-lg font-mono font-medium text-slate-400 hidden sm:inline">
-                | Gestión de Campaña
+                | Infraestructura & DDJJ Siembra
               </span>
             </h1>
             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1 font-medium max-w-2xl">
-              Clasificación técnica de predios, lab indoors, chacras y control de activación por ciclo agrícola.
+              Gestión de predios georreferenciados, polígonos de declaración jurada de siembra, licencias ARICCAME y parcelas productivas.
             </p>
           </div>
 
@@ -432,13 +514,13 @@ export default function Locations() {
                 className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-md shadow-emerald-600/20 flex items-center gap-2 active:scale-95"
               >
                 <Plus size={16} strokeWidth={2.5} />
-                <span>Nuevo Campo / Sitio</span>
+                <span>Nuevo Establecimiento</span>
               </button>
             )}
           </div>
         </div>
 
-        {/* BARRA DE CAMPAÑA AGRÍCOLA (REQUERIMIENTO CLAVE) */}
+        {/* BARRA DE CAMPAÑA AGRÍCOLA */}
         <div className="mt-6 pt-5 border-t border-slate-100 dark:border-slate-800 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
           <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
             <span className="text-[10px] font-mono font-black uppercase text-slate-400 tracking-wider mr-1 shrink-0 flex items-center gap-1">
@@ -486,45 +568,42 @@ export default function Locations() {
           </div>
         </div>
 
-        {/* TARJETAS DE MÉTRICAS RÁPIDAS */}
+        {/* TARJETAS DE MÉTRICAS RÁPIDAS (INCLUYE DDJJ DE SIEMBRA) */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mt-6">
           <div className="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/60 dark:border-slate-800 space-y-1">
-            <span className="text-[10px] font-mono font-bold uppercase text-slate-400 block tracking-wider">Sitios en Vista</span>
+            <span className="text-[10px] font-mono font-bold uppercase text-slate-400 block tracking-wider">Sitios Registrados</span>
             <p className="text-2xl font-mono font-black text-slate-900 dark:text-white">
               {visibleLocations.length} <span className="text-xs font-normal text-slate-400">/ {stats.totalLocs} total</span>
             </p>
           </div>
 
           <div className="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/60 dark:border-slate-800 space-y-1">
-            <span className="text-[10px] font-mono font-bold uppercase text-slate-400 block tracking-wider">Superficie Habilitada</span>
-            <p className="text-2xl font-mono font-black text-emerald-600 dark:text-emerald-400">
+            <span className="text-[10px] font-mono font-bold uppercase text-slate-400 block tracking-wider">Superficie Total Predios</span>
+            <p className="text-2xl font-mono font-black text-sky-600 dark:text-sky-400">
               {stats.totalHa.toFixed(1)} <span className="text-xs font-normal text-slate-400">Ha</span>
             </p>
           </div>
 
           <div className="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/60 dark:border-slate-800 space-y-1">
-            <span className="text-[10px] font-mono font-bold uppercase text-slate-400 block tracking-wider">Ocupación Agronómica</span>
-            <div className="flex items-center gap-2">
-              <p className="text-2xl font-mono font-black text-sky-600 dark:text-sky-400">
-                {stats.occupancyRate.toFixed(0)}%
-              </p>
-              <span className="text-[10px] text-slate-400 font-mono">({stats.occupiedHa.toFixed(1)} ha sembradas)</span>
-            </div>
+            <span className="text-[10px] font-mono font-bold uppercase text-slate-400 block tracking-wider">DDJJ Siembra Declarada</span>
+            <p className="text-2xl font-mono font-black text-emerald-600 dark:text-emerald-400">
+              {stats.totalSowingDeclaredHa.toFixed(1)} <span className="text-xs font-normal text-slate-400">Ha geodésicas</span>
+            </p>
           </div>
 
           <div className="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/60 dark:border-slate-800 space-y-1">
-            <span className="text-[10px] font-mono font-bold uppercase text-slate-400 block tracking-wider">Parcelas Activas</span>
+            <span className="text-[10px] font-mono font-bold uppercase text-slate-400 block tracking-wider">Lotes Sembrados</span>
             <p className="text-2xl font-mono font-black text-purple-600 dark:text-purple-400">
-              {stats.activePlotsCount} <span className="text-xs font-normal text-slate-400">Lotes</span>
+              {stats.activePlotsCount} <span className="text-xs font-normal text-slate-400">Parcelas</span>
             </p>
           </div>
         </div>
       </div>
 
-      {/* 2. BARRA DE FILTROS AVANZADOS (TIPOLOGÍA, ESTADO, BÚSQUEDA) */}
+      {/* 2. BARRA DE FILTROS AVANZADOS */}
       <div className="bg-white dark:bg-slate-900/90 rounded-2xl md:rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4">
         
-        {/* Filtro por Tipología de Sitio (Píldoras Segmentadas) */}
+        {/* Filtro por Tipología de Sitio */}
         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1">
           <span className="text-[10px] font-mono font-bold uppercase text-slate-400 tracking-wider mr-2 shrink-0">
             Tipología:
@@ -589,7 +668,7 @@ export default function Locations() {
               }`}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-              En Preparación
+              En Prep.
             </button>
             <button
               onClick={() => setFilterStatus('En Barbecho')}
@@ -598,28 +677,19 @@ export default function Locations() {
               }`}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
-              En Barbecho
-            </button>
-            <button
-              onClick={() => setFilterStatus('Inactivo')}
-              className={`px-2.5 py-1 rounded text-xs font-bold transition-all flex items-center gap-1 ${
-                filterStatus === 'Inactivo' ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300' : 'text-slate-500 hover:text-rose-600'
-              }`}
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-              Inactivos
+              Barbecho
             </button>
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="relative flex-1 md:w-64">
+            <div className="relative flex-1 md:w-72">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
               <input
                 type="text"
-                placeholder="Buscar campo, ciudad o responsable..."
+                placeholder="Buscar campo, ARICCAME, RENSPA..."
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-3 py-1.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 rounded-lg text-xs outline-none focus:ring-2 focus:ring-emerald-500 dark:text-white"
+                className="w-full pl-9 pr-3 py-1.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 rounded-lg text-xs outline-none focus:ring-2 focus:ring-emerald-500 dark:text-white font-medium"
               />
             </div>
 
@@ -639,7 +709,7 @@ export default function Locations() {
         </div>
       </div>
 
-      {/* 3. GRILLA DE TARJETAS DE CAMPOS Y SITIOS */}
+      {/* 3. GRILLA DE ESTABLECIMIENTOS CON DDJJ Y LICENCIA */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {visibleLocations.length === 0 ? (
           <div className="col-span-full py-16 text-center bg-white dark:bg-slate-900/90 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800 p-8 space-y-3">
@@ -650,12 +720,6 @@ export default function Locations() {
             <p className="text-xs text-slate-500 max-w-md mx-auto font-medium">
               Prueba cambiando la campaña seleccionada ({selectedCampaign}), la tipología o el término de búsqueda.
             </p>
-            <button
-              onClick={() => { setSelectedCampaign('all'); setFilterSiteType('all'); setFilterStatus('all'); setSearchTerm(''); setFilterProvince(''); }}
-              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-xs font-bold rounded-xl transition"
-            >
-              Restablecer Filtros
-            </button>
           </div>
         ) : (
           visibleLocations.map(loc => {
@@ -667,7 +731,8 @@ export default function Locations() {
             const statusConfig = SITE_STATUSES.find(s => s.value === currentStatus) || SITE_STATUSES[0];
 
             const campaigns = loc.activeCampaigns || ['2024/2025', '2025/2026'];
-            const isActiveInSelectedCampaign = selectedCampaign === 'all' || campaigns.includes(selectedCampaign);
+            const targetCamp = selectedCampaign === 'all' ? '2025/2026' : selectedCampaign;
+            const isEffectiveActive = campaigns.includes(targetCamp);
 
             // Parcelas registradas en este campo
             const locPlots = plots.filter(p => p.locationId === loc.id);
@@ -677,7 +742,7 @@ export default function Locations() {
               <div 
                 key={loc.id} 
                 className={`bg-white dark:bg-slate-900/90 rounded-2xl md:rounded-3xl shadow-sm border transition-all flex flex-col h-full overflow-hidden group hover:shadow-md ${
-                  !isActiveInSelectedCampaign 
+                  !isEffectiveActive 
                     ? 'border-slate-200/60 dark:border-slate-800/80 opacity-75 hover:opacity-100' 
                     : 'border-slate-200/80 dark:border-slate-800 hover:border-emerald-500/40'
                 }`}
@@ -700,7 +765,7 @@ export default function Locations() {
                   )}
 
                   {/* Widget de Clima Flotante en la esquina */}
-                  <div className="absolute top-3 left-3 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md p-2.5 rounded-xl shadow-lg border border-slate-200/80 dark:border-slate-800">
+                  <div className="absolute top-3 left-3 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md p-2 rounded-xl shadow-lg border border-slate-200/80 dark:border-slate-800">
                     <WeatherWidget lat={loc.coordinates?.lat || 0} lng={loc.coordinates?.lng || 0} compact={true}/>
                   </div>
 
@@ -710,7 +775,7 @@ export default function Locations() {
                       <button 
                         onClick={() => handleEdit(loc)} 
                         className="p-2 bg-white/95 dark:bg-slate-900/95 rounded-lg text-slate-600 dark:text-slate-300 hover:text-emerald-600 shadow-md border border-slate-200/80 dark:border-slate-700 transition"
-                        title="Editar Ficha de Campo"
+                        title="Editar Ficha de Campo, Geodesia y Licencia"
                       >
                         <Edit2 size={13} />
                       </button>
@@ -747,7 +812,7 @@ export default function Locations() {
                 <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
                   <div>
                     {/* Alerta de Campaña si no está activo en la campaña filtrada */}
-                    {selectedCampaign !== 'all' && !isActiveInSelectedCampaign && (
+                    {selectedCampaign !== 'all' && !isEffectiveActive && (
                       <div className="mb-3 p-2 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl text-[11px] font-medium text-amber-800 dark:text-amber-300 flex items-center justify-between">
                         <span className="flex items-center gap-1.5">
                           <AlertCircle size={13} className="text-amber-500 shrink-0" />
@@ -784,8 +849,28 @@ export default function Locations() {
                       </Link>
                     </div>
 
-                    {/* Chips de Campañas Activas */}
+                    {/* Badge de Licencia ARICCAME y Registro Sanitario RENPSA */}
                     <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                      {loc.ariccameLicenseNumber ? (
+                        <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold px-2 py-0.5 rounded bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60">
+                          <Award size={10} />
+                          <span>{loc.ariccameLicenseNumber}</span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-400">
+                          Sin Licencia ARICCAME
+                        </span>
+                      )}
+
+                      {loc.renspaNumber && (
+                        <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold px-2 py-0.5 rounded bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800/60">
+                          <span>RENSPA: {loc.renspaNumber}</span>
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Chips de Campañas Activas */}
+                    <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
                       <span className="text-[9px] font-mono font-bold uppercase text-slate-400 mr-1">
                         Campañas:
                       </span>
@@ -793,7 +878,7 @@ export default function Locations() {
                         <span 
                           key={camp}
                           className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                            camp === selectedCampaign
+                            camp === targetCamp
                               ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700'
                               : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
                           }`}
@@ -803,26 +888,26 @@ export default function Locations() {
                       ))}
                     </div>
 
-                    {/* Grid de Métricas del Establecimiento */}
+                    {/* GRID DE MÉTRICAS (PREDIO TOTAL vs DDJJ SIEMBRA vs LOTES) */}
                     <div className="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 text-[10px]">
                       <div className="p-2.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-100 dark:border-slate-800 text-center">
-                        <span className="text-[8px] font-mono font-bold uppercase text-slate-400 block tracking-wider">Superficie</span>
+                        <span className="text-[8px] font-mono font-bold uppercase text-slate-400 block tracking-wider">Predio Total</span>
                         <strong className="text-xs font-mono font-black text-slate-900 dark:text-white block mt-0.5">
-                          {loc.capacityHa || 0} {currentSiteType === 'Indoor / Laboratorio' ? 'Ha / Salas' : 'Ha'}
+                          {loc.capacityHa || 0} Ha
                         </strong>
                       </div>
 
-                      <div className="p-2.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-100 dark:border-slate-800 text-center">
-                        <span className="text-[8px] font-mono font-bold uppercase text-slate-400 block tracking-wider">Lotes</span>
+                      <div className="p-2.5 bg-emerald-50/70 dark:bg-emerald-950/30 rounded-xl border border-emerald-100 dark:border-emerald-900/40 text-center">
+                        <span className="text-[8px] font-mono font-bold uppercase text-emerald-700 dark:text-emerald-400 block tracking-wider">DDJJ Siembra</span>
                         <strong className="text-xs font-mono font-black text-emerald-600 dark:text-emerald-400 block mt-0.5">
-                          {activePlotsCount} / {locPlots.length}
+                          {loc.sowingDeclarationHa ? `${loc.sowingDeclarationHa} Ha` : 'S/D'}
                         </strong>
                       </div>
 
                       <div className="p-2.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-100 dark:border-slate-800 text-center">
-                        <span className="text-[8px] font-mono font-bold uppercase text-slate-400 block tracking-wider">Riego</span>
-                        <strong className="text-xs font-mono font-bold text-slate-700 dark:text-slate-300 truncate block mt-0.5" title={loc.irrigationSystem}>
-                          {loc.irrigationSystem?.split(' ')[0] || 'Secano'}
+                        <span className="text-[8px] font-mono font-bold uppercase text-slate-400 block tracking-wider">Lotes Hijos</span>
+                        <strong className="text-xs font-mono font-bold text-purple-600 dark:text-purple-400 block mt-0.5">
+                          {activePlotsCount} / {locPlots.length}
                         </strong>
                       </div>
                     </div>
@@ -838,31 +923,27 @@ export default function Locations() {
 
                   {/* Acciones Rápidas Inferiores */}
                   <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
-                    {/* Botón para cambiar estado rápido de campaña */}
-                    {canManage && (() => {
-                      const effectiveCampaign = selectedCampaign === 'all' ? '2025/2026' : selectedCampaign;
-                      const isEffectiveActive = campaigns.includes(effectiveCampaign);
-                      return (
-                        <button
-                          onClick={(e) => handleToggleCampaign(loc, e)}
-                          className={`px-3 py-1.5 rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 transition shadow-sm ${
-                            isEffectiveActive
-                              ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
-                              : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20'
-                          }`}
-                          title={isEffectiveActive ? `Pausar campo y sus unidades en campaña ${effectiveCampaign}` : `Habilitar campo y sus unidades en campaña ${effectiveCampaign}`}
-                        >
-                          <Power size={11} className={isEffectiveActive ? 'text-amber-600' : 'text-white'} />
-                          <span>{isEffectiveActive ? `Pausar Camp. (${effectiveCampaign})` : `Activar Camp. (${effectiveCampaign})`}</span>
-                        </button>
-                      );
-                    })()}
+                    {/* Botón para cambiar estado rápido de campaña con sincronización a parcelas */}
+                    {canManage && (
+                      <button
+                        onClick={(e) => handleToggleCampaign(loc, e)}
+                        className={`px-3 py-1.5 rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 transition shadow-sm ${
+                          isEffectiveActive
+                            ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
+                            : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20'
+                        }`}
+                        title={isEffectiveActive ? `Pausar campo y sus unidades en campaña ${targetCamp}` : `Habilitar campo y sus unidades en campaña ${targetCamp}`}
+                      >
+                        <Power size={11} className={isEffectiveActive ? 'text-amber-600' : 'text-white'} />
+                        <span>{isEffectiveActive ? `Pausar (${targetCamp.slice(2)})` : `Activar (${targetCamp.slice(2)})`}</span>
+                      </button>
+                    )}
 
                     <Link 
                       to={`/locations/${loc.id}`} 
-                      className="flex-1 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition shadow-sm active:scale-95"
+                      className="flex-1 py-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition shadow-sm active:scale-95"
                     >
-                      <span>Entrar al Sitio</span>
+                      <span>Ficha Completa</span>
                       <ChevronRight size={13} />
                     </Link>
                   </div>
@@ -873,10 +954,12 @@ export default function Locations() {
         )}
       </div>
 
-      {/* 4. MODAL DE ALTA / EDICIÓN INDUSTRIAL */}
+      {/* 4. MODAL INTEGRAL: FICHA AGRONÓMICA, LICENCIA ARICCAME Y GEODESIA DDJJ */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl md:rounded-3xl max-w-5xl w-full p-6 md:p-8 shadow-2xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95 border border-slate-200 dark:border-slate-800">
+        <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-md flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl md:rounded-3xl max-w-6xl w-full p-6 md:p-8 shadow-2xl max-h-[92vh] overflow-y-auto animate-in zoom-in-95 border border-slate-200 dark:border-slate-800">
+            
+            {/* Header del Modal */}
             <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-3">
                 <div className="p-3 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl border border-emerald-500/20">
@@ -887,7 +970,7 @@ export default function Locations() {
                     {editingId ? 'Editar Establecimiento / Sitio' : 'Nuevo Establecimiento / Sitio Productivo'}
                   </h2>
                   <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                    Clasificación técnica, ubicación geográfica y activación por campaña.
+                    Estándares regulatorios de cáñamo, perímetro geodésico y declaración jurada de siembra.
                   </p>
                 </div>
               </div>
@@ -899,17 +982,59 @@ export default function Locations() {
               </button>
             </div>
 
+            {/* Pestañas de Navegación del Modal */}
+            <div className="flex items-center gap-2 mb-6 border-b border-slate-200/80 dark:border-slate-800 pb-2">
+              <button
+                type="button"
+                onClick={() => setActiveModalTab('general')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition ${
+                  activeModalTab === 'general'
+                    ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <Tractor size={14} />
+                <span>1. Ficha Técnica & Campaña</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveModalTab('regulatory')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition ${
+                  activeModalTab === 'regulatory'
+                    ? 'bg-purple-600 text-white shadow-sm'
+                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <Award size={14} />
+                <span>2. Licencia ARICCAME / SENASA</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveModalTab('geodesy')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition ${
+                  activeModalTab === 'geodesy'
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <Satellite size={14} />
+                <span>3. Geodesia & DDJJ Siembra (Satélite HD)</span>
+              </button>
+            </div>
+
             <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
-                
-                {/* COLUMNA IZQUIERDA: DATOS PRIMARIOS Y CLASIFICACIÓN */}
-                <div className="space-y-5">
+              
+              {/* PESTAÑA 1: FICHA TÉCNICA, DENOMINACIÓN & CAMPAÑAS */}
+              {activeModalTab === 'general' && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   
-                  {/* Tipología de Sitio & Estado Operativo */}
-                  <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 space-y-4">
+                  {/* Tipología & Estado */}
+                  <div className="p-5 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 space-y-4">
                     <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
                       <Tractor size={14} className="text-emerald-500" />
-                      <span>Clasificación & Estado</span>
+                      <span>Clasificación & Estado Operativo</span>
                     </h3>
 
                     <div>
@@ -948,7 +1073,7 @@ export default function Locations() {
 
                       <div>
                         <label className="text-[10px] font-mono font-bold uppercase text-slate-500 block mb-1">
-                          Capacidad Declarada (Ha)
+                          Capacidad Total Declarada (Ha)
                         </label>
                         <input 
                           type="number" 
@@ -961,10 +1086,10 @@ export default function Locations() {
                       </div>
                     </div>
 
-                    {/* CHECKBOXES DE CAMPAÑAS ASIGNADAS (REQUERIMIENTO CLAVE) */}
+                    {/* CHECKBOXES DE CAMPAÑAS ASIGNADAS */}
                     <div className="pt-2 border-t border-slate-200/60 dark:border-slate-700/60">
                       <label className="text-[10px] font-mono font-bold uppercase text-slate-500 block mb-2">
-                        Campañas Agrícolas Activas (Tildar ciclos habilitados)
+                        Campañas Agrícolas Habilitadas (Tildar ciclos activos)
                       </label>
                       <div className="grid grid-cols-2 gap-2">
                         {CAMPAIGNS.map(camp => {
@@ -999,8 +1124,8 @@ export default function Locations() {
                     </div>
                   </div>
 
-                  {/* Ficha Primaria (Nombre, Ubicación) */}
-                  <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 space-y-3">
+                  {/* Ficha Primaria (Ubicación, Suelo, Riego) */}
+                  <div className="p-5 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 space-y-3">
                     <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
                       <MapPin size={14} className="text-emerald-500" />
                       <span>Ubicación & Denominación</span>
@@ -1012,7 +1137,7 @@ export default function Locations() {
                       </label>
                       <input 
                         required 
-                        placeholder="Ej: Estación Experimental Río Cuarto / Campo Norte" 
+                        placeholder="Ej: Estación Experimental Río Cuarto / Campo Demostrativo" 
                         className={inputClass} 
                         value={formData.name} 
                         onChange={e => setFormData({ ...formData, name: e.target.value.toUpperCase() })} 
@@ -1042,7 +1167,7 @@ export default function Locations() {
                           Localidad / Ciudad
                         </label>
                         <input 
-                          placeholder="Ej: Pergamino / Río Cuarto" 
+                          placeholder="Ej: Río Cuarto / Pergamino" 
                           className={inputClass} 
                           value={formData.city} 
                           onChange={e => setFormData({ ...formData, city: e.target.value })} 
@@ -1092,7 +1217,7 @@ export default function Locations() {
 
                     <div>
                       <label className="text-[10px] font-mono font-bold uppercase text-slate-500 block mb-1">
-                        Responsable Técnico
+                        Responsable Técnico Agronómico
                       </label>
                       <input 
                         placeholder="Ej: Ing. Agr. Gastón Barea" 
@@ -1104,55 +1229,283 @@ export default function Locations() {
                   </div>
 
                 </div>
+              )}
 
-                {/* COLUMNA DERECHA: PERÍMETRO GENERAL, MAPA & COORDENADAS */}
-                <div className="space-y-5 flex flex-col justify-between">
-                  <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 flex-1 flex flex-col min-h-[420px]">
-                    <div className="flex justify-between items-center mb-3">
-                      <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
-                        <MapIcon size={14} className="text-emerald-500" />
-                        <span>Geolocalización & Perímetro</span>
+              {/* PESTAÑA 2: LICENCIA ARICCAME & ESTÁNDARES REGULATORIOS */}
+              {activeModalTab === 'regulatory' && (
+                <div className="space-y-6">
+                  
+                  {/* Datos de Licencia ARICCAME */}
+                  <div className="p-5 bg-purple-50/60 dark:bg-purple-950/20 rounded-2xl border border-purple-200/80 dark:border-purple-900/40 space-y-4">
+                    <div className="flex items-center justify-between border-b border-purple-200/80 dark:border-purple-900/40 pb-3">
+                      <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-purple-900 dark:text-purple-300 flex items-center gap-2">
+                        <Award size={16} className="text-purple-600" />
+                        <span>Licencia / Disposición ARICCAME (Ley 27.669)</span>
                       </h3>
-                      <div className="flex gap-2">
-                        <input type="file" accept=".kml" ref={fileInputRef} className="hidden" onChange={handleKMLUpload} />
+                      <span className="text-[10px] font-mono text-purple-600 bg-purple-100 dark:bg-purple-900/40 px-2 py-0.5 rounded">
+                        Marco Oficial República Argentina
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="text-[10px] font-mono font-bold uppercase text-slate-500 block mb-1">
+                          N° Disposición / Licencia ARICCAME
+                        </label>
+                        <input 
+                          placeholder="Ej: ARICCAME-DISP-2024-00142-APN" 
+                          className={inputClass} 
+                          value={formData.ariccameLicenseNumber || ''} 
+                          onChange={e => setFormData({ ...formData, ariccameLicenseNumber: e.target.value })} 
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-mono font-bold uppercase text-slate-500 block mb-1">
+                          Categoría / Finalidad de la Licencia
+                        </label>
+                        <select 
+                          className={inputClass} 
+                          value={formData.ariccameLicenseCategory} 
+                          onChange={e => setFormData({ ...formData, ariccameLicenseCategory: e.target.value as HempLicenseCategory })}
+                        >
+                          {HEMP_LICENSE_CATEGORIES.map(cat => (
+                            <option key={cat} value={cat}>{cat}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-mono font-bold uppercase text-slate-500 block mb-1">
+                          Estado de la Licencia
+                        </label>
+                        <select 
+                          className={inputClass} 
+                          value={formData.ariccameLicenseStatus} 
+                          onChange={e => setFormData({ ...formData, ariccameLicenseStatus: e.target.value as HempLicenseStatus })}
+                        >
+                          {HEMP_LICENSE_STATUSES.map(st => (
+                            <option key={st} value={st}>{st}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Registro Sanitario y Catastral */}
+                  <div className="p-5 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 space-y-4">
+                    <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 flex items-center gap-2">
+                      <Landmark size={15} className="text-emerald-500" />
+                      <span>Registros Sanitarios & Catastrales (SENASA / Catastro)</span>
+                    </h3>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="text-[10px] font-mono font-bold uppercase text-slate-500 block mb-1">
+                          N° RENSPA (SENASA)
+                        </label>
+                        <input 
+                          placeholder="Ej: 04.023.0.01948/01" 
+                          className={inputClass} 
+                          value={formData.renspaNumber || ''} 
+                          onChange={e => setFormData({ ...formData, renspaNumber: e.target.value })} 
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-mono font-bold uppercase text-slate-500 block mb-1">
+                          Nomenclatura Catastral / Partida Inmobiliaria
+                        </label>
+                        <input 
+                          placeholder="Ej: Circ. 04 - Sec. B - Parc. 128" 
+                          className={inputClass} 
+                          value={formData.cadastralId || ''} 
+                          onChange={e => setFormData({ ...formData, cadastralId: e.target.value })} 
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-mono font-bold uppercase text-slate-500 block mb-1">
+                          Régimen de Tenencia del Inmueble
+                        </label>
+                        <select 
+                          className={inputClass} 
+                          value={formData.landTenureType} 
+                          onChange={e => setFormData({ ...formData, landTenureType: e.target.value as any })}
+                        >
+                          <option value="Propiedad">Propiedad / Dominio Propio</option>
+                          <option value="Arrendamiento">Contrato de Arrendamiento Rural Registrado</option>
+                          <option value="Comodato">Comodato Notarial</option>
+                          <option value="Convenio Institucional">Convenio Institucional / INTA / Conicet</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Medidas de Seguridad Reglamentarias Exigidas */}
+                  <div className="p-5 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 space-y-3">
+                    <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 flex items-center gap-2">
+                      <Lock size={15} className="text-amber-500" />
+                      <span>Medidas de Seguridad e Integridad Fitosanitaria del Predio</span>
+                    </h3>
+                    <p className="text-[11px] text-slate-500 font-medium">
+                      Exigencias de seguridad perimetral y trazabilidad conforme normativa ARICCAME y Resolución Conjunta:
+                    </p>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 pt-2">
+                      {SECURITY_OPTIONS.map(sec => {
+                        const isChecked = (formData.securityMeasures || []).includes(sec);
+                        return (
+                          <label 
+                            key={sec}
+                            className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition text-xs font-mono font-bold ${
+                              isChecked 
+                                ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-500 text-emerald-800 dark:text-emerald-300' 
+                                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-500'
+                            }`}
+                          >
+                            <span className="text-[11px]">{sec}</span>
+                            <input 
+                              type="checkbox" 
+                              checked={isChecked}
+                              onChange={(e) => {
+                                const current = formData.securityMeasures || [];
+                                if (e.target.checked) {
+                                  setFormData({ ...formData, securityMeasures: [...current, sec] });
+                                } else {
+                                  setFormData({ ...formData, securityMeasures: current.filter(s => s !== sec) });
+                                }
+                              }}
+                              className="rounded text-emerald-600 focus:ring-emerald-500"
+                            />
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                </div>
+              )}
+
+              {/* PESTAÑA 3: GEODESIA & DECLARACIÓN JURADA (DDJJ) DE SIEMBRA */}
+              {activeModalTab === 'geodesy' && (
+                <div className="space-y-5">
+                  
+                  {/* Fila de Datos de Declaración Jurada */}
+                  <div className="p-4 bg-emerald-50/70 dark:bg-emerald-950/20 rounded-2xl border border-emerald-200/80 dark:border-emerald-900/40 grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="text-[10px] font-mono font-bold uppercase text-emerald-800 dark:text-emerald-300 block mb-1">
+                        N° Expediente / Código DDJJ de Siembra
+                      </label>
+                      <input 
+                        placeholder="Ej: DDJJ-SIEMBRA-2025-CBA-001" 
+                        className={inputClass} 
+                        value={formData.sowingDeclarationId || ''} 
+                        onChange={e => setFormData({ ...formData, sowingDeclarationId: e.target.value })} 
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-mono font-bold uppercase text-emerald-800 dark:text-emerald-300 block mb-1">
+                        Fecha Presentación DDJJ
+                      </label>
+                      <input 
+                        type="date" 
+                        className={inputClass} 
+                        value={formData.sowingDeclarationDate || ''} 
+                        onChange={e => setFormData({ ...formData, sowingDeclarationDate: e.target.value })} 
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-mono font-bold uppercase text-emerald-800 dark:text-emerald-300 block mb-1">
+                        Superficie DDJJ Siembra Geodésica (Ha)
+                      </label>
+                      <input 
+                        type="number" 
+                        step="0.01" 
+                        placeholder="0.00" 
+                        className={`${inputClass} font-mono font-black text-emerald-600`} 
+                        value={formData.sowingDeclarationHa || ''} 
+                        onChange={e => setFormData({ ...formData, sowingDeclarationHa: parseFloat(e.target.value) || 0 })} 
+                      />
+                    </div>
+                  </div>
+
+                  {/* Visor Satelital HD y Editor de Polígonos con Capas */}
+                  <div className="p-4 bg-slate-900 rounded-2xl border border-slate-800 flex flex-col min-h-[460px]">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-3">
+                      <div>
+                        <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-200 flex items-center gap-2">
+                          <Satellite size={15} className="text-emerald-400" />
+                          <span>Mapeo Geodésico Satelital HD (Perímetro Predio vs DDJJ Siembra)</span>
+                        </h3>
+                        <p className="text-[10px] font-mono text-slate-400 mt-0.5">
+                          Alterna entre Satélite HD, Terreno o Calles. Traza el predio general y el polígono geodésico exacto de siembra.
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {/* Importador KML Perímetro General */}
+                        <input type="file" accept=".kml" ref={fileInputRefGeneral} className="hidden" onChange={handleKMLUploadGeneral} />
                         <button 
                           type="button" 
-                          onClick={() => fileInputRef.current?.click()} 
-                          className="px-3 py-1 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider border border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-1 hover:bg-slate-100"
+                          onClick={() => fileInputRefGeneral.current?.click()} 
+                          className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-sky-300 rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider border border-sky-500/30 shadow-sm flex items-center gap-1"
                         >
-                          <FileUp size={12} /> Importar KML
+                          <FileUp size={12} /> KML Predio
+                        </button>
+
+                        {/* Importador KML DDJJ Siembra */}
+                        <input type="file" accept=".kml" ref={fileInputRefSowing} className="hidden" onChange={handleKMLUploadSowing} />
+                        <button 
+                          type="button" 
+                          onClick={() => fileInputRefSowing.current?.click()} 
+                          className="px-2.5 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider shadow-sm flex items-center gap-1"
+                        >
+                          <FileUp size={12} /> KML DDJJ Siembra
                         </button>
                       </div>
                     </div>
 
-                    <div className="flex-1 min-h-[260px] border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden mb-3 bg-slate-900">
+                    {/* Componente MapEditor con Capas Satelitales y Dual Polygons */}
+                    <div className="flex-1 min-h-[340px] rounded-xl overflow-hidden mb-3 border border-slate-700">
                       <MapEditor 
                         initialCenter={formData.lat && formData.lng ? { lat: parseFloat(formData.lat), lng: parseFloat(formData.lng) } : undefined} 
                         initialPolygon={formData.polygon || []} 
                         onPolygonChange={handlePolygonChange} 
+                        enableSowingLayer={true}
+                        sowingPolygon={formData.sowingDeclarationPolygon || []}
+                        onSowingPolygonChange={handleSowingPolygonChange}
+                        extraPolygons={plots.filter(p => p.locationId === editingId).map(p => ({
+                            id: p.id,
+                            polygon: p.polygon || [],
+                            label: `Lote: ${p.name} (${p.surfaceArea} ${p.surfaceUnit})`,
+                            color: p.color || '#a855f7'
+                        }))}
                         height="100%" 
                       />
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="text-[10px] font-mono font-bold uppercase text-slate-500 block mb-1">
-                          Latitud GPS
+                        <label className="text-[10px] font-mono font-bold uppercase text-slate-400 block mb-1">
+                          Centroide Latitud GPS
                         </label>
                         <input 
                           placeholder="-33.1235" 
-                          className={inputClass} 
+                          className="w-full bg-slate-800 border border-slate-700 p-2.5 rounded-xl text-xs text-white outline-none font-mono" 
                           value={formData.lat} 
                           onChange={e => setFormData({ ...formData, lat: e.target.value })} 
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] font-mono font-bold uppercase text-slate-500 block mb-1">
-                          Longitud GPS
+                        <label className="text-[10px] font-mono font-bold uppercase text-slate-400 block mb-1">
+                          Centroide Longitud GPS
                         </label>
                         <input 
                           placeholder="-64.3492" 
-                          className={inputClass} 
+                          className="w-full bg-slate-800 border border-slate-700 p-2.5 rounded-xl text-xs text-white outline-none font-mono" 
                           value={formData.lng} 
                           onChange={e => setFormData({ ...formData, lng: e.target.value })} 
                         />
@@ -1160,40 +1513,64 @@ export default function Locations() {
                     </div>
                   </div>
 
-                  {/* Notas Técnicas */}
+                  {/* Observaciones generales */}
                   <div>
                     <label className="text-[10px] font-mono font-bold uppercase text-slate-500 block mb-1">
-                      Observaciones y Notas de Campo
+                      Observaciones y Restricciones del Establecimiento
                     </label>
                     <textarea 
                       placeholder="Historial agronómico, restricciones fitosanitarias, estado del predio para la campaña..." 
-                      className={`${inputClass} h-20 resize-none`}
+                      className={`${inputClass} h-16 resize-none`}
                       value={formData.notes}
                       onChange={e => setFormData({ ...formData, notes: e.target.value })}
                     />
                   </div>
-                </div>
 
-              </div>
+                </div>
+              )}
 
               {/* Botonera de Guardado */}
-              <div className="flex justify-end pt-5 border-t border-slate-100 dark:border-slate-800 gap-3">
-                <button 
-                  type="button" 
-                  onClick={() => setIsModalOpen(false)} 
-                  className="px-5 py-2.5 text-slate-500 font-mono font-bold uppercase text-xs hover:text-slate-700"
-                >
-                  Cancelar
-                </button>
-                <button 
-                  type="submit" 
-                  disabled={isSaving} 
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white px-8 py-2.5 rounded-xl font-mono font-bold text-xs uppercase tracking-wider shadow-lg shadow-emerald-600/20 flex items-center gap-2 transition disabled:opacity-50 active:scale-95"
-                >
-                  {isSaving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
-                  <span>{editingId ? 'Actualizar Sitio' : 'Guardar Sitio'}</span>
-                </button>
+              <div className="flex justify-between items-center pt-5 border-t border-slate-100 dark:border-slate-800">
+                <div className="flex items-center gap-2">
+                  {activeModalTab !== 'general' && (
+                    <button 
+                      type="button" 
+                      onClick={() => setActiveModalTab(activeModalTab === 'geodesy' ? 'regulatory' : 'general')}
+                      className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-mono font-bold uppercase tracking-wider"
+                    >
+                      ← Anterior
+                    </button>
+                  )}
+                  {activeModalTab !== 'geodesy' && (
+                    <button 
+                      type="button" 
+                      onClick={() => setActiveModalTab(activeModalTab === 'general' ? 'regulatory' : 'geodesy')}
+                      className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-mono font-bold uppercase tracking-wider"
+                    >
+                      Siguiente →
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button 
+                    type="button" 
+                    onClick={() => setIsModalOpen(false)} 
+                    className="px-5 py-2.5 text-slate-500 font-mono font-bold uppercase text-xs hover:text-slate-700"
+                  >
+                    Cancelar
+                  </button>
+                  <button 
+                    type="submit" 
+                    disabled={isSaving} 
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white px-8 py-2.5 rounded-xl font-mono font-bold text-xs uppercase tracking-wider shadow-lg shadow-emerald-600/20 flex items-center gap-2 transition disabled:opacity-50 active:scale-95"
+                  >
+                    {isSaving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
+                    <span>{editingId ? 'Actualizar Establecimiento' : 'Guardar Establecimiento'}</span>
+                  </button>
+                </div>
               </div>
+
             </form>
           </div>
         </div>

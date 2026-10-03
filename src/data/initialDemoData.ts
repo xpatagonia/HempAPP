@@ -85,7 +85,29 @@ export const DEMO_LOCATIONS: Location[] = [
     coordinates: { lat: -33.1235, lng: -64.3492 },
     capacityHa: 85,
     irrigationSystem: 'Pivote Central y Goteo Subterráneo',
-    notes: 'Predio principal de ensayos agronómicos y monitoreo satelital continuo.'
+    ariccameLicenseNumber: 'ARICCAME-DISP-2024-00142-APN',
+    ariccameLicenseCategory: 'Investigación y Desarrollo (I+D / Ensayos)',
+    ariccameLicenseStatus: 'Vigente',
+    renspaNumber: '04.023.0.01948/01',
+    cadastralId: 'Circ. 04 - Sec. B - Parc. 128',
+    landTenureType: 'Convenio Institucional',
+    securityMeasures: ['Cerco Perimetral Reglamentario', 'Control de Acceso / Libro de Guardia', 'Monitoreo CCTV / Vigilancia', 'Protocolo de Destrucción de Residuos Vegetales'],
+    sowingDeclarationId: 'DDJJ-SIEMBRA-2025-CBA-001',
+    sowingDeclarationDate: '2025-09-15',
+    sowingDeclarationHa: 25.5,
+    polygon: [
+      { lat: -33.1180, lng: -64.3570 },
+      { lat: -33.1185, lng: -64.3410 },
+      { lat: -33.1290, lng: -64.3415 },
+      { lat: -33.1285, lng: -64.3575 }
+    ],
+    sowingDeclarationPolygon: [
+      { lat: -33.1200, lng: -64.3540 },
+      { lat: -33.1205, lng: -64.3440 },
+      { lat: -33.1270, lng: -64.3445 },
+      { lat: -33.1265, lng: -64.3545 }
+    ],
+    notes: 'Predio principal de ensayos agronómicos con licencia I+D ARICCAME y monitoreo satelital continuo.'
   },
   {
     id: 'loc-pergamino',
@@ -102,6 +124,28 @@ export const DEMO_LOCATIONS: Location[] = [
     coordinates: { lat: -33.8912, lng: -60.5731 },
     capacityHa: 120,
     irrigationSystem: 'Secano Tecnificado con microaspersión complementaria',
+    ariccameLicenseNumber: 'ARICCAME-DISP-2024-00215-APN',
+    ariccameLicenseCategory: 'Cultivo e Industrialización (Fibra y Grano)',
+    ariccameLicenseStatus: 'Vigente',
+    renspaNumber: '01.085.0.03812/00',
+    cadastralId: 'Partida Inmob. 085-19482',
+    landTenureType: 'Arrendamiento',
+    securityMeasures: ['Cerco Perimetral Reglamentario', 'Control de Acceso / Libro de Guardia', 'Cartelería Reglamentaria ARICCAME'],
+    sowingDeclarationId: 'DDJJ-SIEMBRA-2025-BA-014',
+    sowingDeclarationDate: '2025-10-02',
+    sowingDeclarationHa: 45.0,
+    polygon: [
+      { lat: -33.8850, lng: -60.5810 },
+      { lat: -33.8855, lng: -60.5650 },
+      { lat: -33.8970, lng: -60.5655 },
+      { lat: -33.8965, lng: -60.5815 }
+    ],
+    sowingDeclarationPolygon: [
+      { lat: -33.8875, lng: -60.5780 },
+      { lat: -33.8880, lng: -60.5680 },
+      { lat: -33.8945, lng: -60.5685 },
+      { lat: -33.8940, lng: -60.5785 }
+    ],
     notes: 'Campo extensivo en rotación. Programado para descanso parcial en la campaña 2026/2027.'
   },
   {
@@ -119,6 +163,28 @@ export const DEMO_LOCATIONS: Location[] = [
     coordinates: { lat: -40.7831, lng: -63.0024 },
     capacityHa: 60,
     irrigationSystem: 'Riego por Gravedad y Canales Matriz',
+    ariccameLicenseNumber: 'ARICCAME-DISP-2025-00049-APN',
+    ariccameLicenseCategory: 'Cultivo e Industrialización (Fibra y Grano)',
+    ariccameLicenseStatus: 'Vigente',
+    renspaNumber: '16.012.0.00514/02',
+    cadastralId: 'Parcela 104 - Colonia IDEVI',
+    landTenureType: 'Propiedad',
+    securityMeasures: ['Cerco Perimetral Reglamentario', 'Control de Acceso / Libro de Guardia', 'Monitoreo CCTV / Vigilancia'],
+    sowingDeclarationId: 'DDJJ-SIEMBRA-2025-RN-003',
+    sowingDeclarationDate: '2025-10-20',
+    sowingDeclarationHa: 30.0,
+    polygon: [
+      { lat: -40.7760, lng: -63.0120 },
+      { lat: -40.7765, lng: -62.9920 },
+      { lat: -40.7895, lng: -62.9925 },
+      { lat: -40.7890, lng: -63.0125 }
+    ],
+    sowingDeclarationPolygon: [
+      { lat: -40.7785, lng: -63.0090 },
+      { lat: -40.7790, lng: -62.9950 },
+      { lat: -40.7870, lng: -62.9955 },
+      { lat: -40.7865, lng: -63.0095 }
+    ],
     notes: 'Chacra de producción intensiva bajo riego sistematizado.'
   },
   {
@@ -136,6 +202,15 @@ export const DEMO_LOCATIONS: Location[] = [
     coordinates: { lat: -34.6345, lng: -58.4060 },
     capacityHa: 0.5,
     irrigationSystem: 'Goteo',
+    ariccameLicenseNumber: 'ARICCAME-DISP-2023-00088-APN',
+    ariccameLicenseCategory: 'Semillero y Criadero Certificado (INASE)',
+    ariccameLicenseStatus: 'Vigente',
+    cadastralId: 'Comuna 4 - Manzana 82 - Edificio B3',
+    landTenureType: 'Convenio Institucional',
+    securityMeasures: ['Control Biométrico de Acceso', 'CCTV 24/7 con Grabación 90 días', 'Protocolo de Destrucción de Residuos Vegetales', 'Alarma Perimetral Monitoreada'],
+    sowingDeclarationId: 'DDJJ-INDOOR-2025-001',
+    sowingDeclarationDate: '2025-08-01',
+    sowingDeclarationHa: 0.25,
     notes: 'Cámaras de cultivo indoor de precisión para micropropagación, madres y estabilidad genética.'
   },
   {
@@ -153,6 +228,11 @@ export const DEMO_LOCATIONS: Location[] = [
     coordinates: { lat: -34.6225, lng: -58.6730 },
     capacityHa: 1.2,
     irrigationSystem: 'Microaspersión',
+    ariccameLicenseNumber: 'EXP-ARICCAME-2025-00391-APN',
+    ariccameLicenseCategory: 'Investigación y Desarrollo (I+D / Ensayos)',
+    ariccameLicenseStatus: 'En Trámite',
+    landTenureType: 'Convenio Institucional',
+    securityMeasures: ['Cerco Perimetral Reglamentario', 'Control de Acceso / Libro de Guardia', 'Monitoreo CCTV / Vigilancia'],
     notes: 'En preparación para la próxima campaña 2026/2027 para producción de esquejes certificados.'
   },
   {
@@ -170,6 +250,13 @@ export const DEMO_LOCATIONS: Location[] = [
     coordinates: { lat: -33.0441, lng: -61.1681 },
     capacityHa: 95,
     irrigationSystem: 'Secano (Lluvia)',
+    ariccameLicenseNumber: 'ARICCAME-DISP-2024-00072-APN',
+    ariccameLicenseCategory: 'Cultivo e Industrialización (Fibra y Grano)',
+    ariccameLicenseStatus: 'Vigente',
+    renspaNumber: '21.045.0.01120/00',
+    cadastralId: 'Partida 21045-883',
+    landTenureType: 'Propiedad',
+    securityMeasures: ['Cerco Perimetral Reglamentario', 'Cartelería Reglamentaria ARICCAME'],
     notes: 'Lote en barbecho químico y siembra de cultivos de servicio. Inactivo para la próxima campaña 2025/2026.'
   }
 ];

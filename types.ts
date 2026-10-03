@@ -31,6 +31,15 @@ export interface User {
   isNetworkMember: boolean; 
 }
 
+export type HempLicenseCategory = 
+  | 'Cultivo e Industrialización (Fibra y Grano)' 
+  | 'Investigación y Desarrollo (I+D / Ensayos)' 
+  | 'Semillero y Criadero Certificado (INASE)' 
+  | 'Alimentos y Biomasa' 
+  | 'Medicinal / Fitoquímicos';
+
+export type HempLicenseStatus = 'Vigente' | 'En Trámite' | 'Pre-Aprobada' | 'Vencida';
+
 export interface Location {
   id: string;
   name: string;
@@ -41,7 +50,7 @@ export interface Location {
   climate?: string;
   responsiblePerson?: string;
   coordinates?: { lat: number; lng: number };
-  polygon?: { lat: number; lng: number }[];
+  polygon?: { lat: number; lng: number }[]; // Perímetro General del Establecimiento
   clientId?: string;
   ownerName?: string;
   ownerLegalName?: string;
@@ -55,6 +64,21 @@ export interface Location {
   status?: SiteStatus;
   activeCampaigns?: string[];
   notes?: string;
+
+  // ESTÁNDARES REGULATORIOS Y LICENCIA DE CÁÑAMO (ARICCAME / INASE / SENASA)
+  ariccameLicenseNumber?: string; // N° Disposición / Licencia ARICCAME
+  ariccameLicenseCategory?: HempLicenseCategory; // Categoría de licencia
+  ariccameLicenseStatus?: HempLicenseStatus; // Estado de la licencia
+  renspaNumber?: string; // Registro Nacional Sanitario de Productores Agropecuarios (SENASA)
+  cadastralId?: string; // Partida Inmobiliaria / Nomenclatura Catastral
+  landTenureType?: 'Propiedad' | 'Arrendamiento' | 'Comodato' | 'Convenio Institucional';
+  securityMeasures?: string[]; // Medidas de seguridad (Cerco, CCTV, Control biométrico, Protocolo residuos)
+
+  // GEODESIA: DECLARACIÓN JURADA DE SIEMBRA (DDJJ)
+  sowingDeclarationPolygon?: { lat: number; lng: number }[]; // Polígono geodésico exacto declarado ante ARICCAME/SENASA
+  sowingDeclarationHa?: number; // Superficie geodésica declarada
+  sowingDeclarationId?: string; // N° Expediente / Código de DDJJ de Siembra
+  sowingDeclarationDate?: string; // Fecha de presentación oficial de DDJJ
 }
 
 export interface HydricRecord {
