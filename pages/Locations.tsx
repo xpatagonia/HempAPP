@@ -443,6 +443,21 @@ export default function Locations() {
     setActiveModalTab('general');
   };
 
+  const switchTab = (tab: 'general' | 'regulatory' | 'geodesy') => {
+    setActiveModalTab(tab);
+    if (tab === 'geodesy') {
+      setTimeout(() => {
+        window.dispatchEvent(new Event('resize'));
+      }, 50);
+      setTimeout(() => {
+        window.dispatchEvent(new Event('resize'));
+      }, 200);
+      setTimeout(() => {
+        window.dispatchEvent(new Event('resize'));
+      }, 500);
+    }
+  };
+
   const handleEdit = (loc: Location) => {
       setFormData({ 
           ...loc, 
@@ -986,7 +1001,7 @@ export default function Locations() {
             <div className="flex items-center gap-2 mb-6 border-b border-slate-200/80 dark:border-slate-800 pb-2">
               <button
                 type="button"
-                onClick={() => setActiveModalTab('general')}
+                onClick={() => switchTab('general')}
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition ${
                   activeModalTab === 'general'
                     ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-sm'
@@ -999,7 +1014,7 @@ export default function Locations() {
 
               <button
                 type="button"
-                onClick={() => setActiveModalTab('regulatory')}
+                onClick={() => switchTab('regulatory')}
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition ${
                   activeModalTab === 'regulatory'
                     ? 'bg-purple-600 text-white shadow-sm'
@@ -1012,7 +1027,7 @@ export default function Locations() {
 
               <button
                 type="button"
-                onClick={() => setActiveModalTab('geodesy')}
+                onClick={() => switchTab('geodesy')}
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition ${
                   activeModalTab === 'geodesy'
                     ? 'bg-emerald-600 text-white shadow-sm'
@@ -1027,8 +1042,7 @@ export default function Locations() {
             <form onSubmit={handleSubmit} className="space-y-6">
               
               {/* PESTAÑA 1: FICHA TÉCNICA, DENOMINACIÓN & CAMPAÑAS */}
-              {activeModalTab === 'general' && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className={activeModalTab === 'general' ? 'grid grid-cols-1 lg:grid-cols-2 gap-6' : 'hidden'}>
                   
                   {/* Tipología & Estado */}
                   <div className="p-5 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 space-y-4">
@@ -1229,11 +1243,9 @@ export default function Locations() {
                   </div>
 
                 </div>
-              )}
 
               {/* PESTAÑA 2: LICENCIA ARICCAME & ESTÁNDARES REGULATORIOS */}
-              {activeModalTab === 'regulatory' && (
-                <div className="space-y-6">
+              <div className={activeModalTab === 'regulatory' ? 'space-y-6' : 'hidden'}>
                   
                   {/* Datos de Licencia ARICCAME */}
                   <div className="p-5 bg-purple-50/60 dark:bg-purple-950/20 rounded-2xl border border-purple-200/80 dark:border-purple-900/40 space-y-4">
@@ -1385,11 +1397,9 @@ export default function Locations() {
                   </div>
 
                 </div>
-              )}
 
               {/* PESTAÑA 3: GEODESIA & DECLARACIÓN JURADA (DDJJ) DE SIEMBRA */}
-              {activeModalTab === 'geodesy' && (
-                <div className="space-y-5">
+              <div className={activeModalTab === 'geodesy' ? 'space-y-5 block' : 'hidden'}>
                   
                   {/* Fila de Datos de Declaración Jurada */}
                   <div className="p-4 bg-emerald-50/70 dark:bg-emerald-950/20 rounded-2xl border border-emerald-200/80 dark:border-emerald-900/40 grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1469,8 +1479,9 @@ export default function Locations() {
                     </div>
 
                     {/* Componente MapEditor con Capas Satelitales y Dual Polygons */}
-                    <div className="flex-1 min-h-[340px] rounded-xl overflow-hidden mb-3 border border-slate-700">
+                    <div className="w-full h-[480px] min-h-[440px] rounded-xl overflow-hidden mb-3 border border-slate-700 bg-slate-950">
                       <MapEditor 
+                        key={editingId ? `map-loc-${editingId}-${activeModalTab}` : `map-loc-new-${activeModalTab}`}
                         initialCenter={formData.lat && formData.lng ? { lat: parseFloat(formData.lat), lng: parseFloat(formData.lng) } : undefined} 
                         initialPolygon={formData.polygon || []} 
                         onPolygonChange={handlePolygonChange} 
@@ -1483,7 +1494,7 @@ export default function Locations() {
                             label: `Lote: ${p.name} (${p.surfaceArea} ${p.surfaceUnit})`,
                             color: p.color || '#a855f7'
                         }))}
-                        height="100%" 
+                        height="480px" 
                       />
                     </div>
 
@@ -1527,7 +1538,6 @@ export default function Locations() {
                   </div>
 
                 </div>
-              )}
 
               {/* Botonera de Guardado */}
               <div className="flex justify-between items-center pt-5 border-t border-slate-100 dark:border-slate-800">
@@ -1535,7 +1545,7 @@ export default function Locations() {
                   {activeModalTab !== 'general' && (
                     <button 
                       type="button" 
-                      onClick={() => setActiveModalTab(activeModalTab === 'geodesy' ? 'regulatory' : 'general')}
+                      onClick={() => switchTab(activeModalTab === 'geodesy' ? 'regulatory' : 'general')}
                       className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-mono font-bold uppercase tracking-wider"
                     >
                       ← Anterior
@@ -1544,7 +1554,7 @@ export default function Locations() {
                   {activeModalTab !== 'geodesy' && (
                     <button 
                       type="button" 
-                      onClick={() => setActiveModalTab(activeModalTab === 'general' ? 'regulatory' : 'geodesy')}
+                      onClick={() => switchTab(activeModalTab === 'general' ? 'regulatory' : 'geodesy')}
                       className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-mono font-bold uppercase tracking-wider"
                     >
                       Siguiente →

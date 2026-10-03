@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Polygon, Marker, useMapEvents, useMap, Tooltip } from 'react-leaflet';
-import { Trash2, MapPin, MousePointer, Maximize, Layers, Satellite, Mountain, Navigation, ShieldCheck, Check } from 'lucide-react';
+import { Trash2, MapPin, MousePointer, Maximize, Layers, Satellite, Mountain, Navigation, ShieldCheck, Check, Globe } from 'lucide-react';
 import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 
 // Fix Leaflet icons in React
 import icon from 'leaflet/dist/images/marker-icon.png';
@@ -15,7 +16,7 @@ let DefaultIcon = L.icon({
 });
 L.Marker.prototype.options.icon = DefaultIcon;
 
-type MapLayerType = 'satellite' | 'terrain' | 'street';
+type MapLayerType = 'google_hybrid' | 'esri_sat' | 'terrain' | 'street';
 
 interface MapEditorProps {
     initialPolygon?: { lat: number, lng: number }[];
@@ -36,18 +37,27 @@ const MapResizer = () => {
     const map = useMap();
     useEffect(() => {
         if (!map) return;
-        const container = map.getContainer();
-        const observer = new ResizeObserver(() => {
-            requestAnimationFrame(() => {
-                map.invalidateSize({ animate: false });
-            });
-        });
-        observer.observe(container);
-        map.invalidateSize();
-        const timer = setTimeout(() => map.invalidateSize(), 500);
+        const trigger = () => {
+            try { 
+                map.invalidateSize({ animate: false }); 
+            } catch (e) {}
+        };
+
+        trigger();
+        const t1 = setTimeout(trigger, 50);
+        const t2 = setTimeout(trigger, 150);
+        const t3 = setTimeout(trigger, 400);
+        const t4 = setTimeout(trigger, 800);
+        const t5 = setTimeout(trigger, 1500);
+
+        window.addEventListener('resize', trigger);
         return () => {
-            observer.disconnect();
-            clearTimeout(timer);
+            clearTimeout(t1);
+            clearTimeout(t2);
+            clearTimeout(t3);
+            clearTimeout(t4);
+            clearTimeout(t5);
+            window.removeEventListener('resize', trigger);
         };
     }, [map]);
     return null;
@@ -65,7 +75,7 @@ const MapRecenter = ({ center, polygon }: { center: { lat: number, lng: number }
             const bounds = L.latLngBounds(polygon.map(p => [p.lat, p.lng]));
             map.fitBounds(bounds, { padding: [25, 25] });
         } else if (center && center.lat !== 0 && center.lng !== 0) {
-            map.setView([center.lat, center.lng], 15);
+            map.setView([center.lat, center.lng], 14);
         }
     }, [center, polygon, map]);
     return null;
@@ -81,15 +91,15 @@ export default function MapEditor({
     onSowingPolygonChange,
     enableSowingLayer = false,
     readOnly = false, 
-    height = "400px" 
+    height = "480px" 
 }: MapEditorProps) {
     const [polygon, setPolygon] = useState<{ lat: number, lng: number }[]>(initialPolygon);
     const [sowingPoly, setSowingPoly] = useState<{ lat: number, lng: number }[]>(sowingPolygon);
     
-    // Capa de mapa activa: 'satellite' (satélite de alta definición Esri), 'terrain' (topografía), 'street' (gráfico OSM)
-    const [activeLayer, setActiveLayer] = useState<MapLayerType>('satellite');
+    // Capa de mapa activa: 'google_hybrid' (satélite de alta definición con caminos), 'esri_sat', 'terrain', 'street'
+    const [activeLayer, setActiveLayer] = useState<MapLayerType>('google_hybrid');
     
-    // Si la capa DDJJ de siembra está habilitada, podemos alternar cuál estamos editando:
+    // Si la capa DDJJ de siembra está habilitada:
     // 'general' = Perímetro General del Establecimiento | 'sowing' = Declaración Jurada de Siembra
     const [activeEditTarget, setActiveEditTarget] = useState<'general' | 'sowing'>('general');
 
@@ -165,20 +175,25 @@ export default function MapEditor({
         }
     };
 
+    const actualHeight = height && height !== '100%' ? height : '480px';
+
     return (
-        <div className="relative w-full rounded-2xl overflow-hidden border border-slate-300 dark:border-slate-800 shadow-inner z-0 bg-slate-950" style={{ height, minHeight: '340px' }}>
+        <div 
+            className="relative w-full rounded-2xl overflow-hidden border border-slate-300 dark:border-slate-800 shadow-inner z-0 bg-slate-950" 
+            style={{ height: actualHeight, minHeight: '440px' }}
+        >
             
             {/* 1. SELECTOR FLOTANTE DE CAPAS DE MAPA (SATÉLITE / TERRENO / CALLES) */}
-            <div className="absolute top-3 left-3 z-[1000] flex items-center bg-slate-900/90 dark:bg-slate-900/95 backdrop-blur-md p-1 rounded-xl shadow-xl border border-white/20">
+            <div className="absolute top-3 left-3 z-[1000] flex items-center bg-slate-900/95 dark:bg-slate-900/95 backdrop-blur-md p-1 rounded-xl shadow-xl border border-white/20">
                 <button
                     type="button"
-                    onClick={() => setActiveLayer('satellite')}
-                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-mono font-bold uppercase transition ${
-                        activeLayer === 'satellite'
+                    onClick={() => setActiveLayer('google_hybrid')}
+                    className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-mono font-bold uppercase transition ${
+                        activeLayer === 'google_hybrid'
                             ? 'bg-emerald-600 text-white shadow-sm'
                             : 'text-slate-300 hover:text-white hover:bg-slate-800'
                     }`}
-                    title="Vista Satelital de Alta Definición (Esri World Imagery)"
+                    title="Satélite Google Hybrid con rotulación de caminos rurales"
                 >
                     <Satellite size={12} />
                     <span>Satélite HD</span>
@@ -186,8 +201,22 @@ export default function MapEditor({
 
                 <button
                     type="button"
+                    onClick={() => setActiveLayer('esri_sat')}
+                    className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-mono font-bold uppercase transition ${
+                        activeLayer === 'esri_sat'
+                            ? 'bg-emerald-600 text-white shadow-sm'
+                            : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                    }`}
+                    title="Satélite Esri World Imagery"
+                >
+                    <Globe size={12} />
+                    <span>Esri Sat</span>
+                </button>
+
+                <button
+                    type="button"
                     onClick={() => setActiveLayer('terrain')}
-                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-mono font-bold uppercase transition ${
+                    className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-mono font-bold uppercase transition ${
                         activeLayer === 'terrain'
                             ? 'bg-emerald-600 text-white shadow-sm'
                             : 'text-slate-300 hover:text-white hover:bg-slate-800'
@@ -201,7 +230,7 @@ export default function MapEditor({
                 <button
                     type="button"
                     onClick={() => setActiveLayer('street')}
-                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-mono font-bold uppercase transition ${
+                    className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-mono font-bold uppercase transition ${
                         activeLayer === 'street'
                             ? 'bg-emerald-600 text-white shadow-sm'
                             : 'text-slate-300 hover:text-white hover:bg-slate-800'
@@ -215,11 +244,11 @@ export default function MapEditor({
 
             {/* 2. SELECTOR DE POLÍGONO ACTIVO A DIBUJAR (GENERAL VS DDJJ SIEMBRA) */}
             {enableSowingLayer && !readOnly && (
-                <div className="absolute top-14 left-3 z-[1000] flex items-center bg-slate-900/90 dark:bg-slate-900/95 backdrop-blur-md p-1 rounded-xl shadow-xl border border-white/20">
+                <div className="absolute top-14 left-3 z-[1000] flex items-center bg-slate-900/95 dark:bg-slate-900/95 backdrop-blur-md p-1 rounded-xl shadow-xl border border-white/20">
                     <button
                         type="button"
                         onClick={() => setActiveEditTarget('general')}
-                        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-mono font-bold uppercase transition ${
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-mono font-bold uppercase transition ${
                             activeEditTarget === 'general'
                                 ? 'bg-sky-600 text-white shadow-sm'
                                 : 'text-slate-300 hover:text-white hover:bg-slate-800'
@@ -227,13 +256,13 @@ export default function MapEditor({
                         title="Dibujar Perímetro General del Predio"
                     >
                         <span className="w-2 h-2 rounded-full bg-sky-400" />
-                        <span>1. Perímetro General</span>
+                        <span>1. Perímetro General ({calculateAreaHa(polygon).toFixed(1)} ha)</span>
                     </button>
 
                     <button
                         type="button"
                         onClick={() => setActiveEditTarget('sowing')}
-                        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-mono font-bold uppercase transition ${
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-mono font-bold uppercase transition ${
                             activeEditTarget === 'sowing'
                                 ? 'bg-emerald-600 text-white shadow-sm'
                                 : 'text-slate-300 hover:text-white hover:bg-slate-800'
@@ -241,14 +270,14 @@ export default function MapEditor({
                         title="Dibujar Polígono Geodésico de Siembra (Declaración Jurada ARICCAME/SENASA)"
                     >
                         <ShieldCheck size={12} className="text-emerald-300" />
-                        <span>2. DDJJ Siembra Geodésica</span>
+                        <span>2. DDJJ Siembra Geodésica ({calculateAreaHa(sowingPoly).toFixed(2)} ha)</span>
                     </button>
                 </div>
             )}
 
             {/* 3. BOTÓN LIMPIAR POLÍGONO ACTIVO */}
             {!readOnly && (
-                <div className="absolute top-3 right-3 z-[1000] bg-slate-900/90 dark:bg-slate-900/95 backdrop-blur-md p-1.5 rounded-xl shadow-xl border border-white/20">
+                <div className="absolute top-3 right-3 z-[1000] bg-slate-900/95 dark:bg-slate-900/95 backdrop-blur-md p-1.5 rounded-xl shadow-xl border border-white/20">
                     <button 
                         onClick={handleClearActiveLayer} 
                         className="flex items-center text-[10px] text-rose-400 font-mono font-bold uppercase tracking-wider px-2.5 py-1 rounded-lg hover:bg-rose-950/40 transition-colors" 
@@ -261,18 +290,27 @@ export default function MapEditor({
                 </div>
             )}
 
-            {/* 4. MAPA LEAFLET CON TILE LAYER DINÁMICA */}
+            {/* 4. MAPA LEAFLET CON TILE LAYER DINÁMICA Y HEIGHT EXPLÍCITO */}
             <MapContainer 
                 center={[center.lat, center.lng]} 
                 zoom={14}
                 maxZoom={25}
-                style={{ height: "100%", width: "100%" }}
+                style={{ height: actualHeight, minHeight: '440px', width: "100%" }}
                 scrollWheelZoom={true}
             >
                 <MapResizer />
 
                 {/* Capas según selección de usuario */}
-                {activeLayer === 'satellite' && (
+                {activeLayer === 'google_hybrid' && (
+                    <TileLayer 
+                        attribution='&copy; Google Satellite Imagery' 
+                        url="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}" 
+                        maxZoom={25}
+                        maxNativeZoom={20}
+                    />
+                )}
+
+                {activeLayer === 'esri_sat' && (
                     <TileLayer 
                         attribution='Tiles &copy; Esri &mdash; Maxar, Earthstar Geographics' 
                         url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" 
@@ -315,8 +353,8 @@ export default function MapEditor({
                         positions={polygon} 
                         pathOptions={{ color: '#38bdf8', fillColor: '#0284c7', fillOpacity: 0.15, weight: 3 }}
                     >
-                         <Tooltip direction="center" offset={[0, 0]} opacity={0.8} permanent>
-                            <span className="font-mono font-bold text-[10px] uppercase text-sky-900 bg-sky-100 px-1 py-0.5 rounded">
+                         <Tooltip direction="center" offset={[0, 0]} opacity={0.85} permanent>
+                            <span className="font-mono font-bold text-[10px] uppercase text-sky-950 bg-sky-200 px-1.5 py-0.5 rounded shadow">
                                 Predio General ({calculateAreaHa(polygon).toFixed(1)} ha)
                             </span>
                          </Tooltip>
@@ -335,8 +373,8 @@ export default function MapEditor({
                             dashArray: '6, 6'
                         }}
                     >
-                         <Tooltip direction="center" offset={[0, 0]} opacity={0.9} permanent>
-                            <span className="font-mono font-black text-[10px] uppercase text-emerald-950 bg-emerald-300 px-1.5 py-0.5 rounded shadow">
+                         <Tooltip direction="center" offset={[0, 0]} opacity={0.95} permanent>
+                            <span className="font-mono font-black text-[10px] uppercase text-emerald-950 bg-emerald-300 px-2 py-0.5 rounded shadow border border-emerald-400">
                                 📜 DDJJ Siembra: {calculateAreaHa(sowingPoly).toFixed(2)} Ha
                             </span>
                          </Tooltip>
@@ -378,7 +416,7 @@ export default function MapEditor({
                     <MousePointer size={12} className="mr-2 animate-pulse text-emerald-400"/> 
                     <span>
                         {enableSowingLayer && activeEditTarget === 'sowing' 
-                            ? 'Haz clic para marcar los vértices de la Declaración Jurada de Siembra' 
+                            ? 'Haz clic en el mapa satelital para trazar el polígono de DDJJ de Siembra' 
                             : 'Haz clic en el mapa satelital para trazar el perímetro general'}
                     </span>
                 </div>
