@@ -6,6 +6,18 @@ export type SupplierCategory = 'Semillas' | 'Insumos' | 'Servicios' | 'Recursos 
 export type MembershipLevel = 'Activo' | 'En Observación' | 'Premium' | 'Baja Temporal';
 export type SoilType = string;
 
+export type SiteType = 
+  | 'Campo Extensivo' 
+  | 'Chacra Intensiva' 
+  | 'Predio Experimental' 
+  | 'Indoor / Laboratorio' 
+  | 'Invernadero' 
+  | 'Centro de Procesamiento';
+
+export type SiteStatus = 'Activo' | 'Inactivo' | 'En Barbecho' | 'En Preparación';
+
+export const CAMPAIGNS = ['2024/2025', '2025/2026', '2026/2027', '2027/2028'] as const;
+
 export interface User {
   id: string;
   name: string;
@@ -39,6 +51,10 @@ export interface Location {
   capacityHa?: number;
   irrigationSystem?: string;
   responsibleIds?: string[];
+  siteType?: SiteType;
+  status?: SiteStatus;
+  activeCampaigns?: string[];
+  notes?: string;
 }
 
 export interface HydricRecord {

@@ -73,6 +73,9 @@ export const DEMO_LOCATIONS: Location[] = [
   {
     id: 'loc-riocuarto',
     name: 'Estación Experimental Río Cuarto',
+    siteType: 'Predio Experimental',
+    status: 'Activo',
+    activeCampaigns: ['2024/2025', '2025/2026', '2026/2027'],
     province: 'Córdoba',
     city: 'Río Cuarto',
     address: 'Ruta Nac. 36 Km 601',
@@ -81,11 +84,15 @@ export const DEMO_LOCATIONS: Location[] = [
     responsiblePerson: 'Ing. Agr. Gastón Barea',
     coordinates: { lat: -33.1235, lng: -64.3492 },
     capacityHa: 85,
-    irrigationSystem: 'Pivote Central y Goteo Subterráneo'
+    irrigationSystem: 'Pivote Central y Goteo Subterráneo',
+    notes: 'Predio principal de ensayos agronómicos y monitoreo satelital continuo.'
   },
   {
     id: 'loc-pergamino',
     name: 'Campo Demostrativo Pergamino',
+    siteType: 'Campo Extensivo',
+    status: 'Activo',
+    activeCampaigns: ['2024/2025', '2025/2026'],
     province: 'Buenos Aires',
     city: 'Pergamino',
     address: 'Ruta Nac. 8 Km 224',
@@ -94,11 +101,15 @@ export const DEMO_LOCATIONS: Location[] = [
     responsiblePerson: 'Ing. Téc. Marcos Gómez',
     coordinates: { lat: -33.8912, lng: -60.5731 },
     capacityHa: 120,
-    irrigationSystem: 'Secano Tecnificado con microaspersión complementaria'
+    irrigationSystem: 'Secano Tecnificado con microaspersión complementaria',
+    notes: 'Campo extensivo en rotación. Programado para descanso parcial en la campaña 2026/2027.'
   },
   {
     id: 'loc-patagonia',
     name: 'Valle Inferior Río Negro (IDEVI)',
+    siteType: 'Chacra Intensiva',
+    status: 'Activo',
+    activeCampaigns: ['2025/2026', '2026/2027'],
     province: 'Río Negro',
     city: 'Viedma',
     address: 'Camino 4 IDEVI Parcela 104',
@@ -107,7 +118,59 @@ export const DEMO_LOCATIONS: Location[] = [
     responsiblePerson: 'Ing. Lucas Ferrando',
     coordinates: { lat: -40.7831, lng: -63.0024 },
     capacityHa: 60,
-    irrigationSystem: 'Riego por Gravedad y Canales Matriz'
+    irrigationSystem: 'Riego por Gravedad y Canales Matriz',
+    notes: 'Chacra de producción intensiva bajo riego sistematizado.'
+  },
+  {
+    id: 'loc-indoor-caba',
+    name: 'BioLab Indoor & Clima Controlado CABA',
+    siteType: 'Indoor / Laboratorio',
+    status: 'Activo',
+    activeCampaigns: ['2024/2025', '2025/2026', '2026/2027', '2027/2028'],
+    province: 'Buenos Aires',
+    city: 'CABA',
+    address: 'Polo Tecnológico Parque Patricios',
+    soilType: 'Sustrato Controlado',
+    climate: 'Atmósfera Controlada (HVAC + LED espectro completo)',
+    responsiblePerson: 'Dra. Elena Santillán',
+    coordinates: { lat: -34.6345, lng: -58.4060 },
+    capacityHa: 0.5,
+    irrigationSystem: 'Goteo',
+    notes: 'Cámaras de cultivo indoor de precisión para micropropagación, madres y estabilidad genética.'
+  },
+  {
+    id: 'loc-greenhouse-castelar',
+    name: 'Invernadero Tecnológico Castelar',
+    siteType: 'Invernadero',
+    status: 'En Preparación',
+    activeCampaigns: ['2026/2027'],
+    province: 'Buenos Aires',
+    city: 'Castelar',
+    address: 'Polo Tecnológico INTA Castelar',
+    soilType: 'Sustrato Controlado',
+    climate: 'Invernadero automatizado con control de fotoperiodo',
+    responsiblePerson: 'Ing. Pablo Morales',
+    coordinates: { lat: -34.6225, lng: -58.6730 },
+    capacityHa: 1.2,
+    irrigationSystem: 'Microaspersión',
+    notes: 'En preparación para la próxima campaña 2026/2027 para producción de esquejes certificados.'
+  },
+  {
+    id: 'loc-barbecho-rosas',
+    name: 'Establecimiento Las Rosas (En Barbecho)',
+    siteType: 'Campo Extensivo',
+    status: 'En Barbecho',
+    activeCampaigns: ['2024/2025'],
+    province: 'Santa Fe',
+    city: 'Casilda',
+    address: 'Ruta Pcial. 92 Km 18',
+    soilType: 'Franco Arcilloso',
+    climate: 'Templado húmedo',
+    responsiblePerson: 'Ing. Rodrigo Paz',
+    coordinates: { lat: -33.0441, lng: -61.1681 },
+    capacityHa: 95,
+    irrigationSystem: 'Secano (Lluvia)',
+    notes: 'Lote en barbecho químico y siembra de cultivos de servicio. Inactivo para la próxima campaña 2025/2026.'
   }
 ];
 
