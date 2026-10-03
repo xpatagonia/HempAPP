@@ -1399,7 +1399,8 @@ export default function Locations() {
                 </div>
 
               {/* PESTAÑA 3: GEODESIA & DECLARACIÓN JURADA (DDJJ) DE SIEMBRA */}
-              <div className={activeModalTab === 'geodesy' ? 'space-y-5 block' : 'hidden'}>
+              {activeModalTab === 'geodesy' && (
+                <div className="space-y-5">
                   
                   {/* Fila de Datos de Declaración Jurada */}
                   <div className="p-4 bg-emerald-50/70 dark:bg-emerald-950/20 rounded-2xl border border-emerald-200/80 dark:border-emerald-900/40 grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1481,8 +1482,8 @@ export default function Locations() {
                     {/* Componente MapEditor con Capas Satelitales y Dual Polygons */}
                     <div className="w-full h-[480px] min-h-[440px] rounded-xl overflow-hidden mb-3 border border-slate-700 bg-slate-950">
                       <MapEditor 
-                        key={editingId ? `map-loc-${editingId}-${activeModalTab}` : `map-loc-new-${activeModalTab}`}
-                        initialCenter={formData.lat && formData.lng ? { lat: parseFloat(formData.lat), lng: parseFloat(formData.lng) } : undefined} 
+                        key={editingId ? `map-loc-${editingId}` : `map-loc-new`}
+                        initialCenter={formData.lat && formData.lng && !isNaN(parseFloat(formData.lat)) && !isNaN(parseFloat(formData.lng)) ? { lat: parseFloat(formData.lat), lng: parseFloat(formData.lng) } : undefined} 
                         initialPolygon={formData.polygon || []} 
                         onPolygonChange={handlePolygonChange} 
                         enableSowingLayer={true}
@@ -1538,6 +1539,7 @@ export default function Locations() {
                   </div>
 
                 </div>
+              )}
 
               {/* Botonera de Guardado */}
               <div className="flex justify-between items-center pt-5 border-t border-slate-100 dark:border-slate-800">
