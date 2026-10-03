@@ -11,6 +11,7 @@ import Plots from './pages/Plots';
 import PlotDetails from './pages/PlotDetails';
 import TrialManager from './pages/TrialManager';
 import Projects from './pages/Projects';
+import Campaigns from './pages/Campaigns';
 import Users from './pages/Users';
 import Tasks from './pages/Tasks';
 import Login from './pages/Login';
@@ -57,6 +58,7 @@ export default function App() {
                   <Route path="/" element={<Dashboard />} />
                   <Route path="/trials-lite" element={<TrialManager />} />
                   <Route path="/projects" element={<Projects />} />
+                  <Route path="/campaigns" element={<Campaigns />} />
                   <Route path="/calendar" element={<CalendarPage />} />
                   <Route path="/tasks" element={<Tasks />} />
                   <Route path="/tools" element={<Tools />} />

@@ -383,14 +383,46 @@ export const DEMO_PROJECTS: Project[] = [
     name: 'Campaña Fibra Técnica & Biocompuestos 2025/26',
     description: 'Ensayos de densidad y manejo hídrico para producción de fibra larga textil y cañamiza para bioconstrucción.',
     status: 'En Curso',
-    startDate: '2025-09-01'
+    startDate: '2025-09-01',
+    campaign: '2025/2026',
+    objectiveType: 'Fibra Industrial',
+    targetYieldTn: 750,
+    budgetUsd: 145000,
+    directorId: 'user-admin-nucleus'
   },
   {
     id: 'proj-cbg-2025',
-    name: 'Red Santhica CBG & Suelos Regenerativos',
+    name: 'Red Santhica CBG & Suelos Regenerativos 2025/26',
     description: 'Evaluación agronómica de genéticas zero-THC y regeneración edáfica en rotaciones pampeanas.',
     status: 'En Curso',
-    startDate: '2025-10-01'
+    startDate: '2025-10-01',
+    campaign: '2025/2026',
+    objectiveType: 'I+D Genético',
+    targetYieldTn: 180,
+    budgetUsd: 85000,
+    directorId: 'user-admin-nucleus'
+  },
+  {
+    id: 'proj-grano-2026',
+    name: 'Programa Grano & Proteína Vegetal 2026/27',
+    description: 'Expansión de superficie para grano apto molienda humana y prensado en frío de aceite virgen.',
+    status: 'Planificación',
+    startDate: '2026-09-15',
+    campaign: '2026/2027',
+    objectiveType: 'Grano y Alimento',
+    targetYieldTn: 1200,
+    budgetUsd: 280000
+  },
+  {
+    id: 'proj-historico-2024',
+    name: 'Ciclo Piloto Multivarietal 2024/25',
+    description: 'Primera campaña de homologación INASE y calibración de cosechadoras de arrastre.',
+    status: 'Finalizado',
+    startDate: '2024-09-01',
+    campaign: '2024/2025',
+    objectiveType: 'Fibra Industrial',
+    targetYieldTn: 420,
+    budgetUsd: 95000
   }
 ];
 

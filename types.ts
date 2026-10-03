@@ -301,6 +301,10 @@ export interface Project {
   status: 'Planificación' | 'En Curso' | 'Finalizado';
   directorId?: string;
   responsibleIds?: string[];
+  campaign?: string; // Campaña agrícola asociada ej: '2025/2026'
+  targetYieldTn?: number;
+  budgetUsd?: number;
+  objectiveType?: 'Fibra Industrial' | 'Grano y Alimento' | 'I+D Genético' | 'Cannabinoides / Biomasa';
 }
 
 export interface Task {
