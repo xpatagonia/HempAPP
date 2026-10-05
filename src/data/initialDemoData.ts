@@ -414,6 +414,18 @@ export const DEMO_PROJECTS: Project[] = [
     budgetUsd: 280000
   },
   {
+    id: 'proj-patagonia-dual',
+    name: 'Desarrollo Dual Patagonia & Valles Irrigados 2025/26',
+    description: 'Ensayos de adaptación ecofisiológica bajo riego en el Valle Inferior del Río Negro (IDEVI) para grano y fibra corta.',
+    status: 'En Curso',
+    startDate: '2025-10-15',
+    campaign: '2025/2026',
+    objectiveType: 'Dual' as any,
+    targetYieldTn: 320,
+    budgetUsd: 110000,
+    directorId: 'user-admin-nucleus'
+  },
+  {
     id: 'proj-historico-2024',
     name: 'Ciclo Piloto Multivarietal 2024/25',
     description: 'Primera campaña de homologación INASE y calibración de cosechadoras de arrastre.',
