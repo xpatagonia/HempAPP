@@ -28,51 +28,8 @@ const PRESET_PAUSE_REASONS = [
   'Otro motivo agronómico...'
 ];
 
-// Datos iniciales de auditoría histórica para trazabilidad inmediata
-const INITIAL_CAMPAIGN_HISTORY: CampaignHistoryEntry[] = [
-  {
-    id: 'hist-init-1',
-    campaign: '2025/2026',
-    entityType: 'Parcela',
-    entityId: 'plot-delta-descanso',
-    entityName: 'Lote Delta - Suelo en Descanso',
-    locationName: 'Establecimiento Las Rosas',
-    previousStatus: 'Activa',
-    newStatus: 'En Barbecho',
-    reason: 'Lote en descanso durante la campaña 2025/2026. Siembra de vicia para fijación biológica de nitrógeno.',
-    timestamp: '2025-10-20T14:30:00.000Z',
-    responsibleName: 'Ing. Gastón Barea',
-    surfaceArea: 45.0
-  },
-  {
-    id: 'hist-init-2',
-    campaign: '2025/2026',
-    entityType: 'Campo',
-    entityId: 'loc-patagonia',
-    entityName: 'Estación Demostrativa Valle Inferior (IDEVI)',
-    locationName: 'Estación Demostrativa Valle Inferior (IDEVI)',
-    previousStatus: 'En Preparación',
-    newStatus: 'Activo',
-    reason: 'Habilitación oficial de campaña bajo riego presurizado para ensayos duales.',
-    timestamp: '2025-10-01T09:15:00.000Z',
-    responsibleName: 'Ing. Gastón Barea',
-    surfaceArea: 50.0
-  },
-  {
-    id: 'hist-init-3',
-    campaign: '2024/2025',
-    entityType: 'Campo',
-    entityId: 'loc-pergamino',
-    entityName: 'Campo Demostrativo Pergamino',
-    locationName: 'Campo Demostrativo Pergamino',
-    previousStatus: 'Activo',
-    newStatus: 'Finalizado',
-    reason: 'Cierre de ciclo piloto 2024/2025 y cosecha completada de fibra USO-31.',
-    timestamp: '2025-03-30T17:00:00.000Z',
-    responsibleName: 'Ing. Gastón Barea',
-    surfaceArea: 60.0
-  }
-];
+// Datos iniciales de auditoría histórica (comienza vacío para trazabilidad de eventos reales)
+const INITIAL_CAMPAIGN_HISTORY: CampaignHistoryEntry[] = [];
 
 export default function Campaigns() {
   const { 
@@ -105,12 +62,41 @@ export default function Campaigns() {
   const [historyEntries, setHistoryEntries] = useState<CampaignHistoryEntry[]>(() => {
     try {
       const saved = localStorage.getItem('ht_campaign_history');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed: CampaignHistoryEntry[] = JSON.parse(saved);
+        // Descartar automáticamente los registros de ejemplo iniciales (hist-init-*)
+        const clean = parsed.filter(item => !item.id.startsWith('hist-init-'));
+        return clean;
+      }
     } catch (e) {
       console.error('Error loading campaign history:', e);
     }
-    return INITIAL_CAMPAIGN_HISTORY;
+    return [];
   });
+
+  // Eliminar un registro específico del historial
+  const handleDeleteHistoryEntry = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setHistoryEntries(prev => {
+      const updated = prev.filter(item => item.id !== id);
+      try {
+        localStorage.setItem('ht_campaign_history', JSON.stringify(updated));
+      } catch (err) {}
+      return updated;
+    });
+    showToast('Registro eliminado del historial.');
+  };
+
+  // Vaciar todo el historial
+  const handleClearAllHistory = () => {
+    if (window.confirm('¿Deseas vaciar todos los registros del historial de auditoría de campañas?')) {
+      setHistoryEntries([]);
+      try {
+        localStorage.removeItem('ht_campaign_history');
+      } catch (err) {}
+      showToast('Historial de auditoría vaciado.');
+    }
+  };
 
   // Guardar en localStorage cuando cambie el historial
   useEffect(() => {
@@ -1835,6 +1821,17 @@ export default function Campaigns() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
+              {filteredHistory.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleClearAllHistory}
+                  className="px-3.5 py-2 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 hover:bg-rose-100 text-xs font-mono font-bold uppercase tracking-wider transition flex items-center gap-1.5"
+                  title="Vaciar todo el historial"
+                >
+                  <Trash2 size={13} />
+                  <span>Vaciar Historial</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={handleExportHistoryCSV}
@@ -2003,26 +2000,36 @@ export default function Campaigns() {
                           </td>
 
                           <td className="py-3 px-4 text-right">
-                            {entry.entityType === 'Campo' ? (
+                            <div className="flex items-center justify-end gap-1.5">
+                              {entry.entityType === 'Campo' ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedCampaign(entry.campaign);
+                                    setSelectedMapLocationId(entry.entityId);
+                                    setActiveTab('billboard');
+                                  }}
+                                  className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-[10px] font-mono font-bold uppercase transition"
+                                >
+                                  Ver Campo
+                                </button>
+                              ) : (
+                                <Link
+                                  to={`/plots/${entry.entityId}`}
+                                  className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-[10px] font-mono font-bold uppercase transition inline-block"
+                                >
+                                  Ver Lote
+                                </Link>
+                              )}
                               <button
                                 type="button"
-                                onClick={() => {
-                                  setSelectedCampaign(entry.campaign);
-                                  setSelectedMapLocationId(entry.entityId);
-                                  setActiveTab('billboard');
-                                }}
-                                className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-[10px] font-mono font-bold uppercase transition"
+                                onClick={(e) => handleDeleteHistoryEntry(entry.id, e)}
+                                className="p-1 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition"
+                                title="Eliminar este registro del historial"
                               >
-                                Ver Campo
+                                <Trash2 size={13} />
                               </button>
-                            ) : (
-                              <Link
-                                to={`/plots/${entry.entityId}`}
-                                className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-[10px] font-mono font-bold uppercase transition inline-block"
-                              >
-                                Ver Lote
-                              </Link>
-                            )}
+                            </div>
                           </td>
                         </tr>
                       );
