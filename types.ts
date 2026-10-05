@@ -14,7 +14,7 @@ export type SiteType =
   | 'Invernadero' 
   | 'Centro de Procesamiento';
 
-export type SiteStatus = 'Activo' | 'Inactivo' | 'En Barbecho' | 'En Preparación';
+export type SiteStatus = 'Activo' | 'Inactivo' | 'En Barbecho' | 'En Preparación' | 'Pausado';
 
 export const CAMPAIGNS = ['2024/2025', '2025/2026', '2026/2027', '2027/2028'] as const;
 
@@ -79,6 +79,24 @@ export interface Location {
   sowingDeclarationHa?: number; // Superficie geodésica declarada
   sowingDeclarationId?: string; // N° Expediente / Código de DDJJ de Siembra
   sowingDeclarationDate?: string; // Fecha de presentación oficial de DDJJ
+  pauseReason?: string; // Motivo de pausa / descanso agronómico
+  campaignStatuses?: Record<string, 'Activo' | 'Pausado' | 'En Barbecho' | 'Finalizado'>;
+  campaignPauseReasons?: Record<string, string>;
+}
+
+export interface CampaignHistoryEntry {
+  id: string;
+  campaign: string;
+  entityType: 'Campo' | 'Parcela';
+  entityId: string;
+  entityName: string;
+  locationName?: string;
+  previousStatus: string;
+  newStatus: 'Activo' | 'Pausado' | 'En Barbecho' | 'Finalizado';
+  reason?: string;
+  timestamp: string;
+  responsibleName?: string;
+  surfaceArea?: number;
 }
 
 export interface HydricRecord {
@@ -188,6 +206,9 @@ export interface Plot {
   color?: string; // Nuevo campo para el color de referencia
   campaign?: string; // Campaña agrícola asignada (ej: '2025/2026')
   activeCampaigns?: string[];
+  pauseReason?: string;
+  campaignStatuses?: Record<string, 'Activa' | 'Pausada' | 'En Barbecho' | 'Cosechada'>;
+  campaignPauseReasons?: Record<string, string>;
 }
 
 export interface SeedBatch {
