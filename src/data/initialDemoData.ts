@@ -1,6 +1,6 @@
 import { 
   User, Location, Plot, Variety, TrialRecord, Project, Task, HydricRecord,
-  StoragePoint, Supplier
+  StoragePoint, Supplier, SeedBatch, SeedMovement
 } from '../../types';
 
 export const DEMO_USER: User = {
@@ -35,7 +35,23 @@ export const DEMO_VARIETIES: Variety[] = [
     cycleDays: 115,
     expectedThc: 0.12,
     knowledgeBase: 'Genética ucraniana monoica de alto porte (hasta 3.2m), excelente resistencia a déficit hídrico y rendimiento de fibra técnica superior a 8.5 tn/ha.',
-    notes: 'Inscrita en el Registro Nacional de Cultivares INASE.'
+    notes: 'Inscrita en el Registro Nacional de Cultivares INASE.',
+    inaseRncNumber: 'INASE-RNC-8492/23',
+    oecdListing: true,
+    breederName: 'Glukhov Institute of Bast Crops (Ucrania) / BioGenética',
+    breederCountry: 'Ucrania',
+    chemotype: 'Tipo V (Fibra industrial sin cannabinoides)',
+    expectedCbg: 0.15,
+    expectedCbd: 0.85,
+    photoperiodType: 'Monoica',
+    gddRequirement: 1850,
+    waterNeedMm: 480,
+    optimalSowingDensityKgHa: 45,
+    thousandSeedWeightGr: 16.5,
+    expectedFiberYieldTnHa: 8.5,
+    expectedGrainYieldKgHa: 650,
+    thcLabCertificate: 'HPLC-LAB-INTA-2025-089',
+    thcLabName: 'Laboratorio de Cromatografía INTA / Cannatech'
   },
   {
     id: 'var-santhica27',
@@ -45,7 +61,23 @@ export const DEMO_VARIETIES: Variety[] = [
     cycleDays: 120,
     expectedThc: 0.04,
     knowledgeBase: 'Variedad francesa monoica libre de THC (<0.05%), alto contenido de CBG natural y fibra celulósica de alta pureza.',
-    notes: 'Excelente respuesta en suelos franco-limosos de la región pampeana.'
+    notes: 'Excelente respuesta en suelos franco-limosos de la región pampeana.',
+    inaseRncNumber: 'INASE-RNC-9120/24',
+    oecdListing: true,
+    breederName: 'CCPSC / Hemp-it ADN (Francia)',
+    breederCountry: 'Francia',
+    chemotype: 'Tipo IV (CBG puro)',
+    expectedCbg: 2.80,
+    expectedCbd: 0.05,
+    photoperiodType: 'Monoica',
+    gddRequirement: 1920,
+    waterNeedMm: 520,
+    optimalSowingDensityKgHa: 50,
+    thousandSeedWeightGr: 15.2,
+    expectedFiberYieldTnHa: 7.8,
+    expectedGrainYieldKgHa: 800,
+    thcLabCertificate: 'HPLC-LAB-EU-GACP-4412',
+    thcLabName: 'Eurofins Agroscience Services'
   },
   {
     id: 'var-futura75',
@@ -55,7 +87,23 @@ export const DEMO_VARIETIES: Variety[] = [
     cycleDays: 130,
     expectedThc: 0.18,
     knowledgeBase: 'Genética dual vigorosa con potencial de cosecha de grano alimenticio (>1400 kg/ha) y rastrojo para bioenergía/biocompuestos.',
-    notes: 'Apta para rotación con trigo y maíz tardío.'
+    notes: 'Apta para rotación con trigo y maíz tardío.',
+    inaseRncNumber: 'INASE-RNC-7734/22',
+    oecdListing: true,
+    breederName: 'Fédération Nationale des Producteurs de Chanvre (FNPC)',
+    breederCountry: 'Francia',
+    chemotype: 'Fibra/Grano (<0.3% THC)',
+    expectedCbg: 0.40,
+    expectedCbd: 1.80,
+    photoperiodType: 'Monoica',
+    gddRequirement: 2100,
+    waterNeedMm: 560,
+    optimalSowingDensityKgHa: 38,
+    thousandSeedWeightGr: 18.0,
+    expectedFiberYieldTnHa: 6.8,
+    expectedGrainYieldKgHa: 1450,
+    thcLabCertificate: 'HPLC-CANNATECH-2025-102',
+    thcLabName: 'Laboratorios Cannatech Innovación'
   },
   {
     id: 'var-finola',
@@ -65,7 +113,23 @@ export const DEMO_VARIETIES: Variety[] = [
     cycleDays: 95,
     expectedThc: 0.15,
     knowledgeBase: 'Variedad autofloreciente dioica de ciclo corto, porte bajo (1.2m) ideal para cosecha directa con cosechadora de granos convencional.',
-    notes: 'Perfil lipídico balanceado Omega 3-6-9.'
+    notes: 'Perfil lipídico balanceado Omega 3-6-9.',
+    inaseRncNumber: 'INASE-RNC-8012/23',
+    oecdListing: true,
+    breederName: 'Finola Oy (Finlandia)',
+    breederCountry: 'Finlandia',
+    chemotype: 'Fibra/Grano (<0.3% THC)',
+    expectedCbg: 0.20,
+    expectedCbd: 1.20,
+    photoperiodType: 'Dioica',
+    gddRequirement: 1450,
+    waterNeedMm: 380,
+    optimalSowingDensityKgHa: 32,
+    thousandSeedWeightGr: 13.5,
+    expectedFiberYieldTnHa: 3.2,
+    expectedGrainYieldKgHa: 1650,
+    thcLabCertificate: 'HPLC-FIN-OECD-9031',
+    thcLabName: 'Luke Natural Resources Institute Finland'
   }
 ];
 
@@ -529,8 +593,21 @@ export const DEMO_STORAGE_POINTS: StoragePoint[] = [
     province: 'Córdoba',
     coordinates: { lat: -33.1350, lng: -64.3350 },
     surfaceM2: 1200,
+    totalCapacityTn: 450,
     conditions: 'Humedad controlada < 12%, ventilación forzada y control térmico para biomasa y flor seca.',
-    notes: 'Nodo principal de secado y acondicionamiento de biomasa para fibra y flor.'
+    notes: 'Nodo principal de secado y acondicionamiento de biomasa para fibra y flor.',
+    tempC: 18.5,
+    humidityPct: 48,
+    tempStatus: 'normal',
+    humidityStatus: 'normal',
+    securityLevel: 'GACP Alta Seguridad',
+    ariccameCustodyRegistry: 'ARICCAME-LIB-CBA-0442',
+    responsibleAgronomistMatricula: 'MP-AGRO-7814 CBA',
+    zones: [
+      { id: 'z-rc-1', name: 'Silo 1 - Grano Alimento Limpio', type: 'Silo_Grano_Alimento', capacityTn: 120, currentOccupancyTn: 64, targetTempC: 16, maxHumidityPct: 50 },
+      { id: 'z-rc-2', name: 'Playa Estiba Fardos Fibra Tech', type: 'Playa_Estiba_Fardos', capacityTn: 250, currentOccupancyTn: 180, targetTempC: 22, maxHumidityPct: 60 },
+      { id: 'z-rc-3', name: 'Cámara Fría Biomasa CBG', type: 'Biomasa_Custodiada', capacityTn: 80, currentOccupancyTn: 28, targetTempC: 14, maxHumidityPct: 45 }
+    ]
   },
   {
     id: 'sp-pergamino',
@@ -542,8 +619,21 @@ export const DEMO_STORAGE_POINTS: StoragePoint[] = [
     province: 'Buenos Aires',
     coordinates: { lat: -33.8800, lng: -60.5900 },
     surfaceM2: 850,
+    totalCapacityTn: 280,
     conditions: 'Cámara fría a 15°C para conservación de semillas certificadas INASE.',
-    notes: 'Almacenamiento de lotes de semillas USO 31, Futura 75 y Santhica 27.'
+    notes: 'Almacenamiento de lotes de semillas USO 31, Futura 75 y Santhica 27.',
+    tempC: 14.8,
+    humidityPct: 42,
+    tempStatus: 'normal',
+    humidityStatus: 'normal',
+    securityLevel: 'Custodia Fiscal',
+    ariccameCustodyRegistry: 'ARICCAME-LIB-BUE-0129',
+    responsibleAgronomistMatricula: 'MP-AGRO-11092 BUE',
+    zones: [
+      { id: 'z-per-1', name: 'Bóveda de Semilla Fiscalizada INASE', type: 'Camara_Semilla_INASE', capacityTn: 150, currentOccupancyTn: 72, targetTempC: 15, maxHumidityPct: 45 },
+      { id: 'z-per-2', name: 'Sector Cuarentena & Muestreo Oficial', type: 'Cuarentena_Muestreo', capacityTn: 30, currentOccupancyTn: 5, targetTempC: 16, maxHumidityPct: 45 },
+      { id: 'z-per-3', name: 'Acopio de Cañamiza / Hurds Calibrados', type: 'Playa_Estiba_Fardos', capacityTn: 100, currentOccupancyTn: 35, targetTempC: 20, maxHumidityPct: 55 }
+    ]
   },
   {
     id: 'sp-rosario',
@@ -555,8 +645,20 @@ export const DEMO_STORAGE_POINTS: StoragePoint[] = [
     province: 'Santa Fe',
     coordinates: { lat: -32.9587, lng: -60.6558 },
     surfaceM2: 3000,
+    totalCapacityTn: 1200,
     conditions: 'Habilitación SENASA / Aduana para consolidación de contenedores de exportación.',
-    notes: 'Nodo de exportación y despacho de grano y fibra procesada.'
+    notes: 'Nodo de exportación y despacho de grano y fibra procesada.',
+    tempC: 21.0,
+    humidityPct: 55,
+    tempStatus: 'normal',
+    humidityStatus: 'normal',
+    securityLevel: 'Estándar',
+    ariccameCustodyRegistry: 'ARICCAME-LIB-SFE-0891',
+    responsibleAgronomistMatricula: 'MP-AGRO-5621 SFE',
+    zones: [
+      { id: 'z-ros-1', name: 'Silos Portuarios de Grano Export', type: 'Silo_Grano_Alimento', capacityTn: 800, currentOccupancyTn: 450, targetTempC: 20, maxHumidityPct: 55 },
+      { id: 'z-ros-2', name: 'Nave de Consolidación Fardos Fibra', type: 'Playa_Estiba_Fardos', capacityTn: 400, currentOccupancyTn: 220, targetTempC: 22, maxHumidityPct: 60 }
+    ]
   }
 ];
 
@@ -608,5 +710,152 @@ export const DEMO_SUPPLIERS: Supplier[] = [
     commercialContact: 'Ing. Lucas Valenzuela',
     isOfficialPartner: true,
     notes: 'Fertilizantes orgánicos, micorrizas y bioestimulantes certificados para cáñamo.'
+  }
+];
+
+export const DEMO_SEED_BATCHES: SeedBatch[] = [
+  {
+    id: 'batch-uso31-2025',
+    varietyId: 'var-uso31',
+    supplierId: 'sup-1',
+    batchCode: 'USO31-C1-2025-01',
+    materialType: 'seed',
+    labelSerialNumber: 'INASE-ROT-8921-A',
+    category: 'C1',
+    analysisDate: '2025-08-12',
+    germinationExpiryDate: '2026-08-12',
+    purity: 99.4,
+    germination: 92,
+    gs1Code: '7791234567890',
+    certificationNumber: 'CERT-INASE-2025-0441',
+    purchaseDate: '2025-09-01',
+    pricePerKg: 14.5,
+    initialQuantity: 2500,
+    remainingQuantity: 1420,
+    storagePointId: 'sp-pergamino',
+    storageConditions: 'Cámara fría 15°C / 42% HR en Bóveda INASE',
+    isActive: true,
+    notes: 'Semilla fiscalizada para campaña de fibra 2025/2026. Excelente vigor de plántula.'
+  },
+  {
+    id: 'batch-santhica-2025',
+    varietyId: 'var-santhica27',
+    supplierId: 'sup-1',
+    batchCode: 'SANTH27-C1-2025-02',
+    materialType: 'seed',
+    labelSerialNumber: 'INASE-ROT-9104-B',
+    category: 'C1',
+    analysisDate: '2025-08-20',
+    germinationExpiryDate: '2026-08-20',
+    purity: 99.1,
+    germination: 89,
+    gs1Code: '7791234567891',
+    certificationNumber: 'CERT-INASE-2025-0512',
+    purchaseDate: '2025-09-10',
+    pricePerKg: 18.0,
+    initialQuantity: 1800,
+    remainingQuantity: 750,
+    storagePointId: 'sp-pergamino',
+    storageConditions: 'Bóveda INASE Pergamino a 14.8°C',
+    isActive: true,
+    notes: 'Lote de semilla élite zero-THC para multiplicación y ensayos CBG.'
+  },
+  {
+    id: 'batch-grano-futura-cosecha',
+    varietyId: 'var-futura75',
+    batchCode: 'COS-GRAN-FUT-2501',
+    materialType: 'harvested_grain',
+    originPlotId: 'plot-beta-pergamino',
+    originCampaign: '2025/2026',
+    harvestDate: '2026-02-15',
+    initialQuantity: 28500,
+    remainingQuantity: 22000,
+    storagePointId: 'sp-riocuarto',
+    moisturePct: 8.4,
+    oilContentPct: 32.5,
+    aflatoxinFreeCertificate: 'SENASA-INOC-2026-8812 (Negativo)',
+    pricePerKg: 1.35,
+    storageConditions: 'Silo 1 Seco y aireado en Río Cuarto',
+    isActive: true,
+    notes: 'Grano grado alimento humano apto prensado en frío. Humedad óptima <9%.'
+  },
+  {
+    id: 'batch-fardos-uso31-cosecha',
+    varietyId: 'var-uso31',
+    batchCode: 'COS-FARD-USO-2502',
+    materialType: 'fiber_bales',
+    originPlotId: 'plot-alfa-cordoba',
+    originCampaign: '2025/2026',
+    harvestDate: '2026-01-28',
+    initialQuantity: 110000,
+    remainingQuantity: 95000,
+    baleCount: 220,
+    avgBaleWeightKg: 500,
+    rettingQuality: 'Óptimo (Gris plateado)',
+    moisturePct: 11.2,
+    storagePointId: 'sp-riocuarto',
+    pricePerKg: 0.38,
+    storageConditions: 'Playa de Estiba Techada Río Cuarto',
+    isActive: true,
+    notes: 'Fardos de tallo seco enriado en campo para desfibrado textil y celulósico.'
+  },
+  {
+    id: 'batch-biomasa-santhica-cbg',
+    varietyId: 'var-santhica27',
+    batchCode: 'COS-BIO-SANTH-2503',
+    materialType: 'biomass_cbg',
+    originPlotId: 'plot-gamma-patagonia',
+    originCampaign: '2025/2026',
+    harvestDate: '2026-02-20',
+    initialQuantity: 4200,
+    remainingQuantity: 4200,
+    hplcThcPct: 0.038,
+    hplcCbgPct: 2.72,
+    hplcLabCertificate: 'CoA-HPLC-CANNATECH-2026-0419',
+    storagePointId: 'sp-riocuarto',
+    pricePerKg: 8.5,
+    storageConditions: 'Cámara Fría Biomasa Custodiada a 14°C',
+    isActive: true,
+    notes: 'Biomasa floral CBG certificada con HPLC <0.04% THC para extracción fitoquímica.'
+  }
+];
+
+export const DEMO_SEED_MOVEMENTS: SeedMovement[] = [
+  {
+    id: 'mov-1',
+    batchId: 'batch-uso31-2025',
+    targetLocationId: 'loc-riocuarto',
+    quantity: 650,
+    date: '2025-10-18',
+    dispatchTime: '08:30',
+    status: 'Recibido',
+    transportGuideNumber: 'GT-ARICCAME-2025-0089',
+    transportType: 'Propio',
+    driverName: 'Carlos M. Rossi',
+    driverDni: '28.455.120',
+    vehiclePlate: 'AF 342 OP',
+    vehicleModel: 'Mercedes-Benz Sprinter Chasis',
+    routeItinerary: 'Depósito Pergamino ➔ Estación Exp. Río Cuarto (Ruta Nac. 8 y 36)',
+    estimatedDistanceKm: 340,
+    recipientName: 'Ing. Gastón Barea'
+  },
+  {
+    id: 'mov-2',
+    batchId: 'batch-santhica-2025',
+    targetLocationId: 'loc-patagonia',
+    quantity: 450,
+    date: '2025-10-22',
+    dispatchTime: '07:00',
+    status: 'Recibido',
+    transportGuideNumber: 'GT-ARICCAME-2025-0094',
+    transportType: 'Tercerizado',
+    transportCompany: 'Expreso Patagónico de Carga',
+    driverName: 'Horacio Benítez',
+    driverDni: '24.890.312',
+    vehiclePlate: 'AD 812 KL',
+    vehicleModel: 'Scania R450 Térmico',
+    routeItinerary: 'Pergamino ➔ IDEVI Valle Inferior Viedma (RN 3)',
+    estimatedDistanceKm: 890,
+    recipientName: 'Asociación IDEVI Cáñamo'
   }
 ];

@@ -112,6 +112,16 @@ export interface HydricRecord {
   createdBy?: string;
 }
 
+export interface StorageZone {
+  id: string;
+  name: string;
+  type: 'Camara_Semilla_INASE' | 'Silo_Grano_Alimento' | 'Playa_Estiba_Fardos' | 'Cuarentena_Muestreo' | 'Biomasa_Custodiada';
+  capacityTn: number;
+  currentOccupancyTn: number;
+  targetTempC?: number;
+  maxHumidityPct?: number;
+}
+
 export interface StoragePoint {
   id: string;
   name: string; 
@@ -126,6 +136,17 @@ export interface StoragePoint {
   surfaceM2?: number; 
   conditions?: string; 
   notes?: string;
+
+  // ESTÁNDARES GACP, SENASA & ARICCAME DE CUSTODIA
+  zones?: StorageZone[];
+  tempC?: number; // Temperatura actual censada en tiempo real
+  humidityPct?: number; // Humedad relativa actual censada (%)
+  tempStatus?: 'normal' | 'alerta' | 'critico';
+  humidityStatus?: 'normal' | 'alerta' | 'critico';
+  ariccameCustodyRegistry?: string; // N° Libro de Guardia ARICCAME
+  responsibleAgronomistMatricula?: string; // Matrícula profesional del agrónomo responsable
+  securityLevel?: 'Estándar' | 'GACP Alta Seguridad' | 'Custodia Fiscal';
+  totalCapacityTn?: number;
 }
 
 export interface Supplier {
@@ -158,6 +179,24 @@ export interface Variety {
   expectedThc: number;
   knowledgeBase?: string; 
   notes?: string;
+
+  // ESTÁNDARES REGULATORIOS & AGRONÓMICOS GLOBALES (INASE, OECD, GACP)
+  inaseRncNumber?: string; // N° Registro Nacional de Cultivares (INASE RNC)
+  oecdListing?: boolean; // Inscrita en Catálogo Común Europeo / OECD
+  breederName?: string; // Obtentor / Criadero original
+  breederCountry?: string; // País de origen del cultivar
+  chemotype?: 'Tipo III (CBD/CBG dominante)' | 'Tipo IV (CBG puro)' | 'Tipo V (Fibra industrial sin cannabinoides)' | 'Fibra/Grano (<0.3% THC)';
+  expectedCbg?: number; // % CBG esperado
+  expectedCbd?: number; // % CBD esperado
+  photoperiodType?: 'Monoica' | 'Dioica' | 'Autofloreciente';
+  gddRequirement?: number; // Grados-Día de Desarrollo acumulados (GDD)
+  waterNeedMm?: number; // Requerimiento hídrico milimétrico por ciclo
+  optimalSowingDensityKgHa?: number; // Densidad recomendada (kg/ha)
+  thousandSeedWeightGr?: number; // Peso de mil semillas (PMS en gramos)
+  expectedFiberYieldTnHa?: number; // Rendimiento estimado fibra/tallo seco (Tn/ha)
+  expectedGrainYieldKgHa?: number; // Rendimiento estimado grano (kg/ha)
+  thcLabCertificate?: string; // N° Certificado / Protocolo HPLC oficial
+  thcLabName?: string; // Laboratorio acreditado de cromatografía
 }
 
 export interface Client {
@@ -211,6 +250,8 @@ export interface Plot {
   campaignPauseReasons?: Record<string, string>;
 }
 
+export type BiologicalMaterialType = 'seed' | 'harvested_grain' | 'fiber_bales' | 'biomass_cbg' | 'hurds';
+
 export interface SeedBatch {
   id: string;
   varietyId: string;
@@ -234,6 +275,34 @@ export interface SeedBatch {
   notes?: string;
   isActive: boolean;
   createdAt?: string;
+
+  // MULTI-ETAPA DE TRAZABILIDAD AGRONÓMICA & DERIVADOS COSECHADOS
+  materialType?: BiologicalMaterialType; // Tipo biológico (Semilla, Grano, Fardos Fibra, Biomasa CBG, Cañamiza)
+  originPlotId?: string; // Parcela de procedencia en caso de cosecha
+  originCampaign?: string; // Campaña de cosecha (ej: '2025/2026')
+  harvestDate?: string; // Fecha de trilla / corte / fardado
+  
+  // Parámetros de Calidad de Granos
+  moisturePct?: number; // % Humedad (<9% ideal)
+  oilContentPct?: number; // % Contenido lipídico
+  aflatoxinFreeCertificate?: string; // N° Análisis libre de micotoxinas/aflatoxinas
+
+  // Parámetros de Fardos de Paja / Fibra
+  baleCount?: number; // Cantidad de fardos
+  avgBaleWeightKg?: number; // Peso medio por fardo
+  rettingQuality?: 'Óptimo (Gris plateado)' | 'Medio (Amarillo tostado)' | 'Verde (Sin enriar)'; // Enriado en campo
+
+  // Parámetros de Biomasa Cannabinoide / CBG
+  hplcThcPct?: number; // % THC certificado (<0.3%)
+  hplcCbgPct?: number; // % CBG analizado
+  hplcLabCertificate?: string; // Certificado de Análisis (CoA) oficial
+
+  // Parámetros de Cañamiza / Hurds
+  hurdGranulometry?: 'Fina (0-5 mm)' | 'Media (5-15 mm)' | 'Gruesa (15-25 mm)';
+  dustExtractionPct?: number; // % Despolvoreado para hempcrete
+
+  // Vencimientos regulatorios
+  germinationExpiryDate?: string; // Límite de vigencia del análisis INASE
 }
 
 export interface SeedMovement {

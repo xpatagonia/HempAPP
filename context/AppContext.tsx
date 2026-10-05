@@ -8,7 +8,7 @@ import {
 import { 
   DEMO_USER, DEMO_VARIETIES, DEMO_LOCATIONS, DEMO_PLOTS, 
   DEMO_PROJECTS, DEMO_TRIALS, DEMO_HYDRIC, DEMO_TASKS,
-  DEMO_STORAGE_POINTS, DEMO_SUPPLIERS
+  DEMO_STORAGE_POINTS, DEMO_SUPPLIERS, DEMO_SEED_BATCHES, DEMO_SEED_MOVEMENTS
 } from '../src/data/initialDemoData';
 
 interface AppContextType {
@@ -155,8 +155,8 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     const [projects, setProjects] = useState<Project[]>(DEMO_PROJECTS);
     const [clients, setClients] = useState<Client[]>([]);
     const [suppliers, setSuppliers] = useState<Supplier[]>(DEMO_SUPPLIERS);
-    const [seedBatches, setSeedBatches] = useState<SeedBatch[]>([]);
-    const [seedMovements, setSeedMovements] = useState<SeedMovement[]>([]);
+    const [seedBatches, setSeedBatches] = useState<SeedBatch[]>(DEMO_SEED_BATCHES);
+    const [seedMovements, setSeedMovements] = useState<SeedMovement[]>(DEMO_SEED_MOVEMENTS);
     const [resources, setResources] = useState<Resource[]>([]);
     const [storagePoints, setStoragePoints] = useState<StoragePoint[]>(DEMO_STORAGE_POINTS);
     const [hydricRecords, setHydricRecords] = useState<HydricRecord[]>(DEMO_HYDRIC);
@@ -247,6 +247,8 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 setTasks(prev => prev.length > 0 ? prev : DEMO_TASKS);
                 setSuppliers(prev => prev.length > 0 ? prev : DEMO_SUPPLIERS);
                 setStoragePoints(prev => prev.length > 0 ? prev : DEMO_STORAGE_POINTS);
+                setSeedBatches(prev => prev.length > 0 ? prev : DEMO_SEED_BATCHES);
+                setSeedMovements(prev => prev.length > 0 ? prev : DEMO_SEED_MOVEMENTS);
             }
         } catch(e) {
             console.error("Data refresh failed", e);

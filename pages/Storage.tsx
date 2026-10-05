@@ -1,11 +1,11 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { StoragePoint } from '../types';
+import { StoragePoint, StorageZone } from '../types';
 import { 
   Plus, Warehouse, Edit2, Trash2, MapPin, User, 
   Maximize, X, Building, ShieldCheck, Truck, 
-  Package, Search, Filter, FilterX, Save, Loader2, Info, ChevronRight, ScanBarcode, RefreshCw, Navigation
+  Package, Search, Filter, FilterX, Save, Loader2, Info, ChevronRight, ScanBarcode, RefreshCw, Navigation,
+  Thermometer, Droplets, ShieldAlert, Award, FileCheck2, Layers, CheckCircle2, AlertTriangle, Eye
 } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
 
@@ -57,7 +57,9 @@ export default function Storage() {
   const [formData, setFormData] = useState<Partial<StoragePoint> & { lat: string, lng: string }>({
     name: '', nodeCode: '', type: 'Propio', address: '', city: '', province: '',
     clientId: '', responsibleUserId: '', surfaceM2: 0, conditions: '', notes: '',
-    lat: '', lng: ''
+    totalCapacityTn: 500, tempC: 16.5, humidityPct: 45, securityLevel: 'GACP Alta Seguridad',
+    ariccameCustodyRegistry: '', responsibleAgronomistMatricula: '',
+    lat: '', lng: '', zones: []
   });
 
   useEffect(() => {
@@ -72,8 +74,8 @@ export default function Storage() {
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
 
   const generateAutoCode = () => {
-      const prefix = "HNC";
-      const random = Math.floor(1000 + Math.random() * 9000);
+      const prefix = "NOD";
+      const random = Math.floor(100 + Math.random() * 900);
       setFormData(prev => ({ ...prev, nodeCode: `${prefix}-${random}` }));
   };
 
@@ -89,7 +91,8 @@ export default function Storage() {
     return storagePoints.filter(sp => {
         const matchesSearch = sp.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                              sp.city?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                             (sp.nodeCode || '').toLowerCase().includes(searchTerm.toLowerCase());
+                             (sp.nodeCode || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                             (sp.ariccameCustodyRegistry || '').toLowerCase().includes(searchTerm.toLowerCase());
         let matchesOwner = true;
         if (filterOwner === 'central') matchesOwner = !sp.clientId;
         if (filterOwner === 'client') matchesOwner = !!sp.clientId;
@@ -107,284 +110,411 @@ export default function Storage() {
         const finalLng = parseFloat(formData.lng);
         const coordinates = (!isNaN(finalLat) && !isNaN(finalLng)) ? { lat: finalLat, lng: finalLng } : undefined;
 
-        const payload = { 
+        const payload: StoragePoint = { 
             id: editingId || generateId(),
             name: formData.name.trim(),
             nodeCode: formData.nodeCode.trim().toUpperCase(),
-            type: formData.type,
+            type: formData.type || 'Propio',
             address: formData.address || '',
             city: formData.city || '',
             province: formData.province || '',
-            clientId: formData.clientId || null,
-            responsibleUserId: formData.responsibleUserId || null,
-            surfaceM2: Number(formData.surfaceM2),
-            conditions: formData.conditions,
-            notes: formData.notes,
-            coordinates
-        } as StoragePoint;
+            clientId: formData.clientId || undefined,
+            responsibleUserId: formData.responsibleUserId || undefined,
+            surfaceM2: Number(formData.surfaceM2) || 0,
+            totalCapacityTn: Number(formData.totalCapacityTn) || 500,
+            conditions: formData.conditions || '',
+            notes: formData.notes || '',
+            coordinates,
+            tempC: Number(formData.tempC) || 16,
+            humidityPct: Number(formData.humidityPct) || 45,
+            tempStatus: (Number(formData.tempC) > 24) ? 'alerta' : 'normal',
+            humidityStatus: (Number(formData.humidityPct) > 65) ? 'alerta' : 'normal',
+            securityLevel: formData.securityLevel || 'GACP Alta Seguridad',
+            ariccameCustodyRegistry: formData.ariccameCustodyRegistry || '',
+            responsibleAgronomistMatricula: formData.responsibleAgronomistMatricula || '',
+            zones: formData.zones || [
+              { id: generateId(), name: 'Cámara Semilla Fiscalizada INASE', type: 'Camara_Semilla_INASE', capacityTn: 150, currentOccupancyTn: 45, targetTempC: 15, maxHumidityPct: 45 },
+              { id: generateId(), name: 'Silos Grano Alimento', type: 'Silo_Grano_Alimento', capacityTn: 200, currentOccupancyTn: 80, targetTempC: 18, maxHumidityPct: 50 },
+              { id: generateId(), name: 'Playa Estiba Fardos Fibra', type: 'Playa_Estiba_Fardos', capacityTn: 150, currentOccupancyTn: 60, targetTempC: 22, maxHumidityPct: 60 }
+            ]
+        };
 
-        let success = false;
-        if (editingId) {
-            success = await updateStoragePoint(payload);
-        } else {
-            success = await addStoragePoint(payload);
-        }
-        
-        if(success) {
+        const success = editingId ? await updateStoragePoint(payload) : await addStoragePoint(payload);
+        if (success) {
             setIsModalOpen(false);
-            resetForm();
+            setEditingId(null);
         }
-    } catch (err) {
-        console.error(err);
-        alert("Error al procesar el registro.");
     } finally {
         setIsSaving(false);
     }
   };
 
-  const resetForm = () => {
-    setFormData({ 
-        name: '', nodeCode: '', type: 'Propio', address: '', city: '', province: '',
-        clientId: '', responsibleUserId: '', surfaceM2: 0, conditions: '', notes: '',
-        lat: '', lng: ''
-    });
-    setEditingId(null);
-  };
-
-  const handleEdit = (sp: StoragePoint) => { 
+  const handleEdit = (sp: StoragePoint) => {
+      setEditingId(sp.id);
       setFormData({
           ...sp,
-          clientId: sp.clientId || '',
-          responsibleUserId: sp.responsibleUserId || '',
-          lat: sp.coordinates?.lat.toString() || '',
-          lng: sp.coordinates?.lng.toString() || ''
-      }); 
-      setEditingId(sp.id); 
-      setIsModalOpen(true); 
+          lat: sp.coordinates ? sp.coordinates.lat.toString() : '',
+          lng: sp.coordinates ? sp.coordinates.lng.toString() : '',
+          totalCapacityTn: sp.totalCapacityTn || 500,
+          tempC: sp.tempC || 17,
+          humidityPct: sp.humidityPct || 45,
+          securityLevel: sp.securityLevel || 'GACP Alta Seguridad',
+          ariccameCustodyRegistry: sp.ariccameCustodyRegistry || '',
+          responsibleAgronomistMatricula: sp.responsibleAgronomistMatricula || '',
+          zones: sp.zones || []
+      });
+      setIsModalOpen(true);
   };
 
-  const inputClass = "w-full border border-gray-300 dark:border-slate-800 bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 p-2.5 rounded-xl focus:ring-2 focus:ring-hemp-500 outline-none transition-all";
+  const inputClass = "w-full border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 p-2.5 rounded-xl font-mono text-xs focus:ring-2 focus:ring-emerald-500 outline-none transition-all";
+  const labelClass = "text-[9px] font-mono font-black uppercase text-slate-500 ml-1 mb-1 block tracking-wider";
 
   return (
-    <div className="animate-in fade-in duration-500">
-      {/* UI Remains the same, functional logic updated with generateId() */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+    <div className="space-y-6 animate-in fade-in duration-500 pb-20 font-mono">
+      
+      {/* HEADER */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
         <div>
-            <h1 className="text-2xl font-black text-gray-800 dark:text-white uppercase tracking-tight italic">Nodos <span className="text-hemp-600">Logísticos</span></h1>
-            <p className="text-sm text-gray-500">Gestión de acopio con precisión geográfica DMS.</p>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-mono font-black uppercase tracking-wider text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800">
+                Nodos de Custodia & Bioseguridad GACP
+              </span>
+              <span className="text-xs font-mono text-slate-400">· SENASA / ARICCAME</span>
+            </div>
+            <h1 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight mt-1 flex items-center gap-2.5">
+              <Warehouse className="text-emerald-500" size={28}/> 
+              <span>Almacenes, Silos & Cámaras Frías</span>
+            </h1>
+            <p className="text-xs text-slate-500 font-mono mt-0.5">
+              Infraestructura física de acopio con monitoreo higrotérmico continuo y libro de guardia de custodia regulada.
+            </p>
         </div>
         {isAdmin && (
-          <button onClick={() => { resetForm(); setIsModalOpen(true); }} className="bg-hemp-600 text-white px-6 py-3 rounded-2xl flex items-center hover:bg-hemp-700 transition shadow-xl font-black text-xs uppercase tracking-widest">
-            <Plus size={18} className="mr-2" /> Nuevo Nodo
+          <button 
+            type="button"
+            onClick={() => {
+              setEditingId(null);
+              setFormData({
+                name: '', nodeCode: '', type: 'Propio', address: '', city: '', province: '',
+                clientId: '', responsibleUserId: '', surfaceM2: 0, conditions: '', notes: '',
+                totalCapacityTn: 500, tempC: 16.5, humidityPct: 45, securityLevel: 'GACP Alta Seguridad',
+                ariccameCustodyRegistry: '', responsibleAgronomistMatricula: '', lat: '', lng: '', zones: []
+              });
+              generateAutoCode();
+              setIsModalOpen(true);
+            }} 
+            className="bg-emerald-600 text-white px-4 py-2.5 rounded-2xl flex items-center justify-center hover:bg-emerald-500 transition shadow font-mono font-bold text-xs uppercase tracking-wider gap-1.5"
+          >
+            <Plus size={15} /> 
+            <span>Nuevo Nodo de Custodia</span>
           </button>
         )}
       </div>
 
-      <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl shadow-sm border dark:border-slate-800 flex flex-col md:flex-row gap-4 mb-8">
-          <div className="relative flex-1">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18}/>
-              <input 
-                type="text" 
-                placeholder="Buscar por código, nombre o dirección..." 
-                className="w-full pl-12 pr-4 py-3 bg-gray-50 dark:bg-slate-950 border-none rounded-xl text-sm outline-none focus:ring-2 focus:ring-hemp-500 transition-all font-medium"
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-              />
-          </div>
-          <div className="flex gap-2">
-              <button onClick={() => setFilterOwner('all')} className={`px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${filterOwner === 'all' ? 'bg-hemp-600 text-white shadow-lg' : 'bg-gray-100 dark:bg-slate-800 text-gray-400 hover:text-gray-600'}`}>Todos</button>
-              <button onClick={() => setFilterOwner('central')} className={`px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${filterOwner === 'central' ? 'bg-hemp-600 text-white shadow-lg' : 'bg-gray-100 dark:bg-slate-800 text-gray-400 hover:text-gray-600'}`}>Propios</button>
-              <button onClick={() => setFilterOwner('client')} className={`px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${filterOwner === 'client' ? 'bg-hemp-600 text-white shadow-lg' : 'bg-gray-100 dark:bg-slate-800 text-gray-400 hover:text-gray-600'}`}>Socios</button>
-          </div>
+      {/* FILTROS Y BÚSQUEDA */}
+      <div className="flex flex-col sm:flex-row items-center gap-3">
+        <div className="relative flex-1 w-full">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+          <input 
+            type="text" 
+            placeholder="Buscar por nombre, código HNC, ciudad o libro ARICCAME..." 
+            className="w-full pl-10 pr-4 py-3 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-2xl border border-slate-200 dark:border-slate-800 text-xs font-mono outline-none focus:ring-2 focus:ring-emerald-500 shadow-sm"
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+          />
+        </div>
+
+        <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 p-1.5 rounded-2xl border border-slate-200 dark:border-slate-800 text-xs font-mono">
+          <button
+            type="button"
+            onClick={() => setFilterOwner('all')}
+            className={`px-3 py-1.5 rounded-xl font-bold uppercase transition text-[11px] ${
+              filterOwner === 'all'
+                ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-sm'
+                : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            Todos ({storagePoints.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterOwner('central')}
+            className={`px-3 py-1.5 rounded-xl font-bold uppercase transition text-[11px] ${
+              filterOwner === 'central'
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'text-slate-500 hover:text-emerald-600'
+            }`}
+          >
+            Planta Central
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterOwner('client')}
+            className={`px-3 py-1.5 rounded-xl font-bold uppercase transition text-[11px] ${
+              filterOwner === 'client'
+                ? 'bg-sky-600 text-white shadow-sm'
+                : 'text-slate-500 hover:text-sky-600'
+            }`}
+          >
+            Socios de Red
+          </button>
+        </div>
       </div>
 
+      {/* GRILLA DE ALMACENES */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredPoints.map(sp => {
-              const stockKg = seedBatches.filter(b => b.storagePointId === sp.id).reduce((s,b) => s + b.remainingQuantity, 0);
+              const batchesInThisNode = seedBatches.filter(b => b.storagePointId === sp.id);
+              const totalStockKg = batchesInThisNode.reduce((s,b) => s + (b.remainingQuantity || 0), 0);
+              const capacityTn = sp.totalCapacityTn || 450;
+              const occupancyPct = Math.min(100, Math.round((totalStockKg / 1000 / capacityTn) * 100));
+
               return (
-                  <div key={sp.id} className="bg-white dark:bg-slate-900 rounded-[32px] shadow-sm border border-gray-100 dark:border-slate-800 overflow-hidden relative group flex flex-col h-full hover:shadow-xl transition-all">
-                      <div className="h-40 bg-gray-100 dark:bg-slate-800 relative">
-                          {sp.coordinates && sp.coordinates.lat ? (
-                              <iframe width="100%" height="100%" frameBorder="0" scrolling="no" src={`https://maps.google.com/maps?q=${sp.coordinates.lat},${sp.coordinates.lng}&z=14&output=embed`} className="absolute inset-0 opacity-80 group-hover:opacity-100 transition-opacity pointer-events-none border-none"></iframe>
-                          ) : (
-                              <div className="flex items-center justify-center h-full text-gray-400 flex-col bg-slate-50 dark:bg-slate-800"><MapPin size={32} className="mb-2 opacity-30"/><span className="text-[10px] font-black uppercase tracking-widest">Sin GPS</span></div>
-                          )}
-                          <div className="absolute top-4 left-4 flex gap-2">
-                             <div className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest shadow-lg border border-white/20 text-white ${sp.clientId ? 'bg-blue-600' : 'bg-hemp-600'}`}>
-                                 {sp.clientId ? 'Socio' : 'Central'}
-                             </div>
-                          </div>
+                  <div key={sp.id} className="bg-white dark:bg-slate-900 rounded-3xl shadow-sm border border-slate-200/80 dark:border-slate-800 overflow-hidden relative group flex flex-col justify-between hover:shadow-lg transition-all">
+                      <div>
+                        {/* MAPA O ESTADO */}
+                        <div className="h-36 bg-slate-100 dark:bg-slate-800 relative">
+                            {sp.coordinates && sp.coordinates.lat ? (
+                                <iframe width="100%" height="100%" frameBorder="0" scrolling="no" src={`https://maps.google.com/maps?q=${sp.coordinates.lat},${sp.coordinates.lng}&z=14&output=embed`} className="absolute inset-0 opacity-80 group-hover:opacity-100 transition-opacity pointer-events-none border-none"></iframe>
+                            ) : (
+                                <div className="flex items-center justify-center h-full text-slate-400 flex-col bg-slate-100 dark:bg-slate-800">
+                                  <MapPin size={28} className="mb-1 opacity-40"/>
+                                  <span className="text-[10px] uppercase font-bold">Sin Georreferencia</span>
+                                </div>
+                            )}
+                            
+                            {/* BADGE DE SEGURIDAD / CENTRAL */}
+                            <div className="absolute top-3 left-3 flex gap-1.5">
+                               <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase shadow tracking-wider text-white ${sp.clientId ? 'bg-sky-600' : 'bg-emerald-600'}`}>
+                                   {sp.clientId ? 'Socio Red' : 'Central Nucleus'}
+                               </span>
+                               {sp.securityLevel && (
+                                 <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-slate-900/80 text-white backdrop-blur-sm">
+                                   {sp.securityLevel}
+                                 </span>
+                               )}
+                            </div>
+                        </div>
+
+                        {/* CONTENIDO INTERIOR */}
+                        <div className="p-5 space-y-4">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <h3 className="text-base font-black text-slate-900 dark:text-white uppercase tracking-tight truncate leading-tight">{sp.name}</h3>
+                                    <div className="flex items-center gap-2 mt-0.5 text-[10px] text-slate-400">
+                                      <span>Código: <strong className="text-emerald-600 dark:text-emerald-400">{sp.nodeCode}</strong></span>
+                                      {sp.ariccameCustodyRegistry && (
+                                        <span>· Lib: {sp.ariccameCustodyRegistry}</span>
+                                      )}
+                                    </div>
+                                </div>
+                                {isAdmin && (
+                                    <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0">
+                                        <button onClick={() => handleEdit(sp)} className="p-1.5 bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-emerald-600 rounded-lg transition"><Edit2 size={13}/></button>
+                                        <button onClick={() => { if(window.confirm("¿Eliminar nodo de custodia?")) deleteStoragePoint(sp.id); }} className="p-1.5 bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-rose-600 rounded-lg transition"><Trash2 size={13}/></button>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* SENSORES DE TELEMETRÍA HIGROTÉRMICA */}
+                            <div className="grid grid-cols-2 gap-2 bg-slate-50 dark:bg-slate-800/40 p-2.5 rounded-2xl border border-slate-100 dark:border-slate-800 text-xs">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center">
+                                    <Thermometer size={14} />
+                                  </div>
+                                  <div>
+                                    <span className="text-[9px] text-slate-400 uppercase block">Temperatura</span>
+                                    <strong className="text-slate-800 dark:text-slate-200">{sp.tempC !== undefined ? `${sp.tempC} °C` : '16 °C'}</strong>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <div className="w-7 h-7 rounded-lg bg-sky-500/10 text-sky-500 flex items-center justify-center">
+                                    <Droplets size={14} />
+                                  </div>
+                                  <div>
+                                    <span className="text-[9px] text-slate-400 uppercase block">Humedad (HR)</span>
+                                    <strong className="text-slate-800 dark:text-slate-200">{sp.humidityPct !== undefined ? `${sp.humidityPct} %` : '45 %'}</strong>
+                                  </div>
+                                </div>
+                            </div>
+
+                            {/* BARRA DE CAPACIDAD */}
+                            <div>
+                                <div className="flex justify-between items-center text-[10px] text-slate-500 mb-1">
+                                  <span>Ocupación de Almacén:</span>
+                                  <strong>{(totalStockKg / 1000).toFixed(1)} / {capacityTn} Tn ({occupancyPct}%)</strong>
+                                </div>
+                                <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                  <div 
+                                    className={`h-full rounded-full transition-all ${occupancyPct > 85 ? 'bg-rose-500' : occupancyPct > 60 ? 'bg-amber-500' : 'bg-emerald-500'}`} 
+                                    style={{ width: `${occupancyPct}%` }}
+                                  />
+                                </div>
+                            </div>
+
+                            {/* ZONAS DE CUSTODIA */}
+                            {sp.zones && sp.zones.length > 0 && (
+                              <div className="space-y-1 pt-2 border-t border-slate-100 dark:border-slate-800 text-[10px]">
+                                <span className="text-slate-400 uppercase font-bold block mb-1">Zonas de Custodia:</span>
+                                <div className="flex flex-wrap gap-1">
+                                  {sp.zones.map(z => (
+                                    <span key={z.id} className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold">
+                                      {z.name} ({z.currentOccupancyTn}/{z.capacityTn}Tn)
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* RESPONSABLE AGRÓNOMO */}
+                            {sp.responsibleAgronomistMatricula && (
+                              <div className="text-[10px] text-slate-400">
+                                Resp. Técnico: <strong className="text-slate-600 dark:text-slate-300">{sp.responsibleAgronomistMatricula}</strong>
+                              </div>
+                            )}
+                        </div>
                       </div>
 
-                      <div className="p-6 flex-1 flex flex-col">
-                          <div className="flex justify-between items-start mb-6">
-                              <div className="min-w-0">
-                                  <h3 className="text-xl font-black text-gray-800 dark:text-white uppercase tracking-tighter truncate leading-tight">{sp.name}</h3>
-                                  <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest flex items-center mt-1">
-                                      <ScanBarcode size={10} className="mr-1.5 text-hemp-600"/> {sp.nodeCode}
-                                  </p>
-                              </div>
-                              {isAdmin && (
-                                  <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0">
-                                      <button onClick={() => handleEdit(sp)} className="p-2 bg-white dark:bg-slate-800 text-gray-400 hover:text-hemp-600 rounded-xl shadow-sm border dark:border-slate-700 transition"><Edit2 size={16}/></button>
-                                      <button onClick={() => { if(window.confirm("¿Eliminar nodo?")) deleteStoragePoint(sp.id); }} className="p-2 bg-white dark:bg-slate-800 text-gray-400 hover:text-red-600 rounded-xl shadow-sm border dark:border-slate-700 transition"><Trash2 size={16}/></button>
-                                  </div>
-                              )}
+                      {/* PIE DEL NODO */}
+                      <div className="p-4 bg-slate-50/50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center text-xs">
+                          <div>
+                            <span className="text-[9px] text-slate-400 uppercase block">Existencias Totales</span>
+                            <strong className="text-emerald-600 dark:text-emerald-400">{totalStockKg.toLocaleString()} kg</strong>
                           </div>
-
-                          <div className="space-y-3 mb-6 flex-1">
-                              <div className="bg-gray-50 dark:bg-slate-950 p-4 rounded-2xl border dark:border-slate-800">
-                                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Dirección Postal</p>
-                                  <div className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-start">
-                                      <MapPin size={14} className="mr-2 mt-0.5 text-red-500 flex-shrink-0"/>
-                                      <span>{sp.address || 'No declarada'}<br/><span className="text-xs text-slate-400">{sp.city}, {sp.province}</span></span>
-                                  </div>
-                              </div>
-                              <div className="flex justify-between items-center px-2">
-                                  <span className="text-[10px] font-black text-gray-400 uppercase">Stock Actual</span>
-                                  <span className="text-sm font-black text-hemp-600">{stockKg.toLocaleString()} kg</span>
-                              </div>
-                          </div>
-
-                          <div className="pt-4 border-t dark:border-slate-800 text-[10px] font-black text-gray-400 uppercase tracking-tighter">
-                             Node Code: {sp.nodeCode} | {sp.type}
-                          </div>
+                          <span className="text-[10px] text-slate-400">{batchesInThisNode.length} lotes guardados</span>
                       </div>
                   </div>
               );
           })}
       </div>
 
+      {/* MODAL CONFIGURAR NODO LOGÍSTICO */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-6xl w-full p-10 shadow-2xl max-h-[95vh] overflow-y-auto animate-in zoom-in-95 border border-white/10">
-            <div className="flex justify-between items-center mb-8">
-                <div className="flex items-center gap-4">
-                    <div className="bg-hemp-600 p-3 rounded-2xl text-white shadow-lg"><Warehouse size={28}/></div>
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-50 p-4 font-mono">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-4xl w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4 border-b border-slate-100 dark:border-slate-800 pb-3">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 text-emerald-500 flex items-center justify-center">
+                      <Warehouse size={20}/>
+                    </div>
                     <div>
-                        <h2 className="text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tighter italic">Configurar <span className="text-hemp-600">Nodo Logístico</span></h2>
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Soporte para coordenadas 43°15'23" y dirección postal</p>
+                        <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Nodo de Custodia & Almacén GACP</h2>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase">Habilitación higrotérmica y libro de guardia</p>
                     </div>
                 </div>
-                <button onClick={() => { if(!isSaving) setIsModalOpen(false); }} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition text-slate-400"><X size={28}/></button>
+                <button onClick={() => { if(!isSaving) setIsModalOpen(false); }} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
             </div>
             
-            <form onSubmit={handleSubmit} className="space-y-6">
-                {/* ... (Form Content Identical, uses handleSubmit with generateId) ... */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-                    <div className="space-y-6">
-                        <div className="bg-gray-50 dark:bg-slate-950 p-6 rounded-[32px] border dark:border-slate-800">
-                            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-6 border-b dark:border-slate-800 pb-3 flex items-center"><ScanBarcode size={14} className="mr-2 text-hemp-500"/> Registro Maestro</h3>
-                            <div className="space-y-4">
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="text-[9px] font-black text-gray-400 uppercase ml-1 mb-1 block">Código HNC *</label>
-                                        <div className="flex gap-2">
-                                            <input required type="text" className={`${inputClass} font-mono uppercase text-hemp-600`} value={formData.nodeCode} onChange={e => setFormData({...formData, nodeCode: e.target.value})} placeholder="HNC-XXXX" />
-                                            <button type="button" onClick={generateAutoCode} className="p-2.5 bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-xl hover:bg-hemp-50 dark:hover:bg-hemp-900/20 transition shadow-sm"><RefreshCw size={18} className="text-hemp-600"/></button>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label className="text-[9px] font-black text-gray-400 uppercase ml-1 mb-1 block">Nombre del Nodo *</label>
-                                        <input required type="text" className={inputClass} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Ej: Silo Central Rosario" />
-                                    </div>
-                                </div>
-                                
-                                <div>
-                                    <label className="text-[9px] font-black text-gray-400 uppercase ml-1 mb-1 block">Dirección Postal Exacta *</label>
-                                    <input required type="text" className={inputClass} value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} placeholder="Ej: Ruta 9 Km 285, Parque Industrial" />
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="text-[9px] font-black text-gray-400 uppercase ml-1 mb-1 block">Ciudad</label>
-                                        <input type="text" className={inputClass} value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})} placeholder="Rosario" />
-                                    </div>
-                                    <div>
-                                        <label className="text-[9px] font-black text-gray-400 uppercase ml-1 mb-1 block">Provincia</label>
-                                        <input type="text" className={inputClass} value={formData.province} onChange={e => setFormData({...formData, province: e.target.value})} placeholder="Santa Fe" />
-                                    </div>
-                                </div>
-                            </div>
+            <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  
+                  {/* SECCIÓN 1: DATOS MAESTROS */}
+                  <div className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3">
+                    <h3 className="text-[10px] font-bold uppercase text-slate-500">1. Identificación del Nodo</h3>
+                    
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelClass}>Código del Nodo *</label>
+                        <div className="flex gap-1.5">
+                          <input required type="text" className={`${inputClass} uppercase text-emerald-600 font-bold`} value={formData.nodeCode} onChange={e => setFormData({...formData, nodeCode: e.target.value})} placeholder="NOD-01" />
+                          <button type="button" onClick={generateAutoCode} className="p-2 bg-slate-100 dark:bg-slate-800 border rounded-xl hover:bg-emerald-50 transition"><RefreshCw size={14} className="text-emerald-600"/></button>
                         </div>
-
-                        <div className="bg-blue-50 dark:bg-blue-900/10 p-6 rounded-[32px] border border-blue-100 dark:border-blue-900/30">
-                            <h3 className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-[0.2em] mb-4 flex items-center"><Building size={14} className="mr-2"/> Atribución de Nodo</h3>
-                            <div className="space-y-4">
-                                <select className={inputClass} value={formData.clientId || ''} onChange={e => setFormData({...formData, clientId: e.target.value})}>
-                                    <option value="">-- Nodo de Gestión Central --</option>
-                                    {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                                </select>
-                                <select className={inputClass} value={formData.responsibleUserId || ''} onChange={e => setFormData({...formData, responsibleUserId: e.target.value})}>
-                                    <option value="">Sin responsable asignado</option>
-                                    {usersList.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                                </select>
-                            </div>
-                        </div>
+                      </div>
+                      <div>
+                        <label className={labelClass}>Nombre Comercial *</label>
+                        <input required type="text" className={inputClass} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Silo Central Rosario" />
+                      </div>
                     </div>
 
-                    <div className="bg-emerald-50/50 dark:bg-emerald-900/10 p-6 rounded-[32px] border border-emerald-100 dark:border-emerald-900/30 flex flex-col">
-                        <h3 className="text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-[0.2em] mb-4 flex items-center"><Navigation size={14} className="mr-2"/> Georreferencia de Precisión</h3>
-                        <div className="flex-1 rounded-2xl overflow-hidden border dark:border-slate-800 shadow-inner group/map relative bg-slate-200 dark:bg-slate-950 mb-6 min-h-[250px]">
-                            {renderMap ? (
-                                <MapEditor 
-                                    key={`map-storage-${editingId || 'new'}`}
-                                    initialCenter={formData.lat && formData.lng ? { lat: parseFloat(formData.lat), lng: parseFloat(formData.lng) } : undefined} 
-                                    initialPolygon={formData.lat && formData.lng ? [{ lat: parseFloat(formData.lat), lng: parseFloat(formData.lng) }] : []} 
-                                    onPolygonChange={(poly) => {
-                                        if (poly.length > 0) {
-                                            setFormData(prev => ({ ...prev, lat: poly[0].lat.toFixed(7), lng: poly[0].lng.toFixed(7) }));
-                                        }
-                                    }} 
-                                    height="100%" 
-                                />
-                            ) : (
-                                <div className="h-full flex items-center justify-center text-slate-400 uppercase text-[10px] font-black tracking-widest flex-col gap-3">
-                                    <RefreshCw className="animate-spin" size={32}/>
-                                    Sincronizando Cartografía...
-                                </div>
-                            )}
-                        </div>
-                        
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-1">
-                                <label className="text-[9px] font-black text-emerald-700 dark:text-emerald-400 uppercase ml-1 block">Latitud (DMS o Decimal)</label>
-                                <input 
-                                    type="text" 
-                                    className={`${inputClass} font-mono`} 
-                                    value={formData.lat} 
-                                    onChange={e => setFormData({...formData, lat: e.target.value})} 
-                                    onBlur={() => handleCoordinateBlur('lat')}
-                                    placeholder="43°15'23'S" 
-                                />
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-[9px] font-black text-emerald-700 dark:text-emerald-400 uppercase ml-1 block">Longitud (DMS o Decimal)</label>
-                                <input 
-                                    type="text" 
-                                    className={`${inputClass} font-mono`} 
-                                    value={formData.lng} 
-                                    onChange={e => setFormData({...formData, lng: e.target.value})} 
-                                    onBlur={() => handleCoordinateBlur('lng')}
-                                    placeholder="58°12'45'W" 
-                                />
-                            </div>
-                        </div>
-                        <p className="mt-4 text-[9px] text-emerald-600 dark:text-emerald-400 font-bold uppercase italic">* Tip: Puedes ingresar 43°15'23'S y el sistema lo convertirá automáticamente.</p>
+                    <div>
+                      <label className={labelClass}>Dirección Postal Exacta *</label>
+                      <input required type="text" className={inputClass} value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} placeholder="Ruta 9 Km 285" />
                     </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelClass}>Ciudad</label>
+                        <input type="text" className={inputClass} value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})} placeholder="Rosario" />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Provincia</label>
+                        <input type="text" className={inputClass} value={formData.province} onChange={e => setFormData({...formData, province: e.target.value})} placeholder="Santa Fe" />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelClass}>Capacidad Total (Tn)</label>
+                        <input type="number" className={inputClass} value={formData.totalCapacityTn || 500} onChange={e => setFormData({...formData, totalCapacityTn: Number(e.target.value)})} />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Superficie (m²)</label>
+                        <input type="number" className={inputClass} value={formData.surfaceM2 || 0} onChange={e => setFormData({...formData, surfaceM2: Number(e.target.value)})} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* SECCIÓN 2: REGULACIÓN GACP & SENSORES */}
+                  <div className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3">
+                    <h3 className="text-[10px] font-bold uppercase text-slate-500">2. Custodia Legal & Sensores</h3>
+
+                    <div>
+                      <label className={labelClass}>Nivel de Seguridad GACP</label>
+                      <select className={inputClass} value={formData.securityLevel || 'GACP Alta Seguridad'} onChange={e => setFormData({...formData, securityLevel: e.target.value as any})}>
+                        <option value="Custodia Fiscal">Custodia Fiscal (Libro ARICCAME)</option>
+                        <option value="GACP Alta Seguridad">GACP Alta Seguridad (Acceso Restringido)</option>
+                        <option value="Estándar">Estándar (Depósito Agronómico)</option>
+                      </select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelClass}>N° Libro Guardia ARICCAME</label>
+                        <input type="text" className={inputClass} value={formData.ariccameCustodyRegistry || ''} onChange={e => setFormData({...formData, ariccameCustodyRegistry: e.target.value})} placeholder="ARICCAME-LIB-001" />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Matrícula Ing. Agrónomo</label>
+                        <input type="text" className={inputClass} value={formData.responsibleAgronomistMatricula || ''} onChange={e => setFormData({...formData, responsibleAgronomistMatricula: e.target.value})} placeholder="MP-AGRO-7814" />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelClass}>Temperatura Actual (°C)</label>
+                        <input type="number" step="0.1" className={inputClass} value={formData.tempC || 16.5} onChange={e => setFormData({...formData, tempC: Number(e.target.value)})} />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Humedad Relativa (HR %)</label>
+                        <input type="number" step="1" className={inputClass} value={formData.humidityPct || 45} onChange={e => setFormData({...formData, humidityPct: Number(e.target.value)})} />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelClass}>Latitud GPS (Decimal / DMS)</label>
+                        <input type="text" className={inputClass} value={formData.lat} onChange={e => setFormData({...formData, lat: e.target.value})} onBlur={() => handleCoordinateBlur('lat')} placeholder="-33.1350" />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Longitud GPS (Decimal / DMS)</label>
+                        <input type="text" className={inputClass} value={formData.lng} onChange={e => setFormData({...formData, lng: e.target.value})} onBlur={() => handleCoordinateBlur('lng')} placeholder="-64.3350" />
+                      </div>
+                    </div>
+                  </div>
+
                 </div>
 
-                <div className="flex justify-end space-x-3 pt-8 border-t dark:border-slate-800 mt-4">
-                    <button type="button" disabled={isSaving} onClick={() => setIsModalOpen(false)} className="px-8 py-3 text-slate-400 font-black uppercase text-[10px] tracking-widest hover:text-slate-600 transition">Cancelar</button>
-                    <button type="submit" disabled={isSaving} className="bg-slate-900 dark:bg-hemp-600 text-white px-10 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl flex items-center hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50">
-                        {isSaving ? <Loader2 className="animate-spin mr-2" size={18}/> : <Save className="mr-2" size={18}/>}
-                        {editingId ? 'Actualizar Nodo' : 'Finalizar Registro'}
+                <div className="flex justify-end space-x-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                    <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-slate-400 font-bold uppercase text-xs">Cancelar</button>
+                    <button type="submit" disabled={isSaving} className="bg-emerald-600 text-white px-6 py-2.5 rounded-2xl font-bold text-xs uppercase tracking-wider shadow flex items-center hover:bg-emerald-500 transition">
+                        {isSaving ? <Loader2 className="animate-spin mr-2" size={15}/> : <Save className="mr-2" size={15}/>}
+                        Guardar Nodo de Custodia
                     </button>
                 </div>
             </form>
           </div>
         </div>
       )}
+
     </div>
   );
 }

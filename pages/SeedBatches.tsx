@@ -1,14 +1,14 @@
-
 import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { SeedBatch, SeedMovement } from '../types';
+import { SeedBatch, SeedMovement, BiologicalMaterialType, CAMPAIGNS } from '../types';
 import { 
   ScanBarcode, Edit2, Trash2, Tag, Package, Truck, Printer, MapPin, 
   AlertCircle, DollarSign, Archive, Save, X, 
   Loader2, Search, Eye, Info, CheckCircle, Filter, FilterX, ArrowUpRight,
   Building, User, Calendar, FileText, Globe, ClipboardList, ShieldCheck, Warehouse,
   Plus, CheckCircle2, Navigation, Smartphone, UserCheck, Barcode, FlaskConical, Scale, ClipboardCheck,
-  Map as MapIcon, Route, Compass, Weight, LayoutGrid, List
+  Map as MapIcon, Route, Compass, Weight, LayoutGrid, List, Droplets, Sparkles, Sprout,
+  FileCheck, ShieldAlert, Layers
 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 
@@ -23,14 +23,14 @@ const generateId = () => {
 };
 
 const MetricCard = ({ label, value, subtext, icon: Icon, colorClass }: any) => (
-    <div className="bg-white dark:bg-slate-900 p-6 rounded-[32px] border border-slate-100 dark:border-slate-800 shadow-sm flex items-start space-x-4">
+    <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex items-start space-x-4">
         <div className={`p-3 rounded-2xl ${colorClass} bg-opacity-10 text-${colorClass.split('-')[1]}-600`}>
-            <Icon size={24} />
+            <Icon size={22} />
         </div>
         <div>
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">{label}</p>
-            <p className="text-2xl font-black text-gray-800 dark:text-white leading-none">{value}</p>
-            {subtext && <p className="text-[10px] text-gray-400 mt-1 font-bold">{subtext}</p>}
+            <p className="text-[10px] font-mono font-black text-slate-400 uppercase tracking-wider mb-1">{label}</p>
+            <p className="text-xl font-mono font-black text-slate-800 dark:text-white leading-none">{value}</p>
+            {subtext && <p className="text-[10px] font-mono text-slate-400 mt-1 font-semibold">{subtext}</p>}
         </div>
     </div>
 );
@@ -39,11 +39,12 @@ export default function SeedBatches() {
   const { 
     seedBatches, seedMovements, addSeedBatch, updateSeedBatch, 
     deleteSeedBatch, addSeedMovement, updateSeedMovement, varieties, 
-    currentUser, clients, storagePoints, suppliers 
+    currentUser, clients, storagePoints, suppliers, plots 
   } = useAppContext();
   
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<'inventory' | 'logistics'>((searchParams.get('tab') as any) || 'inventory');
+  const [materialFilter, setMaterialFilter] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'batches' | 'warehouses'>('batches');
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -61,8 +62,40 @@ export default function SeedBatches() {
   const [moveUnit, setMoveUnit] = useState<MassUnit>('kg');
 
   const [batchFormData, setBatchFormData] = useState<any>({
-    varietyId: '', supplierId: '', batchCode: '', initialQuantity: 0, remainingQuantity: 0, inputValue: 0, purchaseDate: new Date().toISOString().split('T')[0], pricePerKg: 0, storagePointId: '', isActive: true,
-    labelSerialNumber: '', category: 'C1', certificationNumber: '', gs1Code: '', analysisDate: '', germination: 90, purity: 99, notes: ''
+    materialType: 'seed' as BiologicalMaterialType,
+    varietyId: '', 
+    supplierId: '', 
+    batchCode: '', 
+    initialQuantity: 0, 
+    remainingQuantity: 0, 
+    inputValue: 0, 
+    purchaseDate: new Date().toISOString().split('T')[0], 
+    pricePerKg: 0, 
+    storagePointId: '', 
+    isActive: true,
+    labelSerialNumber: '', 
+    category: 'C1', 
+    certificationNumber: '', 
+    gs1Code: '', 
+    analysisDate: '', 
+    germinationExpiryDate: '',
+    germination: 90, 
+    purity: 99, 
+    originPlotId: '',
+    originCampaign: '2025/2026',
+    harvestDate: '',
+    moisturePct: 8.5,
+    oilContentPct: 30,
+    aflatoxinFreeCertificate: '',
+    baleCount: 0,
+    avgBaleWeightKg: 500,
+    rettingQuality: 'Óptimo (Gris plateado)',
+    hplcThcPct: 0.12,
+    hplcCbgPct: 2.5,
+    hplcLabCertificate: '',
+    hurdGranulometry: 'Media (5-15 mm)',
+    dustExtractionPct: 98,
+    notes: ''
   });
 
   const [moveFormData, setMoveFormData] = useState<any>({
@@ -100,15 +133,20 @@ export default function SeedBatches() {
       }
 
       const matchesSearch = b.batchCode.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                           (v?.name || '').toLowerCase().includes(searchTerm.toLowerCase());
-      return matchesSearch;
-  }), [seedBatches, searchTerm, varieties, isClient, isTech, currentUser, storagePoints]);
+                           (v?.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           (b.labelSerialNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           (b.hplcLabCertificate || '').toLowerCase().includes(searchTerm.toLowerCase());
+
+      const matchesMaterial = materialFilter === 'all' || 
+                              (b.materialType || 'seed') === materialFilter;
+
+      return matchesSearch && matchesMaterial;
+  }), [seedBatches, searchTerm, materialFilter, varieties, isClient, isTech, currentUser, storagePoints]);
 
   const stockByWarehouse = useMemo(() => {
       const grouped: Record<string, { storage: any, items: Record<string, number>, totalKg: number }> = {};
 
       filteredBatches.forEach(b => {
-          // FIX: Floating point precision check. Ignore dust < 1g
           if (b.remainingQuantity <= 0.001) return;
           
           const sp = storagePoints.find(s => s.id === b.storagePointId);
@@ -149,10 +187,15 @@ export default function SeedBatches() {
       return matchesSearch && matchesStatus;
   }).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()), [seedMovements, searchTerm, filterStatus, isClient, isTech, currentUser, storagePoints]);
 
+  // Desglose de Métricas de Stock por Tipo Biológico
   const stats = useMemo(() => {
       const totalKg = filteredBatches.reduce((sum, b) => sum + (b.remainingQuantity || 0), 0);
+      const seedKg = filteredBatches.filter(b => (b.materialType || 'seed') === 'seed').reduce((sum, b) => sum + (b.remainingQuantity || 0), 0);
+      const grainKg = filteredBatches.filter(b => b.materialType === 'harvested_grain').reduce((sum, b) => sum + (b.remainingQuantity || 0), 0);
+      const fiberBalesKg = filteredBatches.filter(b => b.materialType === 'fiber_bales').reduce((sum, b) => sum + (b.remainingQuantity || 0), 0);
+      const biomassKg = filteredBatches.filter(b => b.materialType === 'biomass_cbg').reduce((sum, b) => sum + (b.remainingQuantity || 0), 0);
       const activeTransits = filteredMovements.filter(m => m.status === 'En Tránsito').length;
-      return { totalKg, activeTransits };
+      return { totalKg, seedKg, grainKg, fiberBalesKg, biomassKg, activeTransits };
   }, [filteredBatches, filteredMovements]);
 
   const handleOpenDispatch = () => {
@@ -172,20 +215,18 @@ export default function SeedBatches() {
 
   const handleBatchSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
-      // Relaxed check: calculatedEntryKg must be > 0 (float safe)
       if (!batchFormData.varietyId || !batchFormData.batchCode || (calculatedEntryKg <= 0.000001 && !editingBatchId) || isSubmitting) {
-          alert("Por favor complete los campos obligatorios y asegure que la cantidad sea mayor a 0.");
+          alert("Por favor complete los campos obligatorios y asegure que la masa sea mayor a 0.");
           return;
       }
       setIsSubmitting(true);
       try {
           const { inputValue, supplierId, ...baseData } = batchFormData;
           
-          const payload = { 
+          const payload: SeedBatch = { 
             ...baseData, 
             id: editingBatchId || generateId(), 
-            initialQuantity: Number(calculatedEntryKg.toFixed(3)), // Enforce 3 decimals
-            // FIX: Allow explicit correction of remainingQuantity during edit
+            initialQuantity: Number(calculatedEntryKg.toFixed(3)),
             remainingQuantity: editingBatchId 
                 ? Number(Number(batchFormData.remainingQuantity || 0).toFixed(3)) 
                 : Number(calculatedEntryKg.toFixed(3)), 
@@ -198,100 +239,64 @@ export default function SeedBatches() {
           if (success) { 
               setIsBatchModalOpen(false); 
               setEditingBatchId(null); 
-              alert("✅ Lote registrado exitosamente.");
           }
-      } catch (err) {
-          alert("Error crítico al procesar el lote.");
       } finally { setIsSubmitting(false); }
   };
 
   const handleMoveSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
-      const batch = seedBatches.find(b => b.id === moveFormData.batchId);
-      
-      // FIX: Add epsilon for float comparison safety
-      const epsilon = 0.0001;
-      const currentStock = Number(batch?.remainingQuantity || 0);
-      const usage = Number(calculatedMoveKg);
-
-      if (!batch || usage > (currentStock + epsilon)) {
-          alert(`Error: Stock insuficiente. El lote posee ${currentStock.toFixed(3)} kg.`);
+      if (!moveFormData.batchId || !moveFormData.targetLocationId || calculatedMoveKg <= 0.000001 || isSubmitting) {
+          alert("Por favor complete los datos obligatorios del despacho.");
           return;
       }
-      if (!moveFormData.targetLocationId) {
-          alert("Debe seleccionar un nodo de destino.");
+
+      const sourceBatch = seedBatches.find(b => b.id === moveFormData.batchId);
+      if (!sourceBatch) return;
+
+      const usage = calculatedMoveKg;
+      if (sourceBatch.remainingQuantity < usage) {
+          alert(`Stock insuficiente en el lote de origen. Disponible: ${sourceBatch.remainingQuantity.toFixed(3)} kg.`);
           return;
       }
 
       setIsSubmitting(true);
       try {
-          const { inputValue, ...cleanMoveData } = moveFormData;
-          const finalClientId = cleanMoveData.clientId === 'INTERNAL' ? null : cleanMoveData.clientId;
-
-          const movePayload = { 
-              ...cleanMoveData, 
-              clientId: finalClientId,
-              id: generateId(), 
-              status: 'En Tránsito', 
+          const movePayload: SeedMovement = {
+              ...moveFormData,
+              id: generateId(),
               quantity: Number(usage.toFixed(3)),
-              originStorageId: batch.storagePointId
-          } as SeedMovement;
-          
-          const success = await addSeedMovement(movePayload);
-          if (success) {
-              // Calculate remaining with strict rounding
-              let newQuantity = currentStock - usage;
-              newQuantity = Math.round(newQuantity * 1000) / 1000;
-              if (newQuantity < 0) newQuantity = 0;
+              originStorageId: sourceBatch.storagePointId,
+              status: 'En Tránsito'
+          };
 
-              await updateSeedBatch({ 
-                  ...batch, 
-                  remainingQuantity: newQuantity
+          const moveSuccess = await addSeedMovement(movePayload);
+          if (moveSuccess) {
+              const updatedRemaining = Number((sourceBatch.remainingQuantity - usage).toFixed(3));
+              await updateSeedBatch({
+                  ...sourceBatch,
+                  remainingQuantity: Math.max(0, updatedRemaining)
               });
               
               setIsMoveModalOpen(false);
-              alert(`✅ Despacho registrado. Se han descontado ${usage.toFixed(3)} kg del lote.`);
+              alert(`✅ Despacho registrado con Guía oficial. Se han descontado ${usage.toFixed(3)} kg del lote.`);
           }
       } catch (err) {
           alert("Error de comunicación logística.");
       } finally { setIsSubmitting(false); }
   };
 
-  const handleConfirmReceipt = async (move: SeedMovement) => {
-      if (isSubmitting) return;
-      if (!window.confirm(`¿Confirma recepción de ${move.quantity} kg? El stock se sumará a su galpón.`)) return;
-      
-      setIsSubmitting(true);
-      try {
-          const updateSuccess = await updateSeedMovement({ ...move, status: 'Recibido' });
-          if (updateSuccess) {
-              const originalBatch = seedBatches.find(b => b.id === move.batchId);
-              if (originalBatch) {
-                  const localBatchPayload: SeedBatch = {
-                      ...originalBatch,
-                      id: generateId(),
-                      batchCode: `${originalBatch.batchCode}-REC-${move.transportGuideNumber || 'SN'}`,
-                      initialQuantity: move.quantity,
-                      remainingQuantity: move.quantity,
-                      storagePointId: move.targetLocationId,
-                      notes: `Recepcionado desde Planta Central mediante remito ${move.transportGuideNumber}.`,
-                      createdAt: new Date().toISOString(),
-                      isActive: true
-                  };
-                  await addSeedBatch(localBatchPayload);
-                  alert("✅ Recepción confirmada e inventario actualizado en destino.");
-              }
-          }
-      } finally { setIsSubmitting(false); }
+  const getMaterialLabel = (type?: BiologicalMaterialType) => {
+    switch(type) {
+      case 'harvested_grain': return { label: 'Grano Acopiado', color: 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300' };
+      case 'fiber_bales': return { label: 'Fardos Fibra Tech', color: 'bg-purple-100 text-purple-800 border-purple-300 dark:bg-purple-950/60 dark:text-purple-300' };
+      case 'biomass_cbg': return { label: 'Biomasa CBG (HPLC)', color: 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300' };
+      case 'hurds': return { label: 'Cañamiza / Hurds', color: 'bg-sky-100 text-sky-800 border-sky-300 dark:bg-sky-950/60 dark:text-sky-300' };
+      default: return { label: 'Semilla Fiscalizada', color: 'bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-950/60 dark:text-blue-300' };
+    }
   };
 
-  const inputClass = "w-full border border-gray-300 dark:border-slate-800 bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 p-3 rounded-xl focus:ring-2 focus:ring-hemp-500 outline-none transition-all";
-  const labelClass = "text-[9px] font-black uppercase text-slate-500 ml-1 mb-1.5 block tracking-widest";
-
-  const filteredVarietiesBySupplier = useMemo(() => {
-    if (!batchFormData.supplierId) return [];
-    return varieties.filter(v => v.supplierId === batchFormData.supplierId);
-  }, [batchFormData.supplierId, varieties]);
+  const inputClass = "w-full border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 p-2.5 rounded-xl font-mono text-xs focus:ring-2 focus:ring-emerald-500 outline-none transition-all";
+  const labelClass = "text-[9px] font-mono font-black uppercase text-slate-500 ml-1 mb-1 block tracking-wider";
 
   const destinationStorages = useMemo(() => {
       if (!moveFormData.clientId || moveFormData.clientId === 'INTERNAL') return storagePoints.filter(sp => !sp.clientId);
@@ -299,114 +304,342 @@ export default function SeedBatches() {
   }, [moveFormData.clientId, storagePoints]);
 
   return (
-    <div className="animate-in fade-in duration-500 space-y-8">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <div className="animate-in fade-in duration-500 space-y-6 pb-20">
+      
+      {/* HEADER DE INVENTARIO BIOLÓGICO */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm font-mono">
         <div>
-            <h1 className="text-3xl font-black text-gray-800 dark:text-white uppercase tracking-tighter italic">Inventario <span className="text-hemp-600">& Logística</span></h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Control de stock y trazabilidad de materiales.</p>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-mono font-black uppercase tracking-wider text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800">
+                Cadena de Custodia & Almacenamiento
+              </span>
+              <span className="text-xs font-mono text-slate-400">· INASE / GACP / SENASA</span>
+            </div>
+            <h1 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight mt-1 flex items-center gap-2.5">
+              <Package className="text-emerald-500" size={28}/> 
+              <span>Inventario Biológico & Derivados Industriales</span>
+            </h1>
+            <p className="text-xs text-slate-500 font-mono mt-0.5">
+              Trazabilidad integral: desde el lote de semilla fiscalizada hasta el grano, fibra en fardos y biomasa acopiada.
+            </p>
         </div>
         {isAdmin && (
-          <div className="flex space-x-2 w-full md:w-auto">
-              <button onClick={handleOpenDispatch} className="flex-1 md:flex-none bg-blue-600 text-white px-6 py-3 rounded-2xl flex items-center justify-center hover:bg-blue-700 transition shadow-xl font-black text-xs uppercase tracking-widest"><ArrowUpRight size={18} className="mr-2" /> Despachar Carga</button>
-              <button onClick={() => { setEditingBatchId(null); setEntryUnit('kg'); setBatchFormData({ varietyId: '', supplierId: '', batchCode: '', initialQuantity: 0, inputValue: 0, purchaseDate: new Date().toISOString().split('T')[0], pricePerKg: 0, storagePointId: '', isActive: true }); setIsBatchModalOpen(true); }} className="flex-1 md:flex-none bg-hemp-600 text-white px-6 py-3 rounded-2xl flex items-center justify-center hover:bg-hemp-700 transition shadow-xl font-black text-xs uppercase tracking-widest"><Plus size={18} className="mr-2" /> Ingresar Lote</button>
+          <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+              <button 
+                type="button"
+                onClick={handleOpenDispatch} 
+                className="bg-sky-600 text-white px-4 py-2.5 rounded-2xl flex items-center justify-center hover:bg-sky-500 transition shadow font-mono font-bold text-xs uppercase tracking-wider gap-1.5"
+              >
+                <ArrowUpRight size={15} /> 
+                <span>Despachar Carga</span>
+              </button>
+              <button 
+                type="button"
+                onClick={() => { 
+                  setEditingBatchId(null); 
+                  setEntryUnit('kg'); 
+                  setBatchFormData({ 
+                    materialType: 'seed',
+                    varietyId: '', 
+                    supplierId: '', 
+                    batchCode: '', 
+                    initialQuantity: 0, 
+                    inputValue: 0, 
+                    purchaseDate: new Date().toISOString().split('T')[0], 
+                    pricePerKg: 0, 
+                    storagePointId: '', 
+                    isActive: true,
+                    labelSerialNumber: '',
+                    category: 'C1',
+                    germination: 90,
+                    purity: 99,
+                    originCampaign: '2025/2026'
+                  }); 
+                  setIsBatchModalOpen(true); 
+                }} 
+                className="bg-emerald-600 text-white px-4 py-2.5 rounded-2xl flex items-center justify-center hover:bg-emerald-500 transition shadow font-mono font-bold text-xs uppercase tracking-wider gap-1.5"
+              >
+                <Plus size={15} /> 
+                <span>Ingresar Material</span>
+              </button>
           </div>
         )}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <MetricCard label="Stock Disponible Red" value={`${stats.totalKg.toLocaleString(undefined, {maximumFractionDigits: 0})} kg`} icon={Package} colorClass="bg-blue-500" />
-          <MetricCard label="Almacenes Activos" value={storagePoints.length} icon={Warehouse} colorClass="bg-hemp-500" />
-          <MetricCard label="Cargas en Tránsito" value={stats.activeTransits} icon={Truck} colorClass="bg-purple-500" />
+      {/* METRIC CARDS POR TIPO BIOLÓGICO */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <MetricCard 
+            label="Semilla Fiscalizada" 
+            value={`${stats.seedKg.toLocaleString(undefined, {maximumFractionDigits: 0})} kg`} 
+            subtext="Rótulo INASE / Germ. >85%"
+            icon={Sprout} 
+            colorClass="bg-blue-500" 
+          />
+          <MetricCard 
+            label="Grano Acopiado" 
+            value={`${(stats.grainKg / 1000).toFixed(1)} Tn`} 
+            subtext="Grado Alimento / Hum. <9%"
+            icon={Package} 
+            colorClass="bg-amber-500" 
+          />
+          <MetricCard 
+            label="Fardos Fibra / Paja" 
+            value={`${(stats.fiberBalesKg / 1000).toFixed(1)} Tn`} 
+            subtext="Enriado Óptimo en Playa"
+            icon={Layers} 
+            colorClass="bg-purple-500" 
+          />
+          <MetricCard 
+            label="Biomasa CBG / CoA" 
+            value={`${stats.biomassKg.toLocaleString()} kg`} 
+            subtext="THC <0.04% Protocolo HPLC"
+            icon={FlaskConical} 
+            colorClass="bg-emerald-500" 
+          />
       </div>
 
-      <div className="bg-white dark:bg-slate-900 rounded-[32px] shadow-sm border dark:border-slate-800 p-4">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-              <div className="flex space-x-2 bg-gray-100 dark:bg-slate-950 p-1 rounded-2xl w-full md:w-auto">
-                  <button onClick={() => setActiveTab('inventory')} className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'inventory' ? 'bg-white dark:bg-slate-800 text-hemp-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>Stock en Red</button>
-                  <button onClick={() => setActiveTab('logistics')} className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'logistics' ? 'bg-white dark:bg-slate-800 text-hemp-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>Hoja de Remitos</button>
+      {/* BARRA DE FILTROS & BÚSQUEDA */}
+      <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-sm border border-slate-200/80 dark:border-slate-800 p-4 font-mono">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3">
+              
+              {/* PESTAÑAS PRINCIPALES */}
+              <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 p-1.5 rounded-2xl text-xs font-bold uppercase w-full lg:w-auto overflow-x-auto">
+                  <button 
+                    type="button"
+                    onClick={() => setActiveTab('inventory')} 
+                    className={`px-4 py-2 rounded-xl transition ${activeTab === 'inventory' ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                  >
+                    1. Stock en Nodos ({filteredBatches.length})
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => setActiveTab('logistics')} 
+                    className={`px-4 py-2 rounded-xl transition ${activeTab === 'logistics' ? 'bg-white dark:bg-slate-900 text-sky-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                  >
+                    2. Guías de Tránsito & Remitos ({filteredMovements.length})
+                  </button>
               </div>
-              <div className="relative flex-1 md:flex-none">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14}/>
-                  <input type="text" placeholder="Buscar..." className="pl-9 pr-4 py-2 bg-gray-50 dark:bg-slate-950 border-none rounded-xl text-xs w-full md:w-48 focus:ring-2 focus:ring-hemp-500 outline-none dark:text-white" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+
+              {/* BUSCADOR */}
+              <div className="relative w-full lg:w-72">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14}/>
+                  <input 
+                    type="text" 
+                    placeholder="Buscar lote, rótulo o genética..." 
+                    className="pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl text-xs w-full outline-none focus:ring-2 focus:ring-emerald-500 dark:text-white font-mono" 
+                    value={searchTerm} 
+                    onChange={e => setSearchTerm(e.target.value)} 
+                  />
               </div>
           </div>
+
+          {/* SUB-FILTRO POR CATEGORÍA BIOLÓGICA (SOLO EN INVENTARIO) */}
+          {activeTab === 'inventory' && (
+            <div className="flex items-center gap-1.5 pt-3 mt-3 border-t border-slate-100 dark:border-slate-800 overflow-x-auto text-[11px]">
+              <span className="text-slate-400 uppercase font-bold text-[10px] mr-1">Filtro Material:</span>
+              <button
+                type="button"
+                onClick={() => setMaterialFilter('all')}
+                className={`px-3 py-1 rounded-xl font-bold uppercase transition ${
+                  materialFilter === 'all' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                Todos ({seedBatches.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setMaterialFilter('seed')}
+                className={`px-3 py-1 rounded-xl font-bold uppercase transition ${
+                  materialFilter === 'seed' ? 'bg-blue-600 text-white' : 'text-blue-700 dark:text-blue-300 hover:bg-blue-50'
+                }`}
+              >
+                Semilla Fiscalizada
+              </button>
+              <button
+                type="button"
+                onClick={() => setMaterialFilter('harvested_grain')}
+                className={`px-3 py-1 rounded-xl font-bold uppercase transition ${
+                  materialFilter === 'harvested_grain' ? 'bg-amber-600 text-white' : 'text-amber-700 dark:text-amber-300 hover:bg-amber-50'
+                }`}
+              >
+                Grano Acopiado
+              </button>
+              <button
+                type="button"
+                onClick={() => setMaterialFilter('fiber_bales')}
+                className={`px-3 py-1 rounded-xl font-bold uppercase transition ${
+                  materialFilter === 'fiber_bales' ? 'bg-purple-600 text-white' : 'text-purple-700 dark:text-purple-300 hover:bg-purple-50'
+                }`}
+              >
+                Fardos Fibra
+              </button>
+              <button
+                type="button"
+                onClick={() => setMaterialFilter('biomass_cbg')}
+                className={`px-3 py-1 rounded-xl font-bold uppercase transition ${
+                  materialFilter === 'biomass_cbg' ? 'bg-emerald-600 text-white' : 'text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50'
+                }`}
+              >
+                Biomasa CBG (CoA)
+              </button>
+              <button
+                type="button"
+                onClick={() => setMaterialFilter('hurds')}
+                className={`px-3 py-1 rounded-xl font-bold uppercase transition ${
+                  materialFilter === 'hurds' ? 'bg-sky-600 text-white' : 'text-sky-700 dark:text-sky-300 hover:bg-sky-50'
+                }`}
+              >
+                Cañamiza (Hurds)
+              </button>
+            </div>
+          )}
       </div>
 
+      {/* CONTENIDO TAB 1: INVENTARIO BIOLÓGICO */}
       {activeTab === 'inventory' ? (
-          <div className="space-y-4">
-              <div className="flex justify-end">
-                  <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-xl p-1 flex">
-                      <button onClick={() => setViewMode('batches')} className={`p-2 rounded-lg transition-all ${viewMode === 'batches' ? 'bg-hemp-50 text-hemp-600' : 'text-slate-400 hover:text-slate-600'}`} title="Vista Lista"><List size={20}/></button>
-                      <button onClick={() => setViewMode('warehouses')} className={`p-2 rounded-lg transition-all ${viewMode === 'warehouses' ? 'bg-hemp-50 text-hemp-600' : 'text-slate-400 hover:text-slate-600'}`} title="Vista Almacén"><LayoutGrid size={20}/></button>
+          <div className="space-y-4 font-mono">
+              <div className="flex justify-between items-center text-xs">
+                  <span className="text-slate-500">
+                    Mostrando <strong>{filteredBatches.length}</strong> lotes biológicos activos en red
+                  </span>
+                  <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-1 flex">
+                      <button onClick={() => setViewMode('batches')} className={`p-1.5 rounded-lg transition ${viewMode === 'batches' ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950' : 'text-slate-400'}`} title="Vista Lista"><List size={16}/></button>
+                      <button onClick={() => setViewMode('warehouses')} className={`p-1.5 rounded-lg transition ${viewMode === 'warehouses' ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950' : 'text-slate-400'}`} title="Vista Almacén"><LayoutGrid size={16}/></button>
                   </div>
               </div>
 
               {viewMode === 'batches' ? (
-                  <div className="bg-white dark:bg-slate-900 rounded-[32px] shadow-sm border dark:border-slate-800 overflow-hidden overflow-x-auto animate-in fade-in">
-                      <table className="min-w-full text-sm text-left">
-                          <thead className="bg-gray-50 dark:bg-slate-950/50 text-gray-500 uppercase text-[10px] font-black tracking-widest border-b dark:border-slate-800">
+                  <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-sm border border-slate-200/80 dark:border-slate-800 overflow-hidden overflow-x-auto">
+                      <table className="min-w-full text-xs text-left">
+                          <thead className="bg-slate-50 dark:bg-slate-950/50 text-slate-400 uppercase text-[9px] font-black tracking-wider border-b border-slate-100 dark:border-slate-800">
                               <tr>
-                                  <th className="px-8 py-5">Lote Industrial</th>
-                                  <th className="px-8 py-5">Nodo Logístico</th>
-                                  <th className="px-8 py-5 text-center">Disponible</th>
-                                  <th className="px-8 py-5 text-right">Acciones</th>
+                                  <th className="px-6 py-4">Lote & Tipo Biológico</th>
+                                  <th className="px-6 py-4">Genética / Variedad</th>
+                                  <th className="px-6 py-4">Nodo de Custodia</th>
+                                  <th className="px-6 py-4">Parámetros de Calidad</th>
+                                  <th className="px-6 py-4 text-right">Existencias</th>
+                                  <th className="px-6 py-4 text-right">Acción</th>
                               </tr>
                           </thead>
-                          <tbody className="divide-y divide-gray-100 dark:divide-slate-800 font-bold">
+                          <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-bold">
                               {filteredBatches.length === 0 ? (
-                                  <tr><td colSpan={4} className="p-12 text-center text-gray-400 italic">Sin existencias registradas.</td></tr>
+                                  <tr><td colSpan={6} className="p-12 text-center text-slate-400 italic">No se hallaron materiales biológicos con los filtros seleccionados.</td></tr>
                               ) : filteredBatches.map(batch => {
                                   const v = varieties.find(v => v.id === batch.varietyId);
                                   const sp = storagePoints.find(s => s.id === batch.storagePointId);
-                                  // FIX: Display rounded number to avoid scientific notation
-                                  const displayQty = Number(batch.remainingQuantity.toFixed(3));
+                                  const matMeta = getMaterialLabel(batch.materialType);
+                                  const displayQty = Number(batch.remainingQuantity.toFixed(2));
+
                                   return (
-                                      <tr key={batch.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors group">
-                                          <td className="px-8 py-5">
-                                              <div className="font-black text-gray-800 dark:text-gray-200 uppercase tracking-tighter">{batch.batchCode}</div>
-                                              <div className="text-[9px] text-hemp-600 font-black uppercase tracking-widest">{v?.name || 'S/D'}</div>
+                                      <tr key={batch.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition group">
+                                          <td className="px-6 py-4">
+                                              <div className="font-black text-slate-900 dark:text-white uppercase tracking-tight">{batch.batchCode}</div>
+                                              <div className="flex items-center gap-1.5 mt-1">
+                                                <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase border ${matMeta.color}`}>
+                                                  {matMeta.label}
+                                                </span>
+                                                {batch.labelSerialNumber && (
+                                                  <span className="text-[9px] text-slate-400">Rót: {batch.labelSerialNumber}</span>
+                                                )}
+                                              </div>
                                           </td>
-                                          <td className="px-8 py-5">
-                                              <div className="font-black text-slate-700 dark:text-slate-300 uppercase truncate max-w-[200px]">{sp?.name || 'ALMACÉN CENTRAL'}</div>
-                                              <div className="text-[9px] text-gray-400 uppercase font-black">{sp?.city || '-'}</div>
+                                          <td className="px-6 py-4">
+                                              <div className="font-bold text-slate-800 dark:text-slate-200">{v?.name || 'S/D'}</div>
+                                              <div className="text-[9px] text-slate-400">{v?.usage || 'Fibra'} · {v?.breederCountry || 'ARG'}</div>
                                           </td>
-                                          <td className="px-8 py-5 text-center">
-                                              <span className={`px-4 py-1.5 rounded-full font-black text-xs ${batch.remainingQuantity <= 0.001 ? 'bg-gray-100 text-gray-400' : 'bg-green-100 text-green-700 shadow-sm'}`}>{displayQty.toLocaleString()} kg</span>
+                                          <td className="px-6 py-4">
+                                              <div className="text-slate-700 dark:text-slate-300 uppercase truncate max-w-[180px]">{sp?.name || 'ALMACÉN CENTRAL'}</div>
+                                              <div className="text-[9px] text-slate-400">{sp?.city || '-'}</div>
                                           </td>
-                                          <td className="px-8 py-5 text-right">
+                                          <td className="px-6 py-4 text-[10px]">
+                                              {batch.materialType === 'harvested_grain' ? (
+                                                <span className="text-amber-600 dark:text-amber-400">
+                                                  Hum: {batch.moisturePct || 8.5}% · Aflatoxinas: Negativo
+                                                </span>
+                                              ) : batch.materialType === 'fiber_bales' ? (
+                                                <span className="text-purple-600 dark:text-purple-400">
+                                                  {batch.baleCount || 200} Fardos ({batch.avgBaleWeightKg || 500}kg) · Enriado {batch.rettingQuality || 'Óptimo'}
+                                                </span>
+                                              ) : batch.materialType === 'biomass_cbg' ? (
+                                                <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+                                                  THC: {batch.hplcThcPct || 0.04}% · CBG: {batch.hplcCbgPct || 2.7}% (CoA OK)
+                                                </span>
+                                              ) : (
+                                                <span className="text-blue-600 dark:text-blue-400">
+                                                  PG: {batch.germination || 90}% · Pureza: {batch.purity || 99}% · Cat {batch.category || 'C1'}
+                                                </span>
+                                              )}
+                                          </td>
+                                          <td className="px-6 py-4 text-right">
+                                              <span className={`px-3 py-1 rounded-xl text-xs font-black inline-block ${
+                                                batch.remainingQuantity <= 0.001 
+                                                  ? 'bg-slate-100 text-slate-400' 
+                                                  : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                                              }`}>
+                                                {displayQty.toLocaleString()} kg
+                                              </span>
+                                          </td>
+                                          <td className="px-6 py-4 text-right">
                                               <div className="flex justify-end space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                  <button onClick={() => handleOpenView(batch)} className="p-2 text-gray-400 hover:text-blue-600 bg-white dark:bg-slate-800 rounded-xl shadow-sm border dark:border-slate-700 transition"><Eye size={16}/></button>
-                                                  {isAdmin && <button onClick={() => { setBatchFormData({...batch, inputValue: batch.initialQuantity}); setEditingBatchId(batch.id); setIsBatchModalOpen(true); }} className="p-2 text-gray-400 hover:text-hemp-600 bg-white dark:bg-slate-800 rounded-xl shadow-sm border dark:border-slate-700 transition"><Edit2 size={16}/></button>}
+                                                  <button 
+                                                    type="button"
+                                                    onClick={() => handleOpenView(batch)} 
+                                                    className="p-1.5 text-slate-400 hover:text-sky-600 bg-slate-100 dark:bg-slate-800 rounded-lg transition"
+                                                    title="Ver Ficha Técnica"
+                                                  >
+                                                    <Eye size={14}/>
+                                                  </button>
+                                                  {isAdmin && (
+                                                    <button 
+                                                      type="button"
+                                                      onClick={() => { setBatchFormData({...batch, inputValue: batch.initialQuantity}); setEditingBatchId(batch.id); setIsBatchModalOpen(true); }} 
+                                                      className="p-1.5 text-slate-400 hover:text-emerald-600 bg-slate-100 dark:bg-slate-800 rounded-lg transition"
+                                                      title="Editar Lote"
+                                                    >
+                                                      <Edit2 size={14}/>
+                                                    </button>
+                                                  )}
                                               </div>
                                           </td>
                                       </tr>
-                                  )
+                                  );
                               })}
                           </tbody>
                       </table>
                   </div>
               ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in">
-                      {stockByWarehouse.length === 0 ? (
-                          <div className="col-span-3 p-12 text-center text-gray-400 italic">No hay stock disponible agrupado.</div>
-                      ) : stockByWarehouse.map((group: any, idx) => (
-                          <div key={idx} className="bg-white dark:bg-slate-900 rounded-[32px] shadow-sm border dark:border-slate-800 p-6 flex flex-col">
-                              <div className="flex items-start justify-between mb-4 pb-4 border-b dark:border-slate-800">
-                                  <div>
-                                      <h3 className="font-black text-slate-800 dark:text-white uppercase tracking-tighter text-lg">{group.storage?.name || 'Ubicación Desconocida'}</h3>
-                                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center"><MapPin size={10} className="mr-1"/> {group.storage?.city || 'S/D'}</p>
+                  /* VISTA AGRUPADA POR ALMACÉN */
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {stockByWarehouse.map(({ storage, items, totalKg }, idx) => (
+                          <div key={storage?.id || idx} className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+                              <div>
+                                  <div className="flex justify-between items-start mb-3">
+                                      <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
+                                          <Warehouse size={18} />
+                                      </div>
+                                      <span className="text-xs font-mono font-black text-emerald-600 dark:text-emerald-400">
+                                          {totalKg.toLocaleString()} kg
+                                      </span>
                                   </div>
-                                  <div className="bg-hemp-50 dark:bg-hemp-900/20 text-hemp-600 px-3 py-1 rounded-xl text-xs font-black">
-                                      {Number(group.totalKg.toFixed(2)).toLocaleString()} kg
+                                  <h3 className="text-base font-black text-slate-900 dark:text-white uppercase tracking-tight">
+                                      {storage?.name || 'Almacén Central'}
+                                  </h3>
+                                  <p className="text-xs text-slate-500 font-mono mt-0.5">
+                                      {storage?.address || 'Ubicación registrada'} · {storage?.city || ''}
+                                  </p>
+
+                                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2 text-xs">
+                                      {Object.entries(items).map(([name, qty]) => (
+                                          <div key={name} className="flex justify-between items-center text-slate-600 dark:text-slate-400">
+                                              <span className="truncate max-w-[180px]">{name}:</span>
+                                              <strong className="text-slate-900 dark:text-white">{qty.toLocaleString()} kg</strong>
+                                          </div>
+                                      ))}
                                   </div>
                               </div>
-                              <div className="space-y-2 flex-1 overflow-y-auto max-h-[200px] custom-scrollbar">
-                                  {Object.entries(group.items).map(([variety, qty]: [string, any]) => (
-                                      <div key={variety} className="flex justify-between items-center bg-gray-50 dark:bg-slate-950/50 p-2 rounded-lg">
-                                          <span className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase">{variety}</span>
-                                          <span className="text-xs font-black text-slate-800 dark:text-white">{Number(qty.toFixed(3)).toLocaleString()} kg</span>
-                                      </div>
-                                  ))}
+                              <div className="mt-5 pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center text-[10px] text-slate-400">
+                                  <span>Capacidad: {storage?.totalCapacityTn || 450} Tn</span>
+                                  <span className="text-emerald-500 font-bold">GACP Aprobado</span>
                               </div>
                           </div>
                       ))}
@@ -414,267 +647,460 @@ export default function SeedBatches() {
               )}
           </div>
       ) : (
-          <div className="bg-white dark:bg-slate-900 rounded-[32px] shadow-sm border dark:border-slate-800 overflow-hidden overflow-x-auto">
-              <table className="min-w-full text-sm text-left">
-                  <thead className="bg-gray-50 dark:bg-slate-950 text-gray-400 uppercase text-[10px] font-black tracking-widest border-b dark:border-slate-800">
-                      <tr>
-                          <th className="px-8 py-5">Remito / Chofer</th>
-                          <th className="px-8 py-5">Nodo Destino</th>
-                          <th className="px-8 py-5 text-center">Cantidad</th>
-                          <th className="px-8 py-5 text-right">Estatus</th>
-                      </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100 dark:divide-slate-800 font-bold">
-                      {filteredMovements.length === 0 ? (
-                           <tr><td colSpan={4} className="p-12 text-center text-gray-400 italic">No hay remitos para mostrar.</td></tr>
-                      ) : filteredMovements.map(move => {
-                          const targetStorage = storagePoints.find(s => s.id === move.targetLocationId);
-                          const canConfirm = isAdmin || (isClient && move.clientId === currentUser?.clientId) || (isTech && targetStorage?.responsibleUserId === currentUser?.id);
-                          
-                          return (
-                              <tr key={move.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors">
-                                  <td className="px-8 py-5">
-                                      <div className="font-black text-gray-800 dark:text-gray-200">Guía: {move.transportGuideNumber || 'S/N'}</div>
-                                      <div className="text-[9px] text-gray-400 font-black uppercase tracking-tighter italic">{move.driverName || 'S/D'} ({move.vehiclePlate || 'S/P'})</div>
+          /* CONTENIDO TAB 2: LOGÍSTICA & HOJA DE REMITOS */
+          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-sm border border-slate-200/80 dark:border-slate-800 overflow-hidden font-mono">
+              <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center text-xs">
+                  <span className="font-bold text-slate-700 dark:text-slate-300">
+                    Guías Oficiales de Transporte ARICCAME & SENASA ({filteredMovements.length})
+                  </span>
+                  <span className="text-[10px] text-slate-400">
+                    Cadena de custodia de materiales biológicos en tránsito
+                  </span>
+              </div>
+              <div className="overflow-x-auto">
+                  <table className="min-w-full text-xs text-left">
+                      <thead className="bg-slate-50 dark:bg-slate-950/50 text-slate-400 uppercase text-[9px] font-black tracking-wider border-b border-slate-100 dark:border-slate-800">
+                          <tr>
+                              <th className="px-6 py-4">Guía / Remito</th>
+                              <th className="px-6 py-4">Fecha y Hora</th>
+                              <th className="px-6 py-4">Carga Despachada</th>
+                              <th className="px-6 py-4">Itinerario & Destino</th>
+                              <th className="px-6 py-4">Transportista & Patente</th>
+                              <th className="px-6 py-4 text-center">Estado</th>
+                          </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                          {filteredMovements.map(m => (
+                              <tr key={m.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition">
+                                  <td className="px-6 py-4 font-bold text-slate-900 dark:text-white">
+                                      {m.transportGuideNumber}
                                   </td>
-                                  <td className="px-8 py-5">
-                                      <div className="font-black text-slate-700 dark:text-slate-300 uppercase">{targetStorage?.name || 'S/D'}</div>
-                                      <div className="text-[9px] text-gray-400 uppercase font-black">{targetStorage?.city}</div>
+                                  <td className="px-6 py-4 text-slate-500">
+                                      {m.date} {m.dispatchTime && `· ${m.dispatchTime} hs`}
                                   </td>
-                                  <td className="px-8 py-5 text-center font-black text-hemp-700 text-base">{move.quantity.toLocaleString()} kg</td>
-                                  <td className="px-8 py-5 text-right">
-                                      <div className="flex items-center justify-end space-x-2">
-                                          <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase shadow-sm ${move.status === 'Recibido' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700 animate-pulse'}`}>
-                                            {move.status}
-                                          </span>
-                                          {move.status !== 'Recibido' && canConfirm && (
-                                              <button onClick={() => handleConfirmReceipt(move)} disabled={isSubmitting} className="bg-emerald-600 text-white p-2 rounded-xl hover:bg-emerald-700 transition shadow-md disabled:opacity-50" title="Confirmar Recepción"><ClipboardCheck size={16}/></button>
-                                          )}
-                                      </div>
+                                  <td className="px-6 py-4 font-bold text-sky-600 dark:text-sky-400">
+                                      {m.quantity.toLocaleString()} kg
+                                  </td>
+                                  <td className="px-6 py-4 text-slate-600 dark:text-slate-400 max-w-xs truncate">
+                                      {m.routeItinerary || 'Tránsito directo'}
+                                  </td>
+                                  <td className="px-6 py-4 text-slate-600 dark:text-slate-400">
+                                      <div>{m.driverName || 'Chofer Asignado'}</div>
+                                      <div className="text-[9px] text-slate-400">Pat: {m.vehiclePlate || 'S/D'} · {m.vehicleModel || ''}</div>
+                                  </td>
+                                  <td className="px-6 py-4 text-center">
+                                      <span className={`px-2.5 py-1 rounded-xl text-[10px] font-bold ${
+                                        m.status === 'En Tránsito' 
+                                          ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300' 
+                                          : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
+                                      }`}>
+                                        {m.status}
+                                      </span>
                                   </td>
                               </tr>
-                          )
-                      })}
-                  </tbody>
-              </table>
+                          ))}
+                      </tbody>
+                  </table>
+              </div>
           </div>
       )}
 
-      {/* MODALES CON FORMS ACTUALIZADOS */}
-      {/* MODAL INGRESO LOTE */}
+      {/* MODAL ALTA / EDICIÓN DE MATERIAL BIOLÓGICO */}
       {isBatchModalOpen && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[60] p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-5xl w-full p-6 md:p-10 shadow-2xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95 border border-white/10">
-            <div className="flex justify-between items-center mb-8">
-                <div className="flex items-center gap-4">
-                    <div className="bg-hemp-600 p-3 rounded-2xl text-white shadow-lg"><Archive size={24}/></div>
-                    <div>
-                        <h2 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter italic">Ingresar <span className="text-hemp-600">Lote Industrial</span></h2>
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Protocolo de recepción de semilla certificada</p>
-                    </div>
-                </div>
-                <button onClick={() => setIsBatchModalOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition text-slate-400"><X size={28}/></button>
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-50 p-4 font-mono">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-3xl w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4 border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div>
+                <span className="text-[10px] font-bold uppercase text-emerald-600 flex items-center gap-1">
+                  <Package size={12} />
+                  <span>{editingBatchId ? 'Modificar Material' : 'Ingreso de Material a Custodia'}</span>
+                </span>
+                <h2 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight mt-0.5">
+                  {batchFormData.batchCode || 'Nuevo Lote Biológico'}
+                </h2>
+              </div>
+              <button onClick={() => !isSubmitting && setIsBatchModalOpen(false)} disabled={isSubmitting} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
             </div>
-            
-            <form onSubmit={handleBatchSubmit} className="space-y-8">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
-                    <div className="bg-slate-50 dark:bg-slate-950 p-6 rounded-[32px] border dark:border-slate-800 space-y-4">
-                        <h3 className="text-[10px] font-black text-hemp-600 uppercase tracking-widest mb-4 flex items-center border-b dark:border-slate-800 pb-2"><Building size={14} className="mr-2"/> Origen del Material</h3>
-                        <div>
-                            <label className={labelClass}>Proveedor Autorizado *</label>
-                            <select required className={inputClass} value={batchFormData.supplierId} onChange={e => setBatchFormData({...batchFormData, supplierId: e.target.value, varietyId: ''})}>
-                                <option value="">Seleccionar...</option>
-                                {suppliers.filter(s => s.category === 'Semillas').map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label className={labelClass}>Variedad Genética *</label>
-                            <select required className={inputClass} value={batchFormData.varietyId} onChange={e => setBatchFormData({...batchFormData, varietyId: e.target.value})} disabled={!batchFormData.supplierId}>
-                                <option value="">Seleccionar genética...</option>
-                                {filteredVarietiesBySupplier.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label className={labelClass}>Código de Lote *</label>
-                            <input required type="text" className={`${inputClass} font-mono uppercase text-hemp-600`} value={batchFormData.batchCode} onChange={e => setBatchFormData({...batchFormData, batchCode: e.target.value.toUpperCase()})} placeholder="EJ: LOTE-2024-A" />
-                        </div>
-                    </div>
 
-                    <div className="bg-blue-50 dark:bg-blue-900/10 p-6 rounded-[32px] border border-blue-100 dark:border-blue-900/30 space-y-4">
-                        <h3 className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-4 flex items-center border-b border-blue-100 dark:border-blue-800 pb-2"><ScanBarcode size={14} className="mr-2"/> Certificación y PG</h3>
-                        <div>
-                            <label className={labelClass}>Serie Etiqueta Fiscal</label>
-                            <input type="text" className={inputClass} value={batchFormData.labelSerialNumber} onChange={e => setBatchFormData({...batchFormData, labelSerialNumber: e.target.value})} />
-                        </div>
-                        <div>
-                            <label className={labelClass}>Nro Acta / Certificación</label>
-                            <input type="text" className={inputClass} value={batchFormData.certificationNumber} onChange={e => setBatchFormData({...batchFormData, certificationNumber: e.target.value})} />
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                            <div><label className={labelClass}>Germinación (%)</label><input type="number" className={inputClass} value={batchFormData.germination} onChange={e => setBatchFormData({...batchFormData, germination: Number(e.target.value)})} /></div>
-                            <div><label className={labelClass}>Pureza (%)</label><input type="number" className={inputClass} value={batchFormData.purity} onChange={e => setBatchFormData({...batchFormData, purity: Number(e.target.value)})} /></div>
-                        </div>
-                    </div>
-
-                    <div className="bg-emerald-50 dark:bg-emerald-900/10 p-6 rounded-[32px] border border-emerald-100 dark:border-emerald-900/30 space-y-4">
-                        <h3 className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-4 flex items-center border-b border-emerald-100 dark:border-emerald-800 pb-2"><Warehouse size={14} className="mr-2"/> Destino de Acopio</h3>
-                        <div>
-                            <label className={labelClass}>Punto de Recepción *</label>
-                            <select required className={inputClass} value={batchFormData.storagePointId} onChange={e => setBatchFormData({...batchFormData, storagePointId: e.target.value})}>
-                                <option value="">Seleccionar depósito...</option>
-                                {storagePoints.map(sp => <option key={sp.id} value={sp.id}>{sp.name} ({sp.nodeCode})</option>)}
-                            </select>
-                        </div>
-                        
-                        <div className="space-y-4">
-                            <label className={labelClass}>Masa Inicial *</label>
-                            <div className="flex gap-2">
-                                <input required type="number" step="any" min="0" className={`${inputClass} flex-1 text-2xl font-black text-emerald-700`} value={batchFormData.inputValue} onChange={e => setBatchFormData({...batchFormData, inputValue: Number(e.target.value)})} />
-                                <select className="w-24 bg-white dark:bg-slate-800 border border-emerald-200 dark:border-slate-700 rounded-xl text-[10px] font-black uppercase text-center" value={entryUnit} onChange={e => setEntryUnit(e.target.value as MassUnit)}>
-                                    <option value="gr">GR</option>
-                                    <option value="kg">KG</option>
-                                    <option value="tn">TN</option>
-                                </select>
-                            </div>
-                            
-                            {editingBatchId && (
-                                <div className="bg-white/50 dark:bg-slate-900/50 p-3 rounded-2xl border border-red-200 dark:border-red-900 flex flex-col gap-2">
-                                    <label className="text-[9px] font-black text-red-500 uppercase tracking-widest">Corrección Manual de Stock (KG)</label>
-                                    <input 
-                                        type="number" 
-                                        step="0.001" 
-                                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2 rounded-xl text-lg font-black text-slate-800 dark:text-white"
-                                        value={batchFormData.remainingQuantity} 
-                                        onChange={e => setBatchFormData({...batchFormData, remainingQuantity: Number(e.target.value)})} 
-                                    />
-                                    <p className="text-[8px] text-slate-400 font-medium italic">* Modificar solo para corregir errores de cálculo.</p>
-                                </div>
-                            )}
-
-                            <div className="bg-white/50 dark:bg-slate-900/50 p-3 rounded-2xl border border-dashed border-emerald-200 dark:border-slate-800 flex justify-between items-center px-4">
-                                <span className="text-[8px] font-black text-slate-400 uppercase">Carga Real:</span>
-                                <span className="text-sm font-black text-emerald-600">{calculatedEntryKg.toLocaleString()} KG</span>
-                            </div>
-                        </div>
-                    </div>
+            <form onSubmit={handleBatchSubmit} className="space-y-4">
+              
+              {/* TIPO DE MATERIAL */}
+              <div className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Categoría Biológica del Material *</label>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setBatchFormData({ ...batchFormData, materialType: 'seed' })}
+                    className={`p-2 rounded-xl border text-center transition font-bold ${
+                      batchFormData.materialType === 'seed' 
+                        ? 'bg-blue-600 text-white border-blue-600 shadow' 
+                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600'
+                    }`}
+                  >
+                    Semilla Fiscalizada
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBatchFormData({ ...batchFormData, materialType: 'harvested_grain' })}
+                    className={`p-2 rounded-xl border text-center transition font-bold ${
+                      batchFormData.materialType === 'harvested_grain' 
+                        ? 'bg-amber-600 text-white border-amber-600 shadow' 
+                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600'
+                    }`}
+                  >
+                    Grano Cosechado
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBatchFormData({ ...batchFormData, materialType: 'fiber_bales' })}
+                    className={`p-2 rounded-xl border text-center transition font-bold ${
+                      batchFormData.materialType === 'fiber_bales' 
+                        ? 'bg-purple-600 text-white border-purple-600 shadow' 
+                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600'
+                    }`}
+                  >
+                    Fardos de Fibra
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBatchFormData({ ...batchFormData, materialType: 'biomass_cbg' })}
+                    className={`p-2 rounded-xl border text-center transition font-bold ${
+                      batchFormData.materialType === 'biomass_cbg' 
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow' 
+                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600'
+                    }`}
+                  >
+                    Biomasa CBG
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBatchFormData({ ...batchFormData, materialType: 'hurds' })}
+                    className={`p-2 rounded-xl border text-center transition font-bold ${
+                      batchFormData.materialType === 'hurds' 
+                        ? 'bg-sky-600 text-white border-sky-600 shadow' 
+                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600'
+                    }`}
+                  >
+                    Cañamiza
+                  </button>
                 </div>
-                <button type="submit" disabled={isSubmitting} className="w-full bg-slate-900 dark:bg-hemp-600 text-white py-5 rounded-[28px] font-black text-xs uppercase tracking-[0.3em] shadow-2xl flex items-center justify-center hover:scale-[1.01] transition-all disabled:opacity-50">
-                    {isSubmitting ? <Loader2 className="animate-spin mr-2"/> : <Save className="mr-2"/>}
-                    {editingBatchId ? 'Actualizar Datos de Lote' : 'Finalizar Alta de Lote'}
+              </div>
+
+              {/* IDENTIFICACIÓN DEL LOTE */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className={labelClass}>Código del Lote *</label>
+                  <input required disabled={isSubmitting} type="text" className={inputClass} value={batchFormData.batchCode} onChange={e => setBatchFormData({...batchFormData, batchCode: e.target.value.toUpperCase()})} placeholder="Ej: USO31-C1-2025-01" />
+                </div>
+                <div>
+                  <label className={labelClass}>Genética / Cultivar *</label>
+                  <select required disabled={isSubmitting} className={inputClass} value={batchFormData.varietyId} onChange={e => setBatchFormData({...batchFormData, varietyId: e.target.value})}>
+                    <option value="">Seleccionar Genética...</option>
+                    {varieties.map(v => <option key={v.id} value={v.id}>{v.name} ({v.usage})</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelClass}>Nodo de Acopio Destino *</label>
+                  <select required disabled={isSubmitting} className={inputClass} value={batchFormData.storagePointId} onChange={e => setBatchFormData({...batchFormData, storagePointId: e.target.value})}>
+                    <option value="">Seleccionar Depósito...</option>
+                    {storagePoints.map(sp => <option key={sp.id} value={sp.id}>{sp.name} ({sp.city})</option>)}
+                  </select>
+                </div>
+              </div>
+
+              {/* PARÁMETROS ESPECÍFICOS SEGÚN MATERIAL */}
+              {batchFormData.materialType === 'seed' && (
+                <div className="bg-blue-50/50 dark:bg-blue-950/20 p-4 rounded-2xl border border-blue-200 dark:border-blue-900/40 space-y-3">
+                  <h4 className="text-[10px] font-bold uppercase text-blue-700 dark:text-blue-300">Certificación INASE & Poder Germinativo</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                    <div>
+                      <label className={labelClass}>Serie Rótulo INASE</label>
+                      <input type="text" className={inputClass} value={batchFormData.labelSerialNumber || ''} onChange={e => setBatchFormData({...batchFormData, labelSerialNumber: e.target.value})} placeholder="INASE-ROT-8921-A" />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Categoría Fiscal</label>
+                      <select className={inputClass} value={batchFormData.category || 'C1'} onChange={e => setBatchFormData({...batchFormData, category: e.target.value})}>
+                        <option value="Original">Original</option>
+                        <option value="Base">Base / Prebásica</option>
+                        <option value="C1">Certificada 1° (C1)</option>
+                        <option value="C2">Certificada 2° (C2)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className={labelClass}>Poder Germinativo (%)</label>
+                      <input type="number" className={inputClass} value={batchFormData.germination || 90} onChange={e => setBatchFormData({...batchFormData, germination: Number(e.target.value)})} />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Pureza Físico-Botánica (%)</label>
+                      <input type="number" step="0.1" className={inputClass} value={batchFormData.purity || 99} onChange={e => setBatchFormData({...batchFormData, purity: Number(e.target.value)})} />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {batchFormData.materialType === 'harvested_grain' && (
+                <div className="bg-amber-50/50 dark:bg-amber-950/20 p-4 rounded-2xl border border-amber-200 dark:border-amber-900/40 space-y-3">
+                  <h4 className="text-[10px] font-bold uppercase text-amber-700 dark:text-amber-300">Control de Calidad de Granos Cosechados</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className={labelClass}>Parcela de Cosecha</label>
+                      <select className={inputClass} value={batchFormData.originPlotId || ''} onChange={e => setBatchFormData({...batchFormData, originPlotId: e.target.value})}>
+                        <option value="">Seleccionar Parcela...</option>
+                        {plots.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className={labelClass}>% Humedad de Recibo (&lt;9%)</label>
+                      <input type="number" step="0.1" className={inputClass} value={batchFormData.moisturePct || 8.4} onChange={e => setBatchFormData({...batchFormData, moisturePct: Number(e.target.value)})} />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Certificado Libre de Aflatoxinas</label>
+                      <input type="text" className={inputClass} value={batchFormData.aflatoxinFreeCertificate || ''} onChange={e => setBatchFormData({...batchFormData, aflatoxinFreeCertificate: e.target.value})} placeholder="SENASA-INOC-2026-8812" />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {batchFormData.materialType === 'fiber_bales' && (
+                <div className="bg-purple-50/50 dark:bg-purple-950/20 p-4 rounded-2xl border border-purple-200 dark:border-purple-900/40 space-y-3">
+                  <h4 className="text-[10px] font-bold uppercase text-purple-700 dark:text-purple-300">Estiba de Fardos de Paja / Tallo Enriado</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className={labelClass}>Cantidad de Fardos</label>
+                      <input type="number" className={inputClass} value={batchFormData.baleCount || 200} onChange={e => setBatchFormData({...batchFormData, baleCount: Number(e.target.value)})} />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Peso Medio por Fardo (kg)</label>
+                      <input type="number" className={inputClass} value={batchFormData.avgBaleWeightKg || 500} onChange={e => setBatchFormData({...batchFormData, avgBaleWeightKg: Number(e.target.value)})} />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Calidad de Enriado en Campo</label>
+                      <select className={inputClass} value={batchFormData.rettingQuality || 'Óptimo (Gris plateado)'} onChange={e => setBatchFormData({...batchFormData, rettingQuality: e.target.value})}>
+                        <option value="Óptimo (Gris plateado)">Óptimo (Gris plateado)</option>
+                        <option value="Medio (Amarillo tostado)">Medio (Amarillo tostado)</option>
+                        <option value="Verde (Sin enriar)">Verde (Sin enriar)</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {batchFormData.materialType === 'biomass_cbg' && (
+                <div className="bg-emerald-50/50 dark:bg-emerald-950/20 p-4 rounded-2xl border border-emerald-200 dark:border-emerald-900/40 space-y-3">
+                  <h4 className="text-[10px] font-bold uppercase text-emerald-700 dark:text-emerald-300">Protocolo Cromatográfico HPLC & CoA</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className={labelClass}>% THC Certificado (&lt;0.3%) *</label>
+                      <input type="number" step="0.001" className={inputClass} value={batchFormData.hplcThcPct || 0.038} onChange={e => setBatchFormData({...batchFormData, hplcThcPct: Number(e.target.value)})} />
+                    </div>
+                    <div>
+                      <label className={labelClass}>% CBG Analizado</label>
+                      <input type="number" step="0.01" className={inputClass} value={batchFormData.hplcCbgPct || 2.72} onChange={e => setBatchFormData({...batchFormData, hplcCbgPct: Number(e.target.value)})} />
+                    </div>
+                    <div>
+                      <label className={labelClass}>N° Protocolo CoA Oficial</label>
+                      <input type="text" className={inputClass} value={batchFormData.hplcLabCertificate || ''} onChange={e => setBatchFormData({...batchFormData, hplcLabCertificate: e.target.value})} placeholder="CoA-HPLC-CANNATECH-2026-0419" />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* MASA Y UNIDADES */}
+              <div className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className={labelClass}>Masa a Ingresar *</label>
+                    <div className="flex gap-2">
+                      <input required type="number" step="any" min="0" className={`${inputClass} text-xl font-bold`} value={batchFormData.inputValue} onChange={e => setBatchFormData({...batchFormData, inputValue: Number(e.target.value)})} />
+                      <select className="w-24 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold uppercase text-center" value={entryUnit} onChange={e => setEntryUnit(e.target.value as MassUnit)}>
+                        <option value="kg">KG</option>
+                        <option value="tn">TN</option>
+                        <option value="gr">GR</option>
+                      </select>
+                    </div>
+                    <span className="text-[10px] text-emerald-600 block mt-1">Cálculo Real: {calculatedEntryKg.toLocaleString()} KG</span>
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>Condiciones de Guarda / Almacenamiento</label>
+                    <input type="text" className={inputClass} value={batchFormData.storageConditions || ''} onChange={e => setBatchFormData({...batchFormData, storageConditions: e.target.value})} placeholder="Ej: Cámara fría 15°C / 45% HR" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <button type="button" disabled={isSubmitting} onClick={() => setIsBatchModalOpen(false)} className="px-4 py-2 text-slate-400 font-bold uppercase text-xs hover:text-slate-600">Cancelar</button>
+                <button type="submit" disabled={isSubmitting} className="bg-emerald-600 text-white px-6 py-2.5 rounded-2xl font-bold text-xs uppercase tracking-wider shadow flex items-center hover:bg-emerald-500 transition">
+                  {isSubmitting ? <Loader2 className="animate-spin mr-2" size={15}/> : <Save className="mr-2" size={15}/>}
+                  {editingBatchId ? 'Actualizar Material' : 'Ingresar a Inventario'}
                 </button>
+              </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* MODAL DESPACHO */}
-      {isMoveModalOpen && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[60] p-4">
-            <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-6xl w-full p-6 md:p-10 shadow-2xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95 border border-white/10">
-                <div className="flex justify-between items-center mb-8">
-                    <div className="flex items-center gap-4">
-                        <div className="bg-blue-600 p-3 rounded-2xl text-white shadow-lg"><Truck size={28}/></div>
+      {/* MODAL VIEW / AUDITORÍA TÉCNICA */}
+      {isViewModalOpen && selectedBatch && (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-[70] p-4 font-mono">
+              <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800">
+                  <div className="flex justify-between items-center mb-4 border-b border-slate-100 dark:border-slate-800 pb-3">
+                      <div>
+                          <span className="text-[10px] font-bold uppercase text-emerald-600">Certificado Técnico de Material</span>
+                          <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">{selectedBatch.batchCode}</h2>
+                      </div>
+                      <button onClick={() => setIsViewModalOpen(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4 text-xs">
+                      <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl border border-slate-100 dark:border-slate-800">
+                          <span className="text-[10px] text-slate-400 block uppercase">Genética</span>
+                          <strong className="text-emerald-600 dark:text-emerald-400">{varieties.find(v => v.id === selectedBatch.varietyId)?.name || 'S/D'}</strong>
+                      </div>
+                      <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl border border-slate-100 dark:border-slate-800">
+                          <span className="text-[10px] text-slate-400 block uppercase">Existencia Real</span>
+                          <strong className="text-slate-900 dark:text-white">{Number(selectedBatch.remainingQuantity.toFixed(2)).toLocaleString()} kg</strong>
+                      </div>
+                      <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl border border-slate-100 dark:border-slate-800">
+                          <span className="text-[10px] text-slate-400 block uppercase">Almacén</span>
+                          <strong className="text-sky-600 dark:text-sky-400">{storagePoints.find(s => s.id === selectedBatch.storagePointId)?.name || 'Central'}</strong>
+                      </div>
+                      <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl border border-slate-100 dark:border-slate-800">
+                          <span className="text-[10px] text-slate-400 block uppercase">Estado Fiscal</span>
+                          <strong className="text-emerald-600 font-bold">Habilitado</strong>
+                      </div>
+                  </div>
+
+                  {/* PARÁMETROS ESPECÍFICOS */}
+                  <div className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 text-xs space-y-2 mb-4">
+                      {selectedBatch.materialType === 'biomass_cbg' && (
                         <div>
-                            <h2 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter italic">Generar <span className="text-blue-600">Remito de Salida</span></h2>
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Trazabilidad en tránsito hacia socios de red</p>
+                          <div className="flex justify-between items-center text-emerald-600 dark:text-emerald-400 font-bold">
+                            <span>THC Certificado: {selectedBatch.hplcThcPct}% (&lt;0.3% Ley)</span>
+                            <span>CBG: {selectedBatch.hplcCbgPct}%</span>
+                          </div>
+                          <span className="text-[10px] text-slate-400 block mt-1">CoA Laboratorio: {selectedBatch.hplcLabCertificate || 'Oficial INTA'}</span>
+                        </div>
+                      )}
+                      {selectedBatch.materialType === 'harvested_grain' && (
+                        <div>
+                          <div className="flex justify-between items-center text-amber-600 font-bold">
+                            <span>Humedad de Grano: {selectedBatch.moisturePct}%</span>
+                            <span>Materia Grasa: {selectedBatch.oilContentPct || 32}%</span>
+                          </div>
+                          <span className="text-[10px] text-slate-400 block mt-1">Inocuidad SENASA: {selectedBatch.aflatoxinFreeCertificate || 'Negativo'}</span>
+                        </div>
+                      )}
+                      {selectedBatch.materialType === 'fiber_bales' && (
+                        <div>
+                          <div className="flex justify-between items-center text-purple-600 font-bold">
+                            <span>Conteo Fardos: {selectedBatch.baleCount || 200} un</span>
+                            <span>Peso Medio: {selectedBatch.avgBaleWeightKg || 500} kg</span>
+                          </div>
+                          <span className="text-[10px] text-slate-400 block mt-1">Calidad Enriado: {selectedBatch.rettingQuality}</span>
+                        </div>
+                      )}
+                      {(!selectedBatch.materialType || selectedBatch.materialType === 'seed') && (
+                        <div>
+                          <div className="flex justify-between items-center text-blue-600 font-bold">
+                            <span>Poder Germinativo: {selectedBatch.germination}%</span>
+                            <span>Pureza: {selectedBatch.purity}%</span>
+                          </div>
+                          <span className="text-[10px] text-slate-400 block mt-1">Rótulo INASE: {selectedBatch.labelSerialNumber || 'Certificado'} · Cat {selectedBatch.category || 'C1'}</span>
+                        </div>
+                      )}
+                  </div>
+
+                  <div className="flex justify-end">
+                      <button type="button" onClick={() => setIsViewModalOpen(false)} className="bg-slate-900 text-white dark:bg-white dark:text-slate-900 px-6 py-2 rounded-xl font-bold text-xs uppercase">
+                          Cerrar Ficha
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* MODAL DESPACHO / GUÍA DE TRÁNSITO */}
+      {isMoveModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-[60] p-4 font-mono">
+            <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-4xl w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 max-h-[90vh] overflow-y-auto">
+                <div className="flex justify-between items-center mb-6 border-b border-slate-100 dark:border-slate-800 pb-3">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-2xl bg-sky-500/20 text-sky-500 flex items-center justify-center">
+                          <Truck size={20}/>
+                        </div>
+                        <div>
+                            <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Emisión de Guía de Tránsito ARICCAME</h2>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Trazabilidad oficial de carga hacia nodos o socios</p>
                         </div>
                     </div>
-                    <button onClick={() => setIsMoveModalOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition text-slate-400"><X size={28}/></button>
+                    <button onClick={() => setIsMoveModalOpen(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
                 </div>
 
-                <form onSubmit={handleMoveSubmit} className="space-y-8">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
-                        <div className="space-y-6">
-                            <div className="bg-slate-50 dark:bg-slate-950 p-6 rounded-[32px] border dark:border-slate-800">
-                                <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 border-b dark:border-slate-800 pb-2">Selección de Material</h3>
-                                <div className="space-y-4">
-                                    <div>
-                                        <label className={labelClass}>Lote de Semilla *</label>
-                                        <select required className={inputClass} value={moveFormData.batchId} onChange={e => setMoveFormData({...moveFormData, batchId: e.target.value})}>
-                                            <option value="">Seleccione stock...</option>
-                                            {/* FIX: Filter out tiny floating point leftovers */}
-                                            {seedBatches.filter(b => b.remainingQuantity > 0.001).map(b => {
-                                                const v = varieties.find(v => v.id === b.varietyId);
-                                                const sp = storagePoints.find(s => s.id === b.storagePointId);
-                                                return (
-                                                    <option key={b.id} value={b.id}>
-                                                        {b.batchCode} - {v?.name} ({Number(b.remainingQuantity.toFixed(3))}kg en {sp?.name})
-                                                    </option>
-                                                );
-                                            })}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className={labelClass}>Masa a Despachar *</label>
-                                        <div className="flex gap-2">
-                                            <input required type="number" step="any" min="0" className={`${inputClass} flex-1 text-xl font-black`} value={moveFormData.inputValue} onChange={e => setMoveFormData({...moveFormData, inputValue: Number(e.target.value)})} />
-                                            <select className="w-20 bg-gray-100 dark:bg-slate-800 rounded-xl text-[9px] font-black uppercase text-center" value={moveUnit} onChange={e => setMoveUnit(e.target.value as MassUnit)}>
-                                                <option value="gr">GR</option>
-                                                <option value="kg">KG</option>
-                                                <option value="tn">TN</option>
-                                            </select>
-                                        </div>
-                                        <p className="text-[9px] text-blue-600 font-bold mt-2 uppercase tracking-widest">Neta: {calculatedMoveKg.toLocaleString()} kg</p>
-                                    </div>
-                                </div>
+                <form onSubmit={handleMoveSubmit} className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3">
+                            <h3 className="text-[10px] font-bold uppercase text-slate-500">1. Material y Carga</h3>
+                            <div>
+                                <label className={labelClass}>Lote de Origen *</label>
+                                <select required className={inputClass} value={moveFormData.batchId} onChange={e => setMoveFormData({...moveFormData, batchId: e.target.value})}>
+                                    <option value="">Seleccione lote disponible...</option>
+                                    {seedBatches.filter(b => b.remainingQuantity > 0.001).map(b => (
+                                        <option key={b.id} value={b.id}>
+                                            {b.batchCode} ({Number(b.remainingQuantity.toFixed(2))} kg) - {storagePoints.find(s => s.id === b.storagePointId)?.name}
+                                        </option>
+                                    ))}
+                                </select>
                             </div>
-
-                            <div className="bg-blue-50 dark:bg-blue-900/10 p-6 rounded-[32px] border border-blue-100 dark:border-blue-800">
-                                <h3 className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-4 border-b border-blue-100 dark:border-blue-800 pb-2">Destino de Carga</h3>
-                                <div className="space-y-4">
-                                    <div>
-                                        <label className={labelClass}>Socio Receptor *</label>
-                                        <select required className={inputClass} value={moveFormData.clientId} onChange={e => setMoveFormData({...moveFormData, clientId: e.target.value, targetLocationId: ''})}>
-                                            <option value="">Seleccione socio...</option>
-                                            <option value="INTERNAL">LOGÍSTICA INTERNA (CENTRAL)</option>
-                                            {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className={labelClass}>Depósito de Recepción *</label>
-                                        <select required className={inputClass} value={moveFormData.targetLocationId} onChange={e => setMoveFormData({...moveFormData, targetLocationId: e.target.value})}>
-                                            <option value="">Seleccione destino...</option>
-                                            {destinationStorages.map(sp => <option key={sp.id} value={sp.id}>{sp.name} ({sp.city})</option>)}
-                                        </select>
-                                    </div>
+                            <div>
+                                <label className={labelClass}>Masa a Despachar *</label>
+                                <div className="flex gap-2">
+                                    <input required type="number" step="any" min="0" className={`${inputClass} text-lg font-bold`} value={moveFormData.inputValue} onChange={e => setMoveFormData({...moveFormData, inputValue: Number(e.target.value)})} />
+                                    <select className="w-24 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold uppercase text-center" value={moveUnit} onChange={e => setMoveUnit(e.target.value as MassUnit)}>
+                                        <option value="kg">KG</option>
+                                        <option value="tn">TN</option>
+                                        <option value="gr">GR</option>
+                                    </select>
                                 </div>
+                                <span className="text-[10px] text-sky-600 font-bold block mt-1">Carga Neta: {calculatedMoveKg.toLocaleString()} kg</span>
+                            </div>
+                            <div>
+                                <label className={labelClass}>Destino de Recepción *</label>
+                                <select required className={inputClass} value={moveFormData.targetLocationId} onChange={e => setMoveFormData({...moveFormData, targetLocationId: e.target.value})}>
+                                    <option value="">Seleccione depósito destino...</option>
+                                    {storagePoints.map(sp => <option key={sp.id} value={sp.id}>{sp.name} ({sp.city})</option>)}
+                                </select>
                             </div>
                         </div>
 
-                        <div className="bg-white dark:bg-slate-900 p-6 rounded-[32px] border dark:border-slate-800">
-                            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 border-b dark:border-slate-800 pb-2 flex items-center"><Smartphone size={14} className="mr-2"/> Datos del Envío</h3>
-                            <div className="space-y-4">
-                                <div><label className={labelClass}>Nro Remito / Hoja de Ruta *</label><input required type="text" className={inputClass} value={moveFormData.transportGuideNumber} onChange={e => setMoveFormData({...moveFormData, transportGuideNumber: e.target.value.toUpperCase()})} /></div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div><label className={labelClass}>Fecha</label><input type="date" className={inputClass} value={moveFormData.date} onChange={e => setMoveFormData({...moveFormData, date: e.target.value})} /></div>
-                                    <div><label className={labelClass}>Hora Salida</label><input type="time" className={inputClass} value={moveFormData.dispatchTime} onChange={e => setMoveFormData({...moveFormData, dispatchTime: e.target.value})} /></div>
-                                </div>
-                                <div><label className={labelClass}>Empresa Transportista</label><input type="text" className={inputClass} value={moveFormData.transportCompany} onChange={e => setMoveFormData({...moveFormData, transportCompany: e.target.value})} /></div>
-                                <div><label className={labelClass}>Nombre del Conductor</label><input type="text" className={inputClass} value={moveFormData.driverName} onChange={e => setMoveFormData({...moveFormData, driverName: e.target.value})} /></div>
+                        <div className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3">
+                            <h3 className="text-[10px] font-bold uppercase text-slate-500">2. Transporte & Custodia</h3>
+                            <div>
+                                <label className={labelClass}>N° Guía de Tránsito ARICCAME / Remito *</label>
+                                <input required type="text" className={inputClass} value={moveFormData.transportGuideNumber} onChange={e => setMoveFormData({...moveFormData, transportGuideNumber: e.target.value.toUpperCase()})} placeholder="GT-ARICCAME-2026-0099" />
                             </div>
-                        </div>
-
-                        <div className="bg-white dark:bg-slate-900 p-6 rounded-[32px] border dark:border-slate-800">
-                             <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 border-b dark:border-slate-800 pb-2 flex items-center"><Truck size={14} className="mr-2"/> Identificación Vehicular</h3>
-                             <div className="space-y-4">
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div><label className={labelClass}>Patente Camión</label><input type="text" className={inputClass} value={moveFormData.vehiclePlate} onChange={e => setMoveFormData({...moveFormData, vehiclePlate: e.target.value.toUpperCase()})} /></div>
-                                    <div><label className={labelClass}>Modelo / Otros</label><input type="text" className={inputClass} value={moveFormData.vehicleModel} onChange={e => setMoveFormData({...moveFormData, vehicleModel: e.target.value})} /></div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className={labelClass}>Chofer / Conductor</label>
+                                    <input type="text" className={inputClass} value={moveFormData.driverName} onChange={e => setMoveFormData({...moveFormData, driverName: e.target.value})} placeholder="Nombre completo" />
                                 </div>
-                                <div><label className={labelClass}>DNI Conductor</label><input type="text" className={inputClass} value={moveFormData.driverDni} onChange={e => setMoveFormData({...moveFormData, driverDni: e.target.value})} /></div>
-                                <div className="pt-4 border-t dark:border-slate-800">
-                                    <label className={labelClass}>Itinerario / Notas de Ruta</label>
-                                    <textarea className={`${inputClass} text-xs`} rows={3} value={moveFormData.routeItinerary} onChange={e => setMoveFormData({...moveFormData, routeItinerary: e.target.value})} placeholder="Detalle la ruta o paradas..." />
+                                <div>
+                                    <label className={labelClass}>Patente Vehicular</label>
+                                    <input type="text" className={inputClass} value={moveFormData.vehiclePlate} onChange={e => setMoveFormData({...moveFormData, vehiclePlate: e.target.value.toUpperCase()})} placeholder="AA 123 BB" />
                                 </div>
-                             </div>
+                            </div>
+                            <div>
+                                <label className={labelClass}>Itinerario de Ruta</label>
+                                <input type="text" className={inputClass} value={moveFormData.routeItinerary} onChange={e => setMoveFormData({...moveFormData, routeItinerary: e.target.value})} placeholder="Ruta Nacional y paradas intermedias" />
+                            </div>
                         </div>
                     </div>
 
-                    <div className="flex justify-end space-x-3 pt-8 border-t dark:border-slate-800">
-                        <button type="button" onClick={() => setIsMoveModalOpen(false)} className="px-8 py-4 text-slate-400 font-black uppercase text-[10px] tracking-widest hover:text-slate-600 transition">Cancelar</button>
-                        <button type="submit" disabled={isSubmitting} className="bg-slate-900 dark:bg-blue-600 text-white px-12 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl flex items-center hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50">
-                            {isSubmitting ? <Loader2 className="animate-spin mr-2" size={18}/> : <Truck className="mr-2" size={18}/>}
-                            Confirmar Despacho y Remito
+                    <div className="flex justify-end space-x-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                        <button type="button" onClick={() => setIsMoveModalOpen(false)} className="px-4 py-2 text-slate-400 font-bold uppercase text-xs">Cancelar</button>
+                        <button type="submit" disabled={isSubmitting} className="bg-sky-600 text-white px-6 py-2.5 rounded-2xl font-bold text-xs uppercase tracking-wider shadow flex items-center hover:bg-sky-500 transition">
+                            {isSubmitting ? <Loader2 className="animate-spin mr-2" size={15}/> : <Truck className="mr-2" size={15}/>}
+                            Emitir Guía y Despachar
                         </button>
                     </div>
                 </form>
@@ -682,63 +1108,6 @@ export default function SeedBatches() {
         </div>
       )}
 
-      {/* MODAL FICHA TÉCNICA LOTE (VIEW) */}
-      {isViewModalOpen && selectedBatch && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[70] p-4">
-              <div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-2xl w-full p-10 shadow-2xl animate-in zoom-in-95 border border-white/10">
-                  <div className="flex justify-between items-center mb-8">
-                      <div className="flex items-center gap-3">
-                          <div className="bg-hemp-600 p-3 rounded-2xl text-white shadow-lg"><Archive size={24}/></div>
-                          <div>
-                              <h2 className="text-2xl font-black text-slate-800 dark:text-white uppercase tracking-tighter">{selectedBatch.batchCode}</h2>
-                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Auditoría Técnica de Material</p>
-                          </div>
-                      </div>
-                      <button onClick={() => setIsViewModalOpen(false)} className="text-slate-400 hover:text-slate-600"><X size={28}/></button>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4 mb-8">
-                      <div className="bg-gray-50 dark:bg-slate-950 p-4 rounded-3xl border dark:border-slate-800">
-                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Genética</p>
-                          <p className="text-lg font-black text-hemp-600 uppercase">{varieties.find(v => v.id === selectedBatch.varietyId)?.name || 'S/D'}</p>
-                      </div>
-                      <div className="bg-gray-50 dark:bg-slate-950 p-4 rounded-3xl border dark:border-slate-800">
-                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Existencias</p>
-                          <p className="text-lg font-black text-slate-700 dark:text-slate-300">{Number(selectedBatch.remainingQuantity.toFixed(3)).toLocaleString()} KG</p>
-                      </div>
-                      <div className="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-3xl border border-blue-100 dark:border-blue-900/30">
-                          <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1">Categoría</p>
-                          <p className="text-lg font-black text-blue-800 dark:text-blue-300 uppercase">{selectedBatch.category || 'N/A'}</p>
-                      </div>
-                      <div className="bg-emerald-50 dark:bg-emerald-900/10 p-4 rounded-3xl border border-emerald-100 dark:border-emerald-900/30">
-                          <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Poder Germinativo</p>
-                          <p className="text-lg font-black text-emerald-800 dark:text-emerald-300">{selectedBatch.germination ? `${selectedBatch.germination}%` : 'S/D'}</p>
-                      </div>
-                  </div>
-
-                  <div className="space-y-3 mb-8">
-                      {selectedBatch.storageConditions && (
-                          <div className="bg-gray-50 dark:bg-slate-950 p-4 rounded-2xl border dark:border-slate-800">
-                              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Condiciones de Almacenamiento</p>
-                              <p className="text-xs text-slate-600 dark:text-slate-300">{selectedBatch.storageConditions}</p>
-                          </div>
-                      )}
-                      {selectedBatch.notes && (
-                          <div className="bg-gray-50 dark:bg-slate-950 p-4 rounded-2xl border dark:border-slate-800">
-                              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Observaciones</p>
-                              <p className="text-xs text-slate-600 dark:text-slate-300">{selectedBatch.notes}</p>
-                          </div>
-                      )}
-                  </div>
-
-                  <div className="flex justify-end">
-                      <button onClick={() => setIsViewModalOpen(false)} className="bg-slate-900 dark:bg-blue-600 text-white px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-all">
-                          Cerrar
-                      </button>
-                  </div>
-              </div>
-          </div>
-      )}
     </div>
   );
 }
