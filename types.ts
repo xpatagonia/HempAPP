@@ -2,7 +2,35 @@
 export type UsageType = 'Fibra' | 'Grano' | 'Dual' | 'Medicinal';
 export type UserRole = 'super_admin' | 'admin' | 'technician' | 'client' | 'viewer';
 export type RoleType = 'Productor Pequeño (0-5 ha)' | 'Productor Mediano (5-15 ha)' | 'Productor Grande (>20 ha)' | 'Empresa Privada' | 'Gobierno' | 'Academia' | 'ONG/Cooperativa';
-export type SupplierCategory = 'Semillas' | 'Insumos' | 'Servicios' | 'Recursos Humanos';
+export type SupplierCategory = 
+  | 'Semillero_Criadero'          // Semillas & Multiplicación Fiscalizada INASE
+  | 'Bioinsumos_Fertilizantes'    // Fertilizantes, Enmiendas & Bioestimulantes SENASA
+  | 'Fitosanitarios_Control'      // Control Fitosanitario & Biológico SENASA
+  | 'Mecanizacion_Servicios'      // Siembra de Precisión, Cosecha & Enfardado
+  | 'Laboratorio_Analitica'       // Laboratorios HPLC, Metales Pesados & Pureza
+  | 'Sustratos_Vivero'            // Sustratos & Propagación Agámica
+  | 'Semillas'
+  | 'Insumos'
+  | 'Servicios'
+  | 'Recursos Humanos';
+
+export type TechnicalHomologationStatus = 
+  | 'Homologado_Conforme'         // Apto para producción y trazabilidad oficial
+  | 'En_Auditoria_Tecnica'        // En ensayo agronómico o revisión documental
+  | 'Cuarentena_Tecnica'          // En revisión técnica / lote observado
+  | 'No_Apto_Restringido';        // Desestimado por no conformidad técnica o contaminantes
+
+export interface SupplierAgronomicAudit {
+  technicalAgronomistName?: string;
+  technicalAgronomistMatricula?: string;
+  lastAuditDate?: string;
+  auditScore?: number;            // Calificación técnica (0 a 100)
+  gacpCertified?: boolean;        // Buenas Prácticas Agrícolas y de Recolección (GACP)
+  bpaCertified?: boolean;         // Buenas Prácticas Agrícolas (BPA Oficiales)
+  organicCertified?: boolean;     // Certificación Orgánica SENASA / IFOAM
+  zeroResidueGuarantee?: boolean; // Garantía de Inocuidad y Cero Residuos Químicos
+  labAccreditationStandard?: string; // Ej: ISO/IEC 17025, INTA, SENASA
+}
 export type MembershipLevel = 'Activo' | 'En Observación' | 'Premium' | 'Baja Temporal';
 export type SoilType = string;
 
@@ -162,12 +190,25 @@ export interface Supplier {
   postalCode?: string;
   whatsapp?: string;
   email?: string;
-  coordinates?: { lat: number; lng: number };
   commercialContact?: string;
   logisticsContact?: string;
+  coordinates?: { lat: number; lng: number };
   website?: string;
   notes?: string;
   isOfficialPartner?: boolean;
+
+  // ACREDITACIONES REGULATORIAS & AGRONÓMICAS (NO CRM)
+  inaseRncyfsNumber?: string;          // N° Registro Nacional de Comercio y Fiscalización de Semillas (INASE)
+  senasaRegisterNumber?: string;       // N° Registro Nacional Sanitario de Insumos / Fitosanitarios (SENASA)
+  ariccameLicenseNumber?: string;      // N° Licencia / Disposición ARICCAME
+  homologationStatus?: TechnicalHomologationStatus; // Estado de homologación técnica
+
+  // AUDITORÍA DE CALIDAD & PROTOCOLOS AGRONÓMICOS
+  audit?: SupplierAgronomicAudit;
+  technicalSpecialty?: string;         // Especialidad agronómica
+  activeIngredientsProvided?: string[]; // Principios activos o insumos autorizados
+  technicalDatasheetUrl?: string;      // Ficha técnica agronómica
+  batchReturnWarrantyDays?: number;    // Plazo de garantía técnica por lote / germinación
 }
 
 export interface Variety {
