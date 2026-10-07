@@ -151,6 +151,50 @@ export default function PublicTraceability() {
 
             <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-6 relative z-20 -mt-2">
                 
+                {/* OPERADOR TITULAR & LICENCIAS OFICIALES ARICCAME */}
+                <div className="bg-slate-900/90 border border-slate-800 p-5 md:p-6 rounded-3xl space-y-4">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-800 pb-3">
+                        <div>
+                            <span className="text-[9px] font-black uppercase text-emerald-400 tracking-wider block">
+                                Operador Titular Responsable
+                            </span>
+                            <h2 className="text-lg md:text-xl font-black uppercase text-white tracking-tight">
+                                Cooperativa PatagonianC LTDA
+                            </h2>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs text-slate-400 font-bold">CUIT</span>
+                            <span className="text-xs font-mono font-black text-white bg-slate-950 px-3 py-1 rounded-xl border border-slate-800">
+                                30-71816113-0
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                        <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
+                            <div className="flex items-center justify-between">
+                                <span className="text-[9px] font-black uppercase text-emerald-400">Licencia Agrícola (Cultivo & Criadero)</span>
+                                <span className="text-[9px] font-bold text-emerald-300 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800">ARICCAME</span>
+                            </div>
+                            <strong className="font-mono text-white text-xs block break-all">
+                                EX-2024-134354227--APN-ARICCAME#MEC
+                            </strong>
+                            <p className="text-[9px] text-slate-500">Habilitación oficial de cultivo, germoplasma y multiplicación vegetal</p>
+                        </div>
+
+                        <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
+                            <div className="flex items-center justify-between">
+                                <span className="text-[9px] font-black uppercase text-sky-400">Licencia Industrial (Derivados & Transformación)</span>
+                                <span className="text-[9px] font-bold text-sky-300 bg-sky-950/60 px-2 py-0.5 rounded border border-sky-800">ARICCAME</span>
+                            </div>
+                            <strong className="font-mono text-white text-xs block break-all">
+                                EX-2025-119427833--APN-ARICCAME#MEC
+                            </strong>
+                            <p className="text-[9px] text-slate-500">Habilitación oficial de procesamiento, grano, fibra y derivados</p>
+                        </div>
+                    </div>
+                </div>
+
                 {/* MATRIZ DE RESUMEN FISCAL & CALIDAD */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <div className="bg-slate-900/90 border border-slate-800 p-4 rounded-2xl">
@@ -352,7 +396,11 @@ export default function PublicTraceability() {
                         <Leaf size={18}/>
                         <span className="text-lg font-black uppercase tracking-tight">{appName} <span className="text-white">Nucleus Trace</span></span>
                     </div>
-                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider max-w-sm mx-auto">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider max-w-lg mx-auto">
+                        Titular Operador: Cooperativa PatagonianC LTDA · CUIT 30-71816113-0<br />
+                        Lic. Agrícola EX-2024-134354227 · Lic. Industrial EX-2025-119427833 (ARICCAME)
+                    </p>
+                    <p className="text-[9px] text-slate-500 font-medium uppercase tracking-wider max-w-sm mx-auto">
                         Reporte inmutable de trazabilidad biológica emitido conforme a normativas INASE, ARICCAME y SENASA.
                     </p>
                 </div>

@@ -121,6 +121,48 @@ export const VarietyPassportModal: React.FC<VarietyPassportModalProps> = ({
             </div>
           </div>
 
+          {/* TITULAR OPERADOR RESPONSABLE & LICENCIAS OFICIALES ARICCAME */}
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2 text-xs">
+            <div className="flex justify-between items-center border-b border-slate-200 pb-1.5">
+              <div>
+                <span className="text-[8px] font-black uppercase text-slate-400 block tracking-wider">
+                  Titular & Operador Responsable
+                </span>
+                <strong className="text-sm font-black uppercase text-slate-900">
+                  Cooperativa PatagonianC LTDA
+                </strong>
+              </div>
+              <div className="text-right">
+                <span className="text-[8px] font-black uppercase text-slate-400 block">CUIT</span>
+                <span className="text-xs font-mono font-black text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">
+                  30-71816113-0
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px]">
+              <div className="bg-white p-2 rounded-lg border border-slate-200 shadow-sm">
+                <div className="flex items-center justify-between mb-0.5">
+                  <span className="text-[8px] font-black text-emerald-700 uppercase">Licencia Agrícola (Cultivo & Criadero)</span>
+                  <span className="text-[8px] font-bold text-emerald-600 bg-emerald-50 px-1.5 rounded">ARICCAME</span>
+                </div>
+                <strong className="font-mono text-slate-900 text-[9px] block truncate" title="EX-2024-134354227--APN-ARICCAME#MEC">
+                  EX-2024-134354227--APN-ARICCAME#MEC
+                </strong>
+              </div>
+
+              <div className="bg-white p-2 rounded-lg border border-slate-200 shadow-sm">
+                <div className="flex items-center justify-between mb-0.5">
+                  <span className="text-[8px] font-black text-sky-700 uppercase">Licencia Industrial (Derivados & Transformación)</span>
+                  <span className="text-[8px] font-bold text-sky-600 bg-sky-50 px-1.5 rounded">ARICCAME</span>
+                </div>
+                <strong className="font-mono text-slate-900 text-[9px] block truncate" title="EX-2025-119427833--APN-ARICCAME#MEC">
+                  EX-2025-119427833--APN-ARICCAME#MEC
+                </strong>
+              </div>
+            </div>
+          </div>
+
           {/* LÍMITES QUÍMICOS Y CANNABINOIDES AUDITADOS */}
           <div className="grid grid-cols-3 gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-center text-xs">
             <div>
@@ -205,9 +247,9 @@ export const VarietyPassportModal: React.FC<VarietyPassportModalProps> = ({
           </div>
 
           {/* PIE DE PASAPORTE */}
-          <div className="pt-2 border-t border-slate-200 flex justify-between items-center text-[8px] text-slate-400">
-            <span>Certificado Técnico Fitotécnico Nucleus</span>
-            <span>Estándar Internacional OECD / INASE</span>
+          <div className="pt-2 border-t border-slate-200 flex flex-wrap justify-between items-center text-[8px] text-slate-500 gap-1">
+            <span>Operador: Cooperativa PatagonianC LTDA · CUIT 30-71816113-0</span>
+            <span>Lic. Agrícola EX-2024-134354227 · Lic. Industrial EX-2025-119427833</span>
           </div>
         </div>
 

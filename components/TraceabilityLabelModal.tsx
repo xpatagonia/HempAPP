@@ -165,6 +165,41 @@ export const TraceabilityLabelModal: React.FC<TraceabilityLabelModalProps> = ({
             )}
           </div>
 
+          {/* TITULAR OPERADOR RESPONSABLE & LICENCIAS OFICIALES ARICCAME */}
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 space-y-1.5 text-xs">
+            <div className="flex justify-between items-center border-b border-slate-200 pb-1">
+              <div>
+                <span className="text-[8px] font-black uppercase text-slate-400 block tracking-wider">
+                  Titular & Operador Responsable
+                </span>
+                <strong className="text-xs font-black uppercase text-slate-900">
+                  Cooperativa PatagonianC LTDA
+                </strong>
+              </div>
+              <div className="text-right">
+                <span className="text-[8px] font-black uppercase text-slate-400 block">CUIT</span>
+                <span className="text-[11px] font-mono font-black text-slate-900 bg-white px-1.5 py-0.5 rounded border border-slate-200">
+                  30-71816113-0
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[9px]">
+              <div className="bg-white p-1.5 rounded-lg border border-slate-200">
+                <span className="text-[7.5px] font-bold text-emerald-700 uppercase block">Lic. Agrícola ARICCAME</span>
+                <strong className="font-mono text-slate-900 text-[8.5px] block truncate" title="EX-2024-134354227--APN-ARICCAME#MEC">
+                  EX-2024-134354227--APN-ARICCAME#MEC
+                </strong>
+              </div>
+              <div className="bg-white p-1.5 rounded-lg border border-slate-200">
+                <span className="text-[7.5px] font-bold text-sky-700 uppercase block">Lic. Industrial ARICCAME</span>
+                <strong className="font-mono text-slate-900 text-[8.5px] block truncate" title="EX-2025-119427833--APN-ARICCAME#MEC">
+                  EX-2025-119427833--APN-ARICCAME#MEC
+                </strong>
+              </div>
+            </div>
+          </div>
+
           {/* CÓDIGO DE BARRAS (CODE 128) */}
           <div className="p-3 bg-white border border-slate-200 rounded-xl text-center">
             <span className="text-[8px] font-bold text-slate-400 uppercase block mb-1">
@@ -204,9 +239,9 @@ export const TraceabilityLabelModal: React.FC<TraceabilityLabelModalProps> = ({
           </div>
 
           {/* PIE DE ETIQUETA */}
-          <div className="pt-2 border-t border-slate-200 flex justify-between items-center text-[8px] text-slate-400">
-            <span>Almacén: {storagePoint?.name || 'Central Pergamino'}</span>
-            <span>Certificado Digital Inmutable</span>
+          <div className="pt-2 border-t border-slate-200 flex flex-wrap justify-between items-center text-[8px] text-slate-500 gap-1">
+            <span>Cooperativa PatagonianC LTDA · CUIT 30-71816113-0 · Almacén: {storagePoint?.name || 'Central Pergamino'}</span>
+            <span>Lic. Agrícola EX-2024-134354227 · Lic. Industrial EX-2025-119427833</span>
           </div>
         </div>
 
