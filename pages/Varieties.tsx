@@ -5,9 +5,14 @@ import {
   Plus, Search, Tag, Edit2, Trash2, Sprout, AlertCircle, 
   X, Sparkles, BookOpen, Info, Loader2, Save, Archive,
   ShieldCheck, Award, FileCheck2, Droplets, Thermometer,
-  Scale, Compass, Filter, CheckCircle2, FlaskConical, Globe2
+  Scale, Compass, Filter, CheckCircle2, FlaskConical, Globe2,
+  ScanBarcode, QrCode, Printer
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { QRCodeSVG } from 'qrcode.react';
+import { BarcodeRenderer } from '../components/BarcodeRenderer';
+import { VarietyPassportModal } from '../components/VarietyPassportModal';
+import { BarcodeScannerModal } from '../components/BarcodeScannerModal';
 
 const HEMPIT_CATALOG: Partial<Variety>[] = [
   { 
@@ -131,6 +136,34 @@ export default function Varieties() {
   const [usageFilter, setUsageFilter] = useState<string>('all');
   const [selectedSupplierForImport, setSelectedSupplierForImport] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [isScannerModalOpen, setIsScannerModalOpen] = useState(false);
+  const [isPassportModalOpen, setIsPassportModalOpen] = useState(false);
+  const [selectedVarietyForPassport, setSelectedVarietyForPassport] = useState<Variety | null>(null);
+
+  const handleBarcodeScan = (scannedCode: string) => {
+    const clean = scannedCode.trim().toLowerCase();
+    const foundVariety = varieties.find(v => 
+      v.id.toLowerCase() === clean || 
+      v.name.toLowerCase().includes(clean) ||
+      (v.inaseRncNumber && v.inaseRncNumber.toLowerCase().includes(clean))
+    );
+
+    if (foundVariety) {
+      setSearchTerm(foundVariety.name);
+    } else {
+      const foundBatch = seedBatches.find(b => 
+        b.id.toLowerCase() === clean || 
+        b.batchCode.toLowerCase().includes(clean) ||
+        (b.labelSerialNumber && b.labelSerialNumber.toLowerCase().includes(clean))
+      );
+      if (foundBatch) {
+        const v = varieties.find(va => va.id === foundBatch.varietyId);
+        if (v) setSearchTerm(v.name);
+      } else {
+        setSearchTerm(scannedCode.trim());
+      }
+    }
+  };
 
   const [formData, setFormData] = useState<Partial<Variety>>({
     name: '', usage: 'Fibra', supplierId: '', cycleDays: 120, expectedThc: 0.12, 
@@ -290,26 +323,37 @@ export default function Varieties() {
             </p>
         </div>
         
-        {isAdmin && (
-          <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
               <button 
                 type="button"
-                onClick={() => setIsImportModalOpen(true)} 
-                className="bg-sky-600 text-white px-4 py-2.5 rounded-2xl flex items-center justify-center hover:bg-sky-500 transition shadow font-mono font-bold text-xs uppercase tracking-wider gap-1.5"
+                onClick={() => setIsScannerModalOpen(true)} 
+                className="bg-slate-900 dark:bg-slate-800 text-white px-4 py-2.5 rounded-2xl flex items-center justify-center hover:bg-slate-800 transition shadow font-mono font-bold text-xs uppercase tracking-wider gap-1.5"
+                title="Escanear con Pistola Láser o Colector de Datos"
               >
-                <Sparkles size={15} /> 
-                <span>Importar HempIT</span>
+                <ScanBarcode size={15} /> 
+                <span>Escanear Código</span>
               </button>
-              <button 
-                type="button"
-                onClick={() => { setEditingId(null); setIsModalOpen(true); }} 
-                className="bg-emerald-600 text-white px-4 py-2.5 rounded-2xl flex items-center justify-center hover:bg-emerald-500 transition shadow font-mono font-bold text-xs uppercase tracking-wider gap-1.5"
-              >
-                <Plus size={15} /> 
-                <span>Nueva Genética</span>
-              </button>
+              {isAdmin && (
+                <>
+                  <button 
+                    type="button"
+                    onClick={() => setIsImportModalOpen(true)} 
+                    className="bg-sky-600 text-white px-4 py-2.5 rounded-2xl flex items-center justify-center hover:bg-sky-500 transition shadow font-mono font-bold text-xs uppercase tracking-wider gap-1.5"
+                  >
+                    <Sparkles size={15} /> 
+                    <span>Importar HempIT</span>
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => { setEditingId(null); setIsModalOpen(true); }} 
+                    className="bg-emerald-600 text-white px-4 py-2.5 rounded-2xl flex items-center justify-center hover:bg-emerald-500 transition shadow font-mono font-bold text-xs uppercase tracking-wider gap-1.5"
+                  >
+                    <Plus size={15} /> 
+                    <span>Nueva Genética</span>
+                  </button>
+                </>
+              )}
           </div>
-        )}
       </div>
 
       {/* FILTROS Y BÚSQUEDA */}
@@ -510,21 +554,35 @@ export default function Varieties() {
                 </div>
                 
                 {/* FOOTER: STOCK Y ACCESO */}
-                <div className="mt-5 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <div className="mt-5 pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2">
                     <div>
                       <span className="text-[9px] text-slate-400 block uppercase">Stock en Nodos</span>
                       <strong className="text-xs text-slate-800 dark:text-slate-200">
                         {totalKgInStock.toLocaleString()} kg ({linkedBatches.length} lotes)
                       </strong>
                     </div>
-                    <button 
-                        type="button"
-                        onClick={() => navigate(`/seed-batches?variety=${v.name}`)}
-                        className="bg-slate-900 dark:bg-emerald-600 text-white px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center hover:scale-105 transition shadow gap-1"
-                    >
-                        <Archive size={12} />
-                        <span>Ver Lotes</span>
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <button 
+                          type="button"
+                          onClick={() => {
+                            setSelectedVarietyForPassport(v);
+                            setIsPassportModalOpen(true);
+                          }}
+                          className="bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 px-2.5 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center hover:bg-emerald-100 transition shadow gap-1"
+                          title="Emitir Pasaporte Fitotécnico con Barras y QR"
+                      >
+                          <ScanBarcode size={13} />
+                          <span>Pasaporte QR</span>
+                      </button>
+                      <button 
+                          type="button"
+                          onClick={() => navigate(`/seed-batches?variety=${v.name}`)}
+                          className="bg-slate-900 dark:bg-emerald-600 text-white px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center hover:scale-105 transition shadow gap-1"
+                      >
+                          <Archive size={12} />
+                          <span>Ver Lotes</span>
+                      </button>
+                    </div>
                 </div>
               </div>
             );
@@ -790,6 +848,26 @@ export default function Varieties() {
           </div>
         </div>
       )}
+
+      {/* MODAL DE EMISIÓN DE PASAPORTE FITOTÉCNICO Y RÓTULO QR */}
+      {selectedVarietyForPassport && (
+        <VarietyPassportModal 
+          isOpen={isPassportModalOpen}
+          onClose={() => {
+            setIsPassportModalOpen(false);
+            setSelectedVarietyForPassport(null);
+          }}
+          variety={selectedVarietyForPassport}
+          batches={seedBatches.filter(b => b.varietyId === selectedVarietyForPassport.id)}
+        />
+      )}
+
+      {/* MODAL DE ESCANEO DE CÓDIGO DE BARRAS / QR */}
+      <BarcodeScannerModal 
+        isOpen={isScannerModalOpen}
+        onClose={() => setIsScannerModalOpen(false)}
+        onSelectBatch={handleBarcodeScan}
+      />
     </div>
   );
 }

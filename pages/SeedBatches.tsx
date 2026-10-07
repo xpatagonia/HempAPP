@@ -8,9 +8,11 @@ import {
   Building, User, Calendar, FileText, Globe, ClipboardList, ShieldCheck, Warehouse,
   Plus, CheckCircle2, Navigation, Smartphone, UserCheck, Barcode, FlaskConical, Scale, ClipboardCheck,
   Map as MapIcon, Route, Compass, Weight, LayoutGrid, List, Droplets, Sparkles, Sprout,
-  FileCheck, ShieldAlert, Layers
+  FileCheck, ShieldAlert, Layers, QrCode
 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
+import { TraceabilityLabelModal } from '../components/TraceabilityLabelModal';
+import { BarcodeScannerModal } from '../components/BarcodeScannerModal';
 
 type MassUnit = 'gr' | 'kg' | 'tn';
 
@@ -54,6 +56,9 @@ export default function SeedBatches() {
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
+  const [isLabelModalOpen, setIsLabelModalOpen] = useState(false);
+  const [isScannerModalOpen, setIsScannerModalOpen] = useState(false);
+  const [labelBatch, setLabelBatch] = useState<SeedBatch | null>(null);
   
   const [editingBatchId, setEditingBatchId] = useState<string | null>(null);
   const [selectedBatch, setSelectedBatch] = useState<SeedBatch | null>(null);
@@ -327,6 +332,15 @@ export default function SeedBatches() {
           <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
               <button 
                 type="button"
+                onClick={() => setIsScannerModalOpen(true)} 
+                className="bg-slate-900 text-white dark:bg-white dark:text-slate-900 px-4 py-2.5 rounded-2xl flex items-center justify-center hover:bg-slate-800 dark:hover:bg-slate-100 transition shadow font-mono font-bold text-xs uppercase tracking-wider gap-1.5"
+                title="Escanear con lector láser o QR"
+              >
+                <ScanBarcode size={15} /> 
+                <span>Escanear Lote</span>
+              </button>
+              <button 
+                type="button"
                 onClick={handleOpenDispatch} 
                 className="bg-sky-600 text-white px-4 py-2.5 rounded-2xl flex items-center justify-center hover:bg-sky-500 transition shadow font-mono font-bold text-xs uppercase tracking-wider gap-1.5"
               >
@@ -588,6 +602,17 @@ export default function SeedBatches() {
                                                     title="Ver Ficha Técnica"
                                                   >
                                                     <Eye size={14}/>
+                                                  </button>
+                                                  <button 
+                                                    type="button"
+                                                    onClick={() => {
+                                                      setLabelBatch(batch);
+                                                      setIsLabelModalOpen(true);
+                                                    }} 
+                                                    className="p-1.5 text-slate-400 hover:text-purple-600 bg-slate-100 dark:bg-slate-800 rounded-lg transition"
+                                                    title="Emitir Rótulo Oficial & QR"
+                                                  >
+                                                    <QrCode size={14}/>
                                                   </button>
                                                   {isAdmin && (
                                                     <button 
@@ -1011,7 +1036,18 @@ export default function SeedBatches() {
                       )}
                   </div>
 
-                  <div className="flex justify-end">
+                  <div className="flex justify-end gap-2">
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          setLabelBatch(selectedBatch);
+                          setIsLabelModalOpen(true);
+                        }} 
+                        className="bg-purple-600 text-white hover:bg-purple-500 px-5 py-2 rounded-xl font-bold text-xs uppercase flex items-center gap-1.5 shadow"
+                      >
+                        <QrCode size={14} />
+                        <span>Emitir Rótulo & QR</span>
+                      </button>
                       <button type="button" onClick={() => setIsViewModalOpen(false)} className="bg-slate-900 text-white dark:bg-white dark:text-slate-900 px-6 py-2 rounded-xl font-bold text-xs uppercase">
                           Cerrar Ficha
                       </button>
@@ -1107,6 +1143,32 @@ export default function SeedBatches() {
             </div>
         </div>
       )}
+
+      {/* MODAL EMISIÓN DE RÓTULO CON CÓDIGO DE BARRAS & QR */}
+      {labelBatch && (
+        <TraceabilityLabelModal
+          isOpen={isLabelModalOpen}
+          onClose={() => {
+            setIsLabelModalOpen(false);
+            setLabelBatch(null);
+          }}
+          batch={labelBatch}
+          variety={varieties.find(v => v.id === labelBatch.varietyId)}
+          storagePoint={storagePoints.find(s => s.id === labelBatch.storagePointId)}
+        />
+      )}
+
+      {/* MODAL LECTURA / ESCÁNER ÓPTICO Y LÁSER */}
+      <BarcodeScannerModal
+        isOpen={isScannerModalOpen}
+        onClose={() => setIsScannerModalOpen(false)}
+        onSelectBatch={(id) => {
+          const b = seedBatches.find(x => x.id === id);
+          if (b) {
+            handleOpenView(b);
+          }
+        }}
+      />
 
     </div>
   );
