@@ -84,6 +84,9 @@ export interface User {
   avatar?: string;
   clientId?: string;
   isNetworkMember: boolean; 
+  memberType?: 'Socio_Productor' | 'Cooperativa_Central' | 'Auditor_Tecnico';
+  organizationName?: string;
+  assignedPlotIds?: string[];
 }
 
 export type HempLicenseCategory = 
@@ -449,6 +452,57 @@ export interface Resource {
   unit: string;
   costPerUnit: number;
   stock?: number;
+}
+
+export type ExpenseScope = 'PARCELA_SOCIO' | 'COOPERATIVA_GENERAL';
+
+export type ExpenseCategory = 
+  | 'LABOR_CULTURAL'          // Preparación de suelo, siembra, labores en lote
+  | 'INSUMO_FITOSANITARIO'    // Fertilizantes, bioinsumos, enmiendas aplicadas
+  | 'SEMILLA_FISCALIZADA'     // Semilla certificada C1/C2 asignada
+  | 'RIEGO_COMBUSTIBLE'       // Gasoil maquinaria local / energía y canon hídrico
+  | 'COSECHA_LOTE'            // Cosecha, corte y enfardado en lote
+  | 'FLETE_LOGISTICA_CENTRAL' // Fletes troncales y logística colectiva cooperativa
+  | 'ACOPIO_SECADO_SILOS'     // Acondicionamiento, secado y custodia en silos cooperativos
+  | 'CERTIFICACION_AUDITORIA' // Ensayos HPLC de cannabinoides, pureza ISTA, aranceles regulatorios
+  | 'SEGUROS_COLECTIVOS'      // Póliza multirriesgo agrícola y granizo cooperativa
+  | 'ESTRUCTURA_ADMIN_COOP';  // Balances, asesoría técnica agronómica central, gestión legal
+
+export type ExpenseAuditStatus = 
+  | 'BORRADOR'               // En edición preliminar
+  | 'DECLARADO_SOCIO'        // Enviado por el socio para validación cooperativa
+  | 'AUDITADO_CONFORME'      // Verificado por el equipo técnico/financiero cooperativo
+  | 'OBSERVADO_REVISION';    // Observado por discrepancia de remito o dosis
+
+export interface OperationalExpense {
+  id: string;
+  campaign: string;                      // ej: '2025/2026'
+  date: string;                          // YYYY-MM-DD
+  scope: ExpenseScope;                   // 'PARCELA_SOCIO' | 'COOPERATIVA_GENERAL'
+  plotId?: string;                       // ID de la parcela (obligatorio si PARCELA_SOCIO)
+  plotName?: string;
+  locationId?: string;
+  locationName?: string;
+  socioId?: string;                      // Identificador del socio
+  socioName?: string;                    // Razón social del socio (ej: 'Consorcio Pergamino Verde')
+  category: ExpenseCategory;
+  concept: string;                       // Concepto / detalle del gasto
+  quantity: number;
+  unit: string;                          // 'ha', 'litros', 'kg', 'horas', 'viajes', 'tn', 'global'
+  unitCost: number;                      // Costo unitario
+  totalCost: number;                     // quantity * unitCost
+  currency: 'USD' | 'ARS';
+  exchangeRate?: number;                 // TC aplicado si ARS
+  totalCostUsd: number;                  // Normalizado a USD
+  receiptType?: 'Factura A' | 'Factura B/C' | 'Remito Oficial' | 'Orden de Trabajo' | 'Liquidación Cooperativa';
+  receiptNumber?: string;                // ej: 'FAC-A-0004-00012894'
+  supplierName?: string;                 // Proveedor o contratista
+  status: ExpenseAuditStatus;
+  auditedBy?: string;                    // Responsable de auditoría cooperativa
+  auditDate?: string;
+  auditNotes?: string;
+  notes?: string;
+  createdAt: string;
 }
 
 export interface Project {

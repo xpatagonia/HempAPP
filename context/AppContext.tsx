@@ -3,17 +3,20 @@ import { supabase, checkConnection } from '../supabaseClient';
 import { 
   User, Location, Plot, TrialRecord, Task, Project, Variety, 
   Client, Supplier, SeedBatch, SeedMovement, Resource, 
-  StoragePoint, HydricRecord, FieldLog 
+  StoragePoint, HydricRecord, FieldLog, OperationalExpense, ExpenseAuditStatus
 } from '../types';
 import { 
-  DEMO_USER, DEMO_VARIETIES, DEMO_LOCATIONS, DEMO_PLOTS, 
+  DEMO_USER, DEMO_USERS_LIST, DEMO_VARIETIES, DEMO_LOCATIONS, DEMO_PLOTS, 
   DEMO_PROJECTS, DEMO_TRIALS, DEMO_HYDRIC, DEMO_TASKS,
-  DEMO_STORAGE_POINTS, DEMO_SUPPLIERS, DEMO_SEED_BATCHES, DEMO_SEED_MOVEMENTS, DEMO_RESOURCES
+  DEMO_STORAGE_POINTS, DEMO_SUPPLIERS, DEMO_SEED_BATCHES, DEMO_SEED_MOVEMENTS, DEMO_RESOURCES,
+  DEMO_OPERATIONAL_EXPENSES
 } from '../src/data/initialDemoData';
 
 interface AppContextType {
   currentUser: User | null;
+  setCurrentUser: React.Dispatch<React.SetStateAction<User | null>>;
   usersList: User[];
+  switchUserRole: (userId: string) => void;
   isDbConnected: boolean;
   login: (email: string, password: string) => Promise<boolean>;
   loginDemo: () => Promise<boolean>;
@@ -71,6 +74,11 @@ interface AppContextType {
   addResource: (r: Resource) => Promise<boolean>;
   updateResource: (r: Resource) => Promise<boolean>;
   deleteResource: (id: string) => Promise<boolean>;
+  operationalExpenses: OperationalExpense[];
+  addOperationalExpense: (exp: OperationalExpense) => Promise<boolean>;
+  updateOperationalExpense: (exp: OperationalExpense) => Promise<boolean>;
+  deleteOperationalExpense: (id: string) => Promise<boolean>;
+  auditOperationalExpense: (id: string, status: ExpenseAuditStatus, auditorName: string, notes?: string) => Promise<boolean>;
   storagePoints: StoragePoint[];
   addStoragePoint: (s: StoragePoint) => Promise<boolean>;
   updateStoragePoint: (s: StoragePoint) => Promise<boolean>;
@@ -146,7 +154,16 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isDbConnected, setIsDbConnected] = useState(false);
 
-    const [usersList, setUsersList] = useState<User[]>([DEMO_USER]);
+    const [usersList, setUsersList] = useState<User[]>(DEMO_USERS_LIST);
+    const [operationalExpenses, setOperationalExpenses] = useState<OperationalExpense[]>(() => {
+        if (typeof window !== 'undefined') {
+            try {
+                const stored = localStorage.getItem('ht_operational_expenses');
+                if (stored) return JSON.parse(stored);
+            } catch (e) {}
+        }
+        return DEMO_OPERATIONAL_EXPENSES;
+    });
     const [varieties, setVarieties] = useState<Variety[]>(DEMO_VARIETIES);
     const [locations, setLocations] = useState<Location[]>(DEMO_LOCATIONS);
     const [plots, setPlots] = useState<Plot[]>(DEMO_PLOTS);
@@ -372,7 +389,41 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         else if (table === 'storage_points') setStoragePoints(prev => updateList(prev));
         else if (table === 'hydric_records') setHydricRecords(prev => updateList(prev));
         else if (table === 'resources') setResources(prev => updateList(prev));
+        else if (table === 'operational_expenses') {
+            setOperationalExpenses(prev => {
+                const next = updateList(prev);
+                try { localStorage.setItem('ht_operational_expenses', JSON.stringify(next)); } catch (e) {}
+                return next;
+            });
+        }
         else if (table === 'field_logs') setLogs(prev => updateList(prev));
+    };
+
+    const switchUserRole = (userId: string) => {
+        const found = usersList.find(u => u.id === userId);
+        if (found) {
+            setCurrentUser(found);
+            localStorage.setItem('ht_session_user', JSON.stringify(found));
+            localStorage.removeItem('ht_logged_out');
+        }
+    };
+
+    const auditOperationalExpense = async (
+        id: string, 
+        status: ExpenseAuditStatus, 
+        auditorName: string, 
+        notes?: string
+    ) => {
+        const currentExp = operationalExpenses.find(e => e.id === id);
+        if (!currentExp) return false;
+        const updated: OperationalExpense = {
+            ...currentExp,
+            status,
+            auditedBy: auditorName,
+            auditDate: new Date().toISOString().split('T')[0],
+            auditNotes: notes !== undefined ? notes : currentExp.auditNotes
+        };
+        return await crud('operational_expenses', updated, 'update');
     };
 
     const crud = async (table: string, item: any, action: 'insert' | 'update' | 'delete', idField = 'id') => {
@@ -418,6 +469,13 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             seedBatches, addSeedBatch: (b) => crud('seed_batches', b, 'insert'), updateSeedBatch: (b) => crud('seed_batches', b, 'update'), deleteSeedBatch: (id) => crud('seed_batches', id, 'delete'),
             seedMovements, addSeedMovement: (m) => crud('seed_movements', m, 'insert'), updateSeedMovement: (m) => crud('seed_movements', m, 'update'),
             resources, addResource: (r) => crud('resources', r, 'insert'), updateResource: (r) => crud('resources', r, 'update'), deleteResource: (id) => crud('resources', id, 'delete'),
+            operationalExpenses,
+            addOperationalExpense: (exp) => crud('operational_expenses', exp, 'insert'),
+            updateOperationalExpense: (exp) => crud('operational_expenses', exp, 'update'),
+            deleteOperationalExpense: (id) => crud('operational_expenses', id, 'delete'),
+            auditOperationalExpense,
+            switchUserRole,
+            setCurrentUser,
             storagePoints, addStoragePoint: (s) => crud('storage_points', s, 'insert'), updateStoragePoint: (s) => crud('storage_points', s, 'update'), deleteStoragePoint: (id) => crud('storage_points', id, 'delete'),
             hydricRecords, addHydricRecord: (r) => crud('hydric_records', r, 'insert'), deleteHydricRecord: (id) => crud('hydric_records', id, 'delete'),
             logs, addLog: (l) => crud('field_logs', l, 'insert'), deleteLog: (id) => crud('field_logs', id, 'delete'),
