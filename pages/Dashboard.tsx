@@ -10,10 +10,11 @@ import {
   Bot, Sprout, TrendingUp, AlertTriangle, 
   Calendar, ArrowUpRight, Zap, Target, AlertCircle, Clock, FlaskConical, Plus, ClipboardList,
   Satellite, Sparkles, RefreshCw, CheckCircle2, CheckSquare, Eye, Download, Package, FileText, ArrowRight, Layers,
-  ChevronDown, MapPin, Check, SlidersHorizontal, BarChart3, Wifi
+  ChevronDown, MapPin, Check, SlidersHorizontal, BarChart3, Wifi, Award
 } from 'lucide-react';
 import { getPlotNDVIAlertStatus, exportNDVITimeSeriesPDF, generateDetailedSatellitePasses, getPlotAgrochemicalApplications } from '../src/services/agro40Service';
 import { PlotNDVIAlert, Task, AgrochemicalApplication } from '../types';
+import DashboardLicenseIntegritySummary from '../components/DashboardLicenseIntegritySummary';
 
 interface MetricCardProps {
   label: string;
@@ -146,7 +147,7 @@ export default function Dashboard() {
   const highPriorityTasks = tasks.filter(t => t.status === 'Pendiente' && t.priority === 'Alta').length;
 
   // Filtro de pestañas de visualización rápida
-  const [activeSection, setActiveSection] = useState<'all' | 'satellite' | 'senasa' | 'yield'>('all');
+  const [activeSection, setActiveSection] = useState<'all' | 'satellite' | 'senasa' | 'yield' | 'licenses'>('all');
 
   // Evaluación de alertas automáticas NDVI (<0.2 o >0.7) en lotes registrados
   const plotNDVIAlerts: PlotNDVIAlert[] = useMemo(() => {
@@ -408,8 +409,24 @@ export default function Dashboard() {
             <BarChart3 size={13} />
             Rendimiento & Cosecha
           </button>
+          <button
+            onClick={() => setActiveSection('licenses')}
+            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors shrink-0 flex items-center gap-1.5 ${
+              activeSection === 'licenses'
+                ? 'bg-emerald-700 text-white shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            <Award size={13} />
+            Licencias & Integridad
+          </button>
         </div>
       </div>
+
+      {/* COMPONENTE DE RESUMEN: LICENCIAS OFICIALES (AGRÍCOLA / INDUSTRIAL) & INTEGRIDAD DEL SISTEMA */}
+      {(activeSection === 'all' || activeSection === 'licenses') && (
+        <DashboardLicenseIntegritySummary />
+      )}
 
       {/* 2. INDUSTRIAL KPI CARDS (HIGH-CONTRAST METRIC GRID) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
