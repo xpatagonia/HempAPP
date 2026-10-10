@@ -15,6 +15,7 @@ import {
 import { getPlotNDVIAlertStatus, exportNDVITimeSeriesPDF, generateDetailedSatellitePasses, getPlotAgrochemicalApplications } from '../src/services/agro40Service';
 import { PlotNDVIAlert, Task, AgrochemicalApplication } from '../types';
 import DashboardLicenseIntegritySummary from '../components/DashboardLicenseIntegritySummary';
+import YieldAndInputConsumptionWidget from '../components/YieldAndInputConsumptionWidget';
 
 interface MetricCardProps {
   label: string;
@@ -829,100 +830,9 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* SECTION C: YIELD ANALYTICS & PRODUCTION PROJECTIONS */}
-          {(activeSection === 'all' || activeSection === 'yield') && (
-            <div className="bg-white dark:bg-slate-900/90 rounded-2xl md:rounded-3xl p-6 md:p-8 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-6">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800/80 pb-5">
-                <div className="flex items-center space-x-3.5">
-                  <div className="p-3 bg-sky-500/10 dark:bg-sky-500/20 text-sky-600 dark:text-sky-400 rounded-2xl border border-sky-500/20">
-                    <Target size={24} />
-                  </div>
-                  <div>
-                    <h2 className="text-lg md:text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
-                      Rendimiento de Cosecha (kg/ha)
-                    </h2>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
-                      Comparativa agronómica por cultivar: Biomasa Real Lograda vs. Meta Productiva.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-4 text-xs font-mono font-bold">
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 bg-emerald-500 rounded-sm" />
-                    <span className="text-slate-600 dark:text-slate-300 uppercase">Real</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 bg-slate-300 dark:bg-slate-700 rounded-sm" />
-                    <span className="text-slate-600 dark:text-slate-300 uppercase">Proyectado</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="h-[340px] w-full pt-2">
-                {yieldData.some(d => d.actual > 0) ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={yieldData}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" className="dark:stroke-slate-800" />
-                      <XAxis 
-                        dataKey="name" 
-                        axisLine={false} 
-                        tickLine={false} 
-                        tick={{ fontSize: 11, fill: '#64748b', fontWeight: 'bold' }} 
-                      />
-                      <YAxis 
-                        axisLine={false} 
-                        tickLine={false} 
-                        tick={{ fontSize: 11, fill: '#64748b', fontFamily: 'monospace' }} 
-                      />
-                      <Tooltip 
-                        contentStyle={{ 
-                          borderRadius: '12px', 
-                          border: '1px solid #e2e8f0', 
-                          boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', 
-                          backgroundColor: '#0f172a',
-                          color: '#f8fafc',
-                          padding: '12px 16px',
-                          fontSize: '12px',
-                          fontWeight: 'bold'
-                        }}
-                        itemStyle={{ color: '#10b981' }}
-                      />
-                      <Bar 
-                        dataKey="target" 
-                        fill="#cbd5e1" 
-                        radius={[6, 6, 0, 0]} 
-                        barSize={32} 
-                        className="dark:fill-slate-800" 
-                      />
-                      <Bar 
-                        dataKey="actual" 
-                        barSize={20} 
-                        radius={[6, 6, 0, 0]}
-                      >
-                        {yieldData.map((_, i) => (
-                          <Cell key={i} fill={i % 2 === 0 ? '#059669' : '#10b981'} />
-                        ))}
-                      </Bar>
-                      <Line 
-                        type="monotone" 
-                        dataKey="actual" 
-                        stroke="#059669" 
-                        strokeWidth={2.5} 
-                        dot={{ r: 4, fill: '#10b981', strokeWidth: 2, stroke: '#fff' }} 
-                      />
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="h-full flex flex-col items-center justify-center text-center p-8 bg-slate-50 dark:bg-slate-950/40 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
-                    <Activity size={40} className="text-slate-400 mb-2" />
-                    <p className="text-xs font-mono font-bold text-slate-500 uppercase tracking-widest">
-                      Esperando registros biométricos de corte y pesaje
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
+          {/* SECTION C: YIELD & INPUT CONSUMPTION INTEGRATED WIDGET (CUADERNO FITOSANITARIO) */}
+          {(activeSection === 'all' || activeSection === 'yield' || activeSection === 'senasa') && (
+            <YieldAndInputConsumptionWidget />
           )}
 
         </div>
