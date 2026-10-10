@@ -10,7 +10,7 @@ import {
   Bot, Sprout, TrendingUp, AlertTriangle, 
   Calendar, ArrowUpRight, Zap, Target, AlertCircle, Clock, FlaskConical, Plus, ClipboardList,
   Satellite, Sparkles, RefreshCw, CheckCircle2, CheckSquare, Eye, Download, Package, FileText, ArrowRight, Layers,
-  ChevronDown, MapPin, Check, SlidersHorizontal, BarChart3, Wifi, Award
+  ChevronDown, MapPin, Check, SlidersHorizontal, BarChart3, Wifi, Award, DollarSign, Calculator
 } from 'lucide-react';
 import { getPlotNDVIAlertStatus, exportNDVITimeSeriesPDF, generateDetailedSatellitePasses, getPlotAgrochemicalApplications } from '../src/services/agro40Service';
 import { PlotNDVIAlert, Task, AgrochemicalApplication } from '../types';
@@ -148,7 +148,7 @@ export default function Dashboard() {
   const highPriorityTasks = tasks.filter(t => t.status === 'Pendiente' && t.priority === 'Alta').length;
 
   // Filtro de pestañas de visualización rápida
-  const [activeSection, setActiveSection] = useState<'all' | 'satellite' | 'senasa' | 'yield' | 'licenses'>('all');
+  const [activeSection, setActiveSection] = useState<'all' | 'satellite' | 'senasa' | 'yield' | 'licenses' | 'finances'>('all');
 
   // Evaluación de alertas automáticas NDVI (<0.2 o >0.7) en lotes registrados
   const plotNDVIAlerts: PlotNDVIAlert[] = useMemo(() => {
@@ -210,6 +210,48 @@ export default function Dashboard() {
       senasaCompliancePct: 100
     };
   }, [agrochemicalApps, relevantPlots]);
+
+  // Cálculo en tiempo real de costos operativos para el Dashboard
+  const liveFinancialSummary = useMemo(() => {
+    let totalDirectCostUsd = 0;
+    let totalGrossRevenueUsd = 0;
+    let totalAreaHa = 0;
+
+    relevantPlots.forEach(plot => {
+      let area = plot.surfaceArea || 1.0;
+      if (plot.surfaceUnit === 'm2') area = area / 10000;
+      else if (plot.surfaceUnit === 'ac') area = area * 0.404686;
+      totalAreaHa += area;
+
+      const isIrrigated = plot.irrigationType && !plot.irrigationType.toLowerCase().includes('secano');
+      let costPerHa = isIrrigated ? 720 : 480;
+      if (plot.type === 'Ensayo') costPerHa += 400;
+      totalDirectCostUsd += area * costPerHa;
+
+      const variety = varieties.find(v => v.id === plot.varietyId);
+      const usage = variety?.usage || 'Fibra';
+      if (usage === 'Fibra') {
+        totalGrossRevenueUsd += area * (isIrrigated ? 9.2 : 7.4) * 340;
+      } else if (usage === 'Grano') {
+        totalGrossRevenueUsd += area * (isIrrigated ? 1.85 : 1.30) * 1250;
+      } else if (usage === 'Dual') {
+        totalGrossRevenueUsd += (area * (isIrrigated ? 6.5 : 5.2) * 340) + (area * (isIrrigated ? 1.25 : 0.90) * 1250);
+      } else {
+        totalGrossRevenueUsd += area * 1150 * 9.5;
+      }
+    });
+
+    const netMarginUsd = totalGrossRevenueUsd - totalDirectCostUsd;
+    const avgRoiPct = totalDirectCostUsd > 0 ? (netMarginUsd / totalDirectCostUsd) * 100 : 0;
+
+    return {
+      totalDirectCostUsd: Math.round(totalDirectCostUsd),
+      totalGrossRevenueUsd: Math.round(totalGrossRevenueUsd),
+      netMarginUsd: Math.round(netMarginUsd),
+      avgRoiPct: Number(avgRoiPct.toFixed(1)),
+      totalAreaHa: Number(totalAreaHa.toFixed(1))
+    };
+  }, [relevantPlots, varieties]);
 
   // Estado de sincronización automática de tareas
   const [isSyncingTasks, setIsSyncingTasks] = useState(false);
@@ -420,6 +462,17 @@ export default function Dashboard() {
           >
             <Award size={13} />
             Licencias & Integridad
+          </button>
+          <button
+            onClick={() => setActiveSection('finances')}
+            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors shrink-0 flex items-center gap-1.5 ${
+              activeSection === 'finances'
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            <DollarSign size={13} />
+            Costos Operativos
           </button>
         </div>
       </div>
@@ -833,6 +886,81 @@ export default function Dashboard() {
           {/* SECTION C: YIELD & INPUT CONSUMPTION INTEGRATED WIDGET (CUADERNO FITOSANITARIO) */}
           {(activeSection === 'all' || activeSection === 'yield' || activeSection === 'senasa') && (
             <YieldAndInputConsumptionWidget />
+          )}
+
+          {/* SECTION D: FINANCIAL & OPERATING COSTS LIVE MONITOR */}
+          {(activeSection === 'all' || activeSection === 'finances') && (
+            <div className="bg-white dark:bg-slate-900 rounded-2xl md:rounded-3xl p-6 md:p-8 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-6">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-2xl border border-emerald-500/20">
+                    <DollarSign size={22} />
+                  </div>
+                  <div>
+                    <h3 className="font-mono font-black text-slate-900 dark:text-white text-lg uppercase tracking-tight flex items-center gap-2">
+                      <span>Costos Operativos & Proyección Financiera</span>
+                      <span className="text-[10px] bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-bold px-2 py-0.5 rounded-full border border-emerald-300 dark:border-emerald-800">
+                        TIEMPO REAL
+                      </span>
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      Consolidado de costos directos de labores, insumos y rentabilidad sobre {liveFinancialSummary.totalAreaHa} hectáreas.
+                    </p>
+                  </div>
+                </div>
+
+                <Link
+                  to="/finances"
+                  className="px-4 py-2 rounded-2xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-sm hover:opacity-90 transition shrink-0"
+                >
+                  <span>Ver Matriz Financiera Completa</span>
+                  <ArrowRight size={14} />
+                </Link>
+              </div>
+
+              {/* 4 MINI STATS DE FINANZAS */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-800">
+                  <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider block">Costo Directo Total</span>
+                  <p className="text-xl md:text-2xl font-black font-mono text-slate-900 dark:text-white mt-1">
+                    ${liveFinancialSummary.totalDirectCostUsd.toLocaleString()} USD
+                  </p>
+                  <span className="text-[10px] text-slate-500 font-mono mt-1 block">
+                    ~${Math.round(liveFinancialSummary.totalDirectCostUsd / (liveFinancialSummary.totalAreaHa || 1))} USD/ha
+                  </span>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-800">
+                  <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider block">VBP Proyectado</span>
+                  <p className="text-xl md:text-2xl font-black font-mono text-sky-600 dark:text-sky-400 mt-1">
+                    ${liveFinancialSummary.totalGrossRevenueUsd.toLocaleString()} USD
+                  </p>
+                  <span className="text-[10px] text-sky-600 font-mono mt-1 block font-bold">
+                    Fibra + Grano + Biomasa
+                  </span>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-800">
+                  <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider block">Margen Neto Operativo</span>
+                  <p className="text-xl md:text-2xl font-black font-mono text-emerald-600 mt-1">
+                    +${liveFinancialSummary.netMarginUsd.toLocaleString()} USD
+                  </p>
+                  <span className="text-[10px] text-emerald-600 font-mono mt-1 block font-bold">
+                    Margen positivo
+                  </span>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-800">
+                  <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider block">ROI Estimado</span>
+                  <p className="text-xl md:text-2xl font-black font-mono text-purple-600 mt-1">
+                    +{liveFinancialSummary.avgRoiPct}%
+                  </p>
+                  <span className="text-[10px] text-purple-600 font-mono mt-1 block font-bold">
+                    Retorno s/ Inversión
+                  </span>
+                </div>
+              </div>
+            </div>
           )}
 
         </div>

@@ -8,7 +8,7 @@ import {
 import { 
   DEMO_USER, DEMO_VARIETIES, DEMO_LOCATIONS, DEMO_PLOTS, 
   DEMO_PROJECTS, DEMO_TRIALS, DEMO_HYDRIC, DEMO_TASKS,
-  DEMO_STORAGE_POINTS, DEMO_SUPPLIERS, DEMO_SEED_BATCHES, DEMO_SEED_MOVEMENTS
+  DEMO_STORAGE_POINTS, DEMO_SUPPLIERS, DEMO_SEED_BATCHES, DEMO_SEED_MOVEMENTS, DEMO_RESOURCES
 } from '../src/data/initialDemoData';
 
 interface AppContextType {
@@ -157,7 +157,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     const [suppliers, setSuppliers] = useState<Supplier[]>(DEMO_SUPPLIERS);
     const [seedBatches, setSeedBatches] = useState<SeedBatch[]>(DEMO_SEED_BATCHES);
     const [seedMovements, setSeedMovements] = useState<SeedMovement[]>(DEMO_SEED_MOVEMENTS);
-    const [resources, setResources] = useState<Resource[]>([]);
+    const [resources, setResources] = useState<Resource[]>(DEMO_RESOURCES);
     const [storagePoints, setStoragePoints] = useState<StoragePoint[]>(DEMO_STORAGE_POINTS);
     const [hydricRecords, setHydricRecords] = useState<HydricRecord[]>(DEMO_HYDRIC);
     const [logs, setLogs] = useState<FieldLog[]>([]);

@@ -1,6 +1,6 @@
 import { 
   User, Location, Plot, Variety, TrialRecord, Project, Task, HydricRecord,
-  StoragePoint, Supplier, SeedBatch, SeedMovement, SupplierLotInspection
+  StoragePoint, Supplier, SeedBatch, SeedMovement, SupplierLotInspection, Resource
 } from '../../types';
 
 export const DEMO_USER: User = {
@@ -1005,6 +1005,81 @@ export const DEMO_SUPPLIER_INSPECTIONS: SupplierLotInspection[] = [
     agronomistMatricula: 'MP-BIOQ-8821 BUE',
     observations: 'Patrones analíticos certificados para cromatografía líquida HPLC. Curva de calibración CBD/CBG/THC verificada bajo ISO 17025.',
     createdAt: '2025-08-30T10:00:00Z'
+  }
+];
+
+export const DEMO_RESOURCES: Resource[] = [
+  {
+    id: 'res-bio-root',
+    name: 'Bio-Hemp Root Optimizer (Ácidos Húmicos & Fúlvicos)',
+    type: 'Insumo',
+    unit: 'L',
+    costPerUnit: 14.5,
+    stock: 240
+  },
+  {
+    id: 'res-nutri-foliar',
+    name: 'Phyto-Mineral Boost Zn+B+Mg (Nutrición Foliar)',
+    type: 'Fertilizante',
+    unit: 'L',
+    costPerUnit: 18.2,
+    stock: 180
+  },
+  {
+    id: 'res-neem-bio',
+    name: 'Bio-Defend Neem Pure Organic (Control Biológico)',
+    type: 'Fitosanitario',
+    unit: 'L',
+    costPerUnit: 22.0,
+    stock: 95
+  },
+  {
+    id: 'res-tricho-soil',
+    name: 'Trichoderma Harzianum Formulada (Enmienda Biológica)',
+    type: 'Insumo',
+    unit: 'kg',
+    costPerUnit: 35.0,
+    stock: 120
+  },
+  {
+    id: 'res-fert-organico',
+    name: 'Compost Orgánico Estabilizado y Lombricompuesto',
+    type: 'Fertilizante',
+    unit: 'tn',
+    costPerUnit: 120.0,
+    stock: 45
+  },
+  {
+    id: 'res-labor-pulv',
+    name: 'Labor de Pulverización Terrestre Foliar (Maquinaria)',
+    type: 'Labor',
+    unit: 'ha',
+    costPerUnit: 28.0,
+    stock: 999
+  },
+  {
+    id: 'res-labor-siembra',
+    name: 'Labor de Siembra Directa Neumática Grano Grueso/Fino',
+    type: 'Labor',
+    unit: 'ha',
+    costPerUnit: 65.0,
+    stock: 999
+  },
+  {
+    id: 'res-labor-riego',
+    name: 'Operación & Mantenimiento Sistema Fertirriego Presurizado',
+    type: 'Labor',
+    unit: 'ha/mes',
+    costPerUnit: 42.0,
+    stock: 999
+  },
+  {
+    id: 'res-labor-cosecha',
+    name: 'Cosecha Mecanizada Cabezal Doble Corte Fibra/Grano',
+    type: 'Labor',
+    unit: 'ha',
+    costPerUnit: 95.0,
+    stock: 999
   }
 ];
 
