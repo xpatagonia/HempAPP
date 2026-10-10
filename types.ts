@@ -20,6 +20,33 @@ export type TechnicalHomologationStatus =
   | 'Cuarentena_Tecnica'          // En revisión técnica / lote observado
   | 'No_Apto_Restringido';        // Desestimado por no conformidad técnica o contaminantes
 
+export type AgronomicInspectionVerdict = 
+  | 'APROBADO_CAMPO'            // Lote conforme para siembra / aplicación
+  | 'EN_CUARENTENA_OBSERVADO'   // En observación fisiológica o ensayo de contraprueba
+  | 'RECHAZADO_DEVOLUCION';     // Rechazado por bajo poder germinativo, patógenos o residuo
+
+export interface SupplierLotInspection {
+  id: string;
+  supplierId: string;
+  supplierName: string;
+  date: string;
+  inputCategory: 'Semilla C1/C2' | 'Bioinsumo / Enmienda' | 'Fitosanitario / Biológico' | 'Sustrato / Enraizante' | 'Servicio Mecanización';
+  lotNumber: string;
+  guideOrRemitoNumber?: string;
+  germinationTestedPct?: number;     // % Germinación real en cámara (ISTA / INASE)
+  germinationDeclaredPct?: number;   // % Germinación marbete oficial
+  purityPct?: number;                // % Pureza física
+  moisturePct?: number;              // % Humedad de semilla / grano
+  weedSeedsFound?: boolean;          // Presencia de malezas
+  pathogenScreeningResult?: 'Negativo (Conforme)' | 'Presencia Aislada No Cuarentenaria' | 'Positivo Cuarentenario (Alerta)';
+  residueStatus?: 'Cero Residuos / Orgánico' | 'Dentro de LMR SENASA' | 'Excede LMR';
+  verdict: AgronomicInspectionVerdict;
+  agronomistName: string;
+  agronomistMatricula: string;
+  observations?: string;
+  createdAt?: string;
+}
+
 export interface SupplierAgronomicAudit {
   technicalAgronomistName?: string;
   technicalAgronomistMatricula?: string;

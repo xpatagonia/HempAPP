@@ -2,7 +2,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
-import { TrialRecord, Plot, FieldLog, HydricRecord, SeedBatch } from '../types';
+import { TrialRecord, Plot, FieldLog, HydricRecord, SeedBatch, AgrochemicalApplication } from '../types';
+import { getPlotAgrochemicalApplications } from '../src/services/agro40Service';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area
 } from 'recharts';
@@ -69,8 +70,24 @@ export default function PlotDetails() {
     return logs.filter(l => l.plotId?.toLowerCase() === plot.id.toLowerCase())
                .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [logs, plot]);
-  
-  const [activeTab, setActiveTab] = useState<'records' | 'logs' | 'water' | 'astro' | 'map'>('records');
+
+  const [activeTab, setActiveTab] = useState<'records' | 'logs' | 'water' | 'astro' | 'map' | 'phytosanitary'>('records');
+
+  // Tratamientos y Cuaderno Fitosanitario de esta parcela
+  const plotAgroApps = useMemo(() => {
+    if (!plot) return [];
+    let allApps: AgrochemicalApplication[] = [];
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('ht_agrochemical_apps');
+      if (stored) {
+        try { allApps = JSON.parse(stored); } catch (e) {}
+      }
+    }
+    if (allApps.length === 0) {
+      allApps = getPlotAgrochemicalApplications(plots);
+    }
+    return allApps.filter(a => a.plotId === plot.id);
+  }, [plot, plots]);
   const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
@@ -489,6 +506,10 @@ export default function PlotDetails() {
           <button onClick={() => setActiveTab('astro')} className={`px-8 py-3 font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl transition-all whitespace-nowrap ${activeTab === 'astro' ? 'bg-amber-600 text-white shadow-xl' : 'text-gray-400 hover:text-gray-600'}`}>Ciclo de Luz</button>
           <button onClick={() => setActiveTab('logs')} className={`px-8 py-3 font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl transition-all whitespace-nowrap ${activeTab === 'logs' ? 'bg-slate-800 text-white shadow-xl' : 'text-gray-400 hover:text-gray-600'}`}>Bitácora Multimedia</button>
           <button onClick={() => setActiveTab('water')} className={`px-8 py-3 font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl transition-all whitespace-nowrap ${activeTab === 'water' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}>Pluviómetro</button>
+          <button onClick={() => setActiveTab('phytosanitary')} className={`px-8 py-3 font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl transition-all whitespace-nowrap flex items-center gap-1.5 ${activeTab === 'phytosanitary' ? 'bg-purple-600 text-white shadow-xl' : 'text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950/40'}`}>
+            <ShieldCheck size={14} />
+            <span>Cuaderno Fitosanitario ({plotAgroApps.length})</span>
+          </button>
           <Link to={`/agro40?plotId=${plot.id}`} className="px-6 py-3 font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl transition-all whitespace-nowrap bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 flex items-center space-x-1.5 border border-emerald-500/20 shadow-sm">
               <Satellite size={14} />
               <span>Agro 4.0: NDVI & Suelo</span>
@@ -607,6 +628,119 @@ export default function PlotDetails() {
               </div>
           )}
           {activeTab === 'water' && <HydricBalance locationId={plot.locationId} plotId={plot.id} startDate={plot.sowingDate} />}
+          {activeTab === 'phytosanitary' && (
+            <div className="space-y-6 animate-in fade-in">
+              <div className="bg-white dark:bg-slate-900 p-8 rounded-[40px] border dark:border-slate-800 shadow-sm space-y-6">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b dark:border-slate-800 pb-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-black uppercase text-purple-600 bg-purple-50 dark:bg-purple-950/60 px-2.5 py-0.5 rounded-md border border-purple-200 dark:border-purple-800 flex items-center gap-1">
+                        <ShieldCheck size={12} />
+                        <span>Tratamientos & Cuaderno SENASA</span>
+                      </span>
+                      <span className="text-xs text-slate-400">· Parcela {plot.name} ({plot.surfaceArea || 1} ha)</span>
+                    </div>
+                    <h3 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-tighter mt-1">
+                      Registro de Intervenciones Fitosanitarias
+                    </h3>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Link
+                      to="/phytosanitary"
+                      className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2.5 rounded-2xl font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition shadow"
+                    >
+                      <Plus size={15} />
+                      <span>Gestionar Cuaderno Completo</span>
+                    </Link>
+                  </div>
+                </div>
+
+                {plotAgroApps.length === 0 ? (
+                  <div className="p-12 text-center text-slate-400 border border-dashed dark:border-slate-800 rounded-3xl">
+                    <ShieldCheck size={40} className="mx-auto mb-2 text-slate-300 opacity-40" />
+                    <p className="font-bold text-xs uppercase">Sin tratamientos registrados en esta parcela.</p>
+                    <p className="text-[10px] mt-1 text-slate-500">
+                      Los tratamientos vinculan automáticamente los insumos recepcionados y el cálculo de carencia pre-cosecha.
+                    </p>
+                    <Link
+                      to="/phytosanitary"
+                      className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300 rounded-xl font-bold text-xs uppercase hover:bg-purple-100 transition"
+                    >
+                      <Plus size={14} />
+                      <span>Cargar Primer Tratamiento</span>
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {plotAgroApps.map(app => {
+                        const today = new Date();
+                        const harvestDate = new Date(app.harvestSafetyDate);
+                        const isUnderSafety = today < harvestDate;
+                        const daysLeft = Math.max(0, Math.ceil((harvestDate.getTime() - today.getTime()) / 86400000));
+
+                        return (
+                          <div 
+                            key={app.id} 
+                            className="p-5 rounded-3xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 space-y-3"
+                          >
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <span className="text-[9px] font-black uppercase text-purple-600 bg-purple-50 dark:bg-purple-950 px-2 py-0.5 rounded">
+                                  {app.category}
+                                </span>
+                                <h4 className="text-sm font-black text-slate-900 dark:text-white mt-1">
+                                  {app.productName}
+                                </h4>
+                                <p className="text-[10px] text-slate-500 font-medium">
+                                  {app.activeIngredient}
+                                </p>
+                              </div>
+
+                              <div>
+                                {isUnderSafety ? (
+                                  <span className="px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 font-bold text-[9px] border border-amber-300 dark:border-amber-800 flex items-center gap-1">
+                                    <Clock size={10} />
+                                    <span>Carencia ({daysLeft}d)</span>
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-bold text-[9px] border border-emerald-300 dark:border-emerald-800 flex items-center gap-1">
+                                    <CheckCircle2 size={10} />
+                                    <span>Apto Cosecha</span>
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-100 dark:border-slate-800 text-[10px] space-y-1">
+                              <div className="flex justify-between text-slate-500">
+                                <span>SENASA: <strong className="text-slate-800 dark:text-slate-200">{app.senasaRegisterNumber}</strong></span>
+                                <span>Lote: <strong className="text-slate-800 dark:text-slate-200">{app.batchNumber}</strong></span>
+                              </div>
+                              <div className="flex justify-between text-slate-500">
+                                <span>Dosis: <strong className="text-emerald-600">{app.dosagePerHa} {app.dosageUnit}</strong></span>
+                                <span>Total: <strong>{app.totalAppliedAmount}</strong></span>
+                              </div>
+                              <div className="flex justify-between text-slate-500 pt-1 border-t border-slate-100 dark:border-slate-800">
+                                <span>Fecha: <strong>{app.date}</strong></span>
+                                <span>Carencia: <strong>{app.safetyPeriodDays} días</strong></span>
+                              </div>
+                            </div>
+
+                            <div className="flex justify-between items-center text-[9px] text-slate-400">
+                              <span>Resp: <strong className="text-slate-600 dark:text-slate-300">{app.responsibleAgronomist}</strong></span>
+                              <span className="font-mono">{app.agronomistLicense}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
       </div>
 
       {isQrModalOpen && (

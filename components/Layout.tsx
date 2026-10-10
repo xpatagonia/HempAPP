@@ -7,7 +7,7 @@ import {
   UserCircle, Calendar, Sun, Moon, 
   Tractor, BookOpen, Bot, Settings, 
   FolderKanban, CheckSquare, BarChart3, Users, Warehouse, Package, X, Bell, Globe, Building, ShieldAlert, FileText, BrainCircuit, Activity, FlaskConical, DownloadCloud, Satellite,
-  PanelLeftClose, PanelLeftOpen, ChevronLeft, ChevronRight
+  PanelLeftClose, PanelLeftOpen, ChevronLeft, ChevronRight, ShieldCheck
 } from 'lucide-react';
 
 const NavItem = ({ to, icon: Icon, label, badge, special, isCollapsed }: any) => {
@@ -113,6 +113,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
             {!isCollapsed && "Manejo Técnico"}
           </div>
           <NavItem to="/trials-lite" icon={FlaskConical} label="Gestión Ensayos (Lite)" isCollapsed={isCollapsed} />
+          <NavItem to="/phytosanitary" icon={ShieldCheck} label="Cuaderno Fitosanitario" isCollapsed={isCollapsed} />
           <NavItem to="/locations" icon={Tractor} label="Campos & Sitios" isCollapsed={isCollapsed} />
           <NavItem to="/plots" icon={Sprout} label="Unidades Prod." isCollapsed={isCollapsed} />
           <NavItem to="/tasks" icon={CheckSquare} label="Labores" badge={pendingTasksCount > 0 ? pendingTasksCount : null} isCollapsed={isCollapsed} />

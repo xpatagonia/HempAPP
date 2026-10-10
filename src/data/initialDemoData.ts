@@ -1,6 +1,6 @@
 import { 
   User, Location, Plot, Variety, TrialRecord, Project, Task, HydricRecord,
-  StoragePoint, Supplier, SeedBatch, SeedMovement
+  StoragePoint, Supplier, SeedBatch, SeedMovement, SupplierLotInspection
 } from '../../types';
 
 export const DEMO_USER: User = {
@@ -930,3 +930,81 @@ export const DEMO_SEED_MOVEMENTS: SeedMovement[] = [
     recipientName: 'Asociación IDEVI Cáñamo'
   }
 ];
+
+export const DEMO_SUPPLIER_INSPECTIONS: SupplierLotInspection[] = [
+  {
+    id: 'insp-1',
+    supplierId: 'sup-1',
+    supplierName: 'BioGenética Andina & Semillas Certificadas',
+    date: '2025-10-14',
+    inputCategory: 'Semilla C1/C2',
+    lotNumber: 'LOT-INASE-FUTURA75-2025-01',
+    guideOrRemitoNumber: 'REM-0001-00049210',
+    germinationDeclaredPct: 90,
+    germinationTestedPct: 94,
+    purityPct: 99.8,
+    moisturePct: 8.7,
+    weedSeedsFound: false,
+    pathogenScreeningResult: 'Negativo (Conforme)',
+    residueStatus: 'Cero Residuos / Orgánico',
+    verdict: 'APROBADO_CAMPO',
+    agronomistName: 'Ing. Agr. Lucas Berardi',
+    agronomistMatricula: 'MP-AGRO-3321 MZA',
+    observations: 'Semilla fiscalizada C1 con excelente vigor germinativo. Calibre homogéneo, sin indicios de hongos ni daños mecánicos.',
+    createdAt: '2025-10-14T11:30:00Z'
+  },
+  {
+    id: 'insp-2',
+    supplierId: 'sup-1',
+    supplierName: 'BioGenética Andina & Semillas Certificadas',
+    date: '2025-10-20',
+    inputCategory: 'Semilla C1/C2',
+    lotNumber: 'LOT-INASE-SANTHICA27-2025-04',
+    guideOrRemitoNumber: 'REM-0001-00049388',
+    germinationDeclaredPct: 88,
+    germinationTestedPct: 91,
+    purityPct: 99.5,
+    moisturePct: 9.1,
+    weedSeedsFound: false,
+    pathogenScreeningResult: 'Negativo (Conforme)',
+    residueStatus: 'Cero Residuos / Orgánico',
+    verdict: 'APROBADO_CAMPO',
+    agronomistName: 'Ing. Agr. Lucas Berardi',
+    agronomistMatricula: 'MP-AGRO-3321 MZA',
+    observations: 'Poder germinativo superior al marbete oficial. Apto para siembra directa en campos de Río Cuarto y Pergamino.',
+    createdAt: '2025-10-20T14:15:00Z'
+  },
+  {
+    id: 'insp-3',
+    supplierId: 'sup-3',
+    supplierName: 'AgroInsumos Biológicos del Litoral',
+    date: '2025-09-18',
+    inputCategory: 'Bioinsumo / Enmienda',
+    lotNumber: 'LOT-BIO-TRICHO-25B',
+    guideOrRemitoNumber: 'REM-0003-00011920',
+    pathogenScreeningResult: 'Negativo (Conforme)',
+    residueStatus: 'Cero Residuos / Orgánico',
+    verdict: 'APROBADO_CAMPO',
+    agronomistName: 'Ing. Agr. Esteban Fontana',
+    agronomistMatricula: 'MP-AGRO-4991 SFE',
+    observations: 'Trichoderma harzianum formulado líquido. Título de UFC/ml conforme a certificado SENASA. Sin contaminación bacteriana.',
+    createdAt: '2025-09-18T16:00:00Z'
+  },
+  {
+    id: 'insp-4',
+    supplierId: 'sup-2',
+    supplierName: 'Laboratorios Cannatech Analítica & HPLC',
+    date: '2025-08-30',
+    inputCategory: 'Bioinsumo / Enmienda',
+    lotNumber: 'STD-CALIB-HPLC-2025',
+    guideOrRemitoNumber: 'REMITO-INTA-8812',
+    pathogenScreeningResult: 'Negativo (Conforme)',
+    residueStatus: 'Cero Residuos / Orgánico',
+    verdict: 'APROBADO_CAMPO',
+    agronomistName: 'Dra. Mariana Zabaleta',
+    agronomistMatricula: 'MP-BIOQ-8821 BUE',
+    observations: 'Patrones analíticos certificados para cromatografía líquida HPLC. Curva de calibración CBD/CBG/THC verificada bajo ISO 17025.',
+    createdAt: '2025-08-30T10:00:00Z'
+  }
+];
+
