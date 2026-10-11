@@ -3,7 +3,8 @@ import { supabase, checkConnection } from '../supabaseClient';
 import { 
   User, Location, Plot, TrialRecord, Task, Project, Variety, 
   Client, Supplier, SeedBatch, SeedMovement, Resource, 
-  StoragePoint, HydricRecord, FieldLog, OperationalExpense, ExpenseAuditStatus
+  StoragePoint, HydricRecord, FieldLog, OperationalExpense, ExpenseAuditStatus,
+  HempStageId
 } from '../types';
 import { 
   DEMO_USER, DEMO_USERS_LIST, DEMO_VARIETIES, DEMO_LOCATIONS, DEMO_PLOTS, 
@@ -41,6 +42,7 @@ interface AppContextType {
   addPlot: (p: Plot) => Promise<boolean>;
   updatePlot: (p: Plot) => Promise<boolean>;
   deletePlot: (id: string) => Promise<boolean>;
+  updatePlotPhenology: (plotId: string, stageId: HempStageId, date?: string, notes?: string, certifiedBy?: string) => Promise<boolean>;
   trialRecords: TrialRecord[];
   getPlotHistory: (plotId: string) => TrialRecord[];
   getLatestRecord: (plotId: string) => TrialRecord | undefined;
@@ -51,6 +53,7 @@ interface AppContextType {
   addTask: (t: Task) => Promise<boolean>;
   updateTask: (t: Task) => Promise<boolean>;
   deleteTask: (id: string) => Promise<boolean>;
+  homologateLabor: (laborId: string, notes?: string, certifiedBy?: string) => Promise<boolean>;
   projects: Project[];
   addProject: (p: Project) => Promise<boolean>;
   updateProject: (p: Project) => Promise<boolean>;
@@ -380,7 +383,13 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             });
         } else if (table === 'varieties') setVarieties(prev => updateList(prev));
         else if (table === 'trial_records') setTrialRecords(prev => updateList(prev));
-        else if (table === 'tasks') setTasks(prev => updateList(prev));
+        else if (table === 'tasks') {
+            setTasks(prev => {
+                const next = updateList(prev);
+                try { localStorage.setItem('ht_tasks', JSON.stringify(next)); } catch (e) {}
+                return next;
+            });
+        }
         else if (table === 'projects') setProjects(prev => updateList(prev));
         else if (table === 'clients') setClients(prev => updateList(prev));
         else if (table === 'suppliers') setSuppliers(prev => updateList(prev));
@@ -426,6 +435,140 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         return await crud('operational_expenses', updated, 'update');
     };
 
+    const updatePlotPhenology = async (
+        plotId: string, 
+        stageId: HempStageId, 
+        date?: string, 
+        notes?: string, 
+        certifiedBy?: string
+    ) => {
+        const plot = plots.find(p => p.id === plotId);
+        if (!plot) return false;
+        const effectiveDate = date || new Date().toISOString().split('T')[0];
+        const newHistory = [
+            ...(plot.stageHistory || []),
+            {
+                stageId,
+                date: effectiveDate,
+                certifiedBy: certifiedBy || currentUser?.name || 'Técnico Cooperativa',
+                notes: notes || `Transición fenológica a ${stageId} verificada.`
+            }
+        ];
+        const updatedPlot: Plot = {
+            ...plot,
+            currentPhenologicalStage: stageId,
+            lastStageUpdateDate: effectiveDate,
+            stageHistory: newHistory
+        };
+        return await crud('plots', updatedPlot, 'update');
+    };
+
+    const handleTaskSync = async (task: Task, action: 'insert' | 'update') => {
+        // 1. Sincronizar ciclo biológico si la labor avanza el estadio
+        if (
+            task.advancesPhenologicalStage && 
+            task.newPhenologicalStage && 
+            task.plotId && 
+            (task.status === 'Ejecutada' || task.status === 'Homologada' || task.status === 'Completada')
+        ) {
+            await updatePlotPhenology(
+                task.plotId,
+                task.newPhenologicalStage,
+                task.executionDate || new Date().toISOString().split('T')[0],
+                `Labor completada: ${task.title}`,
+                task.homologatedBy || currentUser?.name || 'Sistema'
+            );
+        }
+
+        // 2. Sincronizar con Costos Operativos si está marcado
+        if (task.syncWithExpenses && task.directCostUsd && task.plotId) {
+            const expId = `exp-labor-${task.id}`;
+            const exists = operationalExpenses.some(e => e.id === expId);
+            const targetPlot = plots.find(p => p.id === task.plotId);
+            const today = task.executionDate || new Date().toISOString().split('T')[0];
+            
+            const expensePayload: OperationalExpense = {
+                id: expId,
+                campaign: targetPlot?.campaign || '2025/2026',
+                date: today,
+                scope: 'PARCELA_SOCIO',
+                plotId: task.plotId,
+                plotName: targetPlot?.name,
+                socioId: currentUser?.id || 'socio-desconocido',
+                socioName: targetPlot?.ownerName || currentUser?.name || 'Socio Productor',
+                category: 'LABOR_CULTURAL',
+                concept: `${task.title} (${task.machinery?.tractor || 'Labor Agrícola'})`,
+                quantity: 1,
+                unit: 'global',
+                unitCost: task.directCostUsd,
+                totalCost: task.directCostUsd,
+                currency: 'USD',
+                exchangeRate: 1,
+                totalCostUsd: task.directCostUsd,
+                receiptType: 'Orden de Trabajo',
+                receiptNumber: `OT-${task.id.slice(-6).toUpperCase()}`,
+                supplierName: task.operator || 'Propio / Cooperativa',
+                status: task.status === 'Homologada' ? 'AUDITADO_CONFORME' : 'DECLARADO_SOCIO',
+                auditedBy: task.homologatedBy,
+                auditDate: task.homologatedAt,
+                auditNotes: task.homologationNotes || (task.status === 'Homologada' ? 'Homologado desde labor de campo.' : undefined),
+                createdAt: today
+            };
+            await crud('operational_expenses', expensePayload, exists ? 'update' : 'insert');
+        }
+
+        // 3. Sincronizar con Cuaderno Fitosanitario si aplica
+        if (task.syncWithPhytosanitary && task.plotId && task.appliedInputs && task.appliedInputs.length > 0) {
+            for (const input of task.appliedInputs) {
+                const logId = `flog-${task.id}-${input.name.slice(0, 10).replace(/\s+/g, '')}`;
+                const exists = logs.some(l => l.id === logId);
+                const targetPlot = plots.find(p => p.id === task.plotId);
+                const newLog: FieldLog = {
+                    id: logId,
+                    plotId: task.plotId,
+                    date: task.executionDate || new Date().toISOString().split('T')[0],
+                    note: `Tratamiento Fitosanitario: ${input.name} (${input.quantity} ${input.unit}) aplicado en ${targetPlot?.name || 'lote'}. Maquinaria: ${task.machinery?.tractor || 'Pulverizadora'}. Operario: ${task.operator || 'Técnico'}. Labor: ${task.title}.`
+                };
+                await crud('field_logs', newLog, exists ? 'update' : 'insert');
+            }
+        }
+    };
+
+    const homologateLabor = async (laborId: string, notes?: string, certifiedBy?: string) => {
+        const labor = tasks.find(t => t.id === laborId);
+        if (!labor) return false;
+        const certName = certifiedBy || currentUser?.name || 'Administración Cooperativa';
+        const today = new Date().toISOString().split('T')[0];
+        const updatedLabor: Task = {
+            ...labor,
+            status: 'Homologada',
+            homologatedBy: certName,
+            homologatedAt: today,
+            homologationNotes: notes || 'Labor homologada técnicamente por la cooperativa.'
+        };
+        const ok = await crud('tasks', updatedLabor, 'update');
+        if (ok) {
+            await handleTaskSync(updatedLabor, 'update');
+        }
+        return ok;
+    };
+
+    const addTaskWithSync = async (t: Task) => {
+        const ok = await crud('tasks', t, 'insert');
+        if (ok) {
+            await handleTaskSync(t, 'insert');
+        }
+        return ok;
+    };
+
+    const updateTaskWithSync = async (t: Task) => {
+        const ok = await crud('tasks', t, 'update');
+        if (ok) {
+            await handleTaskSync(t, 'update');
+        }
+        return ok;
+    };
+
     const crud = async (table: string, item: any, action: 'insert' | 'update' | 'delete', idField = 'id') => {
         // 1. Inmediatamente actualizar estado React y persistencia local
         updateLocalState(table, item, action, idField);
@@ -459,10 +602,10 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             theme, toggleTheme, appName, appLogo, updateBranding,
             varieties, addVariety: (v) => crud('varieties', v, 'insert'), updateVariety: (v) => crud('varieties', v, 'update'), deleteVariety: (id) => crud('varieties', id, 'delete'),
             locations, addLocation: (l) => crud('locations', l, 'insert'), updateLocation: (l) => crud('locations', l, 'update'), deleteLocation: (id) => crud('locations', id, 'delete'),
-            plots, addPlot: (p) => crud('plots', p, 'insert'), updatePlot: (p) => crud('plots', p, 'update'), deletePlot: (id) => crud('plots', id, 'delete'),
+            plots, addPlot: (p) => crud('plots', p, 'insert'), updatePlot: (p) => crud('plots', p, 'update'), deletePlot: (id) => crud('plots', id, 'delete'), updatePlotPhenology,
             trialRecords, getPlotHistory: (pid) => trialRecords.filter(r => r.plotId === pid), getLatestRecord: (pid) => trialRecords.filter(r => r.plotId === pid).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0],
             addTrialRecord: (r) => crud('trial_records', r, 'insert'), updateTrialRecord: (r) => crud('trial_records', r, 'update'), deleteTrialRecord: (id) => crud('trial_records', id, 'delete'),
-            tasks, addTask: (t) => crud('tasks', t, 'insert'), updateTask: (t) => crud('tasks', t, 'update'), deleteTask: (id) => crud('tasks', id, 'delete'),
+            tasks, addTask: addTaskWithSync, updateTask: updateTaskWithSync, deleteTask: (id) => crud('tasks', id, 'delete'), homologateLabor,
             projects, addProject: (p) => crud('projects', p, 'insert'), updateProject: (p) => crud('projects', p, 'update'), deleteProject: (id) => crud('projects', id, 'delete'),
             clients, addClient: (c) => crud('clients', c, 'insert'), updateClient: (c) => crud('clients', c, 'update'), deleteClient: (id) => crud('clients', id, 'delete'),
             suppliers, addSupplier: async (s) => { const ok = await crud('suppliers', s, 'insert'); return ok ? s.id : null; }, updateSupplier: (s) => crud('suppliers', s, 'update'), deleteSupplier: (id) => crud('suppliers', id, 'delete'),

@@ -390,7 +390,16 @@ export const DEMO_PLOTS: Plot[] = [
       { lat: -33.1270, lng: -64.3445 },
       { lat: -33.1265, lng: -64.3545 }
     ],
-    observations: 'Lote piloto Agro 4.0 con sensores edáficos en estrato radicular y reflectancia NDVI Sentinel-2.'
+    observations: 'Lote piloto Agro 4.0 con sensores edáficos en estrato radicular y reflectancia NDVI Sentinel-2.',
+    currentPhenologicalStage: 'BBCH_50_59',
+    accumulatedGdd: 1120,
+    lastStageUpdateDate: '2026-01-20',
+    stageHistory: [
+      { stageId: 'BBCH_00_09', date: '2025-10-24', certifiedBy: 'Ing. Rodrigo Paz', notes: 'Emergencia homogénea al 92%.' },
+      { stageId: 'BBCH_10_19', date: '2025-11-10', certifiedBy: 'Ing. Rodrigo Paz', notes: 'Desarrollo de V4 con excelente anclaje radicular.' },
+      { stageId: 'BBCH_20_39', date: '2025-12-05', certifiedBy: 'Ing. Rodrigo Paz', notes: 'Gran elongación, cierre de entresurco.' },
+      { stageId: 'BBCH_50_59', date: '2026-01-20', certifiedBy: 'Ing. Rodrigo Paz', notes: 'Aparición de primordios florales y diferenciación.' }
+    ]
   },
   {
     id: 'plot-beta-pergamino',
@@ -415,7 +424,15 @@ export const DEMO_PLOTS: Plot[] = [
       { lat: -33.8940, lng: -60.5695 },
       { lat: -33.8935, lng: -60.5775 }
     ],
-    observations: 'Monitoreo de captura neta de carbono y descompactación radicular en Argiudol.'
+    observations: 'Monitoreo de captura neta de carbono y descompactación radicular en Argiudol.',
+    currentPhenologicalStage: 'BBCH_20_39',
+    accumulatedGdd: 810,
+    lastStageUpdateDate: '2025-12-18',
+    stageHistory: [
+      { stageId: 'BBCH_00_09', date: '2025-10-31', certifiedBy: 'Martín Arismendi', notes: 'Brotación y cotiledones óptimos.' },
+      { stageId: 'BBCH_10_19', date: '2025-11-18', certifiedBy: 'Martín Arismendi', notes: 'Cuarto par de hojas verdaderas.' },
+      { stageId: 'BBCH_20_39', date: '2025-12-18', certifiedBy: 'Martín Arismendi', notes: 'Fase de rápido crecimiento y absorción.' }
+    ]
   },
   {
     id: 'plot-gamma-patagonia',
@@ -440,7 +457,14 @@ export const DEMO_PLOTS: Plot[] = [
       { lat: -40.7865, lng: -62.9965 },
       { lat: -40.7860, lng: -63.0085 }
     ],
-    observations: 'Cálculo de eficiencia de uso de agua (WUE) comparativa vs alfalfa bajo riego de cuenca.'
+    observations: 'Cálculo de eficiencia de uso de agua (WUE) comparativa vs alfalfa bajo riego de cuenca.',
+    currentPhenologicalStage: 'BBCH_10_19',
+    accumulatedGdd: 340,
+    lastStageUpdateDate: '2025-11-28',
+    stageHistory: [
+      { stageId: 'BBCH_00_09', date: '2025-11-12', certifiedBy: 'Ing. Lucas Varela', notes: 'Imbibición y emergencia bajo riego por manto regulado.' },
+      { stageId: 'BBCH_10_19', date: '2025-11-28', certifiedBy: 'Ing. Lucas Varela', notes: 'Vegetativo inicial V2 con excelente arraigo.' }
+    ]
   },
   {
     id: 'plot-indoor-madres',
@@ -602,24 +626,226 @@ export const DEMO_HYDRIC: HydricRecord[] = [
 
 export const DEMO_TASKS: Task[] = [
   {
-    id: 'task-1',
-    title: 'Monitoreo Espectral NDVI Sentinel-2',
-    description: 'Verificar reflectancia y vigor foliar tras precipitación en Lote Alfa.',
-    assignedToIds: ['user-admin-nucleus'],
-    dueDate: '2026-02-01',
-    status: 'Completada',
+    id: 'labor-pergamino-01',
+    title: 'Siembra Mecánica de Precisión & Calibración Neumática',
+    description: 'Siembra de variedad Santhica 27 con placa específica para cáñamo industrial a 18 cm entre surcos y 3 cm de profundidad.',
+    status: 'Homologada',
     priority: 'Alta',
-    createdBy: 'user-admin-nucleus'
+    assignedToIds: ['user-socio-pergamino'],
+    dueDate: '2025-10-25',
+    executionDate: '2025-10-25',
+    plotId: 'plot-beta-pergamino',
+    createdBy: 'user-socio-pergamino',
+    laborType: 'SIEMBRA',
+    targetStage: 'BBCH_00_09',
+    advancesPhenologicalStage: true,
+    newPhenologicalStage: 'BBCH_00_09',
+    machinery: {
+      tractor: 'John Deere 6130M (130 HP)',
+      implement: 'Sembradora Neumática Crucianelli Pionera',
+      fuelConsumptionLiters: 115,
+      machineHours: 8.5
+    },
+    operator: 'Martín Arismendi (Socio Productor)',
+    weather: {
+      tempC: 22,
+      humidityPct: 58,
+      windSpeedKmh: 9,
+      windDirection: 'NE',
+      suitableForSpraying: true
+    },
+    appliedInputs: [
+      { name: 'Semilla Fiscalizada Santhica 27 (INASE C1)', quantity: 380, unit: 'kg', costPerUnit: 12.5 }
+    ],
+    directCostUsd: 1420,
+    syncWithExpenses: true,
+    syncWithPhytosanitary: false,
+    homologatedBy: 'Ing. Agrónomo Central Nucleus',
+    homologatedAt: '2025-10-26',
+    homologationNotes: 'Cama de siembra con humedad óptima. Densidad lograda de 48 plantas/m².'
   },
   {
-    id: 'task-2',
-    title: 'Muestreo Edafológico Estratos 0-30cm',
-    description: 'Tomar testigos de suelo para análisis de Carbono Orgánico (SOC) y pH.',
+    id: 'labor-pergamino-02',
+    title: 'Desmalezado Mecánico & Carpidora Inter-filas',
+    description: 'Pasada de escardillo rotativo entre líneas para cortar malezas gramíneas y romper costra superficial antes del cierre de canopia.',
+    status: 'Homologada',
+    priority: 'Alta',
+    assignedToIds: ['user-socio-pergamino'],
+    dueDate: '2025-11-20',
+    executionDate: '2025-11-20',
+    plotId: 'plot-beta-pergamino',
+    createdBy: 'user-socio-pergamino',
+    laborType: 'LABOR_CULTURAL',
+    targetStage: 'BBCH_10_19',
+    advancesPhenologicalStage: true,
+    newPhenologicalStage: 'BBCH_20_39',
+    machinery: {
+      tractor: 'New Holland T6.140',
+      implement: 'Carpidora Interfilas Yomel 7 cuerpos',
+      fuelConsumptionLiters: 78,
+      machineHours: 6.0
+    },
+    operator: 'Martín Arismendi (Socio Productor)',
+    weather: {
+      tempC: 24,
+      humidityPct: 50,
+      windSpeedKmh: 12,
+      windDirection: 'E',
+      suitableForSpraying: true
+    },
+    directCostUsd: 680,
+    syncWithExpenses: true,
+    homologatedBy: 'Ing. Rodrigo Paz',
+    homologatedAt: '2025-11-21',
+    homologationNotes: 'Control mecánico eficiente al 94%. El cultivo cerrará entresurco en 10 días.'
+  },
+  {
+    id: 'labor-cordoba-01',
+    title: 'Fertirriego Nitrogenado Pico (Gran Elongación)',
+    description: 'Inyección de solución UAN 32% + microelementos mediante pivote central en fase de crecimiento exponencial.',
+    status: 'Homologada',
+    priority: 'Alta',
     assignedToIds: ['user-admin-nucleus'],
-    dueDate: '2026-02-10',
+    dueDate: '2025-12-15',
+    executionDate: '2025-12-15',
+    plotId: 'plot-alfa-cordoba',
+    createdBy: 'user-admin-nucleus',
+    laborType: 'FERTIRRIEGO',
+    targetStage: 'BBCH_20_39',
+    advancesPhenologicalStage: false,
+    machinery: {
+      tractor: 'Bomba Dosificadora Pivote Valley',
+      implement: 'Sistema Quimigación Automatizado',
+      fuelConsumptionLiters: 45,
+      machineHours: 12.0
+    },
+    operator: 'Esteban Rossi (Productor / Encargado)',
+    weather: {
+      tempC: 27,
+      humidityPct: 45,
+      windSpeedKmh: 14,
+      windDirection: 'N',
+      suitableForSpraying: true
+    },
+    appliedInputs: [
+      { name: 'Fertilizante Líquido UAN 32%', quantity: 1850, unit: 'kg', costPerUnit: 0.65 },
+      { name: 'Corrector Zinc y Boro Foliar', quantity: 30, unit: 'L', costPerUnit: 14.0 }
+    ],
+    directCostUsd: 1622.5,
+    syncWithExpenses: true,
+    syncWithPhytosanitary: true,
+    homologatedBy: 'Ing. Agrónomo Central Nucleus',
+    homologatedAt: '2025-12-16',
+    homologationNotes: 'Distribución homogénea a 15 mm de lámina de agua.'
+  },
+  {
+    id: 'labor-cordoba-02',
+    title: 'Inspección de Prefloración & Muestreo Fotoperiódico',
+    description: 'Monitoreo de diferenciación floral, conteo de plantas atípicas y calibración de reflectancia espectral.',
+    status: 'Ejecutada',
+    priority: 'Media',
+    assignedToIds: ['user-socio-rossi'],
+    dueDate: '2026-01-20',
+    executionDate: '2026-01-20',
+    plotId: 'plot-alfa-cordoba',
+    createdBy: 'user-socio-rossi',
+    laborType: 'MONITOREO',
+    targetStage: 'BBCH_50_59',
+    advancesPhenologicalStage: true,
+    newPhenologicalStage: 'BBCH_50_59',
+    operator: 'Esteban Rossi (Productor Lote Alfa)',
+    weather: {
+      tempC: 29,
+      humidityPct: 42,
+      windSpeedKmh: 11,
+      windDirection: 'SO',
+      suitableForSpraying: true
+    },
+    directCostUsd: 220,
+    syncWithExpenses: true,
+    notes: 'Aparición homogénea de botones florales. El lote superó los 1100 GDD requeridos para cambio de fase.'
+  },
+  {
+    id: 'labor-patagonia-01',
+    title: 'Apertura de Compuertas & Turno de Riego Gravitacional',
+    description: 'Distribución de 350 m3 de agua del canal matriz IDEVI para recarga de humedad en perfil de suelo franco.',
+    status: 'Homologada',
+    priority: 'Media',
+    assignedToIds: ['user-socio-patagonia'],
+    dueDate: '2025-11-28',
+    executionDate: '2025-11-28',
+    plotId: 'plot-gamma-patagonia',
+    createdBy: 'user-socio-patagonia',
+    laborType: 'MANEJO_HIDRICO',
+    targetStage: 'BBCH_10_19',
+    advancesPhenologicalStage: false,
+    machinery: {
+      tractor: 'Pala Niveladora Hidráulica',
+      implement: 'Compuertas Modulares de Polietileno',
+      fuelConsumptionLiters: 35,
+      machineHours: 7.0
+    },
+    operator: 'Ing. Lucas Varela (Socio IDEVI)',
+    weather: {
+      tempC: 19,
+      humidityPct: 38,
+      windSpeedKmh: 18,
+      windDirection: 'O',
+      suitableForSpraying: false
+    },
+    directCostUsd: 410,
+    syncWithExpenses: true,
+    homologatedBy: 'Ing. Rodrigo Paz',
+    homologatedAt: '2025-11-29',
+    homologationNotes: 'Excelente coeficiente de uniformidad en manto.'
+  },
+  {
+    id: 'labor-cordoba-03',
+    title: 'Monitoreo Preventivo de Helicoverpa & Muestreo HPLC de THC',
+    description: 'Protocolo de muestreo oficial pre-cosecha de inflorescencias apicales para verificar THC <0.3% y ausencia de orugas.',
+    status: 'En_Curso',
+    priority: 'Alta',
+    assignedToIds: ['user-socio-rossi', 'user-admin-nucleus'],
+    dueDate: '2026-02-15',
+    plotId: 'plot-alfa-cordoba',
+    createdBy: 'user-admin-nucleus',
+    laborType: 'MONITOREO',
+    targetStage: 'BBCH_60_69',
+    advancesPhenologicalStage: false,
+    operator: 'Cuadrilla Técnica Nucleus + Esteban Rossi',
+    weather: {
+      tempC: 26,
+      humidityPct: 52,
+      windSpeedKmh: 10,
+      windDirection: 'SE',
+      suitableForSpraying: true
+    },
+    directCostUsd: 350,
+    notes: 'Toma de 30 submuestras en diagonal W reglamentaria para remisión al laboratorio CEPROCOR.'
+  },
+  {
+    id: 'labor-pergamino-03',
+    title: 'Planificación de Corte Mecánico & Cosecha de Biomasa',
+    description: 'Revisión y mantenimiento de barra segadora hileradora para corte de tallos en maduración de fibra.',
     status: 'Pendiente',
     priority: 'Media',
-    createdBy: 'user-admin-nucleus'
+    assignedToIds: ['user-socio-pergamino'],
+    dueDate: '2026-03-01',
+    plotId: 'plot-beta-pergamino',
+    createdBy: 'user-socio-pergamino',
+    laborType: 'COSECHA',
+    targetStage: 'BBCH_89_99',
+    advancesPhenologicalStage: true,
+    newPhenologicalStage: 'BBCH_89_99',
+    machinery: {
+      tractor: 'John Deere 6130M',
+      implement: 'Barra Segadora de Doble Cuchilla MacDon',
+      fuelConsumptionLiters: 140,
+      machineHours: 10.0
+    },
+    operator: 'Martín Arismendi (Socio Productor)',
+    directCostUsd: 950,
+    notes: 'Esperando que la lignificación alcance el 75% para maximizar rendimiento de fibra textil larga.'
   }
 ];
 

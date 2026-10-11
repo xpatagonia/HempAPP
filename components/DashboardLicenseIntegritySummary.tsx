@@ -198,7 +198,7 @@ export default function DashboardLicenseIntegritySummary() {
     checks.push({
       id: 'trials-quality',
       category: 'Calidad de Datos',
-      title: 'Ensayos Biométricos & Monitoreo de Campo',
+      title: 'Monitoreo Agronómico & Ensayos de Campo',
       status: trialScore === 100 ? 'pass' : 'warn',
       scoreWeight: 15,
       actualScore: (trialScore / 100) * 15,

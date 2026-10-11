@@ -319,6 +319,11 @@ export interface Plot {
   pauseReason?: string;
   campaignStatuses?: Record<string, 'Activa' | 'Pausada' | 'En Barbecho' | 'Cosechada'>;
   campaignPauseReasons?: Record<string, string>;
+  // FENOLOGÍA & CICLO BIOLÓGICO
+  currentPhenologicalStage?: HempStageId;
+  accumulatedGdd?: number;
+  lastStageUpdateDate?: string;
+  stageHistory?: Array<{ stageId: HempStageId; date: string; laborId?: string; certifiedBy?: string; notes?: string }>;
 }
 
 export type BiologicalMaterialType = 'seed' | 'harvested_grain' | 'fiber_bales' | 'biomass_cbg' | 'hurds';
@@ -519,16 +524,94 @@ export interface Project {
   objectiveType?: 'Fibra Industrial' | 'Grano y Alimento' | 'I+D Genético' | 'Cannabinoides / Biomasa';
 }
 
+// CICLO BIOLÓGICO Y FENOLOGÍA (ESCALA BBCH CÁÑAMO INDUSTRIAL)
+export type HempStageId = 
+  | 'BBCH_00_09' // Germinación y Emergencia (Días 0-10 | ~100 GDD)
+  | 'BBCH_10_19' // Vegetativo Temprano V1-V4 (Días 10-25 | ~300 GDD)
+  | 'BBCH_20_39' // Vegetativo Rápido / Gran Elongación (Días 25-55 | ~750 GDD)
+  | 'BBCH_50_59' // Prefloración / Inducción & Sexado (Días 55-70 | ~1050 GDD)
+  | 'BBCH_60_69' // Floración Plena (Días 70-95 | ~1400 GDD)
+  | 'BBCH_70_85' // Llenado y Maduración de Grano/Inflorescencia (Días 95-120 | ~1700 GDD)
+  | 'BBCH_89_99'; // Maduración Fisiológica y Cosecha Óptima (Días 120-135 | ~1950 GDD)
+
+export type AgriculturalLaborType = 
+  | 'PREPARACION_SUELO'   // Arado, rastra, subsolado, nivelación de cama
+  | 'SIEMBRA'             // Siembra directa, calibración de sembradora
+  | 'FERTIRRIEGO'         // Fertilización de arranque, cobertera, fertirriego
+  | 'FITOSANITARIO'       // Aplicación de bioinsumos, fitosanitarios, curasemilla
+  | 'MANEJO_HIDRICO'      // Turnos de riego por gravedad, mantenimiento goteo
+  | 'LABOR_CULTURAL'      // Desmalezado mecánico, aporque, roguing
+  | 'MONITOREO'           // Monitoreo de plagas, sexado, muestreo HPLC
+  | 'COSECHA'             // Corte, hilerado, cosecha combinada, enfardado
+  | 'ACONDICIONAMIENTO';  // Acondicionamiento de rastrojo, secado en campo
+
+export type LaborStatus = 'Planificada' | 'Pendiente' | 'En_Curso' | 'Ejecutada' | 'Homologada' | 'Cancelada' | 'Completada';
+
+export interface HempPhenologicalStage {
+  id: HempStageId;
+  bbchCode: string;
+  name: string;
+  shortName: string;
+  daysRange: [number, number];
+  typicalGdd: number;
+  description: string;
+  keyMorphology: string;
+  recommendedLabors: AgriculturalLaborType[];
+  criticalCare: string;
+  badgeColor: string;
+}
+
+export interface LaborMachinery {
+  tractor?: string;
+  implement?: string;
+  fuelConsumptionLiters?: number;
+  machineHours?: number;
+}
+
+export interface LaborWeatherConditions {
+  tempC?: number;
+  humidityPct?: number;
+  windSpeedKmh?: number;
+  windDirection?: string;
+  suitableForSpraying?: boolean;
+}
+
+export interface LaborAppliedInput {
+  resourceId?: string;
+  name: string;
+  quantity: number;
+  unit: string;
+  costPerUnit?: number;
+}
+
 export interface Task {
   id: string;
   title: string;
   description?: string;
-  status: 'Pendiente' | 'Completada';
+  status: LaborStatus;
   priority: 'Alta' | 'Media' | 'Baja';
   assignedToIds: string[];
   dueDate: string;
   plotId?: string;
   createdBy: string;
+  // ENRIQUECIMIENTO AGRONÓMICO & CICLO BIOLÓGICO
+  laborType?: AgriculturalLaborType;
+  targetStage?: HempStageId;
+  advancesPhenologicalStage?: boolean;
+  newPhenologicalStage?: HempStageId;
+  machinery?: LaborMachinery;
+  operator?: string;
+  weather?: LaborWeatherConditions;
+  appliedInputs?: LaborAppliedInput[];
+  directCostUsd?: number;
+  syncWithPhytosanitary?: boolean;
+  syncWithExpenses?: boolean;
+  executionDate?: string;
+  notes?: string;
+  evidenceUrl?: string;
+  homologatedBy?: string;
+  homologatedAt?: string;
+  homologationNotes?: string;
 }
 
 export interface SoilHealthData {

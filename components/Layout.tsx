@@ -7,7 +7,8 @@ import {
   UserCircle, Calendar, Sun, Moon, 
   Tractor, BookOpen, Bot, Settings, 
   FolderKanban, CheckSquare, BarChart3, Users, Warehouse, Package, X, Bell, Globe, Building, ShieldAlert, FileText, BrainCircuit, Activity, FlaskConical, DownloadCloud, Satellite,
-  PanelLeftClose, PanelLeftOpen, ChevronLeft, ChevronRight, ShieldCheck, DollarSign
+  PanelLeftClose, PanelLeftOpen, ChevronLeft, ChevronRight, ShieldCheck, DollarSign,
+  Calculator, Truck, UserCheck, ClipboardList
 } from 'lucide-react';
 
 const NavItem = ({ to, icon: Icon, label, badge, special, isCollapsed }: any) => {
@@ -112,27 +113,28 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
           <div className={isCollapsed ? "pt-4 pb-1 border-t border-slate-200 dark:border-slate-800 my-2" : "pt-8 pb-3 px-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]"}>
             {!isCollapsed && "Manejo Técnico"}
           </div>
-          <NavItem to="/trials-lite" icon={FlaskConical} label="Gestión Ensayos (Lite)" isCollapsed={isCollapsed} />
+          <NavItem to="/trials-lite" icon={ClipboardList} label="Monitoreo Agronómico" isCollapsed={isCollapsed} />
+          <NavItem to="/tasks" icon={CheckSquare} label="Labores Agrícolas" badge={pendingTasksCount > 0 ? pendingTasksCount : null} isCollapsed={isCollapsed} />
+          <NavItem to="/calendar" icon={Calendar} label="Ciclo Biológico (BBCH)" isCollapsed={isCollapsed} />
           <NavItem to="/phytosanitary" icon={ShieldCheck} label="Cuaderno Fitosanitario" isCollapsed={isCollapsed} />
-          <NavItem to="/finances" icon={DollarSign} label="Costos & Finanzas" isCollapsed={isCollapsed} />
+          <NavItem to="/finances" icon={DollarSign} label="Costos Operativos & Finanzas" isCollapsed={isCollapsed} />
           <NavItem to="/locations" icon={Tractor} label="Campos & Sitios" isCollapsed={isCollapsed} />
-          <NavItem to="/plots" icon={Sprout} label="Unidades Prod." isCollapsed={isCollapsed} />
-          <NavItem to="/tasks" icon={CheckSquare} label="Labores" badge={pendingTasksCount > 0 ? pendingTasksCount : null} isCollapsed={isCollapsed} />
-          <NavItem to="/calendar" icon={Calendar} label="Ciclo Biológico" isCollapsed={isCollapsed} />
-          <NavItem to="/projects" icon={FolderKanban} label="Campañas" isCollapsed={isCollapsed} />
+          <NavItem to="/plots" icon={Sprout} label="Parcelas & Lotes" isCollapsed={isCollapsed} />
+          <NavItem to="/campaigns" icon={FolderKanban} label="Campañas" isCollapsed={isCollapsed} />
+          <NavItem to="/tools" icon={Calculator} label="Calculadoras Agronómicas" isCollapsed={isCollapsed} />
 
           <div className={isCollapsed ? "pt-4 pb-1 border-t border-slate-200 dark:border-slate-800 my-2" : "pt-8 pb-3 px-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]"}>
             {!isCollapsed && "Cadena de Valor"}
           </div>
           <NavItem to="/logistics-map" icon={Globe} label="Torre de Control" isCollapsed={isCollapsed} />
-          <NavItem to="/storage" icon={Warehouse} label="Almacenes" isCollapsed={isCollapsed} />
-          <NavItem to="/seed-batches" icon={Package} label="Inventario" isCollapsed={isCollapsed} />
-          <NavItem to="/varieties" icon={BookOpen} label="Genética" isCollapsed={isCollapsed} />
+          <NavItem to="/storage" icon={Warehouse} label="Almacenes & Custodia" isCollapsed={isCollapsed} />
+          <NavItem to="/seed-batches" icon={Package} label="Lotes & Trazabilidad" isCollapsed={isCollapsed} />
+          <NavItem to="/varieties" icon={BookOpen} label="Banco Genético" isCollapsed={isCollapsed} />
           
           {!isClient && (
             <>
-              <NavItem to="/suppliers" icon={Warehouse} label="Proveedores" isCollapsed={isCollapsed} />
-              <NavItem to="/clients" icon={Users} label="Socios de Red" isCollapsed={isCollapsed} />
+              <NavItem to="/suppliers" icon={Truck} label="Proveedores Homologados" isCollapsed={isCollapsed} />
+              <NavItem to="/clients" icon={Building} label="Socios de Red" isCollapsed={isCollapsed} />
             </>
           )}
 
@@ -144,9 +146,9 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
             {!isCollapsed && "Sistema"}
           </div>
           <NavItem to="/analytics" icon={BarChart3} label="Comparativa Genética" isCollapsed={isCollapsed} />
-          <NavItem to="/integrity" icon={ShieldAlert} label="Integridad Datos" isCollapsed={isCollapsed} />
+          <NavItem to="/integrity" icon={ShieldAlert} label="Integridad de Datos" isCollapsed={isCollapsed} />
           
-          {!isClient && <NavItem to="/users" icon={Users} label="Equipo" isCollapsed={isCollapsed} />}
+          {!isClient && <NavItem to="/users" icon={UserCheck} label="Equipo & Accesos" isCollapsed={isCollapsed} />}
           {currentUser.role === 'super_admin' && <NavItem to="/settings" icon={Settings} label="Admin Server" isCollapsed={isCollapsed} />}
         </nav>
 

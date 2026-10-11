@@ -130,10 +130,10 @@ export default function TrialManager() {
             </div>
             <div>
                 <h1 className="text-2xl font-black text-gray-800 dark:text-white uppercase tracking-tighter italic">
-                    Estación de <span className="text-emerald-600">Campo</span>
+                    Monitoreo <span className="text-emerald-600">Agronómico</span>
                 </h1>
                 <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">
-                    Modo de carga rápida para recorrida técnica
+                    Relevamiento técnico y biométrico en lotes productivos y ensayos
                 </p>
             </div>
         </div>
