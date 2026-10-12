@@ -547,7 +547,20 @@ export default function PlotDetails() {
                                 </select>
                             </div>
                         </div>
-                        {currentUser && <button onClick={() => { setIsRecordModalOpen(true); setIsViewMode(false); setEditingRecordId(null); setRecordForm({ ...recordForm, date: new Date().toISOString().split('T')[0], time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }), stage: 'Vegetativo' }); }} className="bg-hemp-600 text-white px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl hover:bg-hemp-700 transition">Nuevo Informe periódico</button>}
+                        {currentUser && (
+                            <div className="flex items-center gap-2">
+                                <Link 
+                                    to="/trials-lite" 
+                                    className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition flex items-center gap-1.5 border dark:border-slate-700 shadow-sm"
+                                    title="Abrir consola de recorrida de campo continua"
+                                >
+                                    <ClipboardList size={13}/> Recorrida de Lotes
+                                </Link>
+                                <button onClick={() => { setIsRecordModalOpen(true); setIsViewMode(false); setEditingRecordId(null); setRecordForm({ ...recordForm, date: new Date().toISOString().split('T')[0], time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }), stage: 'Vegetativo' }); }} className="bg-hemp-600 text-white px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl hover:bg-hemp-700 transition">
+                                    Nuevo Informe periódico
+                                </button>
+                            </div>
+                        )}
                     </div>
                     <div className="overflow-x-auto">
                         <table className="min-w-full text-sm text-left">
