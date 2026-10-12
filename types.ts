@@ -705,11 +705,14 @@ export interface CatastropheRiskAlert {
   preventiveMeasures: string[];
   satelliteTelemetry: {
     temperatureC?: number;
+    tempMinC?: number;
+    tempMaxC?: number;
     relativeHumidityPct?: number;
     windSpeedKmH?: number;
     soilSaturationPct?: number;
     vegetationDrynessIndex?: number;
     fwiIndex?: number;
+    dataSource?: string;
   };
   date: string;
   status: 'Activa' | 'En Observación' | 'Mitigada';

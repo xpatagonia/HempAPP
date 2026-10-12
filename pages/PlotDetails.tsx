@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { TrialRecord, Plot, FieldLog, HydricRecord, SeedBatch, AgrochemicalApplication } from '../types';
 import { getPlotAgrochemicalApplications } from '../src/services/agro40Service';
@@ -71,7 +71,18 @@ export default function PlotDetails() {
                .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [logs, plot]);
 
-  const [activeTab, setActiveTab] = useState<'records' | 'logs' | 'water' | 'astro' | 'map' | 'phytosanitary'>('records');
+  const [searchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab') as any;
+  const validTabs = ['records', 'logs', 'water', 'astro', 'map', 'phytosanitary'];
+  const [activeTab, setActiveTab] = useState<'records' | 'logs' | 'water' | 'astro' | 'map' | 'phytosanitary'>(
+    validTabs.includes(tabParam) ? tabParam : 'records'
+  );
+
+  useEffect(() => {
+    if (tabParam && validTabs.includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam]);
 
   // Tratamientos y Cuaderno Fitosanitario de esta parcela
   const plotAgroApps = useMemo(() => {

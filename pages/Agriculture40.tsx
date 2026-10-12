@@ -9,7 +9,7 @@ import {
   Calendar, ChevronLeft, ChevronRight, Clock, Sliders, Camera,
   Plus, X, Info, Sparkles, Eye, ArrowUpRight, ArrowDownRight,
   Plane, Check, Filter, Flame, ShieldAlert, Award, Car, TreePine, Waves, Search, Package,
-  SlidersHorizontal, Key, ExternalLink
+  SlidersHorizontal, Key, ExternalLink, ThermometerSnowflake
 } from 'lucide-react';
 import { 
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, 
@@ -29,7 +29,9 @@ import {
   calculateCarbonFootprint,
   exportCarbonAuditPDF,
   getRegionalCatastropheAlerts,
-  getPlotAgrochemicalApplications
+  getPlotAgrochemicalApplications,
+  PlotLiveWeather,
+  fetchBatchPlotWeather
 } from '../src/services/agro40Service';
 import { SoilHealthData, WaterEfficiencyMetrics, NDVISample, SatellitePass, DroneFlight, CarbonFootprintData, CatastropheRiskAlert, CatastropheType, RiskLevel, AgrochemicalApplication, ToxicologicalBand } from '../types';
 
@@ -57,6 +59,44 @@ const MapRecenter = ({ polygon, center }: { polygon?: { lat: number; lng: number
       map.setView([center.lat, center.lng], 14);
     }
   }, [polygon, center, map]);
+  return null;
+};
+
+const CatastropheMapController = ({ 
+  selectedAlert, 
+  alerts 
+}: { 
+  selectedAlert: CatastropheRiskAlert | null; 
+  alerts: CatastropheRiskAlert[];
+}) => {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!map) return;
+    map.invalidateSize();
+    const t1 = setTimeout(() => map.invalidateSize(), 150);
+    const t2 = setTimeout(() => map.invalidateSize(), 400);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [map]);
+
+  useEffect(() => {
+    if (!map) return;
+    if (selectedAlert) {
+      map.flyTo([selectedAlert.coordinates.lat, selectedAlert.coordinates.lng], 8.5, {
+        duration: 1.2
+      });
+    } else if (alerts.length > 0) {
+      const validAlerts = alerts.filter(a => a.coordinates && typeof a.coordinates.lat === 'number' && typeof a.coordinates.lng === 'number');
+      if (validAlerts.length > 0) {
+        const bounds = L.latLngBounds(validAlerts.map(a => [a.coordinates.lat, a.coordinates.lng]));
+        map.fitBounds(bounds, { padding: [45, 45], maxZoom: 7 });
+      }
+    }
+  }, [map, selectedAlert, alerts]);
+
   return null;
 };
 
@@ -641,11 +681,33 @@ export default function Agriculture40() {
   }, [selectedPlot, selectedVariety, plotTrials]);
 
   // Alertas de Catástrofes & Riesgo Agroclimático (Incendio, Sequía, Inundación, Helada, Viento)
-  const catastropheAlerts: CatastropheRiskAlert[] = useMemo(() => {
-    return getRegionalCatastropheAlerts(plots, locations);
+  const [liveWeatherMap, setLiveWeatherMap] = useState<Record<string, PlotLiveWeather>>({});
+  const [isLoadingWeather, setIsLoadingWeather] = useState(false);
+  const [weatherLastUpdated, setWeatherLastUpdated] = useState<string>('');
+
+  const refreshLiveTelemetry = async () => {
+    if (plots.length === 0) return;
+    setIsLoadingWeather(true);
+    try {
+      const data = await fetchBatchPlotWeather(plots, locations);
+      setLiveWeatherMap(data);
+      setWeatherLastUpdated(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    } catch (e) {
+      console.warn('Error al actualizar telemetría en vivo:', e);
+    } finally {
+      setIsLoadingWeather(false);
+    }
+  };
+
+  useEffect(() => {
+    refreshLiveTelemetry();
   }, [plots, locations]);
 
-  const [selectedCatastropheFilter, setSelectedCatastropheFilter] = useState<'all' | 'incendio' | 'sequia' | 'inundacion' | 'viento_granizo'>('all');
+  const catastropheAlerts: CatastropheRiskAlert[] = useMemo(() => {
+    return getRegionalCatastropheAlerts(plots, locations, liveWeatherMap);
+  }, [plots, locations, liveWeatherMap]);
+
+  const [selectedCatastropheFilter, setSelectedCatastropheFilter] = useState<'all' | 'incendio' | 'sequia' | 'inundacion' | 'viento_granizo' | 'helada'>('all');
   const [selectedAlertForMap, setSelectedAlertForMap] = useState<CatastropheRiskAlert | null>(null);
 
   const filteredCatastropheAlerts = useMemo(() => {
@@ -2596,11 +2658,21 @@ export default function Agriculture40() {
                 </div>
               </div>
 
+              <div className="p-4 bg-blue-50/60 dark:bg-blue-950/30 rounded-2xl border border-blue-200/70 dark:border-blue-900/40 text-[11px] text-slate-600 dark:text-slate-300 space-y-1">
+                <span className="font-black text-blue-700 dark:text-blue-300 block uppercase tracking-wider text-[10px]">
+                  Sinergia Pluviómetro ⇄ Huella Hídrica
+                </span>
+                <p className="leading-relaxed">
+                  El <strong>Pluviómetro</strong> registra las entradas de agua en campo (lluvia física vs satélite GFS y turnos de riego). La <strong>Huella Hídrica</strong> procesa esos registros bajo el estándar <strong>Hoekstra (WFN)</strong> en Agua Verde, Azul y Gris.
+                </p>
+              </div>
+
               <Link
-                to={`/plots/${selectedPlot?.id}`}
-                className="flex items-center justify-center space-x-2 w-full py-3.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-white rounded-2xl font-bold text-xs uppercase tracking-wider transition-all"
+                to={`/plots/${selectedPlot?.id}?tab=water`}
+                className="flex items-center justify-center space-x-2 w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold text-xs uppercase tracking-wider transition-all shadow-md hover:shadow-lg"
               >
-                <span>Ver Registro Diario en Ficha de Parcela</span>
+                <Droplets size={14} />
+                <span>Abrir Pluviómetro & Bitácora de Agua</span>
                 <ArrowRight size={14} />
               </Link>
             </div>
@@ -3075,68 +3147,97 @@ export default function Agriculture40() {
                   <Flame size={28} />
                 </div>
                 <div>
-                  <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
-                    Centro de Alertas de Catástrofes & Riesgo Climático
-                  </h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
+                      Centro de Alertas de Catástrofes & Riesgo Climático
+                    </h3>
+                    <span className="px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                      En Línea
+                    </span>
+                  </div>
                   <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                    Telemetría satelital y detección temprana de Incendios (FWI), Sequía extrema (SPEI), Inundación y Vientos severos.
+                    Telemetría satelital en tiempo real (Open-Meteo GFS / ERA5-Land) y detección de Heladas, Incendios (FWI), Sequía y Vientos severos.
                   </p>
                 </div>
               </div>
 
-              {/* Filtros por tipo de catástrofe */}
+              {/* Botón de actualización en vivo y Filtros */}
               <div className="flex items-center gap-2 flex-wrap">
                 <button
-                  onClick={() => setSelectedCatastropheFilter('all')}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition ${
-                    selectedCatastropheFilter === 'all'
-                      ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
-                  }`}
+                  onClick={refreshLiveTelemetry}
+                  disabled={isLoadingWeather}
+                  className="px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 hover:bg-emerald-100 transition flex items-center gap-1.5 shadow-sm"
+                  title="Consultar datos meteorológicos en tiempo real desde Open-Meteo"
                 >
-                  Todas ({catastropheAlerts.length})
-                </button>
-                <button
-                  onClick={() => setSelectedCatastropheFilter('incendio')}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-1.5 ${
-                    selectedCatastropheFilter === 'incendio'
-                      ? 'bg-red-600 text-white shadow-sm'
-                      : 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300 hover:bg-red-100'
-                  }`}
-                >
-                  <Flame size={13} /> Incendios
-                </button>
-                <button
-                  onClick={() => setSelectedCatastropheFilter('sequia')}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-1.5 ${
-                    selectedCatastropheFilter === 'sequia'
-                      ? 'bg-amber-600 text-white shadow-sm'
-                      : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 hover:bg-amber-100'
-                  }`}
-                >
-                  <Sun size={13} /> Sequía
-                </button>
-                <button
-                  onClick={() => setSelectedCatastropheFilter('inundacion')}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-1.5 ${
-                    selectedCatastropheFilter === 'inundacion'
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 hover:bg-blue-100'
-                  }`}
-                >
-                  <Waves size={13} /> Inundación
-                </button>
-                <button
-                  onClick={() => setSelectedCatastropheFilter('viento_granizo')}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-1.5 ${
-                    selectedCatastropheFilter === 'viento_granizo'
-                      ? 'bg-indigo-600 text-white shadow-sm'
-                      : 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 hover:bg-indigo-100'
-                  }`}
-                >
-                  <Wind size={13} /> Viento / Ráfagas
+                  <RefreshCw size={13} className={isLoadingWeather ? 'animate-spin' : ''} />
+                  <span>{isLoadingWeather ? 'Sincronizando...' : 'Actualizar Telemetría'}</span>
+                  {weatherLastUpdated && <span className="opacity-70 text-[10px]">({weatherLastUpdated} hs)</span>}
                 </button>
               </div>
+            </div>
+
+            {/* Barra de Filtros por tipo de catástrofe */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => setSelectedCatastropheFilter('all')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition ${
+                  selectedCatastropheFilter === 'all'
+                    ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                }`}
+              >
+                Todas ({catastropheAlerts.length})
+              </button>
+              <button
+                onClick={() => setSelectedCatastropheFilter('helada')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-1.5 ${
+                  selectedCatastropheFilter === 'helada'
+                    ? 'bg-cyan-600 text-white shadow-sm'
+                    : 'bg-cyan-50 text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-300 hover:bg-cyan-100'
+                }`}
+              >
+                <ThermometerSnowflake size={13} /> Heladas ({catastropheAlerts.filter(a => a.type === 'helada').length})
+              </button>
+              <button
+                onClick={() => setSelectedCatastropheFilter('incendio')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-1.5 ${
+                  selectedCatastropheFilter === 'incendio'
+                    ? 'bg-red-600 text-white shadow-sm'
+                    : 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300 hover:bg-red-100'
+                }`}
+              >
+                <Flame size={13} /> Incendios ({catastropheAlerts.filter(a => a.type === 'incendio').length})
+              </button>
+              <button
+                onClick={() => setSelectedCatastropheFilter('sequia')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-1.5 ${
+                  selectedCatastropheFilter === 'sequia'
+                    ? 'bg-amber-600 text-white shadow-sm'
+                    : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 hover:bg-amber-100'
+                }`}
+              >
+                <Sun size={13} /> Sequía ({catastropheAlerts.filter(a => a.type === 'sequia').length})
+              </button>
+              <button
+                onClick={() => setSelectedCatastropheFilter('inundacion')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-1.5 ${
+                  selectedCatastropheFilter === 'inundacion'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 hover:bg-blue-100'
+                }`}
+              >
+                <Waves size={13} /> Inundación ({catastropheAlerts.filter(a => a.type === 'inundacion').length})
+              </button>
+              <button
+                onClick={() => setSelectedCatastropheFilter('viento_granizo')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-1.5 ${
+                  selectedCatastropheFilter === 'viento_granizo'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 hover:bg-indigo-100'
+                }`}
+              >
+                <Wind size={13} /> Viento / Ráfagas ({catastropheAlerts.filter(a => a.type === 'viento_granizo').length})
+              </button>
             </div>
 
             {/* Dos Columnas: Lista de Alertas + Mapa de Riesgo Regional */}
@@ -3153,6 +3254,7 @@ export default function Agriculture40() {
                   </div>
                 ) : (
                   filteredCatastropheAlerts.map(alert => {
+                    const isFrost = alert.type === 'helada';
                     const isFire = alert.type === 'incendio';
                     const isDrought = alert.type === 'sequia';
                     const isFlood = alert.type === 'inundacion';
@@ -3169,8 +3271,9 @@ export default function Agriculture40() {
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex items-center space-x-3">
                             <div className={`p-3 rounded-2xl flex items-center justify-center text-white ${
-                              isFire ? 'bg-red-600' : isDrought ? 'bg-amber-600' : isFlood ? 'bg-blue-600' : 'bg-indigo-600'
+                              isFrost ? 'bg-cyan-600' : isFire ? 'bg-red-600' : isDrought ? 'bg-amber-600' : isFlood ? 'bg-blue-600' : 'bg-indigo-600'
                             }`}>
+                              {isFrost && <ThermometerSnowflake size={20} />}
                               {isFire && <Flame size={20} />}
                               {isDrought && <Sun size={20} />}
                               {isFlood && <Waves size={20} />}
@@ -3201,22 +3304,39 @@ export default function Agriculture40() {
                           {alert.description}
                         </p>
 
-                        {/* Telemetría meteorológica y de satélite */}
+                        {/* Telemetría meteorológica y de satélite en tiempo real */}
                         <div className="p-3 bg-white/80 dark:bg-slate-900/80 rounded-2xl border border-slate-200/60 dark:border-slate-800/80 flex items-center justify-between gap-2 text-[11px] font-bold flex-wrap">
-                          {alert.satelliteTelemetry.temperatureC && (
-                            <span className="flex items-center text-red-500"><Thermometer size={13} className="mr-1" /> {alert.satelliteTelemetry.temperatureC}°C</span>
+                          {alert.satelliteTelemetry.temperatureC !== undefined && (
+                            <span className="flex items-center text-red-500 dark:text-red-400 font-black">
+                              <Thermometer size={13} className="mr-1" />
+                              <span>{alert.satelliteTelemetry.temperatureC}°C</span>
+                              {alert.satelliteTelemetry.tempMinC !== undefined && (
+                                <span className="ml-1 text-cyan-600 dark:text-cyan-300 text-[10px] font-bold">
+                                  (Mín: {alert.satelliteTelemetry.tempMinC}°C)
+                                </span>
+                              )}
+                            </span>
                           )}
-                          {alert.satelliteTelemetry.relativeHumidityPct && (
-                            <span className="flex items-center text-blue-500"><Droplets size={13} className="mr-1" /> {alert.satelliteTelemetry.relativeHumidityPct}% Hum.</span>
+                          {alert.satelliteTelemetry.relativeHumidityPct !== undefined && (
+                            <span className="flex items-center text-blue-500">
+                              <Droplets size={13} className="mr-1" /> {alert.satelliteTelemetry.relativeHumidityPct}% Hum.
+                            </span>
                           )}
-                          {alert.satelliteTelemetry.windSpeedKmH && (
-                            <span className="flex items-center text-indigo-500"><Wind size={13} className="mr-1" /> {alert.satelliteTelemetry.windSpeedKmH} km/h</span>
+                          {alert.satelliteTelemetry.windSpeedKmH !== undefined && (
+                            <span className="flex items-center text-indigo-500">
+                              <Wind size={13} className="mr-1" /> {alert.satelliteTelemetry.windSpeedKmH} km/h
+                            </span>
                           )}
-                          {alert.satelliteTelemetry.fwiIndex && (
+                          {alert.satelliteTelemetry.fwiIndex !== undefined && (
                             <span className="flex items-center text-red-600 font-black">FWI: {alert.satelliteTelemetry.fwiIndex}</span>
                           )}
-                          {alert.satelliteTelemetry.soilSaturationPct && (
+                          {alert.satelliteTelemetry.soilSaturationPct !== undefined && (
                             <span className="flex items-center text-blue-600 font-black">Sat. Suelo: {alert.satelliteTelemetry.soilSaturationPct}%</span>
+                          )}
+                          {alert.satelliteTelemetry.dataSource && (
+                            <span className="text-[9px] text-slate-400 font-bold ml-auto block">
+                              🛰️ {alert.satelliteTelemetry.dataSource}
+                            </span>
                           )}
                         </div>
 
@@ -3229,6 +3349,28 @@ export default function Agriculture40() {
                             ))}
                           </ul>
                         </div>
+
+                        {/* Barra de acción directa: Enfocar en Mapa */}
+                        <div className="flex items-center justify-between pt-1 border-t border-slate-200/50 dark:border-slate-800/50">
+                          <span className="text-[10px] font-bold text-slate-400">
+                            Lat: {alert.coordinates.lat.toFixed(3)}, Lng: {alert.coordinates.lng.toFixed(3)}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedAlertForMap(alert);
+                            }}
+                            className={`text-[10px] font-black uppercase flex items-center gap-1 transition ${
+                              selectedAlertForMap?.id === alert.id
+                                ? 'text-hemp-600 dark:text-hemp-400 underline'
+                                : 'text-slate-600 dark:text-slate-300 hover:text-hemp-600'
+                            }`}
+                          >
+                            <span>{selectedAlertForMap?.id === alert.id ? 'Foco Activo en Mapa' : 'Enfocar en Mapa'}</span>
+                            <ArrowRight size={11} />
+                          </button>
+                        </div>
                       </div>
                     );
                   })
@@ -3236,41 +3378,89 @@ export default function Agriculture40() {
               </div>
 
               {/* Mapa Regional de Riesgo Climático */}
-              <div className="lg:col-span-6 bg-slate-50 dark:bg-slate-950 p-6 rounded-[36px] border border-slate-200 dark:border-slate-800 space-y-4">
+              <div className="lg:col-span-6 bg-slate-50 dark:bg-slate-950 p-6 rounded-[36px] border border-slate-200 dark:border-slate-800 flex flex-col justify-between space-y-4 shadow-sm">
                 <div className="flex items-center justify-between">
-                  <h4 className="font-black text-slate-900 dark:text-white uppercase tracking-tight text-sm flex items-center gap-2">
-                    <MapPin size={16} className="text-red-500" />
-                    <span>Mapeo Regional de Focos de Riesgo</span>
-                  </h4>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">
-                    Red Cooperativa Argentina
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 bg-red-500/10 text-red-600 rounded-xl">
+                      <MapPin size={18} />
+                    </div>
+                    <div>
+                      <h4 className="font-black text-slate-900 dark:text-white uppercase tracking-tight text-sm">
+                        Mapeo Regional de Focos de Riesgo
+                      </h4>
+                      <p className="text-[10px] text-slate-400 font-bold">
+                        {selectedAlertForMap ? `Foco Activo: ${selectedAlertForMap.plotName}` : 'Cobertura Nacional · Red Cooperativa Argentina'}
+                      </p>
+                    </div>
+                  </div>
+                  {selectedAlertForMap && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedAlertForMap(null)}
+                      className="text-[10px] font-black uppercase text-hemp-700 dark:text-hemp-300 bg-hemp-100 dark:bg-hemp-950/60 px-3 py-1.5 rounded-xl border border-hemp-300 dark:border-hemp-800 hover:bg-hemp-200 transition"
+                    >
+                      Ver Todos los Focos
+                    </button>
+                  )}
                 </div>
 
-                <div className="h-[520px] rounded-3xl overflow-hidden border border-slate-200 dark:border-slate-800 relative">
+                {/* Contenedor del Mapa - Cubre el 100% del marco */}
+                <div className="w-full h-[620px] min-h-[550px] rounded-3xl overflow-hidden border border-slate-200 dark:border-slate-800 relative shadow-inner bg-slate-950">
                   <MapContainer
                     center={[-34.5, -63.5]}
                     zoom={5}
-                    scrollWheelZoom={false}
-                    className="w-full h-full"
+                    scrollWheelZoom={true}
+                    className="w-full h-full z-0"
+                    style={{ width: '100%', height: '100%', minHeight: '550px' }}
                   >
+                    <MapResizer />
+                    <CatastropheMapController selectedAlert={selectedAlertForMap} alerts={filteredCatastropheAlerts} />
+
                     <TileLayer
                       url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
                       attribution='&copy; Esri World Imagery'
                     />
 
                     {filteredCatastropheAlerts.map(alert => {
-                      const color = alert.level === 'Alto' ? '#ef4444' : alert.level === 'Moderado' ? '#f59e0b' : '#3b82f6';
+                      const isSelected = selectedAlertForMap?.id === alert.id;
+                      const bg = alert.type === 'helada' ? '#06b6d4' : alert.type === 'incendio' ? '#ef4444' : alert.type === 'sequia' ? '#f59e0b' : alert.type === 'inundacion' ? '#3b82f6' : '#6366f1';
+                      const emoji = alert.type === 'helada' ? '❄️' : alert.type === 'incendio' ? '🔥' : alert.type === 'sequia' ? '☀️' : alert.type === 'inundacion' ? '💧' : '💨';
+
+                      const pinIcon = L.divIcon({
+                        className: 'catastrophe-div-icon',
+                        html: `
+                          <div style="position: relative; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+                            <div style="position: absolute; inset: 0; border-radius: 50%; background: ${bg}; opacity: 0.45; animation: ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>
+                            <div style="position: relative; width: 28px; height: 28px; border-radius: 50%; background: ${bg}; border: 2.5px solid #ffffff; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.5); transform: ${isSelected ? 'scale(1.3)' : 'scale(1)'}; transition: transform 0.2s;">
+                              <span style="font-size: 13px; line-height: 1;">${emoji}</span>
+                            </div>
+                          </div>
+                        `,
+                        iconSize: [34, 34],
+                        iconAnchor: [17, 17],
+                        popupAnchor: [0, -17]
+                      });
+
                       return (
-                        <React.Fragment key={alert.id}>
-                          <Marker position={[alert.coordinates.lat, alert.coordinates.lng]}>
-                            <LeafletTooltip direction="top" offset={[0, -10]} className="bg-slate-900 text-white rounded-xl p-2 shadow-xl border border-white/10 font-bold text-xs">
-                              <span className="font-black block uppercase text-emerald-400">{alert.plotName}</span>
-                              <span className="block text-[11px] text-slate-300 font-normal">{alert.title}</span>
-                              <span className="block text-[10px] text-amber-300 font-bold">Riesgo {alert.level} ({alert.score}/100)</span>
-                            </LeafletTooltip>
-                          </Marker>
-                        </React.Fragment>
+                        <Marker 
+                          key={alert.id} 
+                          position={[alert.coordinates.lat, alert.coordinates.lng]}
+                          icon={pinIcon}
+                          eventHandlers={{
+                            click: () => setSelectedAlertForMap(alert)
+                          }}
+                        >
+                          <LeafletTooltip direction="top" offset={[0, -12]} className="bg-slate-900 text-white rounded-xl p-2.5 shadow-xl border border-white/10 font-bold text-xs">
+                            <span className="font-black block uppercase text-emerald-400">{alert.plotName}</span>
+                            <span className="block text-[11px] text-slate-200 font-semibold">{alert.title}</span>
+                            <span className="block text-[10px] text-amber-300 font-bold mt-0.5">Riesgo {alert.level} ({alert.score}/100)</span>
+                            {alert.satelliteTelemetry.temperatureC !== undefined && (
+                              <span className="block text-[10px] text-slate-300 font-medium">
+                                T° Actual: {alert.satelliteTelemetry.temperatureC}°C
+                              </span>
+                            )}
+                          </LeafletTooltip>
+                        </Marker>
                       );
                     })}
                   </MapContainer>
