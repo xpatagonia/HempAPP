@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAppContext } from '../context/AppContext';
 import { 
   Bell, BellRing, Check, CheckCheck, Trash2, X, AlertTriangle, 
   Clock, Sprout, ShieldAlert, Sparkles, Volume2, VolumeX, Settings,
@@ -28,6 +29,7 @@ interface NotificationCenterModalProps {
 
 export default function NotificationCenterModal({ isOpen, onClose }: NotificationCenterModalProps) {
   const navigate = useNavigate();
+  const { plots, tasks } = useAppContext();
   const [notifications, setNotifications] = useState<PushNotificationItem[]>([]);
   const [permission, setPermission] = useState<'granted' | 'denied' | 'default' | 'unsupported'>('default');
   const [settings, setSettings] = useState<PushSettings>(getPushSettings());
@@ -76,17 +78,20 @@ export default function NotificationCenterModal({ isOpen, onClose }: Notificatio
     setPermission(getNotificationPermissionStatus());
     setIsRequestingPermission(false);
     if (granted) {
-      // Disparar bienvenida push
-      triggerTestPlotAlert('Parcela Demo Experimental');
+      // Disparar alerta de bienvenida apuntando a lote real
+      const targetPlot = plots[0];
+      await triggerTestPlotAlert(targetPlot?.name, targetPlot?.id);
     }
   };
 
   const handleTriggerTest = async (type: 'plot' | 'task') => {
     setTestSending(type);
     if (type === 'plot') {
-      await triggerTestPlotAlert();
+      const targetPlot = plots.find(p => p.status === 'Pausada') || plots[0];
+      await triggerTestPlotAlert(targetPlot?.name, targetPlot?.id);
     } else {
-      await triggerTestTaskReminder();
+      const targetTask = tasks.find(t => t.status === 'Pendiente') || tasks[0];
+      await triggerTestTaskReminder(targetTask?.title, targetTask?.id);
     }
     setTimeout(() => {
       setTestSending(null);
@@ -94,11 +99,23 @@ export default function NotificationCenterModal({ isOpen, onClose }: Notificatio
     }, 400);
   };
 
-  const handleNavigate = (url: string, id: string) => {
-    markNotificationAsRead(id);
+  const handleNavigate = (item: PushNotificationItem) => {
+    markNotificationAsRead(item.id);
     onClose();
-    if (url.startsWith('/')) {
-      navigate(url);
+    
+    let target = item.targetUrl;
+    if (item.category === 'plot_critical') {
+      if (item.plotId && plots.some(p => p.id.toLowerCase() === item.plotId?.toLowerCase())) {
+        target = `/plots/${item.plotId}`;
+      } else if (plots.length > 0) {
+        target = `/plots/${plots[0].id}`;
+      }
+    } else if (item.category === 'task_reminder') {
+      target = '/tasks';
+    }
+
+    if (target.startsWith('/')) {
+      navigate(target);
     }
   };
 
@@ -365,14 +382,15 @@ export default function NotificationCenterModal({ isOpen, onClose }: Notificatio
                   return (
                     <div 
                       key={notif.id}
-                      className={`p-4 rounded-2xl border transition-all relative group ${
+                      onClick={() => handleNavigate(notif)}
+                      className={`p-4 rounded-2xl border transition-all relative group cursor-pointer hover:shadow-md ${
                         !notif.read 
                           ? isCritical 
-                            ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-300 dark:border-rose-900/60 shadow-sm'
+                            ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-300 dark:border-rose-900/60 shadow-sm hover:border-rose-400'
                             : isWarning
-                              ? 'bg-amber-50/70 dark:bg-amber-950/20 border-amber-300 dark:border-amber-900/60 shadow-sm'
-                              : 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-900/60 shadow-sm'
-                          : 'bg-white dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 opacity-80'
+                              ? 'bg-amber-50/70 dark:bg-amber-950/20 border-amber-300 dark:border-amber-900/60 shadow-sm hover:border-amber-400'
+                              : 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-900/60 shadow-sm hover:border-emerald-400'
+                          : 'bg-white dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 opacity-80 hover:opacity-100 hover:border-slate-300 dark:hover:border-slate-700'
                       }`}
                     >
                       <div className="flex items-start space-x-3">
@@ -405,17 +423,29 @@ export default function NotificationCenterModal({ isOpen, onClose }: Notificatio
 
                           <div className="pt-2 flex items-center justify-between">
                             <button
-                              onClick={() => handleNavigate(notif.targetUrl, notif.id)}
-                              className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-slate-900 hover:bg-black dark:bg-slate-700 dark:hover:bg-slate-600 text-white text-[11px] font-black rounded-xl transition-all shadow-sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleNavigate(notif);
+                              }}
+                              className={`inline-flex items-center space-x-1.5 px-3 py-1.5 text-white text-[11px] font-black rounded-xl transition-all shadow-sm ${
+                                isCritical 
+                                  ? 'bg-rose-600 hover:bg-rose-700' 
+                                  : isWarning 
+                                    ? 'bg-amber-600 hover:bg-amber-700' 
+                                    : 'bg-slate-900 hover:bg-black dark:bg-slate-700 dark:hover:bg-slate-600'
+                              }`}
                             >
-                              <span>{notif.actionLabel || 'Ver Detalles'}</span>
+                              <span>{notif.actionLabel || (notif.category === 'plot_critical' ? 'Ver Lote Crítico' : 'Ver Detalles')}</span>
                               <ExternalLink size={12} />
                             </button>
 
-                            <div className="flex items-center space-x-1">
+                            <div className="flex items-center space-x-1" onClick={(e) => e.stopPropagation()}>
                               {!notif.read && (
                                 <button
-                                  onClick={() => markNotificationAsRead(notif.id)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    markNotificationAsRead(notif.id);
+                                  }}
                                   title="Marcar como leída"
                                   className="p-1.5 text-slate-400 hover:text-emerald-600 rounded-lg transition-all"
                                 >
@@ -423,7 +453,10 @@ export default function NotificationCenterModal({ isOpen, onClose }: Notificatio
                                 </button>
                               )}
                               <button
-                                onClick={() => deleteStoredNotification(notif.id)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  deleteStoredNotification(notif.id);
+                                }}
                                 title="Eliminar"
                                 className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg transition-all"
                               >

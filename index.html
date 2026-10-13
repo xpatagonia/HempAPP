@@ -22,6 +22,16 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
 
+    <!-- HashRouter SPA Route Recovery -->
+    <script>
+      (function() {
+        var p = window.location.pathname;
+        if (p && p !== '/' && p !== '/index.html' && !window.location.hash) {
+          window.location.replace('/#' + p + window.location.search);
+        }
+      })();
+    </script>
+
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

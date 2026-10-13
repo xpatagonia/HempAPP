@@ -78,21 +78,41 @@ self.addEventListener('notificationclick', (event) => {
 
   const rawUrl = (event.notification.data && event.notification.data.url) || '/';
   
+  // Normalizar ruta para HashRouter: siempre debe resolver a /#/ruta
+  let cleanPath = rawUrl;
+  if (cleanPath.startsWith('/#')) {
+    cleanPath = cleanPath.substring(2);
+  } else if (cleanPath.startsWith('#')) {
+    cleanPath = cleanPath.substring(1);
+  }
+  if (!cleanPath.startsWith('/')) {
+    cleanPath = '/' + cleanPath;
+  }
+  const hashTarget = `/#${cleanPath}`;
+  const fullTargetUrl = new URL(hashTarget, self.registration.scope).href;
+
   event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // Si ya hay una pestaña abierta del sistema, enfocar y navegar
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (clientList) => {
+      // 1. Si ya hay una pestaña abierta del sistema, enfocar y navegar via postMessage
       for (let i = 0; i < clientList.length; i++) {
         const client = clientList[i];
-        if (client.url && 'focus' in client) {
-          if ('navigate' in client) {
-            client.navigate(rawUrl);
+        if ('focus' in client) {
+          try {
+            await client.focus();
+            client.postMessage({
+              type: 'NAVIGATE',
+              path: cleanPath,
+              hashTarget: hashTarget
+            });
+            return;
+          } catch (e) {
+            console.warn('[SW] Error al enfocar cliente:', e);
           }
-          return client.focus();
         }
       }
-      // Si no hay pestañas abiertas, abrir una nueva
+      // 2. Si no hay pestañas abiertas, abrir una nueva con el hash correcto
       if (self.clients.openWindow) {
-        return self.clients.openWindow(rawUrl);
+        return self.clients.openWindow(fullTargetUrl);
       }
     })
   );

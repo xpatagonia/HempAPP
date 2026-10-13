@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { 
   LayoutDashboard, Sprout, Menu, Leaf, LogOut, 
@@ -69,6 +69,7 @@ const NavItem = ({ to, icon: Icon, label, badge, special, isCollapsed }: any) =>
 };
 
 export default function Layout({ children }: { children?: React.ReactNode }) {
+  const navigate = useNavigate();
   const { currentUser, logout, theme, toggleTheme, tasks, plots, locations, appName, appLogo } = useAppContext();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -90,7 +91,18 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
     };
     window.addEventListener('nucleus:push-notification-change', handleNotifChange);
 
-    // 3. Evaluar alertas críticas de parcelas y tareas próximas
+    // 3. Escuchar navegación disparada desde clics en el Service Worker
+    const handleSwMessage = (event: MessageEvent) => {
+      if (event.data && event.data.type === 'NAVIGATE' && event.data.path) {
+        setIsNotificationsOpen(false);
+        navigate(event.data.path);
+      }
+    };
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', handleSwMessage);
+    }
+
+    // 4. Evaluar alertas críticas de parcelas y tareas próximas
     if (plots && plots.length > 0) {
       evaluateCriticalPlotAlerts(plots, locations || []);
     }
@@ -100,8 +112,11 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
 
     return () => {
       window.removeEventListener('nucleus:push-notification-change', handleNotifChange);
+      if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+        navigator.serviceWorker.removeEventListener('message', handleSwMessage);
+      }
     };
-  }, [plots, locations, tasks]);
+  }, [plots, locations, tasks, navigate]);
 
   const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {

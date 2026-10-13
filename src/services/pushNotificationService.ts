@@ -181,31 +181,32 @@ export const getStoredNotifications = (): PushNotificationItem[] => {
   try {
     const raw = localStorage.getItem(STORAGE_NOTIFICATIONS_KEY);
     if (!raw) {
-      // Datos demo iniciales para que el usuario visualice el centro de notificaciones de inmediato
+      // Datos demo iniciales apuntando a lotes y labores reales de la plataforma
       const initial: PushNotificationItem[] = [
         {
           id: 'demo-alert-1',
           title: '❄️ Alerta Helada Agroclimática',
-          body: 'Riesgo inminente detectado en Parcela Norte A1. Temperatura proyectada bajo 3°C.',
+          body: 'Riesgo inminente detectado en Lote Alfa (Córdoba). Temperatura proyectada bajo 2.2°C con riesgo para plántulas.',
           category: 'plot_critical',
           severity: 'critical',
           timestamp: new Date(Date.now() - 1000 * 60 * 35).toISOString(),
           read: false,
-          plotId: 'plot-demo-1',
-          plotName: 'Parcela Norte A1',
-          targetUrl: '/plots',
-          actionLabel: 'Ver Parcela'
+          plotId: 'plot-alfa-cordoba',
+          plotName: 'Lote Alfa - Ensayo Densidad Fibra',
+          targetUrl: '/plots/plot-alfa-cordoba',
+          actionLabel: 'Ver Lote Crítico'
         },
         {
           id: 'demo-alert-2',
-          title: '⏰ Labor Agrícola para Hoy',
-          body: 'Fertirriego y bioestimulación foliar programado en Lote Ensayo Pergamino.',
+          title: '⏰ Labor Agrícola Pendiente',
+          body: 'Planificación de Corte Mecánico & Cosecha en Lote Beta (Pergamino). Revisión de implementos programada.',
           category: 'task_reminder',
           severity: 'warning',
           timestamp: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
           read: false,
-          taskId: 'task-demo-1',
-          taskTitle: 'Fertirriego y bioestimulación',
+          taskId: 'labor-pergamino-03',
+          taskTitle: 'Planificación de Corte Mecánico & Cosecha',
+          plotId: 'plot-beta-pergamino',
           targetUrl: '/tasks',
           actionLabel: 'Ver Tarea'
         }
@@ -213,7 +214,33 @@ export const getStoredNotifications = (): PushNotificationItem[] => {
       localStorage.setItem(STORAGE_NOTIFICATIONS_KEY, JSON.stringify(initial));
       return initial;
     }
-    return JSON.parse(raw);
+    
+    // Auto-sanitizar notificaciones previas en cache para asegurar enlaces directos a lotes existentes
+    const parsed: PushNotificationItem[] = JSON.parse(raw);
+    let mutated = false;
+    const sanitized = parsed.map(item => {
+      if (item.category === 'plot_critical') {
+        if (!item.plotId || item.plotId === 'plot-demo-1') {
+          item.plotId = 'plot-alfa-cordoba';
+          item.plotName = item.plotName || 'Lote Alfa - Ensayo Densidad Fibra';
+          mutated = true;
+        }
+        if (item.targetUrl === '/plots' || !item.targetUrl.startsWith('/plots/')) {
+          item.targetUrl = `/plots/${item.plotId || 'plot-alfa-cordoba'}`;
+          mutated = true;
+        }
+        if (!item.actionLabel || item.actionLabel === 'Ver Parcela') {
+          item.actionLabel = 'Ver Lote Crítico';
+          mutated = true;
+        }
+      }
+      return item;
+    });
+
+    if (mutated) {
+      localStorage.setItem(STORAGE_NOTIFICATIONS_KEY, JSON.stringify(sanitized));
+    }
+    return sanitized;
   } catch {
     return [];
   }
@@ -243,9 +270,23 @@ export const dispatchPushNotification = async (
 ): Promise<PushNotificationItem> => {
   const settings = getPushSettings();
   const id = `notif-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+  // Normalizar targetUrl para categorías críticas
+  let normalizedTargetUrl = item.targetUrl;
+  let normalizedPlotId = item.plotId;
+  if (item.category === 'plot_critical') {
+    if (!normalizedPlotId || normalizedPlotId === 'plot-demo-1') {
+      normalizedPlotId = 'plot-alfa-cordoba';
+    }
+    if (normalizedTargetUrl === '/plots' || !normalizedTargetUrl.startsWith('/plots/')) {
+      normalizedTargetUrl = `/plots/${normalizedPlotId}`;
+    }
+  }
+
   const fullItem: PushNotificationItem = {
     ...item,
     id,
+    plotId: normalizedPlotId,
+    targetUrl: normalizedTargetUrl,
     timestamp: new Date().toISOString(),
     read: false
   };
@@ -487,23 +528,36 @@ export const evaluateUpcomingTasksReminders = async (
 /**
  * Simulación de prueba para verificar el funcionamiento del Service Worker
  */
-export const triggerTestPlotAlert = async (plotName = 'Parcela Norte A1'): Promise<PushNotificationItem> => {
+export const triggerTestPlotAlert = async (
+  plotName?: string, 
+  plotId?: string
+): Promise<PushNotificationItem> => {
+  const targetPlotId = plotId || 'plot-alfa-cordoba';
+  const name = plotName || 'Lote Alfa - Ensayo Densidad Fibra';
   return await dispatchPushNotification({
-    title: `❄️ Riesgo Helada Inminente: ${plotName}`,
-    body: `Telemetría satelital registra 1.8°C en descenso rápido. Activar protocolo anti-heladas y riego térmico.`,
+    title: `❄️ Riesgo Helada Inminente: ${name}`,
+    body: `Telemetría satelital registra 1.8°C en descenso rápido. Activar protocolo anti-heladas y riego térmico en ${name}.`,
     category: 'plot_critical',
     severity: 'critical',
-    targetUrl: '/plots',
+    plotId: targetPlotId,
+    plotName: name,
+    targetUrl: `/plots/${targetPlotId}`,
     actionLabel: 'Ver Lote Crítico'
   });
 };
 
-export const triggerTestTaskReminder = async (taskTitle = 'Fertirriego y Aplicación de Bioestimulante'): Promise<PushNotificationItem> => {
+export const triggerTestTaskReminder = async (
+  taskTitle = 'Fertirriego y Aplicación de Bioestimulante',
+  taskId?: string
+): Promise<PushNotificationItem> => {
+  const targetTaskId = taskId || 'labor-pergamino-03';
   return await dispatchPushNotification({
     title: `⏰ Labor Agrícola Programada: ${taskTitle}`,
     body: `Vencimiento programado hoy a las 18:00 hs. Insumos asignados: Trichoderma harzianum 2.5 L/ha.`,
     category: 'task_reminder',
     severity: 'warning',
+    taskId: targetTaskId,
+    taskTitle,
     targetUrl: '/tasks',
     actionLabel: 'Ir a Labores'
   });
