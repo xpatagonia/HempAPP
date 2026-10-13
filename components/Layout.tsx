@@ -8,8 +8,16 @@ import {
   Tractor, BookOpen, Bot, Settings, 
   FolderKanban, CheckSquare, BarChart3, Users, Warehouse, Package, X, Bell, Globe, Building, ShieldAlert, FileText, BrainCircuit, Activity, FlaskConical, DownloadCloud, Satellite,
   PanelLeftClose, PanelLeftOpen, ChevronLeft, ChevronRight, ShieldCheck, DollarSign,
-  Calculator, Truck, UserCheck, ClipboardList
+  Calculator, Truck, UserCheck, ClipboardList, Radio
 } from 'lucide-react';
+import NotificationCenterModal from './NotificationCenterModal';
+import { 
+  registerServiceWorker, 
+  getStoredNotifications, 
+  getNotificationPermissionStatus,
+  evaluateCriticalPlotAlerts,
+  evaluateUpcomingTasksReminders
+} from '../src/services/pushNotificationService';
 
 const NavItem = ({ to, icon: Icon, label, badge, special, isCollapsed }: any) => {
   const location = useLocation();
@@ -61,8 +69,40 @@ const NavItem = ({ to, icon: Icon, label, badge, special, isCollapsed }: any) =>
 };
 
 export default function Layout({ children }: { children?: React.ReactNode }) {
-  const { currentUser, logout, theme, toggleTheme, tasks, appName, appLogo } = useAppContext();
+  const { currentUser, logout, theme, toggleTheme, tasks, plots, locations, appName, appLogo } = useAppContext();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [unreadAlertsCount, setUnreadAlertsCount] = useState<number>(() => {
+    return getStoredNotifications().filter(n => !n.read).length;
+  });
+  const [pushStatus, setPushStatus] = useState<'granted' | 'denied' | 'default' | 'unsupported'>('default');
+
+  useEffect(() => {
+    // 1. Inicializar Service Worker
+    registerServiceWorker().then(() => {
+      setPushStatus(getNotificationPermissionStatus());
+    });
+
+    // 2. Escuchar cambios de notificaciones
+    const handleNotifChange = () => {
+      setUnreadAlertsCount(getStoredNotifications().filter(n => !n.read).length);
+      setPushStatus(getNotificationPermissionStatus());
+    };
+    window.addEventListener('nucleus:push-notification-change', handleNotifChange);
+
+    // 3. Evaluar alertas críticas de parcelas y tareas próximas
+    if (plots && plots.length > 0) {
+      evaluateCriticalPlotAlerts(plots, locations || []);
+    }
+    if (tasks && tasks.length > 0) {
+      evaluateUpcomingTasksReminders(tasks);
+    }
+
+    return () => {
+      window.removeEventListener('nucleus:push-notification-change', handleNotifChange);
+    };
+  }, [plots, locations, tasks]);
+
   const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('ht_sidebar_collapsed') === 'true';
@@ -211,9 +251,19 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
           
           <div className="flex items-center space-x-3">
               <div className="flex items-center space-x-1 mr-1 md:mr-3 border-r pr-2 md:pr-4 border-slate-200 dark:border-slate-800">
-                  <button className="p-3 text-slate-500 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-2xl transition-all relative">
-                      <Bell size={20} />
-                      <span className="absolute top-2.5 right-2.5 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-white dark:border-slate-900"></span>
+                  <button 
+                    onClick={() => setIsNotificationsOpen(true)}
+                    title="Centro de Alertas & Push (Service Worker)"
+                    className="p-3 text-slate-500 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-2xl transition-all relative group"
+                  >
+                      <Bell size={20} className={unreadAlertsCount > 0 ? 'text-slate-800 dark:text-white' : ''} />
+                      {unreadAlertsCount > 0 ? (
+                        <span className="absolute -top-0.5 -right-0.5 min-w-[20px] h-5 px-1 bg-rose-500 text-white text-[10px] font-mono font-black rounded-full flex items-center justify-center border-2 border-white dark:border-slate-900 shadow-sm animate-pulse">
+                          {unreadAlertsCount}
+                        </span>
+                      ) : pushStatus === 'default' ? (
+                        <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-amber-400 rounded-full border-2 border-white dark:border-slate-900" title="Push disponible para activar" />
+                      ) : null}
                   </button>
               </div>
               <button onClick={toggleTheme} className="p-2.5 md:p-3 rounded-2xl bg-slate-100 dark:bg-slate-800/90 text-slate-700 dark:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-all flex items-center space-x-2 px-4 shadow-sm font-bold text-xs">
@@ -227,6 +277,12 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
           {children}
         </div>
       </main>
+
+      {/* MODAL / DRAWER CENTRO DE NOTIFICACIONES PUSH */}
+      <NotificationCenterModal 
+        isOpen={isNotificationsOpen} 
+        onClose={() => setIsNotificationsOpen(false)} 
+      />
     </div>
   );
 }

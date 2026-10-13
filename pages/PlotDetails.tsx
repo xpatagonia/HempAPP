@@ -13,11 +13,12 @@ import {
   Camera, Image as ImageIcon, MessageSquare, ClipboardList, User, Calendar, Ruler, Maximize2, Download, Scale, Wind, Bird, CheckCircle2,
   RefreshCw, Globe, Layers, Save, Thermometer, Droplets, Waves, QrCode, Printer, Loader2, Zap, Sparkles, Link as LinkIcon, Sun,
   TrendingUp, ArrowUpRight, Beaker, FileUp, Moon, Sunrise, Sunset, ZapOff, Archive, Navigation, Scan, Target, FlaskConical, ClipboardCheck,
-  ChevronLeft, ChevronRight, Filter, Bot, Terminal, FileText, ArrowUp, ArrowDown, Satellite
+  ChevronLeft, ChevronRight, Filter, Bot, Terminal, FileText, ArrowUp, ArrowDown, Satellite, Bell, BellRing
 } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
 import WeatherWidget from '../components/WeatherWidget';
 import HydricBalance from '../components/HydricBalance';
+import { dispatchPushNotification } from '../src/services/pushNotificationService';
 import { GoogleGenAI } from "@google/genai";
 import { getActiveGeminiApiKey } from '../src/services/geminiService';
 import jsPDF from 'jspdf';
@@ -107,6 +108,23 @@ export default function PlotDetails() {
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isFetchingConditions, setIsFetchingConditions] = useState(false);
+  const [pushSent, setPushSent] = useState(false);
+
+  const handleSendPushAlert = async () => {
+    if (!plot) return;
+    await dispatchPushNotification({
+      title: `🚨 Alerta Monitoreo: ${plot.name}`,
+      body: `Verificación técnica de campo activada. Parcela ${plot.name} (${plot.surfaceArea} ha) vinculada a ${location?.name || 'Establecimiento'}.`,
+      category: 'plot_critical',
+      severity: 'warning',
+      plotId: plot.id,
+      plotName: plot.name,
+      targetUrl: `/plots/${plot.id}`,
+      actionLabel: 'Ver Parcela'
+    });
+    setPushSent(true);
+    setTimeout(() => setPushSent(false), 3000);
+  };
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiInsight, setAiInsight] = useState<string | null>(null);
 
@@ -455,6 +473,13 @@ export default function PlotDetails() {
             </button>
             <button onClick={() => setIsQrModalOpen(true)} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-2xl text-slate-500 hover:text-hemp-600 shadow-sm transition-all flex items-center gap-2 px-6 text-xs font-black uppercase tracking-widest">
                 <QrCode size={18}/> <span className="hidden md:inline">Etiqueta QR</span>
+            </button>
+            <button 
+                onClick={handleSendPushAlert} 
+                title="Emitir alerta push de verificación para esta parcela (Service Worker)"
+                className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-2xl shadow-sm transition-all flex items-center gap-2 px-4 text-xs font-black uppercase tracking-widest ${pushSent ? 'text-emerald-600 border-emerald-400' : 'text-amber-600 hover:text-amber-700 dark:text-amber-400'}`}
+            >
+                <Bell size={18}/> <span className="hidden md:inline">{pushSent ? 'Push Emitido!' : 'Alerta Push'}</span>
             </button>
         </div>
       </div>

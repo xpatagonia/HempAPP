@@ -10,15 +10,21 @@ import {
   Tractor, Sprout, Droplets, ShieldAlert, Waves, Wrench, Search, Scissors,
   Package, Filter, Check, X, FileText, ChevronRight, UserCheck, Fuel,
   Gauge, Wind, Thermometer, MapPin, Building2, User, DollarSign, ShieldCheck,
-  Sparkles, ExternalLink
+  Sparkles, ExternalLink, BellRing, Bell
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { 
+  dispatchPushNotification, 
+  evaluateUpcomingTasksReminders 
+} from '../src/services/pushNotificationService';
 
 export default function Tasks() {
   const { 
     tasks, addTask, updateTask, deleteTask, homologateLabor, 
     currentUser, usersList, plots, varieties, switchUserRole 
   } = useAppContext();
+
+  const [pushFeedback, setPushFeedback] = useState<string | null>(null);
 
   // Filters & Views
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -98,6 +104,28 @@ export default function Tasks() {
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
   const isSocio = currentUser?.memberType === 'Socio_Productor' || currentUser?.role === 'client';
+
+  const handleEvaluatePush = async () => {
+    const alerts = await evaluateUpcomingTasksReminders(tasks, { force: true });
+    setPushFeedback(`Se evaluaron las labores: ${alerts.length > 0 ? `${alerts.length} recordatorio(s) push emitido(s)` : 'Todas las labores al día'}.`);
+    setTimeout(() => setPushFeedback(null), 4000);
+  };
+
+  const handlePushIndividual = async (labor: Task) => {
+    await dispatchPushNotification({
+      title: `⏰ Recordatorio Labor: ${labor.title}`,
+      body: `Labor programada (${labor.priority}) para el ${labor.dueDate}. Operario: ${labor.operator || 'Equipo de Campo'}.`,
+      category: 'task_reminder',
+      severity: labor.priority === 'Alta' ? 'warning' : 'info',
+      taskId: labor.id,
+      taskTitle: labor.title,
+      plotId: labor.plotId,
+      targetUrl: '/tasks',
+      actionLabel: 'Ver Labor'
+    });
+    setPushFeedback(`Recordatorio push emitido para "${labor.title}".`);
+    setTimeout(() => setPushFeedback(null), 3000);
+  };
 
   // Role assigned plots
   const availablePlots = useMemo(() => {
@@ -469,6 +497,15 @@ export default function Tasks() {
               <Sparkles size={14} /> Monitor Ciclo Biológico
             </Link>
 
+            {/* BOTÓN EVALUAR RECORDATORIOS PUSH */}
+            <button 
+              onClick={handleEvaluatePush}
+              title="Evaluar labores pendientes y emitir recordatorios push vía Service Worker"
+              className="px-3.5 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700/60 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+            >
+              <BellRing size={14} /> Recordatorios Push
+            </button>
+
             {/* BOTÓN NUEVA LABOR */}
             <button 
               onClick={() => handleOpenNewModal()}
@@ -758,6 +795,16 @@ export default function Tasks() {
                         title="Eliminar labor"
                       >
                         <X size={15} />
+                      </button>
+                    )}
+                    {/* BOTÓN RECORDATORIO PUSH INDIVIDUAL */}
+                    {(labor.status === 'Pendiente' || labor.status === 'En_Curso') && (
+                      <button 
+                        onClick={() => handlePushIndividual(labor)}
+                        title="Enviar recordatorio push a mi dispositivo (Service Worker)"
+                        className="p-1.5 text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/60 rounded-lg transition"
+                      >
+                        <Bell size={15} />
                       </button>
                     )}
                   </div>
@@ -1427,6 +1474,14 @@ export default function Tasks() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* TOAST DE FEEDBACK PUSH */}
+      {pushFeedback && (
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white dark:bg-white dark:text-slate-950 px-4 py-3 rounded-2xl shadow-2xl border border-slate-700 dark:border-slate-200 text-xs font-black flex items-center gap-2 animate-bounce">
+          <BellRing size={16} className="text-emerald-400" />
+          <span>{pushFeedback}</span>
         </div>
       )}
     </div>
