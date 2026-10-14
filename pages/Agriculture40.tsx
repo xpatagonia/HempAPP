@@ -9,8 +9,9 @@ import {
   Calendar, ChevronLeft, ChevronRight, Clock, Sliders, Camera,
   Plus, X, Info, Sparkles, Eye, ArrowUpRight, ArrowDownRight,
   Plane, Check, Filter, Flame, ShieldAlert, Award, Car, TreePine, Waves, Search, Package,
-  SlidersHorizontal, Key, ExternalLink, ThermometerSnowflake
+  SlidersHorizontal, Key, ExternalLink, ThermometerSnowflake, Radio
 } from 'lucide-react';
+import LiveTelemetryPanel from '../components/LiveTelemetryPanel';
 import { 
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, 
   CartesianGrid, Tooltip, BarChart, Bar, Legend, Cell 
@@ -107,7 +108,7 @@ export default function Agriculture40() {
 
   // Estado del lote seleccionado
   const [selectedPlotId, setSelectedPlotId] = useState<string>(urlPlotId || (plots.length > 0 ? plots[0].id : ''));
-  const [activeTab, setActiveTab] = useState<'ndvi' | 'water' | 'carbon' | 'inputs' | 'catastrophes' | 'soil' | 'simulator'>('ndvi');
+  const [activeTab, setActiveTab] = useState<'ndvi' | 'telemetry' | 'water' | 'carbon' | 'inputs' | 'catastrophes' | 'soil' | 'simulator'>('ndvi');
   const [mapLayer, setMapLayer] = useState<'satellite' | 'ndvi_layer' | 'foliage_layer' | 'moisture_layer' | 'street'>('ndvi_layer');
   const [layerOpacity, setLayerOpacity] = useState<number>(0.75);
   const [showPixelGrid, setShowPixelGrid] = useState<boolean>(true);
@@ -1419,6 +1420,7 @@ export default function Agriculture40() {
             className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-black rounded-2xl px-4 py-3 outline-none focus:ring-2 focus:ring-emerald-500 shadow-sm"
           >
             <option value="ndvi">📡 Vigor Satelital (NDVI)</option>
+            <option value="telemetry">📡 Telemetría IoT en Vivo (Render)</option>
             <option value="water">💧 Huella Hídrica & Cultivos</option>
             <option value="carbon">🌿 Captura CO₂ & Bonos MRV</option>
             <option value="inputs">🧬 Trazabilidad Insumos SENASA</option>
@@ -1429,7 +1431,7 @@ export default function Agriculture40() {
         </div>
 
         {/* Rejilla Adaptativa para Tablets y Pantallas de PC */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-8 gap-2">
           <button
             onClick={() => setActiveTab('ndvi')}
             className={`flex flex-col items-center justify-center p-3 rounded-2xl text-center transition-all duration-200 group relative ${
@@ -1444,6 +1446,23 @@ export default function Agriculture40() {
             </div>
             <span className={`text-[10px] font-mono font-bold uppercase tracking-wider ${activeTab === 'ndvi' ? 'text-emerald-100' : 'text-slate-400 dark:text-slate-400'}`}>
               Sentinel 10m
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('telemetry')}
+            className={`flex flex-col items-center justify-center p-3 rounded-2xl text-center transition-all duration-200 group relative ${
+              activeTab === 'telemetry'
+                ? 'bg-emerald-600 text-white font-black shadow-lg shadow-emerald-600/30 ring-2 ring-emerald-500/50 scale-[1.02]'
+                : 'bg-white dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700/80 border border-slate-200/80 dark:border-slate-700/60'
+            }`}
+          >
+            <div className="flex items-center space-x-1.5 mb-1">
+              <Radio size={18} className={activeTab === 'telemetry' ? 'text-white' : 'text-emerald-500'} />
+              <span className="text-xs font-black tracking-tight">Telemetría IoT</span>
+            </div>
+            <span className={`text-[10px] font-mono font-bold uppercase tracking-wider ${activeTab === 'telemetry' ? 'text-emerald-100' : 'text-slate-400 dark:text-slate-400'}`}>
+              Python / Render
             </span>
           </button>
 
@@ -1550,6 +1569,13 @@ export default function Agriculture40() {
           </button>
         </div>
       </div>
+
+      {/* CONTENIDO DE PESTAÑA: TELEMETRÍA IOT Y SENSORES (PYTHON / RENDER ENGINE) */}
+      {activeTab === 'telemetry' && selectedPlot && (
+        <div className="space-y-8 animate-in fade-in duration-300">
+          <LiveTelemetryPanel plot={selectedPlot} />
+        </div>
+      )}
 
       {/* CONTENIDO DE PESTAÑA: NDVI SATELITAL */}
       {activeTab === 'ndvi' && (

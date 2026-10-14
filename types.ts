@@ -814,4 +814,49 @@ export interface AgrochemicalApplication {
   status: 'Aplicado' | 'En Carencia' | 'Apto Cosecha';
 }
 
+// ==========================================
+// TELEMETRÍA IOT Y SENSORES DE CAMPO (PYTHON / RENDER ENGINE)
+// ==========================================
+
+export interface LiveSensorMetrics {
+  soil_moisture_pct?: number;
+  soil_temp_c?: number;
+  soil_ec_ds_m?: number;
+  soil_matric_potential_kpa?: number;
+  air_temp_c?: number;
+  air_humidity_pct?: number;
+  solar_radiation_wm2?: number;
+  rain_mm?: number;
+  wind_speed_kmh?: number;
+  wind_gust_kmh?: number;
+  wind_direction_deg?: number;
+  atmospheric_pressure_hpa?: number;
+  leaf_wetness_pct?: number;
+  par_umol_m2s?: number;
+}
+
+export interface LiveAgronomicAssessment {
+  et0_fao56_mm_day?: number;
+  gdd_accumulated?: number;
+  delta_t_c?: number;
+  spray_suitability: string;
+  water_stress_status: string;
+  vapor_pressure_deficit_kpa?: number;
+  dew_point_c?: number;
+  frost_risk: boolean;
+}
+
+export interface LiveTelemetryRecord {
+  id: string;
+  device_id: string;
+  plot_id: string;
+  timestamp: string;
+  metrics: LiveSensorMetrics;
+  assessment: LiveAgronomicAssessment;
+  battery_pct?: number;
+  created_at?: string;
+}
+
+export type TelemetryStreamStatus = 'connecting' | 'connected' | 'simulated' | 'disconnected' | 'error';
+
 

@@ -13,11 +13,12 @@ import {
   Camera, Image as ImageIcon, MessageSquare, ClipboardList, User, Calendar, Ruler, Maximize2, Download, Scale, Wind, Bird, CheckCircle2,
   RefreshCw, Globe, Layers, Save, Thermometer, Droplets, Waves, QrCode, Printer, Loader2, Zap, Sparkles, Link as LinkIcon, Sun,
   TrendingUp, ArrowUpRight, Beaker, FileUp, Moon, Sunrise, Sunset, ZapOff, Archive, Navigation, Scan, Target, FlaskConical, ClipboardCheck,
-  ChevronLeft, ChevronRight, Filter, Bot, Terminal, FileText, ArrowUp, ArrowDown, Satellite, Bell, BellRing
+  ChevronLeft, ChevronRight, Filter, Bot, Terminal, FileText, ArrowUp, ArrowDown, Satellite, Bell, BellRing, Radio
 } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
 import WeatherWidget from '../components/WeatherWidget';
 import HydricBalance from '../components/HydricBalance';
+import LiveTelemetryPanel from '../components/LiveTelemetryPanel';
 import { dispatchPushNotification } from '../src/services/pushNotificationService';
 import { GoogleGenAI } from "@google/genai";
 import { getActiveGeminiApiKey } from '../src/services/geminiService';
@@ -74,8 +75,8 @@ export default function PlotDetails() {
 
   const [searchParams] = useSearchParams();
   const tabParam = searchParams.get('tab') as any;
-  const validTabs = ['records', 'logs', 'water', 'astro', 'map', 'phytosanitary'];
-  const [activeTab, setActiveTab] = useState<'records' | 'logs' | 'water' | 'astro' | 'map' | 'phytosanitary'>(
+  const validTabs = ['records', 'telemetry', 'logs', 'water', 'astro', 'map', 'phytosanitary'];
+  const [activeTab, setActiveTab] = useState<'records' | 'telemetry' | 'logs' | 'water' | 'astro' | 'map' | 'phytosanitary'>(
     validTabs.includes(tabParam) ? tabParam : 'records'
   );
 
@@ -546,6 +547,10 @@ export default function PlotDetails() {
             <ShieldCheck size={14} />
             <span>Cuaderno Fitosanitario ({plotAgroApps.length})</span>
           </button>
+          <button onClick={() => setActiveTab('telemetry')} className={`px-8 py-3 font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl transition-all whitespace-nowrap flex items-center gap-1.5 ${activeTab === 'telemetry' ? 'bg-emerald-600 text-white shadow-xl' : 'text-gray-400 hover:text-gray-600'}`}>
+            <Radio size={14} />
+            <span>Telemetría IoT</span>
+          </button>
           <Link to={`/agro40?plotId=${plot.id}`} className="px-6 py-3 font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl transition-all whitespace-nowrap bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 flex items-center space-x-1.5 border border-emerald-500/20 shadow-sm">
               <Satellite size={14} />
               <span>Agro 4.0: NDVI & Suelo</span>
@@ -553,6 +558,12 @@ export default function PlotDetails() {
       </div>
 
       <div className="grid grid-cols-1 gap-8">
+          {activeTab === 'telemetry' && (
+            <div className="animate-in fade-in duration-300">
+              <LiveTelemetryPanel plot={plot} />
+            </div>
+          )}
+
           {activeTab === 'records' && (
             <div className="space-y-8 animate-in fade-in">
                 <div className="bg-white dark:bg-slate-900 p-8 rounded-[40px] border dark:border-slate-800 shadow-sm">

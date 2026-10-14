@@ -11,6 +11,9 @@ declare const __BUILD_TIME__: string;
 interface ImportMetaEnv {
   readonly VITE_SUPABASE_URL: string
   readonly VITE_SUPABASE_ANON_KEY: string
+  readonly VITE_TELEMETRY_API_URL?: string
+  readonly VITE_TELEMETRY_WS_URL?: string
+  [key: string]: any
   BASE_URL: string
   MODE: string
   DEV: boolean
