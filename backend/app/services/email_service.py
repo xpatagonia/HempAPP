@@ -147,10 +147,16 @@ class EmailNotificationService:
                 msg["To"] = req.to_email
                 msg.attach(MIMEText(html_body, "html"))
 
-                with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=10) as server:
-                    server.starttls()
-                    server.login(self.smtp_user, self.smtp_password)
-                    server.send_message(msg)
+                use_ssl = getattr(settings, 'SMTP_USE_SSL', False) or self.smtp_port == 465
+                if use_ssl:
+                    with smtplib.SMTP_SSL(self.smtp_host, self.smtp_port, timeout=12) as server:
+                        server.login(self.smtp_user, self.smtp_password)
+                        server.send_message(msg)
+                else:
+                    with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=12) as server:
+                        server.starttls()
+                        server.login(self.smtp_user, self.smtp_password)
+                        server.send_message(msg)
 
                 logger.info(f"Email sent successfully via SMTP to {req.to_email}")
                 return EmailNotificationResponse(

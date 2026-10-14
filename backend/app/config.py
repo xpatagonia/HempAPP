@@ -14,12 +14,13 @@ class Settings(BaseSettings):
     SUPABASE_URL: str = os.getenv("SUPABASE_URL", os.getenv("VITE_SUPABASE_URL", ""))
     SUPABASE_KEY: str = os.getenv("SUPABASE_KEY", os.getenv("VITE_SUPABASE_ANON_KEY", ""))
     
-    # Email Notification Settings
+    # Email Notification Settings (notificaciones@hempc.com.ar)
     SMTP_FROM: str = os.getenv("SMTP_FROM", "notificaciones@hempc.com.ar")
-    SMTP_HOST: str = os.getenv("SMTP_HOST", "")
+    SMTP_HOST: str = os.getenv("SMTP_HOST", "hempc.com.ar")
     SMTP_PORT: int = int(os.getenv("SMTP_PORT", 587))
-    SMTP_USER: str = os.getenv("SMTP_USER", "")
+    SMTP_USER: str = os.getenv("SMTP_USER", "notificaciones@hempc.com.ar")
     SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
+    SMTP_USE_SSL: bool = os.getenv("SMTP_USE_SSL", "false").lower() in ("true", "1") or int(os.getenv("SMTP_PORT", 587)) == 465
 
     # Allowed CORS Origins
     CORS_ORIGINS: List[str] = [

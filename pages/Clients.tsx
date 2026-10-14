@@ -14,6 +14,7 @@ import MapEditor from '../components/MapEditor';
 import { 
   sendOperatorInvitationEmail, 
   sendTestNotificationEmail,
+  checkEmailServiceStatus,
   getEmailAuditLog, 
   EmailAuditLogEntry, 
   EmailDispatchResult 
@@ -76,8 +77,20 @@ export default function Clients() {
 
   // Modal de vista previa o prueba de correo
   const [showTestEmailModal, setShowTestEmailModal] = useState(false);
-  const [testEmailInput, setTestEmailInput] = useState(currentUser?.email || 'operario@hempc.com.ar');
+  const [testEmailInput, setTestEmailInput] = useState(currentUser?.email || 'admin@hempc.com.ar');
   const [isSendingTest, setIsSendingTest] = useState(false);
+  const [smtpStatus, setSmtpStatus] = useState<{ configured: boolean; sender: string; host: string; port: number; engineUrl: string } | null>(null);
+  const [showPasswordGuide, setShowPasswordGuide] = useState(false);
+
+  const handleOpenTestEmailModal = async () => {
+    setShowTestEmailModal(true);
+    try {
+      const status = await checkEmailServiceStatus();
+      setSmtpStatus(status);
+    } catch (e) {
+      // fallback
+    }
+  };
 
   // Modal de vista previa del email a operario
   const [previewOperatorEmail, setPreviewOperatorEmail] = useState<{
@@ -434,7 +447,7 @@ export default function Clients() {
 
           <div className="flex flex-wrap gap-2.5 shrink-0">
             <button 
-              onClick={() => setShowTestEmailModal(true)}
+              onClick={handleOpenTestEmailModal}
               className="bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-white px-4 py-2.5 rounded-2xl text-[11px] font-black uppercase tracking-wider flex items-center transition shadow-md hover:scale-105"
             >
               <Send size={14} className="mr-2 text-emerald-400" /> Probar Despacho Mail
@@ -1264,55 +1277,151 @@ export default function Clients() {
       {/* MODAL PARA PROBAR DESPACHO DE CORREO (TEST NOTIFICACIONES)         */}
       {/* =================================================================== */}
       {showTestEmailModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-[32px] max-w-md w-full p-6 shadow-2xl border border-white/10 animate-in zoom-in-95">
-            <div className="flex justify-between items-center mb-4">
-              <div className="flex items-center space-x-2 text-emerald-600 dark:text-emerald-400">
-                <Send size={20} />
-                <h3 className="text-lg font-black uppercase tracking-tight">Prueba de Conectividad</h3>
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-md flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-[32px] max-w-xl w-full p-6 md:p-8 shadow-2xl border border-white/10 animate-in zoom-in-95 my-8">
+            <div className="flex justify-between items-start mb-5">
+              <div>
+                <div className="flex items-center space-x-2 text-emerald-600 dark:text-emerald-400">
+                  <Send size={22} />
+                  <h3 className="text-xl font-black uppercase tracking-tight">Servicio de Notificaciones HempC</h3>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Configuración oficial SMTP y prueba de despacho para <strong>notificaciones@hempc.com.ar</strong>
+                </p>
               </div>
-              <button onClick={() => setShowTestEmailModal(false)} className="text-slate-400 hover:text-slate-600">
+              <button 
+                onClick={() => setShowTestEmailModal(false)} 
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+              >
                 <X size={20} />
               </button>
             </div>
 
-            <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 leading-relaxed">
-              Enviará un correo de bienvenida y verificación agronómica con remitente oficial <strong>notificaciones@hempc.com.ar</strong> para auditar la bandeja de entrada.
-            </p>
+            {/* FICHA TÉCNICA DE CONFIGURACIÓN DEL SERVIDOR */}
+            <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 mb-5 space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800/80 pb-2.5">
+                <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">Parámetros del Servidor</span>
+                <span className="bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 text-[10px] font-mono px-2.5 py-0.5 rounded-full font-bold">
+                  hempc.com.ar • STARTTLS / SSL
+                </span>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[11px]">
+                <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
+                  <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">Servidor SMTP</span>
+                  <span className="font-mono font-bold text-slate-800 dark:text-slate-200">hempc.com.ar</span>
+                </div>
+                <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
+                  <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">Puertos SMTP</span>
+                  <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">587 / 465 / 25</span>
+                </div>
+                <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
+                  <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">IMAP (Recepción)</span>
+                  <span className="font-mono font-bold text-slate-800 dark:text-slate-200">143 / 993 (SSL)</span>
+                </div>
+                <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
+                  <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">Sieve Filter</span>
+                  <span className="font-mono font-bold text-slate-800 dark:text-slate-200">Puerto 4190</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
+                <span>Remitente Oficial: <strong className="text-slate-800 dark:text-slate-200 font-mono">notificaciones@hempc.com.ar</strong></span>
+                <span className="text-[10px] text-emerald-600 font-medium">Backend: https://hempapp.onrender.com</span>
+              </div>
+            </div>
 
+            {/* SECCIÓN: IMPACTO DE CONTRASEÑA SIN PUBLICAR EN GIT */}
+            <div className="mb-5 bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4">
+              <div className="flex items-start justify-between cursor-pointer" onClick={() => setShowPasswordGuide(!showPasswordGuide)}>
+                <div className="flex items-center space-x-2.5">
+                  <ShieldAlert size={18} className="text-amber-500 shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="text-xs font-black uppercase text-amber-700 dark:text-amber-400 tracking-wider">
+                      ¿Cómo impactar la contraseña sin subirla a Git?
+                    </h4>
+                    <p className="text-[11px] text-amber-900/80 dark:text-amber-200/80 mt-0.5">
+                      Las credenciales nunca deben comitearse en el repositorio de código.
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  type="button" 
+                  className="text-amber-600 dark:text-amber-400 text-xs font-bold underline shrink-0 ml-2"
+                >
+                  {showPasswordGuide ? 'Ocultar' : 'Ver Guía Paso a Paso'}
+                </button>
+              </div>
+
+              {showPasswordGuide && (
+                <div className="mt-3 pt-3 border-t border-amber-500/20 text-xs text-slate-700 dark:text-slate-300 space-y-2 leading-relaxed animate-in fade-in">
+                  <p>
+                    <strong>1. En Producción (Render / Cloud Backend):</strong><br />
+                    Acceda a <a href="https://dashboard.render.com" target="_blank" rel="noreferrer" className="text-emerald-500 underline font-semibold">dashboard.render.com</a> &rarr; Seleccione el servicio <strong>hempapp</strong> &rarr; Ingrese a la pestaña <strong>Environment</strong> &rarr; Click en <strong>Add Environment Variable</strong>:
+                  </p>
+                  <ul className="list-disc pl-5 font-mono text-[11px] space-y-1 bg-white/60 dark:bg-slate-900/60 p-2.5 rounded-xl border border-amber-200 dark:border-amber-900/40">
+                    <li><strong>SMTP_HOST</strong>: hempc.com.ar</li>
+                    <li><strong>SMTP_PORT</strong>: 587 (o 465)</li>
+                    <li><strong>SMTP_USER</strong>: notificaciones@hempc.com.ar</li>
+                    <li><strong>SMTP_PASSWORD</strong>: [La contraseña de la casilla]</li>
+                    <li><strong>SMTP_FROM</strong>: notificaciones@hempc.com.ar</li>
+                  </ul>
+                  <p className="text-[11px] text-slate-500">
+                    Render inyecta la contraseña directamente en las variables de entorno del servidor en memoria (<code className="font-mono">os.getenv("SMTP_PASSWORD")</code>) al compilar y reiniciar, sin escribirla en ningún commit ni archivo rastreado por Git.
+                  </p>
+                  <p>
+                    <strong>2. En Desarrollo Local:</strong><br />
+                    Cree o edite el archivo <code className="font-mono bg-slate-200 dark:bg-slate-800 px-1 py-0.5 rounded">.env</code> en la raíz. El archivo ya está protegido y excluido en <code className="font-mono">.gitignore</code>, por lo que Git nunca lo subirá.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* FORMULARIO DE ENVÍO DE PRUEBA */}
             <div className="space-y-4">
               <div>
-                <label className="text-[10px] font-black uppercase text-slate-400 ml-1 block mb-1">Correo de Destino</label>
-                <input 
-                  type="email" 
-                  className={inputClass} 
-                  value={testEmailInput}
-                  onChange={e => setTestEmailInput(e.target.value)}
-                  placeholder="tu-correo@empresa.com"
-                />
+                <label className="text-[10px] font-black uppercase text-slate-400 ml-1 block mb-1">
+                  Dirección de Correo para Prueba de Recepción
+                </label>
+                <div className="flex gap-2">
+                  <input 
+                    type="email" 
+                    className={inputClass} 
+                    value={testEmailInput}
+                    onChange={e => setTestEmailInput(e.target.value)}
+                    placeholder="ej: tu_correo@gmail.com o nombre@hempc.com.ar"
+                  />
+                  <button 
+                    type="button" 
+                    onClick={handleSendTestEmail}
+                    disabled={isSendingTest || !testEmailInput}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2.5 rounded-2xl font-black text-xs uppercase tracking-wider flex items-center shadow-lg transition disabled:opacity-50 shrink-0 hover:scale-[1.02]"
+                  >
+                    {isSendingTest ? <Loader2 size={16} className="animate-spin mr-2" /> : <Send size={14} className="mr-2" />}
+                    Enviar Mail
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1.5 ml-1">
+                  Se despachará una plantilla oficial HTML de bienvenida y credenciales para comprobar la entrega inmediata en su bandeja.
+                </p>
               </div>
 
-              <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded-2xl text-[11px] text-slate-500 font-mono border dark:border-slate-800">
-                Remitente: <strong>notificaciones@hempc.com.ar</strong><br />
-                Asunto: Alta de Operario • Red Cooperativa Nucleus
+              {/* DÓNDE MÁS PROBAR */}
+              <div className="bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40 rounded-2xl p-3.5 text-xs text-slate-600 dark:text-slate-300">
+                <span className="font-black uppercase tracking-wider text-[10px] text-emerald-600 dark:text-emerald-400 block mb-1">
+                  ¿Dónde más puedo probar y utilizar los correos?
+                </span>
+                <p className="text-[11px] leading-relaxed">
+                  1. <strong>En cualquier Estructura Productiva:</strong> Haga click en <em>"Gestionar Estructura"</em> &rarr; pestaña <strong>"Operarios & Invitaciones"</strong> &rarr; <em>"Incorporar Nuevo Operario"</em>. Al tildar <em>"Enviar notificación de bienvenida y credenciales"</em>, se envía la invitación real al correo del operario.<br />
+                  2. <strong>En la pestaña "Auditoría de Envíos":</strong> Podrá ver el registro histórico de cada correo despachado desde <strong className="font-mono">notificaciones@hempc.com.ar</strong> con su estado y reintentar despachos.
+                </p>
               </div>
 
-              <div className="flex justify-end space-x-2 pt-2">
+              <div className="flex justify-end pt-2">
                 <button 
                   type="button" 
                   onClick={() => setShowTestEmailModal(false)}
-                  className="px-4 py-2.5 text-xs text-slate-400 font-bold uppercase tracking-wider"
+                  className="bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition"
                 >
-                  Cancelar
-                </button>
-                <button 
-                  type="button" 
-                  onClick={handleSendTestEmail}
-                  disabled={isSendingTest || !testEmailInput}
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider flex items-center shadow-md transition disabled:opacity-50"
-                >
-                  {isSendingTest ? <Loader2 size={16} className="animate-spin mr-2" /> : <Send size={14} className="mr-2" />}
-                  Enviar Correo de Prueba
+                  Cerrar
                 </button>
               </div>
             </div>

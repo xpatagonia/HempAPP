@@ -258,3 +258,38 @@ export async function sendTestNotificationEmail(
     tempPassword: 'demo-' + Math.random().toString(36).substring(2, 8).toUpperCase()
   });
 }
+
+/**
+ * Consulta el estado y configuración del despachador de emails en el backend
+ */
+export async function checkEmailServiceStatus(): Promise<{
+  configured: boolean;
+  sender: string;
+  host: string;
+  port: number;
+  engineUrl: string;
+}> {
+  const engineUrl = getTelemetryEngineUrl();
+  try {
+    const res = await fetch(`${engineUrl}/api/v1/notifications/status`, { signal: AbortSignal.timeout(4000) });
+    if (res.ok) {
+      const data = await res.json();
+      return {
+        configured: Boolean(data.smtp_configured),
+        sender: data.sender || 'notificaciones@hempc.com.ar',
+        host: data.host || 'hempc.com.ar',
+        port: data.port || 587,
+        engineUrl
+      };
+    }
+  } catch (e) {
+    // backend sleeping or local fallback
+  }
+  return {
+    configured: false,
+    sender: 'notificaciones@hempc.com.ar',
+    host: 'hempc.com.ar',
+    port: 587,
+    engineUrl
+  };
+}
