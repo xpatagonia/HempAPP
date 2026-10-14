@@ -7,7 +7,7 @@ import {
   HempStageId
 } from '../types';
 import { 
-  DEMO_USER, DEMO_USERS_LIST, DEMO_VARIETIES, DEMO_LOCATIONS, DEMO_PLOTS, 
+  DEMO_USER, DEMO_USERS_LIST, DEMO_CLIENTS, DEMO_VARIETIES, DEMO_LOCATIONS, DEMO_PLOTS, 
   DEMO_PROJECTS, DEMO_TRIALS, DEMO_HYDRIC, DEMO_TASKS,
   DEMO_STORAGE_POINTS, DEMO_SUPPLIERS, DEMO_SEED_BATCHES, DEMO_SEED_MOVEMENTS, DEMO_RESOURCES,
   DEMO_OPERATIONAL_EXPENSES
@@ -157,7 +157,15 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isDbConnected, setIsDbConnected] = useState(false);
 
-    const [usersList, setUsersList] = useState<User[]>(DEMO_USERS_LIST);
+    const [usersList, setUsersList] = useState<User[]>(() => {
+        if (typeof window !== 'undefined') {
+            try {
+                const stored = localStorage.getItem('ht_users');
+                if (stored) return JSON.parse(stored);
+            } catch (e) {}
+        }
+        return DEMO_USERS_LIST;
+    });
     const [operationalExpenses, setOperationalExpenses] = useState<OperationalExpense[]>(() => {
         if (typeof window !== 'undefined') {
             try {
@@ -173,7 +181,15 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     const [trialRecords, setTrialRecords] = useState<TrialRecord[]>(DEMO_TRIALS);
     const [tasks, setTasks] = useState<Task[]>(DEMO_TASKS);
     const [projects, setProjects] = useState<Project[]>(DEMO_PROJECTS);
-    const [clients, setClients] = useState<Client[]>([]);
+    const [clients, setClients] = useState<Client[]>(() => {
+        if (typeof window !== 'undefined') {
+            try {
+                const stored = localStorage.getItem('ht_clients');
+                if (stored) return JSON.parse(stored);
+            } catch (e) {}
+        }
+        return DEMO_CLIENTS;
+    });
     const [suppliers, setSuppliers] = useState<Supplier[]>(DEMO_SUPPLIERS);
     const [seedBatches, setSeedBatches] = useState<SeedBatch[]>(DEMO_SEED_BATCHES);
     const [seedMovements, setSeedMovements] = useState<SeedMovement[]>(DEMO_SEED_MOVEMENTS);
@@ -239,14 +255,14 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
                 await Promise.all([
                     fetchSettings(),
-                    fetchTable('users', setUsersList, [DEMO_USER]),
+                    fetchTable('users', setUsersList, DEMO_USERS_LIST),
                     fetchTable('varieties', setVarieties, DEMO_VARIETIES),
                     fetchTable('locations', setLocations, DEMO_LOCATIONS),
                     fetchTable('plots', setPlots, DEMO_PLOTS),
                     fetchTable('trial_records', setTrialRecords, DEMO_TRIALS),
                     fetchTable('tasks', setTasks, DEMO_TASKS),
                     fetchTable('projects', setProjects, DEMO_PROJECTS),
-                    fetchTable('clients', setClients),
+                    fetchTable('clients', setClients, DEMO_CLIENTS),
                     fetchTable('suppliers', setSuppliers, DEMO_SUPPLIERS),
                     fetchTable('seed_batches', setSeedBatches),
                     fetchTable('seed_movements', setSeedMovements),
@@ -390,8 +406,21 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 return next;
             });
         }
+        else if (table === 'users') {
+            setUsersList(prev => {
+                const next = updateList(prev);
+                try { localStorage.setItem('ht_users', JSON.stringify(next)); } catch (e) {}
+                return next;
+            });
+        }
         else if (table === 'projects') setProjects(prev => updateList(prev));
-        else if (table === 'clients') setClients(prev => updateList(prev));
+        else if (table === 'clients') {
+            setClients(prev => {
+                const next = updateList(prev);
+                try { localStorage.setItem('ht_clients', JSON.stringify(next)); } catch (e) {}
+                return next;
+            });
+        }
         else if (table === 'suppliers') setSuppliers(prev => updateList(prev));
         else if (table === 'seed_batches') setSeedBatches(prev => updateList(prev));
         else if (table === 'seed_movements') setSeedMovements(prev => updateList(prev));
@@ -593,6 +622,55 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         return true;
     };
 
+    const addClientWithRelations = async (c: Client, teamIds?: string[]) => {
+        const ok = await crud('clients', c, 'insert');
+        if (ok) {
+            if (teamIds && teamIds.length > 0) {
+                setUsersList(prev => {
+                    const next = prev.map(u => teamIds.includes(u.id) ? { ...u, clientId: c.id, isNetworkMember: true } : u);
+                    try { localStorage.setItem('ht_users', JSON.stringify(next)); } catch (e) {}
+                    return next;
+                });
+            }
+            if (c.locationId) {
+                setLocations(prev => {
+                    const next = prev.map(l => l.id === c.locationId ? { ...l, clientId: c.id } : l);
+                    try { localStorage.setItem('ht_locations', JSON.stringify(next)); } catch (e) {}
+                    return next;
+                });
+            }
+        }
+        return ok;
+    };
+
+    const updateClientWithRelations = async (c: Client, teamIds?: string[]) => {
+        const ok = await crud('clients', c, 'update');
+        if (ok) {
+            if (teamIds !== undefined) {
+                setUsersList(prev => {
+                    const next = prev.map(u => {
+                        if (teamIds.includes(u.id)) {
+                            return { ...u, clientId: c.id, isNetworkMember: true };
+                        } else if (u.clientId === c.id) {
+                            return { ...u, clientId: undefined };
+                        }
+                        return u;
+                    });
+                    try { localStorage.setItem('ht_users', JSON.stringify(next)); } catch (e) {}
+                    return next;
+                });
+            }
+            if (c.locationId) {
+                setLocations(prev => {
+                    const next = prev.map(l => l.id === c.locationId ? { ...l, clientId: c.id } : l);
+                    try { localStorage.setItem('ht_locations', JSON.stringify(next)); } catch (e) {}
+                    return next;
+                });
+            }
+        }
+        return ok;
+    };
+
     return (
         <AppContext.Provider value={{
             currentUser, usersList, isDbConnected, login, loginDemo, logout, 
@@ -607,7 +685,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             addTrialRecord: (r) => crud('trial_records', r, 'insert'), updateTrialRecord: (r) => crud('trial_records', r, 'update'), deleteTrialRecord: (id) => crud('trial_records', id, 'delete'),
             tasks, addTask: addTaskWithSync, updateTask: updateTaskWithSync, deleteTask: (id) => crud('tasks', id, 'delete'), homologateLabor,
             projects, addProject: (p) => crud('projects', p, 'insert'), updateProject: (p) => crud('projects', p, 'update'), deleteProject: (id) => crud('projects', id, 'delete'),
-            clients, addClient: (c) => crud('clients', c, 'insert'), updateClient: (c) => crud('clients', c, 'update'), deleteClient: (id) => crud('clients', id, 'delete'),
+            clients, addClient: addClientWithRelations, updateClient: updateClientWithRelations, deleteClient: (id) => crud('clients', id, 'delete'),
             suppliers, addSupplier: async (s) => { const ok = await crud('suppliers', s, 'insert'); return ok ? s.id : null; }, updateSupplier: (s) => crud('suppliers', s, 'update'), deleteSupplier: (id) => crud('suppliers', id, 'delete'),
             seedBatches, addSeedBatch: (b) => crud('seed_batches', b, 'insert'), updateSeedBatch: (b) => crud('seed_batches', b, 'update'), deleteSeedBatch: (id) => crud('seed_batches', id, 'delete'),
             seedMovements, addSeedMovement: (m) => crud('seed_movements', m, 'insert'), updateSeedMovement: (m) => crud('seed_movements', m, 'update'),

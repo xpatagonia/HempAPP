@@ -73,11 +73,19 @@ export type SiteStatus = 'Activo' | 'Inactivo' | 'En Barbecho' | 'En Preparació
 
 export const CAMPAIGNS = ['2024/2025', '2025/2026', '2026/2027', '2027/2028'] as const;
 
+export type StructureRole = 
+  | 'propietario'     // Propietario / Titular de la Explotación
+  | 'encargado'       // Encargado General / Capataz de Campo
+  | 'agronomo'        // Ingeniero Agrónomo / Asesor Técnico
+  | 'operario'        // Operario de Campo / Maquinista / Riego
+  | 'monitoreador';   // Monitoreador de Ensayos / Muestreador
+
 export interface User {
   id: string;
   name: string;
   email: string;
   role: UserRole;
+  structureRole?: StructureRole;
   password?: string;
   jobTitle?: string;
   phone?: string;
@@ -87,6 +95,9 @@ export interface User {
   memberType?: 'Socio_Productor' | 'Cooperativa_Central' | 'Auditor_Tecnico';
   organizationName?: string;
   assignedPlotIds?: string[];
+  invitedAt?: string;
+  invitationEmailSent?: boolean;
+  lastInvitationSentAt?: string;
 }
 
 export type HempLicenseCategory = 
@@ -286,6 +297,8 @@ export interface Client {
   notes?: string;
   relatedUserId?: string; 
   coordinates?: { lat: number; lng: number }; 
+  locationId?: string; // Campo / Establecimiento asociado a la estructura
+  teamUserIds?: string[]; // IDs de operarios vinculados a esta estructura
 }
 
 export interface Plot {

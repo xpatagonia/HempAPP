@@ -17,11 +17,13 @@ import {
   dispatchPushNotification, 
   evaluateUpcomingTasksReminders 
 } from '../src/services/pushNotificationService';
+import { canAccessTask, canAccessPlot } from '../src/utils/structurePermissions';
 
 export default function Tasks() {
   const { 
     tasks, addTask, updateTask, deleteTask, homologateLabor, 
-    currentUser, usersList, plots, varieties, switchUserRole 
+    currentUser, usersList, plots, varieties, switchUserRole,
+    locations, clients
   } = useAppContext();
 
   const [pushFeedback, setPushFeedback] = useState<string | null>(null);
@@ -127,14 +129,10 @@ export default function Tasks() {
     setTimeout(() => setPushFeedback(null), 3000);
   };
 
-  // Role assigned plots
+  // Role and structure assigned plots
   const availablePlots = useMemo(() => {
-    if (!currentUser || isAdmin) return plots;
-    if (currentUser.assignedPlotIds && currentUser.assignedPlotIds.length > 0) {
-      return plots.filter(p => currentUser.assignedPlotIds?.includes(p.id));
-    }
-    return plots;
-  }, [plots, currentUser, isAdmin]);
+    return plots.filter(p => canAccessPlot(currentUser, p, locations, clients));
+  }, [plots, currentUser, locations, clients]);
 
   // Selected plot for form
   const currentSelectedPlot = useMemo(() => {
@@ -170,9 +168,9 @@ export default function Tasks() {
       // Plot
       if (filterPlotId !== 'all' && t.plotId !== filterPlotId) return false;
 
-      // Socio role restriction: socios see only their plots
-      if (isSocio && currentUser?.assignedPlotIds && currentUser.assignedPlotIds.length > 0) {
-        if (t.plotId && !currentUser.assignedPlotIds.includes(t.plotId)) return false;
+      // Aislamiento de Estructura: Los operarios solo acceden a labores del campo asociado
+      if (!canAccessTask(currentUser, t, plots, locations, clients)) {
+        return false;
       }
 
       // Search term

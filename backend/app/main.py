@@ -2,7 +2,7 @@ import logging
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
-from app.routers import telemetry
+from app.routers import telemetry, notifications
 from app.services.stream_manager import stream_manager
 
 # Configure logging
@@ -14,7 +14,7 @@ logger = logging.getLogger("hempc-telemetry")
 
 app = FastAPI(
     title="HempC Nucleus | Telemetry & Agronomic Engine",
-    description="Motor de Ingesta IoT, Sensores de Campo y Modelado Ecofisiológico para la Red Cooperativa del Cáñamo Industrial",
+    description="Motor de Ingesta IoT, Sensores de Campo, Modelado Ecofisiológico y Despacho de Notificaciones para la Red Cooperativa del Cáñamo Industrial",
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc"
@@ -31,6 +31,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(telemetry.router, prefix=settings.API_V1_PREFIX)
+app.include_router(notifications.router, prefix=settings.API_V1_PREFIX)
 
 @app.websocket("/ws/telemetry/{plot_id}")
 async def websocket_telemetry_endpoint(websocket: WebSocket, plot_id: str):

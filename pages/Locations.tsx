@@ -16,6 +16,7 @@ import {
 import { Link } from 'react-router-dom';
 import WeatherWidget from '../components/WeatherWidget';
 import MapEditor from '../components/MapEditor';
+import { canAccessLocation, isCentralAdminOrSupervisor } from '../src/utils/structurePermissions';
 
 const ARG_GEO: Record<string, string[]> = {
     "Buenos Aires": ["La Plata", "Mar del Plata", "Bahía Blanca", "Tandil", "Pergamino", "Junín", "Olavarría", "San Nicolás", "Balcarce", "Castelar", "CABA", "San Pedro", "Trenque Lauquen", "Pehuajó", "9 de Julio", "Bolívar", "Saladillo", "Lobos", "Chascomús", "Necochea", "Tres Arroyos", "General Villegas", "Lincoln", "Chivilcoy", "Chacabuco", "Bragado", "25 de Mayo", "Azul", "Coronel Suárez", "Pigüé", "Carhué", "San Antonio de Areco", "Arrecifes", "Salto", "Rojas", "Mercedes", "Luján", "Cañuelas", "Las Flores"],
@@ -188,15 +189,12 @@ export default function Locations() {
   // Filtrado de establecimientos
   const visibleLocations = useMemo(() => {
     return locations.filter(l => {
-      let matches = true;
-
-      if (isAdmin) {
-        matches = true;
-      } else if ((isClient || isTechnician) && currentUser?.clientId) {
-        matches = (l.clientId === currentUser.clientId) || (l.responsibleIds?.includes(currentUser.id || ''));
-      } else {
-        matches = l.responsibleIds?.includes(currentUser?.id || '') || false;
+      // 1. Aislamiento de Acceso: Cada estructura solo accede a su campo asociado
+      if (!canAccessLocation(currentUser, l, clients)) {
+        return false;
       }
+
+      let matches = true;
 
       if (searchTerm) {
         const lowerTerm = searchTerm.toLowerCase();

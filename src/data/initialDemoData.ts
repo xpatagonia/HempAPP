@@ -1,7 +1,7 @@
 import { 
   User, Location, Plot, Variety, TrialRecord, Project, Task, HydricRecord,
   StoragePoint, Supplier, SeedBatch, SeedMovement, SupplierLotInspection, Resource,
-  OperationalExpense
+  OperationalExpense, Client
 } from '../../types';
 
 export const DEMO_USER: User = {
@@ -34,10 +34,40 @@ export const DEMO_USERS_LIST: User[] = [
     name: 'Martín Arismendi (Socio Pergamino)',
     email: 'arismendi@pergaminoverde.com',
     role: 'client',
+    structureRole: 'propietario',
+    clientId: 'client-pergamino',
     memberType: 'Socio_Productor',
     organizationName: 'Consorcio Pergamino Verde',
-    jobTitle: 'Productor Asociado',
+    jobTitle: 'Productor Titular',
     phone: '+54 9 2477 421099',
+    isNetworkMember: true,
+    assignedPlotIds: ['plot-beta-pergamino']
+  },
+  {
+    id: 'user-operario-pergamino',
+    name: 'Carlos Benítez (Capataz Pergamino)',
+    email: 'carlos.benitez@pergaminoverde.com',
+    role: 'technician',
+    structureRole: 'encargado',
+    clientId: 'client-pergamino',
+    memberType: 'Socio_Productor',
+    organizationName: 'Consorcio Pergamino Verde',
+    jobTitle: 'Encargado General de Campo',
+    phone: '+54 9 2477 558812',
+    isNetworkMember: true,
+    assignedPlotIds: ['plot-beta-pergamino']
+  },
+  {
+    id: 'user-agronomo-pergamino',
+    name: 'Ing. Agr. Sofía Calvo',
+    email: 'sofia.calvo@pergaminoverde.com',
+    role: 'technician',
+    structureRole: 'agronomo',
+    clientId: 'client-pergamino',
+    memberType: 'Socio_Productor',
+    organizationName: 'Consorcio Pergamino Verde',
+    jobTitle: 'Asesora Técnica MP 5.120',
+    phone: '+54 9 2477 662233',
     isNetworkMember: true,
     assignedPlotIds: ['plot-beta-pergamino']
   },
@@ -46,6 +76,8 @@ export const DEMO_USERS_LIST: User[] = [
     name: 'Ing. Lucas Varela (Socio IDEVI)',
     email: 'varela@idevi-canamo.org.ar',
     role: 'client',
+    structureRole: 'propietario',
+    clientId: 'client-idevi',
     memberType: 'Socio_Productor',
     organizationName: 'Asociación IDEVI Cáñamo',
     jobTitle: 'Productor Asociado Valle Inferior',
@@ -54,16 +86,106 @@ export const DEMO_USERS_LIST: User[] = [
     assignedPlotIds: ['plot-gamma-patagonia']
   },
   {
+    id: 'user-operario-idevi',
+    name: 'Facundo Morales (Tractorista IDEVI)',
+    email: 'morales@idevi-canamo.org.ar',
+    role: 'technician',
+    structureRole: 'operario',
+    clientId: 'client-idevi',
+    memberType: 'Socio_Productor',
+    organizationName: 'Asociación IDEVI Cáñamo',
+    jobTitle: 'Operario de Riego y Maquinaria',
+    phone: '+54 9 2920 441199',
+    isNetworkMember: true,
+    assignedPlotIds: ['plot-gamma-patagonia']
+  },
+  {
     id: 'user-socio-cordoba',
     name: 'Esteban Rossi (Productor Lote Alfa)',
     email: 'rossi@cordoba-agro.com',
     role: 'client',
+    structureRole: 'propietario',
+    clientId: 'client-cordoba',
     memberType: 'Socio_Productor',
-    organizationName: 'Red Cooperativa Nucleus',
+    organizationName: 'Agropecuaria Central Córdoba',
     jobTitle: 'Productor Titular Parcela Alfa',
     phone: '+54 9 358 4123456',
     isNetworkMember: true,
     assignedPlotIds: ['plot-alfa-cordoba']
+  },
+  {
+    id: 'user-capataz-cordoba',
+    name: 'Daniel Torres (Encargado Lote Alfa)',
+    email: 'daniel.torres@cordoba-agro.com',
+    role: 'technician',
+    structureRole: 'encargado',
+    clientId: 'client-cordoba',
+    memberType: 'Socio_Productor',
+    organizationName: 'Agropecuaria Central Córdoba',
+    jobTitle: 'Capataz de Campo',
+    phone: '+54 9 358 554433',
+    isNetworkMember: true,
+    assignedPlotIds: ['plot-alfa-cordoba']
+  }
+];
+
+export const DEMO_CLIENTS: Client[] = [
+  {
+    id: 'client-pergamino',
+    name: 'Consorcio Pergamino Verde',
+    type: 'Productor Grande (>20 ha)',
+    contactName: 'Martín Arismendi',
+    contactPhone: '+54 9 2477 421099',
+    email: 'arismendi@pergaminoverde.com',
+    address: 'Ruta Nac. 8 Km 224, Pergamino, Buenos Aires',
+    totalHectares: 120,
+    isNetworkMember: true,
+    membershipLevel: 'Premium',
+    contractDate: '2024-08-15',
+    cuit: '30-71649281-9',
+    relatedUserId: 'user-socio-pergamino',
+    locationId: 'loc-pergamino',
+    coordinates: { lat: -33.8912, lng: -60.5731 },
+    teamUserIds: ['user-socio-pergamino', 'user-operario-pergamino', 'user-agronomo-pergamino'],
+    notes: 'Establecimiento agrícola dedicado a cáñamo para fibra y grano con contrato de entrega asegurada a la cooperativa.'
+  },
+  {
+    id: 'client-idevi',
+    name: 'Asociación Productores IDEVI',
+    type: 'Productor Mediano (5-15 ha)',
+    contactName: 'Ing. Lucas Varela',
+    contactPhone: '+54 9 2920 654321',
+    email: 'varela@idevi-canamo.org.ar',
+    address: 'Camino 4 Valle Inferior, Viedma, Río Negro',
+    totalHectares: 45,
+    isNetworkMember: true,
+    membershipLevel: 'Activo',
+    contractDate: '2024-09-01',
+    cuit: '30-71882341-3',
+    relatedUserId: 'user-socio-idevi',
+    locationId: 'loc-patagonia',
+    coordinates: { lat: -40.7812, lng: -63.0245 },
+    teamUserIds: ['user-socio-idevi', 'user-operario-idevi'],
+    notes: 'Explotación bajo riego intensivo en el Valle Inferior del Río Negro orientada a producción de flor y biomasa.'
+  },
+  {
+    id: 'client-cordoba',
+    name: 'Agropecuaria Central Río Cuarto',
+    type: 'Productor Grande (>20 ha)',
+    contactName: 'Esteban Rossi',
+    contactPhone: '+54 9 358 412890',
+    email: 'rossi@cordoba-agro.com',
+    address: 'Ruta Nac. 36 Km 601, Río Cuarto, Córdoba',
+    totalHectares: 85,
+    isNetworkMember: true,
+    membershipLevel: 'Activo',
+    contractDate: '2024-10-10',
+    cuit: '33-71459012-9',
+    relatedUserId: 'user-socio-cordoba',
+    locationId: 'loc-riocuarto',
+    coordinates: { lat: -33.1235, lng: -64.3492 },
+    teamUserIds: ['user-socio-cordoba', 'user-capataz-cordoba'],
+    notes: 'Estructura mixta de grano alimenticio y bioenergía.'
   }
 ];
 
@@ -177,6 +299,7 @@ export const DEMO_VARIETIES: Variety[] = [
 export const DEMO_LOCATIONS: Location[] = [
   {
     id: 'loc-riocuarto',
+    clientId: 'client-cordoba',
     name: 'Estación Experimental Río Cuarto',
     siteType: 'Predio Experimental',
     status: 'Activo',
@@ -216,6 +339,7 @@ export const DEMO_LOCATIONS: Location[] = [
   },
   {
     id: 'loc-pergamino',
+    clientId: 'client-pergamino',
     name: 'Campo Demostrativo Pergamino',
     siteType: 'Campo Extensivo',
     status: 'Activo',

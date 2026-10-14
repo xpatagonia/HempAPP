@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { BarcodeRenderer } from '../components/BarcodeRenderer';
+import { canAccessPlot } from '../src/utils/structurePermissions';
 
 // Insumos homologados y lotes recepcionados preconfigurados para vinculación rápida
 const RECEIVEABLE_INPUT_PRESETS = [
@@ -108,7 +109,7 @@ const RECEIVEABLE_INPUT_PRESETS = [
 ];
 
 export default function PhytosanitaryBook() {
-  const { plots, currentUser, locations, varieties } = useAppContext();
+  const { plots, currentUser, locations, varieties, clients } = useAppContext();
 
   // Carga reactiva de aplicaciones sincronizada con localStorage
   const [applications, setApplications] = useState<AgrochemicalApplication[]>(() => {
@@ -138,9 +139,14 @@ export default function PhytosanitaryBook() {
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [selectedAppForPrint, setSelectedAppForPrint] = useState<AgrochemicalApplication | null>(null);
 
+  // Parcelas accesibles según el aislamiento de estructura
+  const availablePlots = useMemo(() => {
+    return plots.filter(p => canAccessPlot(currentUser, p, locations, clients));
+  }, [plots, currentUser, locations, clients]);
+
   // Formulario de Nueva Aplicación
   const [formData, setFormData] = useState<Partial<AgrochemicalApplication>>({
-    plotId: plots[0]?.id || '',
+    plotId: availablePlots[0]?.id || plots[0]?.id || '',
     date: new Date().toISOString().split('T')[0],
     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
     category: 'Bioestimulante',
@@ -201,6 +207,12 @@ export default function PhytosanitaryBook() {
   const filteredApps = useMemo(() => {
     const today = new Date();
     return applications.filter(app => {
+      // Aislamiento de Estructura: Solo ver aplicaciones del campo/parcelas de su estructura
+      const targetPlot = plots.find(p => p.id === app.plotId);
+      if (targetPlot && !canAccessPlot(currentUser, targetPlot, locations, clients)) {
+        return false;
+      }
+
       const matchSearch = app.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           app.activeIngredient.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           app.senasaRegisterNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -218,7 +230,7 @@ export default function PhytosanitaryBook() {
 
       return matchSearch && matchPlot && matchCategory && matchStatus;
     });
-  }, [applications, searchTerm, filterPlotId, filterCategory, filterStatus]);
+  }, [applications, searchTerm, filterPlotId, filterCategory, filterStatus, plots, currentUser, locations, clients]);
 
   // Al seleccionar un insumo preconfigurado / recepcionado
   const handleSelectPresetInput = (preset: typeof RECEIVEABLE_INPUT_PRESETS[0]) => {
@@ -422,8 +434,8 @@ export default function PhytosanitaryBook() {
             value={filterPlotId} 
             onChange={e => setFilterPlotId(e.target.value)}
           >
-            <option value="all">Todas las Parcelas ({plots.length})</option>
-            {plots.map(p => (
+            <option value="all">Todas las Parcelas ({availablePlots.length})</option>
+            {availablePlots.map(p => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>

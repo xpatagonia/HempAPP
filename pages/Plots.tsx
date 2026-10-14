@@ -10,6 +10,7 @@ import {
   Power, AlertCircle, CheckCircle2, ShieldCheck, Tractor, Layers, Clock
 } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
+import { canAccessPlot, canAccessLocation } from '../src/utils/structurePermissions';
 
 // Algoritmo de cálculo de área geodésica
 const calculateGeodesicArea = (latLngs: { lat: number, lng: number }[]) => {
@@ -78,7 +79,7 @@ const COLOR_PALETTE = [
 
 export default function Plots() {
   const { 
-    plots, locations, varieties, projects, currentUser, 
+    plots, locations, varieties, projects, currentUser, clients,
     seedBatches, deletePlot, updatePlot, 
     addPlot, updateLocation, updateSeedBatch, storagePoints, appName
   } = useAppContext();
@@ -148,14 +149,8 @@ export default function Plots() {
   }, [seedBatches, isClient, isTechnician, currentUser, storagePoints]);
 
   const availableLocations = useMemo(() => {
-      return locations.filter(l => {
-          if (isAdmin) return true;
-          if ((isClient || isTechnician) && currentUser?.clientId) {
-              return l.clientId === currentUser.clientId || l.responsibleIds?.includes(currentUser.id);
-          }
-          return l.responsibleIds?.includes(currentUser?.id || '') || false;
-      });
-  }, [locations, isAdmin, isClient, isTechnician, currentUser]);
+      return locations.filter(l => canAccessLocation(currentUser, l, clients));
+  }, [locations, currentUser, clients]);
 
   useEffect(() => {
     if (formData.seedBatchId) {
@@ -189,16 +184,11 @@ export default function Plots() {
         matchCampaign = campaigns.includes(selectedCampaign) || p.campaign === selectedCampaign;
       }
 
-      let hasAccess = isAdmin;
-      if ((isClient || isTechnician) && currentUser?.clientId) {
-          const loc = locations.find(l => l.id === p.locationId);
-          hasAccess = loc?.clientId === currentUser.clientId || (p.responsibleIds?.includes(currentUser.id) || false);
-      } else if (!isAdmin) {
-          hasAccess = p.responsibleIds?.includes(currentUser?.id || '') || false;
-      }
+      // Regla de Aislamiento de Estructura: Sólo accede a parcelas de su campo asignado
+      const hasAccess = canAccessPlot(currentUser, p, locations, clients);
       
       return matchSearch && matchLoc && matchType && matchStatus && matchCampaign && hasAccess;
-  }), [plots, searchTerm, filterLoc, filterType, filterStatus, selectedCampaign, isAdmin, isClient, isTechnician, currentUser, locations]);
+  }), [plots, searchTerm, filterLoc, filterType, filterStatus, selectedCampaign, currentUser, locations, clients]);
 
   // Métricas de campaña para la barra de estado
   const campaignStats = useMemo(() => {
