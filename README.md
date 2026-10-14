@@ -18,3 +18,8 @@ View your app in AI Studio: https://ai.studio/apps/drive/1YBj2F5G3omJsGl70Q6tylU
 2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
 3. Run the app:
    `npm run dev`
+
+## Version 7.10.2
+- Red de Socios y Productores HempC
+- Mapeo de lotes y asignación de campos
+- Notificaciones automáticas por correo electrónico (SMTP hempc.com.ar)
