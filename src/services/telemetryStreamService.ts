@@ -1,13 +1,15 @@
 import { LiveTelemetryRecord, TelemetryStreamStatus } from '../../types';
 
+// URL de producción activa en Render
+const DEFAULT_RENDER_URL = 'https://hempapp.onrender.com';
+
 // Obtener URL de backend de telemetría (Render o local)
 const getApiBaseUrl = (): string => {
   const envUrl = (import.meta.env.VITE_TELEMETRY_API_URL as string | undefined)?.trim();
   if (envUrl) {
     return envUrl.replace(/\/+$/, '');
   }
-  // En desarrollo local o si no está configurada, valor por defecto
-  return 'http://localhost:8000';
+  return DEFAULT_RENDER_URL;
 };
 
 const getWsBaseUrl = (): string => {
@@ -20,7 +22,7 @@ const getWsBaseUrl = (): string => {
 };
 
 export const isTelemetryBackendConfigured = (): boolean => {
-  return Boolean(import.meta.env.VITE_TELEMETRY_API_URL);
+  return true;
 };
 
 export const getTelemetryEngineUrl = (): string => {

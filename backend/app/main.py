@@ -55,6 +55,7 @@ async def websocket_telemetry_endpoint(websocket: WebSocket, plot_id: str):
         stream_manager.disconnect_websocket(plot_id, websocket)
 
 @app.get("/healthz", tags=["System"])
+@app.head("/healthz", tags=["System"])
 async def health_check():
     """Endpoint de estado para Render Health Checks y orquestadores."""
     return {
@@ -66,6 +67,7 @@ async def health_check():
     }
 
 @app.get("/", tags=["System"])
+@app.head("/", tags=["System"])
 async def root_info():
     return {
         "message": "HempC Nucleus Telemetry Engine is online",
