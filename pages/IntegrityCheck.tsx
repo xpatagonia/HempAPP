@@ -7,7 +7,7 @@ import {
     Activity, RefreshCw, Trash2, Edit2, ShieldCheck,
     ChevronRight, ExternalLink, ArrowRight, Loader2, Scale,
     Database, Wifi, WifiOff, Download, Layers, FolderKanban,
-    Compass, Clock
+    Compass, Clock, Radio
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -32,6 +32,21 @@ export default function IntegrityCheck() {
         latencyMs: null,
         lastChecked: null,
         remoteCounts: {}
+    });
+
+    // Estado de verificación en vivo del Motor de Telemetría Python en Render
+    const [telemetryEngineStatus, setTelemetryEngineStatus] = useState<{
+        state: 'checking' | 'connected' | 'offline';
+        latencyMs: number | null;
+        lastChecked: string | null;
+        endpoint: string;
+        version: string | null;
+    }>({
+        state: 'checking',
+        latencyMs: null,
+        lastChecked: null,
+        endpoint: 'https://hempapp.onrender.com',
+        version: null
     });
 
     // Test de conexión en tiempo real a Supabase
@@ -72,8 +87,48 @@ export default function IntegrityCheck() {
         }
     };
 
+    // Test de conexión en tiempo real al motor Render (Python / FastAPI)
+    const checkTelemetryEngine = async () => {
+        setTelemetryEngineStatus(prev => ({ ...prev, state: 'checking' }));
+        const start = performance.now();
+        try {
+            const res = await fetch('https://hempapp.onrender.com/healthz', {
+                method: 'GET',
+                headers: { 'Accept': 'application/json' }
+            });
+            const latency = Math.round(performance.now() - start);
+            if (res.ok) {
+                const data = await res.json();
+                setTelemetryEngineStatus({
+                    state: 'connected',
+                    latencyMs: latency,
+                    lastChecked: new Date().toLocaleTimeString(),
+                    endpoint: 'https://hempapp.onrender.com',
+                    version: data.version || '1.0.0'
+                });
+            } else {
+                setTelemetryEngineStatus({
+                    state: 'offline',
+                    latencyMs: latency,
+                    lastChecked: new Date().toLocaleTimeString(),
+                    endpoint: 'https://hempapp.onrender.com',
+                    version: null
+                });
+            }
+        } catch (err) {
+            setTelemetryEngineStatus({
+                state: 'offline',
+                latencyMs: null,
+                lastChecked: new Date().toLocaleTimeString(),
+                endpoint: 'https://hempapp.onrender.com',
+                version: null
+            });
+        }
+    };
+
     useEffect(() => {
         checkLiveDatabase();
+        checkTelemetryEngine();
     }, []);
 
     const audit = useMemo(() => {
@@ -261,6 +316,7 @@ export default function IntegrityCheck() {
                         type="button"
                         onClick={async () => {
                             await checkLiveDatabase();
+                            await checkTelemetryEngine();
                             await refreshData();
                         }} 
                         disabled={isRefreshing || dbStatus.state === 'checking'}
@@ -349,6 +405,82 @@ export default function IntegrityCheck() {
                     <div className="bg-slate-800/40 p-2.5 rounded-xl border border-slate-800 text-center">
                         <span className="text-[10px] text-slate-400 block uppercase">Socios Red</span>
                         <strong className="text-slate-300 text-sm">{clients.length}</strong>
+                    </div>
+                </div>
+            </div>
+
+            {/* ESTADO EN VIVO DEL MOTOR DE TELEMETRÍA IOT (RENDER / FASTAPI) */}
+            <div className="bg-slate-900 rounded-3xl p-6 text-white border border-slate-800 shadow-xl relative overflow-hidden">
+                <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 relative z-10">
+                    <div className="flex items-center gap-3.5">
+                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border ${
+                            telemetryEngineStatus.state === 'connected'
+                                ? 'bg-sky-500/20 text-sky-400 border-sky-500/30'
+                                : 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                        }`}>
+                            <Radio size={24} />
+                        </div>
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs font-mono font-bold uppercase tracking-wider text-sky-400">
+                                    Motor de Telemetría IoT & Modelado Python (Render)
+                                </span>
+                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-black border ${
+                                    telemetryEngineStatus.state === 'connected'
+                                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                        : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                }`}>
+                                    <span className={`w-1.5 h-1.5 rounded-full ${
+                                        telemetryEngineStatus.state === 'connected' ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
+                                    }`} />
+                                    <span>{telemetryEngineStatus.state === 'connected' ? 'EN VIVO Y OPERATIVO' : 'EN ESPERA / RECONEXIÓN'}</span>
+                                </span>
+                            </div>
+                            <h3 className="text-lg font-black tracking-tight font-mono mt-0.5 text-slate-100">
+                                Endpoint: hempapp.onrender.com (Uvicorn / FastAPI v{telemetryEngineStatus.version || '1.0.0'})
+                            </h3>
+                            <p className="text-xs text-slate-400 font-mono">
+                                Ingesta de sensores (Davis, Atmos, LoRaWAN), cálculo FAO-56 ($ET_0$), Delta T, VPD y streaming SSE.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3 font-mono text-xs">
+                        <div className="bg-slate-800/80 px-4 py-2 rounded-2xl border border-slate-700/80 flex items-center gap-2">
+                            <Wifi size={14} className="text-sky-400" />
+                            <span className="text-slate-400">Latencia Motor:</span>
+                            <strong className="text-white">
+                                {telemetryEngineStatus.latencyMs ? `${telemetryEngineStatus.latencyMs} ms` : 'Verificando...'}
+                            </strong>
+                        </div>
+                        <a 
+                            href="https://hempapp.onrender.com/docs" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/40 px-3 py-2 rounded-2xl flex items-center gap-1.5 transition"
+                        >
+                            <span>Swagger Docs</span>
+                            <ExternalLink size={12} />
+                        </a>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-5 pt-4 border-t border-slate-800 font-mono text-xs">
+                    <div className="bg-slate-800/40 p-2.5 rounded-xl border border-slate-800">
+                        <span className="text-[10px] text-slate-400 block uppercase">Ingesta IoT</span>
+                        <strong className="text-emerald-400 text-xs">POST /api/v1/telemetry/ingest</strong>
+                    </div>
+                    <div className="bg-slate-800/40 p-2.5 rounded-xl border border-slate-800">
+                        <span className="text-[10px] text-slate-400 block uppercase">Canal Streaming</span>
+                        <strong className="text-sky-400 text-xs">SSE /api/v1/telemetry/stream</strong>
+                    </div>
+                    <div className="bg-slate-800/40 p-2.5 rounded-xl border border-slate-800">
+                        <span className="text-[10px] text-slate-400 block uppercase">WebSockets</span>
+                        <strong className="text-purple-400 text-xs">WS /ws/telemetry/:plotId</strong>
+                    </div>
+                    <div className="bg-slate-800/40 p-2.5 rounded-xl border border-slate-800">
+                        <span className="text-[10px] text-slate-400 block uppercase">Modelado Ecofisiológico</span>
+                        <strong className="text-amber-400 text-xs">FAO-56, Delta T, VPD, GDD</strong>
                     </div>
                 </div>
             </div>

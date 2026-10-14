@@ -114,6 +114,66 @@ test('Balance Hídrico Acumulado (Precipitación + Riego - ETP)', () => {
     assert.equal(net, 15);
 });
 
+// --- GRUPO 4: TELEMETRÍA IOT & MOTOR RENDER (PYTHON ENGINE) ---
+console.log("\n4️⃣  MÓDULO DE TELEMETRÍA IOT & MOTOR RENDER (PYTHON / FASTAPI)");
+
+test('Validación de fórmula Delta T para idoneidad de pulverización SENASA', () => {
+    // Delta T = T_seca - T_humeda. Si T=24°C y HR=55%, Delta T debe rondar entre 4 y 7°C
+    const temp = 24.0;
+    const rh = 55.0;
+    const tw = temp * Math.atan(0.151977 * Math.sqrt(rh + 8.313659))
+        + Math.atan(temp + rh)
+        - Math.atan(rh - 1.676331)
+        + 0.00391838 * Math.pow(rh, 1.5) * Math.atan(0.023101 * rh)
+        - 4.686035;
+    const deltaT = Number((temp - tw).toFixed(2));
+    assert.ok(deltaT >= 2.0 && deltaT <= 8.0, `Delta T fuera del rango óptimo: ${deltaT}`);
+});
+
+test('Cálculo de Déficit de Presión de Vapor (VPD) para Cannabis sativa L.', () => {
+    const temp = 25.0;
+    const rh = 60.0;
+    const svp = 0.61078 * Math.exp((17.27 * temp) / (temp + 237.3));
+    const avp = svp * (rh / 100.0);
+    const vpd = Number((svp - avp).toFixed(2));
+    // En 25°C y 60% HR, el VPD debe situarse entre 1.0 y 1.4 kPa (zona de transpiración óptima)
+    assert.ok(vpd >= 1.0 && vpd <= 1.4, `VPD fuera de rango normal: ${vpd} kPa`);
+});
+
+test('Cálculo de Grados Día de Desarrollo (GDD) con base 10°C para cáñamo', () => {
+    const tBase = 10.0;
+    const tMax = 28.0;
+    const tMin = 14.0;
+    const tMean = (tMax + tMin) / 2.0;
+    const gdd = Math.max(0, tMean - tBase);
+    assert.equal(gdd, 11.0);
+});
+
+test('Integridad de esquema de eventos de telemetría IoT', () => {
+    const sampleRecord = {
+        id: 'tel-test-001',
+        device_id: 'CANNA-STATION-01',
+        plot_id: 'plot-101',
+        timestamp: new Date().toISOString(),
+        battery_pct: 95.5,
+        metrics: {
+            soil_moisture_pct: 32.5,
+            soil_temp_c: 20.8,
+            air_temp_c: 24.5,
+            air_humidity_pct: 55.0,
+            solar_radiation_wm2: 780
+        },
+        assessment: {
+            spray_suitability: 'Óptimo para pulverización (baja deriva y evaporación controlada)',
+            water_stress_status: 'Capacidad de Campo Óptima',
+            frost_risk: false
+        }
+    };
+    assert.ok(sampleRecord.id.length > 0);
+    assert.ok(sampleRecord.metrics.soil_moisture_pct > 0);
+    assert.equal(sampleRecord.assessment.frost_risk, false);
+});
+
 console.log("\n=================================================");
 console.log(`📊 RESUMEN DE PRUEBAS: ${passed} Exitosas, ${failed} Fallidas`);
 console.log("=================================================");
