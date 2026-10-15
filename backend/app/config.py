@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     PORT: int = int(os.getenv("PORT", 8000))
     
     # Device Security Key for IoT ingestion
-    DEVICE_INGEST_API_KEY: str = os.getenv("DEVICE_INGEST_API_KEY", "hempc-device-secret-key-2026")
+    DEVICE_INGEST_API_KEY: str = os.getenv("DEVICE_INGEST_API_KEY", "")
     
     # Supabase Integration
     SUPABASE_URL: str = os.getenv("SUPABASE_URL", os.getenv("VITE_SUPABASE_URL", ""))
@@ -24,10 +24,10 @@ class Settings(BaseSettings):
 
     # Allowed CORS Origins
     CORS_ORIGINS: List[str] = [
-        "*",
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "http://127.0.0.1:3000",
+        origin.strip() for origin in os.getenv(
+            "CORS_ORIGINS",
+            "http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,https://hempc.com.ar,https://hempapp.onrender.com"
+        ).split(",") if origin.strip()
     ]
 
     class Config:

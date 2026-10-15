@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { supabase } from '../supabaseClient';
+import { supabase, getStoredCredentials } from "../supabaseClient";
 import { 
     ShieldAlert, AlertCircle, CheckCircle2, 
     Zap, Package, Sprout, MapPin, 
@@ -350,7 +350,14 @@ export default function IntegrityCheck() {
                                 </span>
                             </div>
                             <h3 className="text-lg font-black tracking-tight font-mono mt-0.5">
-                                Endpoint: vkfgxbsomxzirdezwrxz.supabase.co
+                                Endpoint: {(() => {
+                                  try {
+                                    const c = getStoredCredentials();
+                                    return c.isConfigured && c.url ? new URL(c.url).hostname : "Autónomo Local / Sin Nube Externa";
+                                  } catch (e) {
+                                    return "Autónomo Local";
+                                  }
+                                })()}
                             </h3>
                             <p className="text-xs text-slate-400 font-mono">
                                 Modo Híbrido: Sincronización REST bidireccional con fallback local inmutable.

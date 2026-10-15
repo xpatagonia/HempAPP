@@ -318,7 +318,8 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         }
 
         // 2. Respaldo de contingencia únicamente si la base de datos estuviera desconectada
-        if (!isDbConnected && trimmedEmail === 'admin@hempc.com.ar' && trimmedPassword === '@Admin130126@') {
+        const offlineAdminSecret = (import.meta as any).env?.VITE_OFFLINE_ADMIN_PASSWORD;
+        if (!isDbConnected && offlineAdminSecret && trimmedEmail === "admin@hempc.com.ar" && trimmedPassword === offlineAdminSecret) {
             setCurrentUser(DEMO_USER);
             localStorage.removeItem('ht_logged_out');
             localStorage.setItem('ht_session_user', JSON.stringify(DEMO_USER));

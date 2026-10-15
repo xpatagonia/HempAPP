@@ -12,41 +12,25 @@ export interface GeminiConnectionStatus {
 /**
  * Obtiene la API Key activa para Gemini descartando claves no válidas o de otros servicios (como Supabase)
  */
-export function getActiveGeminiApiKey(): { key: string; source: 'user_custom' | 'environment' | 'none' } {
-  // 1. Clave personalizada configurada por el usuario en el navegador
-  if (typeof window !== 'undefined') {
-    const userKey = localStorage.getItem('user_gemini_api_key');
-    if (userKey && userKey.trim().length > 10 && !userKey.startsWith('sb_')) {
-      return { key: userKey.trim(), source: 'user_custom' };
+export function getActiveGeminiApiKey(): { key: string; source: "user_custom" | "environment" | "none" } {
+  // 1. Clave personalizada configurada por el usuario en su navegador (solo en localStorage local)
+  if (typeof window !== "undefined") {
+    const userKey = localStorage.getItem("user_gemini_api_key");
+    if (userKey && userKey.trim().length > 10 && !userKey.startsWith("sb_")) {
+      return { key: userKey.trim(), source: "user_custom" };
     }
   }
 
-  // 2. Variable de entorno Vite
+  // 2. Variable de entorno Vite configurada de forma privada (Vercel)
   try {
     const viteKey = (import.meta as any).env?.VITE_GEMINI_API_KEY;
-    if (viteKey && typeof viteKey === 'string' && viteKey.trim().length > 10 && !viteKey.startsWith('sb_')) {
-      return { key: viteKey.trim(), source: 'environment' };
+    if (viteKey && typeof viteKey === "string" && viteKey.trim().length > 10 && !viteKey.startsWith("sb_")) {
+      return { key: viteKey.trim(), source: "environment" };
     }
   } catch (e) {}
 
-  // 3. Variable inyectada por compilador o node
-  try {
-    const globalKey = typeof __API_KEY__ !== 'undefined' ? __API_KEY__ : '';
-    if (globalKey && typeof globalKey === 'string' && globalKey.trim().length > 10 && !globalKey.startsWith('sb_')) {
-      return { key: globalKey.trim(), source: 'environment' };
-    }
-  } catch (e) {}
-
-  try {
-    const processKey = typeof process !== 'undefined' && (process.env?.GEMINI_API_KEY || process.env?.API_KEY);
-    if (processKey && typeof processKey === 'string' && processKey.trim().length > 10 && !processKey.startsWith('sb_')) {
-      return { key: processKey.trim(), source: 'environment' };
-    }
-  } catch (e) {}
-
-  // 4. Clave de Google AI Studio del proyecto
-  const defaultKey = 'AQ.Ab8RN6LAEMU1tHqdCrzf4gCMrQeU3id02FXu5aAZy0vR9ouiQA';
-  return { key: defaultKey, source: 'environment' };
+  // 3. Sin clave: opera con el Motor Experto Agrónomo Nucleus sin consumir cuotas
+  return { key: "", source: "none" };
 }
 
 /**
