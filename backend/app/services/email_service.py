@@ -143,47 +143,52 @@ class EmailNotificationService:
             # Resolver automáticamente al subdominio de correo 'mail.hempc.com.ar'
             # debido a que el dominio raíz está protegido por el proxy HTTP de Cloudflare.
             candidate_hosts = [self.smtp_host]
-            if self.smtp_host in ("hempc.com.ar", "http://hempc.com.ar", "https://hempc.com.ar"):
-                candidate_hosts = ["mail.hempc.com.ar", "138.219.41.106", self.smtp_host]
-            elif "mail.hempc.com.ar" not in candidate_hosts:
-                candidate_hosts.append("mail.hempc.com.ar")
+            for extra in ["mail.hempc.com.ar", "138.219.41.106"]:
+                if extra not in candidate_hosts:
+                    candidate_hosts.append(extra)
+
+            candidate_ports = [2525, self.smtp_port, 587, 465]
+            # Deduplicar preservando el orden prioritario de puerto 2525
+            seen_ports = set()
+            candidate_ports = [p for p in candidate_ports if not (p in seen_ports or seen_ports.add(p))]
 
             last_error = None
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = subject
+            msg["From"] = f"HempC Nucleus <{self.from_email}>"
+            msg["To"] = req.to_email
+            msg.attach(MIMEText(html_body, "html"))
+
             for host in candidate_hosts:
-                try:
-                    msg = MIMEMultipart("alternative")
-                    msg["Subject"] = subject
-                    msg["From"] = f"HempC Nucleus <{self.from_email}>"
-                    msg["To"] = req.to_email
-                    msg.attach(MIMEText(html_body, "html"))
+                for port in candidate_ports:
+                    try:
+                        use_ssl = getattr(settings, "SMTP_USE_SSL", False) or port == 465
+                        if use_ssl:
+                            with smtplib.SMTP_SSL(host, port, timeout=6) as server:
+                                server.login(self.smtp_user, self.smtp_password)
+                                server.send_message(msg)
+                        else:
+                            with smtplib.SMTP(host, port, timeout=6) as server:
+                                server.starttls()
+                                server.login(self.smtp_user, self.smtp_password)
+                                server.send_message(msg)
+                        
+                        logger.info(f"Email sent successfully via SMTP to {req.to_email} using host {host}:{port}")
+                        return EmailNotificationResponse(
+                            success=True,
+                            message=f"Correo enviado exitosamente a {req.to_email} vía SMTP ({host}:{port})",
+                            sent_from=self.from_email,
+                            sent_to=req.to_email,
+                            delivered_via="smtp"
+                        )
+                    except Exception as e:
+                        logger.error(f"SMTP error on host {host}:{port} while sending to {req.to_email}: {e}")
+                        last_error = e
 
-                    use_ssl = getattr(settings, 'SMTP_USE_SSL', False) or self.smtp_port == 465
-                    if use_ssl:
-                        with smtplib.SMTP_SSL(host, self.smtp_port, timeout=12) as server:
-                            server.login(self.smtp_user, self.smtp_password)
-                            server.send_message(msg)
-                    else:
-                        with smtplib.SMTP(host, self.smtp_port, timeout=12) as server:
-                            server.starttls()
-                            server.login(self.smtp_user, self.smtp_password)
-                            server.send_message(msg)
-
-                    logger.info(f"Email sent successfully via SMTP to {req.to_email} using host {host}")
-                    return EmailNotificationResponse(
-                        success=True,
-                        message=f"Correo enviado exitosamente a {req.to_email} vía SMTP ({host})",
-                        sent_from=self.from_email,
-                        sent_to=req.to_email,
-                        delivered_via="smtp"
-                    )
-                except Exception as e:
-                    logger.error(f"SMTP error on host {host} while sending to {req.to_email}: {e}")
-                    last_error = e
-
-            # Fallback to simulated log response rather than failing the transaction
+            error_hint = "Bloqueo de puertos salientes 25/465/587 en Render Free" if "timed out" in str(last_error).lower() else str(last_error)
             return EmailNotificationResponse(
                 success=True,
-                message=f"Simulación de envío: {last_error}. Despacho registrado hacia {req.to_email}",
+                message=f"Despacho simulado ({error_hint}). Registro guardado hacia {req.to_email}",
                 sent_from=self.from_email,
                 sent_to=req.to_email,
                 delivered_via="simulated_log"

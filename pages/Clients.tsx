@@ -493,28 +493,38 @@ export default function Clients() {
       </div>
 
       {/* FEEDBACK TOAST DE ENVÍO DE EMAIL */}
-      {emailFeedback && (
-        <div className="mb-6 p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-700/60 text-emerald-900 dark:text-emerald-200 flex items-center justify-between animate-in slide-in-from-top-2 shadow-lg">
-          <div className="flex items-center space-x-3">
-            <div className="bg-emerald-600 text-white p-2 rounded-xl">
-              <CheckCircle2 size={20} />
+      {emailFeedback && (() => {
+        const isRealSmtp = emailFeedback.via === "smtp" && !emailFeedback.message.toLowerCase().includes("timed out") && !emailFeedback.message.toLowerCase().includes("simulaci");
+        return (
+          <div className={`mb-6 p-4 rounded-2xl border flex items-center justify-between animate-in slide-in-from-top-2 shadow-lg ${
+            isRealSmtp
+              ? "bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-700/60 text-emerald-900 dark:text-emerald-200"
+              : "bg-amber-50 dark:bg-amber-950/60 border-amber-300 dark:border-amber-700/60 text-amber-900 dark:text-amber-200"
+          }`}>
+            <div className="flex items-center space-x-3">
+              <div className={`p-2 rounded-xl text-white ${isRealSmtp ? "bg-emerald-600" : "bg-amber-600"}`}>
+                {isRealSmtp ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
+              </div>
+              <div>
+                <p className="text-xs font-black uppercase tracking-wider">
+                  {isRealSmtp ? "Despacho de Correo Procesado (SMTP Real)" : "Despacho Simulado (No Entregado a Gmail)"}
+                </p>
+                <p className="text-xs opacity-90">{emailFeedback.message}</p>
+                <p className={`text-[10px] font-mono mt-0.5 ${isRealSmtp ? "text-emerald-700 dark:text-emerald-400" : "text-amber-800 dark:text-amber-300"}`}>
+                  Remitente: notificaciones@hempc.com.ar • Destino: {emailFeedback.sentTo} • Vía: {emailFeedback.via}
+                  {!isRealSmtp && " • [Render Free bloquea el puerto 587 saliente]"}
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs font-black uppercase tracking-wider">Despacho de Correo Procesado</p>
-              <p className="text-xs opacity-90">{emailFeedback.message}</p>
-              <p className="text-[10px] font-mono mt-0.5 text-emerald-700 dark:text-emerald-400">
-                Remitente: notificaciones@hempc.com.ar • Destino: {emailFeedback.sentTo} • Vía: {emailFeedback.via}
-              </p>
-            </div>
+            <button 
+              onClick={() => setEmailFeedback(null)} 
+              className={`p-1.5 rounded-lg ${isRealSmtp ? "text-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-900" : "text-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900"}`}
+            >
+              <X size={18} />
+            </button>
           </div>
-          <button 
-            onClick={() => setEmailFeedback(null)} 
-            className="p-1.5 text-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-900 rounded-lg"
-          >
-            <X size={18} />
-          </button>
-        </div>
-      )}
+        );
+      })()}
 
       {/* FILTROS Y BÚSQUEDA */}
       <div className="bg-white dark:bg-slate-900 p-4 rounded-[28px] shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col md:flex-row gap-4 mb-8">
@@ -1312,7 +1322,7 @@ export default function Clients() {
                 </div>
                 <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
                   <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">Puertos SMTP</span>
-                  <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">587 / 465 / 25</span>
+                  <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">2525 (Cloud) / 587 / 465</span>
                 </div>
                 <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
                   <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">IMAP (Recepción)</span>
@@ -1359,7 +1369,7 @@ export default function Clients() {
                   </p>
                   <ul className="list-disc pl-5 font-mono text-[11px] space-y-1 bg-white/60 dark:bg-slate-900/60 p-2.5 rounded-xl border border-amber-200 dark:border-amber-900/40">
                     <li><strong>SMTP_HOST</strong>: mail.hempc.com.ar</li>
-                    <li><strong>SMTP_PORT</strong>: 587 (o 465)</li>
+                    <li><strong>SMTP_PORT</strong>: 2525 (o 587 / 465)</li>
                     <li><strong>SMTP_USER</strong>: notificaciones@hempc.com.ar</li>
                     <li><strong>SMTP_PASSWORD</strong>: [La contraseña de la casilla]</li>
                     <li><strong>SMTP_FROM</strong>: notificaciones@hempc.com.ar</li>
@@ -1367,6 +1377,10 @@ export default function Clients() {
                   <p className="text-[11px] text-slate-500">
                     Render inyecta la contraseña directamente en las variables de entorno del servidor en memoria (<code className="font-mono">os.getenv("SMTP_PASSWORD")</code>) al compilar y reiniciar, sin escribirla en ningún commit ni archivo rastreado por Git.
                   </p>
+                  <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-3 text-[11px] text-rose-700 dark:text-rose-300">
+                    <strong>⚠️ AVISO TÉCNICO DE PUERTOS EN RENDER FREE:</strong><br />
+                    Render bloquea el tráfico de salida en puertos 25, 465 y 587 en su <em>plan gratuito</em> para mitigar spam. Cuando se intenta enviar por SMTP desde Render Free, la conexión da <code className="font-mono">timed out</code> y se conmuta a modo simulado. Para envíos reales hacia Gmail, se debe cambiar la instancia de Render a plan <strong>Starter ($7/mes)</strong> que habilita los puertos SMTP salientes, o habilitar el puerto alternativo <strong>2525</strong> en Postfix.
+                  </div>
                   <p>
                     <strong>2. En Desarrollo Local:</strong><br />
                     Cree o edite el archivo <code className="font-mono bg-slate-200 dark:bg-slate-800 px-1 py-0.5 rounded">.env</code> en la raíz. El archivo ya está protegido y excluido en <code className="font-mono">.gitignore</code>, por lo que Git nunca lo subirá.
