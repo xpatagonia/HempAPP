@@ -512,7 +512,7 @@ export default function Clients() {
                 <p className="text-xs opacity-90">{emailFeedback.message}</p>
                 <p className={`text-[10px] font-mono mt-0.5 ${isRealSmtp ? "text-emerald-700 dark:text-emerald-400" : "text-amber-800 dark:text-amber-300"}`}>
                   Remitente: notificaciones@hempc.com.ar • Destino: {emailFeedback.sentTo} • Vía: {emailFeedback.via}
-                  {!isRealSmtp && " • [Render Free bloquea el puerto 587 saliente]"}
+                  {!isRealSmtp && (emailFeedback.via === "simulated_local" ? " • [Despacho en auditoría local / Conectando motor]" : " • [Verificar servidor de correo]")}
                 </p>
               </div>
             </div>
