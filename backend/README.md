@@ -84,7 +84,7 @@ CREATE INDEX IF NOT EXISTS idx_telemetry_plot_time ON telemetry_logs (plot_id, t
 ```bash
 curl -X POST "https://tu-servicio-en-render.onrender.com/api/v1/telemetry/ingest" \
      -H "Content-Type: application/json" \
-     -H "X-Device-Api-Key: hempc-device-secret-key-2026" \
+     -H "X-Device-Api-Key: TU_CLAVE_DE_SENSOR_AQUI" \
      -d '{
        "device_id": "EST-METEO-LOTE-4",
        "plot_id": "plot-norte-01",

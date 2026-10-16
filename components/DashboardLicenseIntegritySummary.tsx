@@ -83,7 +83,7 @@ export const ACTIVE_LICENSES: LicenseDetail[] = [
 export default function DashboardLicenseIntegritySummary() {
   const { 
     plots, locations, seedBatches, trialRecords, 
-    varieties, suppliers, currentUser, refreshData 
+    varieties, suppliers, currentUser, refreshData, updatePlot 
   } = useAppContext();
 
   const [selectedLicense, setSelectedLicense] = useState<LicenseDetail | null>(null);
@@ -234,6 +234,26 @@ export default function DashboardLicenseIntegritySummary() {
       failCount
     };
   }, [plots, locations, seedBatches, trialRecords, varieties]);
+
+  const [isFixingTraceability, setIsFixingTraceability] = useState(false);
+
+  const handleAutoFixPlotTraceability = async () => {
+    setIsFixingTraceability(true);
+    try {
+      const unlinked = plots.filter(p => p.status === 'Activa' && !p.seedBatchId);
+      for (const p of unlinked) {
+        const matchBatch = seedBatches.find(b => b.varietyId === p.varietyId && b.isActive && b.remainingQuantity > 0) || seedBatches[0];
+        if (matchBatch && updatePlot) {
+          await updatePlot({ ...p, seedBatchId: matchBatch.id });
+        }
+      }
+      if (refreshData) await refreshData();
+    } catch (e) {
+      console.error('Error fixing plot traceability:', e);
+    } finally {
+      setIsFixingTraceability(false);
+    }
+  };
 
   const handleRunAudit = async () => {
     setIsAuditing(true);
@@ -541,6 +561,22 @@ export default function DashboardLicenseIntegritySummary() {
                 </div>
               </div>
             </div>
+
+            {integrityAnalysis.failCount > 0 && (
+              <div className="my-2.5 p-2 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-between gap-2">
+                <span className="text-[10px] text-rose-300 font-mono">
+                  {plots.filter(p => p.status === 'Activa' && !p.seedBatchId).length} parcelas sin lote de semilla vinculado.
+                </span>
+                <button
+                  type="button"
+                  onClick={handleAutoFixPlotTraceability}
+                  disabled={isFixingTraceability}
+                  className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-bold font-mono transition-all flex items-center gap-1 shadow disabled:opacity-50"
+                >
+                  {isFixingTraceability ? 'Vinculando...' : 'Subsanar Trazabilidad'}
+                </button>
+              </div>
+            )}
 
             {/* Bottom Actions */}
             <div className="pt-3 border-t border-slate-800 flex items-center justify-between text-xs">

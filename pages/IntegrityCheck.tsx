@@ -14,7 +14,7 @@ import { Link } from 'react-router-dom';
 export default function IntegrityCheck() {
     const { 
         plots, seedBatches, locations, trialRecords, projects,
-        varieties, suppliers, clients, updateSeedBatch, 
+        varieties, suppliers, clients, updateSeedBatch, updatePlot,
         isRefreshing, refreshData 
     } = useAppContext();
 
@@ -152,7 +152,7 @@ export default function IntegrityCheck() {
         // 2. CHEQUEO DE UNIDADES PRODUCTIVAS & CULTIVO
         plots.forEach(p => {
             if (p.status === 'Activa' && !p.seedBatchId) {
-                issues.push({ id: `p-${p.id}`, level: 'critical', cat: 'Cultivo', item: p.name, msg: 'Sin lote de semilla vinculado (Pierde Trazabilidad)', link: '/plots' });
+                issues.push({ id: `p-${p.id}`, level: 'critical', cat: 'Cultivo', item: p.name, msg: 'Sin lote de semilla vinculado (Pierde Trazabilidad)', link: '/plots', type: 'unlinked-plot', data: p });
             }
             if ((p.surfaceArea || 0) <= 0) {
                 issues.push({ id: `p-a-${p.id}`, level: 'warning', cat: 'Cultivo', item: p.name, msg: 'Superficie declarada en 0. Cálculos de rinde serán nulos.', link: '/plots' });
@@ -207,6 +207,30 @@ export default function IntegrityCheck() {
             precisionIssues: issues.filter(i => i.type === 'precision-batch')
         };
     }, [seedBatches, plots, locations, trialRecords, projects, varieties]);
+
+    const handleAutoLinkSeedBatches = async () => {
+        const unlinked = audit.issues.filter(i => i.type === 'unlinked-plot');
+        if (unlinked.length === 0) return;
+        
+        setIsFixing(true);
+        try {
+            let fixed = 0;
+            for (const issue of unlinked) {
+                const plot = issue.data;
+                const matchBatch = seedBatches.find(b => b.varietyId === plot.varietyId && b.isActive && b.remainingQuantity > 0) || seedBatches[0];
+                if (matchBatch) {
+                    await updatePlot({ ...plot, seedBatchId: matchBatch.id });
+                    fixed++;
+                }
+            }
+            alert(`✅ Se vincularon automáticamente ${fixed} parcelas con lotes de semilla fiscalizados.`);
+            await refreshData();
+        } catch (e) {
+            console.error('Error auto-linking batches:', e);
+        } finally {
+            setIsFixing(false);
+        }
+    };
 
     const handleAutoFixEmptyBatches = async () => {
         const emptyActive = audit.issues.filter(i => i.type === 'empty-batch');
@@ -545,6 +569,26 @@ export default function IntegrityCheck() {
 
             {/* AUTO FIXERS SECTION */}
             <div className="space-y-4">
+                {audit.issues.some(i => i.type === 'unlinked-plot') && (
+                    <div className="bg-rose-50 dark:bg-rose-900/10 border border-rose-200 dark:border-rose-900/30 p-6 rounded-3xl flex flex-col md:flex-row justify-between items-center gap-4 animate-in slide-in-from-top-2">
+                        <div className="flex items-center">
+                            <div className="bg-rose-100 dark:bg-rose-900/30 p-3 rounded-2xl mr-4"><Sprout className="text-rose-600" size={24}/></div>
+                            <div>
+                                <h4 className="font-black text-rose-900 dark:text-rose-200 uppercase text-xs tracking-widest font-mono">Trazabilidad de Parcelas Activas</h4>
+                                <p className="text-xs text-rose-700 dark:text-rose-400 font-mono font-bold">Se detectaron parcelas en producción sin lote de semilla fiscalizado asociado.</p>
+                            </div>
+                        </div>
+                        <button 
+                            type="button"
+                            onClick={handleAutoLinkSeedBatches}
+                            disabled={isFixing}
+                            className="bg-rose-600 hover:bg-rose-700 text-white px-6 py-2.5 rounded-2xl font-black text-[10px] font-mono uppercase tracking-widest shadow-lg flex items-center transition-all disabled:opacity-50"
+                        >
+                            {isFixing ? <Loader2 className="animate-spin mr-2" size={14}/> : <ShieldCheck className="mr-2" size={14}/>}
+                            Vincular Semillas Automáticamente
+                        </button>
+                    </div>
+                )}
                 {audit.precisionIssues.length > 0 && (
                     <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30 p-6 rounded-3xl flex flex-col md:flex-row justify-between items-center gap-4 animate-in slide-in-from-top-2">
                         <div className="flex items-center">

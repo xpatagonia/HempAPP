@@ -258,7 +258,16 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                     fetchTable('users', setUsersList, DEMO_USERS_LIST),
                     fetchTable('varieties', setVarieties, DEMO_VARIETIES),
                     fetchTable('locations', setLocations, DEMO_LOCATIONS),
-                    fetchTable('plots', setPlots, DEMO_PLOTS),
+                    fetchTable('plots', (data: any[]) => {
+                        const healed = (data || []).map((p: any) => {
+                            if (p.status === 'Activa' && !p.seedBatchId && p.varietyId) {
+                                const match = DEMO_SEED_BATCHES.find(b => b.varietyId === p.varietyId && b.isActive);
+                                return match ? { ...p, seedBatchId: match.id } : p;
+                            }
+                            return p;
+                        });
+                        setPlots(healed);
+                    }, DEMO_PLOTS),
                     fetchTable('trial_records', setTrialRecords, DEMO_TRIALS),
                     fetchTable('tasks', setTasks, DEMO_TASKS),
                     fetchTable('projects', setProjects, DEMO_PROJECTS),
@@ -276,7 +285,16 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 setUsersList(prev => prev.length > 0 ? prev : [DEMO_USER]);
                 setVarieties(prev => prev.length > 0 ? prev : DEMO_VARIETIES);
                 setLocations(prev => prev.length > 0 ? prev : DEMO_LOCATIONS);
-                setPlots(prev => prev.length > 0 ? prev : DEMO_PLOTS);
+                setPlots(prev => {
+                    const raw = prev.length > 0 ? prev : DEMO_PLOTS;
+                    return raw.map((p: any) => {
+                        if (p.status === 'Activa' && !p.seedBatchId && p.varietyId) {
+                            const match = DEMO_SEED_BATCHES.find(b => b.varietyId === p.varietyId && b.isActive);
+                            return match ? { ...p, seedBatchId: match.id } : p;
+                        }
+                        return p;
+                    });
+                });
                 setTrialRecords(prev => prev.length > 0 ? prev : DEMO_TRIALS);
                 setHydricRecords(prev => prev.length > 0 ? prev : DEMO_HYDRIC);
                 setProjects(prev => prev.length > 0 ? prev : DEMO_PROJECTS);

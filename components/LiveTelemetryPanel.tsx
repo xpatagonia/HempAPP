@@ -59,7 +59,7 @@ export const LiveTelemetryPanel: React.FC<LiveTelemetryPanelProps> = ({ plot }) 
 
   const curlSnippet = `curl -X POST "${engineUrl}/api/v1/telemetry/ingest" \\
   -H "Content-Type: application/json" \\
-  -H "X-Device-Api-Key: hempc-device-secret-key-2026" \\
+  -H "X-Device-Api-Key: TU_CLAVE_DE_SENSOR_AQUI" \\
   -d '{
     "device_id": "STATION-${plot.id.slice(0, 8).toUpperCase()}",
     "plot_id": "${plot.id}",

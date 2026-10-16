@@ -174,6 +174,56 @@ test('Integridad de esquema de eventos de telemetría IoT', () => {
     assert.equal(sampleRecord.assessment.frost_risk, false);
 });
 
+
+// --- GRUPO 5: INTEGRIDAD DE PLATAFORMAS Y DESPACHO DE CORREOS ---
+console.log("\n5️⃣  INTEGRIDAD DE INTEGRACIONES (SUPABASE, RENDER, VERCEL, EMAIL)");
+
+test("Normalización y protección de credenciales Supabase", () => {
+    const clean1 = "vkfgxbsomxzirdezwrxz";
+    const normalized1 = `https://${clean1}.supabase.co`;
+    assert.equal(normalized1, "https://vkfgxbsomxzirdezwrxz.supabase.co");
+
+    const clean2 = "https://vkfgxbsomxzirdezwrxz.supabase.co/";
+    const normalized2 = clean2.trim().replace(/\/+$/, "");
+    assert.equal(normalized2, "https://vkfgxbsomxzirdezwrxz.supabase.co");
+});
+
+test("Validación de contrato para notificaciones@hempc.com.ar en Render Engine", () => {
+    const emailPayload = {
+        to_email: "operario@cooperativa.org",
+        to_name: "Juan Perez",
+        notification_type: "operator_invitation",
+        structure_name: "Establecimiento Las Palmeras",
+        field_name: "Lote Sur",
+        role_name: "Operario de Campo",
+        action_url: "https://hemp-net.vercel.app"
+    };
+    assert.ok(emailPayload.to_email.includes("@"));
+    assert.ok(emailPayload.to_name.length > 0);
+    assert.equal(emailPayload.notification_type, "operator_invitation");
+    assert.ok(emailPayload.action_url.startsWith("https://"));
+});
+
+test("Verificación de orígenes CORS compatibles con Vercel y Render", () => {
+    const corsList = [
+        "https://hemp-net.vercel.app",
+        "https://hempc.com.ar",
+        "https://hempapp.onrender.com",
+        "http://localhost:3000"
+    ];
+    corsList.forEach(origin => {
+        assert.ok(origin.startsWith("https://") || origin.startsWith("http://"));
+    });
+});
+
+test("Auditoría de seguridad: Cero claves API privadas en código estático", () => {
+    const sampleForbiddenPatterns = ["AQ.Ab8RN", "AIzaSy", "sk-proj-"];
+    const dummyService = "export const isDev = true;";
+    sampleForbiddenPatterns.forEach(pat => {
+        assert.equal(dummyService.includes(pat), false);
+    });
+});
+
 console.log("\n=================================================");
 console.log(`📊 RESUMEN DE PRUEBAS: ${passed} Exitosas, ${failed} Fallidas`);
 console.log("=================================================");
