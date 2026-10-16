@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     
     # Email Notification Settings (notificaciones@hempc.com.ar)
     SMTP_FROM: str = os.getenv("SMTP_FROM", "notificaciones@hempc.com.ar")
-    SMTP_HOST: str = os.getenv("SMTP_HOST", "hempc.com.ar")
+    SMTP_HOST: str = os.getenv("SMTP_HOST", "mail.hempc.com.ar")
     SMTP_PORT: int = int(os.getenv("SMTP_PORT", 587))
     SMTP_USER: str = os.getenv("SMTP_USER", "notificaciones@hempc.com.ar")
     SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     CORS_ORIGINS: List[str] = [
         origin.strip() for origin in os.getenv(
             "CORS_ORIGINS",
-            "http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,https://hempc.com.ar,https://hempapp.onrender.com"
+            "http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,https://hempc.com.ar,https://hemp-net.vercel.app,https://hempapp.onrender.com"
         ).split(",") if origin.strip()
     ]
 

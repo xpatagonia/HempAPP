@@ -17,4 +17,15 @@ services:
       - key: SUPABASE_KEY
         sync: false
       - key: CORS_ORIGINS
-        value: "https://*.vercel.app,http://localhost:3000,http://127.0.0.1:3000"
+        value: "https://*.vercel.app,https://hemp-net.vercel.app,http://localhost:3000,http://127.0.0.1:3000"
+      - key: SMTP_HOST
+        value: "mail.hempc.com.ar"
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        value: "notificaciones@hempc.com.ar"
+      - key: SMTP_FROM
+        value: "notificaciones@hempc.com.ar"
+      - key: SMTP_PASSWORD
+        sync: false
+

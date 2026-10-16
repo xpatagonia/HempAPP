@@ -140,42 +140,54 @@ class EmailNotificationService:
 
         # Si hay servidor SMTP configurado, enviar por SMTP real
         if self.smtp_host and self.smtp_user and self.smtp_password:
-            try:
-                msg = MIMEMultipart("alternative")
-                msg["Subject"] = subject
-                msg["From"] = f"HempC Nucleus <{self.from_email}>"
-                msg["To"] = req.to_email
-                msg.attach(MIMEText(html_body, "html"))
+            # Resolver automáticamente al subdominio de correo 'mail.hempc.com.ar'
+            # debido a que el dominio raíz está protegido por el proxy HTTP de Cloudflare.
+            candidate_hosts = [self.smtp_host]
+            if self.smtp_host in ("hempc.com.ar", "http://hempc.com.ar", "https://hempc.com.ar"):
+                candidate_hosts = ["mail.hempc.com.ar", "138.219.41.106", self.smtp_host]
+            elif "mail.hempc.com.ar" not in candidate_hosts:
+                candidate_hosts.append("mail.hempc.com.ar")
 
-                use_ssl = getattr(settings, 'SMTP_USE_SSL', False) or self.smtp_port == 465
-                if use_ssl:
-                    with smtplib.SMTP_SSL(self.smtp_host, self.smtp_port, timeout=12) as server:
-                        server.login(self.smtp_user, self.smtp_password)
-                        server.send_message(msg)
-                else:
-                    with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=12) as server:
-                        server.starttls()
-                        server.login(self.smtp_user, self.smtp_password)
-                        server.send_message(msg)
+            last_error = None
+            for host in candidate_hosts:
+                try:
+                    msg = MIMEMultipart("alternative")
+                    msg["Subject"] = subject
+                    msg["From"] = f"HempC Nucleus <{self.from_email}>"
+                    msg["To"] = req.to_email
+                    msg.attach(MIMEText(html_body, "html"))
 
-                logger.info(f"Email sent successfully via SMTP to {req.to_email}")
-                return EmailNotificationResponse(
-                    success=True,
-                    message=f"Correo enviado exitosamente a {req.to_email} vía SMTP",
-                    sent_from=self.from_email,
-                    sent_to=req.to_email,
-                    delivered_via="smtp"
-                )
-            except Exception as e:
-                logger.error(f"SMTP error while sending to {req.to_email}: {e}")
-                # Fallback to simulated log response rather than failing the transaction
-                return EmailNotificationResponse(
-                    success=True,
-                    message=f"Simulación de envío: {e}. Despacho registrado hacia {req.to_email}",
-                    sent_from=self.from_email,
-                    sent_to=req.to_email,
-                    delivered_via="simulated_log"
-                )
+                    use_ssl = getattr(settings, 'SMTP_USE_SSL', False) or self.smtp_port == 465
+                    if use_ssl:
+                        with smtplib.SMTP_SSL(host, self.smtp_port, timeout=12) as server:
+                            server.login(self.smtp_user, self.smtp_password)
+                            server.send_message(msg)
+                    else:
+                        with smtplib.SMTP(host, self.smtp_port, timeout=12) as server:
+                            server.starttls()
+                            server.login(self.smtp_user, self.smtp_password)
+                            server.send_message(msg)
+
+                    logger.info(f"Email sent successfully via SMTP to {req.to_email} using host {host}")
+                    return EmailNotificationResponse(
+                        success=True,
+                        message=f"Correo enviado exitosamente a {req.to_email} vía SMTP ({host})",
+                        sent_from=self.from_email,
+                        sent_to=req.to_email,
+                        delivered_via="smtp"
+                    )
+                except Exception as e:
+                    logger.error(f"SMTP error on host {host} while sending to {req.to_email}: {e}")
+                    last_error = e
+
+            # Fallback to simulated log response rather than failing the transaction
+            return EmailNotificationResponse(
+                success=True,
+                message=f"Simulación de envío: {last_error}. Despacho registrado hacia {req.to_email}",
+                sent_from=self.from_email,
+                sent_to=req.to_email,
+                delivered_via="simulated_log"
+            )
 
         # Modo Simulado / Standalone si no se configuraron claves SMTP externas en Render
         logger.info(f"[EMAIL DISPATCH SIMULATED] From: {self.from_email} To: {req.to_email} Subject: {subject}")

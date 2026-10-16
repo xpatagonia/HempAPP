@@ -1308,7 +1308,7 @@ export default function Clients() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[11px]">
                 <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
                   <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">Servidor SMTP</span>
-                  <span className="font-mono font-bold text-slate-800 dark:text-slate-200">hempc.com.ar</span>
+                  <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">mail.hempc.com.ar</span>
                 </div>
                 <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
                   <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">Puertos SMTP</span>
@@ -1358,7 +1358,7 @@ export default function Clients() {
                     Acceda a <a href="https://dashboard.render.com" target="_blank" rel="noreferrer" className="text-emerald-500 underline font-semibold">dashboard.render.com</a> &rarr; Seleccione el servicio <strong>hempapp</strong> &rarr; Ingrese a la pestaña <strong>Environment</strong> &rarr; Click en <strong>Add Environment Variable</strong>:
                   </p>
                   <ul className="list-disc pl-5 font-mono text-[11px] space-y-1 bg-white/60 dark:bg-slate-900/60 p-2.5 rounded-xl border border-amber-200 dark:border-amber-900/40">
-                    <li><strong>SMTP_HOST</strong>: hempc.com.ar</li>
+                    <li><strong>SMTP_HOST</strong>: mail.hempc.com.ar</li>
                     <li><strong>SMTP_PORT</strong>: 587 (o 465)</li>
                     <li><strong>SMTP_USER</strong>: notificaciones@hempc.com.ar</li>
                     <li><strong>SMTP_PASSWORD</strong>: [La contraseña de la casilla]</li>
