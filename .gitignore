@@ -126,3 +126,7 @@ dist
 
 # Mac System
 .DS_Store
+-e 
+# Python bytecode
+__pycache__/
+*.py[cod]
