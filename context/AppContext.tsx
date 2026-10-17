@@ -315,6 +315,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                     fetchTable('resources', setResources),
                     fetchTable('storage_points', setStoragePoints, DEMO_STORAGE_POINTS),
                     fetchTable('hydric_records', setHydricRecords, DEMO_HYDRIC),
+                    fetchTable('operational_expenses', setOperationalExpenses, DEMO_OPERATIONAL_EXPENSES),
                     fetchTable('field_logs', setLogs),
                 ]);
             } else {
