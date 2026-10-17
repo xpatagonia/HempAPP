@@ -15,6 +15,7 @@ import {
 import { getPlotNDVIAlertStatus, exportNDVITimeSeriesPDF, generateDetailedSatellitePasses, getPlotAgrochemicalApplications } from '../src/services/agro40Service';
 import { PlotNDVIAlert, Task, AgrochemicalApplication } from '../types';
 import { sendAgronomicAlertEmail } from '../src/services/emailNotificationService';
+import AlertDashboard from '../components/AlertDashboard';
 import DashboardLicenseIntegritySummary from '../components/DashboardLicenseIntegritySummary';
 import YieldAndInputConsumptionWidget from '../components/YieldAndInputConsumptionWidget';
 
@@ -551,6 +552,9 @@ export default function Dashboard() {
       {(activeSection === 'all' || activeSection === 'licenses') && (
         <DashboardLicenseIntegritySummary />
       )}
+
+      {/* COMPONENTE UNIFICADO DE ALERTAS CRÍTICAS DEL SISTEMA (AGRONÓMICAS, FITOSANITARIAS Y STOCK) */}
+      <AlertDashboard />
 
       {/* 2. INDUSTRIAL KPI CARDS (HIGH-CONTRAST METRIC GRID) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
