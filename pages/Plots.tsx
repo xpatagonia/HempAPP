@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { Plot, Variety, Location, Project, TrialRecord, SeedBatch, CAMPAIGNS } from '../types';
 import { 
@@ -84,9 +84,17 @@ export default function Plots() {
     addPlot, updateLocation, updateSeedBatch, storagePoints, appName
   } = useAppContext();
   
+  const [searchParams] = useSearchParams();
   const [viewMode, setViewMode] = useState<'table' | 'gallery'>('gallery');
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterLoc, setFilterLoc] = useState('all');
+  const [filterLoc, setFilterLoc] = useState<string>(searchParams.get('locationId') || 'all');
+
+  useEffect(() => {
+    const locParam = searchParams.get('locationId');
+    if (locParam) {
+      setFilterLoc(locParam);
+    }
+  }, [searchParams]);
   const [filterType, setFilterType] = useState<'all' | 'Ensayo' | 'Producción'>('all');
   const [filterStatus, setFilterStatus] = useState('all');
   const [selectedCampaign, setSelectedCampaign] = useState<string>('2025/2026'); // Campaña por defecto

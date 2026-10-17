@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { 
   Location, SoilType, RoleType, Plot, SiteType, SiteStatus, CAMPAIGNS, 
@@ -13,7 +13,7 @@ import {
   ArrowRight, ShieldCheck, Thermometer, Warehouse, Clock, FileText, Lock, 
   Scale, FileSignature, CheckSquare, Layers, Award, Satellite
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import WeatherWidget from '../components/WeatherWidget';
 import MapEditor from '../components/MapEditor';
 import { canAccessLocation, isCentralAdminOrSupervisor } from '../src/utils/structurePermissions';
@@ -147,8 +147,16 @@ export default function Locations() {
   const fileInputRefGeneral = useRef<HTMLInputElement>(null);
   const fileInputRefSowing = useRef<HTMLInputElement>(null);
   
+  const [searchParams] = useSearchParams();
   // Filtros de búsqueda
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
+
+  useEffect(() => {
+    const s = searchParams.get('search');
+    if (s) {
+      setSearchTerm(s);
+    }
+  }, [searchParams]);
   const [filterProvince, setFilterProvince] = useState('');
   const [filterSiteType, setFilterSiteType] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');

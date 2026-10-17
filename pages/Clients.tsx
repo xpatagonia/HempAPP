@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Client, RoleType, User, MembershipLevel, UserRole, StructureRole, Location } from '../types';
@@ -673,9 +674,9 @@ export default function Clients() {
                       </p>
                       <div className="mt-2.5 pt-2 border-t border-emerald-100 dark:border-emerald-900/30 flex items-center justify-between text-[10px] text-emerald-700 dark:text-emerald-400 font-bold">
                         <span>🔒 Acceso restringido al personal de esta estructura</span>
-                        <a href={`#/locations?search=${encodeURIComponent(associatedLocation.name)}`} className="hover:underline flex items-center font-black">
+                        <Link to={`/locations/${associatedLocation.id}`} className="hover:underline flex items-center font-black">
                           Ver Campo <ArrowUpRight size={12} className="ml-0.5" />
-                        </a>
+                        </Link>
                       </div>
                     </div>
                   ) : (

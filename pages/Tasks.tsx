@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Task, AgriculturalLaborType, LaborStatus, HempStageId } from '../types';
 import { 
@@ -12,7 +12,7 @@ import {
   Gauge, Wind, Thermometer, MapPin, Building2, User, DollarSign, ShieldCheck,
   Sparkles, ExternalLink, BellRing, Bell
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { 
   dispatchPushNotification, 
   evaluateUpcomingTasksReminders 
@@ -28,10 +28,18 @@ export default function Tasks() {
 
   const [pushFeedback, setPushFeedback] = useState<string | null>(null);
 
+  const [searchParams] = useSearchParams();
   // Filters & Views
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterType, setFilterType] = useState<string>('all');
-  const [filterPlotId, setFilterPlotId] = useState<string>('all');
+  const [filterPlotId, setFilterPlotId] = useState<string>(searchParams.get('plotId') || 'all');
+
+  useEffect(() => {
+    const p = searchParams.get('plotId');
+    if (p) {
+      setFilterPlotId(p);
+    }
+  }, [searchParams]);
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
 

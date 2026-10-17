@@ -8,7 +8,7 @@ import {
   Tractor, BookOpen, Bot, Settings, 
   FolderKanban, CheckSquare, BarChart3, Users, Warehouse, Package, X, Bell, Globe, Building, ShieldAlert, FileText, BrainCircuit, Activity, FlaskConical, DownloadCloud, Satellite,
   PanelLeftClose, PanelLeftOpen, ChevronLeft, ChevronRight, ShieldCheck, DollarSign,
-  Calculator, Truck, UserCheck, ClipboardList, Radio
+  Calculator, Truck, UserCheck, ClipboardList, Radio, Archive
 } from 'lucide-react';
 import NotificationCenterModal from './NotificationCenterModal';
 import { 
@@ -160,30 +160,33 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
         </div>
 
         <nav className={`flex-1 ${isCollapsed ? 'px-2 py-6 space-y-3' : 'px-4 py-8 space-y-1'} overflow-y-auto custom-scrollbar`}>
+          {/* Operación Central & Monitoreo */}
           <NavItem to="/" icon={LayoutDashboard} label="Dashboard" isCollapsed={isCollapsed} />
           <NavItem to="/agro40" icon={Satellite} label="Agro 4.0: NDVI & Suelos" special={true} isCollapsed={isCollapsed} />
           <NavItem to="/intelligence" icon={BrainCircuit} label="Inteligencia Agrónoma" isCollapsed={isCollapsed} />
           <NavItem to="/advisor" icon={Bot} label="AI Terminal" isCollapsed={isCollapsed} />
           
+          {/* Manejo Técnico & Campo (Estructura Geográfica y Labores) */}
           <div className={isCollapsed ? "pt-4 pb-1 border-t border-slate-200 dark:border-slate-800 my-2" : "pt-8 pb-3 px-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]"}>
-            {!isCollapsed && "Manejo Técnico"}
+            {!isCollapsed && "Manejo Técnico & Campo"}
           </div>
-          <NavItem to="/trials-lite" icon={ClipboardList} label="Monitoreo Agronómico" isCollapsed={isCollapsed} />
+          <NavItem to="/locations" icon={Tractor} label="Campos & Sitios" isCollapsed={isCollapsed} />
+          <NavItem to="/plots" icon={Sprout} label="Parcelas de Cultivo" isCollapsed={isCollapsed} />
+          <NavItem to="/campaigns" icon={FolderKanban} label="Campañas Agrícolas" isCollapsed={isCollapsed} />
           <NavItem to="/tasks" icon={CheckSquare} label="Labores Agrícolas" badge={pendingTasksCount > 0 ? pendingTasksCount : null} isCollapsed={isCollapsed} />
           <NavItem to="/calendar" icon={Calendar} label="Ciclo Biológico (BBCH)" isCollapsed={isCollapsed} />
+          <NavItem to="/trials-lite" icon={ClipboardList} label="Monitoreo Agronómico" isCollapsed={isCollapsed} />
           <NavItem to="/phytosanitary" icon={ShieldCheck} label="Cuaderno Fitosanitario" isCollapsed={isCollapsed} />
-          <NavItem to="/finances" icon={DollarSign} label="Costos Operativos & Finanzas" isCollapsed={isCollapsed} />
-          <NavItem to="/locations" icon={Tractor} label="Campos & Sitios" isCollapsed={isCollapsed} />
-          <NavItem to="/plots" icon={Sprout} label="Parcelas & Lotes" isCollapsed={isCollapsed} />
-          <NavItem to="/campaigns" icon={FolderKanban} label="Campañas" isCollapsed={isCollapsed} />
           <NavItem to="/tools" icon={Calculator} label="Calculadoras Agronómicas" isCollapsed={isCollapsed} />
 
+          {/* Cadena de Valor & Logística */}
           <div className={isCollapsed ? "pt-4 pb-1 border-t border-slate-200 dark:border-slate-800 my-2" : "pt-8 pb-3 px-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]"}>
-            {!isCollapsed && "Cadena de Valor"}
+            {!isCollapsed && "Cadena de Valor & Logística"}
           </div>
           <NavItem to="/logistics-map" icon={Globe} label="Torre de Control" isCollapsed={isCollapsed} />
+          <NavItem to="/seed-batches" icon={Package} label="Lotes de Semilla & Cosecha" isCollapsed={isCollapsed} />
           <NavItem to="/storage" icon={Warehouse} label="Almacenes & Custodia" isCollapsed={isCollapsed} />
-          <NavItem to="/seed-batches" icon={Package} label="Lotes & Trazabilidad" isCollapsed={isCollapsed} />
+          <NavItem to="/resources" icon={Archive} label="Insumos & Recursos" isCollapsed={isCollapsed} />
           <NavItem to="/varieties" icon={BookOpen} label="Banco Genético" isCollapsed={isCollapsed} />
           
           {!isClient && (
@@ -192,14 +195,15 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
               <NavItem to="/clients" icon={Building} label="Socios de Red" isCollapsed={isCollapsed} />
             </>
           )}
-
           {isClient && (
             <NavItem to="/clients" icon={Building} label="Mi Organización" isCollapsed={isCollapsed} />
           )}
 
+          {/* Gestión Económica & Sistema */}
           <div className={isCollapsed ? "pt-4 pb-1 border-t border-slate-200 dark:border-slate-800 my-2" : "pt-8 pb-3 px-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]"}>
-            {!isCollapsed && "Sistema"}
+            {!isCollapsed && "Gestión & Sistema"}
           </div>
+          <NavItem to="/finances" icon={DollarSign} label="Costos Operativos & Finanzas" isCollapsed={isCollapsed} />
           <NavItem to="/analytics" icon={BarChart3} label="Comparativa Genética" isCollapsed={isCollapsed} />
           <NavItem to="/integrity" icon={ShieldAlert} label="Integridad de Datos" isCollapsed={isCollapsed} />
           
