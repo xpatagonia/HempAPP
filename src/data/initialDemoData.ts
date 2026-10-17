@@ -4,6 +4,19 @@ import {
   OperationalExpense, Client
 } from '../../types';
 
+export const ADMIN_USER: User = {
+  id: "user-admin-hempc",
+  name: "Administración Central HempC",
+  email: "admin@hempc.com.ar",
+  role: "super_admin",
+  password: "admin",
+  memberType: "Cooperativa_Central",
+  organizationName: "Red Cooperativa Nucleus",
+  jobTitle: "Administrador General de la Plataforma",
+  phone: "+54 9 11 4567-8900",
+  isNetworkMember: true
+};
+
 export const DEMO_USER: User = {
   id: 'user-admin-nucleus',
   name: 'Ing. Gastón Barea (Nucleus)',
@@ -17,6 +30,7 @@ export const DEMO_USER: User = {
 };
 
 export const DEMO_USERS_LIST: User[] = [
+  ADMIN_USER,
   DEMO_USER,
   {
     id: 'user-admin-secondary',

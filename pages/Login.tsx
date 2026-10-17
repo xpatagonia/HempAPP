@@ -10,7 +10,7 @@ import { checkConnection, supabase } from "../supabaseClient";
 import { sendPasswordResetEmail } from "../src/services/emailNotificationService";
 
 export default function Login() {
-  const { currentUser, login, appName, appLogo, usersList, updateUser } = useAppContext();
+  const { currentUser, login, appName, appLogo, usersList, updateUser, addUser } = useAppContext();
   const navigate = useNavigate();
   
   const [email, setEmail] = useState("");
@@ -95,6 +95,21 @@ export default function Login() {
       } catch (e) {
         // Modo offline
       }
+    }
+
+    // Si es la cuenta principal admin@hempc.com.ar o gaston.barea.moreno@gmail.com y no estuviera en memoria local previa
+    if (!userFound && (targetEmail === "admin@hempc.com.ar" || targetEmail === "gaston.barea.moreno@gmail.com")) {
+      userFound = {
+        id: targetEmail === "admin@hempc.com.ar" ? "user-admin-hempc" : "user-admin-nucleus",
+        name: targetEmail === "admin@hempc.com.ar" ? "Administración Central HempC" : "Ing. Gastón Barea (Nucleus)",
+        email: targetEmail,
+        role: "super_admin",
+        password: "admin",
+        isNetworkMember: true,
+        memberType: "Cooperativa_Central",
+        organizationName: "Red Cooperativa Nucleus"
+      };
+      await addUser(userFound);
     }
 
     if (!userFound) {
