@@ -13,13 +13,14 @@ import {
   Camera, Image as ImageIcon, MessageSquare, ClipboardList, User, Calendar, Ruler, Maximize2, Download, Scale, Wind, Bird, CheckCircle2,
   RefreshCw, Globe, Layers, Save, Thermometer, Droplets, Waves, QrCode, Printer, Loader2, Zap, Sparkles, Link as LinkIcon, Sun,
   TrendingUp, ArrowUpRight, Beaker, FileUp, Moon, Sunrise, Sunset, ZapOff, Archive, Navigation, Scan, Target, FlaskConical, ClipboardCheck,
-  ChevronLeft, ChevronRight, Filter, Bot, Terminal, FileText, ArrowUp, ArrowDown, Satellite, Bell, BellRing, Radio
+  ChevronLeft, ChevronRight, Filter, Bot, Terminal, FileText, ArrowUp, ArrowDown, Satellite, Bell, BellRing, Radio, Mail, Send, AlertTriangle
 } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
 import WeatherWidget from '../components/WeatherWidget';
 import HydricBalance from '../components/HydricBalance';
 import LiveTelemetryPanel from '../components/LiveTelemetryPanel';
-import { dispatchPushNotification } from '../src/services/pushNotificationService';
+import { dispatchPushNotification } from "../src/services/pushNotificationService";
+import { sendAgronomicAlertEmail } from "../src/services/emailNotificationService";
 import { GoogleGenAI } from "@google/genai";
 import { getActiveGeminiApiKey } from '../src/services/geminiService';
 import jsPDF from 'jspdf';
@@ -58,8 +59,67 @@ const fastUUID = () => {
 };
 
 export default function PlotDetails() {
+
+  // Estado para emisión de alertas agronómicas por correo
+  const [showEmailAlertModal, setShowEmailAlertModal] = useState(false);
+  const [alertRecipientEmail, setAlertRecipientEmail] = useState("");
+  const [alertRecipientName, setAlertRecipientName] = useState("");
+  const [alertTitle, setAlertTitle] = useState("");
+  const [alertSeverity, setAlertSeverity] = useState<"Crítica" | "Advertencia" | "Informativa">("Crítica");
+  const [alertDetails, setAlertDetails] = useState("");
+  const [isSendingAlertEmail, setIsSendingAlertEmail] = useState(false);
+  const [emailAlertToast, setEmailAlertToast] = useState<{
+    show: boolean;
+    message: string;
+    sentTo: string;
+    via: string;
+  } | null>(null);
+
+  // Inicializar destinatario al abrir modal
+  const handleOpenEmailAlertModal = () => {
+    const client = clients?.find(c => c.id === location?.clientId);
+    const assignedUser = usersList?.find(u => (location?.clientId && u.clientId === location.clientId) || u.assignedPlotIds?.includes(plot?.id || ""));
+    const recipientEmail = client?.email || assignedUser?.email || currentUser?.email || "gaston.barea.moreno@gmail.com";
+    const recipientName = client?.contactName || client?.name || assignedUser?.name || "Productor Asociado";
+    
+    setAlertRecipientEmail(recipientEmail);
+    setAlertRecipientName(recipientName);
+    setAlertTitle(`Alerta Agronómica • Parcela ${plot?.name || "Lote"}`);
+    setAlertDetails(
+      `Se ha detectado una condición agronómica relevante en la parcela "${plot?.name}" (${variety?.name || "Cáñamo"}). Ubicación: ${location?.name || "Campo"}. Se recomienda inspección visual y ajuste de manejo técnico.`
+    );
+    setShowEmailAlertModal(true);
+  };
+
+  const handleSendPlotAlertEmail = async () => {
+    if (!plot || !alertRecipientEmail.trim()) return;
+    setIsSendingAlertEmail(true);
+    try {
+      const res = await sendAgronomicAlertEmail({
+        toEmail: alertRecipientEmail.trim(),
+        toName: alertRecipientName.trim() || "Productor Asociado",
+        alertTitle: `[${alertSeverity.toUpperCase()}] ${alertTitle}`,
+        plotName: plot.name,
+        alertDetails: alertDetails,
+        actionUrl: `${window.location.origin}/#/plots/${plot.id}`
+      });
+
+      setEmailAlertToast({
+        show: true,
+        message: res.message,
+        sentTo: alertRecipientEmail.trim(),
+        via: res.deliveredVia
+      });
+      setShowEmailAlertModal(false);
+    } catch (err: any) {
+      alert("Error al despachar alerta por correo: " + err.message);
+    } finally {
+      setIsSendingAlertEmail(false);
+    }
+  };
+
   const { id: urlId } = useParams();
-  const { plots, locations, varieties, getPlotHistory, addTrialRecord, updateTrialRecord, deleteTrialRecord, currentUser, seedBatches, logs, addLog, deleteLog, hydricRecords, appName } = useAppContext();
+  const { plots, locations, varieties, getPlotHistory, addTrialRecord, updateTrialRecord, deleteTrialRecord, currentUser, seedBatches, logs, addLog, deleteLog, hydricRecords, appName, clients, usersList } = useAppContext();
   
   const plot = useMemo(() => plots.find(p => p.id.toLowerCase() === urlId?.toLowerCase()), [plots, urlId]);
   const location = locations.find(l => l.id === plot?.locationId);
@@ -478,9 +538,16 @@ export default function PlotDetails() {
             <button 
                 onClick={handleSendPushAlert} 
                 title="Emitir alerta push de verificación para esta parcela (Service Worker)"
-                className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-2xl shadow-sm transition-all flex items-center gap-2 px-4 text-xs font-black uppercase tracking-widest ${pushSent ? 'text-emerald-600 border-emerald-400' : 'text-amber-600 hover:text-amber-700 dark:text-amber-400'}`}
+                className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-2xl shadow-sm transition-all flex items-center gap-2 px-4 text-xs font-black uppercase tracking-widest ${pushSent ? "text-emerald-600 border-emerald-400" : "text-amber-600 hover:text-amber-700 dark:text-amber-400"}`}
             >
-                <Bell size={18}/> <span className="hidden md:inline">{pushSent ? 'Push Emitido!' : 'Alerta Push'}</span>
+                <Bell size={18}/> <span className="hidden md:inline">{pushSent ? "Push Emitido!" : "Alerta Push"}</span>
+            </button>
+            <button
+                onClick={handleOpenEmailAlertModal}
+                title="Despachar alerta agronómica formal por correo electrónico al productor"
+                className="bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 hover:bg-rose-100 dark:hover:bg-rose-900/40 p-3 rounded-2xl text-rose-700 dark:text-rose-300 shadow-sm transition-all flex items-center gap-2 px-4 text-xs font-black uppercase tracking-widest cursor-pointer"
+            >
+                <Mail size={18}/> <span className="hidden md:inline">Alerta Correo</span>
             </button>
         </div>
       </div>
@@ -850,6 +917,188 @@ export default function PlotDetails() {
       {previewPhoto && (
           <div className="fixed inset-0 bg-black/95 backdrop-blur-xl z-[200] flex items-center justify-center p-4" onClick={() => setPreviewPhoto(null)}><div className="absolute top-6 right-6 p-2 bg-white/10 rounded-full text-white hover:bg-white/20 transition-all cursor-pointer"><X size={32}/></div><img src={previewPhoto} className="max-w-full max-h-full rounded-3xl shadow-2xl object-contain animate-in zoom-in-90" /></div>
       )}
+
+      {/* TOAST DE CONFIRMACIÓN DE ENVÍO DE EMAIL */}
+      {emailAlertToast && (
+        <div className="fixed bottom-6 right-6 z-50 max-w-md animate-in slide-in-from-bottom-5">
+          <div className={`p-4 rounded-2xl border shadow-2xl flex items-center justify-between ${
+            emailAlertToast.via === "smtp"
+              ? "bg-emerald-50 dark:bg-emerald-950/90 border-emerald-300 text-emerald-900 dark:text-emerald-200"
+              : "bg-amber-50 dark:bg-amber-950/90 border-amber-300 text-amber-900 dark:text-amber-200"
+          }`}>
+            <div className="flex items-center gap-3">
+              <div className={`p-2 rounded-xl text-white ${emailAlertToast.via === "smtp" ? "bg-emerald-600" : "bg-amber-600"}`}>
+                {emailAlertToast.via === "smtp" ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
+              </div>
+              <div>
+                <p className="text-xs font-black uppercase tracking-wider">
+                  {emailAlertToast.via === "smtp" ? "Alerta Enviada por Correo (SMTP Real)" : "Alerta en Auditoría"}
+                </p>
+                <p className="text-xs opacity-90">{emailAlertToast.message}</p>
+                <p className="text-[10px] font-mono mt-0.5 opacity-75">
+                  Destino: {emailAlertToast.sentTo} • Vía: {emailAlertToast.via}
+                </p>
+              </div>
+            </div>
+            <button onClick={() => setEmailAlertToast(null)} className="p-1 opacity-60 hover:opacity-100 cursor-pointer">
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE DESPACHO DE ALERTA AGRONÓMICA POR CORREO */}
+      {showEmailAlertModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] shadow-2xl max-w-lg w-full p-8 relative animate-in zoom-in-95">
+            <button
+              onClick={() => setShowEmailAlertModal(false)}
+              className="absolute top-6 right-6 p-2 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+            >
+              <X size={20} />
+            </button>
+
+            <div className="flex items-center gap-3 mb-6">
+              <div className="bg-rose-600 text-white p-3 rounded-2xl shadow-lg shadow-rose-900/20">
+                <Mail size={22} />
+              </div>
+              <div>
+                <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight italic">
+                  Despachar Alerta Agronómica
+                </h3>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  Notificación formal al productor vía notificaciones@hempc.com.ar
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {/* Información de Parcela */}
+              <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-1.5 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-slate-400 font-bold uppercase text-[10px]">Parcela:</span>
+                  <span className="font-black text-slate-800 dark:text-white uppercase">{plot?.name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400 font-bold uppercase text-[10px]">Variedad / Cultivo:</span>
+                  <span className="font-bold text-hemp-600">{variety?.name || "Cáñamo"}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400 font-bold uppercase text-[10px]">Establecimiento:</span>
+                  <span className="font-bold text-slate-700 dark:text-slate-300">{location?.name}</span>
+                </div>
+              </div>
+
+              {/* Selector de Severidad */}
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1.5 ml-1">
+                  Nivel de Severidad
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(["Crítica", "Advertencia", "Informativa"] as const).map(sev => (
+                    <button
+                      key={sev}
+                      type="button"
+                      onClick={() => setAlertSeverity(sev)}
+                      className={`py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition border cursor-pointer ${
+                        alertSeverity === sev
+                          ? sev === "Crítica" ? "bg-red-600 text-white border-red-600 shadow" :
+                            sev === "Advertencia" ? "bg-amber-500 text-white border-amber-500 shadow" :
+                            "bg-blue-600 text-white border-blue-600 shadow"
+                          : "bg-slate-50 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700"
+                      }`}
+                    >
+                      {sev}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Formulario */}
+              <div className="space-y-3">
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1 ml-1">
+                    Destinatario (Nombre) *
+                  </label>
+                  <input
+                    type="text"
+                    value={alertRecipientName}
+                    onChange={e => setAlertRecipientName(e.target.value)}
+                    className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-rose-500"
+                    placeholder="Nombre del productor"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1 ml-1">
+                    Correo Electrónico Destino *
+                  </label>
+                  <input
+                    type="email"
+                    value={alertRecipientEmail}
+                    onChange={e => setAlertRecipientEmail(e.target.value)}
+                    className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-rose-500"
+                    placeholder="productor@campo.com.ar"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1 ml-1">
+                    Asunto de la Alerta *
+                  </label>
+                  <input
+                    type="text"
+                    value={alertTitle}
+                    onChange={e => setAlertTitle(e.target.value)}
+                    className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-rose-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1 ml-1">
+                    Detalles Técnicos & Recomendación
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={alertDetails}
+                    onChange={e => setAlertDetails(e.target.value)}
+                    className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-rose-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowEmailAlertModal(false)}
+                  className="px-4 py-2 text-slate-400 font-bold uppercase text-xs hover:text-slate-600 transition cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={isSendingAlertEmail || !alertRecipientEmail.trim()}
+                  onClick={handleSendPlotAlertEmail}
+                  className="bg-rose-600 hover:bg-rose-700 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-wider shadow-lg flex items-center transition disabled:opacity-50 cursor-pointer"
+                >
+                  {isSendingAlertEmail ? (
+                    <>
+                      <Loader2 size={15} className="animate-spin mr-2" />
+                      Despachando Alerta...
+                    </>
+                  ) : (
+                    <>
+                      <Send size={15} className="mr-2" />
+                      Despachar al Correo
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

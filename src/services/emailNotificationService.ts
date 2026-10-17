@@ -33,7 +33,9 @@ export interface SendAgronomicAlertParams {
   alertTitle: string;
   plotName?: string;
   alertDetails: string;
+  severity?: "Crítica" | "Advertencia" | "Informativa" | "Alto" | "Moderado" | "Bajo";
   actionUrl?: string;
+  extraData?: Record<string, any>;
 }
 
 export interface EmailDispatchResult {
@@ -194,7 +196,11 @@ export async function sendAgronomicAlertEmail(
     alert_title: params.alertTitle,
     plot_name: params.plotName,
     alert_details: params.alertDetails,
-    action_url: params.actionUrl || `${window.location.origin}/#/agro40`
+    action_url: params.actionUrl || `${window.location.origin}/#/agro40`,
+    extra_data: {
+      severity: params.severity || 'Crítica',
+      ...(params.extraData || {})
+    }
   };
 
   try {

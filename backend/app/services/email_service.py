@@ -80,6 +80,44 @@ class EmailNotificationService:
         title = req.alert_title or "Alerta Agronómica Crítica"
         plot = req.plot_name or "Parcela en Seguimiento"
         details = req.alert_details or "Se ha detectado una desviación en los sensores de telemetría o condiciones climáticas."
+        
+        extra = req.extra_data or {}
+        severity = str(extra.get("severity", "Crítica"))
+        is_critical = severity in ["Crítica", "Alto", "Extremo"]
+        is_warning = severity in ["Advertencia", "Moderado"]
+        
+        badge_bg = "#991b1b" if is_critical else ("#b45309" if is_warning else "#1e40af")
+        header_color = "#e11d48" if is_critical else ("#f59e0b" if is_warning else "#3b82f6")
+        
+        telemetry_html = ""
+        metrics = []
+        if "ndvi" in extra:
+            metrics.append(f"""<div style="flex: 1; padding: 6px;"><span style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase;">Vigor NDVI</span><div style="font-size: 18px; font-weight: 900; color: #0f172a; font-family: monospace;">{extra['ndvi']}</div></div>""")
+        if "temperature_c" in extra or "temperature" in extra:
+            temp = extra.get("temperature_c", extra.get("temperature"))
+            metrics.append(f"""<div style="flex: 1; padding: 6px;"><span style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase;">Temperatura</span><div style="font-size: 18px; font-weight: 900; color: #0f172a;">{temp}°C</div></div>""")
+        if "humidity_pct" in extra or "humidity" in extra:
+            hum = extra.get("humidity_pct", extra.get("humidity"))
+            metrics.append(f"""<div style="flex: 1; padding: 6px;"><span style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase;">Humedad Rel.</span><div style="font-size: 18px; font-weight: 900; color: #0f172a;">{hum}%</div></div>""")
+        if "fwi_index" in extra or "fwi" in extra:
+            fwi = extra.get("fwi_index", extra.get("fwi"))
+            metrics.append(f"""<div style="flex: 1; padding: 6px;"><span style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase;">Índice FWI</span><div style="font-size: 18px; font-weight: 900; color: #dc2626;">{fwi}</div></div>""")
+            
+        if metrics:
+            telemetry_html = f"""
+            <div style="background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 14px; padding: 14px 18px; margin: 18px 0; display: flex; justify-content: space-around; text-align: center;">
+              {''.join(metrics)}
+            </div>
+            """
+            
+        action_box = ""
+        if "suggested_action" in extra and extra["suggested_action"]:
+            action_box = f"""
+            <div style="background: #ecfdf5; border-left: 4px solid #10b981; border-radius: 8px; padding: 14px 16px; margin: 16px 0; font-size: 12px; color: #065f46;">
+              <strong style="font-size: 11px; text-transform: uppercase; letter-spacing: 1px; display: block; margin-bottom: 4px;">Acción Técnica Recomendada:</strong>
+              {extra['suggested_action']}
+            </div>
+            """
 
         return f"""
         <!DOCTYPE html>
@@ -87,40 +125,48 @@ class EmailNotificationService:
         <head>
           <meta charset="utf-8">
           <style>
-            body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f8fafc; margin: 0; padding: 24px; }}
-            .container {{ max-width: 580px; margin: 0 auto; background: #ffffff; border-radius: 24px; border: 1px solid #fecdd3; overflow: hidden; }}
-            .header {{ background: #991b1b; padding: 24px 32px; color: #ffffff; }}
+            body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 24px; }}
+            .container {{ max-width: 580px; margin: 0 auto; background: #ffffff; border-radius: 24px; border: 1px solid #fecdd3; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.05); }}
+            .header {{ background: {badge_bg}; padding: 24px 32px; color: #ffffff; }}
             .content {{ padding: 32px; color: #334155; line-height: 1.6; }}
-            .btn {{ display: inline-block; background: #e11d48; color: #ffffff !important; padding: 12px 24px; border-radius: 12px; font-weight: bold; text-decoration: none; font-size: 12px; text-transform: uppercase; }}
-            .footer {{ background: #f8fafc; padding: 18px 32px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #94a3b8; text-align: center; }}
+            .btn {{ display: inline-block; background: {header_color}; color: #ffffff !important; padding: 14px 28px; border-radius: 14px; font-weight: 800; text-decoration: none; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; }}
+            .footer {{ background: #f8fafc; padding: 20px 32px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #94a3b8; text-align: center; }}
           </style>
         </head>
         <body>
           <div class="container">
             <div class="header">
-              <span style="font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #fecdd3; font-weight: bold;">HempC Nucleus • Monitoreo Crítico</span>
-              <h1 style="margin: 6px 0 0 0; font-size: 20px; font-weight: 800;">{title}</h1>
+              <span style="font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #fecdd3; font-weight: bold;">HempC Nucleus • Monitoreo Crítico Agronómico</span>
+              <h1 style="margin: 8px 0 0 0; font-size: 20px; font-weight: 900;">{title}</h1>
             </div>
             <div class="content">
-              <p>Estimado/a <strong>{req.to_name}</strong>,</p>
-              <p>El sistema de telemetría IoT y teledetección satelital ha disparado una alerta en el lote <strong>{plot}</strong>:</p>
+              <p style="font-size: 14px; margin-top: 0;">Estimado/a <strong>{req.to_name}</strong>,</p>
+              <p style="font-size: 13px; color: #475569;">
+                El sistema de telemetría IoT, teledetección satelital Sentinel-2 y vigilancia meteorológica ha emitido una alerta prioritaria para la parcela <strong>{plot}</strong>:
+              </p>
               
-              <div style="background: #fff1f2; border: 1px solid #ffe4e6; border-left: 4px solid #e11d48; border-radius: 12px; padding: 16px; margin: 20px 0;">
-                <p style="margin: 0; font-size: 13px; color: #9f1239;">{details}</p>
+              <div style="background: #fff1f2; border: 1px solid #ffe4e6; border-left: 4px solid {header_color}; border-radius: 14px; padding: 16px 20px; margin: 18px 0;">
+                <div style="font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 1.5px; color: #be123c; margin-bottom: 4px;">
+                  Severidad: {severity}
+                </div>
+                <p style="margin: 0; font-size: 13px; color: #881337; font-weight: 500; line-height: 1.5;">{details}</p>
               </div>
 
-              <div style="text-align: center; margin: 24px 0;">
-                <a href="{req.action_url}" class="btn">Ver Estado del Lote en Vivo</a>
+              {telemetry_html}
+              {action_box}
+
+              <div style="text-align: center; margin: 28px 0 16px 0;">
+                <a href="{req.action_url}" class="btn">Ver Estado del Lote y Telemetría en Vivo</a>
               </div>
             </div>
             <div class="footer">
-              Enviado automáticamente por <strong>notificaciones@hempc.com.ar</strong>
+              Enviado automáticamente por <strong>notificaciones@hempc.com.ar</strong><br>
+              Plataforma de la Red Cooperativa del Cáñamo Industrial Argentino • INASE / SENASA / ARICCAME
             </div>
           </div>
         </body>
         </html>
         """
-
     def build_password_reset_html(self, req: EmailNotificationRequest) -> str:
         temp_pwd = req.temp_password or "Consulte a su administrador"
         return f"""

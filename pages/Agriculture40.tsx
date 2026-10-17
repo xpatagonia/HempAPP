@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { 
-  Sprout, Droplets, Satellite, Leaf, Download, RefreshCw, 
+  Sprout, Droplets, Mail, Send, Loader2, Satellite, Leaf, Download, RefreshCw, 
   MapPin, AlertCircle, ShieldCheck, CheckCircle2, TrendingUp, 
   Layers, Sun, Compass, ArrowRight, Activity, Thermometer,
   CloudRain, Zap, BarChart3, HelpCircle, FileText, Globe, Wind,
@@ -34,6 +34,7 @@ import {
   PlotLiveWeather,
   fetchBatchPlotWeather
 } from '../src/services/agro40Service';
+import { sendAgronomicAlertEmail } from '../src/services/emailNotificationService';
 import { SoilHealthData, WaterEfficiencyMetrics, NDVISample, SatellitePass, DroneFlight, CarbonFootprintData, CatastropheRiskAlert, CatastropheType, RiskLevel, AgrochemicalApplication, ToxicologicalBand } from '../types';
 
 const MapResizer = () => {
@@ -102,9 +103,88 @@ const CatastropheMapController = ({
 };
 
 export default function Agriculture40() {
-  const { plots, locations, varieties, trialRecords, hydricRecords } = useAppContext();
+  const { plots, locations, varieties, trialRecords, hydricRecords, clients, usersList, currentUser } = useAppContext();
   const [searchParams, setSearchParams] = useSearchParams();
   const urlPlotId = searchParams.get('plotId');
+
+  // Estado para emisión de alertas tempranas por correo
+  const [selectedCatastropheForEmail, setSelectedCatastropheForEmail] = useState<CatastropheRiskAlert | null>(null);
+  const [catastropheRecipientEmail, setCatastropheRecipientEmail] = useState("");
+  const [catastropheRecipientName, setCatastropheRecipientName] = useState("");
+  const [catastropheSubject, setCatastropheSubject] = useState("");
+  const [catastropheSeverity, setCatastropheSeverity] = useState<"Crítica" | "Advertencia" | "Informativa">("Crítica");
+  const [catastropheDetails, setCatastropheDetails] = useState("");
+  const [isSendingCatastropheEmail, setIsSendingCatastropheEmail] = useState(false);
+  const [catastropheEmailToast, setCatastropheEmailToast] = useState<{
+    show: boolean;
+    message: string;
+    sentTo: string;
+    via: string;
+  } | null>(null);
+
+  const handleOpenCatastropheAlertEmail = (alert: CatastropheRiskAlert) => {
+    const plot = plots.find(p => p.id === alert.plotId || p.name.toLowerCase() === alert.plotName.toLowerCase());
+    const location = locations.find(l => l.id === plot?.locationId);
+    const client = clients?.find(c => c.id === location?.clientId);
+    const assignedUser = usersList?.find(u => (location?.clientId && u.clientId === location.clientId) || u.assignedPlotIds?.includes(plot?.id || ""));
+
+    const recipientEmail = client?.email || assignedUser?.email || currentUser?.email || "gaston.barea.moreno@gmail.com";
+    const recipientName = client?.contactName || client?.name || assignedUser?.name || "Productor Asociado";
+
+    const severityLevel = alert.level === "Alto" || alert.level === "Extremo" ? "Crítica" : (alert.level === "Moderado" ? "Advertencia" : "Informativa");
+    setCatastropheSeverity(severityLevel);
+    setSelectedCatastropheForEmail(alert);
+    setCatastropheRecipientEmail(recipientEmail);
+    setCatastropheRecipientName(recipientName);
+    setCatastropheSubject(`Alerta Temprana: ${alert.title} • ${alert.plotName}`);
+    
+    const telemetryParts = [];
+    if (alert.satelliteTelemetry.temperatureC !== undefined) telemetryParts.push(`T°: ${alert.satelliteTelemetry.temperatureC}°C`);
+    if (alert.satelliteTelemetry.relativeHumidityPct !== undefined) telemetryParts.push(`Humedad: ${alert.satelliteTelemetry.relativeHumidityPct}%`);
+    if (alert.satelliteTelemetry.windSpeedKmH !== undefined) telemetryParts.push(`Viento: ${alert.satelliteTelemetry.windSpeedKmH} km/h`);
+    if (alert.satelliteTelemetry.fwiIndex !== undefined) telemetryParts.push(`FWI: ${alert.satelliteTelemetry.fwiIndex}`);
+    if (alert.satelliteTelemetry.soilSaturationPct !== undefined) telemetryParts.push(`Sat. Suelo: ${alert.satelliteTelemetry.soilSaturationPct}%`);
+
+    const measures = alert.preventiveMeasures.join(" | ");
+    setCatastropheDetails(
+      `${alert.description}\n\nTelemetría en Vivo: ${telemetryParts.join(" • ")}\n\nProtocolo Recomendado: ${measures}`
+    );
+  };
+
+  const handleSendCatastropheEmail = async () => {
+    if (!selectedCatastropheForEmail || !catastropheRecipientEmail.trim()) return;
+    setIsSendingCatastropheEmail(true);
+    try {
+      const res = await sendAgronomicAlertEmail({
+        toEmail: catastropheRecipientEmail.trim(),
+        toName: catastropheRecipientName.trim() || "Productor Asociado",
+        alertTitle: `[${catastropheSeverity.toUpperCase()}] ${catastropheSubject}`,
+        plotName: selectedCatastropheForEmail.plotName,
+        alertDetails: catastropheDetails,
+        severity: catastropheSeverity,
+        actionUrl: `${window.location.origin}/#/agro40`,
+        extraData: {
+          severity: catastropheSeverity,
+          temperature_c: selectedCatastropheForEmail.satelliteTelemetry.temperatureC,
+          humidity_pct: selectedCatastropheForEmail.satelliteTelemetry.relativeHumidityPct,
+          wind_kmh: selectedCatastropheForEmail.satelliteTelemetry.windSpeedKmH,
+          fwi_index: selectedCatastropheForEmail.satelliteTelemetry.fwiIndex,
+          suggested_action: selectedCatastropheForEmail.preventiveMeasures[0] || "Aplicar protocolo de contingencia"
+        }
+      });
+      setCatastropheEmailToast({
+        show: true,
+        message: res.message,
+        sentTo: catastropheRecipientEmail.trim(),
+        via: res.deliveredVia
+      });
+      setSelectedCatastropheForEmail(null);
+    } catch (err: any) {
+      alert("Error despachando alerta por correo: " + err.message);
+    } finally {
+      setIsSendingCatastropheEmail(false);
+    }
+  };
 
   // Estado del lote seleccionado
   const [selectedPlotId, setSelectedPlotId] = useState<string>(urlPlotId || (plots.length > 0 ? plots[0].id : ''));
@@ -3381,12 +3461,25 @@ export default function Agriculture40() {
                           <span className="text-[10px] font-bold text-slate-400">
                             Lat: {alert.coordinates.lat.toFixed(3)}, Lng: {alert.coordinates.lng.toFixed(3)}
                           </span>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedAlertForMap(alert);
-                            }}
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenCatastropheAlertEmail(alert);
+                              }}
+                              className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/60 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900/60 rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm transition cursor-pointer"
+                              title="Despachar alerta temprana al productor por correo electrónico"
+                            >
+                              <Mail size={11} />
+                              <span>Notificar Mail</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedAlertForMap(alert);
+                              }}
                             className={`text-[10px] font-black uppercase flex items-center gap-1 transition ${
                               selectedAlertForMap?.id === alert.id
                                 ? 'text-hemp-600 dark:text-hemp-400 underline'
@@ -3396,6 +3489,7 @@ export default function Agriculture40() {
                             <span>{selectedAlertForMap?.id === alert.id ? 'Foco Activo en Mapa' : 'Enfocar en Mapa'}</span>
                             <ArrowRight size={11} />
                           </button>
+                          </div>
                         </div>
                       </div>
                     );
@@ -4119,7 +4213,189 @@ export default function Agriculture40() {
         </div>
       )}
 
+
+      {/* TOAST DE NOTIFICACIÓN DE ALERTA POR CORREO */}
+      {catastropheEmailToast && catastropheEmailToast.show && (
+        <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-5 duration-300">
+          <div className="bg-slate-900 text-white px-5 py-4 rounded-2xl shadow-2xl border border-slate-700 flex items-center gap-4 max-w-md">
+            <div className="bg-rose-600 text-white p-2 rounded-xl shrink-0">
+              <Mail size={18} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <p className="text-xs font-black uppercase tracking-wider text-rose-400">
+                  Alerta Despachada al Productor
+                </p>
+                <span className="text-[9px] px-1.5 py-0.5 rounded font-mono font-bold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  {catastropheEmailToast.via === "smtp" ? "SMTP Real :2525" : "Simulado"}
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 truncate mt-0.5 font-medium">
+                {catastropheEmailToast.sentTo}
+              </p>
+            </div>
+            <button
+              onClick={() => setCatastropheEmailToast(null)}
+              className="p-1 opacity-60 hover:opacity-100 cursor-pointer"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE DESPACHO DE ALERTA TEMPRANA POR CORREO */}
+      {selectedCatastropheForEmail && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] shadow-2xl max-w-lg w-full p-8 relative animate-in zoom-in-95">
+            <button
+              onClick={() => setSelectedCatastropheForEmail(null)}
+              className="absolute top-6 right-6 p-2 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+            >
+              <X size={20} />
+            </button>
+
+            <div className="flex items-center gap-3 mb-6">
+              <div className="bg-rose-600 text-white p-3 rounded-2xl shadow-lg shadow-rose-900/20">
+                <Mail size={22} />
+              </div>
+              <div>
+                <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight italic">
+                  Notificar Alerta Temprana
+                </h3>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  Despacho oficial al productor vía notificaciones@hempc.com.ar
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {/* Información del Lote y Alerta */}
+              <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-1.5 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-slate-400 font-bold uppercase text-[10px]">Lote / Región:</span>
+                  <span className="font-black text-slate-800 dark:text-white uppercase">{selectedCatastropheForEmail.plotName} ({selectedCatastropheForEmail.province})</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400 font-bold uppercase text-[10px]">Tipo de Amenaza:</span>
+                  <span className="font-black text-rose-600 uppercase">{selectedCatastropheForEmail.title}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400 font-bold uppercase text-[10px]">Score de Riesgo:</span>
+                  <span className="font-bold text-slate-700 dark:text-slate-300">{selectedCatastropheForEmail.level} ({selectedCatastropheForEmail.score}/100)</span>
+                </div>
+              </div>
+
+              {/* Selector de Severidad */}
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1.5 ml-1">
+                  Nivel de Severidad
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(["Crítica", "Advertencia", "Informativa"] as const).map(sev => (
+                    <button
+                      key={sev}
+                      type="button"
+                      onClick={() => setCatastropheSeverity(sev)}
+                      className={`py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition border cursor-pointer ${
+                        catastropheSeverity === sev
+                          ? sev === "Crítica" ? "bg-red-600 text-white border-red-600 shadow" :
+                            sev === "Advertencia" ? "bg-amber-500 text-white border-amber-500 shadow" :
+                            "bg-blue-600 text-white border-blue-600 shadow"
+                          : "bg-slate-50 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700"
+                      }`}
+                    >
+                      {sev}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Formulario */}
+              <div className="space-y-3">
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1 ml-1">
+                    Destinatario (Nombre) *
+                  </label>
+                  <input
+                    type="text"
+                    value={catastropheRecipientName}
+                    onChange={e => setCatastropheRecipientName(e.target.value)}
+                    className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-rose-500"
+                    placeholder="Nombre del productor"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1 ml-1">
+                    Correo Electrónico Destino *
+                  </label>
+                  <input
+                    type="email"
+                    value={catastropheRecipientEmail}
+                    onChange={e => setCatastropheRecipientEmail(e.target.value)}
+                    className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-rose-500"
+                    placeholder="productor@campo.com.ar"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1 ml-1">
+                    Asunto de la Notificación *
+                  </label>
+                  <input
+                    type="text"
+                    value={catastropheSubject}
+                    onChange={e => setCatastropheSubject(e.target.value)}
+                    className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-rose-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1 ml-1">
+                    Diagnóstico & Protocolo de Mitigación
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={catastropheDetails}
+                    onChange={e => setCatastropheDetails(e.target.value)}
+                    className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-rose-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setSelectedCatastropheForEmail(null)}
+                  className="px-4 py-2 text-slate-400 font-bold uppercase text-xs hover:text-slate-600 transition cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={isSendingCatastropheEmail || !catastropheRecipientEmail.trim()}
+                  onClick={handleSendCatastropheEmail}
+                  className="bg-rose-600 hover:bg-rose-700 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-wider shadow-lg flex items-center transition disabled:opacity-50 cursor-pointer"
+                >
+                  {isSendingCatastropheEmail ? (
+                    <>
+                      <Loader2 size={15} className="animate-spin mr-2" />
+                      Despachando Alerta...
+                    </>
+                  ) : (
+                    <>
+                      <Send size={15} className="mr-2" />
+                      Despachar al Correo
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
-
