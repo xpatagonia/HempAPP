@@ -27,7 +27,7 @@ import {
 } from '../src/data/historicalCampaignSeed';
 
 export default function Settings() {
-  const { currentUser, appName, appLogo, updateBranding } = useAppContext();
+  const { currentUser, appName, appLogo, updateBranding, refreshData, isDbConnected } = useAppContext();
   const [activeTab, setActiveTab] = useState<'branding' | 'system' | 'maintenance'>('branding');
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [isSavingBranding, setIsSavingBranding] = useState(false);
@@ -111,6 +111,7 @@ export default function Settings() {
       const connected = await checkConnection();
       if (connected) {
         setSbStatusMsg({ type: 'success', text: '✅ Conexión con Supabase verificada exitosamente.' });
+        await refreshData();
       } else {
         setSbStatusMsg({ type: 'error', text: '❌ No se pudo conectar a Supabase. Verifique las credenciales ingresadas.' });
       }
@@ -336,6 +337,20 @@ export default function Settings() {
                               {!sbUrl.includes('placeholder') && sbUrl ? 'Conexión Configurada' : 'Modo Autónomo Local'}
                           </span>
                       </div>
+                  </div>
+
+                  <div className="bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 rounded-2xl p-4 mb-6 text-xs text-emerald-900 dark:text-emerald-200">
+                      <p className="font-black uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                          <Info size={14} className="text-emerald-600 dark:text-emerald-400" />
+                          ¿Cómo conectar tu base de datos de Supabase?
+                      </p>
+                      <ol className="list-decimal pl-5 space-y-1 text-[11px] leading-relaxed">
+                          <li>Ingresa a tu consola en <a href="https://supabase.com/dashboard" target="_blank" rel="noopener noreferrer" className="font-bold underline hover:text-emerald-700">supabase.com/dashboard</a> y entra a tu proyecto.</li>
+                          <li>Ve a <strong>Settings (⚙️) &rarr; Data API</strong> (o pestaña <strong>API</strong>).</li>
+                          <li>Copia la <strong>Project URL</strong> (ej: <code>https://xyzcompany.supabase.co</code>) y la <strong>anon public key</strong> (comienza con <code>eyJhbGci...</code>).</li>
+                          <li>Pégalas en los campos de abajo y presiona <strong>Guardar &amp; Verificar Conexión</strong>.</li>
+                          <li>Una vez conectada, presiona <strong>Sincronizar Ensayos &amp; Socios a Supabase</strong> para subir todas las tablas con un clic.</li>
+                      </ol>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
