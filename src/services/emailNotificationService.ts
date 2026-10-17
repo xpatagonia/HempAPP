@@ -10,6 +10,23 @@ export interface SendOperatorInvitationParams {
   actionUrl?: string;
 }
 
+
+export interface SendPasswordResetParams {
+  toEmail: string;
+  toName: string;
+  tempPassword: string;
+  actionUrl?: string;
+}
+
+export interface SendUserProfileWelcomeParams {
+  toEmail: string;
+  toName: string;
+  roleName: string;
+  organizationName?: string;
+  tempPassword: string;
+  actionUrl?: string;
+}
+
 export interface SendAgronomicAlertParams {
   toEmail: string;
   toName: string;
@@ -292,4 +309,177 @@ export async function checkEmailServiceStatus(): Promise<{
     port: 587,
     engineUrl
   };
+}
+
+
+/**
+ * Envía un correo de recuperación de contraseña con clave provisoria
+ */
+export async function sendPasswordResetEmail(
+  params: SendPasswordResetParams
+): Promise<EmailDispatchResult> {
+  const timestamp = new Date().toISOString();
+  const engineUrl = getTelemetryEngineUrl();
+  const endpoint = `${engineUrl}/api/v1/notifications/email`;
+
+  const payload = {
+    to_email: params.toEmail.trim(),
+    to_name: params.toName.trim(),
+    notification_type: "password_reset",
+    temp_password: params.tempPassword,
+    action_url: params.actionUrl || window.location.origin
+  };
+
+  try {
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      const result: EmailDispatchResult = {
+        success: true,
+        message: data.message || `Instrucciones de recuperación enviadas a ${params.toEmail}`,
+        sentFrom: data.sent_from || "notificaciones@hempc.com.ar",
+        sentTo: data.sent_to || params.toEmail,
+        deliveredVia: data.delivered_via || "smtp",
+        timestamp
+      };
+
+      saveEmailAuditEntry({
+        id: `email-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        timestamp,
+        toEmail: params.toEmail,
+        toName: params.toName,
+        type: "test",
+        subject: "🔐 Restablecimiento de Contraseña • HempC Nucleus",
+        sentFrom: result.sentFrom,
+        status: result.deliveredVia === "smtp" ? "enviado" : "simulado",
+        deliveredVia: result.deliveredVia
+      });
+
+      return result;
+    } else {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Error en servidor HTTP ${res.status}`);
+    }
+  } catch (err: any) {
+    console.warn("Fallo en despacho remoto de email de recuperación, guardando en auditoría local:", err);
+    const result: EmailDispatchResult = {
+      success: true,
+      message: `Despacho registrado hacia ${params.toEmail} desde notificaciones@hempc.com.ar`,
+      sentFrom: "notificaciones@hempc.com.ar",
+      sentTo: params.toEmail,
+      deliveredVia: "simulated_local",
+      timestamp
+    };
+
+    saveEmailAuditEntry({
+      id: `email-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      timestamp,
+      toEmail: params.toEmail,
+      toName: params.toName,
+      type: "test",
+      subject: "🔐 Restablecimiento de Contraseña • HempC Nucleus",
+      sentFrom: result.sentFrom,
+      status: "simulado",
+      deliveredVia: "simulated_local"
+    });
+
+    return result;
+  }
+}
+
+/**
+ * Envía correo de bienvenida y credenciales al crear un nuevo perfil de equipo
+ */
+export async function sendUserProfileWelcomeEmail(
+  params: SendUserProfileWelcomeParams
+): Promise<EmailDispatchResult> {
+  const timestamp = new Date().toISOString();
+  const engineUrl = getTelemetryEngineUrl();
+  const endpoint = `${engineUrl}/api/v1/notifications/email`;
+
+  const payload = {
+    to_email: params.toEmail.trim(),
+    to_name: params.toName.trim(),
+    notification_type: "user_welcome",
+    role_name: params.roleName,
+    structure_name: params.organizationName || "Red Cooperativa Nucleus",
+    temp_password: params.tempPassword,
+    action_url: params.actionUrl || window.location.origin
+  };
+
+  try {
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      const result: EmailDispatchResult = {
+        success: true,
+        message: data.message || `Credenciales de acceso enviadas a ${params.toEmail}`,
+        sentFrom: data.sent_from || "notificaciones@hempc.com.ar",
+        sentTo: data.sent_to || params.toEmail,
+        deliveredVia: data.delivered_via || "smtp",
+        timestamp
+      };
+
+      saveEmailAuditEntry({
+        id: `email-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        timestamp,
+        toEmail: params.toEmail,
+        toName: params.toName,
+        type: "operator_invitation",
+        subject: `🌿 Alta de Perfil y Credenciales • ${params.organizationName || "HempC Nucleus"}`,
+        roleName: params.roleName,
+        structureName: params.organizationName,
+        sentFrom: result.sentFrom,
+        status: result.deliveredVia === "smtp" ? "enviado" : "simulado",
+        deliveredVia: result.deliveredVia
+      });
+
+      return result;
+    } else {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Error en servidor HTTP ${res.status}`);
+    }
+  } catch (err: any) {
+    console.warn("Fallo en despacho de bienvenida de usuario:", err);
+    const result: EmailDispatchResult = {
+      success: true,
+      message: `Despacho registrado hacia ${params.toEmail} desde notificaciones@hempc.com.ar`,
+      sentFrom: "notificaciones@hempc.com.ar",
+      sentTo: params.toEmail,
+      deliveredVia: "simulated_local",
+      timestamp
+    };
+
+    saveEmailAuditEntry({
+      id: `email-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      timestamp,
+      toEmail: params.toEmail,
+      toName: params.toName,
+      type: "operator_invitation",
+      subject: `🌿 Alta de Perfil y Credenciales • ${params.organizationName || "HempC Nucleus"}`,
+      roleName: params.roleName,
+      structureName: params.organizationName,
+      sentFrom: result.sentFrom,
+      status: "simulado",
+      deliveredVia: "simulated_local"
+    });
+
+    return result;
+  }
 }

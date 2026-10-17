@@ -121,10 +121,131 @@ class EmailNotificationService:
         </html>
         """
 
+    def build_password_reset_html(self, req: EmailNotificationRequest) -> str:
+        temp_pwd = req.temp_password or "Consulte a su administrador"
+        return f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 24px; }}
+            .container {{ max-width: 580px; margin: 0 auto; background: #ffffff; border-radius: 24px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.04); }}
+            .header {{ background: #064e3b; padding: 28px 32px; color: #ffffff; text-align: left; }}
+            .content {{ padding: 32px; color: #334155; line-height: 1.6; }}
+            .badge {{ display: inline-block; background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: bold; text-transform: uppercase; }}
+            .pwd-box {{ background: #f0fdf4; border: 2px dashed #059669; border-radius: 16px; padding: 20px; text-align: center; margin: 24px 0; }}
+            .pwd-code {{ font-family: monospace; font-size: 22px; font-weight: 900; letter-spacing: 2px; color: #047857; }}
+            .security-notice {{ background: #fffbeb; border: 1px solid #fef3c7; border-left: 4px solid #f59e0b; border-radius: 12px; padding: 14px 18px; margin: 20px 0; font-size: 11px; color: #92400e; }}
+            .btn {{ display: inline-block; background: #059669; color: #ffffff !important; padding: 14px 30px; border-radius: 14px; font-weight: 800; text-decoration: none; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 10px; }}
+            .footer {{ background: #f8fafc; padding: 20px 32px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #94a3b8; text-align: center; }}
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <span style="font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #a7f3d0; font-weight: bold;">Red Cooperativa Nucleus • Seguridad</span>
+              <h1 style="margin: 6px 0 0 0; font-size: 22px; font-weight: 800;">Restablecimiento de Contraseña</h1>
+            </div>
+            <div class="content">
+              <p style="font-size: 15px; color: #0f172a;">Hola <strong>{req.to_name}</strong>,</p>
+              <p>Hemos recibido una solicitud para recuperar tus credenciales de acceso a la plataforma <strong>HempC Nucleus</strong>.</p>
+              
+              <div class="pwd-box">
+                <span style="font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; color: #065f46; display: block; margin-bottom: 6px;">Tu Contraseña Provisoria de Ingreso</span>
+                <span class="pwd-code">{temp_pwd}</span>
+              </div>
+
+              <div class="security-notice">
+                <strong>🔒 Política de Acceso Institucional:</strong><br>
+                Los usuarios no pueden auto-registrarse en la plataforma pública. El acceso está restringido a miembros registrados por la administración cooperativa. Al ingresar con esta clave provisoria, te sugerimos personalizarla en Ajustes de Perfil.
+              </div>
+
+              <p style="font-size: 13px; color: #64748b;">Si no solicitaste este cambio, por favor ponte en contacto con la administración de tu nodo cooperativo.</p>
+
+              <div style="text-align: center; margin: 26px 0 10px 0;">
+                <a href="{req.action_url}" class="btn">Ingresar al Sistema</a>
+              </div>
+            </div>
+            <div class="footer">
+              Enviado automáticamente por <strong>notificaciones@hempc.com.ar</strong><br>
+              Plataforma de la Red Cooperativa del Cáñamo Industrial Argentino • ARICCAME / INASE / SENASA
+            </div>
+          </div>
+        </body>
+        </html>
+        """
+
+    def build_user_welcome_html(self, req: EmailNotificationRequest) -> str:
+        role_label = req.role_name or "Miembro del Equipo"
+        structure = req.structure_name or "Red Cooperativa Central"
+        temp_pwd = req.temp_password or "Configurada por el administrador"
+        return f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 24px; }}
+            .container {{ max-width: 580px; margin: 0 auto; background: #ffffff; border-radius: 24px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.04); }}
+            .header {{ background: #064e3b; padding: 28px 32px; color: #ffffff; text-align: left; }}
+            .content {{ padding: 32px; color: #334155; line-height: 1.6; }}
+            .badge {{ display: inline-block; background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: bold; text-transform: uppercase; }}
+            .creds-box {{ background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px; padding: 18px; margin: 20px 0; }}
+            .pwd-box {{ background: #f0fdf4; border: 2px dashed #059669; border-radius: 16px; padding: 18px; text-align: center; margin: 20px 0; }}
+            .pwd-code {{ font-family: monospace; font-size: 20px; font-weight: 900; letter-spacing: 1.5px; color: #047857; }}
+            .security-notice {{ background: #eff6ff; border: 1px solid #dbeafe; border-left: 4px solid #3b82f6; border-radius: 12px; padding: 14px 18px; margin: 20px 0; font-size: 11px; color: #1e40af; }}
+            .btn {{ display: inline-block; background: #10b981; color: #ffffff !important; padding: 14px 30px; border-radius: 14px; font-weight: 800; text-decoration: none; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 10px; }}
+            .footer {{ background: #f8fafc; padding: 20px 32px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #94a3b8; text-align: center; }}
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <span style="font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #a7f3d0; font-weight: bold;">Red Cooperativa Nucleus</span>
+              <h1 style="margin: 6px 0 0 0; font-size: 22px; font-weight: 800;">Bienvenido a HempC Nucleus</h1>
+            </div>
+            <div class="content">
+              <p style="font-size: 15px; color: #0f172a;">Hola <strong>{req.to_name}</strong>,</p>
+              <p>La administración cooperativa ha creado tu perfil de acceso para la gestión de equipos, trazabilidad y labores en <strong>HempC Nucleus</strong>.</p>
+              
+              <div class="creds-box">
+                <p style="margin: 0 0 8px 0; font-size: 13px;"><strong>Rol / Jerarquía:</strong> <span class="badge">{role_label}</span></p>
+                <p style="margin: 0 0 8px 0; font-size: 13px;"><strong>Entidad Asignada:</strong> {structure}</p>
+                <p style="margin: 0; font-size: 13px;"><strong>Usuario de Acceso:</strong> <code style="font-family: monospace; color: #0f172a;">{req.to_email}</code></p>
+              </div>
+
+              <div class="pwd-box">
+                <span style="font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; color: #065f46; display: block; margin-bottom: 6px;">Contraseña Inicial Asignada</span>
+                <span class="pwd-code">{temp_pwd}</span>
+              </div>
+
+              <div class="security-notice">
+                <strong>🛡️ Acceso Exclusivo por Invitación:</strong><br>
+                El registro público de usuarios se encuentra inhabilitado por normativas de seguridad institucional y trazabilidad legal ARICCAME / INASE. Esta cuenta es personal e intransferible.
+              </div>
+
+              <div style="text-align: center; margin: 26px 0 10px 0;">
+                <a href="{req.action_url}" class="btn">Acceder al Sistema</a>
+              </div>
+            </div>
+            <div class="footer">
+              Enviado automáticamente por <strong>notificaciones@hempc.com.ar</strong><br>
+              Plataforma de la Red Cooperativa del Cáñamo Industrial Argentino
+            </div>
+          </div>
+        </body>
+        </html>
+        """
+
     def send_notification(self, req: EmailNotificationRequest) -> EmailNotificationResponse:
         subject = req.subject
         if not subject:
-            if req.notification_type == "operator_invitation":
+            if req.notification_type == "password_reset":
+                subject = "🔐 Restablecimiento de Contraseña • HempC Nucleus"
+            elif req.notification_type == "user_welcome":
+                subject = f"🌿 Alta de Perfil y Credenciales • {req.structure_name or 'HempC Nucleus'}"
+            elif req.notification_type == "operator_invitation":
                 subject = f"Alta de Operario • {req.structure_name or 'HempC Nucleus'}"
             elif req.notification_type == "agronomic_alert":
                 subject = f"⚠️ ALERTA CRÍTICA: {req.alert_title or 'Desvío en Lote'}"
@@ -133,7 +254,11 @@ class EmailNotificationService:
             else:
                 subject = "Notificación de HempC | Red Cooperativa Nucleus"
 
-        if req.notification_type == "agronomic_alert":
+        if req.notification_type == "password_reset":
+            html_body = self.build_password_reset_html(req)
+        elif req.notification_type == "user_welcome":
+            html_body = self.build_user_welcome_html(req)
+        elif req.notification_type == "agronomic_alert":
             html_body = self.build_agronomic_alert_html(req)
         else:
             html_body = self.build_operator_invitation_html(req)
