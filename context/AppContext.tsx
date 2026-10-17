@@ -128,6 +128,32 @@ const toSnakeCase = (obj: any): any => {
     return obj;
 }
 
+// Purga inicial de datos demostrativos para paso a producción real y limpia
+if (typeof window !== 'undefined') {
+  const DATA_VERSION = 'v8.0_clean_production';
+  if (localStorage.getItem('ht_data_version') !== DATA_VERSION) {
+    const keysToPurge = [
+      'ht_users', 'ht_clients', 'ht_operational_expenses', 'ht_tasks',
+      'ht_locations', 'ht_plots', 'ht_trial_records', 'ht_storage_points',
+      'ht_seed_batches', 'ht_campaign_history', 'ht_agrochemical_apps',
+      'ht_resources', 'ht_seed_movements'
+    ];
+    keysToPurge.forEach(k => {
+      try { localStorage.removeItem(k); } catch (e) {}
+    });
+    const saved = localStorage.getItem('ht_session_user');
+    if (saved) {
+      try {
+        const u = JSON.parse(saved);
+        if (u.id?.includes('pergamino') || u.id?.includes('cordoba') || u.id?.includes('rosas')) {
+          localStorage.removeItem('ht_session_user');
+        }
+      } catch (e) {}
+    }
+    localStorage.setItem('ht_data_version', DATA_VERSION);
+  }
+}
+
 export const AppProvider = ({ children }: { children?: ReactNode }) => {
     // Sesión persistente: solo restaura si el usuario inició sesión previamente y no cerró sesión.
     const [currentUser, setCurrentUser] = useState<User | null>(() => {

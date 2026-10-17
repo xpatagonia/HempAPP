@@ -98,9 +98,9 @@ export default function Login() {
     }
 
     // Si es la cuenta principal admin@hempc.com.ar o gaston.barea.moreno@gmail.com y no estuviera en memoria local previa
-    if (!userFound && (targetEmail === "admin@hempc.com.ar" || targetEmail === "gaston.barea.moreno@gmail.com")) {
+    if (!userFound && (targetEmail === "admin@hempc.com.ar" || targetEmail === "gaston.barea.moreno@gmail.com" || targetEmail === "xpatagonia.com@gmail.com")) {
       userFound = {
-        id: targetEmail === "admin@hempc.com.ar" ? "user-admin-hempc" : "user-admin-nucleus",
+        id: targetEmail === "admin@hempc.com.ar" ? "user-admin-hempc" : targetEmail === "xpatagonia.com@gmail.com" ? "user-admin-xpatagonia" : "user-admin-nucleus",
         name: targetEmail === "admin@hempc.com.ar" ? "Administración Central HempC" : "Ing. Gastón Barea (Nucleus)",
         email: targetEmail,
         role: "super_admin",
