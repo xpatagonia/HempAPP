@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { supabase, checkConnection } from '../supabaseClient';
+import { supabase, checkConnection, getStoredCredentials } from '../supabaseClient';
 import { 
   User, Location, Plot, TrialRecord, Task, Project, Variety, 
   Client, Supplier, SeedBatch, SeedMovement, Resource, 
@@ -682,22 +682,60 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         return ok;
     };
 
+    const deleteUserSafe = async (id: string): Promise<boolean> => {
+        const user = usersList.find(u => u.id === id);
+        if (user?.email?.toLowerCase() === 'admin@hempc.com.ar') {
+            console.warn('Protección: No se puede eliminar el usuario administrador principal.');
+            return false;
+        }
+        // Desvincular de clientes locales para mantener consistencia relacional
+        setClients(prev => {
+            const updated = prev.map(c => {
+                let modified = false;
+                let relId = c.relatedUserId;
+                let teams = c.teamUserIds || [];
+                if (relId === id) {
+                    relId = undefined;
+                    modified = true;
+                }
+                if (teams.includes(id)) {
+                    teams = teams.filter(uid => uid !== id);
+                    modified = true;
+                }
+                return modified ? { ...c, relatedUserId: relId, teamUserIds: teams } : c;
+            });
+            try { localStorage.setItem('ht_clients', JSON.stringify(updated)); } catch (e) {}
+            return updated;
+        });
+        const ok = await crud('users', id, 'delete');
+        if (ok && currentUser?.id === id) {
+            logout();
+        }
+        return ok;
+    };
+
     const crud = async (table: string, item: any, action: 'insert' | 'update' | 'delete', idField = 'id') => {
         // 1. Inmediatamente actualizar estado React y persistencia local
         updateLocalState(table, item, action, idField);
 
-        // 2. Si la base de datos Supabase está conectada, sincronizar
-        if (isDbConnected) {
+        // 2. Si la base de datos Supabase está conectada o configurada, sincronizar
+        const creds = getStoredCredentials();
+        if (isDbConnected || creds.isConfigured) {
             try {
                 let payload = item;
                 if (action !== 'delete') payload = toSnakeCase(item);
                 if (action === 'insert') {
-                    await supabase.from(table).insert([payload]);
+                    const res = await supabase.from(table).insert([payload]);
+                    if (res.error) console.error(`Error inserting into ${table}:`, res.error);
                 } else if (action === 'update') {
-                    await supabase.from(table).update(payload).eq(idField, item[idField]);
+                    const res = await supabase.from(table).update(payload).eq(idField, item[idField]);
+                    if (res.error) console.error(`Error updating in ${table}:`, res.error);
                 } else if (action === 'delete') {
                     const targetId = typeof item === 'object' && item !== null ? item[idField] : item;
-                    await supabase.from(table).delete().eq(idField, targetId);
+                    const res = await supabase.from(table).delete().eq(idField, targetId);
+                    if (res.error) {
+                        console.error(`Error deleting from ${table}:`, res.error);
+                    }
                 }
             } catch (e) {
                 console.warn(`Sync warning for ${table} in ${action}:`, e);
@@ -760,7 +798,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             currentUser, usersList, isDbConnected, login, loginDemo, logout, 
             addUser: (user: User) => crud('users', user, 'insert'),
             updateUser: (user: User) => crud('users', user, 'update'),
-            deleteUser: (id: string) => crud('users', id, 'delete'),
+            deleteUser: deleteUserSafe,
             theme, toggleTheme, appName, appLogo, updateBranding,
             varieties, addVariety: (v) => crud('varieties', v, 'insert'), updateVariety: (v) => crud('varieties', v, 'update'), deleteVariety: (id) => crud('varieties', id, 'delete'),
             locations, addLocation: (l) => crud('locations', l, 'insert'), updateLocation: (l) => crud('locations', l, 'update'), deleteLocation: (id) => crud('locations', id, 'delete'),

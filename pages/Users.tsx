@@ -39,6 +39,11 @@ export default function Users() {
 
   // Estados para acciones por fila (envío de email o reseteo)
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const [isDeletingUser, setIsDeletingUser] = useState(false);
+  const [userToReset, setUserToReset] = useState<User | null>(null);
+  const [isResettingUser, setIsResettingUser] = useState(false);
+  const [userActionToast, setUserActionToast] = useState<{ show: boolean; success: boolean; message: string } | null>(null);
   const [emailToast, setEmailToast] = useState<{
     show: boolean;
     success: boolean;
@@ -242,14 +247,42 @@ export default function Users() {
     }
   };
 
-  // Restablecer contraseña y notificar por correo
-  const handleResetPasswordAndNotify = async (user: User) => {
-    const confirmReset = window.confirm(
-      `¿Deseas generar una nueva contraseña provisoria para "${user.name}" y despacharla por correo electrónico a ${user.email}?`
-    );
-    if (!confirmReset) return;
+  // Confirmar eliminación de usuario
+  const handleDeleteUserConfirm = async () => {
+    if (!userToDelete) return;
+    setIsDeletingUser(true);
+    try {
+      const ok = await deleteUser(userToDelete.id);
+      if (ok) {
+        setUserActionToast({
+          show: true,
+          success: true,
+          message: `El usuario "${userToDelete.name}" ha sido eliminado exitosamente del padrón y de la base de datos.`
+        });
+        setUserToDelete(null);
+        setTimeout(() => setUserActionToast(null), 5000);
+      } else {
+        setUserActionToast({
+          show: true,
+          success: false,
+          message: `No se pudo eliminar el usuario "${userToDelete.name}". Verifique los permisos o si la cuenta está protegida.`
+        });
+      }
+    } catch (err: any) {
+      setUserActionToast({
+        show: true,
+        success: false,
+        message: `Error al eliminar el usuario: ${err.message || 'Fallo desconocido'}`
+      });
+    } finally {
+      setIsDeletingUser(false);
+    }
+  };
 
-    setActionLoadingId(user.id);
+  // Confirmar reseteo de contraseña
+  const handleResetUserConfirm = async () => {
+    if (!userToReset) return;
+    setIsResettingUser(true);
     try {
       const charsUpper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
       const charsNums = "23456789";
@@ -260,31 +293,43 @@ export default function Users() {
 
       // Actualizar en base de datos
       await updateUser({
-        ...user,
+        ...userToReset,
         password: newTempPassword
       });
 
       // Despachar email
       const dispatch = await sendPasswordResetEmail({
-        toEmail: user.email,
-        toName: user.name,
+        toEmail: userToReset.email,
+        toName: userToReset.name,
         tempPassword: newTempPassword,
         actionUrl: window.location.origin
       });
 
       setEmailToast({
         show: true,
-        success: true,
-        message: `Nueva contraseña provisoria generada y despachada a ${user.email}`,
-        sentTo: user.email,
+        success: dispatch.success,
+        message: dispatch.message,
+        sentTo: userToReset.email,
         via: dispatch.deliveredVia
       });
+      setUserToReset(null);
     } catch (err: any) {
-      alert("Error al restablecer contraseña: " + err.message);
+      setUserActionToast({
+        show: true,
+        success: false,
+        message: "Error al enviar credenciales: " + err.message
+      });
     } finally {
-      setActionLoadingId(null);
+      setIsResettingUser(false);
     }
   };
+
+  // Restablecer contraseña y notificar por correo (abre modal)
+  const handleResetPasswordAndNotify = (user: User) => {
+    setUserToReset(user);
+  };
+
+
 
   const inputClass = "w-full border border-gray-300 dark:border-slate-800 bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 p-3 rounded-2xl focus:ring-2 focus:ring-hemp-500 outline-none transition-all text-sm font-medium";
 
@@ -595,7 +640,7 @@ export default function Users() {
 
                         {/* Botón: Eliminar */}
                         <button 
-                          onClick={() => { if(window.confirm(`¿Eliminar perfil de ${user.name}?`)) deleteUser(user.id); }} 
+                          onClick={() => setUserToDelete(user)} 
                           className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition shadow-sm border border-transparent hover:border-red-100 cursor-pointer"
                           title="Eliminar perfil"
                         >
@@ -610,6 +655,148 @@ export default function Users() {
           </table>
         </div>
       </div>
+
+      {/* TOAST DE ACCIÓN DE USUARIO */}
+      {userActionToast && (
+        <div className="fixed top-6 right-6 z-50 animate-in slide-in-from-top-4 duration-300">
+          <div className={`p-4 rounded-2xl shadow-2xl border flex items-center gap-3 max-w-md ${
+            userActionToast.success 
+              ? 'bg-emerald-50 dark:bg-emerald-950/80 border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-100'
+              : 'bg-red-50 dark:bg-red-950/80 border-red-300 dark:border-red-800 text-red-900 dark:text-red-100'
+          }`}>
+            {userActionToast.success ? <CheckCircle2 size={20} className="text-emerald-600 shrink-0" /> : <AlertTriangle size={20} className="text-red-600 shrink-0" />}
+            <span className="text-xs font-bold">{userActionToast.message}</span>
+            <button onClick={() => setUserActionToast(null)} className="ml-auto text-slate-400 hover:text-slate-600">
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE CONFIRMACIÓN DE ELIMINACIÓN */}
+      {userToDelete && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl max-w-md w-full p-8 animate-in zoom-in-95 border border-slate-200 dark:border-slate-800">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-14 h-14 rounded-2xl bg-red-100 dark:bg-red-950/50 flex items-center justify-center text-red-600 dark:text-red-400 shrink-0">
+                <Trash2 size={28} />
+              </div>
+              <div>
+                <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight leading-none">
+                  Eliminar Usuario
+                </h3>
+                <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-1">
+                  Confirmación de baja en el padrón
+                </p>
+              </div>
+            </div>
+
+            {/* Ficha del usuario a eliminar */}
+            <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 mb-6 flex items-center gap-3">
+              <img
+                src={userToDelete.avatar || PRESET_AVATARS[0]}
+                alt={userToDelete.name}
+                className="w-12 h-12 rounded-xl object-cover bg-white dark:bg-slate-900 border"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="font-black text-sm text-slate-800 dark:text-white truncate">
+                  {userToDelete.name}
+                </p>
+                <p className="text-xs text-slate-400 font-mono truncate">
+                  {userToDelete.email}
+                </p>
+                <span className="inline-block px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 mt-1">
+                  {userToDelete.role}
+                </span>
+              </div>
+            </div>
+
+            {/* Advertencia si es la cuenta maestra admin@hempc.com.ar */}
+            {userToDelete.email?.toLowerCase() === 'admin@hempc.com.ar' ? (
+              <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 text-xs mb-6">
+                <p className="font-bold flex items-center gap-2">
+                  <ShieldCheck size={16} className="text-amber-600 shrink-0" />
+                  Cuenta Maestra Protegida
+                </p>
+                <p className="text-[11px] mt-1 opacity-90 leading-relaxed">
+                  Esta es la cuenta raíz de Administración Central HempC y no puede ser eliminada para garantizar la seguridad e integridad del sistema.
+                </p>
+              </div>
+            ) : (
+              <p className="text-xs text-slate-600 dark:text-slate-400 font-medium leading-relaxed mb-6">
+                ¿Estás seguro de que deseas eliminar permanentemente a este usuario? Se removerá tanto de la base de datos Supabase en la nube como del registro local.
+              </p>
+            )}
+
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setUserToDelete(null)}
+                disabled={isDeletingUser}
+                className="px-5 py-3 rounded-xl text-xs font-black uppercase tracking-wider text-slate-400 hover:text-slate-600 transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              {userToDelete.email?.toLowerCase() !== 'admin@hempc.com.ar' && (
+                <button
+                  type="button"
+                  onClick={handleDeleteUserConfirm}
+                  disabled={isDeletingUser}
+                  className="px-6 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-black uppercase tracking-wider transition shadow-lg shadow-red-600/20 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  {isDeletingUser ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                  <span>{isDeletingUser ? "Eliminando..." : "Confirmar Eliminación"}</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE CONFIRMACIÓN DE RESET DE CONTRASEÑA */}
+      {userToReset && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl max-w-md w-full p-8 animate-in zoom-in-95 border border-slate-200 dark:border-slate-800">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-14 h-14 rounded-2xl bg-amber-100 dark:bg-amber-950/50 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
+                <Key size={28} />
+              </div>
+              <div>
+                <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight leading-none">
+                  Restablecer Clave
+                </h3>
+                <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-1">
+                  Generación de clave temporal
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 dark:text-slate-400 font-medium leading-relaxed mb-6">
+              Se generará una nueva contraseña provisoria de alta seguridad para <strong>{userToReset.name}</strong> y será despachada por correo electrónico a <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{userToReset.email}</span>.
+            </p>
+
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setUserToReset(null)}
+                disabled={isResettingUser}
+                className="px-5 py-3 rounded-xl text-xs font-black uppercase tracking-wider text-slate-400 hover:text-slate-600 transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleResetUserConfirm}
+                disabled={isResettingUser}
+                className="px-6 py-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-black uppercase tracking-wider transition shadow-lg shadow-amber-600/20 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                {isResettingUser ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+                <span>{isResettingUser ? "Generando..." : "Confirmar & Despachar"}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL DE ALTA / EDICIÓN DE PERFIL */}
       {isModalOpen && (
