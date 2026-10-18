@@ -806,10 +806,16 @@ export default function Plots() {
                         </div>
                       )}
 
-                      {/* Campo Padre y Localidad */}
+                      {/* Campo Padre y Localidad con enlace interactivo */}
                       <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono flex items-center gap-1.5">
                         <MapPin size={12} className="text-emerald-500 shrink-0" />
-                        <span>{loc?.name || 'S/D'} ({loc?.city || loc?.province})</span>
+                        <Link 
+                          to={`/locations?search=${encodeURIComponent(loc?.name || '')}`}
+                          className="hover:text-emerald-600 dark:hover:text-emerald-400 hover:underline transition-colors font-bold"
+                          title="Ver detalles del Campo / Sitio Padre"
+                        >
+                          {loc?.name || 'S/D'} ({loc?.city || loc?.province})
+                        </Link>
                       </p>
 
                       {/* Grid de Métricas de Parcela */}
@@ -927,7 +933,18 @@ export default function Plots() {
                         required 
                         className={inputClass} 
                         value={formData.locationId} 
-                        onChange={e => setFormData({ ...formData, locationId: e.target.value })}
+                        onChange={e => {
+                          const chosenLocId = e.target.value;
+                          const chosenLoc = locations.find(l => l.id === chosenLocId);
+                          const updates: any = { locationId: chosenLocId };
+                          if (chosenLoc?.coordinates?.lat && chosenLoc?.coordinates?.lng) {
+                            if (!formData.polygon || formData.polygon.length === 0) {
+                              updates.lat = chosenLoc.coordinates.lat.toString();
+                              updates.lng = chosenLoc.coordinates.lng.toString();
+                            }
+                          }
+                          setFormData(prev => ({ ...prev, ...updates }));
+                        }}
                       >
                         <option value="">Seleccionar campo...</option>
                         {availableLocations.map(l => (
@@ -1143,10 +1160,35 @@ export default function Plots() {
                       </div>
                     </div>
 
-                    <div className="flex-1 min-h-[220px] rounded-xl overflow-hidden mb-3 bg-slate-900 border border-slate-200 dark:border-slate-700">
+                    {/* Referencia contextual del Campo Padre */}
+                    {(() => {
+                      const parentLoc = locations.find(l => l.id === formData.locationId);
+                      if (!parentLoc) return null;
+                      return (
+                        <div className="mb-2 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px]">
+                          <span className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                            <MapPin size={13} className="text-emerald-500 shrink-0" />
+                            <span>Campo Padre: <strong>{parentLoc.name}</strong> ({parentLoc.city || parentLoc.province})</span>
+                          </span>
+                          {parentLoc.polygon && parentLoc.polygon.length > 2 && (
+                            <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-mono font-bold bg-emerald-100/70 dark:bg-emerald-950/60 px-2.5 py-0.5 rounded-lg border border-emerald-500/20">
+                              Perímetro del campo visible
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
+
+                    <div className="flex-1 min-h-[240px] rounded-xl overflow-hidden mb-3 bg-slate-900 border border-slate-200 dark:border-slate-700">
                       <MapEditor 
-                        initialCenter={formData.lat && formData.lng ? { lat: parseFloat(formData.lat), lng: parseFloat(formData.lng) } : undefined} 
+                        key={`plot-map-${formData.locationId || 'default'}-${editingPlot?.id || 'new'}`}
+                        initialCenter={
+                          formData.lat && formData.lng && !isNaN(parseFloat(formData.lat)) && !isNaN(parseFloat(formData.lng)) 
+                            ? { lat: parseFloat(formData.lat), lng: parseFloat(formData.lng) } 
+                            : (locations.find(l => l.id === formData.locationId)?.coordinates || undefined)
+                        } 
                         initialPolygon={formData.polygon || []} 
+                        referencePolygon={locations.find(l => l.id === formData.locationId)?.polygon || []}
                         onPolygonChange={handlePolygonChange} 
                         height="100%" 
                       />

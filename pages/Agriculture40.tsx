@@ -16,7 +16,7 @@ import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, 
   CartesianGrid, Tooltip, BarChart, Bar, Legend, Cell 
 } from 'recharts';
-import { MapContainer, TileLayer, Polygon, Marker, Tooltip as LeafletTooltip, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Polygon, Marker, Tooltip as LeafletTooltip, useMap, ZoomControl } from 'react-leaflet';
 import L from 'leaflet';
 import { 
   fetchLiveSoilAndAgroData, 
@@ -1952,8 +1952,10 @@ export default function Agriculture40() {
                       center={[mapCenter.lat, mapCenter.lng]}
                       zoom={15}
                       scrollWheelZoom={false}
+                      zoomControl={false}
                       className="w-full h-full"
                     >
+                      <ZoomControl position="bottomright" />
                       <MapResizer />
                       <MapRecenter polygon={plotPolygon || undefined} center={mapCenter} />
 
@@ -2014,10 +2016,11 @@ export default function Agriculture40() {
                         </Polygon>
                       ))}
 
-                      {/* Perímetro Vectorial del Lote */}
+                      {/* Perímetro Vectorial del Lote (interactivo solo en capas satelitales planas para evitar superposición con tooltips de píxeles) */}
                       {plotPolygon && (
                         <Polygon
                           positions={plotPolygon.map(p => [p.lat, p.lng])}
+                          interactive={mapLayer === 'satellite' || mapLayer === 'street'}
                           pathOptions={{
                             color: mapLayer === 'satellite' ? activePassColor.stroke : '#ffffff',
                             fillColor: activePassColor.fill,
@@ -2026,10 +2029,12 @@ export default function Agriculture40() {
                             dashArray: mapLayer === 'satellite' ? undefined : '4, 4'
                           }}
                         >
-                          <LeafletTooltip direction="top" offset={[0, -10]} className="font-bold text-xs bg-slate-900 text-white rounded-xl p-2 shadow-xl border border-white/10">
-                            <span className="font-black text-emerald-400">{selectedPlot?.name} ({selectedPlot?.surfaceArea || 1} {selectedPlot?.surfaceUnit || 'ha'})</span>
-                            <span className="block text-[11px] text-slate-300 font-normal">{activePass?.stageName} • NDVI Promedio: {activePass?.ndviAverage.toFixed(2)}</span>
-                          </LeafletTooltip>
+                          {(mapLayer === 'satellite' || mapLayer === 'street') && (
+                            <LeafletTooltip direction="top" offset={[0, -10]} className="font-bold text-xs bg-slate-900 text-white rounded-xl p-2 shadow-xl border border-white/10">
+                              <span className="font-black text-emerald-400">{selectedPlot?.name} ({selectedPlot?.surfaceArea || 1} {selectedPlot?.surfaceUnit || 'ha'})</span>
+                              <span className="block text-[11px] text-slate-300 font-normal">{activePass?.stageName} • NDVI Promedio: {activePass?.ndviAverage.toFixed(2)}</span>
+                            </LeafletTooltip>
+                          )}
                         </Polygon>
                       )}
 
@@ -3530,9 +3535,11 @@ export default function Agriculture40() {
                     center={[-34.5, -63.5]}
                     zoom={5}
                     scrollWheelZoom={true}
+                    zoomControl={false}
                     className="w-full h-full z-0"
                     style={{ width: '100%', height: '100%', minHeight: '550px' }}
                   >
+                    <ZoomControl position="bottomright" />
                     <MapResizer />
                     <CatastropheMapController selectedAlert={selectedAlertForMap} alerts={filteredCatastropheAlerts} />
 

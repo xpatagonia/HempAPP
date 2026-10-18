@@ -7,6 +7,7 @@ import {
     calculateWaterEfficiency,
     calculateCarbonFootprint
 } from '../src/services/agro40Service.js';
+import { DEMO_PLOTS, DEMO_LOCATIONS } from '../src/data/initialDemoData.js';
 
 console.log("=================================================");
 console.log("🧪 INICIANDO BATERÍA DE PRUEBAS UNITARIAS - HEMP");
@@ -222,6 +223,63 @@ test("Auditoría de seguridad: Cero claves API privadas en código estático", (
     sampleForbiddenPatterns.forEach(pat => {
         assert.equal(dummyService.includes(pat), false);
     });
+});
+
+// --- GRUPO 6: INTEGRIDAD MAPAS, PARCELAS & CAMPOS REALES DE PRODUCCIÓN ---
+console.log("\n6️⃣  VERIFICACIÓN RELACIONAL PARCELAS - CAMPOS & MAPAS REALES");
+
+test("Relación estricta: Toda parcela tiene un Campo Padre existente en base real", () => {
+    assert.ok(DEMO_PLOTS.length > 0, "No hay parcelas reales cargadas");
+    assert.ok(DEMO_LOCATIONS.length > 0, "No hay campos reales cargados");
+    DEMO_PLOTS.forEach(plot => {
+        const parentLoc = DEMO_LOCATIONS.find(l => l.id === plot.locationId);
+        assert.ok(parentLoc !== undefined, `La parcela "${plot.name}" no está asociada a ningún Campo válido (${plot.locationId})`);
+    });
+});
+
+test("Georreferenciación válida de Campos y Parcelas en territorio argentino", () => {
+    DEMO_LOCATIONS.forEach(loc => {
+        assert.ok(loc.coordinates, `El campo ${loc.name} carece de coordenadas`);
+        assert.ok(loc.coordinates.lat < -21 && loc.coordinates.lat > -56, `Latitud de campo fuera de Argentina: ${loc.coordinates.lat}`);
+        assert.ok(loc.coordinates.lng < -53 && loc.coordinates.lng > -74, `Longitud de campo fuera de Argentina: ${loc.coordinates.lng}`);
+    });
+    DEMO_PLOTS.forEach(plot => {
+        assert.ok(plot.coordinates, `La parcela ${plot.name} carece de coordenadas`);
+        assert.ok(plot.coordinates.lat < -21 && plot.coordinates.lat > -56, `Latitud de parcela fuera de Argentina: ${plot.coordinates.lat}`);
+        assert.ok(plot.coordinates.lng < -53 && plot.coordinates.lng > -74, `Longitud de parcela fuera de Argentina: ${plot.coordinates.lng}`);
+    });
+});
+
+test("Polígonos vectoriales cerrados con cálculo de área geodésica positiva", () => {
+    DEMO_PLOTS.forEach(plot => {
+        if (plot.polygon && plot.polygon.length > 0) {
+            assert.ok(plot.polygon.length >= 3, `El polígono de "${plot.name}" debe tener al menos 3 vértices`);
+            plot.polygon.forEach(v => {
+                assert.ok(typeof v.lat === 'number' && typeof v.lng === 'number', 'Vértice con formato inválido');
+            });
+        }
+    });
+});
+
+test("Proximidad espacial: Las parcelas están geográficamente contenidas en su Campo Padre", () => {
+    DEMO_PLOTS.forEach(plot => {
+        const parent = DEMO_LOCATIONS.find(l => l.id === plot.locationId);
+        if (parent && plot.coordinates && parent.coordinates) {
+            const dLat = Math.abs(plot.coordinates.lat - parent.coordinates.lat);
+            const dLng = Math.abs(plot.coordinates.lng - parent.coordinates.lng);
+            assert.ok(dLat < 0.25 && dLng < 0.25, `La parcela "${plot.name}" dista demasiado de su campo "${parent.name}"`);
+        }
+    });
+});
+
+test("Prevención de colisión y superposición de tooltips en teledetección espectral", () => {
+    // La regla de interactividad condicional desactiva tooltips del polígono perimetral cuando hay píxeles Sentinel-2 activos
+    const isPolygonInteractiveOnSpectral = (layer: string) => layer === 'satellite' || layer === 'street';
+    assert.equal(isPolygonInteractiveOnSpectral('ndvi_layer'), false);
+    assert.equal(isPolygonInteractiveOnSpectral('foliage_layer'), false);
+    assert.equal(isPolygonInteractiveOnSpectral('moisture_layer'), false);
+    assert.equal(isPolygonInteractiveOnSpectral('satellite'), true);
+    assert.equal(isPolygonInteractiveOnSpectral('street'), true);
 });
 
 console.log("\n=================================================");

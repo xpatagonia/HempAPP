@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { MapContainer, TileLayer, Polygon, Marker, useMapEvents, useMap, Tooltip } from 'react-leaflet';
+import { MapContainer, TileLayer, Polygon, Marker, useMapEvents, useMap, Tooltip, ZoomControl } from 'react-leaflet';
 import { Trash2, MapPin, MousePointer, Layers, Satellite, Mountain, Navigation, ShieldCheck, Globe, Target } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -399,9 +399,11 @@ export default function MapEditor({
                     center={[center.lat, center.lng]} 
                     zoom={14}
                     maxZoom={20}
+                    zoomControl={false}
                     style={{ height: "100%", minHeight: minH, width: "100%" }}
                     scrollWheelZoom={true}
                 >
+                    <ZoomControl position="bottomright" />
                     <MapResizer />
 
                     {/* 1. Capa Satelital Primaria: Esri World Imagery (Sin restricciones, libre, nítida) */}
@@ -447,8 +449,23 @@ export default function MapEditor({
                         fitTrigger={fitTrigger}
                     />
 
-                    {referencePolygon.length > 2 && (
-                        <Polygon positions={referencePolygon} pathOptions={{ color: '#ef4444', fillColor: 'transparent', weight: 2, dashArray: '5, 10' }} />
+                    {referencePolygon && referencePolygon.length > 2 && (
+                        <Polygon 
+                            positions={referencePolygon.map(p => [p.lat, p.lng])} 
+                            pathOptions={{ 
+                                color: '#f59e0b', 
+                                fillColor: '#f59e0b', 
+                                fillOpacity: 0.05, 
+                                weight: 2.5, 
+                                dashArray: '6, 8' 
+                            }} 
+                        >
+                            <Tooltip direction="top" opacity={0.9} sticky>
+                                <span className="font-mono font-bold text-[10px] uppercase text-amber-950 bg-amber-200/90 px-2 py-0.5 rounded shadow">
+                                    Límite Perimetral Campo Padre
+                                </span>
+                            </Tooltip>
+                        </Polygon>
                     )}
 
                     {/* 1. NIVEL GENERAL: Perímetro del Establecimiento (Azul técnico) */}

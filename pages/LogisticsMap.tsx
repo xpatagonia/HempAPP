@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { MapContainer, TileLayer, Marker, Popup, Polygon, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polygon, useMap, ZoomControl } from 'react-leaflet';
 import { 
   Building, MapPin, Warehouse, Truck, Activity, Search, Filter, 
   Maximize2, Navigation, Layers, Satellite, ExternalLink, Phone, 
@@ -495,8 +495,10 @@ export default function LogisticsMap() {
               <MapContainer
                 center={[-34.6037, -62.3816]}
                 zoom={5}
+                zoomControl={false}
                 className="w-full h-full z-0"
               >
+                <ZoomControl position="bottomright" />
                 <MapResizer />
                 <MapController 
                   targetCoords={targetCoords}
