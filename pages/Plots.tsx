@@ -10,6 +10,7 @@ import {
   Power, AlertCircle, CheckCircle2, ShieldCheck, Tractor, Layers, Clock
 } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
+import { PlotIdentificationModal } from '../components/PlotIdentificationModal';
 import { canAccessPlot, canAccessLocation } from '../src/utils/structurePermissions';
 
 // Algoritmo de cálculo de área geodésica
@@ -102,6 +103,7 @@ export default function Plots() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editingPlot, setEditingPlot] = useState<Plot | null>(null);
+  const [selectedPlotForIdModal, setSelectedPlotForIdModal] = useState<Plot | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState<any>({
@@ -718,6 +720,18 @@ export default function Plots() {
                             {p.status}
                           </span>
 
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedPlotForIdModal(p);
+                            }}
+                            className="p-1.5 text-slate-500 hover:text-emerald-600 bg-slate-100 hover:bg-emerald-50 dark:bg-slate-800 dark:hover:bg-emerald-950/40 rounded-lg transition"
+                            title="Rótulo QR y Cartel Oficial de Tranquera (Ley 27.669)"
+                          >
+                            <QrCode size={13} />
+                          </button>
+
                           {isAdmin && (
                             <button 
                               onClick={(e) => handleDeletePlot(e, p.id)} 
@@ -860,6 +874,18 @@ export default function Plots() {
                         <span>Ficha Técnica</span>
                         <ChevronRight size={13} />
                       </Link>
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedPlotForIdModal(p);
+                        }}
+                        className="p-2 text-slate-600 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 bg-slate-100 hover:bg-emerald-50 dark:bg-slate-800 dark:hover:bg-emerald-950/40 rounded-xl transition border border-slate-200 dark:border-slate-700"
+                        title="Emitir Rótulo QR y Cartel Oficial de Tranquera (Ley 27.669)"
+                      >
+                        <QrCode size={14} />
+                      </button>
 
                       {isAdmin && (
                         <button 
@@ -1189,6 +1215,8 @@ export default function Plots() {
                         } 
                         initialPolygon={formData.polygon || []} 
                         referencePolygon={locations.find(l => l.id === formData.locationId)?.polygon || []}
+                        polygonLabel="Perímetro Parcela"
+                        referenceLabel={locations.find(l => l.id === formData.locationId)?.name ? `Límite Campo: ${locations.find(l => l.id === formData.locationId)?.name}` : 'Perímetro Campo Padre'}
                         onPolygonChange={handlePolygonChange} 
                         height="100%" 
                       />
@@ -1241,6 +1269,17 @@ export default function Plots() {
             </form>
           </div>
         </div>
+      )}
+
+      {selectedPlotForIdModal && (
+        <PlotIdentificationModal
+          isOpen={!!selectedPlotForIdModal}
+          onClose={() => setSelectedPlotForIdModal(null)}
+          plot={selectedPlotForIdModal}
+          location={locations.find(l => l.id === selectedPlotForIdModal.locationId)}
+          variety={varieties.find(v => v.id === selectedPlotForIdModal.varietyId)}
+          client={clients?.find(c => c.id === locations.find(l => l.id === selectedPlotForIdModal.locationId)?.clientId)}
+        />
       )}
 
     </div>

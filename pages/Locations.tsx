@@ -1501,6 +1501,7 @@ export default function Locations() {
                             label: `Lote: ${p.name} (${p.surfaceArea} ${p.surfaceUnit})`,
                             color: p.color || '#a855f7'
                         }))}
+                        polygonLabel="Predio General"
                         height="480px" 
                       />
                     </div>

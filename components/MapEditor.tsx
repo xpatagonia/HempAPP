@@ -32,6 +32,8 @@ interface MapEditorProps {
     initialPolygon?: { lat: number, lng: number }[];
     initialCenter?: { lat: number, lng: number };
     referencePolygon?: { lat: number, lng: number }[]; 
+    referenceLabel?: string;
+    polygonLabel?: string;
     extraPolygons?: { id: string, polygon: { lat: number, lng: number }[], label?: string, color?: string }[];
     onPolygonChange?: (polygon: { lat: number, lng: number }[], areaHa: number, center: { lat: number, lng: number }, perimeterM: number) => void;
     // Capa Geodésica de Declaración Jurada (DDJJ) de Siembra
@@ -152,6 +154,8 @@ export default function MapEditor({
     initialPolygon = [], 
     initialCenter, 
     referencePolygon = [], 
+    referenceLabel = "Perímetro Campo Padre",
+    polygonLabel = "Perímetro Parcela",
     extraPolygons = [], 
     onPolygonChange, 
     sowingPolygon = [],
@@ -394,7 +398,13 @@ export default function MapEditor({
             )}
 
             {/* 4. MAPA LEAFLET CON TILE LAYER DINÁMICA */}
-            <div className="flex-1 w-full h-full" style={{ minHeight: minH }}>
+            <div className="flex-1 w-full h-full relative" style={{ minHeight: minH }}>
+                {referencePolygon && referencePolygon.length > 2 && (
+                    <div className="absolute bottom-4 left-4 z-[900] pointer-events-none bg-slate-900/90 backdrop-blur-md px-3 py-1.5 rounded-xl border border-amber-500/40 text-amber-300 text-[10px] font-mono font-bold flex items-center gap-2 shadow-2xl">
+                        <span className="w-3.5 h-0.5 border-b-2 border-dashed border-amber-400 shrink-0" />
+                        <span>{referenceLabel}</span>
+                    </div>
+                )}
                 <MapContainer 
                     center={[center.lat, center.lng]} 
                     zoom={14}
@@ -452,33 +462,28 @@ export default function MapEditor({
                     {referencePolygon && referencePolygon.length > 2 && (
                         <Polygon 
                             positions={referencePolygon.map(p => [p.lat, p.lng])} 
+                            interactive={false}
                             pathOptions={{ 
                                 color: '#f59e0b', 
                                 fillColor: '#f59e0b', 
-                                fillOpacity: 0.05, 
-                                weight: 2.5, 
-                                dashArray: '6, 8' 
+                                fillOpacity: 0.04, 
+                                weight: 2.2, 
+                                dashArray: '5, 8' 
                             }} 
-                        >
-                            <Tooltip direction="top" opacity={0.9} sticky>
-                                <span className="font-mono font-bold text-[10px] uppercase text-amber-950 bg-amber-200/90 px-2 py-0.5 rounded shadow">
-                                    Límite Perimetral Campo Padre
-                                </span>
-                            </Tooltip>
-                        </Polygon>
+                        />
                     )}
 
-                    {/* 1. NIVEL GENERAL: Perímetro del Establecimiento (Azul técnico) */}
+                    {/* 1. NIVEL GENERAL / PARCELA */}
                     {polygon.length > 1 && (
                         <Polygon 
                             positions={polygon} 
                             pathOptions={{ color: '#38bdf8', fillColor: '#0284c7', fillOpacity: 0.18, weight: 3 }}
                         >
-                             <Tooltip direction="center" offset={[0, 0]} opacity={0.88} permanent>
-                                <span className="font-mono font-bold text-[10px] uppercase text-sky-950 bg-sky-200 px-2 py-0.5 rounded shadow">
-                                    Predio General ({calculateAreaHa(polygon).toFixed(1)} ha)
+                            <Tooltip direction="top" offset={[0, -10]} opacity={0.92} sticky>
+                                <span className="font-mono font-bold text-[10px] uppercase text-sky-950 bg-sky-200 px-2 py-0.5 rounded shadow block">
+                                    {polygonLabel} ({calculateAreaHa(polygon).toFixed(2)} ha)
                                 </span>
-                             </Tooltip>
+                            </Tooltip>
                         </Polygon>
                     )}
 
@@ -494,11 +499,11 @@ export default function MapEditor({
                                 dashArray: '6, 6'
                             }}
                         >
-                             <Tooltip direction="center" offset={[0, 0]} opacity={0.95} permanent>
-                                <span className="font-mono font-black text-[10px] uppercase text-emerald-950 bg-emerald-300 px-2.5 py-0.5 rounded shadow border border-emerald-400">
+                            <Tooltip direction="bottom" offset={[0, 10]} opacity={0.95} sticky>
+                                <span className="font-mono font-black text-[10px] uppercase text-emerald-950 bg-emerald-300 px-2.5 py-0.5 rounded shadow border border-emerald-400 block">
                                     📜 DDJJ Siembra: {calculateAreaHa(sowingPoly).toFixed(2)} Ha
                                 </span>
-                             </Tooltip>
+                            </Tooltip>
                         </Polygon>
                     )}
 

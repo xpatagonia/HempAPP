@@ -16,6 +16,7 @@ import {
   ChevronLeft, ChevronRight, Filter, Bot, Terminal, FileText, ArrowUp, ArrowDown, Satellite, Bell, BellRing, Radio, Mail, Send, AlertTriangle
 } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
+import { PlotIdentificationModal } from '../components/PlotIdentificationModal';
 import WeatherWidget from '../components/WeatherWidget';
 import HydricBalance from '../components/HydricBalance';
 import LiveTelemetryPanel from '../components/LiveTelemetryPanel';
@@ -532,8 +533,12 @@ export default function PlotDetails() {
             <button onClick={handleIAAnalysis} disabled={isAnalyzing || history.length === 0} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-2xl text-hemp-600 hover:text-hemp-700 shadow-sm transition-all flex items-center gap-2 px-6 text-xs font-black uppercase tracking-widest disabled:opacity-30">
                 {isAnalyzing ? <Loader2 className="animate-spin" size={18}/> : <Bot size={18}/>} <span className="hidden md:inline">Diagnóstico IA</span>
             </button>
-            <button onClick={() => setIsQrModalOpen(true)} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-2xl text-slate-500 hover:text-hemp-600 shadow-sm transition-all flex items-center gap-2 px-6 text-xs font-black uppercase tracking-widest">
-                <QrCode size={18}/> <span className="hidden md:inline">Etiqueta QR</span>
+            <button 
+                onClick={() => setIsQrModalOpen(true)} 
+                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-2xl text-slate-700 dark:text-slate-200 hover:text-emerald-600 shadow-sm transition-all flex items-center gap-2 px-5 text-xs font-black uppercase tracking-widest"
+                title="Rótulo QR de Trazabilidad y Cartel Oficial de Parcela Exterior / Tranquera"
+            >
+                <QrCode size={18} className="text-emerald-600"/> <span className="hidden sm:inline">Rótulo QR & Cartel Tranquera</span>
             </button>
             <button 
                 onClick={handleSendPushAlert} 
@@ -710,7 +715,17 @@ export default function PlotDetails() {
           {activeTab === 'map' && (
               <div className="space-y-8 animate-in fade-in">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      <div className="md:col-span-2 bg-white dark:bg-slate-900 rounded-[40px] border dark:border-slate-800 shadow-sm overflow-hidden h-[600px] relative"><MapEditor initialCenter={plot.coordinates} initialPolygon={plot.polygon} referencePolygon={location?.polygon} readOnly={true} height="100%" /></div>
+                      <div className="md:col-span-2 bg-white dark:bg-slate-900 rounded-[40px] border dark:border-slate-800 shadow-sm overflow-hidden h-[600px] relative">
+                        <MapEditor 
+                          initialCenter={plot.coordinates} 
+                          initialPolygon={plot.polygon} 
+                          referencePolygon={location?.polygon} 
+                          polygonLabel="Perímetro Parcela"
+                          referenceLabel={location?.name ? `Límite Campo: ${location.name}` : 'Perímetro Campo Padre'}
+                          readOnly={true} 
+                          height="100%" 
+                        />
+                      </div>
                       <div className="space-y-6"><div className="bg-white dark:bg-slate-900 p-8 rounded-[40px] border dark:border-slate-800 shadow-sm"><h3 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-widest mb-6 flex items-center"><Navigation size={18} className="mr-2 text-emerald-600"/> Datos Geofísicos</h3><div className="bg-emerald-50 dark:bg-emerald-900/10 p-5 rounded-3xl border border-emerald-100 dark:border-emerald-900/30"><p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mb-1">Superficie Perimetral</p><p className="text-3xl font-black text-emerald-800 dark:text-emerald-300">{plot.surfaceArea} <span className="text-sm">{plot.surfaceUnit}</span></p></div></div></div>
                   </div>
               </div>
@@ -870,8 +885,15 @@ export default function PlotDetails() {
           )}
       </div>
 
-      {isQrModalOpen && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[110] p-4"><div className="bg-white dark:bg-slate-900 rounded-[40px] max-w-sm w-full p-10 shadow-2xl text-center animate-in zoom-in-95"><div className="mb-6 flex justify-center"><div className="bg-hemp-600 p-4 rounded-[28px] text-white shadow-xl"><QrCode size={48}/></div></div><h3 className="text-2xl font-black dark:text-white uppercase tracking-tighter mb-2 italic">Etiqueta Identificatoria</h3><p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-8">Escanear para acceder a trazabilidad</p><div className="bg-white p-6 rounded-3xl border-4 border-gray-100 shadow-inner inline-block mb-8"><img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${window.location.origin}/#/trace/${plot.id}`} alt="QR Code" className="w-40 h-40"/></div><div className="text-left bg-gray-50 dark:bg-slate-800 p-4 rounded-2xl border dark:border-slate-700 mb-8"><p className="text-[9px] font-black text-gray-400 uppercase mb-1">ID Parcelario:</p><p className="text-xs font-black dark:text-white font-mono">{plot.id}</p></div><div className="flex gap-3"><button onClick={() => window.print()} className="flex-1 bg-hemp-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg flex items-center justify-center"><Printer size={16} className="mr-2"/> Imprimir</button><button onClick={() => setIsQrModalOpen(false)} className="px-6 bg-gray-100 dark:bg-slate-800 text-gray-500 rounded-2xl font-black text-xs uppercase transition-all">Cerrar</button></div></div></div>
+      {plot && (
+        <PlotIdentificationModal
+          isOpen={isQrModalOpen}
+          onClose={() => setIsQrModalOpen(false)}
+          plot={plot}
+          location={location}
+          variety={variety}
+          client={clients?.find(c => c.id === location?.clientId)}
+        />
       )}
 
       {isRecordModalOpen && (
