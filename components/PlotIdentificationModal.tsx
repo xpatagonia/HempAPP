@@ -53,31 +53,64 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
   const campaignDisplay = plot.campaign || '2025/2026';
   const statusDisplay = plot.status || 'Activa';
 
+  const [signPageFilter, setSignPageFilter] = useState<'all' | 'p1' | 'p2'>('all');
+
   return (
     <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center z-[120] p-3 sm:p-5 font-sans overflow-y-auto">
-      {/* Estilos CSS dedicados de impresión limpia a pantalla completa */}
+      {/* Estilos CSS dedicados de impresión limpia a pantalla completa y 2 páginas A4 */}
       <style>{`
         @media print {
+          @page {
+            size: A4 auto;
+            margin: 8mm;
+          }
           body * {
             visibility: hidden !important;
           }
-          #printable-plot-doc, #printable-plot-doc * {
+          .printable-sheet, .printable-sheet *, #printable-plot-doc, #printable-plot-doc * {
             visibility: visible !important;
           }
-          #printable-plot-doc {
-            position: fixed !important;
+          .printable-container {
+            position: absolute !important;
             left: 0 !important;
             top: 0 !important;
-            width: 100vw !important;
-            max-width: 100vw !important;
-            height: auto !important;
+            width: 100% !important;
             margin: 0 !important;
-            padding: 24px !important;
-            box-shadow: none !important;
-            border: 2px solid #000 !important;
+            padding: 0 !important;
+            background: #ffffff !important;
+          }
+          #printable-plot-doc {
+            position: absolute !important;
+            left: 50% !important;
+            top: 20px !important;
+            transform: translateX(-50%) !important;
+            width: 150mm !important;
+            max-width: 95% !important;
             background: #ffffff !important;
             color: #000000 !important;
-            z-index: 999999 !important;
+            box-shadow: none !important;
+            border: 2px dashed #000000 !important;
+            page-break-after: auto !important;
+          }
+          .printable-sheet {
+            display: block !important;
+            position: relative !important;
+            width: 100% !important;
+            min-height: 94vh !important;
+            margin: 0 0 20px 0 !important;
+            padding: 24px !important;
+            box-sizing: border-box !important;
+            border: 4px solid #000000 !important;
+            background: #ffffff !important;
+            color: #000000 !important;
+            box-shadow: none !important;
+            page-break-after: always !important;
+            break-after: page !important;
+          }
+          .printable-sheet:last-of-type {
+            page-break-after: auto !important;
+            break-after: auto !important;
+            margin-bottom: 0 !important;
           }
           .no-print {
             display: none !important;
@@ -150,197 +183,359 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
         {/* CONTENIDO DESPLAZABLE */}
         <div className="flex-1 overflow-y-auto py-4 px-1 space-y-4">
 
-          {/* VISTA 1: CARTEL PARA TRANQUERA EXTERIOR (DECLARANDO CÁÑAMO NO PSICOACTIVO) */}
+          {/* VISTA 1: CARTEL PARA TRANQUERA EXTERIOR (DECLARANDO CÁÑAMO NO PSICOACTIVO - SEGMENTADO EN 2 PÁGINAS A4) */}
           {activeView === 'sign' && (
-            <div className="space-y-4">
-              {/* Barra de opciones del cartel */}
-              <div className="flex flex-wrap items-center justify-between gap-3 bg-amber-50 dark:bg-amber-950/30 p-3 rounded-2xl border border-amber-200 dark:border-amber-800/60 text-xs">
+            <div className="space-y-6">
+              {/* Barra de opciones del cartel: Segmentación de Páginas y Orientación */}
+              <div className="flex flex-wrap items-center justify-between gap-3 bg-amber-50 dark:bg-amber-950/30 p-3.5 rounded-2xl border border-amber-200 dark:border-amber-800/60 text-xs no-print">
                 <div className="flex items-center gap-2 text-amber-900 dark:text-amber-200 font-bold">
-                  <AlertTriangle size={16} className="text-amber-600 shrink-0" />
+                  <AlertTriangle size={18} className="text-amber-600 shrink-0" />
                   <span>
-                    Cartel reglamentario para exhibir en tranquera de acceso y linderos exteriores del campo.
+                    Cartel Oficial Tranquera (2 Páginas A4): Pág. 1 Cartel de Alto Impacto / Visible a distancia · Pág. 2 Anexo Técnico & Geodesia.
                   </span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold uppercase text-slate-500">Orientación:</span>
-                  <button
-                    type="button"
-                    onClick={() => setSignOrientation('horizontal')}
-                    className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold uppercase transition ${
-                      signOrientation === 'horizontal'
-                        ? 'bg-amber-600 text-white shadow-sm'
-                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-                    }`}
-                  >
-                    Horizontal
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSignOrientation('vertical')}
-                    className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold uppercase transition ${
-                      signOrientation === 'vertical'
-                        ? 'bg-amber-600 text-white shadow-sm'
-                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-                    }`}
-                  >
-                    Vertical
-                  </button>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Selector de visualización de páginas */}
+                  <div className="bg-white dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setSignPageFilter('all')}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold uppercase transition ${
+                        signPageFilter === 'all'
+                          ? 'bg-amber-600 text-white shadow-sm'
+                          : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+                      }`}
+                    >
+                      Ambas (Pág 1 y 2)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSignPageFilter('p1')}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold uppercase transition ${
+                        signPageFilter === 'p1'
+                          ? 'bg-amber-600 text-white shadow-sm'
+                          : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+                      }`}
+                    >
+                      Pág. 1 (Cartel)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSignPageFilter('p2')}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold uppercase transition ${
+                        signPageFilter === 'p2'
+                          ? 'bg-amber-600 text-white shadow-sm'
+                          : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+                      }`}
+                    >
+                      Pág. 2 (Anexo)
+                    </button>
+                  </div>
+
+                  {/* Selector de orientación */}
+                  <div className="bg-white dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setSignOrientation('horizontal')}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold uppercase transition ${
+                        signOrientation === 'horizontal'
+                          ? 'bg-emerald-600 text-white shadow-sm'
+                          : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+                      }`}
+                    >
+                      Horizontal
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSignOrientation('vertical')}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold uppercase transition ${
+                        signOrientation === 'vertical'
+                          ? 'bg-emerald-600 text-white shadow-sm'
+                          : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+                      }`}
+                    >
+                      Vertical
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              {/* DOCUMENTO IMPRIMIBLE: CARTEL EXTERIOR */}
-              <div
-                id="printable-plot-doc"
-                className={`bg-white text-slate-950 p-6 md:p-8 rounded-3xl border-4 border-slate-950 shadow-xl space-y-5 mx-auto ${
-                  signOrientation === 'horizontal' ? 'w-full' : 'max-w-2xl'
-                }`}
-              >
-                {/* 1. ENCABEZADO INSTITUCIONAL */}
-                <div className="border-b-4 border-slate-950 pb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="w-4 h-4 rounded-full bg-emerald-600 inline-block"></span>
-                      <p className="text-xs font-black uppercase tracking-widest text-slate-900">
-                        REPÚBLICA ARGENTINA · LEY NACIONAL N° 27.669 & DECRETO 405/2023
-                      </p>
+              {/* CONTENEDOR IMPRIMIBLE DE LAS 2 PÁGINAS */}
+              <div className="printable-container space-y-8">
+                
+                {/* ======================================================== */}
+                {/* PÁGINA 1: CARTEL PRINCIPAL PARA TRANQUERA (ALTO IMPACTO)  */}
+                {/* ======================================================== */}
+                {(signPageFilter === 'all' || signPageFilter === 'p1') && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs px-2 no-print">
+                      <span className="font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                        Página 1: Cartel Exterior para Tranquera (Lectura a Distancia)
+                      </span>
+                      <span className="text-[10px] font-mono text-slate-400">Formato A4</span>
                     </div>
-                    <h1 className="text-lg md:text-2xl font-black uppercase tracking-tight text-slate-950 mt-1">
-                      PATAGONIAN-C LTDA COOPERATIVA DE TRABAJO
-                    </h1>
-                    <p className="text-[13px] font-mono font-black text-emerald-800 uppercase mt-0.5">
-                      CUIT: 30-71816113-0 · HempC (Unidad de Negocios)
-                    </p>
-                    <p className="text-[10px] font-mono font-bold text-slate-600 uppercase mt-0.5">
-                      Marco Regulatorio del Cáñamo y Cannabis · Fiscalización ARICCAME / INASE / SENASA
-                    </p>
-                  </div>
-                  <div className="text-right shrink-0 bg-slate-100 p-3 rounded-2xl border-2 border-slate-300">
-                    <span className="text-[9px] font-mono font-black uppercase text-slate-500 block">Condición Registral</span>
-                    <strong className="text-sm font-black uppercase text-emerald-700 block">
-                      PARCELA DECLARADA ACTIVA
-                    </strong>
-                    <span className="text-[10px] font-mono font-bold text-slate-600 block mt-0.5">
-                      Campaña: {campaignDisplay}
-                    </span>
-                  </div>
-                </div>
 
-                {/* 2. DECLARACIÓN PRINCIPAL MUY DESTACADA EN TRANQUERA */}
-                <div className="bg-amber-100/90 border-4 border-amber-500 p-5 rounded-2xl text-center space-y-2">
-                  <div className="flex items-center justify-center gap-2 text-amber-900">
-                    <ShieldCheck size={28} className="text-emerald-700" />
-                    <span className="text-xs md:text-sm font-black uppercase tracking-widest">
-                      DECLARACIÓN DE CULTIVO NO PSICOACTIVO
-                    </span>
-                  </div>
-                  <h2 className="text-2xl md:text-4xl font-black uppercase tracking-tight text-slate-950 leading-tight">
-                    CÁÑAMO INDUSTRIAL
-                  </h2>
-                  <p className="text-sm md:text-base font-black text-slate-800 uppercase">
-                    (Cannabis sativa L. con tenor de THC menor a 1.0% P/P)
-                  </p>
-                  <p className="text-xs md:text-sm font-bold text-amber-950 max-w-2xl mx-auto leading-snug">
-                    Cultivo agrícola no estupefaciente con destino exclusivo a <strong>Fibra Textil, Grano, Bioplásticos, Celulosa y Ensayos de Investigación Bioeconómica</strong>.
-                  </p>
-                </div>
-
-                {/* 3. GRILLA TÉCNICA DE IDENTIFICACIÓN PARCELARIA Y GEODÉSICA */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-2 border-slate-300 rounded-2xl p-4 bg-slate-50">
-                  <div className="space-y-1">
-                    <span className="text-[9px] font-mono font-bold uppercase text-slate-500 block">
-                      1. Unidad Productiva / Lote:
-                    </span>
-                    <strong className="text-base font-black uppercase text-slate-950 block">
-                      {plot.name}
-                    </strong>
-                    <span className="text-[10px] font-mono font-semibold text-slate-600 block">
-                      ID Catastral: <strong>{plot.id}</strong>
-                    </span>
-                    <span className="text-[10px] font-mono font-semibold text-slate-600 block">
-                      Tipo: <strong>{plot.type || 'Ensayo / Producción'}</strong>
-                    </span>
-                  </div>
-
-                  <div className="space-y-1">
-                    <span className="text-[9px] font-mono font-bold uppercase text-slate-500 block">
-                      2. Establecimiento / Campo Padre:
-                    </span>
-                    <strong className="text-base font-black uppercase text-slate-950 block">
-                      {location?.name || 'Establecimiento Agropecuario'}
-                    </strong>
-                    <span className="text-[10px] font-mono font-semibold text-slate-600 block">
-                      {location?.city || 'Localidad'}, {location?.province || 'Provincia'}
-                    </span>
-                    <span className="text-[10px] font-mono font-semibold text-slate-600 block truncate" title={location?.address}>
-                      {location?.address || 'Ruta / Paraje Rural'}
-                    </span>
-                  </div>
-
-                  <div className="space-y-1">
-                    <span className="text-[9px] font-mono font-bold uppercase text-slate-500 block">
-                      3. Genética & Obtención (INASE):
-                    </span>
-                    <strong className="text-base font-black uppercase text-emerald-800 block">
-                      {variety?.name || 'Variedad Homologada'}
-                    </strong>
-                    <span className="text-[10px] font-mono font-semibold text-slate-600 block">
-                      RNC INASE: <strong>{variety?.inaseRncNumber || 'Certificación RNC'}</strong>
-                    </span>
-                    <span className="text-[10px] font-mono font-semibold text-slate-600 block">
-                      Destino: <strong>{variety?.usage || 'Fibra / Grano'}</strong>
-                    </span>
-                  </div>
-                </div>
-
-                {/* 4. COORDENADAS GEODÉSICAS Y CODIGO QR DE VERIFICACIÓN OFICIAL */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-center border-t-2 border-slate-300 pt-4">
-                  <div className="md:col-span-3 space-y-2">
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
-                      <div className="p-2.5 bg-slate-100 rounded-xl border border-slate-200">
-                        <span className="text-[9px] font-mono font-bold uppercase text-slate-500 block">Superficie Declarada</span>
-                        <strong className="text-sm font-black text-slate-900 block">{surfaceDisplay}</strong>
+                    <div
+                      id="printable-plot-sign-p1"
+                      className={`printable-sheet bg-white text-slate-950 p-6 md:p-10 rounded-3xl border-4 md:border-8 border-slate-950 shadow-2xl space-y-6 mx-auto ${
+                        signOrientation === 'horizontal' ? 'w-full' : 'max-w-2xl'
+                      }`}
+                    >
+                      {/* ENCABEZADO INSTITUCIONAL */}
+                      <div className="border-b-4 border-slate-950 pb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="w-4 h-4 rounded-full bg-emerald-600 inline-block shrink-0"></span>
+                            <p className="text-xs font-black uppercase tracking-widest text-slate-900">
+                              REPÚBLICA ARGENTINA · LEY NACIONAL N° 27.669 & DECRETO 405/2023
+                            </p>
+                          </div>
+                          <h1 className="text-xl md:text-3xl font-black uppercase tracking-tight text-slate-950 mt-1">
+                            PATAGONIAN-C LTDA COOPERATIVA DE TRABAJO
+                          </h1>
+                          <p className="text-sm md:text-base font-mono font-black text-emerald-800 uppercase mt-0.5">
+                            CUIT: 30-71816113-0 · HempC (Unidad de Negocios)
+                          </p>
+                          <p className="text-[10px] md:text-xs font-mono font-bold text-slate-600 uppercase mt-0.5">
+                            Marco Regulatorio del Cáñamo Industrial · Fiscalización ARICCAME / INASE / SENASA
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0 bg-slate-100 p-3.5 rounded-2xl border-2 border-slate-300">
+                          <span className="text-[9px] font-mono font-black uppercase text-slate-500 block">Condición Registral</span>
+                          <strong className="text-sm md:text-base font-black uppercase text-emerald-700 block">
+                            PARCELA DECLARADA ACTIVA
+                          </strong>
+                          <span className="text-[11px] font-mono font-bold text-slate-600 block mt-0.5">
+                            Campaña: {campaignDisplay}
+                          </span>
+                        </div>
                       </div>
-                      <div className="p-2.5 bg-slate-100 rounded-xl border border-slate-200">
-                        <span className="text-[9px] font-mono font-bold uppercase text-slate-500 block">Coordenadas Geodésicas</span>
-                        <strong className="text-xs font-mono font-black text-slate-900 block">
-                          {formattedLat}, {formattedLng}
-                        </strong>
+
+                      {/* DECLARACIÓN CENTRAL DE MÁXIMO IMPACTO VISUAL EN TRANQUERA (LECTURA A DISTANCIA) */}
+                      <div className="bg-amber-100/95 border-4 md:border-8 border-amber-500 p-6 md:p-10 rounded-3xl text-center space-y-4 shadow-inner">
+                        <div className="inline-flex items-center justify-center gap-2.5 px-6 py-2 bg-amber-400 border-2 border-amber-600 text-slate-950 rounded-full font-black text-sm md:text-lg uppercase tracking-widest shadow-sm">
+                          <ShieldCheck size={22} className="text-slate-950 shrink-0" />
+                          <span>DECLARACIÓN DE CULTIVO NO PSICOACTIVO</span>
+                        </div>
+                        
+                        <h2 className="text-5xl md:text-7xl lg:text-8xl font-black uppercase tracking-tight text-slate-950 leading-none py-2 drop-shadow-sm">
+                          CÁÑAMO INDUSTRIAL
+                        </h2>
+
+                        <p className="text-xl md:text-3xl font-black text-slate-900 uppercase tracking-wide">
+                          (Cannabis sativa L. con tenor de THC menor a 1.0% P/P)
+                        </p>
+
+                        <div className="w-32 h-2 bg-amber-500 mx-auto rounded-full my-3"></div>
+
+                        <p className="text-sm md:text-xl font-bold text-amber-950 max-w-4xl mx-auto leading-relaxed">
+                          Cultivo agrícola no estupefaciente con destino exclusivo a <strong className="underline decoration-amber-600 decoration-4">Fibra Textil, Grano, Bioplásticos, Celulosa y Ensayos de Investigación Bioeconómica</strong>.
+                        </p>
                       </div>
-                      <div className="p-2.5 bg-slate-100 rounded-xl border border-slate-200 col-span-2 sm:col-span-1">
-                        <span className="text-[9px] font-mono font-bold uppercase text-slate-500 block">Titular / Operador Responsable</span>
-                        <strong className="text-xs font-bold text-slate-900 truncate block">
-                          PatagonianC LTDA · CUIT: 30-71816113-0
-                        </strong>
-                        <span className="text-[9px] font-mono text-emerald-800 font-bold block truncate">
-                          HempC (Unidad de Negocios) {client?.name ? `· Socio: ${client.name}` : ''}
+
+                      {/* FRANJA DE IDENTIFICACIÓN RÁPIDA EN TRANQUERA */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-slate-50 p-4 rounded-2xl border-2 border-slate-300 text-xs font-mono">
+                        <div className="p-3 bg-white rounded-xl border border-slate-200">
+                          <span className="text-[9px] uppercase font-bold text-slate-400 block">Lote / Parcela:</span>
+                          <strong className="text-base font-black uppercase text-slate-950 block truncate">{plot.name}</strong>
+                          <span className="text-[10px] text-slate-500 block">ID Catastral: {plot.id}</span>
+                        </div>
+
+                        <div className="p-3 bg-white rounded-xl border border-slate-200">
+                          <span className="text-[9px] uppercase font-bold text-slate-400 block">Establecimiento:</span>
+                          <strong className="text-sm font-black uppercase text-slate-950 block truncate">{location?.name || 'Establecimiento Rural'}</strong>
+                          <span className="text-[10px] text-slate-500 block truncate">{location?.city || ''}, {location?.province || ''}</span>
+                        </div>
+
+                        <div className="p-3 bg-white rounded-xl border border-slate-200">
+                          <span className="text-[9px] uppercase font-bold text-slate-400 block">Cultivar Certificado:</span>
+                          <strong className="text-sm font-black uppercase text-emerald-800 block truncate">{variety?.name || 'Variedad Homologada'}</strong>
+                          <span className="text-[10px] text-slate-500 block">RNC INASE: {variety?.inaseRncNumber || 'Homologada'}</span>
+                        </div>
+                      </div>
+
+                      {/* ADVERTENCIA LEGAL A FUERZAS DE SEGURIDAD */}
+                      <div className="p-4 bg-rose-50 border-2 md:border-3 border-rose-400 rounded-2xl text-xs md:text-sm text-rose-950 font-bold leading-snug">
+                        ⚠️ ADVERTENCIA LEGAL A FUERZAS DE SEGURIDAD Y TERCEROS: Predio registrado y fiscalizado bajo la Ley 27.669. Prohibido el ingreso no autorizado o la sustracción de biomasa experimental. Acto penado por los artículos 162, 164 y 186 del Código Penal de la Nación Argentina.
+                      </div>
+
+                      {/* FOOTER PÁGINA 1 */}
+                      <div className="flex flex-col sm:flex-row justify-between items-center text-[10px] font-mono text-slate-500 border-t-2 border-slate-300 pt-3 gap-2">
+                        <div className="flex items-center gap-3">
+                          <div className="p-1 bg-white rounded-lg border border-slate-300">
+                            <QRCodeSVG value={traceUrl} size={46} level="M" />
+                          </div>
+                          <div>
+                            <span className="font-black text-slate-800 block">PatagonianC LTDA · CUIT: 30-71816113-0 · HempC</span>
+                            <span className="text-[9px] text-slate-400 block">Escanear para verificación digital inmediata</span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <span className="font-bold text-slate-700 block">Página 1 de 2 · Cartel Exterior de Tranquera</span>
+                          <span className="text-[9px] text-slate-400">Emisión: {new Date().toLocaleDateString('es-AR')} · red.hempc.com.ar</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ======================================================== */}
+                {/* PÁGINA 2: ANEXO TÉCNICO, GEODESIA Y FICHA REGISTRAL      */}
+                {/* ======================================================== */}
+                {(signPageFilter === 'all' || signPageFilter === 'p2') && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs px-2 no-print">
+                      <span className="font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-600"></span>
+                        Página 2: Anexo Técnico, Geodesia y Ficha Registral de Parcela
+                      </span>
+                      <span className="text-[10px] font-mono text-slate-400">Formato A4</span>
+                    </div>
+
+                    <div
+                      id="printable-plot-sign-p2"
+                      className={`printable-sheet bg-white text-slate-950 p-6 md:p-8 rounded-3xl border-4 md:border-8 border-slate-950 shadow-2xl space-y-5 mx-auto ${
+                        signOrientation === 'horizontal' ? 'w-full' : 'max-w-2xl'
+                      }`}
+                    >
+                      {/* ENCABEZADO ANEXO TÉCNICO */}
+                      <div className="border-b-4 border-slate-950 pb-3 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <FileText size={16} className="text-emerald-700" />
+                            <p className="text-xs font-black uppercase tracking-widest text-slate-900">
+                              REPÚBLICA ARGENTINA · LEY NACIONAL N° 27.669 & DECRETO 405/2023
+                            </p>
+                          </div>
+                          <h2 className="text-lg md:text-2xl font-black uppercase tracking-tight text-slate-950 mt-1">
+                            ANEXO TÉCNICO Y FICHA REGISTRAL DE PARCELA
+                          </h2>
+                          <p className="text-xs md:text-sm font-mono font-black text-emerald-800 uppercase mt-0.5">
+                            PATAGONIAN-C LTDA COOPERATIVA DE TRABAJO · CUIT: 30-71816113-0 · HempC
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0 bg-slate-100 p-2.5 rounded-xl border border-slate-300">
+                          <span className="text-[9px] font-mono font-black uppercase text-slate-500 block">Legajo Oficial</span>
+                          <strong className="text-xs font-mono font-black text-slate-900 block">
+                            EXP: HEMP-AR-{plot.id.substring(0, 8).toUpperCase()}
+                          </strong>
+                          <span className="text-[9px] font-mono text-slate-500 block">Campaña {campaignDisplay}</span>
+                        </div>
+                      </div>
+
+                      {/* SECCIÓN 1: IDENTIFICACIÓN PARCELARIA Y CATASTRAL */}
+                      <div className="space-y-1.5">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                          <Sprout size={14} className="text-emerald-600" />
+                          1. Ficha Catastral & Identificación del Cultivo
                         </span>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 border-2 border-slate-300 rounded-2xl p-3.5 bg-slate-50 text-xs font-mono">
+                          <div className="space-y-1">
+                            <span className="text-[9px] text-slate-400 uppercase font-bold block">Unidad Productiva / Lote:</span>
+                            <strong className="text-sm text-slate-950 font-black block">{plot.name}</strong>
+                            <span className="text-[10px] text-slate-600 block">ID Parcelario: <strong>{plot.id}</strong></span>
+                            <span className="text-[10px] text-slate-600 block">Tipo: <strong>{plot.type || 'Ensayo / Producción'}</strong></span>
+                            <span className="text-[10px] text-slate-600 block">Estado: <strong className="text-emerald-700">{statusDisplay}</strong></span>
+                          </div>
+
+                          <div className="space-y-1">
+                            <span className="text-[9px] text-slate-400 uppercase font-bold block">Establecimiento / Campo Padre:</span>
+                            <strong className="text-sm text-slate-950 font-black block">{location?.name || 'Establecimiento Rural'}</strong>
+                            <span className="text-[10px] text-slate-600 block">Ubicación: {location?.city || ''}, {location?.province || ''}</span>
+                            <span className="text-[10px] text-slate-600 block truncate" title={location?.address}>Dirección: {location?.address || 'Zona Rural'}</span>
+                            <span className="text-[10px] text-slate-600 block">RENSPA: <strong>{location?.renspaNumber || 'En trámite'}</strong></span>
+                          </div>
+
+                          <div className="space-y-1">
+                            <span className="text-[9px] text-slate-400 uppercase font-bold block">Genética Certificada (INASE):</span>
+                            <strong className="text-sm text-emerald-800 font-black block">{variety?.name || 'Cultivar Homologado'}</strong>
+                            <span className="text-[10px] text-slate-600 block">RNC INASE: <strong>{variety?.inaseRncNumber || 'Certificación RNC'}</strong></span>
+                            <span className="text-[10px] text-slate-600 block">Destino Bioeconómico: <strong>{variety?.usage || 'Fibra / Grano'}</strong></span>
+                            <span className="text-[10px] text-slate-600 block">Fotoperíodo: <strong>{variety?.photoperiodType || 'Monoica'}</strong></span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* SECCIÓN 2: GEODESIA, CENTROIDE Y TELEDETECCIÓN */}
+                      <div className="space-y-1.5">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                          <Compass size={14} className="text-emerald-600" />
+                          2. Georreferenciación Geodésica & Monitoreo Satelital
+                        </span>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 text-xs font-mono">
+                          <div className="p-2.5 bg-slate-100 rounded-xl border border-slate-200">
+                            <span className="text-[9px] uppercase text-slate-500 font-bold block">Superficie Declarada</span>
+                            <strong className="text-sm font-black text-slate-900 block">{surfaceDisplay}</strong>
+                          </div>
+                          <div className="p-2.5 bg-slate-100 rounded-xl border border-slate-200">
+                            <span className="text-[9px] uppercase text-slate-500 font-bold block">Coordenadas Centroide</span>
+                            <strong className="text-xs font-black text-slate-900 block">{formattedLat}, {formattedLng}</strong>
+                          </div>
+                          <div className="p-2.5 bg-slate-100 rounded-xl border border-slate-200">
+                            <span className="text-[9px] uppercase text-slate-500 font-bold block">Polígono Geodésico</span>
+                            <strong className="text-xs font-bold text-slate-900 block">
+                              {plot.polygon && plot.polygon.length >= 3 ? `${plot.polygon.length} Vértices Vectoriales` : 'Centroide georreferenciado'}
+                            </strong>
+                          </div>
+                          <div className="p-2.5 bg-slate-100 rounded-xl border border-slate-200">
+                            <span className="text-[9px] uppercase text-slate-500 font-bold block">Vigilancia Espectral</span>
+                            <strong className="text-xs font-bold text-emerald-700 block">Copernicus Sentinel-2</strong>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* SECCIÓN 3: TITULARIDAD, OPERADOR Y LICENCIAS ARICCAME */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs font-mono">
+                        <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                          <span className="text-[9px] uppercase text-slate-500 font-bold block">Operador Titular Responsable</span>
+                          <strong className="text-xs font-black text-slate-900 block">PatagonianC LTDA Cooperativa de Trabajo</strong>
+                          <span className="text-[10px] text-emerald-800 font-bold block">CUIT: 30-71816113-0 · HempC (Unidad de Negocios)</span>
+                          <span className="text-[10px] text-slate-600 block">Titular Predial / Socio: <strong>{client?.name || location?.ownerName || 'HempC Red Cooperativa'}</strong></span>
+                        </div>
+
+                        <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                          <span className="text-[9px] uppercase text-slate-500 font-bold block">Licencias y Fiscalización Sanitaria</span>
+                          <span className="text-[10px] text-slate-700 block">Lic. Agrícola ARICCAME: <strong>EX-2024-134354227</strong></span>
+                          <span className="text-[10px] text-slate-700 block">Lic. Industrial ARICCAME: <strong>EX-2025-119427833</strong></span>
+                          <span className="text-[10px] text-emerald-700 font-bold block">Cumplimiento Fitosanitario: Resoluciones SENASA N° 350/99 y 637/11</span>
+                        </div>
+                      </div>
+
+                      {/* SECCIÓN 4: AUDITORÍA DIGITAL Y RECUADROS DE FIRMAS */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-center border-t-2 border-slate-300 pt-3">
+                        <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-200">
+                          <QRCodeSVG value={traceUrl} size={76} level="H" />
+                          <div className="text-[9px] font-mono space-y-0.5">
+                            <strong className="font-black text-slate-900 block">QR Auditoría Digital</strong>
+                            <span className="text-slate-500 block leading-tight">Escaneo directo para verificar historial satelital y DDJJ oficial</span>
+                            <span className="text-emerald-700 font-bold block">SENASA · INASE · ARICCAME</span>
+                          </div>
+                        </div>
+
+                        {/* Caja Firma Responsable Técnico */}
+                        <div className="p-3 border-2 border-dashed border-slate-400 rounded-2xl h-24 flex flex-col justify-between text-[9px] font-mono">
+                          <span className="font-bold text-slate-500 uppercase">Firma Responsable Técnico / Agrónomo</span>
+                          <div className="border-t border-slate-300 pt-1 text-slate-400 text-center">Firma, Aclaración y Matrícula</div>
+                        </div>
+
+                        {/* Caja Visado Inspección Oficial */}
+                        <div className="p-3 border-2 border-dashed border-slate-400 rounded-2xl h-24 flex flex-col justify-between text-[9px] font-mono">
+                          <span className="font-bold text-slate-500 uppercase">Inspección Oficial / Autoridad Rural</span>
+                          <div className="border-t border-slate-300 pt-1 text-slate-400 text-center">Sello, Fecha y Matrícula Inspector</div>
+                        </div>
+                      </div>
+
+                      {/* FOOTER PÁGINA 2 */}
+                      <div className="flex flex-col sm:flex-row justify-between items-center text-[10px] font-mono text-slate-500 border-t-2 border-slate-300 pt-2 gap-1">
+                        <span className="font-bold">PatagonianC LTDA Cooperativa de Trabajo · CUIT: 30-71816113-0 · HempC (Unidad de Negocios)</span>
+                        <span>Página 2 de 2 · Anexo Técnico y Geodésico · red.hempc.com.ar</span>
                       </div>
                     </div>
-
-                    <div className="p-3 bg-red-50 border-2 border-red-300 rounded-xl text-[10px] text-red-950 font-bold leading-tight">
-                      ⚠️ ADVERTENCIA LEGAL A FUERZAS DE SEGURIDAD Y TERCEROS: Predio registrado y fiscalizado bajo la Ley 27.669. Prohibido el ingreso no autorizado o la sustracción de biomasa experimental. Acto penado por los artículos 162, 164 y 186 del Código Penal de la Nación Argentina.
-                    </div>
                   </div>
+                )}
 
-                  {/* QR VECTORIAL DE AUDITORÍA OFICIAL */}
-                  <div className="flex flex-col items-center justify-center p-3 bg-slate-50 rounded-2xl border-2 border-slate-300 text-center">
-                    <QRCodeSVG
-                      value={traceUrl}
-                      size={120}
-                      level="H"
-                      includeMargin={true}
-                    />
-                    <span className="text-[8px] font-mono font-black uppercase text-slate-500 mt-1 block">
-                      Escanear para Auditoría Digital Oficial
-                    </span>
-                  </div>
-                </div>
-
-                {/* 5. PIE DEL CARTEL */}
-                <div className="flex flex-col sm:flex-row justify-between items-center text-[9px] font-mono text-slate-500 border-t-2 border-slate-300 pt-2 gap-1">
-                  <span className="font-bold">PatagonianC LTDA Cooperativa de Trabajo · CUIT: 30-71816113-0 · HempC (Unidad de Negocios)</span>
-                  <span>Plataforma HempTrack · Emisión: {new Date().toLocaleDateString('es-AR')} · red.hempc.com.ar</span>
-                </div>
               </div>
             </div>
           )}
