@@ -44,7 +44,106 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
   };
 
   const handlePrint = () => {
-    window.print();
+    try {
+      const containerId = activeView === 'sign' ? 'printable-sign-container' : 'printable-plot-doc';
+      const sourceElement = document.getElementById(containerId);
+      if (!sourceElement) {
+        window.print();
+        return;
+      }
+
+      // Crear iframe temporal para aislar completamente el contenido imprimible y evitar pantallas en blanco
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'fixed';
+      iframe.style.top = '-10000px';
+      iframe.style.left = '-10000px';
+      iframe.style.width = '1000px';
+      iframe.style.height = '1000px';
+      iframe.style.border = 'none';
+      document.body.appendChild(iframe);
+
+      const iframeDoc = iframe.contentWindow?.document;
+      if (!iframeDoc) {
+        window.print();
+        return;
+      }
+
+      // Copiar todos los estilos, Tailwind CSS y fuentes
+      const headStyles = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
+        .map(style => style.outerHTML)
+        .join('\n');
+
+      const orientationRule = signOrientation === 'horizontal' ? 'A4 landscape' : 'A4 portrait';
+
+      iframeDoc.open();
+      iframeDoc.write(`
+        <!DOCTYPE html>
+        <html lang="es">
+          <head>
+            <meta charset="utf-8" />
+            <title>${activeView === 'sign' ? 'Cartel Oficial Tranquera - PatagonianC' : 'Rótulo QR Parcela'}</title>
+            ${headStyles}
+            <style>
+              @page {
+                size: ${orientationRule};
+                margin: 6mm;
+              }
+              html, body {
+                margin: 0 !important;
+                padding: 0 !important;
+                background: #ffffff !important;
+                color: #000000 !important;
+                font-family: ui-sans-serif, system-ui, sans-serif !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+              }
+              .no-print {
+                display: none !important;
+              }
+              .printable-sheet {
+                display: block !important;
+                box-sizing: border-box !important;
+                page-break-after: always !important;
+                break-after: page !important;
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+                margin: 0 0 10mm 0 !important;
+                zoom: 0.87 !important;
+              }
+              .printable-sheet:last-of-type {
+                page-break-after: auto !important;
+                break-after: auto !important;
+                margin-bottom: 0 !important;
+              }
+              #printable-plot-doc {
+                margin: 20mm auto !important;
+              }
+            </style>
+          </head>
+          <body>
+            ${sourceElement.outerHTML}
+          </body>
+        </html>
+      `);
+      iframeDoc.close();
+
+      setTimeout(() => {
+        try {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+        } catch {
+          window.print();
+        } finally {
+          setTimeout(() => {
+            if (document.body.contains(iframe)) {
+              document.body.removeChild(iframe);
+            }
+          }, 1500);
+        }
+      }, 300);
+    } catch {
+      window.print();
+    }
   };
 
   const formattedLat = plot.coordinates?.lat ? Number(plot.coordinates.lat).toFixed(5) : '-';
@@ -64,64 +163,32 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
             size: ${signOrientation === 'horizontal' ? 'A4 landscape' : 'A4 portrait'};
             margin: 6mm;
           }
-
-          /* Asegurar que la ventana de impresión no quede bloqueada ni recortada por el modal fijo */
-          html, body {
-            overflow: visible !important;
-            height: auto !important;
-            min-height: 100% !important;
-            background: #ffffff !important;
-            margin: 0 !important;
-            padding: 0 !important;
-          }
-
-          /* Desacoplar el modal fixed y scroll containers para permitir paginación fluida de múltiples hojas A4 */
-          #modal-print-overlay,
-          #modal-print-dialog,
-          #modal-print-body {
-            position: static !important;
-            overflow: visible !important;
-            max-height: none !important;
-            height: auto !important;
-            width: 100% !important;
-            padding: 0 !important;
-            margin: 0 !important;
-            border: none !important;
-            box-shadow: none !important;
-            background: transparent !important;
-            backdrop-filter: none !important;
-            inset: auto !important;
-            z-index: auto !important;
-            display: block !important;
-          }
-
           body * {
             visibility: hidden !important;
           }
-
-          #printable-sign-container,
-          #printable-sign-container *,
+          .printable-container,
+          .printable-container *,
           .printable-sheet,
           .printable-sheet *,
           #printable-plot-doc,
           #printable-plot-doc * {
             visibility: visible !important;
           }
-
-          #printable-sign-container {
-            position: static !important;
-            display: block !important;
+          .printable-container {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
             width: 100% !important;
             margin: 0 !important;
             padding: 0 !important;
             background: #ffffff !important;
           }
-
           #printable-plot-doc {
-            display: block !important;
-            position: relative !important;
-            margin: 20mm auto !important;
-            width: 140mm !important;
+            position: absolute !important;
+            left: 50% !important;
+            top: 20px !important;
+            transform: translateX(-50%) !important;
+            width: 150mm !important;
             max-width: 95% !important;
             background: #ffffff !important;
             color: #000000 !important;
@@ -130,7 +197,6 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
             page-break-after: auto !important;
             break-after: auto !important;
           }
-
           .printable-sheet {
             display: block !important;
             position: relative !important;
@@ -140,21 +206,18 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
             color: #000000 !important;
             border: 4px solid #000000 !important;
             margin: 0 0 10mm 0 !important;
-            padding: 18px !important;
+            padding: 20px !important;
             page-break-after: always !important;
             break-after: page !important;
             page-break-inside: avoid !important;
             break-inside: avoid !important;
-            /* Auto-encuadre proporcional al 87% dentro de la hoja A4 sin alterar pantalla */
             zoom: 0.87 !important;
           }
-
           .printable-sheet:last-of-type {
             page-break-after: auto !important;
             break-after: auto !important;
             margin-bottom: 0 !important;
           }
-
           .no-print {
             display: none !important;
           }
