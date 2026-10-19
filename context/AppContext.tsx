@@ -203,37 +203,67 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         }
         return initialList;
     });
-    const [operationalExpenses, setOperationalExpenses] = useState<OperationalExpense[]>(() => {
+    // Función auxiliar para leer colecciones persistentes respetando borrados y altas en producción
+    const getStoredCollection = <T,>(key: string, fallback: T[]): T[] => {
         if (typeof window !== 'undefined') {
             try {
-                const stored = localStorage.getItem('ht_operational_expenses');
-                if (stored) return JSON.parse(stored);
+                const stored = localStorage.getItem(key);
+                if (stored !== null) {
+                    const parsed = JSON.parse(stored);
+                    if (Array.isArray(parsed)) {
+                        return parsed;
+                    }
+                }
             } catch (e) {}
         }
-        return DEMO_OPERATIONAL_EXPENSES;
-    });
-    const [varieties, setVarieties] = useState<Variety[]>(DEMO_VARIETIES);
-    const [locations, setLocations] = useState<Location[]>(DEMO_LOCATIONS);
-    const [plots, setPlots] = useState<Plot[]>(DEMO_PLOTS);
-    const [trialRecords, setTrialRecords] = useState<TrialRecord[]>(DEMO_TRIALS);
-    const [tasks, setTasks] = useState<Task[]>(DEMO_TASKS);
-    const [projects, setProjects] = useState<Project[]>(DEMO_PROJECTS);
-    const [clients, setClients] = useState<Client[]>(() => {
-        if (typeof window !== 'undefined') {
-            try {
-                const stored = localStorage.getItem('ht_clients');
-                if (stored) return JSON.parse(stored);
-            } catch (e) {}
-        }
-        return DEMO_CLIENTS;
-    });
-    const [suppliers, setSuppliers] = useState<Supplier[]>(DEMO_SUPPLIERS);
-    const [seedBatches, setSeedBatches] = useState<SeedBatch[]>(DEMO_SEED_BATCHES);
-    const [seedMovements, setSeedMovements] = useState<SeedMovement[]>(DEMO_SEED_MOVEMENTS);
-    const [resources, setResources] = useState<Resource[]>(DEMO_RESOURCES);
-    const [storagePoints, setStoragePoints] = useState<StoragePoint[]>(DEMO_STORAGE_POINTS);
-    const [hydricRecords, setHydricRecords] = useState<HydricRecord[]>(DEMO_HYDRIC);
-    const [logs, setLogs] = useState<FieldLog[]>([]);
+        return fallback;
+    };
+
+    const [operationalExpenses, setOperationalExpenses] = useState<OperationalExpense[]>(() => 
+        getStoredCollection('ht_operational_expenses', DEMO_OPERATIONAL_EXPENSES)
+    );
+    const [varieties, setVarieties] = useState<Variety[]>(() => 
+        getStoredCollection('ht_varieties', DEMO_VARIETIES)
+    );
+    const [locations, setLocations] = useState<Location[]>(() => 
+        getStoredCollection('ht_locations', DEMO_LOCATIONS)
+    );
+    const [plots, setPlots] = useState<Plot[]>(() => 
+        getStoredCollection('ht_plots', DEMO_PLOTS)
+    );
+    const [trialRecords, setTrialRecords] = useState<TrialRecord[]>(() => 
+        getStoredCollection('ht_trial_records', DEMO_TRIALS)
+    );
+    const [tasks, setTasks] = useState<Task[]>(() => 
+        getStoredCollection('ht_tasks', DEMO_TASKS)
+    );
+    const [projects, setProjects] = useState<Project[]>(() => 
+        getStoredCollection('ht_projects', DEMO_PROJECTS)
+    );
+    const [clients, setClients] = useState<Client[]>(() => 
+        getStoredCollection('ht_clients', DEMO_CLIENTS)
+    );
+    const [suppliers, setSuppliers] = useState<Supplier[]>(() => 
+        getStoredCollection('ht_suppliers', DEMO_SUPPLIERS)
+    );
+    const [seedBatches, setSeedBatches] = useState<SeedBatch[]>(() => 
+        getStoredCollection('ht_seed_batches', DEMO_SEED_BATCHES)
+    );
+    const [seedMovements, setSeedMovements] = useState<SeedMovement[]>(() => 
+        getStoredCollection('ht_seed_movements', DEMO_SEED_MOVEMENTS)
+    );
+    const [resources, setResources] = useState<Resource[]>(() => 
+        getStoredCollection('ht_resources', DEMO_RESOURCES)
+    );
+    const [storagePoints, setStoragePoints] = useState<StoragePoint[]>(() => 
+        getStoredCollection('ht_storage_points', DEMO_STORAGE_POINTS)
+    );
+    const [hydricRecords, setHydricRecords] = useState<HydricRecord[]>(() => 
+        getStoredCollection('ht_hydric_records', DEMO_HYDRIC)
+    );
+    const [logs, setLogs] = useState<FieldLog[]>(() => 
+        getStoredCollection('ht_field_logs', [])
+    );
 
     useEffect(() => {
         refreshData();
@@ -263,14 +293,18 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             if (connected) {
                 const fetchTable = async (table: string, setter: any, fallbackData?: any) => {
                     try {
-                      const { data } = await supabase.from(table).select('*');
-                      if (data && data.length > 0) {
-                        setter(toCamelCase(data));
-                      } else if (fallbackData) {
-                        setter(fallbackData);
+                      const { data, error } = await supabase.from(table).select('*');
+                      if (!error && data !== null) {
+                        const mapped = toCamelCase(data);
+                        setter(mapped);
+                        try { localStorage.setItem(`ht_${table}`, JSON.stringify(mapped)); } catch (e) {}
+                        return;
+                      }
+                      if (fallbackData) {
+                        setter((prev: any[]) => prev && prev.length > 0 ? prev : fallbackData);
                       }
                     } catch(e) {
-                      if (fallbackData) setter(fallbackData);
+                      if (fallbackData) setter((prev: any[]) => prev && prev.length > 0 ? prev : fallbackData);
                     }
                 };
                 
@@ -319,28 +353,8 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                     fetchTable('field_logs', setLogs),
                 ]);
             } else {
-                // Modo Autónomo / Local
+                // Modo Autónomo / Local: respeta fielmente los datos del usuario en memoria/localStorage
                 setUsersList(prev => prev.length > 0 ? prev : [DEMO_USER]);
-                setVarieties(prev => prev.length > 0 ? prev : DEMO_VARIETIES);
-                setLocations(prev => prev.length > 0 ? prev : DEMO_LOCATIONS);
-                setPlots(prev => {
-                    const raw = prev.length > 0 ? prev : DEMO_PLOTS;
-                    return raw.map((p: any) => {
-                        if (p.status === 'Activa' && !p.seedBatchId && p.varietyId) {
-                            const match = DEMO_SEED_BATCHES.find(b => b.varietyId === p.varietyId && b.isActive);
-                            return match ? { ...p, seedBatchId: match.id } : p;
-                        }
-                        return p;
-                    });
-                });
-                setTrialRecords(prev => prev.length > 0 ? prev : DEMO_TRIALS);
-                setHydricRecords(prev => prev.length > 0 ? prev : DEMO_HYDRIC);
-                setProjects(prev => prev.length > 0 ? prev : DEMO_PROJECTS);
-                setTasks(prev => prev.length > 0 ? prev : DEMO_TASKS);
-                setSuppliers(prev => prev.length > 0 ? prev : DEMO_SUPPLIERS);
-                setStoragePoints(prev => prev.length > 0 ? prev : DEMO_STORAGE_POINTS);
-                setSeedBatches(prev => prev.length > 0 ? prev : DEMO_SEED_BATCHES);
-                setSeedMovements(prev => prev.length > 0 ? prev : DEMO_SEED_MOVEMENTS);
             }
         } catch(e) {
             console.error("Data refresh failed", e);
@@ -481,44 +495,91 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 try { localStorage.setItem('ht_plots', JSON.stringify(next)); } catch (e) {}
                 return next;
             });
-        } else if (table === 'varieties') setVarieties(prev => updateList(prev));
-        else if (table === 'trial_records') setTrialRecords(prev => updateList(prev));
-        else if (table === 'tasks') {
+        } else if (table === 'varieties') {
+            setVarieties(prev => {
+                const next = updateList(prev);
+                try { localStorage.setItem('ht_varieties', JSON.stringify(next)); } catch (e) {}
+                return next;
+            });
+        } else if (table === 'trial_records') {
+            setTrialRecords(prev => {
+                const next = updateList(prev);
+                try { localStorage.setItem('ht_trial_records', JSON.stringify(next)); } catch (e) {}
+                return next;
+            });
+        } else if (table === 'tasks') {
             setTasks(prev => {
                 const next = updateList(prev);
                 try { localStorage.setItem('ht_tasks', JSON.stringify(next)); } catch (e) {}
                 return next;
             });
-        }
-        else if (table === 'users') {
+        } else if (table === 'users') {
             setUsersList(prev => {
                 const next = updateList(prev);
                 try { localStorage.setItem('ht_users', JSON.stringify(next)); } catch (e) {}
                 return next;
             });
-        }
-        else if (table === 'projects') setProjects(prev => updateList(prev));
-        else if (table === 'clients') {
+        } else if (table === 'projects') {
+            setProjects(prev => {
+                const next = updateList(prev);
+                try { localStorage.setItem('ht_projects', JSON.stringify(next)); } catch (e) {}
+                return next;
+            });
+        } else if (table === 'clients') {
             setClients(prev => {
                 const next = updateList(prev);
                 try { localStorage.setItem('ht_clients', JSON.stringify(next)); } catch (e) {}
                 return next;
             });
-        }
-        else if (table === 'suppliers') setSuppliers(prev => updateList(prev));
-        else if (table === 'seed_batches') setSeedBatches(prev => updateList(prev));
-        else if (table === 'seed_movements') setSeedMovements(prev => updateList(prev));
-        else if (table === 'storage_points') setStoragePoints(prev => updateList(prev));
-        else if (table === 'hydric_records') setHydricRecords(prev => updateList(prev));
-        else if (table === 'resources') setResources(prev => updateList(prev));
-        else if (table === 'operational_expenses') {
+        } else if (table === 'suppliers') {
+            setSuppliers(prev => {
+                const next = updateList(prev);
+                try { localStorage.setItem('ht_suppliers', JSON.stringify(next)); } catch (e) {}
+                return next;
+            });
+        } else if (table === 'seed_batches') {
+            setSeedBatches(prev => {
+                const next = updateList(prev);
+                try { localStorage.setItem('ht_seed_batches', JSON.stringify(next)); } catch (e) {}
+                return next;
+            });
+        } else if (table === 'seed_movements') {
+            setSeedMovements(prev => {
+                const next = updateList(prev);
+                try { localStorage.setItem('ht_seed_movements', JSON.stringify(next)); } catch (e) {}
+                return next;
+            });
+        } else if (table === 'storage_points') {
+            setStoragePoints(prev => {
+                const next = updateList(prev);
+                try { localStorage.setItem('ht_storage_points', JSON.stringify(next)); } catch (e) {}
+                return next;
+            });
+        } else if (table === 'hydric_records') {
+            setHydricRecords(prev => {
+                const next = updateList(prev);
+                try { localStorage.setItem('ht_hydric_records', JSON.stringify(next)); } catch (e) {}
+                return next;
+            });
+        } else if (table === 'resources') {
+            setResources(prev => {
+                const next = updateList(prev);
+                try { localStorage.setItem('ht_resources', JSON.stringify(next)); } catch (e) {}
+                return next;
+            });
+        } else if (table === 'operational_expenses') {
             setOperationalExpenses(prev => {
                 const next = updateList(prev);
                 try { localStorage.setItem('ht_operational_expenses', JSON.stringify(next)); } catch (e) {}
                 return next;
             });
+        } else if (table === 'field_logs') {
+            setLogs(prev => {
+                const next = updateList(prev);
+                try { localStorage.setItem('ht_field_logs', JSON.stringify(next)); } catch (e) {}
+                return next;
+            });
         }
-        else if (table === 'field_logs') setLogs(prev => updateList(prev));
     };
 
     const switchUserRole = (userId: string) => {
@@ -793,6 +854,67 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         return ok;
     };
 
+    const deleteLocationSafe = async (id: string): Promise<boolean> => {
+        // Desvincular de clientes locales para mantener consistencia
+        setClients(prev => {
+            const next = prev.map(c => c.locationId === id ? { ...c, locationId: undefined } : c);
+            try { localStorage.setItem('ht_clients', JSON.stringify(next)); } catch (e) {}
+            return next;
+        });
+        return await crud('locations', id, 'delete');
+    };
+
+    const deletePlotSafe = async (id: string): Promise<boolean> => {
+        // Cascada segura de registros técnicos de la parcela
+        setTrialRecords(prev => {
+            const next = prev.filter(r => r.plotId !== id);
+            try { localStorage.setItem('ht_trial_records', JSON.stringify(next)); } catch (e) {}
+            return next;
+        });
+        setHydricRecords(prev => {
+            const next = prev.filter(r => r.plotId !== id);
+            try { localStorage.setItem('ht_hydric_records', JSON.stringify(next)); } catch (e) {}
+            return next;
+        });
+        setLogs(prev => {
+            const next = prev.filter(l => l.plotId !== id);
+            try { localStorage.setItem('ht_field_logs', JSON.stringify(next)); } catch (e) {}
+            return next;
+        });
+        setTasks(prev => {
+            const next = prev.map(t => t.plotId === id ? { ...t, plotId: '' } : t);
+            try { localStorage.setItem('ht_tasks', JSON.stringify(next)); } catch (e) {}
+            return next;
+        });
+        return await crud('plots', id, 'delete');
+    };
+
+    const deleteClientSafe = async (id: string): Promise<boolean> => {
+        // Desvincular de usuarios
+        setUsersList(prev => {
+            const next = prev.map(u => u.clientId === id ? { ...u, clientId: undefined } : u);
+            try { localStorage.setItem('ht_users', JSON.stringify(next)); } catch (e) {}
+            return next;
+        });
+        // Desvincular de establecimientos
+        setLocations(prev => {
+            const next = prev.map(l => l.clientId === id ? { ...l, clientId: undefined } : l);
+            try { localStorage.setItem('ht_locations', JSON.stringify(next)); } catch (e) {}
+            return next;
+        });
+        return await crud('clients', id, 'delete');
+    };
+
+    const deleteSeedBatchSafe = async (id: string): Promise<boolean> => {
+        // Desvincular de parcelas
+        setPlots(prev => {
+            const next = prev.map(p => p.seedBatchId === id ? { ...p, seedBatchId: undefined } : p);
+            try { localStorage.setItem('ht_plots', JSON.stringify(next)); } catch (e) {}
+            return next;
+        });
+        return await crud('seed_batches', id, 'delete');
+    };
+
     return (
         <AppContext.Provider value={{
             currentUser, usersList, isDbConnected, login, loginDemo, logout, 
@@ -801,15 +923,15 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             deleteUser: deleteUserSafe,
             theme, toggleTheme, appName, appLogo, updateBranding,
             varieties, addVariety: (v) => crud('varieties', v, 'insert'), updateVariety: (v) => crud('varieties', v, 'update'), deleteVariety: (id) => crud('varieties', id, 'delete'),
-            locations, addLocation: (l) => crud('locations', l, 'insert'), updateLocation: (l) => crud('locations', l, 'update'), deleteLocation: (id) => crud('locations', id, 'delete'),
-            plots, addPlot: (p) => crud('plots', p, 'insert'), updatePlot: (p) => crud('plots', p, 'update'), deletePlot: (id) => crud('plots', id, 'delete'), updatePlotPhenology,
+            locations, addLocation: (l) => crud('locations', l, 'insert'), updateLocation: (l) => crud('locations', l, 'update'), deleteLocation: deleteLocationSafe,
+            plots, addPlot: (p) => crud('plots', p, 'insert'), updatePlot: (p) => crud('plots', p, 'update'), deletePlot: deletePlotSafe, updatePlotPhenology,
             trialRecords, getPlotHistory: (pid) => trialRecords.filter(r => r.plotId === pid), getLatestRecord: (pid) => trialRecords.filter(r => r.plotId === pid).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0],
             addTrialRecord: (r) => crud('trial_records', r, 'insert'), updateTrialRecord: (r) => crud('trial_records', r, 'update'), deleteTrialRecord: (id) => crud('trial_records', id, 'delete'),
             tasks, addTask: addTaskWithSync, updateTask: updateTaskWithSync, deleteTask: (id) => crud('tasks', id, 'delete'), homologateLabor,
             projects, addProject: (p) => crud('projects', p, 'insert'), updateProject: (p) => crud('projects', p, 'update'), deleteProject: (id) => crud('projects', id, 'delete'),
-            clients, addClient: addClientWithRelations, updateClient: updateClientWithRelations, deleteClient: (id) => crud('clients', id, 'delete'),
+            clients, addClient: addClientWithRelations, updateClient: updateClientWithRelations, deleteClient: deleteClientSafe,
             suppliers, addSupplier: async (s) => { const ok = await crud('suppliers', s, 'insert'); return ok ? s.id : null; }, updateSupplier: (s) => crud('suppliers', s, 'update'), deleteSupplier: (id) => crud('suppliers', id, 'delete'),
-            seedBatches, addSeedBatch: (b) => crud('seed_batches', b, 'insert'), updateSeedBatch: (b) => crud('seed_batches', b, 'update'), deleteSeedBatch: (id) => crud('seed_batches', id, 'delete'),
+            seedBatches, addSeedBatch: (b) => crud('seed_batches', b, 'insert'), updateSeedBatch: (b) => crud('seed_batches', b, 'update'), deleteSeedBatch: deleteSeedBatchSafe,
             seedMovements, addSeedMovement: (m) => crud('seed_movements', m, 'insert'), updateSeedMovement: (m) => crud('seed_movements', m, 'update'),
             resources, addResource: (r) => crud('resources', r, 'insert'), updateResource: (r) => crud('resources', r, 'update'), deleteResource: (id) => crud('resources', id, 'delete'),
             operationalExpenses,
