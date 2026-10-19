@@ -27,7 +27,11 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
 }) => {
   const [activeView, setActiveView] = useState<'label' | 'sign'>('sign');
   const [copied, setCopied] = useState(false);
-  const [signOrientation, setSignOrientation] = useState<'horizontal' | 'vertical'>('horizontal');
+  // Orientación predeterminada VERTICAL (A4 Portrait) para coincidir 100% con la visualización del sistema
+  const [signOrientation, setSignOrientation] = useState<'horizontal' | 'vertical'>('vertical');
+  // Formato para la etiqueta / rótulo de parcela (A4 Centrado de oficina o Térmica 100x150mm de estaca)
+  const [labelFormat, setLabelFormat] = useState<'a4' | 'thermal'>('a4');
+  const [signPageFilter, setSignPageFilter] = useState<'all' | 'p1' | 'p2'>('all');
 
   if (!isOpen || !plot) return null;
 
@@ -45,14 +49,15 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
 
   const handlePrint = () => {
     try {
-      const containerId = activeView === 'sign' ? 'printable-sign-container' : 'printable-plot-doc';
+      const isSign = activeView === 'sign';
+      const containerId = isSign ? 'printable-sign-container' : 'printable-plot-doc';
       const sourceElement = document.getElementById(containerId);
       if (!sourceElement) {
         window.print();
         return;
       }
 
-      // Crear iframe temporal para aislar completamente el contenido imprimible y evitar pantallas en blanco
+      // Crear iframe temporal para aislar la impresión y previsualizar exactamente sin hojas en blanco
       const iframe = document.createElement('iframe');
       iframe.style.position = 'fixed';
       iframe.style.top = '-10000px';
@@ -68,12 +73,23 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
         return;
       }
 
-      // Copiar todos los estilos, Tailwind CSS y fuentes
+      // Copiar fuentes y estilos globales excluyendo reglas que oculten el body
       const headStyles = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
+        .filter(tag => !(tag.tagName === 'STYLE' && tag.textContent?.includes('visibility: hidden')))
         .map(style => style.outerHTML)
         .join('\n');
 
-      const orientationRule = signOrientation === 'horizontal' ? 'A4 landscape' : 'A4 portrait';
+      const docTitle = isSign 
+        ? 'Cartel Oficial Tranquera - PatagonianC LTDA' 
+        : 'Rótulo QR Parcela - PatagonianC LTDA';
+
+      const orientationRule = isSign 
+        ? (signOrientation === 'horizontal' ? 'A4 landscape' : 'A4 portrait')
+        : (labelFormat === 'thermal' ? '100mm 150mm portrait' : 'A4 portrait');
+
+      const pageMargin = isSign 
+        ? '5mm' 
+        : (labelFormat === 'thermal' ? '3mm' : '8mm');
 
       iframeDoc.open();
       iframeDoc.write(`
@@ -81,46 +97,79 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
         <html lang="es">
           <head>
             <meta charset="utf-8" />
-            <title>${activeView === 'sign' ? 'Cartel Oficial Tranquera - PatagonianC' : 'Rótulo QR Parcela'}</title>
+            <title>${docTitle}</title>
             ${headStyles}
             <style>
               @page {
                 size: ${orientationRule};
-                margin: 6mm;
+                margin: ${pageMargin};
+              }
+              * {
+                box-sizing: border-box !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
               }
               html, body {
                 margin: 0 !important;
                 padding: 0 !important;
                 background: #ffffff !important;
                 color: #000000 !important;
-                font-family: ui-sans-serif, system-ui, sans-serif !important;
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
+                font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
               }
               .no-print {
                 display: none !important;
               }
+              /* Cartel de tranquera: encuadre estricto en hoja A4 vertical (2 páginas) */
               .printable-sheet {
-                display: block !important;
+                display: flex !important;
+                flex-direction: column !important;
+                justify-content: space-between !important;
                 box-sizing: border-box !important;
+                width: 100% !important;
+                max-width: ${signOrientation === 'horizontal' ? '280mm' : '198mm'} !important;
+                height: ${signOrientation === 'horizontal' ? '198mm' : '278mm'} !important;
+                max-height: ${signOrientation === 'horizontal' ? '198mm' : '278mm'} !important;
+                margin: 0 auto !important;
+                padding: 14px 18px !important;
+                border: 4px solid #000000 !important;
+                border-radius: 20px !important;
+                background: #ffffff !important;
+                color: #000000 !important;
                 page-break-after: always !important;
                 break-after: page !important;
                 page-break-inside: avoid !important;
                 break-inside: avoid !important;
-                margin: 0 0 10mm 0 !important;
-                zoom: 0.87 !important;
+                overflow: hidden !important;
               }
               .printable-sheet:last-of-type {
                 page-break-after: auto !important;
                 break-after: auto !important;
-                margin-bottom: 0 !important;
               }
+              /* Rótulo / Etiqueta de parcela (Pasaporte Biológico) */
               #printable-plot-doc {
-                margin: 20mm auto !important;
+                display: flex !important;
+                flex-direction: column !important;
+                justify-content: space-between !important;
+                box-sizing: border-box !important;
+                width: ${labelFormat === 'thermal' ? '96mm' : '135mm'} !important;
+                max-width: 95% !important;
+                height: ${labelFormat === 'thermal' ? '144mm' : 'auto'} !important;
+                margin: ${labelFormat === 'thermal' ? '0 auto' : '15mm auto'} !important;
+                padding: ${labelFormat === 'thermal' ? '14px' : '20px'} !important;
+                border: 2px dashed #000000 !important;
+                border-radius: 20px !important;
+                background: #ffffff !important;
+                color: #000000 !important;
+                box-shadow: none !important;
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+                page-break-after: auto !important;
+                break-after: auto !important;
+                overflow: hidden !important;
               }
             </style>
           </head>
-          <body>
+          <body style="background:#ffffff; color:#000000;">
             ${sourceElement.outerHTML}
           </body>
         </html>
@@ -138,9 +187,9 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
             if (document.body.contains(iframe)) {
               document.body.removeChild(iframe);
             }
-          }, 1500);
+          }, 1800);
         }
-      }, 300);
+      }, 350);
     } catch {
       window.print();
     }
@@ -152,74 +201,100 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
   const campaignDisplay = plot.campaign || '2025/2026';
   const statusDisplay = plot.status || 'Activa';
 
-  const [signPageFilter, setSignPageFilter] = useState<'all' | 'p1' | 'p2'>('all');
-
   return (
     <div id="modal-print-overlay" className="fixed inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center z-[120] p-3 sm:p-5 font-sans overflow-y-auto">
-      {/* Estilos CSS dedicados de impresión limpia a pantalla completa y 2 páginas A4 */}
+      {/* Estilos CSS de respaldo para impresión directa con Ctrl+P */}
       <style>{`
         @media print {
           @page {
-            size: ${signOrientation === 'horizontal' ? 'A4 landscape' : 'A4 portrait'};
-            margin: 6mm;
+            size: ${activeView === 'sign' ? (signOrientation === 'horizontal' ? 'A4 landscape' : 'A4 portrait') : (labelFormat === 'thermal' ? '100mm 150mm portrait' : 'A4 portrait')};
+            margin: 5mm;
           }
-          body * {
-            visibility: hidden !important;
-          }
-          .printable-container,
-          .printable-container *,
-          .printable-sheet,
-          .printable-sheet *,
-          #printable-plot-doc,
-          #printable-plot-doc * {
-            visibility: visible !important;
-          }
-          .printable-container {
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: 100% !important;
+          html, body {
             margin: 0 !important;
             padding: 0 !important;
             background: #ffffff !important;
+            overflow: visible !important;
           }
-          #printable-plot-doc {
-            position: absolute !important;
-            left: 50% !important;
-            top: 20px !important;
-            transform: translateX(-50%) !important;
-            width: 150mm !important;
-            max-width: 95% !important;
-            background: #ffffff !important;
-            color: #000000 !important;
+          #modal-print-overlay {
+            position: static !important;
+            inset: auto !important;
+            background: transparent !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            overflow: visible !important;
+            display: block !important;
+          }
+          #modal-print-dialog {
+            position: static !important;
+            max-width: 100% !important;
+            width: 100% !important;
+            max-height: none !important;
+            height: auto !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            border: none !important;
             box-shadow: none !important;
-            border: 2px dashed #000000 !important;
-            page-break-after: auto !important;
-            break-after: auto !important;
+            background: transparent !important;
+            overflow: visible !important;
+            display: block !important;
+          }
+          #modal-print-body {
+            overflow: visible !important;
+            height: auto !important;
+            max-height: none !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            display: block !important;
+          }
+          .no-print {
+            display: none !important;
           }
           .printable-sheet {
-            display: block !important;
-            position: relative !important;
-            width: 100% !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: space-between !important;
             box-sizing: border-box !important;
+            width: 100% !important;
+            max-width: ${signOrientation === 'horizontal' ? '280mm' : '198mm'} !important;
+            height: ${signOrientation === 'horizontal' ? '198mm' : '278mm'} !important;
+            max-height: ${signOrientation === 'horizontal' ? '198mm' : '278mm'} !important;
+            margin: 0 auto !important;
+            padding: 14px 18px !important;
+            border: 4px solid #000000 !important;
+            border-radius: 20px !important;
             background: #ffffff !important;
             color: #000000 !important;
-            border: 4px solid #000000 !important;
-            margin: 0 0 10mm 0 !important;
-            padding: 20px !important;
             page-break-after: always !important;
             break-after: page !important;
             page-break-inside: avoid !important;
             break-inside: avoid !important;
-            zoom: 0.87 !important;
+            overflow: hidden !important;
           }
           .printable-sheet:last-of-type {
             page-break-after: auto !important;
             break-after: auto !important;
-            margin-bottom: 0 !important;
           }
-          .no-print {
-            display: none !important;
+          #printable-plot-doc {
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: space-between !important;
+            box-sizing: border-box !important;
+            width: ${labelFormat === 'thermal' ? '96mm' : '135mm'} !important;
+            max-width: 95% !important;
+            height: ${labelFormat === 'thermal' ? '144mm' : 'auto'} !important;
+            margin: ${labelFormat === 'thermal' ? '0 auto' : '15mm auto'} !important;
+            padding: ${labelFormat === 'thermal' ? '14px' : '20px'} !important;
+            border: 2px dashed #000000 !important;
+            border-radius: 20px !important;
+            background: #ffffff !important;
+            color: #000000 !important;
+            box-shadow: none !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            page-break-after: auto !important;
+            break-after: auto !important;
+            overflow: hidden !important;
           }
         }
       `}</style>
@@ -297,7 +372,7 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                 <div className="flex items-center gap-2 text-amber-900 dark:text-amber-200 font-bold">
                   <AlertTriangle size={18} className="text-amber-600 shrink-0" />
                   <span>
-                    Cartel Oficial Tranquera (2 Páginas A4): Pág. 1 Cartel de Alto Impacto / Visible a distancia · Pág. 2 Anexo Técnico & Geodesia.
+                    Cartel Oficial Tranquera (2 Páginas A4 Verticales): Pág. 1 Cartel de Alto Impacto · Pág. 2 Anexo Técnico & Geodesia.
                   </span>
                 </div>
 
@@ -339,8 +414,19 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                     </button>
                   </div>
 
-                  {/* Selector de orientación */}
+                  {/* Selector de orientación: Vertical A4 por defecto */}
                   <div className="bg-white dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setSignOrientation('vertical')}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold uppercase transition ${
+                        signOrientation === 'vertical'
+                          ? 'bg-emerald-600 text-white shadow-sm'
+                          : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+                      }`}
+                    >
+                      Vertical (A4 Estándar)
+                    </button>
                     <button
                       type="button"
                       onClick={() => setSignOrientation('horizontal')}
@@ -351,17 +437,6 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                       }`}
                     >
                       Horizontal
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSignOrientation('vertical')}
-                      className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold uppercase transition ${
-                        signOrientation === 'vertical'
-                          ? 'bg-emerald-600 text-white shadow-sm'
-                          : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
-                      }`}
-                    >
-                      Vertical
                     </button>
                   </div>
                 </div>
@@ -380,107 +455,107 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                         <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
                         Página 1: Cartel Exterior para Tranquera (Lectura a Distancia)
                       </span>
-                      <span className="text-[10px] font-mono text-slate-400">Formato A4</span>
+                      <span className="text-[10px] font-mono text-slate-400">Formato A4 Vertical (1 Hoja)</span>
                     </div>
 
                     <div
                       id="printable-plot-sign-p1"
-                      className={`printable-sheet bg-white text-slate-950 p-6 md:p-10 rounded-3xl border-4 md:border-8 border-slate-950 shadow-2xl space-y-6 mx-auto ${
+                      className={`printable-sheet bg-white text-slate-950 p-5 md:p-6 rounded-3xl border-4 md:border-6 border-slate-950 shadow-2xl space-y-3.5 md:space-y-4 mx-auto ${
                         signOrientation === 'horizontal' ? 'w-full' : 'max-w-2xl'
                       }`}
                     >
                       {/* ENCABEZADO INSTITUCIONAL */}
-                      <div className="border-b-4 border-slate-950 pb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div className="border-b-4 border-slate-950 pb-3 flex flex-col md:flex-row md:items-center justify-between gap-3">
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="w-4 h-4 rounded-full bg-emerald-600 inline-block shrink-0"></span>
-                            <p className="text-xs font-black uppercase tracking-widest text-slate-900">
+                            <span className="w-3.5 h-3.5 rounded-full bg-emerald-600 inline-block shrink-0"></span>
+                            <p className="text-[10px] md:text-xs font-black uppercase tracking-widest text-slate-900">
                               REPÚBLICA ARGENTINA · LEY NACIONAL N° 27.669 & DECRETO 405/2023
                             </p>
                           </div>
-                          <h1 className="text-xl md:text-3xl font-black uppercase tracking-tight text-slate-950 mt-1">
+                          <h1 className="text-lg md:text-2xl font-black uppercase tracking-tight text-slate-950 mt-0.5">
                             PATAGONIAN-C LTDA COOPERATIVA DE TRABAJO
                           </h1>
-                          <p className="text-sm md:text-base font-mono font-black text-emerald-800 uppercase mt-0.5">
+                          <p className="text-xs md:text-sm font-mono font-black text-emerald-800 uppercase mt-0.5">
                             CUIT: 30-71816113-0 · HempC (Unidad de Negocios)
                           </p>
-                          <p className="text-[10px] md:text-xs font-mono font-bold text-slate-600 uppercase mt-0.5">
+                          <p className="text-[9px] md:text-[10px] font-mono font-bold text-slate-600 uppercase mt-0.5">
                             Marco Regulatorio del Cáñamo Industrial · Fiscalización ARICCAME / INASE / SENASA
                           </p>
                         </div>
-                        <div className="text-right shrink-0 bg-slate-100 p-3.5 rounded-2xl border-2 border-slate-300">
-                          <span className="text-[9px] font-mono font-black uppercase text-slate-500 block">Condición Registral</span>
-                          <strong className="text-sm md:text-base font-black uppercase text-emerald-700 block">
+                        <div className="text-right shrink-0 bg-slate-100 p-2.5 rounded-2xl border-2 border-slate-300">
+                          <span className="text-[8px] font-mono font-black uppercase text-slate-500 block">Condición Registral</span>
+                          <strong className="text-xs md:text-sm font-black uppercase text-emerald-700 block">
                             PARCELA DECLARADA ACTIVA
                           </strong>
-                          <span className="text-[11px] font-mono font-bold text-slate-600 block mt-0.5">
+                          <span className="text-[10px] font-mono font-bold text-slate-600 block mt-0.5">
                             Campaña: {campaignDisplay}
                           </span>
                         </div>
                       </div>
 
                       {/* DECLARACIÓN CENTRAL DE MÁXIMO IMPACTO VISUAL EN TRANQUERA (LECTURA A DISTANCIA) */}
-                      <div className="bg-amber-100/95 border-4 md:border-8 border-amber-500 p-6 md:p-10 rounded-3xl text-center space-y-4 shadow-inner">
-                        <div className="inline-flex items-center justify-center gap-2.5 px-6 py-2 bg-amber-400 border-2 border-amber-600 text-slate-950 rounded-full font-black text-sm md:text-lg uppercase tracking-widest shadow-sm">
-                          <ShieldCheck size={22} className="text-slate-950 shrink-0" />
+                      <div className="bg-amber-100/95 border-4 md:border-6 border-amber-500 p-4 md:p-6 rounded-3xl text-center space-y-2.5 shadow-inner my-auto">
+                        <div className="inline-flex items-center justify-center gap-2 px-4 py-1 bg-amber-400 border-2 border-amber-600 text-slate-950 rounded-full font-black text-xs uppercase tracking-widest shadow-sm">
+                          <ShieldCheck size={18} className="text-slate-950 shrink-0" />
                           <span>DECLARACIÓN DE CULTIVO NO PSICOACTIVO</span>
                         </div>
                         
-                        <h2 className="text-5xl md:text-7xl lg:text-8xl font-black uppercase tracking-tight text-slate-950 leading-none py-2 drop-shadow-sm">
+                        <h2 className="text-4xl md:text-5xl lg:text-6xl font-black uppercase tracking-tight text-slate-950 leading-none py-1 drop-shadow-sm">
                           CÁÑAMO INDUSTRIAL
                         </h2>
 
-                        <p className="text-xl md:text-3xl font-black text-slate-900 uppercase tracking-wide">
+                        <p className="text-base md:text-xl font-black text-slate-900 uppercase tracking-wide">
                           (Cannabis sativa L. con tenor de THC menor a 1.0% P/P)
                         </p>
 
-                        <div className="w-32 h-2 bg-amber-500 mx-auto rounded-full my-3"></div>
+                        <div className="w-24 h-1.5 bg-amber-500 mx-auto rounded-full my-1.5"></div>
 
-                        <p className="text-sm md:text-xl font-bold text-amber-950 max-w-4xl mx-auto leading-relaxed">
-                          Cultivo agrícola no estupefaciente con destino exclusivo a <strong className="underline decoration-amber-600 decoration-4">Fibra Textil, Grano, Bioplásticos, Celulosa y Ensayos de Investigación Bioeconómica</strong>.
+                        <p className="text-xs md:text-sm font-bold text-amber-950 max-w-3xl mx-auto leading-relaxed">
+                          Cultivo agrícola no estupefaciente con destino exclusivo a <strong className="underline decoration-amber-600 decoration-2">Fibra Textil, Grano, Bioplásticos, Celulosa y Ensayos de Investigación Bioeconómica</strong>.
                         </p>
                       </div>
 
                       {/* FRANJA DE IDENTIFICACIÓN RÁPIDA EN TRANQUERA */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-slate-50 p-4 rounded-2xl border-2 border-slate-300 text-xs font-mono">
-                        <div className="p-3 bg-white rounded-xl border border-slate-200">
-                          <span className="text-[9px] uppercase font-bold text-slate-400 block">Lote / Parcela:</span>
-                          <strong className="text-base font-black uppercase text-slate-950 block truncate">{plot.name}</strong>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 bg-slate-50 p-2.5 rounded-2xl border-2 border-slate-300 text-xs font-mono">
+                        <div className="p-2.5 bg-white rounded-xl border border-slate-200">
+                          <span className="text-[8px] uppercase font-bold text-slate-400 block">Lote / Parcela:</span>
+                          <strong className="text-sm font-black uppercase text-slate-950 block truncate">{plot.name}</strong>
                           <span className="text-[10px] text-slate-500 block">ID Catastral: {plot.id}</span>
                         </div>
 
-                        <div className="p-3 bg-white rounded-xl border border-slate-200">
-                          <span className="text-[9px] uppercase font-bold text-slate-400 block">Establecimiento:</span>
-                          <strong className="text-sm font-black uppercase text-slate-950 block truncate">{location?.name || 'Establecimiento Rural'}</strong>
+                        <div className="p-2.5 bg-white rounded-xl border border-slate-200">
+                          <span className="text-[8px] uppercase font-bold text-slate-400 block">Establecimiento:</span>
+                          <strong className="text-xs font-black uppercase text-slate-950 block truncate">{location?.name || 'Establecimiento Rural'}</strong>
                           <span className="text-[10px] text-slate-500 block truncate">{location?.city || ''}, {location?.province || ''}</span>
                         </div>
 
-                        <div className="p-3 bg-white rounded-xl border border-slate-200">
-                          <span className="text-[9px] uppercase font-bold text-slate-400 block">Cultivar Certificado:</span>
-                          <strong className="text-sm font-black uppercase text-emerald-800 block truncate">{variety?.name || 'Variedad Homologada'}</strong>
+                        <div className="p-2.5 bg-white rounded-xl border border-slate-200">
+                          <span className="text-[8px] uppercase font-bold text-slate-400 block">Cultivar Certificado:</span>
+                          <strong className="text-xs font-black uppercase text-emerald-800 block truncate">{variety?.name || 'Variedad Homologada'}</strong>
                           <span className="text-[10px] text-slate-500 block">RNC INASE: {variety?.inaseRncNumber || 'Homologada'}</span>
                         </div>
                       </div>
 
                       {/* ADVERTENCIA LEGAL A FUERZAS DE SEGURIDAD */}
-                      <div className="p-4 bg-rose-50 border-2 md:border-3 border-rose-400 rounded-2xl text-xs md:text-sm text-rose-950 font-bold leading-snug">
+                      <div className="p-2.5 bg-rose-50 border-2 border-rose-400 rounded-2xl text-[10px] md:text-xs text-rose-950 font-bold leading-snug">
                         ⚠️ ADVERTENCIA LEGAL A FUERZAS DE SEGURIDAD Y TERCEROS: Predio registrado y fiscalizado bajo la Ley 27.669. Prohibido el ingreso no autorizado o la sustracción de biomasa experimental. Acto penado por los artículos 162, 164 y 186 del Código Penal de la Nación Argentina.
                       </div>
 
                       {/* FOOTER PÁGINA 1 */}
-                      <div className="flex flex-col sm:flex-row justify-between items-center text-[10px] font-mono text-slate-500 border-t-2 border-slate-300 pt-3 gap-2">
-                        <div className="flex items-center gap-3">
+                      <div className="flex flex-col sm:flex-row justify-between items-center text-[9px] font-mono text-slate-500 border-t-2 border-slate-300 pt-2 gap-2">
+                        <div className="flex items-center gap-2.5">
                           <div className="p-1 bg-white rounded-lg border border-slate-300">
-                            <QRCodeSVG value={traceUrl} size={46} level="M" />
+                            <QRCodeSVG value={traceUrl} size={40} level="M" />
                           </div>
                           <div>
                             <span className="font-black text-slate-800 block">PatagonianC LTDA · CUIT: 30-71816113-0 · HempC</span>
-                            <span className="text-[9px] text-slate-400 block">Escanear para verificación digital inmediata</span>
+                            <span className="text-[8px] text-slate-400 block">Escanear para verificación digital inmediata</span>
                           </div>
                         </div>
                         <div className="text-right">
                           <span className="font-bold text-slate-700 block">Página 1 de 2 · Cartel Exterior de Tranquera</span>
-                          <span className="text-[9px] text-slate-400">Emisión: {new Date().toLocaleDateString('es-AR')} · red.hempc.com.ar</span>
+                          <span className="text-[8px] text-slate-400">Emisión: {new Date().toLocaleDateString('es-AR')} · red.hempc.com.ar</span>
                         </div>
                       </div>
                     </div>
@@ -497,145 +572,145 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                         <span className="w-2.5 h-2.5 rounded-full bg-emerald-600"></span>
                         Página 2: Anexo Técnico, Geodesia y Ficha Registral de Parcela
                       </span>
-                      <span className="text-[10px] font-mono text-slate-400">Formato A4</span>
+                      <span className="text-[10px] font-mono text-slate-400">Formato A4 Vertical (1 Hoja)</span>
                     </div>
 
                     <div
                       id="printable-plot-sign-p2"
-                      className={`printable-sheet bg-white text-slate-950 p-6 md:p-8 rounded-3xl border-4 md:border-8 border-slate-950 shadow-2xl space-y-5 mx-auto ${
+                      className={`printable-sheet bg-white text-slate-950 p-5 md:p-6 rounded-3xl border-4 md:border-6 border-slate-950 shadow-2xl space-y-3 md:space-y-3.5 mx-auto ${
                         signOrientation === 'horizontal' ? 'w-full' : 'max-w-2xl'
                       }`}
                     >
                       {/* ENCABEZADO ANEXO TÉCNICO */}
-                      <div className="border-b-4 border-slate-950 pb-3 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                      <div className="border-b-4 border-slate-950 pb-2.5 flex flex-col md:flex-row md:items-center justify-between gap-2.5">
                         <div>
                           <div className="flex items-center gap-2">
                             <FileText size={16} className="text-emerald-700" />
-                            <p className="text-xs font-black uppercase tracking-widest text-slate-900">
+                            <p className="text-[10px] md:text-xs font-black uppercase tracking-widest text-slate-900">
                               REPÚBLICA ARGENTINA · LEY NACIONAL N° 27.669 & DECRETO 405/2023
                             </p>
                           </div>
-                          <h2 className="text-lg md:text-2xl font-black uppercase tracking-tight text-slate-950 mt-1">
+                          <h2 className="text-base md:text-xl font-black uppercase tracking-tight text-slate-950 mt-0.5">
                             ANEXO TÉCNICO Y FICHA REGISTRAL DE PARCELA
                           </h2>
                           <p className="text-xs md:text-sm font-mono font-black text-emerald-800 uppercase mt-0.5">
                             PATAGONIAN-C LTDA COOPERATIVA DE TRABAJO · CUIT: 30-71816113-0 · HempC
                           </p>
                         </div>
-                        <div className="text-right shrink-0 bg-slate-100 p-2.5 rounded-xl border border-slate-300">
-                          <span className="text-[9px] font-mono font-black uppercase text-slate-500 block">Legajo Oficial</span>
+                        <div className="text-right shrink-0 bg-slate-100 p-2 rounded-xl border border-slate-300">
+                          <span className="text-[8px] font-mono font-black uppercase text-slate-500 block">Legajo Oficial</span>
                           <strong className="text-xs font-mono font-black text-slate-900 block">
                             EXP: HEMP-AR-{plot.id.substring(0, 8).toUpperCase()}
                           </strong>
-                          <span className="text-[9px] font-mono text-slate-500 block">Campaña {campaignDisplay}</span>
+                          <span className="text-[8px] font-mono text-slate-500 block">Campaña {campaignDisplay}</span>
                         </div>
                       </div>
 
                       {/* SECCIÓN 1: IDENTIFICACIÓN PARCELARIA Y CATASTRAL */}
-                      <div className="space-y-1.5">
+                      <div className="space-y-1">
                         <span className="text-[10px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
                           <Sprout size={14} className="text-emerald-600" />
                           1. Ficha Catastral & Identificación del Cultivo
                         </span>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 border-2 border-slate-300 rounded-2xl p-3.5 bg-slate-50 text-xs font-mono">
-                          <div className="space-y-1">
-                            <span className="text-[9px] text-slate-400 uppercase font-bold block">Unidad Productiva / Lote:</span>
-                            <strong className="text-sm text-slate-950 font-black block">{plot.name}</strong>
-                            <span className="text-[10px] text-slate-600 block">ID Parcelario: <strong>{plot.id}</strong></span>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 border-2 border-slate-300 rounded-2xl p-2.5 bg-slate-50 text-xs font-mono">
+                          <div className="space-y-0.5">
+                            <span className="text-[8px] text-slate-400 uppercase font-bold block">Unidad Productiva / Lote:</span>
+                            <strong className="text-xs text-slate-950 font-black block">{plot.name}</strong>
+                            <span className="text-[10px] text-slate-600 block">ID: <strong>{plot.id}</strong></span>
                             <span className="text-[10px] text-slate-600 block">Tipo: <strong>{plot.type || 'Ensayo / Producción'}</strong></span>
                             <span className="text-[10px] text-slate-600 block">Estado: <strong className="text-emerald-700">{statusDisplay}</strong></span>
                           </div>
 
-                          <div className="space-y-1">
-                            <span className="text-[9px] text-slate-400 uppercase font-bold block">Establecimiento / Campo Padre:</span>
-                            <strong className="text-sm text-slate-950 font-black block">{location?.name || 'Establecimiento Rural'}</strong>
+                          <div className="space-y-0.5">
+                            <span className="text-[8px] text-slate-400 uppercase font-bold block">Establecimiento Rural:</span>
+                            <strong className="text-xs text-slate-950 font-black block">{location?.name || 'Establecimiento Rural'}</strong>
                             <span className="text-[10px] text-slate-600 block">Ubicación: {location?.city || ''}, {location?.province || ''}</span>
                             <span className="text-[10px] text-slate-600 block truncate" title={location?.address}>Dirección: {location?.address || 'Zona Rural'}</span>
                             <span className="text-[10px] text-slate-600 block">RENSPA: <strong>{location?.renspaNumber || 'En trámite'}</strong></span>
                           </div>
 
-                          <div className="space-y-1">
-                            <span className="text-[9px] text-slate-400 uppercase font-bold block">Genética Certificada (INASE):</span>
-                            <strong className="text-sm text-emerald-800 font-black block">{variety?.name || 'Cultivar Homologado'}</strong>
+                          <div className="space-y-0.5">
+                            <span className="text-[8px] text-slate-400 uppercase font-bold block">Genética Certificada (INASE):</span>
+                            <strong className="text-xs text-emerald-800 font-black block">{variety?.name || 'Cultivar Homologado'}</strong>
                             <span className="text-[10px] text-slate-600 block">RNC INASE: <strong>{variety?.inaseRncNumber || 'Certificación RNC'}</strong></span>
-                            <span className="text-[10px] text-slate-600 block">Destino Bioeconómico: <strong>{variety?.usage || 'Fibra / Grano'}</strong></span>
+                            <span className="text-[10px] text-slate-600 block">Destino: <strong>{variety?.usage || 'Fibra / Grano'}</strong></span>
                             <span className="text-[10px] text-slate-600 block">Fotoperíodo: <strong>{variety?.photoperiodType || 'Monoica'}</strong></span>
                           </div>
                         </div>
                       </div>
 
                       {/* SECCIÓN 2: GEODESIA, CENTROIDE Y TELEDETECCIÓN */}
-                      <div className="space-y-1.5">
+                      <div className="space-y-1">
                         <span className="text-[10px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
                           <Compass size={14} className="text-emerald-600" />
                           2. Georreferenciación Geodésica & Monitoreo Satelital
                         </span>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 text-xs font-mono">
-                          <div className="p-2.5 bg-slate-100 rounded-xl border border-slate-200">
-                            <span className="text-[9px] uppercase text-slate-500 font-bold block">Superficie Declarada</span>
-                            <strong className="text-sm font-black text-slate-900 block">{surfaceDisplay}</strong>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs font-mono">
+                          <div className="p-2 bg-slate-100 rounded-xl border border-slate-200">
+                            <span className="text-[8px] uppercase text-slate-500 font-bold block">Superficie</span>
+                            <strong className="text-xs font-black text-slate-900 block">{surfaceDisplay}</strong>
                           </div>
-                          <div className="p-2.5 bg-slate-100 rounded-xl border border-slate-200">
-                            <span className="text-[9px] uppercase text-slate-500 font-bold block">Coordenadas Centroide</span>
-                            <strong className="text-xs font-black text-slate-900 block">{formattedLat}, {formattedLng}</strong>
+                          <div className="p-2 bg-slate-100 rounded-xl border border-slate-200">
+                            <span className="text-[8px] uppercase text-slate-500 font-bold block">Centroide GPS</span>
+                            <strong className="text-[10px] font-black text-slate-900 block">{formattedLat}, {formattedLng}</strong>
                           </div>
-                          <div className="p-2.5 bg-slate-100 rounded-xl border border-slate-200">
-                            <span className="text-[9px] uppercase text-slate-500 font-bold block">Polígono Geodésico</span>
-                            <strong className="text-xs font-bold text-slate-900 block">
-                              {plot.polygon && plot.polygon.length >= 3 ? `${plot.polygon.length} Vértices Vectoriales` : 'Centroide georreferenciado'}
+                          <div className="p-2 bg-slate-100 rounded-xl border border-slate-200">
+                            <span className="text-[8px] uppercase text-slate-500 font-bold block">Polígono Vectorial</span>
+                            <strong className="text-[10px] font-bold text-slate-900 block">
+                              {plot.polygon && plot.polygon.length >= 3 ? `${plot.polygon.length} Vértices` : 'Centroide'}
                             </strong>
                           </div>
-                          <div className="p-2.5 bg-slate-100 rounded-xl border border-slate-200">
-                            <span className="text-[9px] uppercase text-slate-500 font-bold block">Vigilancia Espectral</span>
-                            <strong className="text-xs font-bold text-emerald-700 block">Copernicus Sentinel-2</strong>
+                          <div className="p-2 bg-slate-100 rounded-xl border border-slate-200">
+                            <span className="text-[8px] uppercase text-slate-500 font-bold block">Vigilancia Espectral</span>
+                            <strong className="text-[10px] font-bold text-emerald-700 block">Sentinel-2</strong>
                           </div>
                         </div>
                       </div>
 
                       {/* SECCIÓN 3: TITULARIDAD, OPERADOR Y LICENCIAS ARICCAME */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs font-mono">
-                        <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
-                          <span className="text-[9px] uppercase text-slate-500 font-bold block">Operador Titular Responsable</span>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 text-xs font-mono">
+                        <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl space-y-0.5">
+                          <span className="text-[8px] uppercase text-slate-500 font-bold block">Operador Titular Responsable</span>
                           <strong className="text-xs font-black text-slate-900 block">PatagonianC LTDA Cooperativa de Trabajo</strong>
                           <span className="text-[10px] text-emerald-800 font-bold block">CUIT: 30-71816113-0 · HempC (Unidad de Negocios)</span>
-                          <span className="text-[10px] text-slate-600 block">Titular Predial / Socio: <strong>{client?.name || location?.ownerName || 'HempC Red Cooperativa'}</strong></span>
+                          <span className="text-[10px] text-slate-600 block">Titular Predial: <strong>{client?.name || location?.ownerName || 'HempC Red Cooperativa'}</strong></span>
                         </div>
 
-                        <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
-                          <span className="text-[9px] uppercase text-slate-500 font-bold block">Licencias y Fiscalización Sanitaria</span>
+                        <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl space-y-0.5">
+                          <span className="text-[8px] uppercase text-slate-500 font-bold block">Licencias y Fiscalización Sanitaria</span>
                           <span className="text-[10px] text-slate-700 block">Lic. Agrícola ARICCAME: <strong>EX-2024-134354227</strong></span>
                           <span className="text-[10px] text-slate-700 block">Lic. Industrial ARICCAME: <strong>EX-2025-119427833</strong></span>
-                          <span className="text-[10px] text-emerald-700 font-bold block">Cumplimiento Fitosanitario: Resoluciones SENASA N° 350/99 y 637/11</span>
+                          <span className="text-[9px] text-emerald-700 font-bold block">SENASA Resoluciones N° 350/99 y 637/11</span>
                         </div>
                       </div>
 
                       {/* SECCIÓN 4: AUDITORÍA DIGITAL Y RECUADROS DE FIRMAS */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-center border-t-2 border-slate-300 pt-3">
-                        <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-200">
-                          <QRCodeSVG value={traceUrl} size={76} level="H" />
-                          <div className="text-[9px] font-mono space-y-0.5">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 items-center border-t-2 border-slate-300 pt-2.5">
+                        <div className="flex items-center gap-2.5 p-2 bg-slate-50 rounded-2xl border border-slate-200">
+                          <QRCodeSVG value={traceUrl} size={64} level="H" />
+                          <div className="text-[8px] font-mono space-y-0.5">
                             <strong className="font-black text-slate-900 block">QR Auditoría Digital</strong>
-                            <span className="text-slate-500 block leading-tight">Escaneo directo para verificar historial satelital y DDJJ oficial</span>
+                            <span className="text-slate-500 block leading-tight">Historial satelital y DDJJ oficial</span>
                             <span className="text-emerald-700 font-bold block">SENASA · INASE · ARICCAME</span>
                           </div>
                         </div>
 
                         {/* Caja Firma Responsable Técnico */}
-                        <div className="p-3 border-2 border-dashed border-slate-400 rounded-2xl h-24 flex flex-col justify-between text-[9px] font-mono">
+                        <div className="p-2 border-2 border-dashed border-slate-400 rounded-xl h-20 flex flex-col justify-between text-[8px] font-mono">
                           <span className="font-bold text-slate-500 uppercase">Firma Responsable Técnico / Agrónomo</span>
-                          <div className="border-t border-slate-300 pt-1 text-slate-400 text-center">Firma, Aclaración y Matrícula</div>
+                          <div className="border-t border-slate-300 pt-0.5 text-slate-400 text-center">Firma, Aclaración y Matrícula</div>
                         </div>
 
                         {/* Caja Visado Inspección Oficial */}
-                        <div className="p-3 border-2 border-dashed border-slate-400 rounded-2xl h-24 flex flex-col justify-between text-[9px] font-mono">
+                        <div className="p-2 border-2 border-dashed border-slate-400 rounded-xl h-20 flex flex-col justify-between text-[8px] font-mono">
                           <span className="font-bold text-slate-500 uppercase">Inspección Oficial / Autoridad Rural</span>
-                          <div className="border-t border-slate-300 pt-1 text-slate-400 text-center">Sello, Fecha y Matrícula Inspector</div>
+                          <div className="border-t border-slate-300 pt-0.5 text-slate-400 text-center">Sello, Fecha y Matrícula Inspector</div>
                         </div>
                       </div>
 
                       {/* FOOTER PÁGINA 2 */}
-                      <div className="flex flex-col sm:flex-row justify-between items-center text-[10px] font-mono text-slate-500 border-t-2 border-slate-300 pt-2 gap-1">
-                        <span className="font-bold">PatagonianC LTDA Cooperativa de Trabajo · CUIT: 30-71816113-0 · HempC (Unidad de Negocios)</span>
+                      <div className="flex flex-col sm:flex-row justify-between items-center text-[9px] font-mono text-slate-500 border-t-2 border-slate-300 pt-1.5 gap-1">
+                        <span className="font-bold">PatagonianC LTDA Cooperativa de Trabajo · CUIT: 30-71816113-0 · HempC</span>
                         <span>Página 2 de 2 · Anexo Técnico y Geodésico · red.hempc.com.ar</span>
                       </div>
                     </div>
@@ -646,20 +721,53 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
             </div>
           )}
 
-          {/* VISTA 2: RÓTULO TÉCNICO DE TRAZABILIDAD QR (FORMATO ETIQUETA / PASAPORTE) */}
+          {/* VISTA 2: RÓTULO TÉCNICO DE TRAZABILIDAD QR (FORMATO ETIQUETA DE PARCELA / PASAPORTE) */}
           {activeView === 'label' && (
             <div className="space-y-4">
-              <div className="p-3 bg-emerald-50 dark:bg-emerald-950/30 rounded-2xl border border-emerald-200 dark:border-emerald-800/60 text-xs text-emerald-900 dark:text-emerald-200 flex items-center gap-2">
-                <Info size={16} className="text-emerald-600 shrink-0" />
-                <span>
-                  Rótulo técnico de 100 x 150 mm para carpetas de lote, estacas de parcela, remitos de cosecha y certificación fitosanitaria.
-                </span>
+              {/* Barra de opciones de la Etiqueta de Parcela */}
+              <div className="flex flex-wrap items-center justify-between gap-3 bg-emerald-50 dark:bg-emerald-950/30 p-3.5 rounded-2xl border border-emerald-200 dark:border-emerald-800/60 text-xs no-print">
+                <div className="flex items-center gap-2 text-emerald-950 dark:text-emerald-200 font-bold">
+                  <Info size={18} className="text-emerald-600 shrink-0" />
+                  <span>
+                    Etiqueta / Rótulo Oficial de Parcela: Pasaporte biológico QR, datos catastrales y marco legal Ley 27.669.
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {/* Selector de formato de etiqueta */}
+                  <div className="bg-white dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setLabelFormat('a4')}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold uppercase transition ${
+                        labelFormat === 'a4'
+                          ? 'bg-emerald-600 text-white shadow-sm'
+                          : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+                      }`}
+                    >
+                      A4 Centrado (Oficina / Carpeta)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLabelFormat('thermal')}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold uppercase transition ${
+                        labelFormat === 'thermal'
+                          ? 'bg-emerald-600 text-white shadow-sm'
+                          : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+                      }`}
+                    >
+                      100x150 mm (Térmica / Estaca)
+                    </button>
+                  </div>
+                </div>
               </div>
 
               {/* CONTENEDOR DE LA ETIQUETA IMPRIMIBLE */}
               <div 
                 id="printable-plot-doc"
-                className="bg-white text-slate-900 p-6 rounded-3xl border-2 border-dashed border-slate-400 shadow-lg space-y-4 max-w-lg mx-auto"
+                className={`bg-white text-slate-900 p-6 rounded-3xl border-2 border-dashed border-slate-400 shadow-lg space-y-4 mx-auto ${
+                  labelFormat === 'thermal' ? 'max-w-md' : 'max-w-lg'
+                }`}
               >
                 {/* CABECERA ETIQUETA */}
                 <div className="flex justify-between items-start border-b-2 border-slate-900 pb-3">
@@ -725,7 +833,7 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                   <div className="p-2 bg-white rounded-xl border border-slate-200 shadow-sm shrink-0">
                     <QRCodeSVG
                       value={traceUrl}
-                      size={105}
+                      size={labelFormat === 'thermal' ? 84 : 105}
                       level="H"
                       includeMargin={false}
                     />
@@ -738,7 +846,7 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                       Escanee para verificar la declaración jurada, historial fitosanitario y pasadas satelitales Sentinel-2 en tiempo real.
                     </p>
                     <span className="text-[9px] text-emerald-700 font-bold block pt-1">
-                      Fiscalización: SENASA · ARICCAME
+                      Fiscalización: SENASA · ARICCAME · INASE
                     </span>
                   </div>
                 </div>
@@ -791,7 +899,11 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
               className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-black text-xs uppercase tracking-wider transition shadow-lg shadow-emerald-600/20 active:scale-95"
             >
               <Printer size={16} />
-              <span>{activeView === 'sign' ? 'Imprimir Cartel Tranquera' : 'Imprimir Rótulo QR'}</span>
+              <span>
+                {activeView === 'sign'
+                  ? `Imprimir Cartel Tranquera (A4 Vertical · ${signPageFilter === 'all' ? '2 Páginas' : '1 Página'})`
+                  : `Imprimir Rótulo QR Parcela (${labelFormat === 'thermal' ? '100x150 mm' : 'A4 1 Página'})`}
+              </span>
             </button>
           </div>
         </div>
