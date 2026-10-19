@@ -299,61 +299,61 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
         }
       `}</style>
 
-      <div id="modal-print-dialog" className="bg-white dark:bg-slate-900 rounded-[32px] max-w-4xl w-full p-6 md:p-8 shadow-2xl border border-slate-200 dark:border-slate-800 max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+      <div id="modal-print-dialog" className="bg-white dark:bg-slate-900 rounded-[32px] max-w-5xl w-full p-6 md:p-8 shadow-2xl border border-slate-200 dark:border-slate-800 max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
         
-        {/* ENCABEZADO DEL MODAL */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800 gap-3 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-              {activeView === 'sign' ? <ShieldCheck size={26} /> : <QrCode size={26} />}
+        {/* ENCABEZADO DEL MODAL REORGANIZADO */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800 gap-4 shrink-0">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/20">
+              {activeView === 'sign' ? <ShieldCheck size={28} /> : <QrCode size={28} />}
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-mono font-bold uppercase text-emerald-600 dark:text-emerald-400 tracking-widest bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-500/20">
-                  PatagonianC LTDA Cooperativa de Trabajo · CUIT: 30-71816113-0 · HempC (Unidad de Negocios)
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[10px] font-mono font-bold uppercase text-emerald-700 dark:text-emerald-400 tracking-wider bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                  PatagonianC LTDA · CUIT 30-71816113-0 · HempC
                 </span>
                 <span className="text-[10px] font-mono font-black uppercase text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
                   Campaña {campaignDisplay}
                 </span>
               </div>
-              <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight mt-1">
-                {activeView === 'sign' ? 'Cartel Oficial de Parcela Exterior / Tranquera' : 'Rótulo de Trazabilidad QR (Pasaporte Biológico)'}
+              <h2 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight mt-1">
+                {activeView === 'sign' ? 'Cartel Oficial de Tranquera (Ley 27.669)' : 'Rótulo QR y Pasaporte Biológico'}
               </h2>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 self-end sm:self-center">
-            {/* Pestañas de Cambio de Modo */}
-            <div className="bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl flex items-center">
+          <div className="flex items-center gap-2.5 self-start lg:self-center shrink-0">
+            {/* Pestañas Principales de Modo */}
+            <div className="bg-slate-100 dark:bg-slate-800 p-1.5 rounded-2xl flex items-center border border-slate-200 dark:border-slate-700">
               <button
                 type="button"
                 onClick={() => setActiveView('sign')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition ${
+                className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 ${
                   activeView === 'sign'
-                    ? 'bg-emerald-600 text-white shadow-sm'
+                    ? 'bg-emerald-600 text-white shadow-md'
                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
-                title="Cartel para tranquera exterior declarando cáñamo no psicoactivo"
               >
-                🪧 Cartel Tranquera (A4)
+                <span>🪧</span>
+                <span>Cartel Tranquera (A4)</span>
               </button>
               <button
                 type="button"
                 onClick={() => setActiveView('label')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition ${
+                className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 ${
                   activeView === 'label'
-                    ? 'bg-emerald-600 text-white shadow-sm'
+                    ? 'bg-emerald-600 text-white shadow-md'
                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
-                title="Rótulo técnico QR para pasaporte biológico y carpeta de lote"
               >
-                🏷️ Rótulo QR Parcela
+                <span>🏷️</span>
+                <span>Rótulo QR Parcela</span>
               </button>
             </div>
 
             <button
               onClick={onClose}
-              className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-white rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+              className="p-2.5 text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition"
               title="Cerrar ventana"
             >
               <X size={20} />
@@ -367,77 +367,91 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
           {/* VISTA 1: CARTEL PARA TRANQUERA EXTERIOR (DECLARANDO CÁÑAMO NO PSICOACTIVO - SEGMENTADO EN 2 PÁGINAS A4) */}
           {activeView === 'sign' && (
             <div className="space-y-6">
-              {/* Barra de opciones del cartel: Segmentación de Páginas y Orientación */}
-              <div className="flex flex-wrap items-center justify-between gap-3 bg-amber-50 dark:bg-amber-950/30 p-3.5 rounded-2xl border border-amber-200 dark:border-amber-800/60 text-xs no-print">
-                <div className="flex items-center gap-2 text-amber-900 dark:text-amber-200 font-bold">
-                  <AlertTriangle size={18} className="text-amber-600 shrink-0" />
-                  <span>
-                    Cartel Oficial Tranquera (2 Páginas A4 Verticales): Pág. 1 Cartel de Alto Impacto · Pág. 2 Anexo Técnico & Geodesia.
+              {/* BOTONERA UNIFICADA Y ORDENADA DEL CARTEL DE TRANQUERA */}
+              <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-700/80 space-y-3 no-print">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 border-b border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center gap-2 text-slate-800 dark:text-slate-200 font-bold text-xs">
+                    <AlertTriangle size={18} className="text-amber-500 shrink-0" />
+                    <span>Configuración Oficial de Impresión A4 para Tranquera</span>
+                  </div>
+                  <span className="text-[11px] font-mono text-emerald-700 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/50 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 self-start sm:self-auto">
+                    {signPageFilter === 'all' ? '📄 Documento Completo: 2 Páginas A4' : signPageFilter === 'p1' ? '📄 Pág. 1: Cartel Tranquera (Alto Impacto)' : '📄 Pág. 2: Anexo Técnico & Geodesia'}
                   </span>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                  {/* Selector de visualización de páginas */}
-                  <div className="bg-white dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => setSignPageFilter('all')}
-                      className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold uppercase transition ${
-                        signPageFilter === 'all'
-                          ? 'bg-amber-600 text-white shadow-sm'
-                          : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
-                      }`}
-                    >
-                      Ambas (Pág 1 y 2)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSignPageFilter('p1')}
-                      className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold uppercase transition ${
-                        signPageFilter === 'p1'
-                          ? 'bg-amber-600 text-white shadow-sm'
-                          : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
-                      }`}
-                    >
-                      Pág. 1 (Cartel)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSignPageFilter('p2')}
-                      className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold uppercase transition ${
-                        signPageFilter === 'p2'
-                          ? 'bg-amber-600 text-white shadow-sm'
-                          : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
-                      }`}
-                    >
-                      Pág. 2 (Anexo)
-                    </button>
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  {/* Selector de Páginas */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold text-slate-500 uppercase font-mono">Páginas:</span>
+                    <div className="bg-white dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-1 shadow-sm">
+                      <button
+                        type="button"
+                        onClick={() => setSignPageFilter('all')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                          signPageFilter === 'all'
+                            ? 'bg-amber-600 text-white shadow-sm'
+                            : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+                        }`}
+                      >
+                        <span>📑</span>
+                        <span>Ambas (Pág. 1 y 2)</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSignPageFilter('p1')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                          signPageFilter === 'p1'
+                            ? 'bg-amber-600 text-white shadow-sm'
+                            : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+                        }`}
+                      >
+                        <span>1️⃣</span>
+                        <span>Pág. 1 (Cartel)</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSignPageFilter('p2')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                          signPageFilter === 'p2'
+                            ? 'bg-amber-600 text-white shadow-sm'
+                            : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+                        }`}
+                      >
+                        <span>2️⃣</span>
+                        <span>Pág. 2 (Anexo)</span>
+                      </button>
+                    </div>
                   </div>
 
-                  {/* Selector de orientación: Vertical A4 por defecto */}
-                  <div className="bg-white dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => setSignOrientation('vertical')}
-                      className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold uppercase transition ${
-                        signOrientation === 'vertical'
-                          ? 'bg-emerald-600 text-white shadow-sm'
-                          : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
-                      }`}
-                    >
-                      Vertical (A4 Estándar)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSignOrientation('horizontal')}
-                      className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold uppercase transition ${
-                        signOrientation === 'horizontal'
-                          ? 'bg-emerald-600 text-white shadow-sm'
-                          : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
-                      }`}
-                    >
-                      Horizontal
-                    </button>
+                  {/* Selector de Orientación */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold text-slate-500 uppercase font-mono">Orientación:</span>
+                    <div className="bg-white dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-1 shadow-sm">
+                      <button
+                        type="button"
+                        onClick={() => setSignOrientation('vertical')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                          signOrientation === 'vertical'
+                            ? 'bg-emerald-600 text-white shadow-sm'
+                            : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+                        }`}
+                      >
+                        <span>↕️</span>
+                        <span>Vertical A4 (Estándar)</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSignOrientation('horizontal')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                          signOrientation === 'horizontal'
+                            ? 'bg-emerald-600 text-white shadow-sm'
+                            : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+                        }`}
+                      >
+                        <span>↔️</span>
+                        <span>Horizontal</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -455,12 +469,12 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                         <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
                         Página 1: Cartel Exterior para Tranquera (Lectura a Distancia)
                       </span>
-                      <span className="text-[10px] font-mono text-slate-400">Formato A4 Vertical (1 Hoja)</span>
+                      <span className="text-[10px] font-mono text-slate-400 font-bold">Formato A4 Vertical (1 Hoja)</span>
                     </div>
 
                     <div
                       id="printable-plot-sign-p1"
-                      className={`printable-sheet bg-white text-slate-950 p-5 md:p-6 rounded-3xl border-4 md:border-6 border-slate-950 shadow-2xl space-y-3.5 md:space-y-4 mx-auto ${
+                      className={`printable-sheet bg-white text-slate-950 p-6 md:p-8 rounded-3xl border-4 md:border-6 border-slate-950 shadow-2xl space-y-4 md:space-y-5 mx-auto ${
                         signOrientation === 'horizontal' ? 'w-full' : 'max-w-2xl'
                       }`}
                     >
@@ -469,22 +483,22 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="w-3.5 h-3.5 rounded-full bg-emerald-600 inline-block shrink-0"></span>
-                            <p className="text-[10px] md:text-xs font-black uppercase tracking-widest text-slate-900">
+                            <p className="text-xs font-black uppercase tracking-wider text-slate-900">
                               REPÚBLICA ARGENTINA · LEY NACIONAL N° 27.669 & DECRETO 405/2023
                             </p>
                           </div>
-                          <h1 className="text-lg md:text-2xl font-black uppercase tracking-tight text-slate-950 mt-0.5">
+                          <h1 className="text-xl md:text-2xl font-black uppercase tracking-tight text-slate-950 mt-1">
                             PATAGONIAN-C LTDA COOPERATIVA DE TRABAJO
                           </h1>
                           <p className="text-xs md:text-sm font-mono font-black text-emerald-800 uppercase mt-0.5">
                             CUIT: 30-71816113-0 · HempC (Unidad de Negocios)
                           </p>
-                          <p className="text-[9px] md:text-[10px] font-mono font-bold text-slate-600 uppercase mt-0.5">
+                          <p className="text-[10px] md:text-xs font-mono font-bold text-slate-600 uppercase mt-0.5">
                             Marco Regulatorio del Cáñamo Industrial · Fiscalización ARICCAME / INASE / SENASA
                           </p>
                         </div>
                         <div className="text-right shrink-0 bg-slate-100 p-2.5 rounded-2xl border-2 border-slate-300">
-                          <span className="text-[8px] font-mono font-black uppercase text-slate-500 block">Condición Registral</span>
+                          <span className="text-[9px] font-mono font-black uppercase text-slate-500 block">Condición Registral</span>
                           <strong className="text-xs md:text-sm font-black uppercase text-emerald-700 block">
                             PARCELA DECLARADA ACTIVA
                           </strong>
@@ -495,67 +509,67 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                       </div>
 
                       {/* DECLARACIÓN CENTRAL DE MÁXIMO IMPACTO VISUAL EN TRANQUERA (LECTURA A DISTANCIA) */}
-                      <div className="bg-amber-100/95 border-4 md:border-6 border-amber-500 p-4 md:p-6 rounded-3xl text-center space-y-2.5 shadow-inner my-auto">
-                        <div className="inline-flex items-center justify-center gap-2 px-4 py-1 bg-amber-400 border-2 border-amber-600 text-slate-950 rounded-full font-black text-xs uppercase tracking-widest shadow-sm">
-                          <ShieldCheck size={18} className="text-slate-950 shrink-0" />
+                      <div className="bg-amber-100/95 border-4 md:border-6 border-amber-500 p-5 md:p-7 rounded-3xl text-center space-y-3 shadow-inner my-auto">
+                        <div className="inline-flex items-center justify-center gap-2 px-5 py-1.5 bg-amber-400 border-2 border-amber-600 text-slate-950 rounded-full font-black text-xs md:text-sm uppercase tracking-widest shadow-sm">
+                          <ShieldCheck size={20} className="text-slate-950 shrink-0" />
                           <span>DECLARACIÓN DE CULTIVO NO PSICOACTIVO</span>
                         </div>
                         
-                        <h2 className="text-4xl md:text-5xl lg:text-6xl font-black uppercase tracking-tight text-slate-950 leading-none py-1 drop-shadow-sm">
+                        <h2 className="text-5xl md:text-6xl lg:text-7xl font-black uppercase tracking-tight text-slate-950 leading-none py-1 drop-shadow-sm">
                           CÁÑAMO INDUSTRIAL
                         </h2>
 
-                        <p className="text-base md:text-xl font-black text-slate-900 uppercase tracking-wide">
+                        <p className="text-lg md:text-xl lg:text-2xl font-black text-slate-900 uppercase tracking-wide">
                           (Cannabis sativa L. con tenor de THC menor a 1.0% P/P)
                         </p>
 
-                        <div className="w-24 h-1.5 bg-amber-500 mx-auto rounded-full my-1.5"></div>
+                        <div className="w-28 h-2 bg-amber-500 mx-auto rounded-full my-2"></div>
 
-                        <p className="text-xs md:text-sm font-bold text-amber-950 max-w-3xl mx-auto leading-relaxed">
+                        <p className="text-sm md:text-base font-bold text-amber-950 max-w-3xl mx-auto leading-relaxed">
                           Cultivo agrícola no estupefaciente con destino exclusivo a <strong className="underline decoration-amber-600 decoration-2">Fibra Textil, Grano, Bioplásticos, Celulosa y Ensayos de Investigación Bioeconómica</strong>.
                         </p>
                       </div>
 
                       {/* FRANJA DE IDENTIFICACIÓN RÁPIDA EN TRANQUERA */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 bg-slate-50 p-2.5 rounded-2xl border-2 border-slate-300 text-xs font-mono">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-slate-50 p-3 rounded-2xl border-2 border-slate-300 text-xs font-mono">
                         <div className="p-2.5 bg-white rounded-xl border border-slate-200">
-                          <span className="text-[8px] uppercase font-bold text-slate-400 block">Lote / Parcela:</span>
-                          <strong className="text-sm font-black uppercase text-slate-950 block truncate">{plot.name}</strong>
+                          <span className="text-[9px] uppercase font-bold text-slate-400 block">Lote / Parcela:</span>
+                          <strong className="text-base font-black uppercase text-slate-950 block truncate">{plot.name}</strong>
                           <span className="text-[10px] text-slate-500 block">ID Catastral: {plot.id}</span>
                         </div>
 
                         <div className="p-2.5 bg-white rounded-xl border border-slate-200">
-                          <span className="text-[8px] uppercase font-bold text-slate-400 block">Establecimiento:</span>
-                          <strong className="text-xs font-black uppercase text-slate-950 block truncate">{location?.name || 'Establecimiento Rural'}</strong>
+                          <span className="text-[9px] uppercase font-bold text-slate-400 block">Establecimiento:</span>
+                          <strong className="text-sm font-black uppercase text-slate-950 block truncate">{location?.name || 'Establecimiento Rural'}</strong>
                           <span className="text-[10px] text-slate-500 block truncate">{location?.city || ''}, {location?.province || ''}</span>
                         </div>
 
                         <div className="p-2.5 bg-white rounded-xl border border-slate-200">
-                          <span className="text-[8px] uppercase font-bold text-slate-400 block">Cultivar Certificado:</span>
-                          <strong className="text-xs font-black uppercase text-emerald-800 block truncate">{variety?.name || 'Variedad Homologada'}</strong>
+                          <span className="text-[9px] uppercase font-bold text-slate-400 block">Cultivar Certificado:</span>
+                          <strong className="text-sm font-black uppercase text-emerald-800 block truncate">{variety?.name || 'Variedad Homologada'}</strong>
                           <span className="text-[10px] text-slate-500 block">RNC INASE: {variety?.inaseRncNumber || 'Homologada'}</span>
                         </div>
                       </div>
 
                       {/* ADVERTENCIA LEGAL A FUERZAS DE SEGURIDAD */}
-                      <div className="p-2.5 bg-rose-50 border-2 border-rose-400 rounded-2xl text-[10px] md:text-xs text-rose-950 font-bold leading-snug">
+                      <div className="p-3 bg-rose-50 border-2 border-rose-400 rounded-2xl text-xs md:text-sm text-rose-950 font-bold leading-snug">
                         ⚠️ ADVERTENCIA LEGAL A FUERZAS DE SEGURIDAD Y TERCEROS: Predio registrado y fiscalizado bajo la Ley 27.669. Prohibido el ingreso no autorizado o la sustracción de biomasa experimental. Acto penado por los artículos 162, 164 y 186 del Código Penal de la Nación Argentina.
                       </div>
 
                       {/* FOOTER PÁGINA 1 */}
-                      <div className="flex flex-col sm:flex-row justify-between items-center text-[9px] font-mono text-slate-500 border-t-2 border-slate-300 pt-2 gap-2">
+                      <div className="flex flex-col sm:flex-row justify-between items-center text-[10px] font-mono text-slate-500 border-t-2 border-slate-300 pt-2.5 gap-2">
                         <div className="flex items-center gap-2.5">
                           <div className="p-1 bg-white rounded-lg border border-slate-300">
-                            <QRCodeSVG value={traceUrl} size={40} level="M" />
+                            <QRCodeSVG value={traceUrl} size={46} level="M" />
                           </div>
                           <div>
-                            <span className="font-black text-slate-800 block">PatagonianC LTDA · CUIT: 30-71816113-0 · HempC</span>
-                            <span className="text-[8px] text-slate-400 block">Escanear para verificación digital inmediata</span>
+                            <span className="font-black text-slate-800 block text-xs">PatagonianC LTDA · CUIT: 30-71816113-0 · HempC</span>
+                            <span className="text-[9px] text-slate-500 block">Escanear para verificación digital inmediata</span>
                           </div>
                         </div>
                         <div className="text-right">
                           <span className="font-bold text-slate-700 block">Página 1 de 2 · Cartel Exterior de Tranquera</span>
-                          <span className="text-[8px] text-slate-400">Emisión: {new Date().toLocaleDateString('es-AR')} · red.hempc.com.ar</span>
+                          <span className="text-[9px] text-slate-400">Emisión: {new Date().toLocaleDateString('es-AR')} · red.hempc.com.ar</span>
                         </div>
                       </div>
                     </div>
@@ -572,123 +586,123 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                         <span className="w-2.5 h-2.5 rounded-full bg-emerald-600"></span>
                         Página 2: Anexo Técnico, Geodesia y Ficha Registral de Parcela
                       </span>
-                      <span className="text-[10px] font-mono text-slate-400">Formato A4 Vertical (1 Hoja)</span>
+                      <span className="text-[10px] font-mono text-slate-400 font-bold">Formato A4 Vertical (1 Hoja)</span>
                     </div>
 
                     <div
                       id="printable-plot-sign-p2"
-                      className={`printable-sheet bg-white text-slate-950 p-5 md:p-6 rounded-3xl border-4 md:border-6 border-slate-950 shadow-2xl space-y-3 md:space-y-3.5 mx-auto ${
+                      className={`printable-sheet bg-white text-slate-950 p-6 md:p-8 rounded-3xl border-4 md:border-6 border-slate-950 shadow-2xl space-y-4 md:space-y-4.5 mx-auto ${
                         signOrientation === 'horizontal' ? 'w-full' : 'max-w-2xl'
                       }`}
                     >
                       {/* ENCABEZADO ANEXO TÉCNICO */}
-                      <div className="border-b-4 border-slate-950 pb-2.5 flex flex-col md:flex-row md:items-center justify-between gap-2.5">
+                      <div className="border-b-4 border-slate-950 pb-3 flex flex-col md:flex-row md:items-center justify-between gap-3">
                         <div>
                           <div className="flex items-center gap-2">
-                            <FileText size={16} className="text-emerald-700" />
-                            <p className="text-[10px] md:text-xs font-black uppercase tracking-widest text-slate-900">
+                            <FileText size={18} className="text-emerald-700" />
+                            <p className="text-xs font-black uppercase tracking-wider text-slate-900">
                               REPÚBLICA ARGENTINA · LEY NACIONAL N° 27.669 & DECRETO 405/2023
                             </p>
                           </div>
-                          <h2 className="text-base md:text-xl font-black uppercase tracking-tight text-slate-950 mt-0.5">
+                          <h2 className="text-lg md:text-2xl font-black uppercase tracking-tight text-slate-950 mt-1">
                             ANEXO TÉCNICO Y FICHA REGISTRAL DE PARCELA
                           </h2>
                           <p className="text-xs md:text-sm font-mono font-black text-emerald-800 uppercase mt-0.5">
                             PATAGONIAN-C LTDA COOPERATIVA DE TRABAJO · CUIT: 30-71816113-0 · HempC
                           </p>
                         </div>
-                        <div className="text-right shrink-0 bg-slate-100 p-2 rounded-xl border border-slate-300">
-                          <span className="text-[8px] font-mono font-black uppercase text-slate-500 block">Legajo Oficial</span>
+                        <div className="text-right shrink-0 bg-slate-100 p-2.5 rounded-xl border border-slate-300">
+                          <span className="text-[9px] font-mono font-black uppercase text-slate-500 block">Legajo Oficial</span>
                           <strong className="text-xs font-mono font-black text-slate-900 block">
                             EXP: HEMP-AR-{plot.id.substring(0, 8).toUpperCase()}
                           </strong>
-                          <span className="text-[8px] font-mono text-slate-500 block">Campaña {campaignDisplay}</span>
+                          <span className="text-[9px] font-mono text-slate-500 block">Campaña {campaignDisplay}</span>
                         </div>
                       </div>
 
                       {/* SECCIÓN 1: IDENTIFICACIÓN PARCELARIA Y CATASTRAL */}
-                      <div className="space-y-1">
-                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                      <div className="space-y-1.5">
+                        <span className="text-[11px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
                           <Sprout size={14} className="text-emerald-600" />
                           1. Ficha Catastral & Identificación del Cultivo
                         </span>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 border-2 border-slate-300 rounded-2xl p-2.5 bg-slate-50 text-xs font-mono">
-                          <div className="space-y-0.5">
-                            <span className="text-[8px] text-slate-400 uppercase font-bold block">Unidad Productiva / Lote:</span>
-                            <strong className="text-xs text-slate-950 font-black block">{plot.name}</strong>
-                            <span className="text-[10px] text-slate-600 block">ID: <strong>{plot.id}</strong></span>
-                            <span className="text-[10px] text-slate-600 block">Tipo: <strong>{plot.type || 'Ensayo / Producción'}</strong></span>
-                            <span className="text-[10px] text-slate-600 block">Estado: <strong className="text-emerald-700">{statusDisplay}</strong></span>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 border-2 border-slate-300 rounded-2xl p-3 bg-slate-50 text-xs font-mono">
+                          <div className="space-y-1">
+                            <span className="text-[9px] text-slate-400 uppercase font-bold block">Unidad Productiva / Lote:</span>
+                            <strong className="text-sm text-slate-950 font-black block">{plot.name}</strong>
+                            <span className="text-[11px] text-slate-600 block">ID: <strong>{plot.id}</strong></span>
+                            <span className="text-[11px] text-slate-600 block">Tipo: <strong>{plot.type || 'Ensayo / Producción'}</strong></span>
+                            <span className="text-[11px] text-slate-600 block">Estado: <strong className="text-emerald-700">{statusDisplay}</strong></span>
                           </div>
 
-                          <div className="space-y-0.5">
-                            <span className="text-[8px] text-slate-400 uppercase font-bold block">Establecimiento Rural:</span>
-                            <strong className="text-xs text-slate-950 font-black block">{location?.name || 'Establecimiento Rural'}</strong>
-                            <span className="text-[10px] text-slate-600 block">Ubicación: {location?.city || ''}, {location?.province || ''}</span>
-                            <span className="text-[10px] text-slate-600 block truncate" title={location?.address}>Dirección: {location?.address || 'Zona Rural'}</span>
-                            <span className="text-[10px] text-slate-600 block">RENSPA: <strong>{location?.renspaNumber || 'En trámite'}</strong></span>
+                          <div className="space-y-1">
+                            <span className="text-[9px] text-slate-400 uppercase font-bold block">Establecimiento Rural:</span>
+                            <strong className="text-sm text-slate-950 font-black block">{location?.name || 'Establecimiento Rural'}</strong>
+                            <span className="text-[11px] text-slate-600 block">Ubicación: {location?.city || ''}, {location?.province || ''}</span>
+                            <span className="text-[11px] text-slate-600 block truncate" title={location?.address}>Dirección: {location?.address || 'Zona Rural'}</span>
+                            <span className="text-[11px] text-slate-600 block">RENSPA: <strong>{location?.renspaNumber || 'En trámite'}</strong></span>
                           </div>
 
-                          <div className="space-y-0.5">
-                            <span className="text-[8px] text-slate-400 uppercase font-bold block">Genética Certificada (INASE):</span>
-                            <strong className="text-xs text-emerald-800 font-black block">{variety?.name || 'Cultivar Homologado'}</strong>
-                            <span className="text-[10px] text-slate-600 block">RNC INASE: <strong>{variety?.inaseRncNumber || 'Certificación RNC'}</strong></span>
-                            <span className="text-[10px] text-slate-600 block">Destino: <strong>{variety?.usage || 'Fibra / Grano'}</strong></span>
-                            <span className="text-[10px] text-slate-600 block">Fotoperíodo: <strong>{variety?.photoperiodType || 'Monoica'}</strong></span>
+                          <div className="space-y-1">
+                            <span className="text-[9px] text-slate-400 uppercase font-bold block">Genética Certificada (INASE):</span>
+                            <strong className="text-sm text-emerald-800 font-black block">{variety?.name || 'Cultivar Homologado'}</strong>
+                            <span className="text-[11px] text-slate-600 block">RNC INASE: <strong>{variety?.inaseRncNumber || 'Certificación RNC'}</strong></span>
+                            <span className="text-[11px] text-slate-600 block">Destino: <strong>{variety?.usage || 'Fibra / Grano'}</strong></span>
+                            <span className="text-[11px] text-slate-600 block">Fotoperíodo: <strong>{variety?.photoperiodType || 'Monoica'}</strong></span>
                           </div>
                         </div>
                       </div>
 
                       {/* SECCIÓN 2: GEODESIA, CENTROIDE Y TELEDETECCIÓN */}
-                      <div className="space-y-1">
-                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                      <div className="space-y-1.5">
+                        <span className="text-[11px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
                           <Compass size={14} className="text-emerald-600" />
                           2. Georreferenciación Geodésica & Monitoreo Satelital
                         </span>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs font-mono">
-                          <div className="p-2 bg-slate-100 rounded-xl border border-slate-200">
-                            <span className="text-[8px] uppercase text-slate-500 font-bold block">Superficie</span>
-                            <strong className="text-xs font-black text-slate-900 block">{surfaceDisplay}</strong>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 text-xs font-mono">
+                          <div className="p-2.5 bg-slate-100 rounded-xl border border-slate-200">
+                            <span className="text-[9px] uppercase text-slate-500 font-bold block">Superficie</span>
+                            <strong className="text-sm font-black text-slate-900 block">{surfaceDisplay}</strong>
                           </div>
-                          <div className="p-2 bg-slate-100 rounded-xl border border-slate-200">
-                            <span className="text-[8px] uppercase text-slate-500 font-bold block">Centroide GPS</span>
-                            <strong className="text-[10px] font-black text-slate-900 block">{formattedLat}, {formattedLng}</strong>
+                          <div className="p-2.5 bg-slate-100 rounded-xl border border-slate-200">
+                            <span className="text-[9px] uppercase text-slate-500 font-bold block">Centroide GPS</span>
+                            <strong className="text-xs font-black text-slate-900 block">{formattedLat}, {formattedLng}</strong>
                           </div>
-                          <div className="p-2 bg-slate-100 rounded-xl border border-slate-200">
-                            <span className="text-[8px] uppercase text-slate-500 font-bold block">Polígono Vectorial</span>
-                            <strong className="text-[10px] font-bold text-slate-900 block">
+                          <div className="p-2.5 bg-slate-100 rounded-xl border border-slate-200">
+                            <span className="text-[9px] uppercase text-slate-500 font-bold block">Polígono Vectorial</span>
+                            <strong className="text-xs font-bold text-slate-900 block">
                               {plot.polygon && plot.polygon.length >= 3 ? `${plot.polygon.length} Vértices` : 'Centroide'}
                             </strong>
                           </div>
-                          <div className="p-2 bg-slate-100 rounded-xl border border-slate-200">
-                            <span className="text-[8px] uppercase text-slate-500 font-bold block">Vigilancia Espectral</span>
-                            <strong className="text-[10px] font-bold text-emerald-700 block">Sentinel-2</strong>
+                          <div className="p-2.5 bg-slate-100 rounded-xl border border-slate-200">
+                            <span className="text-[9px] uppercase text-slate-500 font-bold block">Vigilancia Espectral</span>
+                            <strong className="text-xs font-bold text-emerald-700 block">Sentinel-2</strong>
                           </div>
                         </div>
                       </div>
 
                       {/* SECCIÓN 3: TITULARIDAD, OPERADOR Y LICENCIAS ARICCAME */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 text-xs font-mono">
-                        <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl space-y-0.5">
-                          <span className="text-[8px] uppercase text-slate-500 font-bold block">Operador Titular Responsable</span>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs font-mono">
+                        <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                          <span className="text-[9px] uppercase text-slate-500 font-bold block">Operador Titular Responsable</span>
                           <strong className="text-xs font-black text-slate-900 block">PatagonianC LTDA Cooperativa de Trabajo</strong>
-                          <span className="text-[10px] text-emerald-800 font-bold block">CUIT: 30-71816113-0 · HempC (Unidad de Negocios)</span>
-                          <span className="text-[10px] text-slate-600 block">Titular Predial: <strong>{client?.name || location?.ownerName || 'HempC Red Cooperativa'}</strong></span>
+                          <span className="text-[11px] text-emerald-800 font-bold block">CUIT: 30-71816113-0 · HempC (Unidad de Negocios)</span>
+                          <span className="text-[11px] text-slate-600 block">Titular Predial: <strong>{client?.name || location?.ownerName || 'HempC Red Cooperativa'}</strong></span>
                         </div>
 
-                        <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl space-y-0.5">
-                          <span className="text-[8px] uppercase text-slate-500 font-bold block">Licencias y Fiscalización Sanitaria</span>
-                          <span className="text-[10px] text-slate-700 block">Lic. Agrícola ARICCAME: <strong>EX-2024-134354227</strong></span>
-                          <span className="text-[10px] text-slate-700 block">Lic. Industrial ARICCAME: <strong>EX-2025-119427833</strong></span>
-                          <span className="text-[9px] text-emerald-700 font-bold block">SENASA Resoluciones N° 350/99 y 637/11</span>
+                        <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                          <span className="text-[9px] uppercase text-slate-500 font-bold block">Licencias y Fiscalización Sanitaria</span>
+                          <span className="text-[11px] text-slate-700 block">Lic. Agrícola ARICCAME: <strong>EX-2024-134354227</strong></span>
+                          <span className="text-[11px] text-slate-700 block">Lic. Industrial ARICCAME: <strong>EX-2025-119427833</strong></span>
+                          <span className="text-[10px] text-emerald-700 font-bold block">SENASA Resoluciones N° 350/99 y 637/11</span>
                         </div>
                       </div>
 
                       {/* SECCIÓN 4: AUDITORÍA DIGITAL Y RECUADROS DE FIRMAS */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 items-center border-t-2 border-slate-300 pt-2.5">
-                        <div className="flex items-center gap-2.5 p-2 bg-slate-50 rounded-2xl border border-slate-200">
-                          <QRCodeSVG value={traceUrl} size={64} level="H" />
-                          <div className="text-[8px] font-mono space-y-0.5">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-center border-t-2 border-slate-300 pt-3">
+                        <div className="flex items-center gap-3 p-2.5 bg-slate-50 rounded-2xl border border-slate-200">
+                          <QRCodeSVG value={traceUrl} size={68} level="H" />
+                          <div className="text-[9px] font-mono space-y-0.5">
                             <strong className="font-black text-slate-900 block">QR Auditoría Digital</strong>
                             <span className="text-slate-500 block leading-tight">Historial satelital y DDJJ oficial</span>
                             <span className="text-emerald-700 font-bold block">SENASA · INASE · ARICCAME</span>
@@ -696,20 +710,20 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                         </div>
 
                         {/* Caja Firma Responsable Técnico */}
-                        <div className="p-2 border-2 border-dashed border-slate-400 rounded-xl h-20 flex flex-col justify-between text-[8px] font-mono">
+                        <div className="p-2.5 border-2 border-dashed border-slate-400 rounded-xl h-22 flex flex-col justify-between text-[9px] font-mono">
                           <span className="font-bold text-slate-500 uppercase">Firma Responsable Técnico / Agrónomo</span>
-                          <div className="border-t border-slate-300 pt-0.5 text-slate-400 text-center">Firma, Aclaración y Matrícula</div>
+                          <div className="border-t border-slate-300 pt-1 text-slate-400 text-center">Firma, Aclaración y Matrícula</div>
                         </div>
 
                         {/* Caja Visado Inspección Oficial */}
-                        <div className="p-2 border-2 border-dashed border-slate-400 rounded-xl h-20 flex flex-col justify-between text-[8px] font-mono">
+                        <div className="p-2.5 border-2 border-dashed border-slate-400 rounded-xl h-22 flex flex-col justify-between text-[9px] font-mono">
                           <span className="font-bold text-slate-500 uppercase">Inspección Oficial / Autoridad Rural</span>
-                          <div className="border-t border-slate-300 pt-0.5 text-slate-400 text-center">Sello, Fecha y Matrícula Inspector</div>
+                          <div className="border-t border-slate-300 pt-1 text-slate-400 text-center">Sello, Fecha y Matrícula Inspector</div>
                         </div>
                       </div>
 
                       {/* FOOTER PÁGINA 2 */}
-                      <div className="flex flex-col sm:flex-row justify-between items-center text-[9px] font-mono text-slate-500 border-t-2 border-slate-300 pt-1.5 gap-1">
+                      <div className="flex flex-col sm:flex-row justify-between items-center text-[10px] font-mono text-slate-500 border-t-2 border-slate-300 pt-2 gap-1">
                         <span className="font-bold">PatagonianC LTDA Cooperativa de Trabajo · CUIT: 30-71816113-0 · HempC</span>
                         <span>Página 2 de 2 · Anexo Técnico y Geodésico · red.hempc.com.ar</span>
                       </div>
@@ -724,40 +738,47 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
           {/* VISTA 2: RÓTULO TÉCNICO DE TRAZABILIDAD QR (FORMATO ETIQUETA DE PARCELA / PASAPORTE) */}
           {activeView === 'label' && (
             <div className="space-y-4">
-              {/* Barra de opciones de la Etiqueta de Parcela */}
-              <div className="flex flex-wrap items-center justify-between gap-3 bg-emerald-50 dark:bg-emerald-950/30 p-3.5 rounded-2xl border border-emerald-200 dark:border-emerald-800/60 text-xs no-print">
-                <div className="flex items-center gap-2 text-emerald-950 dark:text-emerald-200 font-bold">
-                  <Info size={18} className="text-emerald-600 shrink-0" />
-                  <span>
-                    Etiqueta / Rótulo Oficial de Parcela: Pasaporte biológico QR, datos catastrales y marco legal Ley 27.669.
+              {/* BOTONERA UNIFICADA DE LA ETIQUETA DE PARCELA */}
+              <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-700/80 space-y-3 no-print">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 border-b border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center gap-2 text-slate-800 dark:text-slate-200 font-bold text-xs">
+                    <Info size={18} className="text-emerald-600 shrink-0" />
+                    <span>Emisión Oficial de Rótulo QR y Pasaporte Biológico de Parcela</span>
+                  </div>
+                  <span className="text-[11px] font-mono text-emerald-700 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/50 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 self-start sm:self-auto">
+                    {labelFormat === 'a4' ? '📄 1 Hoja A4 Centrado (Oficina / Carpeta)' : '🏷️ Etiqueta 100x150 mm (Térmica / Estaca de Campo)'}
                   </span>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  {/* Selector de formato de etiqueta */}
-                  <div className="bg-white dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => setLabelFormat('a4')}
-                      className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold uppercase transition ${
-                        labelFormat === 'a4'
-                          ? 'bg-emerald-600 text-white shadow-sm'
-                          : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
-                      }`}
-                    >
-                      A4 Centrado (Oficina / Carpeta)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setLabelFormat('thermal')}
-                      className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold uppercase transition ${
-                        labelFormat === 'thermal'
-                          ? 'bg-emerald-600 text-white shadow-sm'
-                          : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
-                      }`}
-                    >
-                      100x150 mm (Térmica / Estaca)
-                    </button>
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold text-slate-500 uppercase font-mono">Formato de Salida:</span>
+                    <div className="bg-white dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-1 shadow-sm">
+                      <button
+                        type="button"
+                        onClick={() => setLabelFormat('a4')}
+                        className={`px-3.5 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                          labelFormat === 'a4'
+                            ? 'bg-emerald-600 text-white shadow-sm'
+                            : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+                        }`}
+                      >
+                        <span>📄</span>
+                        <span>A4 Centrado (Carpeta de Campo)</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setLabelFormat('thermal')}
+                        className={`px-3.5 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                          labelFormat === 'thermal'
+                            ? 'bg-emerald-600 text-white shadow-sm'
+                            : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+                        }`}
+                      >
+                        <span>🏷️</span>
+                        <span>100x150 mm (Térmica / Estaca)</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -765,95 +786,95 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
               {/* CONTENEDOR DE LA ETIQUETA IMPRIMIBLE */}
               <div 
                 id="printable-plot-doc"
-                className={`bg-white text-slate-900 p-6 rounded-3xl border-2 border-dashed border-slate-400 shadow-lg space-y-4 mx-auto ${
-                  labelFormat === 'thermal' ? 'max-w-md' : 'max-w-lg'
+                className={`bg-white text-slate-900 p-6 md:p-8 rounded-3xl border-2 border-dashed border-slate-400 shadow-xl space-y-4 mx-auto ${
+                  labelFormat === 'thermal' ? 'max-w-md' : 'max-w-xl'
                 }`}
               >
                 {/* CABECERA ETIQUETA */}
-                <div className="flex justify-between items-start border-b-2 border-slate-900 pb-3">
+                <div className="flex justify-between items-start border-b-2 border-slate-900 pb-3.5">
                   <div>
                     <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-slate-900">
                       <Sprout size={18} className="text-emerald-600" />
                       <span>PATAGONIAN-C LTDA COOPERATIVA DE TRABAJO</span>
                     </div>
-                    <p className="text-[11px] font-black text-emerald-800 uppercase font-mono mt-0.5">
+                    <p className="text-xs font-black text-emerald-800 uppercase font-mono mt-0.5">
                       CUIT: 30-71816113-0 · HempC (Unidad de Negocios)
                     </p>
-                    <p className="text-[9px] text-slate-600 uppercase font-bold">
+                    <p className="text-[10px] text-slate-600 uppercase font-bold mt-0.5">
                       Pasaporte Biológico de Parcela · Trazabilidad Agro 4.0
                     </p>
                   </div>
                   <div className="text-right">
-                    <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-emerald-600 text-white">
+                    <span className="px-2.5 py-1 rounded text-[10px] font-black uppercase bg-emerald-600 text-white shadow-sm">
                       {statusDisplay}
                     </span>
-                    <p className="text-[8px] text-slate-400 mt-0.5 font-bold">LEY 27.669</p>
+                    <p className="text-[9px] text-slate-400 mt-1 font-bold">LEY 27.669</p>
                   </div>
                 </div>
 
                 {/* DETALLE PARCELA */}
                 <div>
-                  <span className="text-[9px] font-mono text-slate-400 uppercase font-bold block">Parcela / Unidad Productiva:</span>
-                  <strong className="text-lg font-black uppercase text-slate-900 block leading-tight">
+                  <span className="text-[10px] font-mono text-slate-400 uppercase font-bold block">Parcela / Unidad Productiva:</span>
+                  <strong className="text-xl md:text-2xl font-black uppercase text-slate-900 block leading-tight mt-0.5">
                     {plot.name}
                   </strong>
-                  <span className="text-[11px] font-mono text-slate-600 block mt-0.5">
+                  <span className="text-xs font-mono text-slate-600 block mt-1">
                     ID Parcelario: <strong>{plot.id}</strong>
                   </span>
                 </div>
 
                 {/* DATOS CRUZADOS */}
-                <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs font-mono">
+                <div className="grid grid-cols-2 gap-3 p-3.5 bg-slate-50 rounded-2xl border border-slate-200 text-xs font-mono">
                   <div>
-                    <span className="text-[8px] text-slate-400 uppercase block font-bold">Campo / Sitio:</span>
-                    <strong className="text-slate-900 truncate block">{location?.name || 'S/D'}</strong>
-                    <span className="text-[9px] text-slate-500">{location?.city || location?.province}</span>
+                    <span className="text-[9px] text-slate-400 uppercase block font-bold">Campo / Sitio:</span>
+                    <strong className="text-slate-900 truncate block text-sm">{location?.name || 'S/D'}</strong>
+                    <span className="text-[10px] text-slate-500">{location?.city || location?.province}</span>
                   </div>
                   <div>
-                    <span className="text-[8px] text-slate-400 uppercase block font-bold">Cultivar Certificado:</span>
-                    <strong className="text-emerald-700 truncate block">{variety?.name || 'INASE'}</strong>
-                    <span className="text-[9px] text-slate-500">{variety?.inaseRncNumber || 'RNC N°'}</span>
+                    <span className="text-[9px] text-slate-400 uppercase block font-bold">Cultivar Certificado:</span>
+                    <strong className="text-emerald-700 truncate block text-sm">{variety?.name || 'INASE'}</strong>
+                    <span className="text-[10px] text-slate-500">{variety?.inaseRncNumber || 'RNC N°'}</span>
                   </div>
                   <div>
-                    <span className="text-[8px] text-slate-400 uppercase block font-bold">Superficie:</span>
-                    <strong className="text-slate-900 block">{surfaceDisplay}</strong>
+                    <span className="text-[9px] text-slate-400 uppercase block font-bold">Superficie:</span>
+                    <strong className="text-slate-900 block text-sm">{surfaceDisplay}</strong>
                   </div>
                   <div>
-                    <span className="text-[8px] text-slate-400 uppercase block font-bold">Campaña:</span>
-                    <strong className="text-slate-900 block">{campaignDisplay}</strong>
+                    <span className="text-[9px] text-slate-400 uppercase block font-bold">Campaña:</span>
+                    <strong className="text-slate-900 block text-sm">{campaignDisplay}</strong>
                   </div>
                   <div className="col-span-2">
-                    <span className="text-[8px] text-slate-400 uppercase block font-bold">Coordenadas GPS Centroide:</span>
-                    <strong className="text-[11px] text-slate-800 block">{formattedLat}, {formattedLng}</strong>
+                    <span className="text-[9px] text-slate-400 uppercase block font-bold">Coordenadas GPS Centroide:</span>
+                    <strong className="text-xs text-slate-800 block">{formattedLat}, {formattedLng}</strong>
                   </div>
                 </div>
 
                 {/* QR Y VERIFICACIÓN */}
-                <div className="flex items-center gap-4 border-t border-slate-200 pt-3">
-                  <div className="p-2 bg-white rounded-xl border border-slate-200 shadow-sm shrink-0">
+                <div className="flex items-center gap-4 border-t-2 border-slate-200 pt-3.5">
+                  <div className="p-2 bg-white rounded-2xl border-2 border-slate-300 shadow-sm shrink-0">
                     <QRCodeSVG
                       value={traceUrl}
-                      size={labelFormat === 'thermal' ? 84 : 105}
+                      size={labelFormat === 'thermal' ? 90 : 110}
                       level="H"
                       includeMargin={false}
                     />
                   </div>
-                  <div className="space-y-1 text-[10px] font-mono">
-                    <p className="font-bold text-slate-900">
+                  <div className="space-y-1 text-xs font-mono">
+                    <p className="font-black text-slate-900 text-sm">
                       Trazabilidad Digital Completa
                     </p>
-                    <p className="text-slate-500 text-[9px] leading-tight">
+                    <p className="text-slate-500 text-[10px] leading-tight">
                       Escanee para verificar la declaración jurada, historial fitosanitario y pasadas satelitales Sentinel-2 en tiempo real.
                     </p>
-                    <span className="text-[9px] text-emerald-700 font-bold block pt-1">
-                      Fiscalización: SENASA · ARICCAME · INASE
+                    <span className="text-[10px] text-emerald-700 font-bold block pt-1">
+                      Fiscalización Oficial: SENASA · ARICCAME · INASE
                     </span>
                   </div>
                 </div>
 
                 {/* PIE */}
-                <div className="text-[8px] font-mono text-slate-500 text-center border-t border-slate-200 pt-2 space-y-0.5">
-                  <div className="font-bold text-slate-700">PatagonianC LTDA Cooperativa de Trabajo · CUIT: 30-71816113-0 · HempC (Unidad de Negocios)</div>
+                <div className="text-[9px] font-mono text-slate-500 text-center border-t border-slate-200 pt-2.5 space-y-0.5">
+                  <div className="font-bold text-slate-700">PatagonianC LTDA Cooperativa de Trabajo · CUIT: 30-71816113-0 · HempC</div>
                   <div className="text-slate-400">Documento emitido electrónicamente · red.hempc.com.ar</div>
                 </div>
               </div>
@@ -861,13 +882,13 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
           )}
         </div>
 
-        {/* ACCIONES Y BOTONES DE DESCARGA / IMPRESIÓN */}
+        {/* ACCIONES Y BOTONES DE DESCARGA / IMPRESIÓN REORGANIZADOS */}
         <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={handleCopyLink}
-              className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold transition"
+              className="flex items-center gap-1.5 px-3.5 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold transition"
             >
               {copied ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
               <span>{copied ? '¡Enlace Copiado!' : 'Copiar URL Pública'}</span>
@@ -877,14 +898,14 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
               href={`/#/trace/${plot.id}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold transition"
+              className="flex items-center gap-1.5 px-3.5 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold transition"
             >
               <ExternalLink size={14} />
               <span>Ver Trazabilidad en Vivo</span>
             </a>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             <button
               type="button"
               onClick={onClose}
@@ -901,8 +922,8 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
               <Printer size={16} />
               <span>
                 {activeView === 'sign'
-                  ? `Imprimir Cartel Tranquera (A4 Vertical · ${signPageFilter === 'all' ? '2 Páginas' : '1 Página'})`
-                  : `Imprimir Rótulo QR Parcela (${labelFormat === 'thermal' ? '100x150 mm' : 'A4 1 Página'})`}
+                  ? `Imprimir Cartel Tranquera (${signOrientation === 'vertical' ? 'A4 Vertical' : 'A4 Horizontal'} · ${signPageFilter === 'all' ? '2 Págs' : '1 Pág'})`
+                  : `Imprimir Rótulo QR (${labelFormat === 'thermal' ? '100x150 mm' : 'A4 1 Pág'})`}
               </span>
             </button>
           </div>
