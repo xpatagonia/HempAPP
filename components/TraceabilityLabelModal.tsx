@@ -26,10 +26,17 @@ export const TraceabilityLabelModal: React.FC<TraceabilityLabelModalProps> = ({
 
   if (!isOpen || !batch) return null;
 
-  // URL pública de trazabilidad para el QR (funciona tanto en producción como en dev)
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://hemp-net.vercel.app';
+  // URL pública de trazabilidad para el QR (funciona tanto en producción como en dev para escaneo móvil)
+  const baseUrl = (() => {
+    if (typeof window === 'undefined') return 'https://red.hempc.com.ar';
+    const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1' || host.includes('run.app') || host.includes('aistudio')) {
+      return 'https://red.hempc.com.ar';
+    }
+    return window.location.origin;
+  })();
   // Si tiene parcela de origen vinculada o se rastrea por ID
-  const traceUrl = `${baseUrl}/trace/${batch.originPlotId || batch.id}`;
+  const traceUrl = `${baseUrl}/#/trace/${batch.originPlotId || batch.id}`;
 
   // Código para el código de barras (Rótulo oficial o batch code)
   const barcodeValue = (batch.labelSerialNumber || batch.batchCode).replace(/[^A-Z0-9-]/gi, '').toUpperCase();

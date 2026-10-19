@@ -35,9 +35,40 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
 
   if (!isOpen || !plot) return null;
 
-  // URL pública de trazabilidad en vivo
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://red.hempc.com.ar';
-  const traceUrl = `${baseUrl}/#/trace/${plot.id}`;
+  const campaignDisplay = plot.campaign || '2025/2026';
+  const statusDisplay = plot.status || 'Activa';
+  const surfaceDisplay = `${plot.surfaceArea || 1} ${plot.surfaceUnit || 'ha'}`;
+  const formattedLat = plot.coordinates?.lat ? Number(plot.coordinates.lat).toFixed(5) : '-';
+  const formattedLng = plot.coordinates?.lng ? Number(plot.coordinates.lng).toFixed(5) : '-';
+
+  // Dominio público accesible para escaneo móvil desde cualquier dispositivo externo
+  const publicBaseUrl = (() => {
+    if (typeof window === 'undefined') return 'https://red.hempc.com.ar';
+    const host = window.location.hostname;
+    // Si estamos en un host privado (localhost, 127.0.0.1, dev sandbox Cloud Run de AI Studio)
+    // una cámara móvil NO tiene acceso a esa red privada. Usamos el dominio oficial de producción.
+    if (host === 'localhost' || host === '127.0.0.1' || host.includes('run.app') || host.includes('aistudio')) {
+      return 'https://red.hempc.com.ar';
+    }
+    return window.location.origin;
+  })();
+
+  // Construir URL pública con parámetros de respaldo para garantizar trazabilidad instantánea en cualquier celular
+  const traceUrl = (() => {
+    const params = new URLSearchParams();
+    if (plot.name) params.set('name', plot.name);
+    if (location?.name) params.set('loc', location.name);
+    if (location?.province) params.set('prov', location.province);
+    if (plot.coordinates?.lat) params.set('lat', String(plot.coordinates.lat));
+    if (plot.coordinates?.lng) params.set('lng', String(plot.coordinates.lng));
+    if (variety?.name) params.set('var', variety.name);
+    if (plot.surfaceArea) params.set('ha', String(plot.surfaceArea));
+    if (campaignDisplay) params.set('camp', campaignDisplay);
+    if (plot.status) params.set('status', plot.status);
+
+    const queryStr = params.toString();
+    return `${publicBaseUrl}/#/trace/${encodeURIComponent(plot.id)}${queryStr ? `?${queryStr}` : ''}`;
+  })();
 
   const handleCopyLink = () => {
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
@@ -127,12 +158,12 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                 box-sizing: border-box !important;
                 width: 100% !important;
                 max-width: ${signOrientation === 'horizontal' ? '280mm' : '198mm'} !important;
-                height: ${signOrientation === 'horizontal' ? '198mm' : '278mm'} !important;
-                max-height: ${signOrientation === 'horizontal' ? '198mm' : '278mm'} !important;
+                height: ${signOrientation === 'horizontal' ? '198mm' : '274mm'} !important;
+                max-height: ${signOrientation === 'horizontal' ? '198mm' : '274mm'} !important;
                 margin: 0 auto !important;
-                padding: 14px 18px !important;
+                padding: 10px 14px !important;
                 border: 4px solid #000000 !important;
-                border-radius: 20px !important;
+                border-radius: 16px !important;
                 background: #ffffff !important;
                 color: #000000 !important;
                 page-break-after: always !important;
@@ -144,6 +175,35 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
               .printable-sheet:last-of-type {
                 page-break-after: auto !important;
                 break-after: auto !important;
+              }
+              /* Forzar columnas paralelas en Página 1 y Página 2 durante la impresión */
+              #printable-plot-sign-p1 .p1-quick-grid {
+                display: grid !important;
+                grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+                gap: 8px !important;
+              }
+              #printable-plot-sign-p2 {
+                padding: 10px 14px !important;
+              }
+              #printable-plot-sign-p2 .p2-sec1-grid {
+                display: grid !important;
+                grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+                gap: 6px !important;
+              }
+              #printable-plot-sign-p2 .p2-sec2-grid {
+                display: grid !important;
+                grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+                gap: 5px !important;
+              }
+              #printable-plot-sign-p2 .p2-sec3-grid {
+                display: grid !important;
+                grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+                gap: 6px !important;
+              }
+              #printable-plot-sign-p2 .p2-sec4-grid {
+                display: grid !important;
+                grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+                gap: 6px !important;
               }
               /* Rótulo / Etiqueta de parcela (Pasaporte Biológico) */
               #printable-plot-doc {
@@ -194,12 +254,6 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
       window.print();
     }
   };
-
-  const formattedLat = plot.coordinates?.lat ? Number(plot.coordinates.lat).toFixed(5) : '-';
-  const formattedLng = plot.coordinates?.lng ? Number(plot.coordinates.lng).toFixed(5) : '-';
-  const surfaceDisplay = `${plot.surfaceArea || 1} ${plot.surfaceUnit || 'ha'}`;
-  const campaignDisplay = plot.campaign || '2025/2026';
-  const statusDisplay = plot.status || 'Activa';
 
   return (
     <div id="modal-print-overlay" className="fixed inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center z-[120] p-3 sm:p-5 font-sans overflow-y-auto">
@@ -257,12 +311,12 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
             box-sizing: border-box !important;
             width: 100% !important;
             max-width: ${signOrientation === 'horizontal' ? '280mm' : '198mm'} !important;
-            height: ${signOrientation === 'horizontal' ? '198mm' : '278mm'} !important;
-            max-height: ${signOrientation === 'horizontal' ? '198mm' : '278mm'} !important;
+            height: ${signOrientation === 'horizontal' ? '198mm' : '274mm'} !important;
+            max-height: ${signOrientation === 'horizontal' ? '198mm' : '274mm'} !important;
             margin: 0 auto !important;
-            padding: 14px 18px !important;
+            padding: 10px 14px !important;
             border: 4px solid #000000 !important;
-            border-radius: 20px !important;
+            border-radius: 16px !important;
             background: #ffffff !important;
             color: #000000 !important;
             page-break-after: always !important;
@@ -274,6 +328,34 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
           .printable-sheet:last-of-type {
             page-break-after: auto !important;
             break-after: auto !important;
+          }
+          #printable-plot-sign-p1 .p1-quick-grid {
+            display: grid !important;
+            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+            gap: 8px !important;
+          }
+          #printable-plot-sign-p2 {
+            padding: 10px 14px !important;
+          }
+          #printable-plot-sign-p2 .p2-sec1-grid {
+            display: grid !important;
+            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+            gap: 6px !important;
+          }
+          #printable-plot-sign-p2 .p2-sec2-grid {
+            display: grid !important;
+            grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+            gap: 5px !important;
+          }
+          #printable-plot-sign-p2 .p2-sec3-grid {
+            display: grid !important;
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            gap: 6px !important;
+          }
+          #printable-plot-sign-p2 .p2-sec4-grid {
+            display: grid !important;
+            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+            gap: 6px !important;
           }
           #printable-plot-doc {
             display: flex !important;
@@ -531,7 +613,7 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                       </div>
 
                       {/* FRANJA DE IDENTIFICACIÓN RÁPIDA EN TRANQUERA */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-slate-50 p-3 rounded-2xl border-2 border-slate-300 text-xs font-mono">
+                      <div className="p1-quick-grid grid grid-cols-3 gap-2.5 bg-slate-50 p-2.5 rounded-2xl border-2 border-slate-300 text-xs font-mono">
                         <div className="p-2.5 bg-white rounded-xl border border-slate-200">
                           <span className="text-[9px] uppercase font-bold text-slate-400 block">Lote / Parcela:</span>
                           <strong className="text-base font-black uppercase text-slate-950 block truncate">{plot.name}</strong>
@@ -552,14 +634,14 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                       </div>
 
                       {/* ADVERTENCIA LEGAL A FUERZAS DE SEGURIDAD */}
-                      <div className="p-3 bg-rose-50 border-2 border-rose-400 rounded-2xl text-xs md:text-sm text-rose-950 font-bold leading-snug">
+                      <div className="p-2.5 bg-rose-50 border-2 border-rose-400 rounded-2xl text-xs md:text-sm text-rose-950 font-bold leading-snug">
                         ⚠️ ADVERTENCIA LEGAL A FUERZAS DE SEGURIDAD Y TERCEROS: Predio registrado y fiscalizado bajo la Ley 27.669. Prohibido el ingreso no autorizado o la sustracción de biomasa experimental. Acto penado por los artículos 162, 164 y 186 del Código Penal de la Nación Argentina.
                       </div>
 
                       {/* FOOTER PÁGINA 1 */}
-                      <div className="flex flex-col sm:flex-row justify-between items-center text-[10px] font-mono text-slate-500 border-t-2 border-slate-300 pt-2.5 gap-2">
+                      <div className="flex flex-col sm:flex-row justify-between items-center text-[10px] font-mono text-slate-500 border-t-2 border-slate-300 pt-2 gap-2">
                         <div className="flex items-center gap-2.5">
-                          <div className="p-1 bg-white rounded-lg border border-slate-300">
+                          <div className="p-1 bg-white rounded-lg border border-slate-300 shrink-0">
                             <QRCodeSVG value={traceUrl} size={46} level="M" />
                           </div>
                           <div>
@@ -591,12 +673,12 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
 
                     <div
                       id="printable-plot-sign-p2"
-                      className={`printable-sheet bg-white text-slate-950 p-6 md:p-8 rounded-3xl border-4 md:border-6 border-slate-950 shadow-2xl space-y-4 md:space-y-4.5 mx-auto ${
+                      className={`printable-sheet bg-white text-slate-950 p-5 md:p-6 rounded-3xl border-4 md:border-6 border-slate-950 shadow-2xl space-y-3.5 mx-auto ${
                         signOrientation === 'horizontal' ? 'w-full' : 'max-w-2xl'
                       }`}
                     >
                       {/* ENCABEZADO ANEXO TÉCNICO */}
-                      <div className="border-b-4 border-slate-950 pb-3 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                      <div className="border-b-4 border-slate-950 pb-2.5 flex flex-col md:flex-row md:items-center justify-between gap-2.5">
                         <div>
                           <div className="flex items-center gap-2">
                             <FileText size={18} className="text-emerald-700" />
@@ -604,14 +686,14 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                               REPÚBLICA ARGENTINA · LEY NACIONAL N° 27.669 & DECRETO 405/2023
                             </p>
                           </div>
-                          <h2 className="text-lg md:text-2xl font-black uppercase tracking-tight text-slate-950 mt-1">
+                          <h2 className="text-lg md:text-2xl font-black uppercase tracking-tight text-slate-950 mt-0.5">
                             ANEXO TÉCNICO Y FICHA REGISTRAL DE PARCELA
                           </h2>
                           <p className="text-xs md:text-sm font-mono font-black text-emerald-800 uppercase mt-0.5">
                             PATAGONIAN-C LTDA COOPERATIVA DE TRABAJO · CUIT: 30-71816113-0 · HempC
                           </p>
                         </div>
-                        <div className="text-right shrink-0 bg-slate-100 p-2.5 rounded-xl border border-slate-300">
+                        <div className="text-right shrink-0 bg-slate-100 p-2 rounded-xl border border-slate-300">
                           <span className="text-[9px] font-mono font-black uppercase text-slate-500 block">Legajo Oficial</span>
                           <strong className="text-xs font-mono font-black text-slate-900 block">
                             EXP: HEMP-AR-{plot.id.substring(0, 8).toUpperCase()}
@@ -621,60 +703,60 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                       </div>
 
                       {/* SECCIÓN 1: IDENTIFICACIÓN PARCELARIA Y CATASTRAL */}
-                      <div className="space-y-1.5">
+                      <div className="space-y-1">
                         <span className="text-[11px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
                           <Sprout size={14} className="text-emerald-600" />
                           1. Ficha Catastral & Identificación del Cultivo
                         </span>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 border-2 border-slate-300 rounded-2xl p-3 bg-slate-50 text-xs font-mono">
-                          <div className="space-y-1">
+                        <div className="p2-sec1-grid grid grid-cols-3 gap-2.5 border-2 border-slate-300 rounded-xl p-2.5 bg-slate-50 text-[11px] font-mono">
+                          <div className="space-y-0.5">
                             <span className="text-[9px] text-slate-400 uppercase font-bold block">Unidad Productiva / Lote:</span>
-                            <strong className="text-sm text-slate-950 font-black block">{plot.name}</strong>
-                            <span className="text-[11px] text-slate-600 block">ID: <strong>{plot.id}</strong></span>
-                            <span className="text-[11px] text-slate-600 block">Tipo: <strong>{plot.type || 'Ensayo / Producción'}</strong></span>
-                            <span className="text-[11px] text-slate-600 block">Estado: <strong className="text-emerald-700">{statusDisplay}</strong></span>
+                            <strong className="text-xs text-slate-950 font-black block">{plot.name}</strong>
+                            <span className="text-[10px] text-slate-600 block">ID: <strong>{plot.id}</strong></span>
+                            <span className="text-[10px] text-slate-600 block">Tipo: <strong>{plot.type || 'Ensayo / Producción'}</strong></span>
+                            <span className="text-[10px] text-slate-600 block">Estado: <strong className="text-emerald-700">{statusDisplay}</strong></span>
                           </div>
 
-                          <div className="space-y-1">
+                          <div className="space-y-0.5">
                             <span className="text-[9px] text-slate-400 uppercase font-bold block">Establecimiento Rural:</span>
-                            <strong className="text-sm text-slate-950 font-black block">{location?.name || 'Establecimiento Rural'}</strong>
-                            <span className="text-[11px] text-slate-600 block">Ubicación: {location?.city || ''}, {location?.province || ''}</span>
-                            <span className="text-[11px] text-slate-600 block truncate" title={location?.address}>Dirección: {location?.address || 'Zona Rural'}</span>
-                            <span className="text-[11px] text-slate-600 block">RENSPA: <strong>{location?.renspaNumber || 'En trámite'}</strong></span>
+                            <strong className="text-xs text-slate-950 font-black block">{location?.name || 'Establecimiento Rural'}</strong>
+                            <span className="text-[10px] text-slate-600 block">Ubicación: {location?.city || ''}, {location?.province || ''}</span>
+                            <span className="text-[10px] text-slate-600 block truncate" title={location?.address}>Dirección: {location?.address || 'Zona Rural'}</span>
+                            <span className="text-[10px] text-slate-600 block">RENSPA: <strong>{location?.renspaNumber || 'En trámite'}</strong></span>
                           </div>
 
-                          <div className="space-y-1">
+                          <div className="space-y-0.5">
                             <span className="text-[9px] text-slate-400 uppercase font-bold block">Genética Certificada (INASE):</span>
-                            <strong className="text-sm text-emerald-800 font-black block">{variety?.name || 'Cultivar Homologado'}</strong>
-                            <span className="text-[11px] text-slate-600 block">RNC INASE: <strong>{variety?.inaseRncNumber || 'Certificación RNC'}</strong></span>
-                            <span className="text-[11px] text-slate-600 block">Destino: <strong>{variety?.usage || 'Fibra / Grano'}</strong></span>
-                            <span className="text-[11px] text-slate-600 block">Fotoperíodo: <strong>{variety?.photoperiodType || 'Monoica'}</strong></span>
+                            <strong className="text-xs text-emerald-800 font-black block">{variety?.name || 'Cultivar Homologado'}</strong>
+                            <span className="text-[10px] text-slate-600 block">RNC INASE: <strong>{variety?.inaseRncNumber || 'Certificación RNC'}</strong></span>
+                            <span className="text-[10px] text-slate-600 block">Destino: <strong>{variety?.usage || 'Fibra / Grano'}</strong></span>
+                            <span className="text-[10px] text-slate-600 block">Fotoperíodo: <strong>{variety?.photoperiodType || 'Monoica'}</strong></span>
                           </div>
                         </div>
                       </div>
 
                       {/* SECCIÓN 2: GEODESIA, CENTROIDE Y TELEDETECCIÓN */}
-                      <div className="space-y-1.5">
+                      <div className="space-y-1">
                         <span className="text-[11px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
                           <Compass size={14} className="text-emerald-600" />
                           2. Georreferenciación Geodésica & Monitoreo Satelital
                         </span>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 text-xs font-mono">
-                          <div className="p-2.5 bg-slate-100 rounded-xl border border-slate-200">
+                        <div className="p2-sec2-grid grid grid-cols-4 gap-2 text-xs font-mono">
+                          <div className="p-2 bg-slate-100 rounded-xl border border-slate-200">
                             <span className="text-[9px] uppercase text-slate-500 font-bold block">Superficie</span>
-                            <strong className="text-sm font-black text-slate-900 block">{surfaceDisplay}</strong>
+                            <strong className="text-xs font-black text-slate-900 block">{surfaceDisplay}</strong>
                           </div>
-                          <div className="p-2.5 bg-slate-100 rounded-xl border border-slate-200">
+                          <div className="p-2 bg-slate-100 rounded-xl border border-slate-200">
                             <span className="text-[9px] uppercase text-slate-500 font-bold block">Centroide GPS</span>
-                            <strong className="text-xs font-black text-slate-900 block">{formattedLat}, {formattedLng}</strong>
+                            <strong className="text-[11px] font-black text-slate-900 block">{formattedLat}, {formattedLng}</strong>
                           </div>
-                          <div className="p-2.5 bg-slate-100 rounded-xl border border-slate-200">
+                          <div className="p-2 bg-slate-100 rounded-xl border border-slate-200">
                             <span className="text-[9px] uppercase text-slate-500 font-bold block">Polígono Vectorial</span>
-                            <strong className="text-xs font-bold text-slate-900 block">
+                            <strong className="text-[11px] font-bold text-slate-900 block">
                               {plot.polygon && plot.polygon.length >= 3 ? `${plot.polygon.length} Vértices` : 'Centroide'}
                             </strong>
                           </div>
-                          <div className="p-2.5 bg-slate-100 rounded-xl border border-slate-200">
+                          <div className="p-2 bg-slate-100 rounded-xl border border-slate-200">
                             <span className="text-[9px] uppercase text-slate-500 font-bold block">Vigilancia Espectral</span>
                             <strong className="text-xs font-bold text-emerald-700 block">Sentinel-2</strong>
                           </div>
@@ -682,50 +764,52 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                       </div>
 
                       {/* SECCIÓN 3: TITULARIDAD, OPERADOR Y LICENCIAS ARICCAME */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs font-mono">
-                        <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                      <div className="p2-sec3-grid grid grid-cols-2 gap-2.5 text-xs font-mono">
+                        <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl space-y-0.5">
                           <span className="text-[9px] uppercase text-slate-500 font-bold block">Operador Titular Responsable</span>
                           <strong className="text-xs font-black text-slate-900 block">PatagonianC LTDA Cooperativa de Trabajo</strong>
-                          <span className="text-[11px] text-emerald-800 font-bold block">CUIT: 30-71816113-0 · HempC (Unidad de Negocios)</span>
-                          <span className="text-[11px] text-slate-600 block">Titular Predial: <strong>{client?.name || location?.ownerName || 'HempC Red Cooperativa'}</strong></span>
+                          <span className="text-[10px] text-emerald-800 font-bold block">CUIT: 30-71816113-0 · HempC (Unidad de Negocios)</span>
+                          <span className="text-[10px] text-slate-600 block">Titular Predial: <strong>{client?.name || location?.ownerName || 'HempC Red Cooperativa'}</strong></span>
                         </div>
 
-                        <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                        <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl space-y-0.5">
                           <span className="text-[9px] uppercase text-slate-500 font-bold block">Licencias y Fiscalización Sanitaria</span>
-                          <span className="text-[11px] text-slate-700 block">Lic. Agrícola ARICCAME: <strong>EX-2024-134354227</strong></span>
-                          <span className="text-[11px] text-slate-700 block">Lic. Industrial ARICCAME: <strong>EX-2025-119427833</strong></span>
+                          <span className="text-[10px] text-slate-700 block">Lic. Agrícola ARICCAME: <strong>EX-2024-134354227</strong></span>
+                          <span className="text-[10px] text-slate-700 block">Lic. Industrial ARICCAME: <strong>EX-2025-119427833</strong></span>
                           <span className="text-[10px] text-emerald-700 font-bold block">SENASA Resoluciones N° 350/99 y 637/11</span>
                         </div>
                       </div>
 
-                      {/* SECCIÓN 4: AUDITORÍA DIGITAL Y RECUADROS DE FIRMAS */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-center border-t-2 border-slate-300 pt-3">
-                        <div className="flex items-center gap-3 p-2.5 bg-slate-50 rounded-2xl border border-slate-200">
-                          <QRCodeSVG value={traceUrl} size={68} level="H" />
-                          <div className="text-[9px] font-mono space-y-0.5">
-                            <strong className="font-black text-slate-900 block">QR Auditoría Digital</strong>
-                            <span className="text-slate-500 block leading-tight">Historial satelital y DDJJ oficial</span>
-                            <span className="text-emerald-700 font-bold block">SENASA · INASE · ARICCAME</span>
+                      {/* SECCIÓN 4: AUDITORÍA DIGITAL Y RECUADROS DE FIRMAS (SIEMPRE VISIBLE Y SIN DESBORDE) */}
+                      <div className="p2-sec4-grid grid grid-cols-3 gap-2.5 items-stretch border-t-2 border-slate-300 pt-2.5">
+                        <div className="flex items-center gap-2.5 p-2 bg-slate-50 rounded-xl border border-slate-200">
+                          <div className="bg-white p-1 rounded-lg border border-slate-200 shrink-0">
+                            <QRCodeSVG value={traceUrl} size={58} level="M" />
+                          </div>
+                          <div className="text-[9px] font-mono space-y-0.5 min-w-0">
+                            <strong className="font-black text-slate-900 block truncate text-[10px]">QR Auditoría Digital</strong>
+                            <span className="text-slate-500 block text-[8px] leading-tight">Historial satelital y DDJJ oficial</span>
+                            <span className="text-emerald-700 font-bold block text-[8px]">SENASA · INASE · ARICCAME</span>
                           </div>
                         </div>
 
                         {/* Caja Firma Responsable Técnico */}
-                        <div className="p-2.5 border-2 border-dashed border-slate-400 rounded-xl h-22 flex flex-col justify-between text-[9px] font-mono">
-                          <span className="font-bold text-slate-500 uppercase">Firma Responsable Técnico / Agrónomo</span>
-                          <div className="border-t border-slate-300 pt-1 text-slate-400 text-center">Firma, Aclaración y Matrícula</div>
+                        <div className="p-2 border-2 border-dashed border-slate-400 rounded-xl h-20 flex flex-col justify-between text-[9px] font-mono">
+                          <span className="font-bold text-slate-600 uppercase text-[8.5px]">Firma Responsable Técnico / Agrónomo</span>
+                          <div className="border-t border-slate-300 pt-1 text-slate-400 text-center text-[8px]">Firma, Aclaración y Matrícula</div>
                         </div>
 
                         {/* Caja Visado Inspección Oficial */}
-                        <div className="p-2.5 border-2 border-dashed border-slate-400 rounded-xl h-22 flex flex-col justify-between text-[9px] font-mono">
-                          <span className="font-bold text-slate-500 uppercase">Inspección Oficial / Autoridad Rural</span>
-                          <div className="border-t border-slate-300 pt-1 text-slate-400 text-center">Sello, Fecha y Matrícula Inspector</div>
+                        <div className="p-2 border-2 border-dashed border-slate-400 rounded-xl h-20 flex flex-col justify-between text-[9px] font-mono">
+                          <span className="font-bold text-slate-600 uppercase text-[8.5px]">Inspección Oficial / Autoridad Rural</span>
+                          <div className="border-t border-slate-300 pt-1 text-slate-400 text-center text-[8px]">Sello, Fecha y Matrícula Inspector</div>
                         </div>
                       </div>
 
                       {/* FOOTER PÁGINA 2 */}
-                      <div className="flex flex-col sm:flex-row justify-between items-center text-[10px] font-mono text-slate-500 border-t-2 border-slate-300 pt-2 gap-1">
-                        <span className="font-bold">PatagonianC LTDA Cooperativa de Trabajo · CUIT: 30-71816113-0 · HempC</span>
-                        <span>Página 2 de 2 · Anexo Técnico y Geodésico · red.hempc.com.ar</span>
+                      <div className="flex justify-between items-center text-[9px] font-mono text-slate-500 border-t-2 border-slate-300 pt-2 gap-1">
+                        <span className="font-bold truncate">PatagonianC LTDA · CUIT: 30-71816113-0 · HempC</span>
+                        <span className="shrink-0">Pág. 2 de 2 · Anexo Técnico · red.hempc.com.ar</span>
                       </div>
                     </div>
                   </div>
@@ -895,14 +979,18 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
             </button>
 
             <a
-              href={`/#/trace/${plot.id}`}
+              href={traceUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3.5 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold transition"
+              className="flex items-center gap-1.5 px-3.5 py-2.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 rounded-xl text-xs font-bold transition"
             >
               <ExternalLink size={14} />
-              <span>Ver Trazabilidad en Vivo</span>
+              <span>Probar Trazabilidad QR en Vivo</span>
             </a>
+
+            <span className="hidden sm:inline-flex items-center text-[10px] font-mono text-slate-500 bg-slate-100 dark:bg-slate-800 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700">
+              Escaneo Móvil: <strong className="ml-1 text-slate-700 dark:text-slate-300">{publicBaseUrl.replace('https://', '')}</strong>
+            </span>
           </div>
 
           <div className="flex items-center gap-2.5">

@@ -24,8 +24,15 @@ export const VarietyPassportModal: React.FC<VarietyPassportModalProps> = ({
 
   if (!isOpen || !variety) return null;
 
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://hemp-net.vercel.app';
-  const traceUrl = `${baseUrl}/trace/${variety.id}`;
+  const baseUrl = (() => {
+    if (typeof window === 'undefined') return 'https://red.hempc.com.ar';
+    const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1' || host.includes('run.app') || host.includes('aistudio')) {
+      return 'https://red.hempc.com.ar';
+    }
+    return window.location.origin;
+  })();
+  const traceUrl = `${baseUrl}/#/trace/${variety.id}`;
 
   // Código de barras normalizado (ej: INASE-RNC-8492-23 o VAR-USO31)
   const rawCode = variety.inaseRncNumber || `VAR-${variety.name.replace(/[^A-Z0-9]/gi, '').toUpperCase()}`;

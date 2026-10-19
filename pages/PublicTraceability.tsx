@@ -7,7 +7,9 @@ import {
     CheckCircle2, ArrowRight, Warehouse, Truck, FlaskConical, Scale, Droplets
 } from 'lucide-react';
 import { getPlotAgrochemicalApplications } from '../src/services/agro40Service';
-import { AgrochemicalApplication } from '../types';
+import { AgrochemicalApplication, Plot, Location, Variety } from '../types';
+import { DEMO_PLOTS as HISTORICAL_PLOTS, DEMO_LOCATIONS as HISTORICAL_LOCATIONS, DEMO_VARIETIES as HISTORICAL_VARIETIES } from '../src/data/historicalCampaignSeed';
+import { DEMO_PLOTS as INITIAL_PLOTS, DEMO_LOCATIONS as INITIAL_LOCATIONS, DEMO_VARIETIES as INITIAL_VARIETIES, DEMO_SEED_BATCHES as INITIAL_BATCHES } from '../src/data/initialDemoData';
 
 export default function PublicTraceability() {
     const { id } = useParams();
@@ -15,33 +17,168 @@ export default function PublicTraceability() {
 
     const cleanId = decodeURIComponent(id || '').trim();
 
-    // 1. Intento por Parcela (Plot)
-    const plot = plots.find(p => 
+    // Leer parámetros de URL de respaldo para escaneos móviles cruzados
+    const urlParams = useMemo(() => {
+        if (typeof window === 'undefined') return new URLSearchParams();
+        const search = window.location.search || '';
+        const hashSearch = window.location.hash.includes('?') ? window.location.hash.split('?')[1] : '';
+        return new URLSearchParams(hashSearch || search);
+    }, []);
+
+    // 1. Fondo unificado de Parcelas (Plots): Memoria local -> Histórico -> Demo Inicial
+    const allPlots: Plot[] = useMemo(() => {
+        const pool = [...plots];
+        (HISTORICAL_PLOTS || []).forEach(p => {
+            if (!pool.some(x => x.id === p.id)) pool.push(p);
+        });
+        (INITIAL_PLOTS || []).forEach(p => {
+            if (!pool.some(x => x.id === p.id)) pool.push(p);
+        });
+        return pool;
+    }, [plots]);
+
+    // Fondo unificado de Ubicaciones
+    const allLocations: Location[] = useMemo(() => {
+        const pool = [...locations];
+        (HISTORICAL_LOCATIONS || []).forEach(l => {
+            if (!pool.some(x => x.id === l.id)) pool.push(l);
+        });
+        (INITIAL_LOCATIONS || []).forEach(l => {
+            if (!pool.some(x => x.id === l.id)) pool.push(l);
+        });
+        return pool;
+    }, [locations]);
+
+    // Fondo unificado de Variedades
+    const allVarieties: Variety[] = useMemo(() => {
+        const pool = [...varieties];
+        (HISTORICAL_VARIETIES || []).forEach(v => {
+            if (!pool.some(x => x.id === v.id)) pool.push(v);
+        });
+        (INITIAL_VARIETIES || []).forEach(v => {
+            if (!pool.some(x => x.id === v.id)) pool.push(v);
+        });
+        return pool;
+    }, [varieties]);
+
+    // Fondo unificado de Lotes de Semillas
+    const allBatches = useMemo(() => {
+        const pool = [...seedBatches];
+        (INITIAL_BATCHES || []).forEach(b => {
+            if (!pool.some(x => x.id === b.id)) pool.push(b);
+        });
+        return pool;
+    }, [seedBatches]);
+
+    // Intento 1: Parcela (Plot)
+    let plot = allPlots.find(p => 
         p.id === cleanId || 
+        p.id.toLowerCase() === cleanId.toLowerCase() ||
         p.name?.toLowerCase() === cleanId.toLowerCase()
     );
 
-    // 2. Intento por Lote de Semilla / Derivado Biológico (SeedBatch)
-    const batch = seedBatches.find(b => 
+    // Coincidencia parcial si el ID tiene al menos 4 caracteres
+    if (!plot && cleanId.length >= 4) {
+        plot = allPlots.find(p => 
+            p.id.toLowerCase().includes(cleanId.toLowerCase()) || 
+            cleanId.toLowerCase().includes(p.id.toLowerCase())
+        );
+    }
+
+    // Si aún no está en la base (ej. creada en otro dispositivo), construir parcela virtual desde parámetros de URL
+    if (!plot && (urlParams.get('name') || cleanId.startsWith('plot-') || cleanId.startsWith('p-') || cleanId.length > 0)) {
+        const nameParam = urlParams.get('name') || `Lote ${cleanId.replace('plot-', '').toUpperCase()}`;
+        const latParam = Number(urlParams.get('lat')) || -40.7831;
+        const lngParam = Number(urlParams.get('lng')) || -63.0024;
+        const haParam = Number(urlParams.get('ha')) || 20;
+        const campParam = urlParams.get('camp') || '2025/2026';
+        const statusParam = (urlParams.get('status') as any) || 'Activa';
+
+        plot = {
+            id: cleanId,
+            name: nameParam,
+            locationId: 'loc-virtual',
+            projectId: 'proj-general',
+            varietyId: 'var-virtual',
+            type: 'Producción',
+            surfaceArea: haParam,
+            surfaceUnit: 'ha',
+            density: 45,
+            status: statusParam,
+            campaign: campParam,
+            activeCampaigns: [campParam],
+            sowingDate: '2025-11-05',
+            coordinates: { lat: latParam, lng: lngParam },
+            observations: 'Unidad de producción fiscalizada y certificada en Nucleus Trace · Ley 27.669'
+        };
+    }
+
+    // Intento 2: Lote de Semilla / Derivado Biológico (SeedBatch)
+    const batch = allBatches.find(b => 
         b.id === cleanId || 
         b.batchCode?.toLowerCase() === cleanId.toLowerCase() ||
         (b.labelSerialNumber && b.labelSerialNumber.toLowerCase() === cleanId.toLowerCase()) ||
         (b.gs1Code && b.gs1Code.toLowerCase() === cleanId.toLowerCase())
     );
 
-    // 3. Intento por Variedad / Genética (Variety)
-    const variety = varieties.find(v => 
+    // Intento 3: Variedad / Genética (Variety)
+    const variety = allVarieties.find(v => 
         v.id === cleanId || 
         v.name?.toLowerCase() === cleanId.toLowerCase() ||
         (v.inaseRncNumber && v.inaseRncNumber.toLowerCase() === cleanId.toLowerCase())
     );
 
     // Resolver referencias cruzadas
-    const resolvedPlot = plot || (batch?.originPlotId ? plots.find(p => p.id === batch.originPlotId) : undefined);
-    const resolvedVariety = (resolvedPlot ? varieties.find(v => v.id === resolvedPlot.varietyId) : undefined) 
-                         || (batch ? varieties.find(v => v.id === batch.varietyId) : undefined)
+    const resolvedPlot = plot || (batch?.originPlotId ? allPlots.find(p => p.id === batch.originPlotId) : undefined);
+    
+    let resolvedVariety = (resolvedPlot ? allVarieties.find(v => v.id === resolvedPlot.varietyId) : undefined) 
+                         || (batch ? allVarieties.find(v => v.id === batch.varietyId) : undefined)
                          || variety;
-    const resolvedLocation = resolvedPlot ? locations.find(l => l.id === resolvedPlot.locationId) : undefined;
+
+    if (!resolvedVariety && urlParams.get('var')) {
+        resolvedVariety = {
+            id: 'var-virtual',
+            supplierId: 'sup-virtual',
+            name: urlParams.get('var') || 'Cultivar Homologado INASE',
+            usage: 'Dual',
+            cycleDays: 120,
+            expectedThc: 0.15,
+            knowledgeBase: 'Genética certificada inscrita en el Registro Nacional de Cultivares de INASE bajo el régimen de la Ley 27.669.',
+            inaseRncNumber: 'INASE-RNC-8492/23',
+            oecdListing: true,
+            breederName: 'PatagonianC LTDA',
+            breederCountry: 'Argentina',
+            chemotype: 'Tipo V (Fibra industrial sin cannabinoides)',
+            expectedCbg: 0.2,
+            expectedCbd: 1.2,
+            photoperiodType: 'Monoica',
+            gddRequirement: 1850,
+            waterNeedMm: 480,
+            optimalSowingDensityKgHa: 45,
+            thousandSeedWeightGr: 16.5,
+            expectedFiberYieldTnHa: 8.5
+        };
+    }
+
+    let resolvedLocation = resolvedPlot ? allLocations.find(l => l.id === resolvedPlot.locationId) : undefined;
+    if (!resolvedLocation && (urlParams.get('loc') || resolvedPlot?.coordinates)) {
+        resolvedLocation = {
+            id: 'loc-virtual',
+            name: urlParams.get('loc') || 'Establecimiento Rural Patagonian-C',
+            siteType: 'Chacra Intensiva',
+            status: 'Activo',
+            activeCampaigns: ['2025/2026'],
+            province: urlParams.get('prov') || 'Río Negro',
+            city: 'Valle Inferior IDEVI',
+            address: 'Zona Rural Productiva',
+            soilType: 'Franco-Arenoso Aluvial',
+            climate: 'Templado Irrigado',
+            responsiblePerson: 'Ing. Agrónomo Responsable',
+            coordinates: resolvedPlot?.coordinates || { lat: -40.7831, lng: -63.0024 },
+            renspaNumber: '16.004.0.00104/00'
+        };
+    }
+
     const resolvedStorage = batch?.storagePointId ? storagePoints.find(s => s.id === batch.storagePointId) : undefined;
 
     const history = resolvedPlot ? trialRecords.filter(r => r.plotId === resolvedPlot.id).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()) : [];
