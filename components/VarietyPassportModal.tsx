@@ -75,10 +75,13 @@ export const VarietyPassportModal: React.FC<VarietyPassportModalProps> = ({
             <div>
               <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-slate-900">
                 <ShieldCheck size={18} className="text-emerald-600" />
-                <span>NUCLEUS GENETICS · PASAPORTE FITOTÉCNICO</span>
+                <span>PATAGONIAN-C LTDA COOPERATIVA DE TRABAJO</span>
               </div>
-              <p className="text-[9px] text-slate-500 uppercase font-bold mt-0.5">
-                Registro Nacional de Cultivares (INASE / OECD / UE) · Ley 27.669
+              <p className="text-[10px] text-emerald-800 uppercase font-black font-mono mt-0.5">
+                CUIT: 30-71816113-0 · HempC (Unidad de Negocios)
+              </p>
+              <p className="text-[8px] text-slate-500 uppercase font-bold">
+                Pasaporte Fitotécnico Oficial · Registro INASE / OECD / UE · Ley 27.669
               </p>
             </div>
             <div className="text-right">
@@ -128,9 +131,12 @@ export const VarietyPassportModal: React.FC<VarietyPassportModalProps> = ({
                 <span className="text-[8px] font-black uppercase text-slate-400 block tracking-wider">
                   Titular & Operador Responsable
                 </span>
-                <strong className="text-sm font-black uppercase text-slate-900">
-                  Cooperativa PatagonianC LTDA
+                <strong className="text-sm font-black uppercase text-slate-900 block">
+                  PatagonianC LTDA Cooperativa de Trabajo
                 </strong>
+                <span className="text-[10px] font-mono font-bold text-emerald-800 block">
+                  HempC (Unidad de Negocios)
+                </span>
               </div>
               <div className="text-right">
                 <span className="text-[8px] font-black uppercase text-slate-400 block">CUIT</span>
@@ -248,7 +254,7 @@ export const VarietyPassportModal: React.FC<VarietyPassportModalProps> = ({
 
           {/* PIE DE PASAPORTE */}
           <div className="pt-2 border-t border-slate-200 flex flex-wrap justify-between items-center text-[8px] text-slate-500 gap-1">
-            <span>Operador: Cooperativa PatagonianC LTDA · CUIT 30-71816113-0</span>
+            <span className="font-bold">PatagonianC LTDA Cooperativa de Trabajo · CUIT: 30-71816113-0 · HempC (Unidad de Negocios)</span>
             <span>Lic. Agrícola EX-2024-134354227 · Lic. Industrial EX-2025-119427833</span>
           </div>
         </div>

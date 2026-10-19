@@ -76,10 +76,13 @@ export const TraceabilityLabelModal: React.FC<TraceabilityLabelModalProps> = ({
             <div>
               <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-slate-900">
                 <Sprout size={16} className="text-emerald-600" />
-                <span>NUCLEUS TRACE · PASAPORTE BIOLÓGICO</span>
+                <span>PATAGONIAN-C LTDA COOPERATIVA DE TRABAJO</span>
               </div>
-              <p className="text-[9px] text-slate-500 uppercase font-bold mt-0.5">
-                Fiscalización Oficial INASE / ARICCAME / GACP
+              <p className="text-[10px] text-emerald-800 uppercase font-black font-mono mt-0.5">
+                CUIT: 30-71816113-0 · HempC (Unidad de Negocios)
+              </p>
+              <p className="text-[8px] text-slate-500 uppercase font-bold">
+                Pasaporte Biológico · Fiscalización Oficial INASE / ARICCAME / SENASA
               </p>
             </div>
             <div className="text-right">
@@ -172,9 +175,12 @@ export const TraceabilityLabelModal: React.FC<TraceabilityLabelModalProps> = ({
                 <span className="text-[8px] font-black uppercase text-slate-400 block tracking-wider">
                   Titular & Operador Responsable
                 </span>
-                <strong className="text-xs font-black uppercase text-slate-900">
-                  Cooperativa PatagonianC LTDA
+                <strong className="text-xs font-black uppercase text-slate-900 block">
+                  PatagonianC LTDA Cooperativa de Trabajo
                 </strong>
+                <span className="text-[9px] font-mono font-bold text-emerald-800 block">
+                  HempC (Unidad de Negocios)
+                </span>
               </div>
               <div className="text-right">
                 <span className="text-[8px] font-black uppercase text-slate-400 block">CUIT</span>
@@ -240,8 +246,8 @@ export const TraceabilityLabelModal: React.FC<TraceabilityLabelModalProps> = ({
 
           {/* PIE DE ETIQUETA */}
           <div className="pt-2 border-t border-slate-200 flex flex-wrap justify-between items-center text-[8px] text-slate-500 gap-1">
-            <span>Cooperativa PatagonianC LTDA · CUIT 30-71816113-0 · Almacén: {storagePoint?.name || 'Central Pergamino'}</span>
-            <span>Lic. Agrícola EX-2024-134354227 · Lic. Industrial EX-2025-119427833</span>
+            <span className="font-bold">PatagonianC LTDA Cooperativa de Trabajo · CUIT: 30-71816113-0 · HempC (Unidad de Negocios)</span>
+            <span>Almacén: {storagePoint?.name || 'Central Pergamino'} · Lic. ARICCAME EX-2024-134354227</span>
           </div>
         </div>
 

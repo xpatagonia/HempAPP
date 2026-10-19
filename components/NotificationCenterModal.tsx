@@ -169,7 +169,9 @@ export default function NotificationCenterModal({ isOpen, onClose }: Notificatio
                   </span>
                 )}
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Service Worker & Alertas Agronómicas en Vivo</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                PatagonianC LTDA · CUIT: 30-71816113-0 · HempC (Unidad de Negocios)
+              </p>
             </div>
           </div>
           <button 
@@ -474,27 +476,33 @@ export default function NotificationCenterModal({ isOpen, onClose }: Notificatio
           )}
         </div>
 
-        {/* Footer con Quick Actions */}
-        <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/60 flex items-center justify-between text-xs">
-          <button
-            onClick={() => handleTriggerTest('plot')}
-            className="flex items-center space-x-1.5 text-rose-600 dark:text-rose-400 font-bold hover:underline"
-          >
-            <ShieldAlert size={14} />
-            <span>Simular Helada</span>
-          </button>
+        {/* Footer con Quick Actions & Datos Cooperativos */}
+        <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/60 flex flex-col gap-2.5 text-xs">
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => handleTriggerTest('plot')}
+              className="flex items-center space-x-1.5 text-rose-600 dark:text-rose-400 font-bold hover:underline"
+            >
+              <ShieldAlert size={14} />
+              <span>Simular Helada</span>
+            </button>
 
-          <button
-            onClick={() => handleTriggerTest('task')}
-            className="flex items-center space-x-1.5 text-amber-600 dark:text-amber-400 font-bold hover:underline"
-          >
-            <Clock size={14} />
-            <span>Simular Labor</span>
-          </button>
+            <button
+              onClick={() => handleTriggerTest('task')}
+              className="flex items-center space-x-1.5 text-amber-600 dark:text-amber-400 font-bold hover:underline"
+            >
+              <Clock size={14} />
+              <span>Simular Labor</span>
+            </button>
 
-          <span className="text-[10px] font-mono text-slate-400">
-            Web Push Protocol
-          </span>
+            <span className="text-[10px] font-mono text-slate-400">
+              Web Push Protocol
+            </span>
+          </div>
+
+          <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800/60 text-[9px] font-mono text-slate-500 dark:text-slate-400 text-center">
+            PatagonianC LTDA Cooperativa de Trabajo · CUIT: 30-71816113-0 · HempC (Unidad de Negocios)
+          </div>
         </div>
 
       </div>

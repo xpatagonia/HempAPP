@@ -96,7 +96,7 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-mono font-bold uppercase text-emerald-600 dark:text-emerald-400 tracking-widest bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-500/20">
-                  Ley Nacional 27.669 · Dec. 405/2023
+                  PatagonianC LTDA Cooperativa de Trabajo · CUIT: 30-71816113-0 · HempC (Unidad de Negocios)
                 </span>
                 <span className="text-[10px] font-mono font-black uppercase text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
                   Campaña {campaignDisplay}
@@ -201,14 +201,17 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                     <div className="flex items-center gap-2">
                       <span className="w-4 h-4 rounded-full bg-emerald-600 inline-block"></span>
                       <p className="text-xs font-black uppercase tracking-widest text-slate-900">
-                        REPÚBLICA ARGENTINA · LEY NACIONAL N° 27.669
+                        REPÚBLICA ARGENTINA · LEY NACIONAL N° 27.669 & DECRETO 405/2023
                       </p>
                     </div>
                     <h1 className="text-lg md:text-2xl font-black uppercase tracking-tight text-slate-950 mt-1">
-                      MARCO REGULATORIO PARA LA INDUSTRIA DEL CÁÑAMO Y CANNABIS
+                      PATAGONIAN-C LTDA COOPERATIVA DE TRABAJO
                     </h1>
-                    <p className="text-[11px] font-mono font-bold text-slate-700 uppercase mt-0.5">
-                      Decreto Reglamentario 405/2023 · Fiscalización ARICCAME / INASE / SENASA
+                    <p className="text-[13px] font-mono font-black text-emerald-800 uppercase mt-0.5">
+                      CUIT: 30-71816113-0 · HempC (Unidad de Negocios)
+                    </p>
+                    <p className="text-[10px] font-mono font-bold text-slate-600 uppercase mt-0.5">
+                      Marco Regulatorio del Cáñamo y Cannabis · Fiscalización ARICCAME / INASE / SENASA
                     </p>
                   </div>
                   <div className="text-right shrink-0 bg-slate-100 p-3 rounded-2xl border-2 border-slate-300">
@@ -304,10 +307,13 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                         </strong>
                       </div>
                       <div className="p-2.5 bg-slate-100 rounded-xl border border-slate-200 col-span-2 sm:col-span-1">
-                        <span className="text-[9px] font-mono font-bold uppercase text-slate-500 block">Titular / Operador</span>
+                        <span className="text-[9px] font-mono font-bold uppercase text-slate-500 block">Titular / Operador Responsable</span>
                         <strong className="text-xs font-bold text-slate-900 truncate block">
-                          {client?.name || location?.ownerName || 'HempC Red Cooperativa'}
+                          PatagonianC LTDA · CUIT: 30-71816113-0
                         </strong>
+                        <span className="text-[9px] font-mono text-emerald-800 font-bold block truncate">
+                          HempC (Unidad de Negocios) {client?.name ? `· Socio: ${client.name}` : ''}
+                        </span>
                       </div>
                     </div>
 
@@ -331,9 +337,9 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                 </div>
 
                 {/* 5. PIE DEL CARTEL */}
-                <div className="flex justify-between items-center text-[9px] font-mono text-slate-400 border-t border-slate-200 pt-2">
-                  <span>Plataforma HempTrack · Sistema de Trazabilidad Geodésica</span>
-                  <span>Emisión: {new Date().toLocaleDateString('es-AR')} · SHA256 Oficial</span>
+                <div className="flex flex-col sm:flex-row justify-between items-center text-[9px] font-mono text-slate-500 border-t-2 border-slate-300 pt-2 gap-1">
+                  <span className="font-bold">PatagonianC LTDA Cooperativa de Trabajo · CUIT: 30-71816113-0 · HempC (Unidad de Negocios)</span>
+                  <span>Plataforma HempTrack · Emisión: {new Date().toLocaleDateString('es-AR')} · red.hempc.com.ar</span>
                 </div>
               </div>
             </div>
@@ -359,17 +365,20 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                   <div>
                     <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-slate-900">
                       <Sprout size={18} className="text-emerald-600" />
-                      <span>PASAPORTE BIOLÓGICO DE PARCELA</span>
+                      <span>PATAGONIAN-C LTDA COOPERATIVA DE TRABAJO</span>
                     </div>
-                    <p className="text-[9px] text-slate-500 uppercase font-bold mt-0.5">
-                      HempTrack · Red Cooperativa Agro 4.0
+                    <p className="text-[11px] font-black text-emerald-800 uppercase font-mono mt-0.5">
+                      CUIT: 30-71816113-0 · HempC (Unidad de Negocios)
+                    </p>
+                    <p className="text-[9px] text-slate-600 uppercase font-bold">
+                      Pasaporte Biológico de Parcela · Trazabilidad Agro 4.0
                     </p>
                   </div>
                   <div className="text-right">
                     <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-emerald-600 text-white">
                       {statusDisplay}
                     </span>
-                    <p className="text-[8px] text-slate-400 mt-0.5">LEY 27.669</p>
+                    <p className="text-[8px] text-slate-400 mt-0.5 font-bold">LEY 27.669</p>
                   </div>
                 </div>
 
@@ -434,8 +443,9 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                 </div>
 
                 {/* PIE */}
-                <div className="text-[8px] font-mono text-slate-400 text-center border-t border-slate-100 pt-2">
-                  Documento emitido electrónicamente · red.hempc.com.ar
+                <div className="text-[8px] font-mono text-slate-500 text-center border-t border-slate-200 pt-2 space-y-0.5">
+                  <div className="font-bold text-slate-700">PatagonianC LTDA Cooperativa de Trabajo · CUIT: 30-71816113-0 · HempC (Unidad de Negocios)</div>
+                  <div className="text-slate-400">Documento emitido electrónicamente · red.hempc.com.ar</div>
                 </div>
               </div>
             </div>

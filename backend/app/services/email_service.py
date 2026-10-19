@@ -47,7 +47,8 @@ class EmailNotificationService:
         <body>
           <div class="container">
             <div class="header">
-              <span style="font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #a7f3d0; font-weight: bold;">Red Cooperativa Nucleus</span>
+              <div style="font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: #a7f3d0; font-weight: 800; margin-bottom: 2px;">PatagonianC LTDA Cooperativa de Trabajo</div>
+              <div style="font-size: 12px; font-weight: 900; color: #ffffff; margin-bottom: 6px;">CUIT: 30-71816113-0 · HempC (Unidad de Negocios)</div>
               <h1 style="margin: 6px 0 0 0; font-size: 22px; font-weight: 800;">Bienvenido al Equipo de Campo</h1>
             </div>
             <div class="content">
@@ -68,8 +69,9 @@ class EmailNotificationService:
               </div>
             </div>
             <div class="footer">
-              Enviado automáticamente por <strong>notificaciones@hempc.com.ar</strong><br>
-              Plataforma de la Red Cooperativa del Cáñamo Industrial Argentino • ARICCAME / INASE / SENASA
+              <div style="margin-bottom: 6px; font-weight: 800; color: #334155; font-size: 12px;">PatagonianC LTDA Cooperativa de Trabajo · CUIT: 30-71816113-0 · HempC (Unidad de Negocios)</div>
+              <div style="font-size: 11px; color: #64748b; margin-bottom: 4px;">Enviado automáticamente por <strong>notificaciones@hempc.com.ar</strong></div>
+              <div style="font-size: 10px; color: #94a3b8;">Plataforma Oficial de la Red Cooperativa del Cáñamo Industrial Argentino • ARICCAME / INASE / SENASA • red.hempc.com.ar</div>
             </div>
           </div>
         </body>
@@ -136,8 +138,9 @@ class EmailNotificationService:
         <body>
           <div class="container">
             <div class="header">
-              <span style="font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #fecdd3; font-weight: bold;">HempC Nucleus • Monitoreo Crítico Agronómico</span>
-              <h1 style="margin: 8px 0 0 0; font-size: 20px; font-weight: 900;">{title}</h1>
+              <div style="font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: #fecdd3; font-weight: 800; margin-bottom: 2px;">PatagonianC LTDA Cooperativa de Trabajo</div>
+              <div style="font-size: 12px; font-weight: 900; color: #ffffff; margin-bottom: 6px;">CUIT: 30-71816113-0 · HempC (Unidad de Negocios)</div>
+              <h1 style="margin: 6px 0 0 0; font-size: 20px; font-weight: 900;">{title}</h1>
             </div>
             <div class="content">
               <p style="font-size: 14px; margin-top: 0;">Estimado/a <strong>{req.to_name}</strong>,</p>
@@ -160,8 +163,9 @@ class EmailNotificationService:
               </div>
             </div>
             <div class="footer">
-              Enviado automáticamente por <strong>notificaciones@hempc.com.ar</strong><br>
-              Plataforma de la Red Cooperativa del Cáñamo Industrial Argentino • INASE / SENASA / ARICCAME
+              <div style="margin-bottom: 6px; font-weight: 800; color: #334155; font-size: 12px;">PatagonianC LTDA Cooperativa de Trabajo · CUIT: 30-71816113-0 · HempC (Unidad de Negocios)</div>
+              <div style="font-size: 11px; color: #64748b; margin-bottom: 4px;">Enviado automáticamente por <strong>notificaciones@hempc.com.ar</strong></div>
+              <div style="font-size: 10px; color: #94a3b8;">Plataforma Oficial de la Red Cooperativa del Cáñamo Industrial Argentino • INASE / SENASA / ARICCAME • red.hempc.com.ar</div>
             </div>
           </div>
         </body>
@@ -190,7 +194,8 @@ class EmailNotificationService:
         <body>
           <div class="container">
             <div class="header">
-              <span style="font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #a7f3d0; font-weight: bold;">Red Cooperativa Nucleus • Seguridad</span>
+              <div style="font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: #a7f3d0; font-weight: 800; margin-bottom: 2px;">PatagonianC LTDA Cooperativa de Trabajo</div>
+              <div style="font-size: 12px; font-weight: 900; color: #ffffff; margin-bottom: 6px;">CUIT: 30-71816113-0 · HempC (Unidad de Negocios)</div>
               <h1 style="margin: 6px 0 0 0; font-size: 22px; font-weight: 800;">Restablecimiento de Contraseña</h1>
             </div>
             <div class="content">
@@ -214,8 +219,9 @@ class EmailNotificationService:
               </div>
             </div>
             <div class="footer">
-              Enviado automáticamente por <strong>notificaciones@hempc.com.ar</strong><br>
-              Plataforma de la Red Cooperativa del Cáñamo Industrial Argentino • ARICCAME / INASE / SENASA
+              <div style="margin-bottom: 6px; font-weight: 800; color: #334155; font-size: 12px;">PatagonianC LTDA Cooperativa de Trabajo · CUIT: 30-71816113-0 · HempC (Unidad de Negocios)</div>
+              <div style="font-size: 11px; color: #64748b; margin-bottom: 4px;">Enviado automáticamente por <strong>notificaciones@hempc.com.ar</strong></div>
+              <div style="font-size: 10px; color: #94a3b8;">Plataforma Oficial de la Red Cooperativa del Cáñamo Industrial Argentino • ARICCAME / INASE / SENASA • red.hempc.com.ar</div>
             </div>
           </div>
         </body>
@@ -248,7 +254,8 @@ class EmailNotificationService:
         <body>
           <div class="container">
             <div class="header">
-              <span style="font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #a7f3d0; font-weight: bold;">Red Cooperativa Nucleus</span>
+              <div style="font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: #a7f3d0; font-weight: 800; margin-bottom: 2px;">PatagonianC LTDA Cooperativa de Trabajo</div>
+              <div style="font-size: 12px; font-weight: 900; color: #ffffff; margin-bottom: 6px;">CUIT: 30-71816113-0 · HempC (Unidad de Negocios)</div>
               <h1 style="margin: 6px 0 0 0; font-size: 22px; font-weight: 800;">Bienvenido a HempC Nucleus</h1>
             </div>
             <div class="content">
@@ -276,8 +283,9 @@ class EmailNotificationService:
               </div>
             </div>
             <div class="footer">
-              Enviado automáticamente por <strong>notificaciones@hempc.com.ar</strong><br>
-              Plataforma de la Red Cooperativa del Cáñamo Industrial Argentino
+              <div style="margin-bottom: 6px; font-weight: 800; color: #334155; font-size: 12px;">PatagonianC LTDA Cooperativa de Trabajo · CUIT: 30-71816113-0 · HempC (Unidad de Negocios)</div>
+              <div style="font-size: 11px; color: #64748b; margin-bottom: 4px;">Enviado automáticamente por <strong>notificaciones@hempc.com.ar</strong></div>
+              <div style="font-size: 10px; color: #94a3b8;">Plataforma Oficial de la Red Cooperativa del Cáñamo Industrial Argentino • ARICCAME / INASE / SENASA • red.hempc.com.ar</div>
             </div>
           </div>
         </body>

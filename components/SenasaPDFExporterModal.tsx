@@ -23,7 +23,7 @@ export default function SenasaPDFExporterModal({
     appName
 }: SenasaPDFExporterModalProps) {
     const [selectedPlotId, setSelectedPlotId] = useState<string>('all');
-    const [producerName, setProductorName] = useState<string>('Red Cooperativa Cáñamo Industrial Arg.');
+    const [producerName, setProductorName] = useState<string>('PatagonianC LTDA Cooperativa de Trabajo · CUIT: 30-71816113-0 · HempC (Unidad de Negocios)');
     const [establishmentRenspa, setEstablishmentRenspa] = useState<string>('RENSPA N° 19.042.8.00120/00');
     const [agronomistName, setAgronomistName] = useState<string>('Ing. Agr. Gabriel Santos');
     const [agronomistMp, setAgronomistMp] = useState<string>('MP 4.812 (CPIA)');
@@ -202,7 +202,7 @@ export default function SenasaPDFExporterModal({
                     doc.setPage(i);
                     doc.setFontSize(6.5);
                     doc.setTextColor(148, 163, 184);
-                    doc.text(`Documento emitido por la Plataforma Cooperativa ${appName} | Código de Verificación Único: SENASA-HEMP-${Date.now().toString().substring(5)}`, 14, pageHeight - 6);
+                    doc.text(`Documento emitido por PatagonianC LTDA Cooperativa de Trabajo | CUIT: 30-71816113-0 | HempC (Unidad de Negocios) - ${appName} | Código Único: SENASA-HEMP-${Date.now().toString().substring(5)}`, 14, pageHeight - 6);
                     doc.text(`Página ${i} de ${pageCount}`, pageWidth - 14, pageHeight - 6, { align: 'right' });
                 }
 
