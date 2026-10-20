@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import NotificationCenterModal from './NotificationCenterModal';
 import SeedingProtocolModal from './SeedingProtocolModal';
+import { PWAInstallButton } from './PWAInstallButton';
+import { OfflineIndicator } from './OfflineIndicator';
 import { 
   registerServiceWorker, 
   getStoredNotifications, 
@@ -300,6 +302,11 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
           
           <div className="flex items-center space-x-3">
               <div className="flex items-center space-x-1 mr-1 md:mr-3 border-r pr-2 md:pr-4 border-slate-200 dark:border-slate-800">
+                  {/* Botón Instalar App PWA */}
+                  <div className="hidden sm:flex items-center mr-1">
+                    <PWAInstallButton />
+                  </div>
+
                   {/* Botón Protocolo de Siembra Anexo II en Header */}
                   <button
                     onClick={() => setIsProtocolOpen(true)}
@@ -348,6 +355,9 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
         isOpen={isProtocolOpen}
         onClose={() => setIsProtocolOpen(false)}
       />
+
+      {/* INDICADOR DE MODO CAMPO OFFLINE */}
+      <OfflineIndicator />
     </div>
   );
 }

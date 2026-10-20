@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Download, Printer, FileText, X, CheckCircle2, AlertTriangle, 
-  ExternalLink, ShieldCheck, Sprout, Droplets, Scale, Copy, Check, Eye
+  ExternalLink, ShieldCheck, Sprout, Droplets, Scale, Copy, Check, Eye, PenTool
 } from 'lucide-react';
+import { DigitalSignaturePad, SignatureData } from './DigitalSignaturePad';
 
 interface SeedingProtocolModalProps {
   isOpen: boolean;
@@ -16,6 +17,52 @@ export const SEEDING_PROTOCOL_CANONICAL_NAME = 'ANEXO_II_PROTOCOLO_DE_SIEMBRA_PA
 export default function SeedingProtocolModal({ isOpen, onClose, defaultTab = 'document' }: SeedingProtocolModalProps) {
   const [activeView, setActiveView] = useState<'document' | 'pdf'>(defaultTab);
   const [copied, setCopied] = useState(false);
+
+  const [tecnicoSig, setTecnicoSig] = useState<SignatureData | null>(() => {
+    try {
+      const saved = localStorage.getItem('hempc_protocol_sig_tecnico');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const [productorSig, setProductorSig] = useState<SignatureData | null>(() => {
+    try {
+      const saved = localStorage.getItem('hempc_protocol_sig_productor');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const handleSaveTecnicoSig = (data: SignatureData) => {
+    setTecnicoSig(data);
+    try {
+      localStorage.setItem('hempc_protocol_sig_tecnico', JSON.stringify(data));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleSaveProductorSig = (data: SignatureData) => {
+    setProductorSig(data);
+    try {
+      localStorage.setItem('hempc_protocol_sig_productor', JSON.stringify(data));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleClearTecnicoSig = () => {
+    setTecnicoSig(null);
+    localStorage.removeItem('hempc_protocol_sig_tecnico');
+  };
+
+  const handleClearProductorSig = () => {
+    setProductorSig(null);
+    localStorage.removeItem('hempc_protocol_sig_productor');
+  };
 
   useEffect(() => {
     if (!isOpen) return;
@@ -517,45 +564,52 @@ export default function SeedingProtocolModal({ isOpen, onClose, defaultTab = 'do
                 </div>
               </div>
 
-              {/* SECCIÓN 9: FIRMAS Y CONFORMIDAD TÉCNICA */}
-              <div className="bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
-                <div className="flex items-center gap-3 text-emerald-600 dark:text-emerald-400">
-                  <div className="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center font-mono font-bold text-sm">
-                    9
-                  </div>
-                  <h3 className="text-base font-black uppercase tracking-wider text-slate-900 dark:text-white">
-                    Firmas y Conformidad Técnica
-                  </h3>
-                </div>
-
-                <p className="text-xs text-slate-500 pl-0 md:pl-11">
-                  En prueba de conformidad y conocimiento de los requerimientos técnicos fijados para el desarrollo del cultivo bajo la Licencia Agrícola Expte. N.° EX-2024-134354227:
-                </p>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 pl-0 md:pl-11">
-                  <div className="p-6 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-2xl text-center space-y-2 bg-slate-50/50 dark:bg-slate-800/30">
-                    <div className="h-12 border-b border-slate-300 dark:border-slate-600 mx-8"></div>
-                    <h5 className="text-xs font-bold text-slate-800 dark:text-white uppercase">
-                      Tec. Agrónomo / Dirección Técnica
-                    </h5>
-                    <p className="text-[11px] text-slate-500">
-                      Cooperativa de Trabajo Patagonian C Ltda.
-                    </p>
-                    <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 block font-bold">
-                      ARICCAME Lic. Agrícola y Lic. Industrial
-                    </span>
-                  </div>
-
-                  <div className="p-6 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-2xl text-center space-y-2 bg-slate-50/50 dark:bg-slate-800/30">
-                    <div className="h-12 border-b border-slate-300 dark:border-slate-600 mx-8"></div>
-                    <h5 className="text-xs font-bold text-slate-800 dark:text-white uppercase">
-                      El Productor (En Conformidad)
-                    </h5>
-                    <div className="text-[11px] text-slate-500 text-left px-8 space-y-1">
-                      <p>Nombre / Razón Social: ________________________</p>
-                      <p>CUIT: ________________________</p>
+              {/* SECCIÓN 9: FIRMAS Y CONFORMIDAD TÉCNICA (ELECTRÓNICA TÁCTIL) */}
+              <div className="bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 text-emerald-600 dark:text-emerald-400">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center font-mono font-bold text-sm">
+                      9
+                    </div>
+                    <div>
+                      <h3 className="text-base font-black uppercase tracking-wider text-slate-900 dark:text-white">
+                        Firmas y Conformidad Técnica Electrónica
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        Rúbrica táctil desde celular, tablet o PC con certificación GPS, fecha/hora y matrícula profesional.
+                      </p>
                     </div>
                   </div>
+
+                  <div className="flex items-center gap-2">
+                    {tecnicoSig && productorSig ? (
+                      <span className="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-xs font-bold font-mono flex items-center gap-1.5">
+                        <CheckCircle2 size={14} /> Protocolo 100% Firmado
+                      </span>
+                    ) : (
+                      <span className="px-3 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30 text-xs font-bold font-mono">
+                        Pendiente de Rúbrica
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-2">
+                  <DigitalSignaturePad
+                    role="tecnico"
+                    roleTitle="Dirección Técnica / Tec. Agrónomo"
+                    initialData={tecnicoSig}
+                    onSave={handleSaveTecnicoSig}
+                    onClear={handleClearTecnicoSig}
+                  />
+
+                  <DigitalSignaturePad
+                    role="productor"
+                    roleTitle="El Productor (En Conformidad)"
+                    initialData={productorSig}
+                    onSave={handleSaveProductorSig}
+                    onClear={handleClearProductorSig}
+                  />
                 </div>
               </div>
 
