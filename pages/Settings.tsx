@@ -50,7 +50,7 @@ export default function Settings() {
   // @ts-ignore
   const buildTime = typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : 'Local Dev';
   // @ts-ignore
-  const appVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'V7.10.1';
+  const appVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'V7.12.2';
 
   if (currentUser?.role !== 'super_admin') {
       return (

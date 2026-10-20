@@ -269,7 +269,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
 
            {!isCollapsed && (
              <div className="mt-3 text-center text-[10px] font-mono text-slate-400">
-                 Nucleus • v7.10.1 ONLINE
+                 Nucleus • v7.12.2 ONLINE
              </div>
            )}
         </div>

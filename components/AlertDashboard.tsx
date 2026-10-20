@@ -468,7 +468,7 @@ Origen: ${alert.sourceTag}`
               <h2 className="text-lg md:text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight flex items-center gap-2">
                 <span>AlertDashboard</span>
                 <span className="text-xs font-mono font-bold text-slate-400 lowercase tracking-normal">
-                  v7.10
+                  v7.12.2
                 </span>
               </h2>
 
