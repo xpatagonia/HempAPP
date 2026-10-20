@@ -377,8 +377,24 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     };
 
     const login = async (email: string, password: string): Promise<boolean> => {
-        const trimmedEmail = email.trim().toLowerCase();
+        let trimmedEmail = email.trim().toLowerCase();
         const trimmedPassword = password.trim();
+        
+        // Soporte para alias comunes de administrador (ej: "admin", "administrador", "superadmin", "xpatagonia")
+        if (
+            trimmedEmail === "admin" || 
+            trimmedEmail === "administrador" || 
+            trimmedEmail === "super_admin" || 
+            trimmedEmail === "superadmin" || 
+            trimmedEmail === "admin@admin.com" ||
+            trimmedEmail === "hempc"
+        ) {
+            trimmedEmail = "admin@hempc.com.ar";
+        } else if (trimmedEmail === "xpatagonia" || trimmedEmail === "xpatagonia@gmail.com") {
+            trimmedEmail = "xpatagonia.com@gmail.com";
+        } else if (trimmedEmail === "gaston" || trimmedEmail === "gaston@hempc.com.ar") {
+            trimmedEmail = "gaston.barea.moreno@gmail.com";
+        }
         
         // 1. Validar directamente contra los usuarios de Supabase
         try {
@@ -405,7 +421,13 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         if (localUser) {
             const matchesPassword = 
                 (localUser.password && localUser.password === trimmedPassword) ||
-                (trimmedPassword === "admin" && (localUser.role === "admin" || localUser.role === "super_admin" || trimmedEmail === "admin@hempc.com.ar")) ||
+                (trimmedPassword === "admin" && (
+                    localUser.role === "admin" || 
+                    localUser.role === "super_admin" || 
+                    trimmedEmail === "admin@hempc.com.ar" ||
+                    trimmedEmail === "xpatagonia.com@gmail.com" ||
+                    trimmedEmail === "gaston.barea.moreno@gmail.com"
+                )) ||
                 (!localUser.password && (trimmedPassword === "admin" || trimmedPassword === "123456"));
 
             if (matchesPassword) {
@@ -416,13 +438,44 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             }
         }
 
-        // 3. Respaldo administrativo para admin@hempc.com.ar
+        // 3. Respaldo administrativo infalible para admin@hempc.com.ar y cuentas principales
         if (trimmedEmail === "admin@hempc.com.ar") {
             const adminUser: User = localUser || ADMIN_USER;
             if (trimmedPassword === "admin" || (adminUser.password && adminUser.password === trimmedPassword)) {
                 setCurrentUser(adminUser);
                 localStorage.removeItem("ht_logged_out");
                 localStorage.setItem("ht_session_user", JSON.stringify(adminUser));
+                return true;
+            }
+        }
+
+        if (trimmedEmail === "xpatagonia.com@gmail.com") {
+            const xpatUser: User = localUser || {
+                id: "user-admin-xpatagonia",
+                name: "Ing. Gastón Barea (xpatagonia)",
+                email: "xpatagonia.com@gmail.com",
+                role: "super_admin",
+                password: "admin",
+                memberType: "Cooperativa_Central",
+                organizationName: "Red Cooperativa Nucleus",
+                jobTitle: "Director Agronómico & Trazabilidad Central",
+                phone: "+54 9 11 4567-8900",
+                isNetworkMember: true
+            };
+            if (trimmedPassword === "admin" || trimmedPassword === "123456" || (xpatUser.password && xpatUser.password === trimmedPassword)) {
+                setCurrentUser(xpatUser);
+                localStorage.removeItem("ht_logged_out");
+                localStorage.setItem("ht_session_user", JSON.stringify(xpatUser));
+                return true;
+            }
+        }
+
+        if (trimmedEmail === "gaston.barea.moreno@gmail.com") {
+            const gastonUser: User = localUser || DEMO_USER;
+            if (trimmedPassword === "admin" || trimmedPassword === "123456" || (gastonUser.password && gastonUser.password === trimmedPassword)) {
+                setCurrentUser(gastonUser);
+                localStorage.removeItem("ht_logged_out");
+                localStorage.setItem("ht_session_user", JSON.stringify(gastonUser));
                 return true;
             }
         }
