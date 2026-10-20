@@ -535,6 +535,17 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                       </button>
                     </div>
                   </div>
+
+                  {/* Descarga Anexo II Protocolo de Siembra */}
+                  <a
+                    href="/assets/aistudio/ANEXO_II_PROTOCOLO_DE_SIEMBRA_6dc09e5c.pdf"
+                    download="ANEXO_II_PROTOCOLO_DE_SIEMBRA_PATAGONIAN_C.pdf"
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/40"
+                    title="Descargar PDF Oficial del Protocolo Técnico de Siembra (Anexo II)"
+                  >
+                    <Download size={13} className="text-emerald-600" />
+                    <span>Descargar Anexo II (Protocolo de Siembra)</span>
+                  </a>
                 </div>
               </div>
 

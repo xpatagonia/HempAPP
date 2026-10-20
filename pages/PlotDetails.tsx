@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
 import { PlotIdentificationModal } from '../components/PlotIdentificationModal';
+import SeedingProtocolModal from '../components/SeedingProtocolModal';
 import WeatherWidget from '../components/WeatherWidget';
 import HydricBalance from '../components/HydricBalance';
 import LiveTelemetryPanel from '../components/LiveTelemetryPanel';
@@ -69,6 +70,7 @@ export default function PlotDetails() {
   const [alertSeverity, setAlertSeverity] = useState<"Crítica" | "Advertencia" | "Informativa">("Crítica");
   const [alertDetails, setAlertDetails] = useState("");
   const [isSendingAlertEmail, setIsSendingAlertEmail] = useState(false);
+  const [isProtocolModalOpen, setIsProtocolModalOpen] = useState(false);
   const [emailAlertToast, setEmailAlertToast] = useState<{
     show: boolean;
     message: string;
@@ -540,6 +542,13 @@ export default function PlotDetails() {
             >
                 <QrCode size={18} className="text-emerald-600"/> <span className="hidden sm:inline">Rótulo QR & Cartel Tranquera</span>
             </button>
+            <button
+                onClick={() => setIsProtocolModalOpen(true)}
+                className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800/80 p-3 rounded-2xl text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 shadow-sm transition-all flex items-center gap-2 px-4 text-xs font-black uppercase tracking-widest"
+                title="Consultar y Descargar Protocolo Técnico de Siembra Oficial (Anexo II - PDF)"
+            >
+                <FileText size={18} className="text-emerald-600"/> <span className="hidden lg:inline">Protocolo Siembra (Anexo II)</span>
+            </button>
             <button 
                 onClick={handleSendPushAlert} 
                 title="Emitir alerta push de verificación para esta parcela (Service Worker)"
@@ -895,6 +904,12 @@ export default function PlotDetails() {
           client={clients?.find(c => c.id === location?.clientId)}
         />
       )}
+
+      {/* MODAL OFICIAL: PROTOCOLO TÉCNICO DE SIEMBRA ANEXO II */}
+      <SeedingProtocolModal
+        isOpen={isProtocolModalOpen}
+        onClose={() => setIsProtocolModalOpen(false)}
+      />
 
       {isRecordModalOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[100] p-4">

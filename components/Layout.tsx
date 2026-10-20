@@ -11,6 +11,7 @@ import {
   Calculator, Truck, UserCheck, ClipboardList, Radio, Archive
 } from 'lucide-react';
 import NotificationCenterModal from './NotificationCenterModal';
+import SeedingProtocolModal from './SeedingProtocolModal';
 import { 
   registerServiceWorker, 
   getStoredNotifications, 
@@ -73,6 +74,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
   const { currentUser, logout, theme, toggleTheme, tasks, plots, locations, appName, appLogo } = useAppContext();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isProtocolOpen, setIsProtocolOpen] = useState(false);
   const [unreadAlertsCount, setUnreadAlertsCount] = useState<number>(() => {
     return getStoredNotifications().filter(n => !n.read).length;
   });
@@ -178,6 +180,34 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
           <NavItem to="/trials-lite" icon={ClipboardList} label="Monitoreo Agronómico" isCollapsed={isCollapsed} />
           <NavItem to="/phytosanitary" icon={ShieldCheck} label="Cuaderno Fitosanitario" isCollapsed={isCollapsed} />
           <NavItem to="/tools" icon={Calculator} label="Calculadoras Agronómicas" isCollapsed={isCollapsed} />
+          
+          {/* Botón Acceso Rápido Protocolo Técnico Anexo II */}
+          <div className="pt-1">
+            <button
+              type="button"
+              onClick={() => setIsProtocolOpen(true)}
+              title="Protocolo Técnico de Siembra y Manejo Agronómico (Anexo II - PDF Oficial)"
+              className={isCollapsed
+                ? "flex items-center justify-center h-12 w-12 mx-auto rounded-2xl text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 border border-emerald-200 dark:border-emerald-800/60 transition-all relative group"
+                : "w-full flex items-center justify-between px-4 py-3 rounded-2xl text-emerald-800 dark:text-emerald-300 bg-emerald-50/80 dark:bg-emerald-950/40 hover:bg-emerald-100/80 dark:hover:bg-emerald-900/50 border border-emerald-200/90 dark:border-emerald-800/60 transition-all font-bold text-sm tracking-tight shadow-sm"
+              }
+            >
+              <div className="flex items-center space-x-3 min-w-0">
+                <FileText size={isCollapsed ? 22 : 20} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                {!isCollapsed && <span className="font-bold text-sm tracking-tight truncate">Protocolo de Siembra</span>}
+              </div>
+              {!isCollapsed && (
+                <span className="text-[10px] font-mono font-black bg-emerald-600 text-white px-2 py-0.5 rounded-full shrink-0 ml-2 uppercase shadow-sm">
+                  PDF
+                </span>
+              )}
+              {isCollapsed && (
+                <div className="absolute left-full ml-3 px-3 py-2 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-xs font-bold rounded-xl shadow-xl whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                  Protocolo de Siembra (Anexo II)
+                </div>
+              )}
+            </button>
+          </div>
 
           {/* Cadena de Valor & Logística */}
           <div className={isCollapsed ? "pt-4 pb-1 border-t border-slate-200 dark:border-slate-800 my-2" : "pt-8 pb-3 px-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]"}>
@@ -270,10 +300,20 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
           
           <div className="flex items-center space-x-3">
               <div className="flex items-center space-x-1 mr-1 md:mr-3 border-r pr-2 md:pr-4 border-slate-200 dark:border-slate-800">
+                  {/* Botón Protocolo de Siembra Anexo II en Header */}
+                  <button
+                    onClick={() => setIsProtocolOpen(true)}
+                    title="Protocolo Técnico de Siembra Oficial (Anexo II - PDF)"
+                    className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-xs font-bold transition-all shadow-sm mr-1 cursor-pointer"
+                  >
+                    <FileText size={16} className="text-emerald-600 dark:text-emerald-400" />
+                    <span className="font-mono text-[11px] font-black uppercase">Anexo II (PDF)</span>
+                  </button>
+
                   <button 
                     onClick={() => setIsNotificationsOpen(true)}
                     title="Centro de Alertas & Push (Service Worker)"
-                    className="p-3 text-slate-500 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-2xl transition-all relative group"
+                    className="p-3 text-slate-500 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-2xl transition-all relative group cursor-pointer"
                   >
                       <Bell size={20} className={unreadAlertsCount > 0 ? 'text-slate-800 dark:text-white' : ''} />
                       {unreadAlertsCount > 0 ? (
@@ -301,6 +341,12 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
       <NotificationCenterModal 
         isOpen={isNotificationsOpen} 
         onClose={() => setIsNotificationsOpen(false)} 
+      />
+
+      {/* MODAL OFICIAL PROTOCOLO TÉCNICO DE SIEMBRA ANEXO II */}
+      <SeedingProtocolModal
+        isOpen={isProtocolOpen}
+        onClose={() => setIsProtocolOpen(false)}
       />
     </div>
   );

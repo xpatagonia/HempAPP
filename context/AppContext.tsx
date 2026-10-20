@@ -222,9 +222,22 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     const [operationalExpenses, setOperationalExpenses] = useState<OperationalExpense[]>(() => 
         getStoredCollection('ht_operational_expenses', DEMO_OPERATIONAL_EXPENSES)
     );
-    const [varieties, setVarieties] = useState<Variety[]>(() => 
-        getStoredCollection('ht_varieties', DEMO_VARIETIES)
-    );
+    const [varieties, setVarieties] = useState<Variety[]>(() => {
+        const stored = getStoredCollection('ht_varieties', DEMO_VARIETIES);
+        // Migrar variedades anteriores a la denominación protocolar Anexo II
+        let updated = stored.filter(v => 
+            !v.id?.includes('ostara') && 
+            !v.id?.includes('futura83') && 
+            !v.name?.toLowerCase().includes('ostara') && 
+            !v.name?.toLowerCase().includes('futura 83')
+        );
+        DEMO_VARIETIES.forEach(dv => {
+            if (!updated.some(v => v.id === dv.id || v.name.toLowerCase() === dv.name.toLowerCase())) {
+                updated.unshift(dv);
+            }
+        });
+        return updated;
+    });
     const [locations, setLocations] = useState<Location[]>(() => 
         getStoredCollection('ht_locations', DEMO_LOCATIONS)
     );

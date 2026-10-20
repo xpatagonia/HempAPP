@@ -13,8 +13,49 @@ import { QRCodeSVG } from 'qrcode.react';
 import { BarcodeRenderer } from '../components/BarcodeRenderer';
 import { VarietyPassportModal } from '../components/VarietyPassportModal';
 import { BarcodeScannerModal } from '../components/BarcodeScannerModal';
+import SeedingProtocolModal from '../components/SeedingProtocolModal';
 
 const HEMPIT_CATALOG: Partial<Variety>[] = [
+  { 
+    name: 'Variedad (Grano / Alimento)', 
+    usage: 'Grano' as UsageType, 
+    cycleDays: 125, 
+    expectedThc: 0.10, 
+    expectedCbd: 1.2,
+    expectedCbg: 0.15,
+    chemotype: 'Fibra/Grano (<0.3% THC)',
+    photoperiodType: 'Monoica',
+    gddRequirement: 1800,
+    waterNeedMm: 450,
+    optimalSowingDensityKgHa: 50,
+    thousandSeedWeightGr: 18.0,
+    expectedFiberYieldTnHa: 5.5,
+    expectedGrainYieldKgHa: 1600,
+    oecdListing: true,
+    breederName: 'Patagonian C Ltda. / Red Oficial',
+    breederCountry: 'Argentina / Chubut',
+    knowledgeBase: 'Variedad homologada en el Anexo II Protocolo Técnico de Siembra. Dosis de siembra 50 kg/Ha, profundidad 1.5 a 2.0 cm (máx. 2.5 cm), distancia entre surcos 15 a 20 cm, ventana Chubut 1 Nov - 15 Dic, temp mínima de suelo 10-12°C a 5 cm. Trilla con 75-80% de grano maduro y 12-15% humedad.' 
+  },
+  { 
+    name: 'Variedad (Multipropósito / Biomasa)', 
+    usage: 'Dual' as UsageType, 
+    cycleDays: 145, 
+    expectedThc: 0.15, 
+    expectedCbd: 1.8,
+    expectedCbg: 0.35,
+    chemotype: 'Fibra/Grano (<0.3% THC)',
+    photoperiodType: 'Monoica',
+    gddRequirement: 2050,
+    waterNeedMm: 520,
+    optimalSowingDensityKgHa: 50,
+    thousandSeedWeightGr: 18.5,
+    expectedFiberYieldTnHa: 9.2,
+    expectedGrainYieldKgHa: 1300,
+    oecdListing: true,
+    breederName: 'Patagonian C Ltda. / Red Oficial',
+    breederCountry: 'Argentina / Chubut',
+    knowledgeBase: 'Variedad homologada en el Anexo II Protocolo Técnico de Siembra. Dosis de siembra 50 kg/Ha, profundidad 1.5 a 2.0 cm (máx. 2.5 cm), distancia entre surcos 15 a 20 cm, ventana Chubut 1 Nov - 15 Dic. Destino biomasa y grano con corte y enfardado inmediato post-trilla.' 
+  },
   { 
     name: 'Fedora 17', 
     usage: 'Dual' as UsageType, 
@@ -138,6 +179,7 @@ export default function Varieties() {
   const [isSaving, setIsSaving] = useState(false);
   const [isScannerModalOpen, setIsScannerModalOpen] = useState(false);
   const [isPassportModalOpen, setIsPassportModalOpen] = useState(false);
+  const [isProtocolModalOpen, setIsProtocolModalOpen] = useState(false);
   const [selectedVarietyForPassport, setSelectedVarietyForPassport] = useState<Variety | null>(null);
 
   const handleBarcodeScan = (scannedCode: string) => {
@@ -332,6 +374,17 @@ export default function Varieties() {
               >
                 <ScanBarcode size={15} /> 
                 <span>Escanear Código</span>
+              </button>
+
+              {/* Botón Protocolo de Siembra Anexo II */}
+              <button
+                type="button"
+                onClick={() => setIsProtocolModalOpen(true)}
+                className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800/80 px-4 py-2.5 rounded-2xl flex items-center justify-center hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition shadow-sm font-mono font-bold text-xs uppercase tracking-wider gap-1.5"
+                title="Consultar y Descargar Protocolo Técnico de Siembra Oficial (Anexo II - PDF)"
+              >
+                <FileCheck2 size={15} className="text-emerald-600" />
+                <span>Protocolo Siembra (Anexo II)</span>
               </button>
               {isAdmin && (
                 <>
@@ -867,6 +920,12 @@ export default function Varieties() {
         isOpen={isScannerModalOpen}
         onClose={() => setIsScannerModalOpen(false)}
         onSelectBatch={handleBarcodeScan}
+      />
+
+      {/* MODAL OFICIAL: PROTOCOLO TÉCNICO DE SIEMBRA ANEXO II */}
+      <SeedingProtocolModal
+        isOpen={isProtocolModalOpen}
+        onClose={() => setIsProtocolModalOpen(false)}
       />
     </div>
   );

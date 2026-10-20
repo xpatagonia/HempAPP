@@ -7,10 +7,11 @@ import {
   Trash2, Edit2, QrCode, X, Save, Search, Filter, 
   MapPin, Calendar, Sprout, Printer, Activity, Plus, Loader2, Info, FolderKanban, FileUp,
   Link as LinkIcon, Scale, Box, Weight, Archive, Globe, LayoutDashboard, Eye, Palette,
-  Power, AlertCircle, CheckCircle2, ShieldCheck, Tractor, Layers, Clock
+  Power, AlertCircle, CheckCircle2, ShieldCheck, Tractor, Layers, Clock, FileText, Download
 } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
 import { PlotIdentificationModal } from '../components/PlotIdentificationModal';
+import SeedingProtocolModal from '../components/SeedingProtocolModal';
 import { canAccessPlot, canAccessLocation } from '../src/utils/structurePermissions';
 
 // Algoritmo de cálculo de área geodésica
@@ -104,6 +105,7 @@ export default function Plots() {
   const [isSaving, setIsSaving] = useState(false);
   const [editingPlot, setEditingPlot] = useState<Plot | null>(null);
   const [selectedPlotForIdModal, setSelectedPlotForIdModal] = useState<Plot | null>(null);
+  const [isProtocolModalOpen, setIsProtocolModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState<any>({
@@ -471,6 +473,16 @@ export default function Plots() {
                 <LayoutGrid size={17}/>
               </button>
             </div>
+
+            <button
+              onClick={() => setIsProtocolModalOpen(true)}
+              className="px-4 py-2.5 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/80 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-sm flex items-center gap-2"
+              title="Consultar y Descargar Protocolo Técnico de Siembra Oficial (Anexo II - PDF)"
+            >
+              <FileText size={15} className="text-emerald-500" />
+              <span className="hidden sm:inline">Protocolo Siembra (Anexo II)</span>
+              <span className="sm:hidden">Anexo II</span>
+            </button>
 
             {canManage && (
               <button 
@@ -1051,10 +1063,21 @@ export default function Plots() {
                 {/* COLUMNA 2: GENÉTICA Y PROTOCOLO DE SIEMBRA */}
                 <div className="space-y-5">
                   <div className="p-4 bg-emerald-50 dark:bg-emerald-950/30 rounded-2xl border border-emerald-100 dark:border-emerald-900/40 space-y-3">
-                    <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5">
-                      <FlaskConical size={14} />
-                      <span>Genética & Insumos</span>
-                    </h3>
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5">
+                        <FlaskConical size={14} />
+                        <span>Genética & Insumos</span>
+                      </h3>
+                      <button
+                        type="button"
+                        onClick={() => setIsProtocolModalOpen(true)}
+                        className="text-[10px] font-mono font-bold text-emerald-700 dark:text-emerald-300 hover:underline flex items-center gap-1 bg-white/80 dark:bg-slate-900/80 px-2 py-0.5 rounded-md border border-emerald-300 dark:border-emerald-800"
+                        title="Ver pautas técnicas y dosis de 50 kg/Ha"
+                      >
+                        <FileText size={11} />
+                        <span>Anexo II (50 kg/Ha)</span>
+                      </button>
+                    </div>
 
                     <div>
                       <label className={labelClass}>Variedad Genética *</label>
@@ -1281,6 +1304,12 @@ export default function Plots() {
           client={clients?.find(c => c.id === locations.find(l => l.id === selectedPlotForIdModal.locationId)?.clientId)}
         />
       )}
+
+      {/* MODAL OFICIAL: PROTOCOLO TÉCNICO DE SIEMBRA ANEXO II */}
+      <SeedingProtocolModal
+        isOpen={isProtocolModalOpen}
+        onClose={() => setIsProtocolModalOpen(false)}
+      />
 
     </div>
   );
