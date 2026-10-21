@@ -7,7 +7,7 @@ import {
   Trash2, Edit2, QrCode, X, Save, Search, Filter, 
   MapPin, Calendar, Sprout, Printer, Activity, Plus, Loader2, Info, FolderKanban, FileUp,
   Link as LinkIcon, Scale, Box, Weight, Archive, Globe, LayoutDashboard, Eye, Palette,
-  Power, AlertCircle, CheckCircle2, ShieldCheck, Tractor, Layers, Clock, FileText, Download
+  Power, AlertCircle, CheckCircle2, ShieldCheck, Tractor, Layers, Clock, FileText, Download, UserCheck, Award
 } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
 import { PlotIdentificationModal } from '../components/PlotIdentificationModal';
@@ -128,7 +128,11 @@ export default function Plots() {
       polygon: [],
       usedSeedValue: 0,
       usedSeedUnit: 'kg',
-      color: '#10b981'
+      color: '#10b981',
+      samplingResponsibleName: 'Matias QUINTANA',
+      sowingResponsibleName: 'Joaquin AREZO',
+      technicalResponsibleName: 'Ing. Agr. Julian PIZARRO',
+      technicalResponsibleMatricula: 'MP CIAFBA 14.892'
   });
 
   const isSuperAdmin = currentUser?.role === 'super_admin';
@@ -144,13 +148,18 @@ export default function Plots() {
       activeCampaigns: [selectedCampaign === 'all' ? '2025/2026' : selectedCampaign],
       sowingDate: new Date().toISOString().split('T')[0], surfaceArea: 0, 
       surfaceUnit: 'ha', density: 0, lat: '', lng: '', polygon: [], usedSeedValue: 0, usedSeedUnit: 'kg',
-      color: '#10b981'
+      color: '#10b981',
+      samplingResponsibleName: currentUser?.name || 'Matias QUINTANA',
+      sowingResponsibleName: 'Joaquin AREZO',
+      technicalResponsibleName: 'Ing. Agr. Julian PIZARRO',
+      technicalResponsibleMatricula: 'MP CIAFBA 14.892'
     });
     setEditingPlot(null);
   };
 
   const availableBatches = useMemo(() => {
       return seedBatches.filter(b => {
+          if (b.materialType && b.materialType !== 'seed') return false;
           if (!b.isActive || b.remainingQuantity <= 0.001) return false;
           if ((isClient || isTechnician) && currentUser?.clientId) {
               const storage = storagePoints.find(s => s.id === b.storagePointId);
@@ -167,8 +176,13 @@ export default function Plots() {
   useEffect(() => {
     if (formData.seedBatchId) {
         const selectedBatch = seedBatches.find(b => b.id === formData.seedBatchId);
-        if (selectedBatch && selectedBatch.varietyId !== formData.varietyId) {
-            setFormData(prev => ({ ...prev, varietyId: selectedBatch.varietyId }));
+        if (selectedBatch) {
+            setFormData((prev: any) => ({
+                ...prev,
+                varietyId: selectedBatch.varietyId || prev.varietyId,
+                samplingResponsibleName: selectedBatch.samplerName || prev.samplingResponsibleName || 'Matias QUINTANA',
+                technicalResponsibleName: selectedBatch.inspectorName || prev.technicalResponsibleName || 'Ing. Agr. Julian PIZARRO'
+            }));
         }
     }
   }, [formData.seedBatchId, seedBatches]);
@@ -698,9 +712,28 @@ export default function Plots() {
                       </td>
 
                       <td className="px-6 py-4">
-                        <span className="px-2 py-1 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 rounded-lg text-[10px] font-mono font-bold border border-emerald-200 dark:border-emerald-800/60">
-                          {vari?.name || 'Genética Certificada'}
-                        </span>
+                        <div className="space-y-1">
+                          <span className="px-2 py-1 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 rounded-lg text-[10px] font-mono font-bold border border-emerald-200 dark:border-emerald-800/60 inline-block">
+                            {vari?.name || 'Genética Certificada'}
+                          </span>
+                          {(() => {
+                            const linkedBatch =
+                              seedBatches.find(b => b.id === p.seedBatchId) ||
+                              seedBatches.find(b => b.varietyId === p.varietyId && (!b.materialType || b.materialType === 'seed')) ||
+                              seedBatches.find(b => !b.materialType || b.materialType === 'seed');
+                            return (
+                              <div className="text-[9.5px] font-mono text-slate-600 dark:text-slate-400 flex flex-col gap-0.5 pt-0.5">
+                                <span className="flex items-center gap-1 font-bold text-slate-800 dark:text-slate-200">
+                                  <Award size={10} className="text-emerald-600 shrink-0" />
+                                  <span>N° Lote Semilla: {linkedBatch?.certificationNumber || linkedBatch?.batchCode || 'LOT-2025-FED17-C1'}</span>
+                                </span>
+                                <span className="text-[8.5px] text-slate-400">
+                                  Rótulo INASE: {linkedBatch?.labelSerialNumber || 'INA-2025-008492'} · {linkedBatch?.qualityGrade === 'GRADO_B_ESTANDAR' ? 'Grado B' : 'Grado A'}
+                                </span>
+                              </div>
+                            );
+                          })()}
+                        </div>
                       </td>
 
                       <td className="px-6 py-4 text-center font-mono font-black text-slate-800 dark:text-slate-200">
@@ -860,6 +893,43 @@ export default function Plots() {
                           </strong>
                         </div>
                       </div>
+
+                      {/* Bloque de Lote de Siembra & Personal Interviniente */}
+                      {(() => {
+                        const linkedBatch =
+                          seedBatches.find(b => b.id === p.seedBatchId) ||
+                          seedBatches.find(b => b.varietyId === p.varietyId && (!b.materialType || b.materialType === 'seed')) ||
+                          seedBatches.find(b => !b.materialType || b.materialType === 'seed');
+                        const obtainedCount = seedBatches.filter(b => b.originPlotId === p.id && b.materialType !== 'seed').length;
+                        return (
+                          <div className="mt-3 p-2.5 rounded-xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200/60 dark:border-indigo-900/40 text-[10px] font-mono space-y-1">
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="font-bold text-indigo-800 dark:text-indigo-300 flex items-center gap-1 truncate">
+                                <Award size={11} className="text-emerald-600 shrink-0" />
+                                N° Lote Semilla: {linkedBatch?.certificationNumber || linkedBatch?.batchCode || 'LOT-2025-FED17-C1'}
+                              </span>
+                              <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-black text-[8.5px] border border-emerald-500/20 shrink-0">
+                                {linkedBatch?.qualityGrade === 'GRADO_B_ESTANDAR' ? 'Grado B' : 'Grado A Élite'}
+                              </span>
+                            </div>
+                            <div className="text-[9px] text-slate-500 dark:text-slate-400 flex items-center justify-between">
+                              <span className="truncate">Rótulo INASE: <strong>{linkedBatch?.labelSerialNumber || 'INA-2025-008492'}</strong></span>
+                              <span className="truncate text-[8.5px]">Traz.: {linkedBatch?.batchCode || 'TRZ-2025-C1'}</span>
+                            </div>
+                            <div className="flex items-center justify-between text-[9px] text-slate-500 dark:text-slate-400 pt-0.5 border-t border-indigo-100 dark:border-indigo-900/40">
+                              <span className="flex items-center gap-1 truncate">
+                                <UserCheck size={10} className="text-indigo-500 shrink-0" />
+                                Muestreo/DT: <strong>{p.samplingResponsibleName || linkedBatch?.samplerName || 'M. Quintana'}</strong>
+                              </span>
+                              {obtainedCount > 0 && (
+                                <span className="text-amber-600 dark:text-amber-400 font-bold shrink-0">
+                                  +{obtainedCount} Mat. Obtenido
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     {/* Acciones Inferiores */}
@@ -1095,19 +1165,33 @@ export default function Plots() {
                     </div>
 
                     <div>
-                      <label className={labelClass}>Lote Maestro de Semilla (Opcional)</label>
+                      <label className={labelClass}>Lote Maestro de Semilla Homologado</label>
                       <select 
                         className={inputClass} 
                         value={formData.seedBatchId} 
                         onChange={e => setFormData({ ...formData, seedBatchId: e.target.value })}
                       >
-                        <option value="">Seleccione lote de semilla...</option>
+                        <option value="">Seleccione lote de semilla homologado...</option>
                         {availableBatches.map(b => (
                           <option key={b.id} value={b.id}>
-                            {b.batchCode} ({Number(b.remainingQuantity.toFixed(3))} kg disp.)
+                            {b.batchCode} · {b.qualityGrade === 'GRADO_B_ESTANDAR' ? 'Grado B' : 'Grado A Élite'} ({Number(b.remainingQuantity.toFixed(1))} kg disp.)
                           </option>
                         ))}
                       </select>
+                      {(() => {
+                        const selB = seedBatches.find(b => b.id === formData.seedBatchId);
+                        if (!selB) return null;
+                        return (
+                          <div className="mt-1.5 p-2 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-emerald-200 dark:border-emerald-800 text-[10px] font-mono flex items-center justify-between">
+                            <span className="text-emerald-700 dark:text-emerald-300 font-bold">
+                              Calidad: {selB.qualityGrade === 'GRADO_B_ESTANDAR' ? 'Grado B Estándar' : 'Grado A Élite'} ({selB.qualityScore || 96}/100) · PG {selB.germination || 94}%
+                            </span>
+                            <span className="text-indigo-600 dark:text-indigo-400 font-bold">
+                              Muestreo: {selB.samplerName || 'M. Quintana'}
+                            </span>
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
@@ -1133,6 +1217,43 @@ export default function Plots() {
                           <option value="gr">GR</option>
                           <option value="tn">TN</option>
                         </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* PERSONAL INTERVINIENTE EN MUESTREO, SIEMBRA Y TRAZABILIDAD */}
+                  <div className="p-4 bg-indigo-50/70 dark:bg-indigo-950/25 rounded-2xl border border-indigo-200 dark:border-indigo-900/50 space-y-2.5">
+                    <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-indigo-800 dark:text-indigo-300 flex items-center gap-1.5">
+                      <UserCheck size={14} className="text-indigo-600" />
+                      <span>Personal Interviniente (Muestreo & Siembra)</span>
+                    </h3>
+                    <div>
+                      <label className={labelClass}>Responsable Toma de Muestras en Lote</label>
+                      <input
+                        className={inputClass}
+                        placeholder="Ej: Matias QUINTANA"
+                        value={formData.samplingResponsibleName || ''}
+                        onChange={e => setFormData({ ...formData, samplingResponsibleName: e.target.value })}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <div>
+                        <label className={labelClass}>Jefe Operativo de Siembra</label>
+                        <input
+                          className={inputClass}
+                          placeholder="Ej: Joaquin AREZO"
+                          value={formData.sowingResponsibleName || ''}
+                          onChange={e => setFormData({ ...formData, sowingResponsibleName: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Director Técnico Agrónomo</label>
+                        <input
+                          className={inputClass}
+                          placeholder="Ej: Ing. Agr. Julian PIZARRO"
+                          value={formData.technicalResponsibleName || ''}
+                          onChange={e => setFormData({ ...formData, technicalResponsibleName: e.target.value })}
+                        />
                       </div>
                     </div>
                   </div>
@@ -1302,6 +1423,12 @@ export default function Plots() {
           location={locations.find(l => l.id === selectedPlotForIdModal.locationId)}
           variety={varieties.find(v => v.id === selectedPlotForIdModal.varietyId)}
           client={clients?.find(c => c.id === locations.find(l => l.id === selectedPlotForIdModal.locationId)?.clientId)}
+          seedBatch={
+            seedBatches.find(b => b.id === selectedPlotForIdModal.seedBatchId) ||
+            seedBatches.find(b => b.varietyId === selectedPlotForIdModal.varietyId && (!b.materialType || b.materialType === 'seed')) ||
+            seedBatches.find(b => !b.materialType || b.materialType === 'seed') ||
+            seedBatches[0]
+          }
         />
       )}
 

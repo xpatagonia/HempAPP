@@ -251,11 +251,63 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         });
         return updated;
     });
+    const healSeedBatches = (list: SeedBatch[]): SeedBatch[] => {
+        const deletedMap = getDeletedIdsMap();
+        const deletedSet = new Set(deletedMap['seed_batches'] || []);
+        const demoMapById = new Map(DEMO_SEED_BATCHES.map(b => [String(b.id), b]));
+        const demoMapByCode = new Map(DEMO_SEED_BATCHES.map(b => [String(b.batchCode), b]));
+
+        const enriched: SeedBatch[] = (list || []).map((b: SeedBatch): SeedBatch => {
+            const demoMatch = demoMapById.get(String(b.id)) || demoMapByCode.get(String(b.batchCode));
+            return {
+                ...(demoMatch || {}),
+                ...b,
+                labelSerialNumber: b.labelSerialNumber || demoMatch?.labelSerialNumber || '00000012',
+                certificationNumber: b.certificationNumber || demoMatch?.certificationNumber || 'S/N',
+                originInspectionId: b.originInspectionId || demoMatch?.originInspectionId,
+                qualityGrade: b.qualityGrade || demoMatch?.qualityGrade,
+                qualityScore: b.qualityScore ?? demoMatch?.qualityScore,
+                samplerName: b.samplerName || demoMatch?.samplerName,
+                samplerMatricula: b.samplerMatricula || demoMatch?.samplerMatricula,
+                sampleCode: b.sampleCode || demoMatch?.sampleCode,
+                inspectorName: b.inspectorName || demoMatch?.inspectorName,
+                inspectorMatricula: b.inspectorMatricula || demoMatch?.inspectorMatricula,
+                parentSeedBatchId: b.parentSeedBatchId || demoMatch?.parentSeedBatchId,
+                originPlotId: b.originPlotId || demoMatch?.originPlotId,
+                materialType: b.materialType || demoMatch?.materialType,
+            };
+        });
+
+        DEMO_SEED_BATCHES.forEach(db => {
+            if (!deletedSet.has(String(db.id)) && !enriched.some(b => String(b.id) === String(db.id) || String(b.batchCode) === String(db.batchCode))) {
+                enriched.push(db);
+            }
+        });
+
+        return enriched;
+    };
+
+    const healPlotsWithSeedBatches = (plotsList: Plot[], batchesList: SeedBatch[] = DEMO_SEED_BATCHES): Plot[] => {
+        return (plotsList || []).map((p: Plot) => {
+            if (!p.seedBatchId && p.varietyId) {
+                const match = batchesList.find(b => b.varietyId === p.varietyId && b.isActive && (!b.materialType || b.materialType === 'seed'))
+                    || DEMO_SEED_BATCHES.find(b => b.varietyId === p.varietyId && b.isActive);
+                if (match) {
+                    return { ...p, seedBatchId: match.id };
+                }
+            }
+            return p;
+        });
+    };
+
     const [locations, setLocations] = useState<Location[]>(() => 
         getStoredCollection('ht_locations', DEMO_LOCATIONS)
     );
+    const [seedBatches, setSeedBatches] = useState<SeedBatch[]>(() => 
+        healSeedBatches(getStoredCollection('ht_seed_batches', DEMO_SEED_BATCHES))
+    );
     const [plots, setPlots] = useState<Plot[]>(() => 
-        getStoredCollection('ht_plots', DEMO_PLOTS)
+        healPlotsWithSeedBatches(getStoredCollection('ht_plots', DEMO_PLOTS))
     );
     const [trialRecords, setTrialRecords] = useState<TrialRecord[]>(() => 
         getStoredCollection('ht_trial_records', DEMO_TRIALS)
@@ -271,9 +323,6 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     );
     const [suppliers, setSuppliers] = useState<Supplier[]>(() => 
         getStoredCollection('ht_suppliers', DEMO_SUPPLIERS)
-    );
-    const [seedBatches, setSeedBatches] = useState<SeedBatch[]>(() => 
-        getStoredCollection('ht_seed_batches', DEMO_SEED_BATCHES)
     );
     const [seedMovements, setSeedMovements] = useState<SeedMovement[]>(() => 
         getStoredCollection('ht_seed_movements', DEMO_SEED_MOVEMENTS)
@@ -392,23 +441,22 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                     fetchTable('varieties', setVarieties, DEMO_VARIETIES),
                     fetchTable('locations', setLocations, DEMO_LOCATIONS),
                     fetchTable('plots', (data: any[]) => {
-                        const healed = (data || []).map((p: any) => {
-                            if (p.status === 'Activa' && !p.seedBatchId && p.varietyId) {
-                                const match = DEMO_SEED_BATCHES.find(b => b.varietyId === p.varietyId && b.isActive);
-                                return match ? { ...p, seedBatchId: match.id } : p;
-                            }
-                            return p;
-                        });
+                        const healed = healPlotsWithSeedBatches(data || []);
                         setPlots(healed);
+                        try { localStorage.setItem('ht_plots', JSON.stringify(healed)); } catch (e) {}
                     }, DEMO_PLOTS),
                     fetchTable('trial_records', setTrialRecords, DEMO_TRIALS),
                     fetchTable('tasks', setTasks, DEMO_TASKS),
                     fetchTable('projects', setProjects, DEMO_PROJECTS),
                     fetchTable('clients', setClients, DEMO_CLIENTS),
                     fetchTable('suppliers', setSuppliers, DEMO_SUPPLIERS),
-                    fetchTable('seed_batches', setSeedBatches),
-                    fetchTable('seed_movements', setSeedMovements),
-                    fetchTable('resources', setResources),
+                    fetchTable('seed_batches', (data: any[]) => {
+                        const healed = healSeedBatches(data || []);
+                        setSeedBatches(healed);
+                        try { localStorage.setItem('ht_seed_batches', JSON.stringify(healed)); } catch (e) {}
+                    }, DEMO_SEED_BATCHES),
+                    fetchTable('seed_movements', setSeedMovements, DEMO_SEED_MOVEMENTS),
+                    fetchTable('resources', setResources, DEMO_RESOURCES),
                     fetchTable('storage_points', setStoragePoints, DEMO_STORAGE_POINTS),
                     fetchTable('hydric_records', setHydricRecords, DEMO_HYDRIC),
                     fetchTable('operational_expenses', setOperationalExpenses, DEMO_OPERATIONAL_EXPENSES),
@@ -417,6 +465,16 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             } else {
                 // Modo Autónomo / Local: respeta fielmente los datos del usuario en memoria/localStorage
                 setUsersList(prev => prev.length > 0 ? prev : [DEMO_USER]);
+                setSeedBatches(prev => {
+                    const healed = healSeedBatches(prev);
+                    try { localStorage.setItem('ht_seed_batches', JSON.stringify(healed)); } catch (e) {}
+                    return healed;
+                });
+                setPlots(prev => {
+                    const healed = healPlotsWithSeedBatches(prev);
+                    try { localStorage.setItem('ht_plots', JSON.stringify(healed)); } catch (e) {}
+                    return healed;
+                });
             }
         } catch(e) {
             console.error("Data refresh failed", e);

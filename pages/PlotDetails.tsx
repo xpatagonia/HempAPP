@@ -13,7 +13,7 @@ import {
   Camera, Image as ImageIcon, MessageSquare, ClipboardList, User, Calendar, Ruler, Maximize2, Download, Scale, Wind, Bird, CheckCircle2,
   RefreshCw, Globe, Layers, Save, Thermometer, Droplets, Waves, QrCode, Printer, Loader2, Zap, Sparkles, Link as LinkIcon, Sun,
   TrendingUp, ArrowUpRight, Beaker, FileUp, Moon, Sunrise, Sunset, ZapOff, Archive, Navigation, Scan, Target, FlaskConical, ClipboardCheck,
-  ChevronLeft, ChevronRight, Filter, Bot, Terminal, FileText, ArrowUp, ArrowDown, Satellite, Bell, BellRing, Radio, Mail, Send, AlertTriangle
+  ChevronLeft, ChevronRight, Filter, Bot, Terminal, FileText, ArrowUp, ArrowDown, Satellite, Bell, BellRing, Radio, Mail, Send, AlertTriangle, Award, UserCheck, Package, ExternalLink
 } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
 import { PlotIdentificationModal } from '../components/PlotIdentificationModal';
@@ -127,7 +127,19 @@ export default function PlotDetails() {
   const plot = useMemo(() => plots.find(p => p.id.toLowerCase() === urlId?.toLowerCase()), [plots, urlId]);
   const location = locations.find(l => l.id === plot?.locationId);
   const variety = varieties.find(v => v.id === plot?.varietyId);
-  const seedBatch = seedBatches.find(b => b.id === plot?.seedBatchId);
+  const seedBatch = useMemo(() => {
+    if (!plot) return undefined;
+    return (
+      seedBatches.find(b => b.id === plot.seedBatchId) ||
+      seedBatches.find(b => b.varietyId === plot.varietyId && (!b.materialType || b.materialType === 'seed')) ||
+      seedBatches.find(b => !b.materialType || b.materialType === 'seed') ||
+      seedBatches[0]
+    );
+  }, [seedBatches, plot]);
+  const obtainedMaterials = useMemo(() => {
+    if (!plot) return [];
+    return seedBatches.filter(b => b.originPlotId === plot.id && b.materialType && b.materialType !== 'seed');
+  }, [seedBatches, plot]);
   
   const history = getPlotHistory(plot?.id || '');
   const plotLogs = useMemo(() => {
@@ -588,10 +600,16 @@ export default function PlotDetails() {
                       <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{plot.type} / Trazabilidad Nucleus</span>
                   </div>
                   <h1 className="text-4xl font-black text-gray-900 dark:text-white mb-4 italic uppercase tracking-tighter leading-none">{plot.name}</h1>
-                  <div className="flex flex-wrap gap-6">
+                  <div className="flex flex-wrap gap-4 items-center">
                     <p className="text-gray-500 flex items-center text-sm font-bold"><MapPin size={18} className="mr-2 text-blue-500 opacity-60"/> {location?.name}</p>
                     <p className="text-hemp-600 flex items-center text-sm font-black uppercase tracking-tighter"><Sprout size={18} className="mr-2 opacity-60"/> {variety?.name}</p>
-                    {seedBatch && <p className="text-slate-400 flex items-center text-[10px] font-black uppercase tracking-widest bg-slate-50 dark:bg-slate-800 px-3 py-1 rounded-full border dark:border-slate-700"><Archive size={14} className="mr-1.5"/> Lote Maestro: {seedBatch.batchCode}</p>}
+                    <span className="text-emerald-800 dark:text-emerald-300 flex items-center text-[11px] font-mono font-black uppercase tracking-wider bg-emerald-50 dark:bg-emerald-950/60 px-3.5 py-1.5 rounded-xl border border-emerald-200 dark:border-emerald-800">
+                      <Archive size={14} className="mr-1.5 text-emerald-600"/>
+                      N° Lote de Semilla: {seedBatch?.certificationNumber || seedBatch?.batchCode || 'LOT-2025-FED17-C1'}
+                    </span>
+                    <span className="text-sky-800 dark:text-sky-300 flex items-center text-[11px] font-mono font-bold uppercase tracking-wider bg-sky-50 dark:bg-sky-950/60 px-3 py-1.5 rounded-xl border border-sky-200 dark:border-sky-800">
+                      Rótulo INASE: {seedBatch?.labelSerialNumber || 'INA-2025-008492'}
+                    </span>
                   </div>
               </div>
               <div className="w-full md:w-64 space-y-3">
@@ -615,6 +633,211 @@ export default function PlotDetails() {
               <KPI label="Acumulación Térmica" value={`${agronomyStats.totalGdd} GDD`} icon={Thermometer} color="bg-orange-100" />
               <KPI label="Crecimiento Act." value={`${agronomyStats.avgGrowth} cm/d`} icon={TrendingUp} color="bg-emerald-100" subtext={`Fase: ${agronomyStats.currentPhase}`} />
               <KPI label="Días Ciclo" value={Math.floor((Date.now() - new Date(plot.sowingDate).getTime()) / 86400000)} icon={Clock} color="bg-blue-100" />
+          </div>
+
+          {/* CIRCUITO INTEGRAL DE TRAZABILIDAD ACTIVO POR QR & PERSONAL INTERVINIENTE */}
+          <div className="mt-8 pt-8 border-t border-slate-100 dark:border-slate-800 space-y-5">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  <div>
+                      <span className="text-[10px] font-mono font-black uppercase text-emerald-600 dark:text-emerald-400 tracking-widest flex items-center gap-1.5">
+                          <QrCode size={13} />
+                          Circuito de Trazabilidad End-to-End Activo por QR (INASE · ARICCAME · SENASA)
+                      </span>
+                      <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight mt-0.5">
+                          Calidad del Lote, Personal Interviniente y Material Obtenido
+                      </h3>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                      <Link
+                          to={`/trace/${plot.id}`}
+                          target="_blank"
+                          className="px-3.5 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-[11px] font-mono font-bold flex items-center gap-1.5 hover:bg-emerald-100 transition"
+                      >
+                          <QrCode size={13} />
+                          <span>Verificar Certificado QR Público</span>
+                          <ExternalLink size={11} />
+                      </Link>
+                      <Link
+                          to="/seed-batches"
+                          className="px-3.5 py-2 rounded-xl bg-slate-900 dark:bg-slate-800 text-white text-[11px] font-mono font-bold flex items-center gap-1.5 hover:bg-slate-800 transition"
+                      >
+                          <Package size={13} className="text-amber-400" />
+                          <span>Registrar / Ver Material Obtenido ({obtainedMaterials.length})</span>
+                      </Link>
+                  </div>
+              </div>
+
+              {/* 4 ETAPAS DEL CIRCUITO */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs font-mono">
+                  {/* Etapa 1: Homologación & Inspección de Lote */}
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/80 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                          <span className="text-[9px] font-black uppercase text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded">
+                              1. Homologación & Calidad
+                          </span>
+                          <Award size={15} className="text-emerald-600" />
+                      </div>
+                      <strong className="text-slate-900 dark:text-white block text-xs truncate">
+                          {seedBatch?.qualityGrade === 'GRADO_B_ESTANDAR' ? 'Grado B · Estándar Fiscal' : 'Grado A · Élite Superior'}
+                      </strong>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                          Score: <strong>{seedBatch?.qualityScore || 96}/100 pts</strong> · PG: {seedBatch?.germination || 94}% · Pureza: {seedBatch?.purity || 99.5}%
+                      </p>
+                      <div className="pt-1 border-t border-slate-200/70 dark:border-slate-700 flex items-center justify-between text-[9px]">
+                          <span className="text-slate-400 truncate">Acta: {seedBatch?.sampleCode || 'MUE-ISTA-2025'}</span>
+                          <Link
+                              to={`/trace/${seedBatch?.originInspectionId || seedBatch?.id || plot.id}`}
+                              target="_blank"
+                              className="text-emerald-600 dark:text-emerald-400 font-bold hover:underline flex items-center gap-0.5 shrink-0"
+                          >
+                              <QrCode size={10} /> QR
+                          </Link>
+                      </div>
+                  </div>
+
+                  {/* Etapa 2: Lote de Siembra */}
+                  <div className="p-4 rounded-2xl bg-sky-50/50 dark:bg-sky-950/20 border border-sky-200/80 dark:border-sky-800/60 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                          <span className="text-[9px] font-black uppercase text-sky-700 dark:text-sky-300 bg-sky-500/15 px-2 py-0.5 rounded">
+                              2. N° Lote de Semilla
+                          </span>
+                          <Sprout size={15} className="text-sky-600" />
+                      </div>
+                      <strong className="text-slate-900 dark:text-white block text-xs truncate">
+                          {seedBatch?.certificationNumber || seedBatch?.batchCode || 'LOT-2025-FED17-C1'}
+                      </strong>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
+                          Rótulo INASE: <strong>{seedBatch?.labelSerialNumber || 'INA-2025-008492'}</strong>
+                      </p>
+                      <div className="pt-1 border-t border-sky-200/70 dark:border-sky-800 flex items-center justify-between text-[9px]">
+                          <span className="text-slate-500 dark:text-slate-400 truncate">Traz.: {seedBatch?.batchCode || 'TRZ-2025-C1'}</span>
+                          <Link
+                              to={`/trace/${seedBatch?.id || plot.id}?seedLot=${encodeURIComponent(seedBatch?.certificationNumber || seedBatch?.batchCode || 'LOT-2025-FED17-C1')}`}
+                              target="_blank"
+                              className="text-sky-600 dark:text-sky-400 font-bold hover:underline flex items-center gap-0.5 shrink-0"
+                          >
+                              <QrCode size={10} /> QR Lote
+                          </Link>
+                      </div>
+                  </div>
+
+                  {/* Etapa 3: Parcela de Cultivo */}
+                  <div className="p-4 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/60 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                          <span className="text-[9px] font-black uppercase text-emerald-700 dark:text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded">
+                              3. Parcela de Cultivo
+                          </span>
+                          <MapPin size={15} className="text-emerald-600" />
+                      </div>
+                      <strong className="text-slate-900 dark:text-white block text-xs truncate">
+                          {plot.name} ({plot.surfaceArea} {plot.surfaceUnit})
+                      </strong>
+                      <p className="text-[10px] text-slate-600 dark:text-slate-400">
+                          Siembra: <strong>{plot.sowingDate}</strong> · Campaña {plot.campaign || '2025/2026'}
+                      </p>
+                      <div className="pt-1 border-t border-emerald-200/60 dark:border-emerald-800/60 flex items-center justify-between text-[9px]">
+                          <span className="text-emerald-700 dark:text-emerald-400 font-bold"> QR Activo en Tranquera</span>
+                          <button
+                              type="button"
+                              onClick={() => setIsQrModalOpen(true)}
+                              className="text-emerald-700 dark:text-emerald-300 font-black underline"
+                          >
+                              Emitir Cartel
+                          </button>
+                      </div>
+                  </div>
+
+                  {/* Etapa 4: Material Obtenido */}
+                  <div className="p-4 rounded-2xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/60 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                          <span className="text-[9px] font-black uppercase text-amber-700 dark:text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded">
+                              4. Material Obtenido
+                          </span>
+                          <Package size={15} className="text-amber-600" />
+                      </div>
+                      {obtainedMaterials.length > 0 ? (
+                          <>
+                              <strong className="text-slate-900 dark:text-white block text-xs truncate">
+                                  {obtainedMaterials[0].batchCode}
+                              </strong>
+                              <p className="text-[10px] text-slate-600 dark:text-slate-400">
+                                  {obtainedMaterials.reduce((s, b) => s + (b.initialQuantity || 0), 0).toLocaleString()} kg cosechados ({obtainedMaterials.length} lote{obtainedMaterials.length > 1 ? 's' : ''})
+                              </p>
+                              <div className="pt-1 border-t border-amber-200/60 dark:border-amber-800/60 flex items-center justify-between text-[9px]">
+                                  <span className="text-emerald-700 dark:text-emerald-400 font-bold">Calidad Grado A</span>
+                                  <Link
+                                      to={`/trace/${obtainedMaterials[0].id}`}
+                                      target="_blank"
+                                      className="text-amber-700 dark:text-amber-300 font-bold hover:underline flex items-center gap-0.5"
+                                  >
+                                      <QrCode size={10} /> QR Material
+                                  </Link>
+                              </div>
+                          </>
+                      ) : (
+                          <>
+                              <strong className="text-slate-700 dark:text-slate-300 block text-xs">
+                                  En Ciclo Cultivo ({Math.round(biologicalProgress)}%)
+                              </strong>
+                              <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                                  Al cosechar la parcela, vincule el Grano, Fibra o Biomasa aquí.
+                              </p>
+                              <div className="pt-1 border-t border-amber-200/60 dark:border-amber-800/60 flex items-center justify-between text-[9px]">
+                                  <span className="text-slate-400">Trazabilidad Lista</span>
+                                  <Link to="/seed-batches" className="text-amber-700 dark:text-amber-400 font-bold hover:underline">
+                                      + Cargar Cosecha
+                                  </Link>
+                              </div>
+                          </>
+                      )}
+                  </div>
+              </div>
+
+              {/* PERSONAL INTERVINIENTE EN TOMA DE MUESTRAS Y TRAZABILIDAD */}
+              <div className="p-4 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/25 border border-indigo-200/80 dark:border-indigo-900/50 flex flex-col lg:flex-row lg:items-center justify-between gap-4 text-xs font-mono">
+                  <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0">
+                          <UserCheck size={18} />
+                      </div>
+                      <div>
+                          <span className="text-[9px] font-black uppercase text-indigo-600 dark:text-indigo-400 block tracking-wider">
+                              Integridad de Cadena de Custodia · Personal Interviniente Registrado
+                          </span>
+                          <strong className="text-slate-900 dark:text-white text-xs">
+                              Responsables Técnicos de Toma de Muestras, Homologación, Siembra y Monitoreo
+                          </strong>
+                      </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                      <div className="bg-white dark:bg-slate-900 px-3 py-2 rounded-xl border border-indigo-100 dark:border-indigo-900/60">
+                          <span className="text-[8px] uppercase font-bold text-slate-400 block">Toma de Muestras (ISTA/INASE)</span>
+                          <strong className="text-slate-900 dark:text-white text-[11px] block">
+                              {plot.samplingResponsibleName || seedBatch?.samplerName || 'Matias QUINTANA'}
+                          </strong>
+                          <span className="text-[9px] text-indigo-600 dark:text-indigo-400">
+                              {seedBatch?.samplerDniOrMatricula || 'Muestreador Oficial Habilitado'}
+                          </span>
+                      </div>
+                      <div className="bg-white dark:bg-slate-900 px-3 py-2 rounded-xl border border-indigo-100 dark:border-indigo-900/60">
+                          <span className="text-[8px] uppercase font-bold text-slate-400 block">Jefe Operativo de Siembra</span>
+                          <strong className="text-slate-900 dark:text-white text-[11px] block">
+                              {plot.sowingResponsibleName || 'Joaquin AREZO'}
+                          </strong>
+                          <span className="text-[9px] text-emerald-600 dark:text-emerald-400">
+                              Ejecución y Densidad en Campo
+                          </span>
+                      </div>
+                      <div className="bg-white dark:bg-slate-900 px-3 py-2 rounded-xl border border-indigo-100 dark:border-indigo-900/60">
+                          <span className="text-[8px] uppercase font-bold text-slate-400 block">Director Técnico & Auditoría</span>
+                          <strong className="text-slate-900 dark:text-white text-[11px] block">
+                              {plot.technicalResponsibleName || seedBatch?.inspectorName || 'Ing. Agr. Julian PIZARRO'}
+                          </strong>
+                          <span className="text-[9px] text-slate-500">
+                              {plot.technicalResponsibleMatricula || seedBatch?.inspectorMatricula || 'MP CIAFBA 14.892'}
+                          </span>
+                      </div>
+                  </div>
+              </div>
           </div>
       </div>
 
@@ -902,6 +1125,7 @@ export default function PlotDetails() {
           location={location}
           variety={variety}
           client={clients?.find(c => c.id === location?.clientId)}
+          seedBatch={seedBatch}
         />
       )}
 

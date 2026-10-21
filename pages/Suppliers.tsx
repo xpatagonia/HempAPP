@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { 
   Supplier, SupplierCategory, TechnicalHomologationStatus, 
-  SupplierLotInspection, AgronomicInspectionVerdict 
+  SupplierLotInspection, AgronomicInspectionVerdict, LotQualityGrade, SeedBatch 
 } from '../types';
 import { DEMO_SUPPLIER_INSPECTIONS } from '../src/data/initialDemoData';
 import { 
@@ -12,7 +12,7 @@ import {
   ExternalLink, Printer, Check, Copy, FileText, ChevronRight,
   Filter, CheckSquare, Phone, Globe, Microscope, Droplets,
   Scale, ClipboardCheck, ArrowUpDown, Sparkles, Building2,
-  Calendar, UserCheck, AlertCircle
+  Calendar, UserCheck, AlertCircle, QrCode, Users, Layers, PackageCheck
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
@@ -88,6 +88,79 @@ const VERDICT_CONFIG: Record<AgronomicInspectionVerdict, { label: string; bg: st
   }
 };
 
+export const QUALITY_GRADE_CONFIG: Record<LotQualityGrade, { label: string; shortLabel: string; bg: string; text: string; border: string; description: string }> = {
+  'GRADO_A_SUPERIOR': {
+    label: 'Grado A · Calidad Superior (Semilla Élite)',
+    shortLabel: 'GRADO A · ÉLITE',
+    bg: 'bg-emerald-100 dark:bg-emerald-950/80',
+    text: 'text-emerald-800 dark:text-emerald-300',
+    border: 'border-emerald-400 dark:border-emerald-700',
+    description: 'PG ≥ 90%, Pureza ≥ 99%, Libre de Patógenos y Cero Residuos. Apta para multiplicación y siembra de alta precisión.'
+  },
+  'GRADO_B_ESTANDAR': {
+    label: 'Grado B · Estándar Fiscalizado INASE',
+    shortLabel: 'GRADO B · ESTÁNDAR',
+    bg: 'bg-sky-100 dark:bg-sky-950/80',
+    text: 'text-sky-800 dark:text-sky-300',
+    border: 'border-sky-400 dark:border-sky-700',
+    description: 'PG 80–89%, Pureza ≥ 98%, Dentro de tolerancia sanitaria SENASA. Apta para siembra extensiva industrial.'
+  },
+  'GRADO_C_CONDICIONAL': {
+    label: 'Grado C · Condicional (Ajuste de Densidad)',
+    shortLabel: 'GRADO C · CONDICIONAL',
+    bg: 'bg-amber-100 dark:bg-amber-950/80',
+    text: 'text-amber-800 dark:text-amber-300',
+    border: 'border-amber-400 dark:border-amber-700',
+    description: 'PG 70–79% o humedad observada. Requiere corrección de densidad de siembra (+15% kg/ha) y monitoreo temprano.'
+  },
+  'NO_CONFORME': {
+    label: 'No Conforme · Rechazo Técnico / Bloqueado',
+    shortLabel: 'NO CONFORME',
+    bg: 'bg-rose-100 dark:bg-rose-950/80',
+    text: 'text-rose-800 dark:text-rose-300',
+    border: 'border-rose-400 dark:border-rose-700',
+    description: 'PG < 70%, presencia de patógenos cuarentenarios o exceso de LMR. Lote bloqueado para implantación.'
+  }
+};
+
+export function calculateLotQuality(data: Partial<SupplierLotInspection>): { grade: LotQualityGrade; score: number; recommendedVerdict: AgronomicInspectionVerdict } {
+  if (
+    data.pathogenScreeningResult === 'Positivo Cuarentenario (Alerta)' ||
+    data.residueStatus === 'Excede LMR' ||
+    data.weedSeedsFound
+  ) {
+    return { grade: 'NO_CONFORME', score: 35, recommendedVerdict: 'RECHAZADO_DEVOLUCION' };
+  }
+
+  const pg = Number(data.germinationTestedPct ?? 90);
+  const purity = Number(data.purityPct ?? 99);
+  const moisture = Number(data.moisturePct ?? 9);
+  const vigor = Number(data.vigorScore ?? 8);
+
+  if (pg < 70 || purity < 95 || moisture > 14) {
+    return { grade: 'NO_CONFORME', score: Math.max(40, Math.round(pg * 0.6)), recommendedVerdict: 'RECHAZADO_DEVOLUCION' };
+  }
+
+  // Ponderación técnica ISTA: PG (45%), Pureza (25%), Humedad óptima 7-10% (15%), Vigor 1-9 (15%)
+  const pgScore = Math.min(100, (pg / 95) * 100);
+  const purityScore = Math.min(100, (purity / 99.8) * 100);
+  const moistureScore = moisture >= 7 && moisture <= 10 ? 100 : moisture <= 12 ? 82 : 60;
+  const vigorScorePct = Math.min(100, (vigor / 9) * 100);
+
+  let rawScore = Math.round(pgScore * 0.45 + purityScore * 0.25 + moistureScore * 0.15 + vigorScorePct * 0.15);
+  if (data.pathogenScreeningResult === 'Presencia Aislada No Cuarentenaria') rawScore -= 12;
+  if (data.residueStatus === 'Dentro de LMR SENASA') rawScore -= 5;
+  const finalScore = Math.max(10, Math.min(100, rawScore));
+
+  if (pg >= 90 && purity >= 98.5 && moisture <= 10.5 && data.pathogenScreeningResult === 'Negativo (Conforme)') {
+    return { grade: 'GRADO_A_SUPERIOR', score: finalScore, recommendedVerdict: 'APROBADO_CAMPO' };
+  }
+  if (pg >= 80 && purity >= 97 && moisture <= 12) {
+    return { grade: 'GRADO_B_ESTANDAR', score: finalScore, recommendedVerdict: 'APROBADO_CAMPO' };
+  }
+  return { grade: 'GRADO_C_CONDICIONAL', score: finalScore, recommendedVerdict: 'EN_CUARENTENA_OBSERVADO' };
+}
+
 // Vademécum agronómico de insumos autorizados bajo protocolo GACP / SENASA
 const AGRONOMIC_VADEMECUM = [
   {
@@ -155,7 +228,8 @@ const AGRONOMIC_VADEMECUM = [
 export default function Suppliers() {
   const { 
     suppliers, addSupplier, updateSupplier, deleteSupplier, 
-    currentUser, varieties, seedBatches 
+    currentUser, varieties, seedBatches, addSeedBatch, updateSeedBatch,
+    plots, storagePoints, usersList: users
   } = useAppContext();
   const navigate = useNavigate();
 
@@ -172,7 +246,9 @@ export default function Suppliers() {
 
   // Modal para Inspecciones de Lotes
   const [isNewInspectionModalOpen, setIsNewInspectionModalOpen] = useState(false);
+  const [editingInspectionId, setEditingInspectionId] = useState<string | null>(null);
   const [selectedInspectionForView, setSelectedInspectionForView] = useState<SupplierLotInspection | null>(null);
+  const [syncWithSeedBatch, setSyncWithSeedBatch] = useState<boolean>(true);
 
   // Filtros
   const [searchTerm, setSearchTerm] = useState('');
@@ -180,12 +256,17 @@ export default function Suppliers() {
   const [filterHomologation, setFilterHomologation] = useState<string>('all');
   const [filterVerdict, setFilterVerdict] = useState<string>('all');
 
-  // Inspecciones de Lote con persistencia en localStorage
+  // Inspecciones de Lote con persistencia en localStorage y semilla automática si estaba vacío
   const [lotInspections, setLotInspections] = useState<SupplierLotInspection[]>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('ht_supplier_inspections');
       if (saved) {
-        try { return JSON.parse(saved); } catch (e) {}
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed;
+          }
+        } catch (e) {}
       }
     }
     return DEMO_SUPPLIER_INSPECTIONS;
@@ -206,40 +287,113 @@ export default function Suppliers() {
     technicalSpecialty: '', activeIngredientsProvided: [], batchReturnWarrantyDays: 60,
     lat: '', lng: '',
     audit: {
-      technicalAgronomistName: 'Ing. Agr. Lucas Berardi',
-      technicalAgronomistMatricula: 'MP-AGRO-3321 MZA',
+      technicalAgronomistName: 'Ing. Agr. Julian PIZARRO',
+      technicalAgronomistMatricula: 'MP-AGRO-1492 CH',
+      samplerName: 'Matias QUINTANA',
+      samplerMatricula: 'TEC-MUESTREO-ISTA-108',
       lastAuditDate: new Date().toISOString().split('T')[0],
       auditScore: 95,
       bpaCertified: true,
       gacpCertified: true,
       organicCertified: false,
       zeroResidueGuarantee: true,
-      labAccreditationStandard: ''
+      labAccreditationStandard: 'ISTA / ISO 17025 & Red ARICCAME'
     }
   });
 
   // Formulario de Nueva Inspección de Lote
   const [newInspectionData, setNewInspectionData] = useState<Partial<SupplierLotInspection>>({
-    supplierId: suppliers[0]?.id || 'sup-1',
-    supplierName: suppliers[0]?.name || 'BioGenética Andina & Semillas Certificadas',
+    supplierId: suppliers[0]?.id || '3bfc9bcd-4ab1-4149-b46a-1a5d1e3392cd',
+    supplierName: suppliers[0]?.name || 'HEMPIT France',
     date: new Date().toISOString().split('T')[0],
     inputCategory: 'Semilla C1/C2',
     lotNumber: '',
     guideOrRemitoNumber: '',
     germinationDeclaredPct: 90,
-    germinationTestedPct: 92,
-    purityPct: 99.5,
-    moisturePct: 9.0,
+    germinationTestedPct: 93,
+    purityPct: 99.7,
+    moisturePct: 8.8,
+    vigorScore: 9,
+    thousandSeedWeightGr: 18.5,
     weedSeedsFound: false,
     pathogenScreeningResult: 'Negativo (Conforme)',
     residueStatus: 'Cero Residuos / Orgánico',
+    qualityGrade: 'GRADO_A_SUPERIOR',
+    qualityScore: 96,
     verdict: 'APROBADO_CAMPO',
-    agronomistName: currentUser?.name || 'Ing. Agr. Lucas Berardi',
-    agronomistMatricula: 'MP-AGRO-3321 MZA',
+    varietyId: varieties[0]?.id || 'ce04b1d9-bde3-4040-94f3-3b57599ad4e7',
+    varietyName: varieties[0]?.name || 'Futura 75',
+    seedBatchId: '',
+    initialQuantityKg: 1.0,
+    storagePointId: storagePoints[0]?.id || '5ceffc58-8219-4774-a340-9e1ac2c8458d',
+    samplerUserId: '1766450364369',
+    samplerName: 'Matias QUINTANA',
+    samplerRole: 'Responsable de Muestreo en Recepción',
+    samplerDniOrMatricula: 'TEC-MUESTREO-ISTA-108',
+    sampleCode: `MUE-ISTA-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`,
+    samplingDate: new Date().toISOString().split('T')[0],
+    samplingMethod: 'Calador ISTA Compuesto (3 Submuestras Precintadas)',
+    agronomistUserId: '1766683825719',
+    agronomistName: currentUser?.name || 'Ing. Agr. Julian PIZARRO',
+    agronomistMatricula: 'MP-AGRO-1492 CH',
+    receptionResponsibleName: 'Gastón BAREA M.',
     observations: ''
   });
 
-  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
+  // Cálculo dinámico de calidad del lote a medida que cambian los parámetros de laboratorio
+  const liveQualityEvaluation = useMemo(() => {
+    return calculateLotQuality(newInspectionData);
+  }, [
+    newInspectionData.germinationTestedPct,
+    newInspectionData.purityPct,
+    newInspectionData.moisturePct,
+    newInspectionData.vigorScore,
+    newInspectionData.pathogenScreeningResult,
+    newInspectionData.residueStatus,
+    newInspectionData.weedSeedsFound
+  ]);
+
+  // Helper para resolver la cadena de trazabilidad completa de una inspección de lote
+  const getInspectionTraceabilityChain = (insp: SupplierLotInspection) => {
+    const linkedSeedBatches = seedBatches.filter(b =>
+      (b.materialType || 'seed') === 'seed' && (
+        b.id === insp.seedBatchId ||
+        b.originInspectionId === insp.id ||
+        b.batchCode.toUpperCase().includes(insp.lotNumber.toUpperCase())
+      )
+    );
+    const seedBatchIds = new Set(linkedSeedBatches.map(b => b.id));
+    if (insp.seedBatchId) seedBatchIds.add(insp.seedBatchId);
+
+    const linkedPlots = plots.filter(p =>
+      (p.seedBatchId && seedBatchIds.has(p.seedBatchId)) ||
+      p.originInspectionId === insp.id
+    );
+    const plotIds = new Set(linkedPlots.map(p => p.id));
+
+    const obtainedMaterials = seedBatches.filter(b =>
+      b.materialType && b.materialType !== 'seed' && (
+        b.originInspectionId === insp.id ||
+        (b.originPlotId && plotIds.has(b.originPlotId)) ||
+        (b.parentSeedBatchId && seedBatchIds.has(b.parentSeedBatchId))
+      )
+    );
+
+    return { linkedSeedBatches, linkedPlots, obtainedMaterials };
+  };
+
+  const buildTraceUrl = (id: string, params: Record<string, string | number | undefined>) => {
+    const baseUrl = typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}` : '';
+    const sp = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && String(v).trim() !== '') {
+        sp.set(k, String(v));
+      }
+    });
+    return `${baseUrl}#/trace/${encodeURIComponent(id)}?${sp.toString()}`;
+  };
+
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || currentUser?.role === 'technician';
 
   // Insumos y aplicaciones fitosanitarias almacenadas
   const agroAppsCountBySupplier = useMemo(() => {
@@ -367,7 +521,7 @@ export default function Suppliers() {
     }
   };
 
-  const handleCreateInspection = (e: React.FormEvent) => {
+  const handleCreateInspection = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newInspectionData.lotNumber || !newInspectionData.supplierId) {
       alert("Por favor indique el N° de Lote y seleccione un proveedor homologado.");
@@ -375,52 +529,175 @@ export default function Suppliers() {
     }
 
     const matchedSup = suppliers.find(s => s.id === newInspectionData.supplierId);
+    const matchedVar = varieties.find(v => v.id === newInspectionData.varietyId);
+    const evalResult = calculateLotQuality(newInspectionData);
+    const inspectionId = editingInspectionId || generateId('insp');
+    const cleanLotNumber = newInspectionData.lotNumber!.trim().toUpperCase();
+
+    let linkedBatchId = newInspectionData.seedBatchId || undefined;
+
+    // Si es Semilla y está activada la vinculación con Lotes de Siembra, creamos o actualizamos el SeedBatch
+    if (newInspectionData.inputCategory === 'Semilla C1/C2' && syncWithSeedBatch) {
+      const existingBatch = seedBatches.find(b =>
+        (linkedBatchId && b.id === linkedBatchId) ||
+        b.batchCode.toUpperCase() === cleanLotNumber
+      );
+
+      if (existingBatch) {
+        linkedBatchId = existingBatch.id;
+        await updateSeedBatch({
+          ...existingBatch,
+          supplierId: matchedSup?.id || existingBatch.supplierId,
+          varietyId: matchedVar?.id || existingBatch.varietyId,
+          germination: Number(newInspectionData.germinationTestedPct) || existingBatch.germination,
+          purity: Number(newInspectionData.purityPct) || existingBatch.purity,
+          moisturePct: Number(newInspectionData.moisturePct) || existingBatch.moisturePct,
+          analysisDate: newInspectionData.date || existingBatch.analysisDate,
+          originInspectionId: inspectionId,
+          qualityGrade: evalResult.grade,
+          qualityScore: evalResult.score,
+          samplerName: newInspectionData.samplerName?.trim() || existingBatch.samplerName,
+          samplerMatricula: newInspectionData.samplerDniOrMatricula?.trim() || existingBatch.samplerMatricula,
+          sampleCode: newInspectionData.sampleCode?.trim() || existingBatch.sampleCode,
+          inspectorName: newInspectionData.agronomistName?.trim() || existingBatch.inspectorName,
+          inspectorMatricula: newInspectionData.agronomistMatricula?.trim() || existingBatch.inspectorMatricula,
+          logisticsResponsible: newInspectionData.receptionResponsibleName?.trim() || existingBatch.logisticsResponsible
+        });
+      } else {
+        const newBatchId = generateId('batch');
+        linkedBatchId = newBatchId;
+        const createdBatch: SeedBatch = {
+          id: newBatchId,
+          varietyId: matchedVar?.id || varieties[0]?.id || 'ce04b1d9-bde3-4040-94f3-3b57599ad4e7',
+          supplierId: matchedSup?.id,
+          batchCode: cleanLotNumber,
+          labelSerialNumber: `INASE-${Math.floor(100000 + Math.random() * 900000)}`,
+          category: 'C1_CERTIFICADA_1',
+          materialType: 'seed',
+          analysisDate: newInspectionData.date || new Date().toISOString().split('T')[0],
+          purity: Number(newInspectionData.purityPct) || 99.5,
+          germination: Number(newInspectionData.germinationTestedPct) || 92,
+          moisturePct: Number(newInspectionData.moisturePct) || 8.8,
+          certificationNumber: newInspectionData.guideOrRemitoNumber || `CERT-${cleanLotNumber}`,
+          purchaseDate: newInspectionData.date || new Date().toISOString().split('T')[0],
+          pricePerKg: 0,
+          initialQuantity: Number(newInspectionData.initialQuantityKg) || 1,
+          remainingQuantity: Number(newInspectionData.initialQuantityKg) || 1,
+          storagePointId: newInspectionData.storagePointId || storagePoints[0]?.id,
+          logisticsResponsible: newInspectionData.receptionResponsibleName?.trim() || 'Gastón BAREA M.',
+          originInspectionId: inspectionId,
+          qualityGrade: evalResult.grade,
+          qualityScore: evalResult.score,
+          samplerName: newInspectionData.samplerName?.trim() || 'Matias QUINTANA',
+          samplerMatricula: newInspectionData.samplerDniOrMatricula?.trim() || 'TEC-MUESTREO-ISTA-108',
+          sampleCode: newInspectionData.sampleCode?.trim() || `MUE-${cleanLotNumber}`,
+          inspectorName: newInspectionData.agronomistName?.trim() || 'Ing. Agr. Julian PIZARRO',
+          inspectorMatricula: newInspectionData.agronomistMatricula?.trim() || 'MP-AGRO-1492 CH',
+          notes: `Lote de siembra homologado desde Inspección Técnica #${inspectionId} (${QUALITY_GRADE_CONFIG[evalResult.grade].shortLabel}).`,
+          isActive: evalResult.grade !== 'NO_CONFORME',
+          createdAt: new Date().toISOString()
+        };
+        await addSeedBatch(createdBatch);
+      }
+    }
 
     const inspection: SupplierLotInspection = {
-      id: generateId('insp'),
+      id: inspectionId,
       supplierId: newInspectionData.supplierId!,
       supplierName: matchedSup?.name || newInspectionData.supplierName || 'Proveedor Homologado',
       date: newInspectionData.date || new Date().toISOString().split('T')[0],
       inputCategory: newInspectionData.inputCategory || 'Semilla C1/C2',
-      lotNumber: newInspectionData.lotNumber!.trim().toUpperCase(),
+      lotNumber: cleanLotNumber,
       guideOrRemitoNumber: newInspectionData.guideOrRemitoNumber?.trim() || undefined,
       germinationDeclaredPct: Number(newInspectionData.germinationDeclaredPct) || undefined,
       germinationTestedPct: Number(newInspectionData.germinationTestedPct) || undefined,
       purityPct: Number(newInspectionData.purityPct) || undefined,
       moisturePct: Number(newInspectionData.moisturePct) || undefined,
+      vigorScore: Number(newInspectionData.vigorScore) || 8,
+      thousandSeedWeightGr: Number(newInspectionData.thousandSeedWeightGr) || undefined,
       weedSeedsFound: Boolean(newInspectionData.weedSeedsFound),
       pathogenScreeningResult: newInspectionData.pathogenScreeningResult || 'Negativo (Conforme)',
       residueStatus: newInspectionData.residueStatus || 'Cero Residuos / Orgánico',
-      verdict: newInspectionData.verdict || 'APROBADO_CAMPO',
-      agronomistName: newInspectionData.agronomistName?.trim() || 'Ing. Agr. Lucas Berardi',
-      agronomistMatricula: newInspectionData.agronomistMatricula?.trim() || 'MP-AGRO-3321 MZA',
+      qualityGrade: evalResult.grade,
+      qualityScore: evalResult.score,
+      verdict: newInspectionData.verdict || evalResult.recommendedVerdict,
+      varietyId: matchedVar?.id || newInspectionData.varietyId,
+      varietyName: matchedVar?.name || newInspectionData.varietyName,
+      seedBatchId: linkedBatchId,
+      initialQuantityKg: Number(newInspectionData.initialQuantityKg) || undefined,
+      storagePointId: newInspectionData.storagePointId || undefined,
+      samplerUserId: newInspectionData.samplerUserId,
+      samplerName: newInspectionData.samplerName?.trim() || 'Matias QUINTANA',
+      samplerRole: newInspectionData.samplerRole?.trim() || 'Responsable de Muestreo en Recepción',
+      samplerDniOrMatricula: newInspectionData.samplerDniOrMatricula?.trim() || 'TEC-MUESTREO-ISTA-108',
+      sampleCode: newInspectionData.sampleCode?.trim() || `MUE-${cleanLotNumber}`,
+      samplingDate: newInspectionData.samplingDate || newInspectionData.date,
+      samplingMethod: newInspectionData.samplingMethod || 'Calador ISTA Compuesto (3 Submuestras Precintadas)',
+      agronomistUserId: newInspectionData.agronomistUserId,
+      agronomistName: newInspectionData.agronomistName?.trim() || 'Ing. Agr. Julian PIZARRO',
+      agronomistMatricula: newInspectionData.agronomistMatricula?.trim() || 'MP-AGRO-1492 CH',
+      receptionResponsibleName: newInspectionData.receptionResponsibleName?.trim() || 'Gastón BAREA M.',
       observations: newInspectionData.observations?.trim() || undefined,
       createdAt: new Date().toISOString()
     };
 
-    setLotInspections(prev => [inspection, ...prev]);
-    setIsNewInspectionModalOpen(false);
+    if (editingInspectionId) {
+      setLotInspections(prev => prev.map(i => i.id === editingInspectionId ? inspection : i));
+    } else {
+      setLotInspections(prev => [inspection, ...prev]);
+    }
 
-    // Reset inspection modal form
-    setNewInspectionData({
-      supplierId: suppliers[0]?.id || 'sup-1',
-      supplierName: suppliers[0]?.name || '',
-      date: new Date().toISOString().split('T')[0],
-      inputCategory: 'Semilla C1/C2',
-      lotNumber: '',
-      guideOrRemitoNumber: '',
-      germinationDeclaredPct: 90,
-      germinationTestedPct: 92,
-      purityPct: 99.5,
-      moisturePct: 9.0,
-      weedSeedsFound: false,
-      pathogenScreeningResult: 'Negativo (Conforme)',
-      residueStatus: 'Cero Residuos / Orgánico',
-      verdict: 'APROBADO_CAMPO',
-      agronomistName: currentUser?.name || 'Ing. Agr. Lucas Berardi',
-      agronomistMatricula: 'MP-AGRO-3321 MZA',
-      observations: ''
-    });
+    setIsNewInspectionModalOpen(false);
+    setEditingInspectionId(null);
+  };
+
+  const openNewInspectionModal = (inspToEdit?: SupplierLotInspection) => {
+    if (inspToEdit) {
+      setEditingInspectionId(inspToEdit.id);
+      setNewInspectionData({ ...inspToEdit });
+      setSyncWithSeedBatch(Boolean(inspToEdit.seedBatchId || inspToEdit.inputCategory === 'Semilla C1/C2'));
+    } else {
+      setEditingInspectionId(null);
+      setNewInspectionData({
+        supplierId: suppliers[0]?.id || '3bfc9bcd-4ab1-4149-b46a-1a5d1e3392cd',
+        supplierName: suppliers[0]?.name || 'HEMPIT France',
+        date: new Date().toISOString().split('T')[0],
+        inputCategory: 'Semilla C1/C2',
+        lotNumber: '',
+        guideOrRemitoNumber: '',
+        germinationDeclaredPct: 90,
+        germinationTestedPct: 93,
+        purityPct: 99.7,
+        moisturePct: 8.8,
+        vigorScore: 9,
+        thousandSeedWeightGr: 18.5,
+        weedSeedsFound: false,
+        pathogenScreeningResult: 'Negativo (Conforme)',
+        residueStatus: 'Cero Residuos / Orgánico',
+        qualityGrade: 'GRADO_A_SUPERIOR',
+        qualityScore: 96,
+        verdict: 'APROBADO_CAMPO',
+        varietyId: varieties[0]?.id || 'ce04b1d9-bde3-4040-94f3-3b57599ad4e7',
+        varietyName: varieties[0]?.name || 'Futura 75',
+        seedBatchId: '',
+        initialQuantityKg: 1.0,
+        storagePointId: storagePoints[0]?.id || '5ceffc58-8219-4774-a340-9e1ac2c8458d',
+        samplerUserId: '1766450364369',
+        samplerName: 'Matias QUINTANA',
+        samplerRole: 'Responsable de Muestreo en Recepción',
+        samplerDniOrMatricula: 'TEC-MUESTREO-ISTA-108',
+        sampleCode: `MUE-ISTA-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`,
+        samplingDate: new Date().toISOString().split('T')[0],
+        samplingMethod: 'Calador ISTA Compuesto (3 Submuestras Precintadas)',
+        agronomistUserId: '1766683825719',
+        agronomistName: currentUser?.name || 'Ing. Agr. Julian PIZARRO',
+        agronomistMatricula: 'MP-AGRO-1492 CH',
+        receptionResponsibleName: 'Gastón BAREA M.',
+        observations: ''
+      });
+      setSyncWithSeedBatch(true);
+    }
+    setIsNewInspectionModalOpen(true);
   };
 
   const resetForm = () => {
@@ -432,15 +709,17 @@ export default function Suppliers() {
       technicalSpecialty: '', activeIngredientsProvided: [], batchReturnWarrantyDays: 60,
       lat: '', lng: '',
       audit: {
-        technicalAgronomistName: 'Ing. Agr. Lucas Berardi',
-        technicalAgronomistMatricula: 'MP-AGRO-3321 MZA',
+        technicalAgronomistName: 'Ing. Agr. Julian PIZARRO',
+        technicalAgronomistMatricula: 'MP-AGRO-1492 CH',
+        samplerName: 'Matias QUINTANA',
+        samplerMatricula: 'TEC-MUESTREO-ISTA-108',
         lastAuditDate: new Date().toISOString().split('T')[0],
         auditScore: 95,
         bpaCertified: true,
         gacpCertified: true,
         organicCertified: false,
         zeroResidueGuarantee: true,
-        labAccreditationStandard: ''
+        labAccreditationStandard: 'ISTA / ISO 17025 & Red ARICCAME'
       }
     });
     setEditingId(null);
@@ -513,7 +792,7 @@ export default function Suppliers() {
         <div className="flex flex-wrap items-center gap-2.5 shrink-0">
           <button
             type="button"
-            onClick={() => setIsNewInspectionModalOpen(true)}
+            onClick={() => openNewInspectionModal()}
             className="bg-purple-600 text-white px-4 py-2.5 rounded-2xl flex items-center justify-center hover:bg-purple-500 transition shadow font-bold text-xs uppercase tracking-wider gap-2"
           >
             <ClipboardCheck size={16} />
@@ -861,21 +1140,26 @@ export default function Suppliers() {
                     </div>
                   </div>
 
-                  {/* FOOTER ACCIONES: DICTAMEN TÉCNICO */}
-                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                    <div>
-                      {s.audit?.technicalAgronomistName ? (
-                        <span className="text-[9px] text-slate-400 block truncate" title={s.audit.technicalAgronomistName}>
-                          Auditor: {s.audit.technicalAgronomistName}
-                        </span>
-                      ) : (
-                        <span className="text-[9px] text-slate-400 block">
-                          Garantía Lote: {s.batchReturnWarrantyDays || 60} días
-                        </span>
-                      )}
+                  {/* FOOTER ACCIONES: DICTAMEN TÉCNICO + QR ACTIVO */}
+                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <span className="text-[9px] text-slate-500 dark:text-slate-400 font-bold block truncate" title={s.audit?.technicalAgronomistName || 'Ing. Agr. Julian PIZARRO'}>
+                        Auditor: {s.audit?.technicalAgronomistName || 'Ing. Agr. Julian PIZARRO'}
+                      </span>
+                      <span className="text-[8px] text-emerald-600 font-bold block truncate">
+                        Muestreo: {s.audit?.samplerName || 'Matias QUINTANA'}
+                      </span>
                     </div>
                     
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/trace/${s.id}?type=supplier&name=${encodeURIComponent(s.name)}&cuit=${encodeURIComponent(s.cuit || '')}&inase=${encodeURIComponent(s.inaseRncyfsNumber || '')}`)}
+                        className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 transition"
+                        title="Abrir Trazabilidad Pública QR de Homologación"
+                      >
+                        <QrCode size={14} />
+                      </button>
                       <button 
                         type="button"
                         onClick={() => {
@@ -885,7 +1169,7 @@ export default function Suppliers() {
                         className="bg-slate-900 dark:bg-emerald-600 text-white px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center hover:scale-105 transition shadow gap-1"
                       >
                         <FileText size={12} />
-                        <span>Dictamen Técnico</span>
+                        <span>Dictamen & QR</span>
                       </button>
                     </div>
                   </div>
@@ -905,7 +1189,7 @@ export default function Suppliers() {
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16}/>
               <input 
                 type="text" 
-                placeholder="Buscar por lote, proveedor, N° remito o agrónomo..." 
+                placeholder="Buscar por lote, proveedor, muestra, tomador de muestra o agrónomo..." 
                 className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-2xl border border-slate-200 dark:border-slate-800 text-xs outline-none focus:ring-2 focus:ring-purple-500 shadow-sm"
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
@@ -926,29 +1210,29 @@ export default function Suppliers() {
 
               <button
                 type="button"
-                onClick={() => setIsNewInspectionModalOpen(true)}
+                onClick={() => openNewInspectionModal()}
                 className="bg-purple-600 text-white px-4 py-2.5 rounded-2xl flex items-center justify-center hover:bg-purple-500 transition shadow font-bold text-xs uppercase tracking-wider gap-1.5"
               >
                 <Plus size={15} />
-                <span>Registrar Ensayo de Lote</span>
+                <span>Nueva Inspección Técnica de Lote</span>
               </button>
             </div>
           </div>
 
-          {/* TABLA AGRONÓMICA DE INSPECCIONES */}
+          {/* TABLA AGRONÓMICA DE INSPECCIONES Y TRAZABILIDAD ACTIVA */}
           <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden">
-            <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+            <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
               <div>
                 <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight flex items-center gap-2">
                   <Microscope size={18} className="text-purple-600" />
-                  <span>Ensayos Fisiológicos & Control Fitosanitario a la Recepción</span>
+                  <span>Determinación de Calidad de Lotes, Muestreo & Circuito de Trazabilidad QR</span>
                 </h3>
                 <p className="text-[11px] text-slate-400 mt-0.5">
-                  Comparación marbete INASE vs test en cámara, screening de patógenos y verificación de LMR SENASA.
+                  Calificación ISTA/INASE (Grado A/B/C), personal interviniente en toma de muestras y vinculación con lotes de siembra, parcelas y material obtenido.
                 </p>
               </div>
-              <span className="text-xs font-bold text-slate-400">
-                {filteredInspections.length} ensayos registrados
+              <span className="text-xs font-bold text-purple-600 bg-purple-50 dark:bg-purple-950/60 px-3 py-1 rounded-xl border border-purple-200 dark:border-purple-800">
+                {filteredInspections.length} lotes inspeccionados
               </span>
             </div>
 
@@ -956,36 +1240,47 @@ export default function Suppliers() {
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="bg-slate-50 dark:bg-slate-800/60 text-[10px] font-black uppercase text-slate-500 border-b border-slate-100 dark:border-slate-800">
-                    <th className="py-3 px-4">Lote / Insumo</th>
-                    <th className="py-3 px-4">Proveedor Homologado</th>
-                    <th className="py-3 px-4 text-center">P. Germinativo (Real vs Marbete)</th>
-                    <th className="py-3 px-4 text-center">Pureza / Humedad</th>
-                    <th className="py-3 px-4">Sanidad & Residuos</th>
-                    <th className="py-3 px-4 text-center">Veredicto Fitosanitario</th>
-                    <th className="py-3 px-4 text-right">Acciones</th>
+                    <th className="py-3 px-4">Lote / Calidad Determinada</th>
+                    <th className="py-3 px-4">Proveedor & Genética</th>
+                    <th className="py-3 px-4 text-center">Parámetros ISTA (PG / Pureza / H°)</th>
+                    <th className="py-3 px-4">Personal Interviniente (Muestreo & Auditoría)</th>
+                    <th className="py-3 px-4">Circuito de Trazabilidad Activo</th>
+                    <th className="py-3 px-4 text-center">Veredicto</th>
+                    <th className="py-3 px-4 text-right">Acciones & QR</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {filteredInspections.map(insp => {
                     const verdictCfg = VERDICT_CONFIG[insp.verdict] || VERDICT_CONFIG['APROBADO_CAMPO'];
                     const VIcon = verdictCfg.icon;
+                    const calcQ = calculateLotQuality(insp);
+                    const qGrade = insp.qualityGrade || calcQ.grade;
+                    const qScore = insp.qualityScore || calcQ.score;
+                    const gradeCfg = QUALITY_GRADE_CONFIG[qGrade] || QUALITY_GRADE_CONFIG['GRADO_A_SUPERIOR'];
 
                     const pgDiff = (insp.germinationTestedPct && insp.germinationDeclaredPct)
                       ? insp.germinationTestedPct - insp.germinationDeclaredPct
                       : null;
 
+                    const chain = getInspectionTraceabilityChain(insp);
+
                     return (
                       <tr key={insp.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition">
                         <td className="py-3.5 px-4">
-                          <strong className="font-mono text-slate-900 dark:text-white font-black block">
-                            {insp.lotNumber}
-                          </strong>
-                          <span className="text-[10px] text-slate-400 block">
+                          <div className="flex items-center gap-1.5">
+                            <strong className="font-mono text-slate-900 dark:text-white font-black text-xs">
+                              {insp.lotNumber}
+                            </strong>
+                            <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase border ${gradeCfg.bg} ${gradeCfg.text} ${gradeCfg.border}`}>
+                              {gradeCfg.shortLabel} ({qScore} pts)
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-slate-400 block mt-0.5">
                             {insp.inputCategory} · {insp.date}
                           </span>
                           {insp.guideOrRemitoNumber && (
                             <span className="text-[9px] text-purple-600 font-mono block">
-                              Remito: {insp.guideOrRemitoNumber}
+                              Guía/Remito: {insp.guideOrRemitoNumber}
                             </span>
                           )}
                         </td>
@@ -994,56 +1289,102 @@ export default function Suppliers() {
                           <strong className="text-slate-800 dark:text-slate-200 block text-xs">
                             {insp.supplierName}
                           </strong>
-                          <span className="text-[10px] text-slate-400 block">
-                            Auditor: {insp.agronomistName}
+                          {insp.varietyName && (
+                            <span className="text-[10px] text-emerald-600 font-bold block flex items-center gap-1 mt-0.5">
+                              <Sprout size={11} />
+                              <span>Cultivar: {insp.varietyName}</span>
+                            </span>
+                          )}
+                          <span className="text-[9px] text-slate-400 block">
+                            {insp.residueStatus || 'Cero Residuos GACP'}
                           </span>
                         </td>
 
                         <td className="py-3.5 px-4 text-center">
                           {insp.germinationTestedPct ? (
-                            <div>
-                              <div className="flex items-center justify-center gap-1.5 font-bold">
+                            <div className="space-y-0.5">
+                              <div className="flex items-center justify-center gap-1 font-bold">
                                 <span className="text-sm font-black text-emerald-600 font-mono">
-                                  {insp.germinationTestedPct}%
+                                  {insp.germinationTestedPct}% PG
                                 </span>
                                 <span className="text-[10px] text-slate-400">
-                                  / {insp.germinationDeclaredPct || 90}%
+                                  (Marbete {insp.germinationDeclaredPct || 90}%)
                                 </span>
                               </div>
+                              <div className="text-[10px] font-mono text-slate-600 dark:text-slate-300">
+                                {insp.purityPct || 99.5}% Pur. · {insp.moisturePct || 8.8}% H° · Vigor {insp.vigorScore || 8}/9
+                              </div>
                               {pgDiff !== null && (
-                                <span className={`text-[9px] font-bold ${pgDiff >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                  {pgDiff >= 0 ? `+${pgDiff}% vigor extra` : `${pgDiff}% bajo marbete`}
+                                <span className={`text-[9px] font-bold block ${pgDiff >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                  {pgDiff >= 0 ? `+${pgDiff}% sobre marbete` : `${pgDiff}% bajo marbete`}
                                 </span>
                               )}
                             </div>
                           ) : (
-                            <span className="text-[10px] text-slate-400">No aplica (Insumo)</span>
-                          )}
-                        </td>
-
-                        <td className="py-3.5 px-4 text-center font-mono">
-                          {insp.purityPct ? (
-                            <div>
-                              <span className="font-bold text-slate-800 dark:text-slate-200 block">
-                                {insp.purityPct}% Pureza
-                              </span>
-                              <span className="text-[10px] text-slate-400">
-                                {insp.moisturePct ? `${insp.moisturePct}% H°` : 'H° standard'}
-                              </span>
-                            </div>
-                          ) : (
-                            <span className="text-[10px] text-slate-400">Conforme</span>
+                            <span className="text-[10px] text-slate-400">Insumo Verificado</span>
                           )}
                         </td>
 
                         <td className="py-3.5 px-4">
-                          <span className="text-[10px] font-bold text-emerald-600 block flex items-center gap-1">
-                            <CheckCircle2 size={11} />
-                            <span>{insp.pathogenScreeningResult || 'Negativo (Limpio)'}</span>
-                          </span>
-                          <span className="text-[10px] text-purple-600 block">
-                            {insp.residueStatus || 'Cero Residuos'}
-                          </span>
+                          <div className="space-y-1 text-[10px]">
+                            <div className="flex items-center gap-1.5">
+                              <span className="px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 font-bold text-[8px] uppercase">
+                                Toma Muestra
+                              </span>
+                              <strong className="text-slate-800 dark:text-slate-200">
+                                {insp.samplerName || 'Matias QUINTANA'}
+                              </strong>
+                            </div>
+                            <span className="text-[9px] font-mono text-slate-400 block">
+                              Muestra: {insp.sampleCode || `MUE-${insp.lotNumber}`} · {insp.samplerDniOrMatricula || 'ISTA'}
+                            </span>
+                            <div className="flex items-center gap-1.5 pt-0.5">
+                              <span className="px-1.5 py-0.5 rounded bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 font-bold text-[8px] uppercase">
+                                Auditor Lab
+                              </span>
+                              <strong className="text-slate-700 dark:text-slate-300">
+                                {insp.agronomistName}
+                              </strong>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="py-3.5 px-4">
+                          <div className="flex flex-wrap items-center gap-1 text-[9px] font-bold">
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/seed-batches`)}
+                              className="px-2 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 transition flex items-center gap-1"
+                              title="Ver Lotes de Siembra Asociados"
+                            >
+                              <Sprout size={11} />
+                              <span>{chain.linkedSeedBatches.length} Lotes Siembra</span>
+                            </button>
+
+                            <ChevronRight size={11} className="text-slate-400" />
+
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/plots`)}
+                              className="px-2 py-1 rounded-lg bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800 hover:bg-sky-100 transition flex items-center gap-1"
+                              title="Ver Parcelas Implantadas con este Lote"
+                            >
+                              <Layers size={11} />
+                              <span>{chain.linkedPlots.length} Parcelas</span>
+                            </button>
+
+                            <ChevronRight size={11} className="text-slate-400" />
+
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/seed-batches`)}
+                              className="px-2 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 hover:bg-amber-100 transition flex items-center gap-1"
+                              title="Ver Material Obtenido de la Cosecha"
+                            >
+                              <PackageCheck size={11} />
+                              <span>{chain.obtainedMaterials.length} Mat. Obtenido</span>
+                            </button>
+                          </div>
                         </td>
 
                         <td className="py-3.5 px-4 text-center">
@@ -1057,23 +1398,42 @@ export default function Suppliers() {
                           <div className="flex items-center justify-end gap-1.5">
                             <button
                               type="button"
+                              onClick={() => navigate(`/trace/${insp.id}?type=inspection&lot=${encodeURIComponent(insp.lotNumber)}&sup=${encodeURIComponent(insp.supplierName)}&grade=${qGrade}&score=${qScore}&sampler=${encodeURIComponent(insp.samplerName || 'Matias QUINTANA')}&sampleCode=${encodeURIComponent(insp.sampleCode || '')}&agro=${encodeURIComponent(insp.agronomistName)}`)}
+                              className="p-1.5 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 hover:bg-purple-100 transition"
+                              title="Abrir Trazabilidad QR Pública de la Inspección"
+                            >
+                              <QrCode size={14} />
+                            </button>
+
+                            <button
+                              type="button"
                               onClick={() => setSelectedInspectionForView(insp)}
-                              className="bg-slate-100 hover:bg-purple-100 text-slate-700 hover:text-purple-700 dark:bg-slate-800 dark:hover:bg-purple-950/60 dark:text-slate-300 dark:hover:text-purple-300 px-2.5 py-1.5 rounded-xl font-bold text-[10px] uppercase transition flex items-center gap-1"
-                              title="Ver Acta Fitosanitaria Imprimible"
+                              className="bg-slate-900 hover:bg-purple-600 text-white px-2.5 py-1.5 rounded-xl font-bold text-[10px] uppercase transition flex items-center gap-1 shadow-sm"
+                              title="Ver Acta Fitosanitaria, QR y Circuito de Trazabilidad"
                             >
                               <FileText size={12} />
-                              <span>Acta Técnica</span>
+                              <span>Acta & QR</span>
                             </button>
 
                             {isAdmin && (
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteInspection(insp.id)}
-                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-slate-800 rounded-xl transition"
-                                title="Eliminar Ensayo"
-                              >
-                                <Trash2 size={13} />
-                              </button>
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => openNewInspectionModal(insp)}
+                                  className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-slate-800 rounded-xl transition"
+                                  title="Editar Inspección y Asociaciones"
+                                >
+                                  <Edit2 size={13} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteInspection(insp.id)}
+                                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-slate-800 rounded-xl transition"
+                                  title="Eliminar Ensayo"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </>
                             )}
                           </div>
                         </td>
@@ -1163,112 +1523,229 @@ export default function Suppliers() {
         </div>
       )}
 
-      {/* MODAL 1: NUEVA INSPECCIÓN FITOSANITARIA DE LOTE */}
+      {/* MODAL 1: NUEVA INSPECCIÓN FITOSANITARIA DE LOTE + CALIDAD + TRAZABILIDAD + PERSONAL INTERVINIENTE */}
       {isNewInspectionModalOpen && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-[80] p-4 font-mono">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-2xl w-full p-6 md:p-8 shadow-2xl border border-slate-200 dark:border-slate-800 max-h-[92vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6 border-b border-slate-100 dark:border-slate-800 pb-3">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-4xl w-full p-6 md:p-8 shadow-2xl border border-slate-200 dark:border-slate-800 max-h-[94vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-5 border-b border-slate-100 dark:border-slate-800 pb-3">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-purple-500/10 text-purple-600 flex items-center justify-center">
                   <ClipboardCheck size={22} />
                 </div>
                 <div>
                   <span className="text-[10px] font-bold uppercase text-purple-600 tracking-wider">
-                    Control Fitosanitario en Recepción
+                    Determinación de Calidad del Lote & Vinculación de Trazabilidad QR
                   </span>
                   <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
-                    Nueva Inspección Técnica de Lote
+                    {editingInspectionId ? 'Editar Inspección Técnica de Lote' : 'Nueva Inspección Técnica de Lote'}
                   </h2>
                 </div>
               </div>
               <button onClick={() => setIsNewInspectionModalOpen(false)} className="text-slate-400 hover:text-slate-600"><X size={22}/></button>
             </div>
 
-            <form onSubmit={handleCreateInspection} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Proveedor Homologado *</label>
-                  <select
-                    required
-                    className={inputClass}
-                    value={newInspectionData.supplierId}
-                    onChange={e => {
-                      const sup = suppliers.find(s => s.id === e.target.value);
-                      setNewInspectionData({
-                        ...newInspectionData,
-                        supplierId: e.target.value,
-                        supplierName: sup?.name || ''
-                      });
-                    }}
-                  >
-                    {suppliers.map(s => (
-                      <option key={s.id} value={s.id}>
-                        {s.name} ({s.category})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Categoría del Insumo</label>
-                  <select
-                    className={inputClass}
-                    value={newInspectionData.inputCategory}
-                    onChange={e => setNewInspectionData({ ...newInspectionData, inputCategory: e.target.value as any })}
-                  >
-                    <option value="Semilla C1/C2">Semilla Fiscalizada C1 / C2</option>
-                    <option value="Bioinsumo / Enmienda">Bioinsumo / Biofertilizante SENASA</option>
-                    <option value="Fitosanitario / Biológico">Fitosanitario / Control Biológico</option>
-                    <option value="Sustrato / Enraizante">Sustrato / Propagación</option>
-                    <option value="Servicio Mecanización">Servicio Mecanizado de Campo</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">N° de Lote / Marbete *</label>
-                  <input
-                    required
-                    type="text"
-                    className={inputClass}
-                    placeholder="Ej: LOT-INASE-2025-C1-884"
-                    value={newInspectionData.lotNumber}
-                    onChange={e => setNewInspectionData({ ...newInspectionData, lotNumber: e.target.value })}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">N° Remito / Guía Tránsito</label>
-                  <input
-                    type="text"
-                    className={inputClass}
-                    placeholder="Ej: REM-0004-00018422"
-                    value={newInspectionData.guideOrRemitoNumber || ''}
-                    onChange={e => setNewInspectionData({ ...newInspectionData, guideOrRemitoNumber: e.target.value })}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Fecha de Recepción</label>
-                  <input
-                    type="date"
-                    className={inputClass}
-                    value={newInspectionData.date}
-                    onChange={e => setNewInspectionData({ ...newInspectionData, date: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              {/* ENSAYOS FISIOLÓGICOS (PARA SEMILLAS O SUSTRATOS) */}
+            <form onSubmit={handleCreateInspection} className="space-y-5">
+              {/* BLOQUE 1: ORIGEN DEL LOTE Y ASOCIACIÓN A LOTE DE SIEMBRA */}
               <div className="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3">
-                <span className="text-[10px] font-black uppercase text-purple-600 block tracking-wider">
-                  Ensayos de Cámara & Laboratorio (ISTA / INASE)
-                </span>
+                <div className="flex flex-wrap justify-between items-center gap-2">
+                  <span className="text-[10px] font-black uppercase text-emerald-600 tracking-wider flex items-center gap-1.5">
+                    <Sprout size={14} />
+                    <span>1. Identificación del Lote & Vinculación a Lotes de Siembra</span>
+                  </span>
+                  {newInspectionData.inputCategory === 'Semilla C1/C2' && (
+                    <label className="flex items-center gap-2 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={syncWithSeedBatch}
+                        onChange={e => setSyncWithSeedBatch(e.target.checked)}
+                        className="rounded text-emerald-600"
+                      />
+                      <span>Sincronizar / Crear Lote de Siembra Activo en Inventario QR</span>
+                    </label>
+                  )}
+                </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div>
-                    <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">% Germinación Medido</label>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Proveedor Homologado *</label>
+                    <select
+                      required
+                      className={inputClass}
+                      value={newInspectionData.supplierId}
+                      onChange={e => {
+                        const sup = suppliers.find(s => s.id === e.target.value);
+                        setNewInspectionData({
+                          ...newInspectionData,
+                          supplierId: e.target.value,
+                          supplierName: sup?.name || ''
+                        });
+                      }}
+                    >
+                      {suppliers.map(s => (
+                        <option key={s.id} value={s.id}>
+                          {s.name} ({s.category})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Categoría del Insumo *</label>
+                    <select
+                      className={inputClass}
+                      value={newInspectionData.inputCategory}
+                      onChange={e => setNewInspectionData({ ...newInspectionData, inputCategory: e.target.value as any })}
+                    >
+                      <option value="Semilla C1/C2">Semilla Fiscalizada C1 / C2</option>
+                      <option value="Bioinsumo / Enmienda">Bioinsumo / Biofertilizante SENASA</option>
+                      <option value="Fitosanitario / Biológico">Fitosanitario / Control Biológico</option>
+                      <option value="Sustrato / Enraizante">Sustrato / Propagación</option>
+                      <option value="Servicio Mecanización">Servicio Mecanizado de Campo</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Vincular con Lote de Siembra Existente</label>
+                    <select
+                      className={inputClass}
+                      value={newInspectionData.seedBatchId || ''}
+                      onChange={e => {
+                        const chosenBatch = seedBatches.find(b => b.id === e.target.value);
+                        if (chosenBatch) {
+                          const v = varieties.find(va => va.id === chosenBatch.varietyId);
+                          setNewInspectionData({
+                            ...newInspectionData,
+                            seedBatchId: chosenBatch.id,
+                            lotNumber: chosenBatch.batchCode,
+                            varietyId: chosenBatch.varietyId,
+                            varietyName: v?.name || '',
+                            germinationTestedPct: chosenBatch.germination || 92,
+                            purityPct: chosenBatch.purity || 99.5,
+                            initialQuantityKg: chosenBatch.initialQuantity || 1,
+                            storagePointId: chosenBatch.storagePointId || newInspectionData.storagePointId
+                          });
+                        } else {
+                          setNewInspectionData({ ...newInspectionData, seedBatchId: '' });
+                        }
+                      }}
+                    >
+                      <option value="">+ Crear Nuevo Lote o Por Código de Marbete</option>
+                      {seedBatches.filter(b => (b.materialType || 'seed') === 'seed').map(b => (
+                        <option key={b.id} value={b.id}>
+                          {b.batchCode} ({b.remainingQuantity} kg disp.)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">N° de Lote / Marbete Oficial *</label>
+                    <input
+                      required
+                      type="text"
+                      className={inputClass}
+                      placeholder="Ej: FUT-75-25-HEM"
+                      value={newInspectionData.lotNumber}
+                      onChange={e => setNewInspectionData({ ...newInspectionData, lotNumber: e.target.value })}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Genética / Variedad Asociada</label>
+                    <select
+                      className={inputClass}
+                      value={newInspectionData.varietyId || ''}
+                      onChange={e => {
+                        const v = varieties.find(va => va.id === e.target.value);
+                        setNewInspectionData({
+                          ...newInspectionData,
+                          varietyId: e.target.value,
+                          varietyName: v?.name || ''
+                        });
+                      }}
+                    >
+                      <option value="">Seleccionar Genética...</option>
+                      {varieties.map(v => (
+                        <option key={v.id} value={v.id}>{v.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">N° Remito / Guía ARICCAME</label>
+                    <input
+                      type="text"
+                      className={inputClass}
+                      placeholder="Ej: RE-2026-04104588-APN"
+                      value={newInspectionData.guideOrRemitoNumber || ''}
+                      onChange={e => setNewInspectionData({ ...newInspectionData, guideOrRemitoNumber: e.target.value })}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Fecha de Recepción / Ensayo</label>
+                    <input
+                      type="date"
+                      className={inputClass}
+                      value={newInspectionData.date}
+                      onChange={e => setNewInspectionData({ ...newInspectionData, date: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                {newInspectionData.inputCategory === 'Semilla C1/C2' && syncWithSeedBatch && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-slate-200 dark:border-slate-700">
+                    <div>
+                      <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Cantidad Recepcionada p/ Siembra (Kg)</label>
+                      <input
+                        type="number"
+                        step="0.05"
+                        min="0.01"
+                        className={inputClass}
+                        value={newInspectionData.initialQuantityKg || 1}
+                        onChange={e => setNewInspectionData({ ...newInspectionData, initialQuantityKg: Number(e.target.value) })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Nodo de Almacenamiento Destino</label>
+                      <select
+                        className={inputClass}
+                        value={newInspectionData.storagePointId || ''}
+                        onChange={e => setNewInspectionData({ ...newInspectionData, storagePointId: e.target.value })}
+                      >
+                        {storagePoints.map(sp => (
+                          <option key={sp.id} value={sp.id}>{sp.name} ({sp.city})</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* BLOQUE 2: ENSAYOS FISIOLÓGICOS Y DETERMINACIÓN AUTOMÁTICA DE CALIDAD DEL LOTE */}
+              <div className="p-4 bg-purple-50/40 dark:bg-purple-950/20 rounded-2xl border border-purple-200 dark:border-purple-900/60 space-y-3">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-purple-200/60 dark:border-purple-800/60 pb-2.5">
+                  <div>
+                    <span className="text-[10px] font-black uppercase text-purple-600 block tracking-wider">
+                      2. Determinación de Calidad del Lote (Laboratorio ISTA / INASE)
+                    </span>
+                    <p className="text-[10px] text-slate-500">
+                      La calificación de calidad se asocia automáticamente al lote de siembra, parcelas y material cosechado.
+                    </p>
+                  </div>
+                  <div className={`px-3 py-1.5 rounded-xl border text-right ${QUALITY_GRADE_CONFIG[liveQualityEvaluation.grade].bg} ${QUALITY_GRADE_CONFIG[liveQualityEvaluation.grade].text} ${QUALITY_GRADE_CONFIG[liveQualityEvaluation.grade].border}`}>
+                    <span className="text-[8px] font-black uppercase block opacity-80">Calidad Calculada del Lote</span>
+                    <strong className="text-xs font-black uppercase">
+                      {QUALITY_GRADE_CONFIG[liveQualityEvaluation.grade].shortLabel} · Score {liveQualityEvaluation.score}/100
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">% Germinación Real</label>
                     <input
                       type="number"
                       step="0.5"
@@ -1276,7 +1753,7 @@ export default function Suppliers() {
                       max="100"
                       className={inputClass}
                       placeholder="Ej: 94"
-                      value={newInspectionData.germinationTestedPct || ''}
+                      value={newInspectionData.germinationTestedPct ?? ''}
                       onChange={e => setNewInspectionData({ ...newInspectionData, germinationTestedPct: Number(e.target.value) })}
                     />
                   </div>
@@ -1290,7 +1767,7 @@ export default function Suppliers() {
                       max="100"
                       className={inputClass}
                       placeholder="Ej: 90"
-                      value={newInspectionData.germinationDeclaredPct || ''}
+                      value={newInspectionData.germinationDeclaredPct ?? ''}
                       onChange={e => setNewInspectionData({ ...newInspectionData, germinationDeclaredPct: Number(e.target.value) })}
                     />
                   </div>
@@ -1304,13 +1781,13 @@ export default function Suppliers() {
                       max="100"
                       className={inputClass}
                       placeholder="Ej: 99.8"
-                      value={newInspectionData.purityPct || ''}
+                      value={newInspectionData.purityPct ?? ''}
                       onChange={e => setNewInspectionData({ ...newInspectionData, purityPct: Number(e.target.value) })}
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">% Humedad Semilla</label>
+                    <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">% Humedad Grano</label>
                     <input
                       type="number"
                       step="0.1"
@@ -1318,15 +1795,29 @@ export default function Suppliers() {
                       max="30"
                       className={inputClass}
                       placeholder="Ej: 8.8"
-                      value={newInspectionData.moisturePct || ''}
+                      value={newInspectionData.moisturePct ?? ''}
                       onChange={e => setNewInspectionData({ ...newInspectionData, moisturePct: Number(e.target.value) })}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Índice Vigor (1-9)</label>
+                    <input
+                      type="number"
+                      step="1"
+                      min="1"
+                      max="9"
+                      className={inputClass}
+                      placeholder="Ej: 9"
+                      value={newInspectionData.vigorScore ?? 8}
+                      onChange={e => setNewInspectionData({ ...newInspectionData, vigorScore: Number(e.target.value) })}
                     />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
                   <div>
-                    <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Detección de Patógenos (Fusarium, Botrytis)</label>
+                    <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Screening Patógenos (Fusarium / Botrytis)</label>
                     <select
                       className={inputClass}
                       value={newInspectionData.pathogenScreeningResult}
@@ -1350,44 +1841,163 @@ export default function Suppliers() {
                       <option value="Excede LMR">Excede LMR (No Apto)</option>
                     </select>
                   </div>
+
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Veredicto Fitosanitario Oficial *</label>
+                    <select
+                      required
+                      className={inputClass}
+                      value={newInspectionData.verdict}
+                      onChange={e => setNewInspectionData({ ...newInspectionData, verdict: e.target.value as any })}
+                    >
+                      <option value="APROBADO_CAMPO">APROBADO PARA CAMPO (Conforme)</option>
+                      <option value="EN_CUARENTENA_OBSERVADO">EN CUARENTENA TÉCNICA (Lote Observado)</option>
+                      <option value="RECHAZADO_DEVOLUCION">RECHAZADO FITOSANITARIAMENTE (Devolución)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[10px] text-slate-600 dark:text-slate-300 flex items-center justify-between">
+                  <span><strong>Dictamen Automático de Calidad:</strong> {QUALITY_GRADE_CONFIG[liveQualityEvaluation.grade].description}</span>
                 </div>
               </div>
 
-              {/* VEREDICTO FINAL AGRONÓMICO */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Veredicto Fitosanitario Oficial *</label>
-                  <select
-                    required
-                    className={inputClass}
-                    value={newInspectionData.verdict}
-                    onChange={e => setNewInspectionData({ ...newInspectionData, verdict: e.target.value as any })}
-                  >
-                    <option value="APROBADO_CAMPO">APROBADO PARA CAMPO (Conforme)</option>
-                    <option value="EN_CUARENTENA_OBSERVADO">EN CUARENTENA TÉCNICA (Lote Observado)</option>
-                    <option value="RECHAZADO_DEVOLUCION">RECHAZADO FITOSANITARIAMENTE (Devolución)</option>
-                  </select>
+              {/* BLOQUE 3: PERSONAL INTERVINIENTE EN TOMA DE MUESTRAS Y TRAZABILIDAD */}
+              <div className="p-4 bg-amber-50/40 dark:bg-amber-950/20 rounded-2xl border border-amber-200 dark:border-amber-900/60 space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] font-black uppercase text-amber-700 dark:text-amber-400 tracking-wider flex items-center gap-1.5">
+                    <Users size={14} />
+                    <span>3. Personal Interviniente en Toma de Muestras, Laboratorio y Recepción</span>
+                  </span>
+                  <span className="text-[9px] font-bold text-slate-400 uppercase">
+                    Integridad de Cadena de Custodia QR
+                  </span>
                 </div>
 
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Agrónomo Responsable & MP *</label>
-                  <input
-                    required
-                    type="text"
-                    className={inputClass}
-                    value={newInspectionData.agronomistName}
-                    onChange={e => setNewInspectionData({ ...newInspectionData, agronomistName: e.target.value })}
-                    placeholder="Ing. Agr. Lucas Berardi - MP-AGRO-3321"
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Operador Toma de Muestra (Staff)</label>
+                    <select
+                      className={inputClass}
+                      value={newInspectionData.samplerUserId || ''}
+                      onChange={e => {
+                        const u = users.find(usr => usr.id === e.target.value);
+                        if (u) {
+                          setNewInspectionData({
+                            ...newInspectionData,
+                            samplerUserId: u.id,
+                            samplerName: u.name,
+                            samplerRole: u.jobTitle || 'Responsable de Muestreo en Recepción'
+                          });
+                        } else {
+                          setNewInspectionData({ ...newInspectionData, samplerUserId: '' });
+                        }
+                      }}
+                    >
+                      <option value="">Seleccionar Personal Activo...</option>
+                      {users.map(u => (
+                        <option key={u.id} value={u.id}>{u.name} ({u.jobTitle || u.role})</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Nombre Tomador de Muestra *</label>
+                    <input
+                      required
+                      type="text"
+                      className={inputClass}
+                      value={newInspectionData.samplerName || ''}
+                      onChange={e => setNewInspectionData({ ...newInspectionData, samplerName: e.target.value })}
+                      placeholder="Ej: Matias QUINTANA"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Matrícula / Legajo Muestreador *</label>
+                    <input
+                      required
+                      type="text"
+                      className={inputClass}
+                      value={newInspectionData.samplerDniOrMatricula || ''}
+                      onChange={e => setNewInspectionData({ ...newInspectionData, samplerDniOrMatricula: e.target.value })}
+                      placeholder="Ej: TEC-MUESTREO-ISTA-108"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Código de Muestra Precintada *</label>
+                    <input
+                      required
+                      type="text"
+                      className={inputClass}
+                      value={newInspectionData.sampleCode || ''}
+                      onChange={e => setNewInspectionData({ ...newInspectionData, sampleCode: e.target.value })}
+                      placeholder="Ej: MUE-ISTA-2026-001"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Método de Toma de Muestra</label>
+                    <select
+                      className={inputClass}
+                      value={newInspectionData.samplingMethod || 'Calador ISTA Compuesto (3 Submuestras Precintadas)'}
+                      onChange={e => setNewInspectionData({ ...newInspectionData, samplingMethod: e.target.value as any })}
+                    >
+                      <option value="Calador ISTA Compuesto (3 Submuestras Precintadas)">Calador ISTA Compuesto (3 Submuestras Precintadas)</option>
+                      <option value="Cuarteo Oficial INASE en Bóveda Central">Cuarteo Oficial INASE en Bóveda Central</option>
+                      <option value="Muestreo Sistemático en Línea de Recepción">Muestreo Sistemático en Línea de Recepción</option>
+                      <option value="Contramuestra Precintada de Semillero">Contramuestra Precintada de Semillero</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Responsable Custodia / Recepción</label>
+                    <input
+                      type="text"
+                      className={inputClass}
+                      value={newInspectionData.receptionResponsibleName || ''}
+                      onChange={e => setNewInspectionData({ ...newInspectionData, receptionResponsibleName: e.target.value })}
+                      placeholder="Ej: Gastón BAREA M."
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1 border-t border-amber-200/60 dark:border-amber-800/60">
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Ingeniero Agrónomo Certificante *</label>
+                    <input
+                      required
+                      type="text"
+                      className={inputClass}
+                      value={newInspectionData.agronomistName || ''}
+                      onChange={e => setNewInspectionData({ ...newInspectionData, agronomistName: e.target.value })}
+                      placeholder="Ing. Agr. Julian PIZARRO"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Matrícula Profesional (MP) *</label>
+                    <input
+                      required
+                      type="text"
+                      className={inputClass}
+                      value={newInspectionData.agronomistMatricula || ''}
+                      onChange={e => setNewInspectionData({ ...newInspectionData, agronomistMatricula: e.target.value })}
+                      placeholder="MP-AGRO-1492 CH"
+                    />
+                  </div>
                 </div>
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Observaciones Técnicas del Ensayo</label>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Observaciones Técnicas del Ensayo y Trazabilidad</label>
                 <textarea
                   rows={2}
                   className={inputClass}
-                  placeholder="Detallar vigor, comportamiento en cámara germinadora o condiciones de transporte..."
+                  placeholder="Detallar energía germinativa, homogeneidad de calibre, estado de precintos INASE y aptitud para siembra..."
                   value={newInspectionData.observations || ''}
                   onChange={e => setNewInspectionData({ ...newInspectionData, observations: e.target.value })}
                 />
@@ -1395,7 +2005,7 @@ export default function Suppliers() {
 
               <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center text-xs">
                 <span className="text-[10px] text-slate-400">
-                  Acta de custodia agronómica según Ley 27.669.
+                  El dictamen impacta automáticamente en la trazabilidad QR de lotes de siembra, parcelas y cosecha.
                 </span>
                 <div className="flex items-center gap-2">
                   <button
@@ -1410,7 +2020,7 @@ export default function Suppliers() {
                     className="bg-purple-600 text-white px-6 py-2.5 rounded-2xl font-bold uppercase tracking-wider shadow flex items-center hover:bg-purple-500 transition"
                   >
                     <Save className="mr-2" size={16}/>
-                    <span>Emitir Dictamen de Lote</span>
+                    <span>{editingInspectionId ? 'Guardar Cambios y Actualizar QR' : 'Emitir Dictamen y Vincular Trazabilidad'}</span>
                   </button>
                 </div>
               </div>
@@ -1419,221 +2029,332 @@ export default function Suppliers() {
         </div>
       )}
 
-      {/* MODAL 2: ACTA OFICIAL DE INSPECCIÓN TÉCNICA Y RECEPCIÓN (IMPRIMIBLE) */}
-      {selectedInspectionForView && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-[85] p-4 font-mono">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 max-h-[95vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4 border-b border-slate-100 dark:border-slate-800 pb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-2xl bg-purple-500/10 text-purple-600 flex items-center justify-center">
-                  <Microscope size={22} />
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold uppercase text-purple-600 tracking-wider">
-                    Cadena de Custodia & Control de Entrada
-                  </span>
-                  <h2 className="text-base font-black text-slate-900 dark:text-white uppercase tracking-tight">
-                    Acta Técnica de Inspección Fitosanitaria
-                  </h2>
-                </div>
-              </div>
-              <button onClick={() => setSelectedInspectionForView(null)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
-            </div>
+      {/* MODAL 2: ACTA OFICIAL DE INSPECCIÓN TÉCNICA Y RECEPCIÓN (IMPRIMIBLE + QR + CIRCUITO TRAZABILIDAD) */}
+      {selectedInspectionForView && (() => {
+        const calcQ = calculateLotQuality(selectedInspectionForView);
+        const qGrade = selectedInspectionForView.qualityGrade || calcQ.grade;
+        const qScore = selectedInspectionForView.qualityScore || calcQ.score;
+        const gradeCfg = QUALITY_GRADE_CONFIG[qGrade] || QUALITY_GRADE_CONFIG['GRADO_A_SUPERIOR'];
+        const chain = getInspectionTraceabilityChain(selectedInspectionForView);
+        const qrUrl = buildTraceUrl(selectedInspectionForView.id, {
+          type: 'inspection',
+          lot: selectedInspectionForView.lotNumber,
+          sup: selectedInspectionForView.supplierName,
+          grade: qGrade,
+          score: qScore,
+          pg: selectedInspectionForView.germinationTestedPct,
+          purity: selectedInspectionForView.purityPct,
+          sampler: selectedInspectionForView.samplerName || 'Matias QUINTANA',
+          sampleCode: selectedInspectionForView.sampleCode || `MUE-${selectedInspectionForView.lotNumber}`,
+          agro: selectedInspectionForView.agronomistName,
+          mp: selectedInspectionForView.agronomistMatricula
+        });
 
-            {/* DOCUMENTO IMPRIMIBLE */}
-            <div id="printable-lot-inspection" className="bg-white text-slate-900 p-6 rounded-2xl border-2 border-dashed border-slate-300 space-y-4 my-2 text-xs">
-              {/* CABECERA FITOTÉCNICA */}
-              <div className="flex justify-between items-start border-b-2 border-slate-900 pb-3">
-                <div>
-                  <div className="flex items-center gap-1.5 text-xs font-black uppercase text-slate-900">
-                    <ShieldCheck size={18} className="text-emerald-600" />
-                    <span>NUCLEUS QUALITY · ACTA TÉCNICA DE RECEPCIÓN DE LOTE</span>
+        return (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-[85] p-4 font-mono">
+            <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-3xl w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 max-h-[95vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-4 border-b border-slate-100 dark:border-slate-800 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-2xl bg-purple-500/10 text-purple-600 flex items-center justify-center">
+                    <Microscope size={22} />
                   </div>
-                  <p className="text-[9px] text-slate-500 uppercase font-bold mt-0.5">
-                    Estándares ISTA / INASE / SENASA · Ley 27.669 & Res. ARICCAME
-                  </p>
-                </div>
-                <div className="text-right">
-                  <span className={`px-2.5 py-1 rounded text-[10px] font-black uppercase ${
-                    selectedInspectionForView.verdict === 'APROBADO_CAMPO'
-                      ? 'bg-emerald-600 text-white'
-                      : selectedInspectionForView.verdict === 'EN_CUARENTENA_OBSERVADO'
-                      ? 'bg-amber-500 text-white'
-                      : 'bg-rose-600 text-white'
-                  }`}>
-                    {selectedInspectionForView.verdict === 'APROBADO_CAMPO' ? 'CONFORME PARA CAMPO' : selectedInspectionForView.verdict}
-                  </span>
-                </div>
-              </div>
-
-              {/* DATOS DE LA ENTIDAD OPERADORA (PATAGONIANC LTDA) */}
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2 text-xs">
-                <div className="flex justify-between items-center border-b border-slate-200 pb-1.5">
                   <div>
-                    <span className="text-[8px] font-black uppercase text-slate-400 block tracking-wider">
-                      Titular & Entidad Fiscal
+                    <span className="text-[10px] font-bold uppercase text-purple-600 tracking-wider">
+                      Certificado de Calidad de Lote, Toma de Muestras & Trazabilidad QR
                     </span>
-                    <strong className="text-sm font-black uppercase text-slate-900">
-                      Cooperativa PatagonianC LTDA
-                    </strong>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-[8px] font-black uppercase text-slate-400 block">CUIT</span>
-                    <span className="text-xs font-mono font-black text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">
-                      30-71816113-0
-                    </span>
+                    <h2 className="text-base font-black text-slate-900 dark:text-white uppercase tracking-tight">
+                      Acta Técnica de Inspección Fitosanitaria · Lote {selectedInspectionForView.lotNumber}
+                    </h2>
                   </div>
                 </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px]">
-                  <div className="bg-white p-2 rounded-lg border border-slate-200 shadow-sm">
-                    <span className="text-[8px] font-black text-emerald-700 uppercase block">Licencia Agrícola ARICCAME</span>
-                    <strong className="font-mono text-slate-900 text-[9px] block truncate">
-                      EX-2024-134354227--APN-ARICCAME#MEC
-                    </strong>
-                  </div>
-
-                  <div className="bg-white p-2 rounded-lg border border-slate-200 shadow-sm">
-                    <span className="text-[8px] font-black text-sky-700 uppercase block">Licencia Industrial ARICCAME</span>
-                    <strong className="font-mono text-slate-900 text-[9px] block truncate">
-                      EX-2025-119427833--APN-ARICCAME#MEC
-                    </strong>
-                  </div>
-                </div>
+                <button onClick={() => setSelectedInspectionForView(null)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
               </div>
 
-              {/* DATOS DEL LOTE Y PROVEEDOR */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <span className="text-[9px] text-slate-400 uppercase font-bold block">Lote Inspeccionado:</span>
-                  <strong className="text-base font-black font-mono text-slate-900 block leading-tight">
-                    {selectedInspectionForView.lotNumber}
-                  </strong>
-                  <span className="text-[10px] text-slate-600 block mt-0.5">
-                    Categoría: {selectedInspectionForView.inputCategory}
-                  </span>
-                  {selectedInspectionForView.guideOrRemitoNumber && (
-                    <span className="text-[10px] font-mono text-purple-700 block">
-                      Remito Oficial: {selectedInspectionForView.guideOrRemitoNumber}
+              {/* DOCUMENTO IMPRIMIBLE */}
+              <div id="printable-lot-inspection" className="bg-white text-slate-900 p-6 rounded-2xl border-2 border-dashed border-slate-300 space-y-4 my-2 text-xs">
+                {/* CABECERA FITOTÉCNICA */}
+                <div className="flex justify-between items-start border-b-2 border-slate-900 pb-3">
+                  <div>
+                    <div className="flex items-center gap-1.5 text-xs font-black uppercase text-slate-900">
+                      <ShieldCheck size={18} className="text-emerald-600" />
+                      <span>NUCLEUS QUALITY · ACTA DE DETERMINACIÓN DE CALIDAD DE LOTE</span>
+                    </div>
+                    <p className="text-[9px] text-slate-500 uppercase font-bold mt-0.5">
+                      Protocolo ISTA / INASE / SENASA · Ley 27.669 & Trazabilidad QR ARICCAME
+                    </p>
+                  </div>
+                  <div className="text-right space-y-1">
+                    <span className={`px-2.5 py-1 rounded text-[10px] font-black uppercase block ${
+                      selectedInspectionForView.verdict === 'APROBADO_CAMPO'
+                        ? 'bg-emerald-600 text-white'
+                        : selectedInspectionForView.verdict === 'EN_CUARENTENA_OBSERVADO'
+                        ? 'bg-amber-500 text-white'
+                        : 'bg-rose-600 text-white'
+                    }`}>
+                      {selectedInspectionForView.verdict === 'APROBADO_CAMPO' ? 'APROBADO PARA SIEMBRA' : selectedInspectionForView.verdict}
                     </span>
+                    <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-slate-900 text-white block">
+                      {gradeCfg.shortLabel} ({qScore}/100)
+                    </span>
+                  </div>
+                </div>
+
+                {/* DATOS DE LA ENTIDAD OPERADORA (PATAGONIANC LTDA) */}
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2 text-xs">
+                  <div className="flex justify-between items-center border-b border-slate-200 pb-1.5">
+                    <div>
+                      <span className="text-[8px] font-black uppercase text-slate-400 block tracking-wider">
+                        Titular & Entidad Fiscal Homologadora
+                      </span>
+                      <strong className="text-sm font-black uppercase text-slate-900">
+                        Cooperativa PatagonianC LTDA
+                      </strong>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[8px] font-black uppercase text-slate-400 block">CUIT</span>
+                      <span className="text-xs font-mono font-black text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">
+                        30-71816113-0
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px]">
+                    <div className="bg-white p-2 rounded-lg border border-slate-200 shadow-sm">
+                      <span className="text-[8px] font-black text-emerald-700 uppercase block">Licencia Agrícola ARICCAME</span>
+                      <strong className="font-mono text-slate-900 text-[9px] block truncate">
+                        EX-2024-134354227--APN-ARICCAME#MEC
+                      </strong>
+                    </div>
+
+                    <div className="bg-white p-2 rounded-lg border border-slate-200 shadow-sm">
+                      <span className="text-[8px] font-black text-sky-700 uppercase block">Licencia Industrial ARICCAME</span>
+                      <strong className="font-mono text-slate-900 text-[9px] block truncate">
+                        EX-2025-119427833--APN-ARICCAME#MEC
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+
+                {/* DATOS DEL LOTE Y PROVEEDOR + QR DE TRAZABILIDAD */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
+                  <div>
+                    <span className="text-[9px] text-slate-400 uppercase font-bold block">Lote Inspeccionado:</span>
+                    <strong className="text-base font-black font-mono text-slate-900 block leading-tight">
+                      {selectedInspectionForView.lotNumber}
+                    </strong>
+                    <span className="text-[10px] text-slate-600 block mt-0.5">
+                      Categoría: {selectedInspectionForView.inputCategory}
+                    </span>
+                    {selectedInspectionForView.varietyName && (
+                      <span className="text-[10px] font-bold text-emerald-700 block">
+                        Genética: {selectedInspectionForView.varietyName}
+                      </span>
+                    )}
+                    {selectedInspectionForView.guideOrRemitoNumber && (
+                      <span className="text-[10px] font-mono text-purple-700 block">
+                        Remito Oficial: {selectedInspectionForView.guideOrRemitoNumber}
+                      </span>
+                    )}
+                  </div>
+
+                  <div>
+                    <span className="text-[9px] text-slate-400 uppercase font-bold block">Proveedor Homologado:</span>
+                    <strong className="text-sm font-black text-slate-900 block">
+                      {selectedInspectionForView.supplierName}
+                    </strong>
+                    <span className="text-[10px] text-slate-500 block">
+                      Fecha Ensayo: {selectedInspectionForView.date}
+                    </span>
+                    <span className="text-[10px] font-bold text-slate-800 block mt-0.5">
+                      Calidad: {gradeCfg.label}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col items-center justify-center bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                    <QRCodeSVG value={qrUrl} size={78} level="M" includeMargin={false} />
+                    <span className="text-[8px] font-black uppercase text-slate-600 mt-1">
+                      QR Activo · Escaneo Público
+                    </span>
+                  </div>
+                </div>
+
+                {/* MATRIZ DE MEDICIÓN TÉCNICA */}
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+                  <span className="text-[8px] font-black uppercase text-slate-400 block tracking-wider">
+                    Resultados Fisiológicos, Sanitarios & Determinación de Calidad
+                  </span>
+
+                  <div className="grid grid-cols-5 gap-2 text-center">
+                    <div className="bg-white p-2 rounded-lg border border-slate-200">
+                      <span className="text-[8px] text-slate-400 uppercase block">PG Real Cámara</span>
+                      <strong className="text-emerald-700 text-sm font-black font-mono">
+                        {selectedInspectionForView.germinationTestedPct ? `${selectedInspectionForView.germinationTestedPct}%` : 'N/A'}
+                      </strong>
+                    </div>
+
+                    <div className="bg-white p-2 rounded-lg border border-slate-200">
+                      <span className="text-[8px] text-slate-400 uppercase block">PG Marbete</span>
+                      <strong className="text-slate-800 text-sm font-bold font-mono">
+                        {selectedInspectionForView.germinationDeclaredPct ? `${selectedInspectionForView.germinationDeclaredPct}%` : 'N/A'}
+                      </strong>
+                    </div>
+
+                    <div className="bg-white p-2 rounded-lg border border-slate-200">
+                      <span className="text-[8px] text-slate-400 uppercase block">Pureza Física</span>
+                      <strong className="text-slate-800 text-sm font-bold font-mono">
+                        {selectedInspectionForView.purityPct ? `${selectedInspectionForView.purityPct}%` : 'OK'}
+                      </strong>
+                    </div>
+
+                    <div className="bg-white p-2 rounded-lg border border-slate-200">
+                      <span className="text-[8px] text-slate-400 uppercase block">Humedad Lote</span>
+                      <strong className="text-slate-800 text-sm font-bold font-mono">
+                        {selectedInspectionForView.moisturePct ? `${selectedInspectionForView.moisturePct}%` : '≤9%'}
+                      </strong>
+                    </div>
+
+                    <div className="bg-white p-2 rounded-lg border border-slate-200">
+                      <span className="text-[8px] text-slate-400 uppercase block">Vigor ISTA</span>
+                      <strong className="text-purple-700 text-sm font-black font-mono">
+                        {selectedInspectionForView.vigorScore || 9} / 9
+                      </strong>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-200 text-[10px]">
+                    <div>
+                      <span className="text-slate-400 block font-bold">Screening Patógenos:</span>
+                      <strong className="text-emerald-700">{selectedInspectionForView.pathogenScreeningResult}</strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block font-bold">Residuos Químicos:</span>
+                      <strong className="text-purple-700">{selectedInspectionForView.residueStatus}</strong>
+                    </div>
+                  </div>
+
+                  {selectedInspectionForView.observations && (
+                    <div className="pt-2 border-t border-slate-200 text-[10px]">
+                      <span className="text-slate-400 block font-bold">Observaciones Técnicas:</span>
+                      <p className="text-slate-700 italic">{selectedInspectionForView.observations}</p>
+                    </div>
                   )}
                 </div>
 
-                <div>
-                  <span className="text-[9px] text-slate-400 uppercase font-bold block">Proveedor Remitente:</span>
-                  <strong className="text-sm font-black text-slate-900 block">
-                    {selectedInspectionForView.supplierName}
-                  </strong>
-                  <span className="text-[10px] text-slate-500 block">
-                    Fecha de Ensayo: {selectedInspectionForView.date}
+                {/* PERSONAL INTERVINIENTE EN TOMA DE MUESTRAS Y AUDITORÍA */}
+                <div className="bg-amber-50/70 p-3 rounded-xl border border-amber-200 space-y-2">
+                  <span className="text-[8px] font-black uppercase text-amber-900 block tracking-wider">
+                    Personal Interviniente en Toma de Muestras y Cadena de Custodia
                   </span>
-                </div>
-              </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[10px]">
+                    <div className="bg-white p-2 rounded-lg border border-amber-200">
+                      <span className="text-[8px] text-amber-700 uppercase font-black block">Toma de Muestras</span>
+                      <strong className="text-slate-900 block">{selectedInspectionForView.samplerName || 'Matias QUINTANA'}</strong>
+                      <span className="text-[9px] text-slate-500 block">{selectedInspectionForView.samplerDniOrMatricula || 'TEC-MUESTREO-ISTA-108'}</span>
+                      <span className="text-[8px] font-mono text-amber-800 block mt-0.5">
+                        Muestra: {selectedInspectionForView.sampleCode || `MUE-${selectedInspectionForView.lotNumber}`}
+                      </span>
+                    </div>
 
-              {/* MATRIZ DE MEDICIÓN TÉCNICA */}
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
-                <span className="text-[8px] font-black uppercase text-slate-400 block tracking-wider">
-                  Resultados Fisiológicos & Sanitarios
-                </span>
+                    <div className="bg-white p-2 rounded-lg border border-amber-200">
+                      <span className="text-[8px] text-purple-700 uppercase font-black block">Auditoría Fitotécnica</span>
+                      <strong className="text-slate-900 block">{selectedInspectionForView.agronomistName}</strong>
+                      <span className="text-[9px] text-slate-500 block">MP: {selectedInspectionForView.agronomistMatricula}</span>
+                      <span className="text-[8px] text-slate-500 block mt-0.5">
+                        Método: {selectedInspectionForView.samplingMethod || 'Calador ISTA Compuesto'}
+                      </span>
+                    </div>
 
-                <div className="grid grid-cols-4 gap-2 text-center">
-                  <div className="bg-white p-2 rounded-lg border border-slate-200">
-                    <span className="text-[8px] text-slate-400 uppercase block">PG Real en Cámara</span>
-                    <strong className="text-emerald-700 text-sm font-black font-mono">
-                      {selectedInspectionForView.germinationTestedPct ? `${selectedInspectionForView.germinationTestedPct}%` : 'N/A'}
-                    </strong>
-                  </div>
-
-                  <div className="bg-white p-2 rounded-lg border border-slate-200">
-                    <span className="text-[8px] text-slate-400 uppercase block">PG Marbete INASE</span>
-                    <strong className="text-slate-800 text-sm font-bold font-mono">
-                      {selectedInspectionForView.germinationDeclaredPct ? `${selectedInspectionForView.germinationDeclaredPct}%` : 'N/A'}
-                    </strong>
-                  </div>
-
-                  <div className="bg-white p-2 rounded-lg border border-slate-200">
-                    <span className="text-[8px] text-slate-400 uppercase block">Pureza Física</span>
-                    <strong className="text-slate-800 text-sm font-bold font-mono">
-                      {selectedInspectionForView.purityPct ? `${selectedInspectionForView.purityPct}%` : 'OK'}
-                    </strong>
-                  </div>
-
-                  <div className="bg-white p-2 rounded-lg border border-slate-200">
-                    <span className="text-[8px] text-slate-400 uppercase block">Humedad Lote</span>
-                    <strong className="text-slate-800 text-sm font-bold font-mono">
-                      {selectedInspectionForView.moisturePct ? `${selectedInspectionForView.moisturePct}%` : '≤9%'}
-                    </strong>
+                    <div className="bg-white p-2 rounded-lg border border-amber-200">
+                      <span className="text-[8px] text-emerald-700 uppercase font-black block">Custodia & Recepción</span>
+                      <strong className="text-slate-900 block">{selectedInspectionForView.receptionResponsibleName || 'Gastón BAREA M.'}</strong>
+                      <span className="text-[9px] text-slate-500 block">Bóveda & Almacén Central</span>
+                      <BarcodeRenderer value={selectedInspectionForView.lotNumber} width={0.9} height={18} displayValue={false} />
+                    </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-200 text-[10px]">
-                  <div>
-                    <span className="text-slate-400 block font-bold">Screening Patógenos:</span>
-                    <strong className="text-emerald-700">{selectedInspectionForView.pathogenScreeningResult}</strong>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block font-bold">Residuos Químicos:</span>
-                    <strong className="text-purple-700">{selectedInspectionForView.residueStatus}</strong>
-                  </div>
-                </div>
-
-                {selectedInspectionForView.observations && (
-                  <div className="pt-2 border-t border-slate-200 text-[10px]">
-                    <span className="text-slate-400 block font-bold">Observaciones del Agrónomo:</span>
-                    <p className="text-slate-700 italic">{selectedInspectionForView.observations}</p>
-                  </div>
-                )}
-              </div>
-
-              {/* FIRMA Y AUDITORÍA PROFESIONAL */}
-              <div className="p-3 bg-purple-50/50 rounded-xl border border-purple-200 flex justify-between items-center">
-                <div>
-                  <span className="text-[8px] text-purple-800 uppercase block font-bold">Responsable Técnico Firmante</span>
-                  <strong className="text-slate-900 text-xs block">
-                    {selectedInspectionForView.agronomistName}
-                  </strong>
-                  <span className="text-[9px] text-slate-500">
-                    Matrícula Profesional: {selectedInspectionForView.agronomistMatricula}
+                {/* CIRCUITO DE TRAZABILIDAD CONTINUA (4 ESLABONES) */}
+                <div className="bg-emerald-50/50 p-3 rounded-xl border border-emerald-200 space-y-2">
+                  <span className="text-[8px] font-black uppercase text-emerald-800 block tracking-wider">
+                    Circuito de Trazabilidad Activo Asociado a este Lote
                   </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[10px]">
+                    <div className="bg-white p-2 rounded-lg border border-emerald-200">
+                      <span className="text-[8px] font-black text-emerald-700 uppercase block">1. Lotes de Siembra ({chain.linkedSeedBatches.length})</span>
+                      {chain.linkedSeedBatches.length > 0 ? (
+                        chain.linkedSeedBatches.slice(0, 2).map(b => (
+                          <span key={b.id} className="font-mono text-[9px] text-slate-800 block truncate">• {b.batchCode}</span>
+                        ))
+                      ) : (
+                        <span className="text-[9px] text-slate-400">Listo para asignar a siembra</span>
+                      )}
+                    </div>
+
+                    <div className="bg-white p-2 rounded-lg border border-emerald-200">
+                      <span className="text-[8px] font-black text-sky-700 uppercase block">2. Parcelas Implantadas ({chain.linkedPlots.length})</span>
+                      {chain.linkedPlots.length > 0 ? (
+                        chain.linkedPlots.slice(0, 2).map(p => (
+                          <span key={p.id} className="font-mono text-[9px] text-slate-800 block truncate">• {p.name}</span>
+                        ))
+                      ) : (
+                        <span className="text-[9px] text-slate-400">Sin parcelas vinculadas aún</span>
+                      )}
+                    </div>
+
+                    <div className="bg-white p-2 rounded-lg border border-emerald-200">
+                      <span className="text-[8px] font-black text-amber-700 uppercase block">3. Material Obtenido ({chain.obtainedMaterials.length})</span>
+                      {chain.obtainedMaterials.length > 0 ? (
+                        chain.obtainedMaterials.slice(0, 2).map(m => (
+                          <span key={m.id} className="font-mono text-[9px] text-slate-800 block truncate">• {m.batchCode} ({m.remainingQuantity} kg)</span>
+                        ))
+                      ) : (
+                        <span className="text-[9px] text-slate-400">En ciclo de cultivo</span>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <BarcodeRenderer value={selectedInspectionForView.lotNumber} width={1} height={26} displayValue={false} />
-                  <span className="text-[8px] font-mono text-slate-400 block">ID: {selectedInspectionForView.id}</span>
+
+                {/* PIE INSTITUCIONAL */}
+                <div className="pt-2 border-t border-slate-200 flex justify-between items-center text-[8px] text-slate-400">
+                  <span>Válido para fiscalización INASE / SENASA / ARICCAME</span>
+                  <span>Cooperativa PatagonianC LTDA · Trazabilidad QR Inmutable</span>
                 </div>
               </div>
 
-              {/* PIE INSTITUCIONAL */}
-              <div className="pt-2 border-t border-slate-200 flex justify-between items-center text-[8px] text-slate-400">
-                <span>Válido para fiscalización INASE / SENASA / ARICCAME</span>
-                <span>Cooperativa PatagonianC LTDA · Trazabilidad Inmutable</span>
-              </div>
-            </div>
-
-            <div className="flex justify-between items-center pt-3 border-t border-slate-100 dark:border-slate-800 text-xs">
-              <span className="text-[10px] text-slate-400">
-                Impresión térmica o formato A4 para archivo de campo.
-              </span>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap justify-between items-center gap-2 pt-3 border-t border-slate-100 dark:border-slate-800 text-xs">
                 <button
                   type="button"
-                  onClick={() => setSelectedInspectionForView(null)}
-                  className="px-4 py-2 text-slate-400 font-bold uppercase hover:text-slate-600"
+                  onClick={() => {
+                    setSelectedInspectionForView(null);
+                    navigate(`/trace/${selectedInspectionForView.id}?type=inspection&lot=${encodeURIComponent(selectedInspectionForView.lotNumber)}&sup=${encodeURIComponent(selectedInspectionForView.supplierName)}&grade=${qGrade}&score=${qScore}&sampler=${encodeURIComponent(selectedInspectionForView.samplerName || 'Matias QUINTANA')}&sampleCode=${encodeURIComponent(selectedInspectionForView.sampleCode || '')}&agro=${encodeURIComponent(selectedInspectionForView.agronomistName)}`);
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-bold uppercase text-[10px] flex items-center gap-1.5 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 transition"
                 >
-                  Cerrar
+                  <QrCode size={14} />
+                  <span>Abrir Portal Público QR</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => window.print()}
-                  className="bg-purple-600 text-white px-5 py-2.5 rounded-2xl font-bold uppercase shadow flex items-center gap-1.5 hover:bg-purple-500 transition"
-                >
-                  <Printer size={15} />
-                  <span>Imprimir Acta</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedInspectionForView(null)}
+                    className="px-4 py-2 text-slate-400 font-bold uppercase hover:text-slate-600"
+                  >
+                    Cerrar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    className="bg-purple-600 text-white px-5 py-2.5 rounded-2xl font-bold uppercase shadow flex items-center gap-1.5 hover:bg-purple-500 transition"
+                  >
+                    <Printer size={15} />
+                    <span>Imprimir Acta & QR</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* MODAL 3: DICTAMEN DE HOMOLOGACIÓN DEL PROVEEDOR (IMPRIMIBLE) */}
       {isAuditModalOpen && selectedSupplierForAudit && (
@@ -1764,19 +2485,44 @@ export default function Suppliers() {
                 </div>
               </div>
 
-              {/* AUDITOR MATRICULADO */}
-              <div className="p-3 bg-emerald-50/50 rounded-xl border border-emerald-200 flex justify-between items-center">
-                <div>
-                  <span className="text-[8px] text-emerald-800 uppercase block font-bold">Agrónomo Auditor Responsable</span>
-                  <strong className="text-slate-900 text-xs block">
-                    {selectedSupplierForAudit.audit?.technicalAgronomistName || 'Ing. Agr. Lucas Berardi'}
-                  </strong>
-                  <span className="text-[9px] text-slate-500">
-                    Matrícula: {selectedSupplierForAudit.audit?.technicalAgronomistMatricula || 'MP-AGRO-3321 MZA'}
-                  </span>
+              {/* PERSONAL INTERVINIENTE Y QR DE HOMOLOGACIÓN */}
+              <div className="p-3 bg-emerald-50/50 rounded-xl border border-emerald-200 flex flex-col sm:flex-row justify-between items-center gap-3">
+                <div className="space-y-1 flex-1">
+                  <div>
+                    <span className="text-[8px] text-emerald-800 uppercase block font-bold">Agrónomo Auditor Responsable</span>
+                    <strong className="text-slate-900 text-xs block">
+                      {selectedSupplierForAudit.audit?.technicalAgronomistName || 'Ing. Agr. Julian PIZARRO'}
+                    </strong>
+                    <span className="text-[9px] text-slate-500">
+                      Matrícula: {selectedSupplierForAudit.audit?.technicalAgronomistMatricula || 'MP-AGRO-1492 CH'}
+                    </span>
+                  </div>
+                  <div className="pt-1 border-t border-emerald-200/60">
+                    <span className="text-[8px] text-amber-800 uppercase block font-bold">Responsable Toma de Muestras & Custodia</span>
+                    <strong className="text-slate-900 text-[11px] block">
+                      {selectedSupplierForAudit.audit?.samplerName || 'Matias QUINTANA'} ({selectedSupplierForAudit.audit?.samplerMatricula || 'TEC-MUESTREO-ISTA-108'})
+                    </strong>
+                  </div>
                 </div>
-                <div className="text-right text-[10px] text-slate-500">
-                  <span>Fecha de Dictamen: <strong>{selectedSupplierForAudit.audit?.lastAuditDate || '2025-08-10'}</strong></span>
+
+                <div className="flex items-center gap-3 bg-white p-2.5 rounded-xl border border-emerald-200">
+                  <QRCodeSVG
+                    value={buildTraceUrl(selectedSupplierForAudit.id, {
+                      type: 'supplier',
+                      name: selectedSupplierForAudit.name,
+                      cuit: selectedSupplierForAudit.cuit,
+                      inase: selectedSupplierForAudit.inaseRncyfsNumber,
+                      agro: selectedSupplierForAudit.audit?.technicalAgronomistName || 'Ing. Agr. Julian PIZARRO',
+                      sampler: selectedSupplierForAudit.audit?.samplerName || 'Matias QUINTANA'
+                    })}
+                    size={70}
+                    level="M"
+                  />
+                  <div className="text-[9px] text-slate-600">
+                    <strong className="text-slate-900 uppercase block">QR Homologación</strong>
+                    <span>Fecha: {selectedSupplierForAudit.audit?.lastAuditDate || '2025-12-20'}</span>
+                    <span className="block text-[8px] text-emerald-700 font-bold mt-0.5">Verificación Pública</span>
+                  </div>
                 </div>
               </div>
 
@@ -1787,10 +2533,18 @@ export default function Suppliers() {
               </div>
             </div>
 
-            <div className="flex justify-between items-center pt-3 border-t border-slate-100 dark:border-slate-800 text-xs">
-              <span className="text-[10px] text-slate-400">
-                Gestión contable y órdenes de compra en Odoo 20
-              </span>
+            <div className="flex flex-wrap justify-between items-center gap-2 pt-3 border-t border-slate-100 dark:border-slate-800 text-xs">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAuditModalOpen(false);
+                  navigate(`/trace/${selectedSupplierForAudit.id}?type=supplier&name=${encodeURIComponent(selectedSupplierForAudit.name)}&cuit=${encodeURIComponent(selectedSupplierForAudit.cuit || '')}&inase=${encodeURIComponent(selectedSupplierForAudit.inaseRncyfsNumber || '')}`);
+                }}
+                className="px-3.5 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-bold uppercase text-[10px] flex items-center gap-1.5 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 transition"
+              >
+                <QrCode size={14} />
+                <span>Abrir Trazabilidad QR</span>
+              </button>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
@@ -1805,7 +2559,7 @@ export default function Suppliers() {
                   className="bg-emerald-600 text-white px-5 py-2.5 rounded-2xl font-bold uppercase shadow flex items-center gap-1.5 hover:bg-emerald-500 transition"
                 >
                   <Printer size={15} />
-                  <span>Imprimir Dictamen</span>
+                  <span>Imprimir Dictamen & QR</span>
                 </button>
               </div>
             </div>
@@ -1973,11 +2727,22 @@ export default function Suppliers() {
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Matrícula Profesional (MP)</label>
-                      <input disabled={isSaving} type="text" className={inputClass} value={formData.audit?.technicalAgronomistMatricula || ''} onChange={e => setFormData({...formData, audit: {...(formData.audit || {}), technicalAgronomistMatricula: e.target.value}})} placeholder="Ej: MP-AGRO-3321 MZA" />
+                      <input disabled={isSaving} type="text" className={inputClass} value={formData.audit?.technicalAgronomistMatricula || ''} onChange={e => setFormData({...formData, audit: {...(formData.audit || {}), technicalAgronomistMatricula: e.target.value}})} placeholder="Ej: MP-AGRO-1492 CH" />
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Calificación Técnica (0-100)</label>
                       <input disabled={isSaving} type="number" min={0} max={100} className={inputClass} value={formData.audit?.auditScore || 95} onChange={e => setFormData({...formData, audit: {...(formData.audit || {}), auditScore: Number(e.target.value)}})} />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Responsable Toma de Muestras en Homologación</label>
+                      <input disabled={isSaving} type="text" className={inputClass} value={formData.audit?.samplerName || ''} onChange={e => setFormData({...formData, audit: {...(formData.audit || {}), samplerName: e.target.value}})} placeholder="Ej: Matias QUINTANA" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Legajo / Matrícula Muestreador ISTA</label>
+                      <input disabled={isSaving} type="text" className={inputClass} value={formData.audit?.samplerMatricula || ''} onChange={e => setFormData({...formData, audit: {...(formData.audit || {}), samplerMatricula: e.target.value}})} placeholder="Ej: TEC-MUESTREO-ISTA-108" />
                     </div>
                   </div>
 

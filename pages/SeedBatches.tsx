@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { SeedBatch, SeedMovement, BiologicalMaterialType, CAMPAIGNS } from '../types';
+import { SeedBatch, SeedMovement, BiologicalMaterialType, CAMPAIGNS, SupplierLotInspection, LotQualityGrade } from '../types';
+import { DEMO_SUPPLIER_INSPECTIONS } from '../src/data/initialDemoData';
 import { 
   ScanBarcode, Edit2, Trash2, Tag, Package, Truck, Printer, MapPin, 
   AlertCircle, DollarSign, Archive, Save, X, 
@@ -8,9 +9,9 @@ import {
   Building, User, Calendar, FileText, Globe, ClipboardList, ShieldCheck, Warehouse,
   Plus, CheckCircle2, Navigation, Smartphone, UserCheck, Barcode, FlaskConical, Scale, ClipboardCheck,
   Map as MapIcon, Route, Compass, Weight, LayoutGrid, List, Droplets, Sparkles, Sprout,
-  FileCheck, ShieldAlert, Layers, QrCode
+  FileCheck, ShieldAlert, Layers, QrCode, Users, ChevronRight
 } from 'lucide-react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { TraceabilityLabelModal } from '../components/TraceabilityLabelModal';
 import { BarcodeScannerModal } from '../components/BarcodeScannerModal';
 
@@ -41,8 +42,9 @@ export default function SeedBatches() {
   const { 
     seedBatches, seedMovements, addSeedBatch, updateSeedBatch, 
     deleteSeedBatch, addSeedMovement, updateSeedMovement, deleteSeedMovement, varieties, 
-    currentUser, clients, storagePoints, suppliers, plots 
+    currentUser, clients, storagePoints, suppliers, plots, usersList: users 
   } = useAppContext();
+  const navigate = useNavigate();
   
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<'inventory' | 'logistics'>((searchParams.get('tab') as any) || 'inventory');
@@ -59,6 +61,19 @@ export default function SeedBatches() {
   const [isLabelModalOpen, setIsLabelModalOpen] = useState(false);
   const [isScannerModalOpen, setIsScannerModalOpen] = useState(false);
   const [labelBatch, setLabelBatch] = useState<SeedBatch | null>(null);
+
+  const supplierInspections = useMemo<SupplierLotInspection[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('ht_supplier_inspections');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        } catch (e) {}
+      }
+    }
+    return DEMO_SUPPLIER_INSPECTIONS;
+  }, [isBatchModalOpen, isViewModalOpen]);
   
   const [editingBatchId, setEditingBatchId] = useState<string | null>(null);
   const [selectedBatch, setSelectedBatch] = useState<SeedBatch | null>(null);
@@ -89,6 +104,17 @@ export default function SeedBatches() {
     germination: 90, 
     purity: 99, 
     originPlotId: '',
+    originInspectionId: '',
+    parentSeedBatchId: '',
+    qualityGrade: 'GRADO_A_SUPERIOR' as LotQualityGrade,
+    qualityScore: 95,
+    samplerName: 'Matias QUINTANA',
+    samplerMatricula: 'TEC-MUESTREO-ISTA-108',
+    sampleCode: '',
+    inspectorName: 'Ing. Agr. Julian PIZARRO',
+    inspectorMatricula: 'MP-AGRO-1492 CH',
+    sowingResponsibleName: 'Matias QUINTANA',
+    harvestResponsibleName: 'Ing. Agr. Julian PIZARRO',
     originCampaign: '2025/2026',
     harvestDate: '',
     moisturePct: 8.5,
@@ -529,12 +555,12 @@ export default function SeedBatches() {
                       <table className="min-w-full text-xs text-left">
                           <thead className="bg-slate-50 dark:bg-slate-950/50 text-slate-400 uppercase text-[9px] font-black tracking-wider border-b border-slate-100 dark:border-slate-800">
                               <tr>
-                                  <th className="px-6 py-4">Lote & Tipo Biológico</th>
-                                  <th className="px-6 py-4">Genética / Variedad</th>
+                                  <th className="px-6 py-4">Lote & Calidad Homologada</th>
+                                  <th className="px-6 py-4">Genética & Circuito Trazabilidad</th>
                                   <th className="px-6 py-4">Nodo de Custodia</th>
-                                  <th className="px-6 py-4">Parámetros de Calidad</th>
+                                  <th className="px-6 py-4">Parámetros & Personal Interviniente</th>
                                   <th className="px-6 py-4 text-right">Existencias</th>
-                                  <th className="px-6 py-4 text-right">Acción</th>
+                                  <th className="px-6 py-4 text-right">Acción & QR</th>
                               </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-bold">
@@ -545,14 +571,31 @@ export default function SeedBatches() {
                                   const sp = storagePoints.find(s => s.id === batch.storagePointId);
                                   const matMeta = getMaterialLabel(batch.materialType);
                                   const displayQty = Number(batch.remainingQuantity.toFixed(2));
+                                  const matchedInsp = supplierInspections.find(i =>
+                                    i.id === batch.originInspectionId ||
+                                    i.seedBatchId === batch.id ||
+                                    batch.batchCode.toUpperCase().includes(i.lotNumber.toUpperCase())
+                                  );
+                                  const qGrade = batch.qualityGrade || matchedInsp?.qualityGrade || 'GRADO_A_SUPERIOR';
+                                  const linkedPlotsCount = plots.filter(p => p.seedBatchId === batch.id).length;
+                                  const originPlot = batch.originPlotId ? plots.find(p => p.id === batch.originPlotId) : undefined;
 
                                   return (
                                       <tr key={batch.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition group">
                                           <td className="px-6 py-4">
                                               <div className="font-black text-slate-900 dark:text-white uppercase tracking-tight">{batch.batchCode}</div>
-                                              <div className="flex items-center gap-1.5 mt-1">
+                                              <div className="flex flex-wrap items-center gap-1.5 mt-1">
                                                 <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase border ${matMeta.color}`}>
                                                   {matMeta.label}
+                                                </span>
+                                                <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase border ${
+                                                  qGrade === 'GRADO_A_SUPERIOR'
+                                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300'
+                                                    : qGrade === 'GRADO_B_ESTANDAR'
+                                                    ? 'bg-sky-50 text-sky-700 border-sky-300'
+                                                    : 'bg-amber-50 text-amber-700 border-amber-300'
+                                                }`}>
+                                                  {qGrade === 'GRADO_A_SUPERIOR' ? 'Grado A Élite' : qGrade === 'GRADO_B_ESTANDAR' ? 'Grado B' : 'Grado C'}
                                                 </span>
                                                 {batch.labelSerialNumber && (
                                                   <span className="text-[9px] text-slate-400">Rót: {batch.labelSerialNumber}</span>
@@ -562,6 +605,23 @@ export default function SeedBatches() {
                                           <td className="px-6 py-4">
                                               <div className="font-bold text-slate-800 dark:text-slate-200">{v?.name || 'S/D'}</div>
                                               <div className="text-[9px] text-slate-400">{v?.usage || 'Fibra'} · {v?.breederCountry || 'ARG'}</div>
+                                              <div className="flex flex-wrap items-center gap-1 mt-1 text-[9px]">
+                                                {matchedInsp && (
+                                                  <span className="text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/50 px-1.5 py-0.5 rounded border border-purple-200 dark:border-purple-800">
+                                                    Inspección: {matchedInsp.lotNumber}
+                                                  </span>
+                                                )}
+                                                {(!batch.materialType || batch.materialType === 'seed') && linkedPlotsCount > 0 && (
+                                                  <span className="text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/50 px-1.5 py-0.5 rounded border border-sky-200 dark:border-sky-800">
+                                                    {linkedPlotsCount} Parcelas Sembradas
+                                                  </span>
+                                                )}
+                                                {originPlot && (
+                                                  <span className="text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-800">
+                                                    Origen: {originPlot.name}
+                                                  </span>
+                                                )}
+                                              </div>
                                           </td>
                                           <td className="px-6 py-4">
                                               <div className="text-slate-700 dark:text-slate-300 uppercase truncate max-w-[180px]">{sp?.name || 'ALMACÉN CENTRAL'}</div>
@@ -569,22 +629,25 @@ export default function SeedBatches() {
                                           </td>
                                           <td className="px-6 py-4 text-[10px]">
                                               {batch.materialType === 'harvested_grain' ? (
-                                                <span className="text-amber-600 dark:text-amber-400">
-                                                  Hum: {batch.moisturePct || 8.5}% · Aflatoxinas: Negativo
+                                                <span className="text-amber-600 dark:text-amber-400 block">
+                                                  Hum: {batch.moisturePct || 8.5}% · PG: {batch.germination || 92}%
                                                 </span>
                                               ) : batch.materialType === 'fiber_bales' ? (
-                                                <span className="text-purple-600 dark:text-purple-400">
+                                                <span className="text-purple-600 dark:text-purple-400 block">
                                                   {batch.baleCount || 200} Fardos ({batch.avgBaleWeightKg || 500}kg) · Enriado {batch.rettingQuality || 'Óptimo'}
                                                 </span>
                                               ) : batch.materialType === 'biomass_cbg' ? (
-                                                <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+                                                <span className="text-emerald-600 dark:text-emerald-400 font-bold block">
                                                   THC: {batch.hplcThcPct || 0.04}% · CBG: {batch.hplcCbgPct || 2.7}% (CoA OK)
                                                 </span>
                                               ) : (
-                                                <span className="text-blue-600 dark:text-blue-400">
+                                                <span className="text-blue-600 dark:text-blue-400 block">
                                                   PG: {batch.germination || 90}% · Pureza: {batch.purity || 99}% · Cat {batch.category || 'C1'}
                                                 </span>
                                               )}
+                                              <span className="text-[9px] text-slate-500 block mt-0.5">
+                                                Muestreo: <strong>{batch.samplerName || matchedInsp?.samplerName || 'Matias QUINTANA'}</strong> · Aud: <strong>{batch.inspectorName || matchedInsp?.agronomistName || 'Ing. J. PIZARRO'}</strong>
+                                              </span>
                                           </td>
                                           <td className="px-6 py-4 text-right">
                                               <span className={`px-3 py-1 rounded-xl text-xs font-black inline-block ${
@@ -596,12 +659,12 @@ export default function SeedBatches() {
                                               </span>
                                           </td>
                                           <td className="px-6 py-4 text-right">
-                                              <div className="flex justify-end space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                              <div className="flex justify-end space-x-1">
                                                   <button 
                                                     type="button"
                                                     onClick={() => handleOpenView(batch)} 
-                                                    className="p-1.5 text-slate-400 hover:text-sky-600 bg-slate-100 dark:bg-slate-800 rounded-lg transition"
-                                                    title="Ver Ficha Técnica"
+                                                    className="p-1.5 text-slate-500 hover:text-sky-600 bg-slate-100 dark:bg-slate-800 rounded-lg transition"
+                                                    title="Ver Ficha Técnica y Circuito de Trazabilidad"
                                                   >
                                                     <Eye size={14}/>
                                                   </button>
@@ -611,8 +674,8 @@ export default function SeedBatches() {
                                                       setLabelBatch(batch);
                                                       setIsLabelModalOpen(true);
                                                     }} 
-                                                    className="p-1.5 text-slate-400 hover:text-purple-600 bg-slate-100 dark:bg-slate-800 rounded-lg transition"
-                                                    title="Emitir Rótulo Oficial & QR"
+                                                    className="p-1.5 text-purple-600 hover:bg-purple-100 bg-purple-50 dark:bg-purple-950/60 rounded-lg transition"
+                                                    title="Emitir Rótulo Oficial & QR Activo"
                                                   >
                                                     <QrCode size={14}/>
                                                   </button>
@@ -927,7 +990,44 @@ export default function SeedBatches() {
               {/* PARÁMETROS ESPECÍFICOS SEGÚN MATERIAL */}
               {batchFormData.materialType === 'seed' && (
                 <div className="bg-blue-50/50 dark:bg-blue-950/20 p-4 rounded-2xl border border-blue-200 dark:border-blue-900/40 space-y-3">
-                  <h4 className="text-[10px] font-bold uppercase text-blue-700 dark:text-blue-300">Certificación INASE & Poder Germinativo</h4>
+                  <div className="flex flex-wrap justify-between items-center gap-2">
+                    <h4 className="text-[10px] font-bold uppercase text-blue-700 dark:text-blue-300">Certificación INASE, Inspección de Recepción & Calidad</h4>
+                    <select
+                      className="px-2.5 py-1 bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800 rounded-xl text-[10px] font-bold text-purple-700 dark:text-purple-300"
+                      value={batchFormData.originInspectionId || ''}
+                      onChange={e => {
+                        const insp = supplierInspections.find(i => i.id === e.target.value);
+                        if (insp) {
+                          setBatchFormData({
+                            ...batchFormData,
+                            originInspectionId: insp.id,
+                            batchCode: batchFormData.batchCode || insp.lotNumber,
+                            varietyId: insp.varietyId || batchFormData.varietyId,
+                            supplierId: insp.supplierId || batchFormData.supplierId,
+                            germination: insp.germinationTestedPct || batchFormData.germination,
+                            purity: insp.purityPct || batchFormData.purity,
+                            qualityGrade: insp.qualityGrade || 'GRADO_A_SUPERIOR',
+                            qualityScore: insp.qualityScore || 96,
+                            samplerName: insp.samplerName || 'Matias QUINTANA',
+                            samplerMatricula: insp.samplerDniOrMatricula || 'TEC-MUESTREO-ISTA-108',
+                            sampleCode: insp.sampleCode || `MUE-${insp.lotNumber}`,
+                            inspectorName: insp.agronomistName || 'Ing. Agr. Julian PIZARRO',
+                            inspectorMatricula: insp.agronomistMatricula || 'MP-AGRO-1492 CH'
+                          });
+                        } else {
+                          setBatchFormData({ ...batchFormData, originInspectionId: '' });
+                        }
+                      }}
+                    >
+                      <option value="">Vincular Acta de Inspección Técnica de Lote...</option>
+                      {supplierInspections.map(i => (
+                        <option key={i.id} value={i.id}>
+                          Acta {i.lotNumber} · {i.supplierName} ({i.qualityGrade || 'Grado A'})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                     <div>
                       <label className={labelClass}>Serie Rótulo INASE</label>
@@ -954,72 +1054,171 @@ export default function SeedBatches() {
                 </div>
               )}
 
-              {batchFormData.materialType === 'harvested_grain' && (
+              {batchFormData.materialType !== 'seed' && (
                 <div className="bg-amber-50/50 dark:bg-amber-950/20 p-4 rounded-2xl border border-amber-200 dark:border-amber-900/40 space-y-3">
-                  <h4 className="text-[10px] font-bold uppercase text-amber-700 dark:text-amber-300">Control de Calidad de Granos Cosechados</h4>
+                  <h4 className="text-[10px] font-bold uppercase text-amber-700 dark:text-amber-300">
+                    Origen de Trazabilidad del Material Obtenido (Parcela ➔ Lote Siembra ➔ Homologación)
+                  </h4>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
-                      <label className={labelClass}>Parcela de Cosecha</label>
-                      <select className={inputClass} value={batchFormData.originPlotId || ''} onChange={e => setBatchFormData({...batchFormData, originPlotId: e.target.value})}>
-                        <option value="">Seleccionar Parcela...</option>
-                        {plots.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      <label className={labelClass}>Parcela de Cultivo Origen *</label>
+                      <select
+                        className={inputClass}
+                        value={batchFormData.originPlotId || ''}
+                        onChange={e => {
+                          const p = plots.find(pl => pl.id === e.target.value);
+                          const parentBatch = p?.seedBatchId ? seedBatches.find(b => b.id === p.seedBatchId) : undefined;
+                          const originInsp = parentBatch
+                            ? supplierInspections.find(i => i.id === parentBatch.originInspectionId || i.seedBatchId === parentBatch.id || parentBatch.batchCode.includes(i.lotNumber))
+                            : undefined;
+                          setBatchFormData({
+                            ...batchFormData,
+                            originPlotId: e.target.value,
+                            varietyId: p?.varietyId || batchFormData.varietyId,
+                            parentSeedBatchId: parentBatch?.id || batchFormData.parentSeedBatchId,
+                            originInspectionId: originInsp?.id || parentBatch?.originInspectionId || batchFormData.originInspectionId,
+                            qualityGrade: parentBatch?.qualityGrade || originInsp?.qualityGrade || 'GRADO_A_SUPERIOR',
+                            sowingResponsibleName: p?.sowingResponsibleName || p?.ownerName || 'Matias QUINTANA'
+                          });
+                        }}
+                      >
+                        <option value="">Seleccionar Parcela Cosechada...</option>
+                        {plots.map(p => <option key={p.id} value={p.id}>{p.name} ({p.surfaceArea} {p.surfaceUnit})</option>)}
                       </select>
                     </div>
                     <div>
-                      <label className={labelClass}>% Humedad de Recibo (&lt;9%)</label>
-                      <input type="number" step="0.1" className={inputClass} value={batchFormData.moisturePct || 8.4} onChange={e => setBatchFormData({...batchFormData, moisturePct: Number(e.target.value)})} />
+                      <label className={labelClass}>Lote de Siembra Madre</label>
+                      <select
+                        className={inputClass}
+                        value={batchFormData.parentSeedBatchId || ''}
+                        onChange={e => setBatchFormData({ ...batchFormData, parentSeedBatchId: e.target.value })}
+                      >
+                        <option value="">Asociado por parcela...</option>
+                        {seedBatches.filter(b => (b.materialType || 'seed') === 'seed').map(b => (
+                          <option key={b.id} value={b.id}>{b.batchCode}</option>
+                        ))}
+                      </select>
                     </div>
                     <div>
-                      <label className={labelClass}>Certificado Libre de Aflatoxinas</label>
-                      <input type="text" className={inputClass} value={batchFormData.aflatoxinFreeCertificate || ''} onChange={e => setBatchFormData({...batchFormData, aflatoxinFreeCertificate: e.target.value})} placeholder="SENASA-INOC-2026-8812" />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {batchFormData.materialType === 'fiber_bales' && (
-                <div className="bg-purple-50/50 dark:bg-purple-950/20 p-4 rounded-2xl border border-purple-200 dark:border-purple-900/40 space-y-3">
-                  <h4 className="text-[10px] font-bold uppercase text-purple-700 dark:text-purple-300">Estiba de Fardos de Paja / Tallo Enriado</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div>
-                      <label className={labelClass}>Cantidad de Fardos</label>
-                      <input type="number" className={inputClass} value={batchFormData.baleCount || 200} onChange={e => setBatchFormData({...batchFormData, baleCount: Number(e.target.value)})} />
-                    </div>
-                    <div>
-                      <label className={labelClass}>Peso Medio por Fardo (kg)</label>
-                      <input type="number" className={inputClass} value={batchFormData.avgBaleWeightKg || 500} onChange={e => setBatchFormData({...batchFormData, avgBaleWeightKg: Number(e.target.value)})} />
-                    </div>
-                    <div>
-                      <label className={labelClass}>Calidad de Enriado en Campo</label>
-                      <select className={inputClass} value={batchFormData.rettingQuality || 'Óptimo (Gris plateado)'} onChange={e => setBatchFormData({...batchFormData, rettingQuality: e.target.value})}>
-                        <option value="Óptimo (Gris plateado)">Óptimo (Gris plateado)</option>
-                        <option value="Medio (Amarillo tostado)">Medio (Amarillo tostado)</option>
-                        <option value="Verde (Sin enriar)">Verde (Sin enriar)</option>
+                      <label className={labelClass}>Calidad Determinada del Material</label>
+                      <select
+                        className={inputClass}
+                        value={batchFormData.qualityGrade || 'GRADO_A_SUPERIOR'}
+                        onChange={e => setBatchFormData({ ...batchFormData, qualityGrade: e.target.value })}
+                      >
+                        <option value="GRADO_A_SUPERIOR">Grado A · Calidad Superior</option>
+                        <option value="GRADO_B_ESTANDAR">Grado B · Estándar Fiscalizado</option>
+                        <option value="GRADO_C_CONDICIONAL">Grado C · Condicional</option>
                       </select>
                     </div>
                   </div>
+
+                  {batchFormData.materialType === 'harvested_grain' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                      <div>
+                        <label className={labelClass}>% Humedad de Recibo (&lt;9%)</label>
+                        <input type="number" step="0.1" className={inputClass} value={batchFormData.moisturePct || 8.4} onChange={e => setBatchFormData({...batchFormData, moisturePct: Number(e.target.value)})} />
+                      </div>
+                      <div>
+                        <label className={labelClass}>% Poder Germinativo Grano</label>
+                        <input type="number" step="0.5" className={inputClass} value={batchFormData.germination || 92} onChange={e => setBatchFormData({...batchFormData, germination: Number(e.target.value)})} />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Certificado Inocuidad SENASA</label>
+                        <input type="text" className={inputClass} value={batchFormData.aflatoxinFreeCertificate || ''} onChange={e => setBatchFormData({...batchFormData, aflatoxinFreeCertificate: e.target.value})} placeholder="SENASA-INOC-2026-8812" />
+                      </div>
+                    </div>
+                  )}
+
+                  {batchFormData.materialType === 'fiber_bales' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                      <div>
+                        <label className={labelClass}>Cantidad de Fardos</label>
+                        <input type="number" className={inputClass} value={batchFormData.baleCount || 200} onChange={e => setBatchFormData({...batchFormData, baleCount: Number(e.target.value)})} />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Peso Medio por Fardo (kg)</label>
+                        <input type="number" className={inputClass} value={batchFormData.avgBaleWeightKg || 500} onChange={e => setBatchFormData({...batchFormData, avgBaleWeightKg: Number(e.target.value)})} />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Calidad de Enriado en Campo</label>
+                        <select className={inputClass} value={batchFormData.rettingQuality || 'Óptimo (Gris plateado)'} onChange={e => setBatchFormData({...batchFormData, rettingQuality: e.target.value})}>
+                          <option value="Óptimo (Gris plateado)">Óptimo (Gris plateado)</option>
+                          <option value="Medio (Amarillo tostado)">Medio (Amarillo tostado)</option>
+                          <option value="Verde (Sin enriar)">Verde (Sin enriar)</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
+                  {batchFormData.materialType === 'biomass_cbg' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                      <div>
+                        <label className={labelClass}>% THC Certificado (&lt;0.3%) *</label>
+                        <input type="number" step="0.001" className={inputClass} value={batchFormData.hplcThcPct || 0.038} onChange={e => setBatchFormData({...batchFormData, hplcThcPct: Number(e.target.value)})} />
+                      </div>
+                      <div>
+                        <label className={labelClass}>% CBG Analizado</label>
+                        <input type="number" step="0.01" className={inputClass} value={batchFormData.hplcCbgPct || 2.72} onChange={e => setBatchFormData({...batchFormData, hplcCbgPct: Number(e.target.value)})} />
+                      </div>
+                      <div>
+                        <label className={labelClass}>N° Protocolo CoA Oficial</label>
+                        <input type="text" className={inputClass} value={batchFormData.hplcLabCertificate || ''} onChange={e => setBatchFormData({...batchFormData, hplcLabCertificate: e.target.value})} placeholder="CoA-HPLC-CANNATECH-2026-0419" />
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
-              {batchFormData.materialType === 'biomass_cbg' && (
-                <div className="bg-emerald-50/50 dark:bg-emerald-950/20 p-4 rounded-2xl border border-emerald-200 dark:border-emerald-900/40 space-y-3">
-                  <h4 className="text-[10px] font-bold uppercase text-emerald-700 dark:text-emerald-300">Protocolo Cromatográfico HPLC & CoA</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div>
-                      <label className={labelClass}>% THC Certificado (&lt;0.3%) *</label>
-                      <input type="number" step="0.001" className={inputClass} value={batchFormData.hplcThcPct || 0.038} onChange={e => setBatchFormData({...batchFormData, hplcThcPct: Number(e.target.value)})} />
-                    </div>
-                    <div>
-                      <label className={labelClass}>% CBG Analizado</label>
-                      <input type="number" step="0.01" className={inputClass} value={batchFormData.hplcCbgPct || 2.72} onChange={e => setBatchFormData({...batchFormData, hplcCbgPct: Number(e.target.value)})} />
-                    </div>
-                    <div>
-                      <label className={labelClass}>N° Protocolo CoA Oficial</label>
-                      <input type="text" className={inputClass} value={batchFormData.hplcLabCertificate || ''} onChange={e => setBatchFormData({...batchFormData, hplcLabCertificate: e.target.value})} placeholder="CoA-HPLC-CANNATECH-2026-0419" />
-                    </div>
+              {/* PERSONAL INTERVINIENTE EN TOMA DE MUESTRAS Y TRAZABILIDAD */}
+              <div className="bg-purple-50/40 dark:bg-purple-950/20 p-4 rounded-2xl border border-purple-200 dark:border-purple-900/40 space-y-3">
+                <h4 className="text-[10px] font-bold uppercase text-purple-700 dark:text-purple-300 flex items-center gap-1.5">
+                  <Users size={13} />
+                  <span>Personal Interviniente en Toma de Muestras y Cadena de Custodia</span>
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                  <div>
+                    <label className={labelClass}>Responsable Toma de Muestra</label>
+                    <input
+                      type="text"
+                      className={inputClass}
+                      value={batchFormData.samplerName || ''}
+                      onChange={e => setBatchFormData({ ...batchFormData, samplerName: e.target.value })}
+                      placeholder="Matias QUINTANA"
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Código Muestra / Precinto</label>
+                    <input
+                      type="text"
+                      className={inputClass}
+                      value={batchFormData.sampleCode || ''}
+                      onChange={e => setBatchFormData({ ...batchFormData, sampleCode: e.target.value })}
+                      placeholder="MUE-ISTA-2026-01"
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Agrónomo Certificante</label>
+                    <input
+                      type="text"
+                      className={inputClass}
+                      value={batchFormData.inspectorName || ''}
+                      onChange={e => setBatchFormData({ ...batchFormData, inspectorName: e.target.value })}
+                      placeholder="Ing. Agr. Julian PIZARRO"
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Responsable Siembra / Cosecha</label>
+                    <input
+                      type="text"
+                      className={inputClass}
+                      value={batchFormData.harvestResponsibleName || batchFormData.sowingResponsibleName || ''}
+                      onChange={e => setBatchFormData({ ...batchFormData, harvestResponsibleName: e.target.value, sowingResponsibleName: e.target.value })}
+                      placeholder="Gastón BAREA M."
+                    />
                   </div>
                 </div>
-              )}
+              </div>
 
               {/* MASA Y UNIDADES */}
               <div className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
@@ -1056,96 +1255,140 @@ export default function SeedBatches() {
         </div>
       )}
 
-      {/* MODAL VIEW / AUDITORÍA TÉCNICA */}
-      {isViewModalOpen && selectedBatch && (
+      {/* MODAL VIEW / AUDITORÍA TÉCNICA + CIRCUITO COMPLETO DE TRAZABILIDAD */}
+      {isViewModalOpen && selectedBatch && (() => {
+        const matchedInsp = supplierInspections.find(i =>
+          i.id === selectedBatch.originInspectionId ||
+          i.seedBatchId === selectedBatch.id ||
+          selectedBatch.batchCode.toUpperCase().includes(i.lotNumber.toUpperCase())
+        );
+        const linkedPlots = plots.filter(p => p.seedBatchId === selectedBatch.id || p.id === selectedBatch.originPlotId);
+        const obtainedFromThisSeed = seedBatches.filter(b =>
+          b.materialType && b.materialType !== 'seed' && (
+            b.parentSeedBatchId === selectedBatch.id ||
+            (b.originPlotId && linkedPlots.some(p => p.id === b.originPlotId))
+          )
+        );
+        const qGrade = selectedBatch.qualityGrade || matchedInsp?.qualityGrade || 'GRADO_A_SUPERIOR';
+
+        return (
           <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-[70] p-4 font-mono">
-              <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800">
-                  <div className="flex justify-between items-center mb-4 border-b border-slate-100 dark:border-slate-800 pb-3">
-                      <div>
-                          <span className="text-[10px] font-bold uppercase text-emerald-600">Certificado Técnico de Material</span>
-                          <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">{selectedBatch.batchCode}</h2>
-                      </div>
-                      <button onClick={() => setIsViewModalOpen(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
-                  </div>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4 text-xs">
-                      <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl border border-slate-100 dark:border-slate-800">
-                          <span className="text-[10px] text-slate-400 block uppercase">Genética</span>
-                          <strong className="text-emerald-600 dark:text-emerald-400">{varieties.find(v => v.id === selectedBatch.varietyId)?.name || 'S/D'}</strong>
-                      </div>
-                      <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl border border-slate-100 dark:border-slate-800">
-                          <span className="text-[10px] text-slate-400 block uppercase">Existencia Real</span>
-                          <strong className="text-slate-900 dark:text-white">{Number(selectedBatch.remainingQuantity.toFixed(2)).toLocaleString()} kg</strong>
-                      </div>
-                      <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl border border-slate-100 dark:border-slate-800">
-                          <span className="text-[10px] text-slate-400 block uppercase">Almacén</span>
-                          <strong className="text-sky-600 dark:text-sky-400">{storagePoints.find(s => s.id === selectedBatch.storagePointId)?.name || 'Central'}</strong>
-                      </div>
-                      <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl border border-slate-100 dark:border-slate-800">
-                          <span className="text-[10px] text-slate-400 block uppercase">Estado Fiscal</span>
-                          <strong className="text-emerald-600 font-bold">Habilitado</strong>
-                      </div>
-                  </div>
-
-                  {/* PARÁMETROS ESPECÍFICOS */}
-                  <div className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 text-xs space-y-2 mb-4">
-                      {selectedBatch.materialType === 'biomass_cbg' && (
-                        <div>
-                          <div className="flex justify-between items-center text-emerald-600 dark:text-emerald-400 font-bold">
-                            <span>THC Certificado: {selectedBatch.hplcThcPct}% (&lt;0.3% Ley)</span>
-                            <span>CBG: {selectedBatch.hplcCbgPct}%</span>
-                          </div>
-                          <span className="text-[10px] text-slate-400 block mt-1">CoA Laboratorio: {selectedBatch.hplcLabCertificate || 'Oficial INTA'}</span>
-                        </div>
-                      )}
-                      {selectedBatch.materialType === 'harvested_grain' && (
-                        <div>
-                          <div className="flex justify-between items-center text-amber-600 font-bold">
-                            <span>Humedad de Grano: {selectedBatch.moisturePct}%</span>
-                            <span>Materia Grasa: {selectedBatch.oilContentPct || 32}%</span>
-                          </div>
-                          <span className="text-[10px] text-slate-400 block mt-1">Inocuidad SENASA: {selectedBatch.aflatoxinFreeCertificate || 'Negativo'}</span>
-                        </div>
-                      )}
-                      {selectedBatch.materialType === 'fiber_bales' && (
-                        <div>
-                          <div className="flex justify-between items-center text-purple-600 font-bold">
-                            <span>Conteo Fardos: {selectedBatch.baleCount || 200} un</span>
-                            <span>Peso Medio: {selectedBatch.avgBaleWeightKg || 500} kg</span>
-                          </div>
-                          <span className="text-[10px] text-slate-400 block mt-1">Calidad Enriado: {selectedBatch.rettingQuality}</span>
-                        </div>
-                      )}
-                      {(!selectedBatch.materialType || selectedBatch.materialType === 'seed') && (
-                        <div>
-                          <div className="flex justify-between items-center text-blue-600 font-bold">
-                            <span>Poder Germinativo: {selectedBatch.germination}%</span>
-                            <span>Pureza: {selectedBatch.purity}%</span>
-                          </div>
-                          <span className="text-[10px] text-slate-400 block mt-1">Rótulo INASE: {selectedBatch.labelSerialNumber || 'Certificado'} · Cat {selectedBatch.category || 'C1'}</span>
-                        </div>
-                      )}
-                  </div>
-
-                  <div className="flex justify-end gap-2">
-                      <button 
-                        type="button" 
-                        onClick={() => {
-                          setLabelBatch(selectedBatch);
-                          setIsLabelModalOpen(true);
-                        }} 
-                        className="bg-purple-600 text-white hover:bg-purple-500 px-5 py-2 rounded-xl font-bold text-xs uppercase flex items-center gap-1.5 shadow"
-                      >
-                        <QrCode size={14} />
-                        <span>Emitir Rótulo & QR</span>
-                      </button>
-                      <button type="button" onClick={() => setIsViewModalOpen(false)} className="bg-slate-900 text-white dark:bg-white dark:text-slate-900 px-6 py-2 rounded-xl font-bold text-xs uppercase">
-                          Cerrar Ficha
-                      </button>
-                  </div>
+            <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 max-h-[92vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-4 border-b border-slate-100 dark:border-slate-800 pb-3">
+                <div>
+                  <span className="text-[10px] font-bold uppercase text-emerald-600">
+                    Certificado Técnico de Material & Trazabilidad QR Activa
+                  </span>
+                  <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">{selectedBatch.batchCode}</h2>
+                </div>
+                <button onClick={() => setIsViewModalOpen(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
               </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4 text-xs">
+                <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl border border-slate-100 dark:border-slate-800">
+                  <span className="text-[10px] text-slate-400 block uppercase">Genética</span>
+                  <strong className="text-emerald-600 dark:text-emerald-400">{varieties.find(v => v.id === selectedBatch.varietyId)?.name || 'S/D'}</strong>
+                </div>
+                <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl border border-slate-100 dark:border-slate-800">
+                  <span className="text-[10px] text-slate-400 block uppercase">Calidad Lote</span>
+                  <strong className="text-purple-600 dark:text-purple-400">
+                    {qGrade === 'GRADO_A_SUPERIOR' ? 'Grado A Élite' : qGrade === 'GRADO_B_ESTANDAR' ? 'Grado B' : 'Grado C'}
+                  </strong>
+                </div>
+                <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl border border-slate-100 dark:border-slate-800">
+                  <span className="text-[10px] text-slate-400 block uppercase">Existencia Real</span>
+                  <strong className="text-slate-900 dark:text-white">{Number(selectedBatch.remainingQuantity.toFixed(2)).toLocaleString()} kg</strong>
+                </div>
+                <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl border border-slate-100 dark:border-slate-800">
+                  <span className="text-[10px] text-slate-400 block uppercase">Almacén</span>
+                  <strong className="text-sky-600 dark:text-sky-400">{storagePoints.find(s => s.id === selectedBatch.storagePointId)?.name || 'Central'}</strong>
+                </div>
+              </div>
+
+              {/* PERSONAL INTERVINIENTE EN TOMA DE MUESTRAS Y TRAZABILIDAD */}
+              <div className="bg-amber-50/50 dark:bg-amber-950/20 p-3.5 rounded-2xl border border-amber-200 dark:border-amber-900/40 text-xs space-y-2 mb-4">
+                <span className="text-[9px] font-black uppercase text-amber-700 dark:text-amber-400 block">
+                  Personal Interviniente en Toma de Muestras y Custodia
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[10px]">
+                  <div className="bg-white dark:bg-slate-900 p-2 rounded-xl border border-amber-200 dark:border-slate-800">
+                    <span className="text-[8px] text-slate-400 uppercase block">Toma de Muestra</span>
+                    <strong className="text-slate-900 dark:text-white block">{selectedBatch.samplerName || matchedInsp?.samplerName || 'Matias QUINTANA'}</strong>
+                    <span className="text-[9px] text-amber-600 font-mono block">{selectedBatch.sampleCode || matchedInsp?.sampleCode || `MUE-${selectedBatch.batchCode}`}</span>
+                  </div>
+                  <div className="bg-white dark:bg-slate-900 p-2 rounded-xl border border-amber-200 dark:border-slate-800">
+                    <span className="text-[8px] text-slate-400 uppercase block">Auditoría Laboratorio</span>
+                    <strong className="text-slate-900 dark:text-white block">{selectedBatch.inspectorName || matchedInsp?.agronomistName || 'Ing. Agr. Julian PIZARRO'}</strong>
+                    <span className="text-[9px] text-purple-600 font-mono block">{selectedBatch.inspectorMatricula || matchedInsp?.agronomistMatricula || 'MP-AGRO-1492 CH'}</span>
+                  </div>
+                  <div className="bg-white dark:bg-slate-900 p-2 rounded-xl border border-amber-200 dark:border-slate-800">
+                    <span className="text-[8px] text-slate-400 uppercase block">Custodia / Campo</span>
+                    <strong className="text-slate-900 dark:text-white block">{selectedBatch.harvestResponsibleName || selectedBatch.logisticsResponsible || 'Gastón BAREA M.'}</strong>
+                    <span className="text-[9px] text-emerald-600 block">Trazabilidad Verificada</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* CIRCUITO DE TRAZABILIDAD DE 4 ETAPAS */}
+              <div className="bg-slate-50 dark:bg-slate-800/40 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 text-xs space-y-2 mb-4">
+                <span className="text-[9px] font-black uppercase text-emerald-600 block">
+                  Circuito Completo de Trazabilidad Asociado
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[10px]">
+                  <div className="bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800">
+                    <span className="text-[8px] font-bold text-purple-600 uppercase block">1. Inspección Recepción</span>
+                    <strong className="text-slate-800 dark:text-slate-200 block truncate">
+                      {matchedInsp ? `${matchedInsp.lotNumber} (${matchedInsp.supplierName})` : 'Homologado INASE'}
+                    </strong>
+                  </div>
+                  <div className="bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800">
+                    <span className="text-[8px] font-bold text-sky-600 uppercase block">2. Parcelas Asociadas ({linkedPlots.length})</span>
+                    <strong className="text-slate-800 dark:text-slate-200 block truncate">
+                      {linkedPlots.length > 0 ? linkedPlots.map(p => p.name).join(', ') : 'Disponible en Almacén'}
+                    </strong>
+                  </div>
+                  <div className="bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800">
+                    <span className="text-[8px] font-bold text-amber-600 uppercase block">3. Material Obtenido ({obtainedFromThisSeed.length})</span>
+                    <strong className="text-slate-800 dark:text-slate-200 block truncate">
+                      {obtainedFromThisSeed.length > 0 ? obtainedFromThisSeed.map(m => m.batchCode).join(', ') : (selectedBatch.materialType !== 'seed' ? selectedBatch.batchCode : 'En ciclo agrícola')}
+                    </strong>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap justify-between items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsViewModalOpen(false);
+                    navigate(`/trace/${selectedBatch.id}`);
+                  }}
+                  className="bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-4 py-2 rounded-xl font-bold text-xs uppercase flex items-center gap-1.5"
+                >
+                  <QrCode size={14} />
+                  <span>Abrir Portal Público QR</span>
+                </button>
+                <div className="flex items-center gap-2">
+                  <button 
+                    type="button" 
+                    onClick={() => {
+                      setLabelBatch(selectedBatch);
+                      setIsLabelModalOpen(true);
+                    }} 
+                    className="bg-purple-600 text-white hover:bg-purple-500 px-5 py-2 rounded-xl font-bold text-xs uppercase flex items-center gap-1.5 shadow"
+                  >
+                    <QrCode size={14} />
+                    <span>Emitir Rótulo & QR</span>
+                  </button>
+                  <button type="button" onClick={() => setIsViewModalOpen(false)} className="bg-slate-900 text-white dark:bg-white dark:text-slate-900 px-6 py-2 rounded-xl font-bold text-xs uppercase">
+                    Cerrar Ficha
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
-      )}
+        );
+      })()}
 
       {/* MODAL DESPACHO / GUÍA DE TRÁNSITO */}
       {isMoveModalOpen && (

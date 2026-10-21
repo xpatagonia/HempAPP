@@ -4,9 +4,9 @@ import {
   X, Printer, Download, ShieldCheck, QrCode, Sprout, 
   MapPin, Calendar, FileText, AlertTriangle, ExternalLink, 
   Copy, Check, Info, Globe, Building, CheckCircle2, Scale, 
-  FileCheck2, Compass, Layers, UserCheck
+  FileCheck2, Compass, Layers, UserCheck, Award
 } from 'lucide-react';
-import { Plot, Location, Variety, Client } from '../types';
+import { Plot, Location, Variety, Client, SeedBatch } from '../types';
 
 interface PlotIdentificationModalProps {
   isOpen: boolean;
@@ -15,6 +15,7 @@ interface PlotIdentificationModalProps {
   location?: Location;
   variety?: Variety;
   client?: Client;
+  seedBatch?: SeedBatch;
 }
 
 export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = ({
@@ -23,7 +24,8 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
   plot,
   location,
   variety,
-  client
+  client,
+  seedBatch
 }) => {
   const [activeView, setActiveView] = useState<'label' | 'sign'>('sign');
   const [copied, setCopied] = useState(false);
@@ -41,17 +43,15 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
   const formattedLat = plot.coordinates?.lat ? Number(plot.coordinates.lat).toFixed(5) : '-';
   const formattedLng = plot.coordinates?.lng ? Number(plot.coordinates.lng).toFixed(5) : '-';
 
-  // Dominio público accesible para escaneo móvil desde cualquier dispositivo externo
+  // Dominio público accesible para escaneo móvil
   const publicBaseUrl = (() => {
     if (typeof window === 'undefined') return 'https://red.hempc.com.ar';
-    const host = window.location.hostname;
-    // Si estamos en un host privado (localhost, 127.0.0.1, dev sandbox Cloud Run de AI Studio)
-    // una cámara móvil NO tiene acceso a esa red privada. Usamos el dominio oficial de producción.
-    if (host === 'localhost' || host === '127.0.0.1' || host.includes('run.app') || host.includes('aistudio')) {
-      return 'https://red.hempc.com.ar';
-    }
     return window.location.origin;
   })();
+
+  const seedLotCode = seedBatch?.batchCode || 'FUT-83-25-HEM';
+  const seedMotherLot = seedBatch?.certificationNumber || (seedLotCode.includes('-REC-') ? seedLotCode.split('-REC-')[0] : seedLotCode);
+  const seedRotuloInase = seedBatch?.labelSerialNumber || 'INASE-SERIE-2025-A0041928';
 
   // Construir URL pública con parámetros de respaldo para garantizar trazabilidad instantánea en cualquier celular
   const traceUrl = (() => {
@@ -65,6 +65,13 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
     if (plot.surfaceArea) params.set('ha', String(plot.surfaceArea));
     if (campaignDisplay) params.set('camp', campaignDisplay);
     if (plot.status) params.set('status', plot.status);
+    if (plot.seedBatchId || seedBatch?.id) params.set('batchId', plot.seedBatchId || seedBatch?.id || '');
+    params.set('seedLot', seedLotCode);
+    params.set('seedCert', seedMotherLot);
+    params.set('seedRotulo', seedRotuloInase);
+    if (plot.samplingResponsibleName || seedBatch?.samplerName) params.set('sampler', plot.samplingResponsibleName || seedBatch?.samplerName || '');
+    if (plot.sowingResponsibleName) params.set('sower', plot.sowingResponsibleName);
+    if (plot.technicalResponsibleName || seedBatch?.inspectorName) params.set('inspector', plot.technicalResponsibleName || seedBatch?.inspectorName || '');
 
     const queryStr = params.toString();
     return `${publicBaseUrl}/#/trace/${encodeURIComponent(plot.id)}${queryStr ? `?${queryStr}` : ''}`;
@@ -179,8 +186,8 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
               /* Forzar columnas paralelas en Página 1 y Página 2 durante la impresión */
               #printable-plot-sign-p1 .p1-quick-grid {
                 display: grid !important;
-                grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-                gap: 8px !important;
+                grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+                gap: 6px !important;
               }
               #printable-plot-sign-p2 {
                 padding: 10px 14px !important;
@@ -331,8 +338,8 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
           }
           #printable-plot-sign-p1 .p1-quick-grid {
             display: grid !important;
-            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-            gap: 8px !important;
+            grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+            gap: 6px !important;
           }
           #printable-plot-sign-p2 {
             padding: 10px 14px !important;
@@ -623,24 +630,30 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                         </p>
                       </div>
 
-                      {/* FRANJA DE IDENTIFICACIÓN RÁPIDA EN TRANQUERA */}
-                      <div className="p1-quick-grid grid grid-cols-3 gap-2.5 bg-slate-50 p-2.5 rounded-2xl border-2 border-slate-300 text-xs font-mono">
-                        <div className="p-2.5 bg-white rounded-xl border border-slate-200">
-                          <span className="text-[9px] uppercase font-bold text-slate-400 block">Lote / Parcela:</span>
-                          <strong className="text-base font-black uppercase text-slate-950 block truncate">{plot.name}</strong>
-                          <span className="text-[10px] text-slate-500 block">ID Catastral: {plot.id}</span>
+                      {/* FRANJA DE IDENTIFICACIÓN RÁPIDA EN TRANQUERA (INCLUYE N° DE LOTE DE SEMILLA) */}
+                      <div className="p1-quick-grid grid grid-cols-2 md:grid-cols-4 gap-2 bg-slate-50 p-2.5 rounded-2xl border-2 border-slate-300 text-xs font-mono">
+                        <div className="p-2 bg-white rounded-xl border border-slate-200">
+                          <span className="text-[8.5px] uppercase font-bold text-slate-400 block">Lote / Parcela:</span>
+                          <strong className="text-sm font-black uppercase text-slate-950 block truncate">{plot.name}</strong>
+                          <span className="text-[9.5px] text-slate-500 block truncate">ID: {plot.id}</span>
                         </div>
 
-                        <div className="p-2.5 bg-white rounded-xl border border-slate-200">
-                          <span className="text-[9px] uppercase font-bold text-slate-400 block">Establecimiento:</span>
+                        <div className="p-2 bg-white rounded-xl border border-slate-200">
+                          <span className="text-[8.5px] uppercase font-bold text-slate-400 block">Establecimiento:</span>
                           <strong className="text-sm font-black uppercase text-slate-950 block truncate">{location?.name || 'Establecimiento Rural'}</strong>
-                          <span className="text-[10px] text-slate-500 block truncate">{location?.city || ''}, {location?.province || ''}</span>
+                          <span className="text-[9.5px] text-slate-500 block truncate">{location?.city || ''}, {location?.province || ''}</span>
                         </div>
 
-                        <div className="p-2.5 bg-white rounded-xl border border-slate-200">
-                          <span className="text-[9px] uppercase font-bold text-slate-400 block">Cultivar Certificado:</span>
+                        <div className="p-2 bg-white rounded-xl border border-slate-200">
+                          <span className="text-[8.5px] uppercase font-bold text-slate-400 block">Cultivar Certificado:</span>
                           <strong className="text-sm font-black uppercase text-emerald-800 block truncate">{variety?.name || 'Variedad Homologada'}</strong>
-                          <span className="text-[10px] text-slate-500 block">RNC INASE: {variety?.inaseRncNumber || 'Homologada'}</span>
+                          <span className="text-[9.5px] text-slate-500 block truncate">RNC INASE: {variety?.inaseRncNumber || 'Homologada'}</span>
+                        </div>
+
+                        <div className="p-2 bg-emerald-50 rounded-xl border-2 border-emerald-500">
+                          <span className="text-[8.5px] uppercase font-black text-emerald-800 block">N° Lote de Semilla:</span>
+                          <strong className="text-sm font-black uppercase text-slate-950 block truncate" title={seedLotCode}>{seedMotherLot}</strong>
+                          <span className="text-[9px] text-emerald-800 font-bold block truncate" title={seedRotuloInase}>Rótulo: {seedRotuloInase}</span>
                         </div>
                       </div>
 
@@ -649,15 +662,18 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                         ⚠️ ADVERTENCIA LEGAL A FUERZAS DE SEGURIDAD Y TERCEROS: Predio registrado y fiscalizado bajo la Ley 27.669. Prohibido el ingreso no autorizado o la sustracción de biomasa experimental. Acto penado por los artículos 162, 164 y 186 del Código Penal de la Nación Argentina.
                       </div>
 
-                      {/* FOOTER PÁGINA 1 */}
+                      {/* FOOTER PÁGINA 1 CON N° DE LOTE DE SEMILLA JUNTO AL QR */}
                       <div className="flex flex-col sm:flex-row justify-between items-center text-[10px] font-mono text-slate-500 border-t-2 border-slate-300 pt-2 gap-2">
                         <div className="flex items-center gap-2.5">
                           <div className="p-1 bg-white rounded-lg border border-slate-300 shrink-0">
-                            <QRCodeSVG value={traceUrl} size={46} level="M" />
+                            <QRCodeSVG value={traceUrl} size={48} level="M" />
                           </div>
                           <div>
                             <span className="font-black text-slate-800 block text-xs">PatagonianC LTDA · CUIT: 30-71816113-0 · HempC</span>
-                            <span className="text-[9px] text-slate-500 block">Escanear para verificación digital inmediata</span>
+                            <span className="text-[9.5px] text-emerald-800 font-black block">
+                              N° Lote de Semilla: {seedMotherLot} · Rótulo INASE: {seedRotuloInase}
+                            </span>
+                            <span className="text-[8.5px] text-slate-500 block">Escanear QR para trazabilidad del lote y verificación digital</span>
                           </div>
                         </div>
                         <div className="text-right">
@@ -709,7 +725,7 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                           <strong className="text-xs font-mono font-black text-slate-900 block">
                             EXP: HEMP-AR-{plot.id.substring(0, 8).toUpperCase()}
                           </strong>
-                          <span className="text-[9px] font-mono text-slate-500 block">Campaña {campaignDisplay}</span>
+                          <span className="text-[9px] font-mono text-emerald-800 font-black block">Lote Semilla: {seedMotherLot}</span>
                         </div>
                       </div>
 
@@ -717,7 +733,7 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                       <div className="space-y-1">
                         <span className="text-[11px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
                           <Sprout size={14} className="text-emerald-600" />
-                          1. Ficha Catastral & Identificación del Cultivo
+                          1. Ficha Catastral, Genética & N° de Lote de Semilla
                         </span>
                         <div className="p2-sec1-grid grid grid-cols-3 gap-2.5 border-2 border-slate-300 rounded-xl p-2.5 bg-slate-50 text-[11px] font-mono">
                           <div className="space-y-0.5">
@@ -737,11 +753,11 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                           </div>
 
                           <div className="space-y-0.5">
-                            <span className="text-[9px] text-slate-400 uppercase font-bold block">Genética Certificada (INASE):</span>
+                            <span className="text-[9px] text-slate-400 uppercase font-bold block">Genética & Lote de Semilla:</span>
                             <strong className="text-xs text-emerald-800 font-black block">{variety?.name || 'Cultivar Homologado'}</strong>
+                            <span className="text-[10px] text-slate-900 block">N° Lote Semilla: <strong>{seedMotherLot}</strong></span>
+                            <span className="text-[10px] text-slate-600 block truncate" title={seedRotuloInase}>Rótulo INASE: <strong>{seedRotuloInase}</strong></span>
                             <span className="text-[10px] text-slate-600 block">RNC INASE: <strong>{variety?.inaseRncNumber || 'Certificación RNC'}</strong></span>
-                            <span className="text-[10px] text-slate-600 block">Destino: <strong>{variety?.usage || 'Fibra / Grano'}</strong></span>
-                            <span className="text-[10px] text-slate-600 block">Fotoperíodo: <strong>{variety?.photoperiodType || 'Monoica'}</strong></span>
                           </div>
                         </div>
                       </div>
@@ -774,20 +790,30 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                         </div>
                       </div>
 
-                      {/* SECCIÓN 3: TITULARIDAD, OPERADOR Y LICENCIAS ARICCAME */}
+                      {/* SECCIÓN 3: TITULARIDAD, OPERADOR Y TRAZABILIDAD DEL LOTE DE SEMILLA */}
                       <div className="p2-sec3-grid grid grid-cols-2 gap-2.5 text-xs font-mono">
                         <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl space-y-0.5">
-                          <span className="text-[9px] uppercase text-slate-500 font-bold block">Operador Titular Responsable</span>
+                          <span className="text-[9px] uppercase text-slate-500 font-bold block">Operador Titular & Licencias ARICCAME</span>
                           <strong className="text-xs font-black text-slate-900 block">PatagonianC LTDA Cooperativa de Trabajo</strong>
                           <span className="text-[10px] text-emerald-800 font-bold block">CUIT: 30-71816113-0 · HempC (Unidad de Negocios)</span>
+                          <span className="text-[10px] text-slate-700 block">Lic. Agrícola ARICCAME: <strong>EX-2024-134354227</strong></span>
                           <span className="text-[10px] text-slate-600 block">Titular Predial: <strong>{client?.name || location?.ownerName || 'HempC Red Cooperativa'}</strong></span>
                         </div>
 
-                        <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl space-y-0.5">
-                          <span className="text-[9px] uppercase text-slate-500 font-bold block">Licencias y Fiscalización Sanitaria</span>
-                          <span className="text-[10px] text-slate-700 block">Lic. Agrícola ARICCAME: <strong>EX-2024-134354227</strong></span>
-                          <span className="text-[10px] text-slate-700 block">Lic. Industrial ARICCAME: <strong>EX-2025-119427833</strong></span>
-                          <span className="text-[10px] text-emerald-700 font-bold block">SENASA Resoluciones N° 350/99 y 637/11</span>
+                        <div className="p-2.5 bg-emerald-50/70 border-2 border-emerald-300 rounded-xl space-y-0.5">
+                          <span className="text-[9px] uppercase text-emerald-800 font-black block">N° de Lote de Semilla y Trazabilidad del Lote</span>
+                          <span className="text-[10px] text-slate-900 block">
+                            N° Lote de Semilla: <strong className="font-black text-emerald-900">{seedMotherLot}</strong> ({seedBatch?.qualityGrade === 'GRADO_B_ESTANDAR' ? 'Grado B' : 'Grado A Élite'} · {seedBatch?.qualityScore || 96}/100 pts)
+                          </span>
+                          <span className="text-[9.5px] text-slate-700 block truncate" title={seedLotCode}>
+                            Código Trazabilidad / Remito: <strong>{seedLotCode}</strong>
+                          </span>
+                          <span className="text-[9.5px] text-emerald-800 font-bold block">
+                            Rótulo Oficial INASE: <strong>{seedRotuloInase}</strong> · PG: {seedBatch?.germination || 94}%
+                          </span>
+                          <span className="text-[9.5px] text-indigo-800 font-bold block truncate">
+                            Muestreo: {plot.samplingResponsibleName || seedBatch?.samplerName || 'Matias QUINTANA'} · DT: {plot.technicalResponsibleName || seedBatch?.inspectorName || 'Ing. Agr. Julian PIZARRO'}
+                          </span>
                         </div>
                       </div>
 
@@ -798,8 +824,9 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                             <QRCodeSVG value={traceUrl} size={58} level="M" />
                           </div>
                           <div className="text-[9px] font-mono space-y-0.5 min-w-0">
-                            <strong className="font-black text-slate-900 block truncate text-[10px]">QR Auditoría Digital</strong>
-                            <span className="text-slate-500 block text-[8px] leading-tight">Historial satelital y DDJJ oficial</span>
+                            <strong className="font-black text-slate-900 block truncate text-[10px]">QR Trazabilidad Lote</strong>
+                            <span className="text-emerald-800 font-black block truncate text-[8.5px]">Lote Semilla: {seedMotherLot}</span>
+                            <span className="text-slate-500 block text-[8px] leading-tight">Rótulo: {seedRotuloInase}</span>
                             <span className="text-emerald-700 font-bold block text-[8px]">SENASA · INASE · ARICCAME</span>
                           </div>
                         </div>
@@ -908,14 +935,21 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                 </div>
 
                 {/* DETALLE PARCELA */}
-                <div>
-                  <span className="text-[10px] font-mono text-slate-400 uppercase font-bold block">Parcela / Unidad Productiva:</span>
-                  <strong className="text-xl md:text-2xl font-black uppercase text-slate-900 block leading-tight mt-0.5">
-                    {plot.name}
-                  </strong>
-                  <span className="text-xs font-mono text-slate-600 block mt-1">
-                    ID Parcelario: <strong>{plot.id}</strong>
-                  </span>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <span className="text-[10px] font-mono text-slate-400 uppercase font-bold block">Parcela / Unidad Productiva:</span>
+                    <strong className="text-xl md:text-2xl font-black uppercase text-slate-900 block leading-tight mt-0.5">
+                      {plot.name}
+                    </strong>
+                    <span className="text-xs font-mono text-slate-600 block mt-1">
+                      ID Parcelario: <strong>{plot.id}</strong>
+                    </span>
+                  </div>
+                  <div className="bg-emerald-50 border-2 border-emerald-500 rounded-xl px-3 py-2 font-mono text-right">
+                    <span className="text-[9px] font-black uppercase text-emerald-800 block">N° de Lote de Semilla</span>
+                    <strong className="text-sm font-black uppercase text-slate-950 block">{seedMotherLot}</strong>
+                    <span className="text-[9px] font-bold text-emerald-700 block">Rótulo: {seedRotuloInase}</span>
+                  </div>
                 </div>
 
                 {/* DATOS CRUZADOS */}
@@ -944,7 +978,43 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                   </div>
                 </div>
 
-                {/* QR Y VERIFICACIÓN */}
+                {/* N° DE LOTE DE SEMILLA, TRAZABILIDAD DEL LOTE & PERSONAL INTERVINIENTE */}
+                <div className="p-3.5 bg-indigo-50/70 rounded-2xl border-2 border-indigo-200 text-[10px] font-mono space-y-2">
+                  <div className="flex items-center justify-between border-b border-indigo-200 pb-1.5">
+                    <span className="font-black uppercase text-indigo-900 flex items-center gap-1">
+                      <UserCheck size={13} className="text-indigo-700" />
+                      N° de Lote de Semilla, Trazabilidad & Personal Interviniente
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-emerald-600 text-white font-black text-[8px] uppercase flex items-center gap-1">
+                      <Award size={10} />
+                      {seedBatch?.qualityGrade === 'GRADO_B_ESTANDAR' ? 'Grado B Estándar' : 'Grado A Élite'} ({seedBatch?.qualityScore || 96}/100)
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div className="bg-white p-2 rounded-xl border border-indigo-100">
+                      <span className="text-[8px] text-emerald-700 uppercase font-black block">N° de Lote de Semilla (Lote Madre):</span>
+                      <strong className="text-slate-950 text-xs font-black block truncate">{seedMotherLot}</strong>
+                      <span className="text-[8.5px] text-slate-600 block truncate" title={seedLotCode}>
+                        Cód. Recepción: <strong>{seedLotCode}</strong>
+                      </span>
+                      <span className="text-[8.5px] text-emerald-700 font-bold block">
+                        Rótulo INASE: {seedRotuloInase} · PG: {seedBatch?.germination || 94}%
+                      </span>
+                    </div>
+                    <div className="bg-white p-2 rounded-xl border border-indigo-100">
+                      <span className="text-[8px] text-indigo-700 uppercase font-black block">Toma de Muestras & Dirección Técnica:</span>
+                      <strong className="text-slate-950 block truncate">{plot.samplingResponsibleName || seedBatch?.samplerName || 'Matias QUINTANA'}</strong>
+                      <span className="text-[8.5px] text-indigo-700 font-bold block truncate">
+                        DT: {plot.technicalResponsibleName || seedBatch?.inspectorName || 'Ing. Agr. Julian PIZARRO'}
+                      </span>
+                      <span className="text-[8.5px] text-slate-600 block truncate">
+                        Siembra: {plot.sowingResponsibleName || 'Joaquin AREZO'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* QR Y VERIFICACIÓN CON N° DE LOTE DE SEMILLA EXPLÍCITO */}
                 <div className="flex items-center gap-4 border-t-2 border-slate-200 pt-3.5">
                   <div className="p-2 bg-white rounded-2xl border-2 border-slate-300 shadow-sm shrink-0">
                     <QRCodeSVG
@@ -956,12 +1026,15 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                   </div>
                   <div className="space-y-1 text-xs font-mono">
                     <p className="font-black text-slate-900 text-sm">
-                      Trazabilidad Digital Completa
+                      QR Trazabilidad Integral del Lote y Parcela
                     </p>
-                    <p className="text-slate-500 text-[10px] leading-tight">
-                      Escanee para verificar la declaración jurada, historial fitosanitario y pasadas satelitales Sentinel-2 en tiempo real.
+                    <p className="text-[10.5px] font-black text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 inline-block">
+                      N° Lote de Semilla: {seedMotherLot} · Rótulo: {seedRotuloInase}
                     </p>
-                    <span className="text-[10px] text-emerald-700 font-bold block pt-1">
+                    <p className="text-slate-500 text-[9.5px] leading-tight">
+                      Escanee para auditar N° de lote de semilla, acta de muestreo ISTA, trazabilidad origen-siembra-cosecha y monitoreo Sentinel-2.
+                    </p>
+                    <span className="text-[10px] text-emerald-700 font-bold block pt-0.5">
                       Fiscalización Oficial: SENASA · ARICCAME · INASE
                     </span>
                   </div>

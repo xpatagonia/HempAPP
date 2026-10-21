@@ -25,6 +25,12 @@ export type AgronomicInspectionVerdict =
   | 'EN_CUARENTENA_OBSERVADO'   // En observación fisiológica o ensayo de contraprueba
   | 'RECHAZADO_DEVOLUCION';     // Rechazado por bajo poder germinativo, patógenos o residuo
 
+export type LotQualityGrade =
+  | 'GRADO_A_SUPERIOR'          // 90-100 pts: Calidad Élite Fiscalizada (Óptimo vigor y sanidad)
+  | 'GRADO_B_ESTANDAR'          // 75-89 pts: Calidad Estándar Comercial (Apto siembra general)
+  | 'GRADO_C_CONDICIONAL'       // 60-74 pts: Calidad Condicional (Requiere ajuste de densidad / observación)
+  | 'NO_CONFORME';              // <60 pts: Fuera de estándar técnico / Rechazado
+
 export interface SupplierLotInspection {
   id: string;
   supplierId: string;
@@ -37,12 +43,32 @@ export interface SupplierLotInspection {
   germinationDeclaredPct?: number;   // % Germinación marbete oficial
   purityPct?: number;                // % Pureza física
   moisturePct?: number;              // % Humedad de semilla / grano
+  vigorScore?: number;               // Vigor fisiológico (Escala 1 a 9)
+  thousandSeedWeightGr?: number;     // Peso de 1000 semillas (PMS en g)
   weedSeedsFound?: boolean;          // Presencia de malezas
   pathogenScreeningResult?: 'Negativo (Conforme)' | 'Presencia Aislada No Cuarentenaria' | 'Positivo Cuarentenario (Alerta)';
   residueStatus?: 'Cero Residuos / Orgánico' | 'Dentro de LMR SENASA' | 'Excede LMR';
+  qualityGrade?: LotQualityGrade;    // Determinación de calidad del lote
+  qualityScore?: number;             // Índice numérico de calidad (0 a 100)
   verdict: AgronomicInspectionVerdict;
-  agronomistName: string;
-  agronomistMatricula: string;
+  // ASOCIACIÓN CON TRAZABILIDAD DE LOTES DE SIEMBRA Y CULTIVAR
+  varietyId?: string;
+  varietyName?: string;
+  seedBatchId?: string;              // Lote de siembra vinculado en Inventario Biológico
+  initialQuantityKg?: number;        // Masa recepcionada del lote (kg)
+  storagePointId?: string;           // Nodo de custodia de recepción
+  // PERSONAL INTERVINIENTE EN TOMA DE MUESTRAS Y TRAZABILIDAD
+  samplerUserId?: string;
+  samplerName?: string;              // Personal interviniente en la toma de muestra
+  samplerRole?: string;              // Cargo / Función en muestreo
+  samplerDniOrMatricula?: string;    // DNI / Legajo / Matrícula del muestreador
+  sampleCode?: string;               // Código de muestra precintada (ej: MUE-INASE-2026-0041)
+  samplingDate?: string;             // Fecha de toma de muestra
+  samplingMethod?: string;           // Protocolo de muestreo (ej: ISTA Compuesto con Calador)
+  agronomistUserId?: string;
+  agronomistName: string;            // Ingeniero Agrónomo dictaminante
+  agronomistMatricula: string;       // Matrícula profesional
+  receptionResponsibleName?: string; // Responsable de recepción y custodia en almacén
   observations?: string;
   createdAt?: string;
 }
@@ -50,6 +76,8 @@ export interface SupplierLotInspection {
 export interface SupplierAgronomicAudit {
   technicalAgronomistName?: string;
   technicalAgronomistMatricula?: string;
+  samplerName?: string;              // Responsable de toma de muestras en homologación
+  samplerMatricula?: string;
   lastAuditDate?: string;
   auditScore?: number;            // Calificación técnica (0 a 100)
   gacpCertified?: boolean;        // Buenas Prácticas Agrícolas y de Recolección (GACP)
@@ -337,6 +365,13 @@ export interface Plot {
   accumulatedGdd?: number;
   lastStageUpdateDate?: string;
   stageHistory?: Array<{ stageId: HempStageId; date: string; laborId?: string; certifiedBy?: string; notes?: string }>;
+  // TRAZABILIDAD DE CALIDAD Y PERSONAL INTERVINIENTE
+  originInspectionId?: string;       // Inspección técnica de lote homologado asociada
+  qualityGrade?: LotQualityGrade;    // Grado de calidad del lote sembrado
+  samplingResponsibleName?: string;  // Personal interviniente en toma de muestras de parcela
+  sowingResponsibleName?: string;    // Personal responsable de siembra
+  technicalResponsibleName?: string; // Ingeniero Agrónomo responsable del seguimiento
+  technicalResponsibleMatricula?: string; // Matrícula del Director Técnico
 }
 
 export type BiologicalMaterialType = 'seed' | 'harvested_grain' | 'fiber_bales' | 'biomass_cbg' | 'hurds';
@@ -345,9 +380,10 @@ export interface SeedBatch {
   id: string;
   varietyId: string;
   supplierId?: string;
+  supplierName?: string;
   batchCode: string;
   labelSerialNumber?: string;
-  category?: 'C1' | 'C2' | 'Base' | 'Original';
+  category?: 'C1' | 'C2' | 'Base' | 'Original' | 'C1_CERTIFICADA_1';
   analysisDate?: string;
   purity?: number;
   germination?: number;
@@ -364,6 +400,24 @@ export interface SeedBatch {
   notes?: string;
   isActive: boolean;
   createdAt?: string;
+
+  // VINCULACIÓN CON INSPECCIÓN DE CALIDAD HOMOLOGADA Y LOTE MADRE
+  originInspectionId?: string;       // ID de la Inspección Técnica de Lote en Recepción
+  parentSeedBatchId?: string;        // Si es material obtenido en cosecha, ID del lote de semilla sembrado
+  qualityGrade?: LotQualityGrade;    // Grado de calidad determinado (Grado A/B/C)
+  qualityScore?: number;             // Puntaje técnico de calidad (0-100)
+
+  // PERSONAL INTERVINIENTE EN TOMA DE MUESTRAS Y TRAZABILIDAD DEL LOTE
+  samplerName?: string;              // Personal que realizó la toma de muestra
+  samplerRole?: string;              // Rol o cargo del muestreador
+  samplerMatricula?: string;         // Matrícula / DNI / Rol del muestreador
+  samplerDniOrMatricula?: string;    // Alias DNI / Matrícula del muestreador
+  sampleCode?: string;               // Código oficial de muestra precintada
+  samplingMethod?: string;           // Protocolo de toma de muestra (ISTA / INASE)
+  inspectorName?: string;            // Ingeniero Agrónomo certificante de calidad
+  inspectorMatricula?: string;       // Matrícula profesional del inspector
+  sowingResponsibleName?: string;    // Responsable técnico de siembra
+  harvestResponsibleName?: string;   // Responsable técnico de cosecha / obtención de material
 
   // MULTI-ETAPA DE TRAZABILIDAD AGRONÓMICA & DERIVADOS COSECHADOS
   materialType?: BiologicalMaterialType; // Tipo biológico (Semilla, Grano, Fardos Fibra, Biomasa CBG, Cañamiza)
