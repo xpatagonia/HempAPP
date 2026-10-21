@@ -410,10 +410,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
               <span className="text-slate-800 dark:text-slate-200 font-black capitalize">
                 {new Date().toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' })}
               </span>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-100/80 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 text-[10px] font-mono font-bold">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                CAMPO ONLINE
-              </span>
+              <OfflineIndicator />
             </div>
           </div>
           
@@ -485,8 +482,6 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
         isOpen={isProtocolOpen}
         onClose={() => setIsProtocolOpen(false)}
       />
-
-      <OfflineIndicator />
     </div>
   );
 }
