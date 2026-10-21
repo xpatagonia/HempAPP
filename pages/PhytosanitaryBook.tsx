@@ -134,8 +134,10 @@ export default function PhytosanitaryBook() {
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
 
-  // Modales
+  // Modales y Estado de Edición / Eliminación
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [editingAppId, setEditingAppId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [selectedAppForPrint, setSelectedAppForPrint] = useState<AgrochemicalApplication | null>(null);
 
@@ -252,10 +254,44 @@ export default function PhytosanitaryBook() {
     }));
   };
 
+  const resetForm = () => {
+    setEditingAppId(null);
+    setFormData({
+      plotId: availablePlots[0]?.id || plots[0]?.id || '',
+      date: new Date().toISOString().split('T')[0],
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+      category: 'Bioestimulante',
+      productName: '',
+      activeIngredient: '',
+      manufacturer: '',
+      supplierName: '',
+      senasaRegisterNumber: '',
+      toxicologicalClass: 'Biológico / Orgánico Certificado',
+      dosagePerHa: 1.5,
+      dosageUnit: 'L/ha',
+      applicationMethod: 'Pulverización Terrestre',
+      batchNumber: '',
+      safetyPeriodDays: 0,
+      responsibleAgronomist: currentUser?.name || 'Ing. Agr. Lucas Berardi',
+      agronomistLicense: 'MP-AGRO-3321 MZA',
+      weatherCondition: {
+        temperatureC: 22.0,
+        windSpeedKmH: 8.5,
+        relativeHumidityPct: 60
+      },
+      notes: ''
+    });
+  };
+
+  const handleOpenEditApplication = (app: AgrochemicalApplication) => {
+    setEditingAppId(app.id);
+    setFormData({ ...app });
+    setIsAddModalOpen(true);
+  };
+
   const handleAddApplication = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.plotId || !formData.productName || !formData.activeIngredient) {
-      alert("Por favor complete los campos obligatorios del tratamiento fitosanitario.");
       return;
     }
 
@@ -274,7 +310,7 @@ export default function PhytosanitaryBook() {
     const totalApplied = Number((dosage * areaHa).toFixed(2));
 
     const newApp: AgrochemicalApplication = {
-      id: `app-${Date.now()}`,
+      id: editingAppId || `app-${Date.now()}`,
       plotId: formData.plotId!,
       plotName: selectedPlot?.name || 'Unidad de Producción',
       date: appDate,
@@ -306,14 +342,18 @@ export default function PhytosanitaryBook() {
       status: new Date() >= safetyDateObj ? 'Apto Cosecha' : 'En Carencia'
     };
 
-    setApplications(prev => [newApp, ...prev]);
+    if (editingAppId) {
+      setApplications(prev => prev.map(a => (a.id === editingAppId ? newApp : a)));
+    } else {
+      setApplications(prev => [newApp, ...prev]);
+    }
     setIsAddModalOpen(false);
+    resetForm();
   };
 
   const handleDeleteApplication = (id: string) => {
-    if (window.confirm("¿Está seguro de eliminar este registro del Cuaderno Fitosanitario?")) {
-      setApplications(prev => prev.filter(a => a.id !== id));
-    }
+    setApplications(prev => prev.filter(a => a.id !== id));
+    setConfirmDeleteId(null);
   };
 
   return (
@@ -355,8 +395,11 @@ export default function PhytosanitaryBook() {
 
           <button
             type="button"
-            onClick={() => setIsAddModalOpen(true)}
-            className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-2xl flex items-center justify-center transition shadow font-bold text-xs uppercase tracking-wider gap-2"
+            onClick={() => {
+              resetForm();
+              setIsAddModalOpen(true);
+            }}
+            className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-2xl flex items-center justify-center transition shadow font-bold text-xs uppercase tracking-wider gap-2 cursor-pointer"
           >
             <Plus size={16} />
             <span>Registrar Tratamiento</span>
@@ -592,24 +635,52 @@ export default function PhytosanitaryBook() {
                       <div className="flex items-center justify-end gap-1.5">
                         <button
                           type="button"
+                          onClick={() => handleOpenEditApplication(app)}
+                          className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-800 rounded-xl transition cursor-pointer"
+                          title="Editar Tratamiento"
+                        >
+                          <Edit2 size={14} />
+                        </button>
+
+                        <button
+                          type="button"
                           onClick={() => {
                             setSelectedAppForPrint(app);
                             setIsPrintModalOpen(true);
                           }}
-                          className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-slate-800 rounded-xl transition"
+                          className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-slate-800 rounded-xl transition cursor-pointer"
                           title="Imprimir Acta de Tratamiento"
                         >
                           <Printer size={14} />
                         </button>
 
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteApplication(app.id)}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-slate-800 rounded-xl transition"
-                          title="Eliminar Tratamiento"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        {confirmDeleteId === app.id ? (
+                          <div className="flex items-center gap-1 bg-rose-50 dark:bg-rose-950/50 px-2 py-1 rounded-xl border border-rose-200 dark:border-rose-800">
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteApplication(app.id)}
+                              className="text-[10px] font-black text-rose-600 uppercase cursor-pointer"
+                            >
+                              Confirmar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteId(null)}
+                              className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteId(app.id)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-slate-800 rounded-xl transition cursor-pointer"
+                            title="Eliminar Tratamiento"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -635,11 +706,11 @@ export default function PhytosanitaryBook() {
                     Cuaderno Fitosanitario Digital SENASA
                   </span>
                   <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
-                    Cargar Tratamiento Agronómico en Parcela
+                    {editingAppId ? 'Editar Tratamiento Agronómico' : 'Cargar Tratamiento Agronómico en Parcela'}
                   </h2>
                 </div>
               </div>
-              <button onClick={() => setIsAddModalOpen(false)} className="text-slate-400 hover:text-slate-600"><X size={22}/></button>
+              <button onClick={() => { setIsAddModalOpen(false); resetForm(); }} className="text-slate-400 hover:text-slate-600 cursor-pointer"><X size={22}/></button>
             </div>
 
             {/* BARRA DE ACCIÓN RÁPIDA: VINCULAR INSUMO RECEPCIONADO */}

@@ -3,8 +3,8 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
 
-// V7.13.0-STABLE - PRODUCTION PROTOCOL
-const version = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'V7.13.0-STABLE';
+// V7.14.0-STABLE - PRODUCTION PROTOCOL
+const version = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'V7.14.0-STABLE';
 const buildTime = typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : new Date().toISOString();
 
 console.log(`%c NUCLEUS APP ${version} `, 'background: #006633; color: #fff; font-weight: bold; padding: 10px; font-size: 20px; border: 2px solid #DDDB00;');

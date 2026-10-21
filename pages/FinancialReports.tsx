@@ -10,7 +10,7 @@ import {
   ShieldCheck, AlertCircle, ArrowUpRight, Scale, PieChart as PieChartIcon,
   BarChart3, RefreshCw, CheckCircle2, ChevronRight, Zap, Target,
   Plus, Check, X, Building2, UserCheck, Clock, Receipt, Truck,
-  Warehouse, FileCheck, Eye, HelpCircle, Users, AlertTriangle
+  Warehouse, FileCheck, Eye, HelpCircle, Users, AlertTriangle, Edit2, Trash2
 } from 'lucide-react';
 import { AgrochemicalApplication, OperationalExpense, ExpenseCategory, ExpenseScope, ExpenseAuditStatus } from '../types';
 import { getPlotAgrochemicalApplications } from '../src/services/agro40Service';
@@ -30,8 +30,10 @@ export default function FinancialReports() {
   const [selectedLocationId, setSelectedLocationId] = useState<string>('all');
   const [isExporting, setIsExporting] = useState(false);
   
-  // Modal de registro manual de gasto operativo
+  // Modal de registro / edición manual de gasto operativo
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
+  const [confirmDeleteExpenseId, setConfirmDeleteExpenseId] = useState<string | null>(null);
   // Modal de auditoría de gasto cooperativa
   const [auditTargetExpense, setAuditTargetExpense] = useState<OperationalExpense | null>(null);
   const [auditNotesInput, setAuditNotesInput] = useState('');
@@ -77,6 +79,7 @@ export default function FinancialReports() {
 
   // Reset modal state al abrir
   const handleOpenAddModal = () => {
+    setEditingExpenseId(null);
     if (isSocio) {
       setFormScope('PARCELA_SOCIO');
       setFormCategory('LABOR_CULTURAL');
@@ -91,11 +94,30 @@ export default function FinancialReports() {
     setFormUnitCost(50);
     setFormReceiptNumber('');
     setFormSupplierName('');
+    setFormDate(new Date().toISOString().split('T')[0]);
     setFormNotes('');
     setIsAddModalOpen(true);
   };
 
-  // Guardar nuevo costo operativo con control estricto de roles
+  const handleOpenEditModal = (exp: OperationalExpense) => {
+    setEditingExpenseId(exp.id);
+    setFormScope(exp.scope);
+    setFormPlotId(exp.plotId || accessiblePlots[0]?.id || '');
+    setFormCategory(exp.category);
+    setFormConcept(exp.concept);
+    setFormQuantity(exp.quantity);
+    setFormUnit(exp.unit);
+    setFormUnitCost(exp.unitCost);
+    setFormCurrency(exp.currency);
+    setFormReceiptType(exp.receiptType);
+    setFormReceiptNumber(exp.receiptNumber);
+    setFormSupplierName(exp.supplierName || '');
+    setFormDate(exp.date);
+    setFormNotes(exp.notes || '');
+    setIsAddModalOpen(true);
+  };
+
+  // Guardar nuevo o editado costo operativo con control estricto de roles
   const handleSaveExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formConcept.trim()) return;
@@ -103,7 +125,6 @@ export default function FinancialReports() {
     let selectedPlot = plots.find(p => p.id === formPlotId);
     let selectedLoc = locations.find(l => l.id === selectedPlot?.locationId);
 
-    // Si es socio, forzar scope a PARCELA_SOCIO y validar que la parcela pertenezca a sus asignadas
     const effectiveScope: ExpenseScope = isSocio ? 'PARCELA_SOCIO' : formScope;
     
     if (effectiveScope === 'PARCELA_SOCIO') {
@@ -111,27 +132,27 @@ export default function FinancialReports() {
         selectedPlot = accessiblePlots[0];
       }
       if (isSocio && !accessiblePlots.some(p => p.id === selectedPlot?.id)) {
-        alert('Acceso denegado: solo puedes imputar costos a tus parcelas asignadas.');
         return;
       }
     }
 
     const totalRaw = formQuantity * formUnitCost;
     const totalUsd = formCurrency === 'USD' ? totalRaw : Number((totalRaw / exchangeRate).toFixed(2));
+    const existingExp = editingExpenseId ? operationalExpenses.find(x => x.id === editingExpenseId) : undefined;
 
-    const newExpense: OperationalExpense = {
-      id: `exp-${Date.now()}`,
-      campaign: selectedCampaign === 'all' ? '2025/2026' : selectedCampaign,
+    const expensePayload: OperationalExpense = {
+      id: editingExpenseId || `exp-${Date.now()}`,
+      campaign: existingExp?.campaign || (selectedCampaign === 'all' ? '2025/2026' : selectedCampaign),
       date: formDate,
       scope: effectiveScope,
       plotId: effectiveScope === 'PARCELA_SOCIO' ? selectedPlot?.id : undefined,
       plotName: effectiveScope === 'PARCELA_SOCIO' ? selectedPlot?.name : undefined,
       locationId: effectiveScope === 'PARCELA_SOCIO' ? selectedPlot?.locationId : undefined,
       locationName: effectiveScope === 'PARCELA_SOCIO' ? selectedLoc?.name : undefined,
-      socioId: isSocio ? activeUser.id : (effectiveScope === 'PARCELA_SOCIO' ? selectedPlot?.ownerName : undefined),
-      socioName: isSocio 
+      socioId: existingExp?.socioId || (isSocio ? activeUser.id : (effectiveScope === 'PARCELA_SOCIO' ? selectedPlot?.ownerName : undefined)),
+      socioName: existingExp?.socioName || (isSocio 
         ? (activeUser.organizationName || activeUser.name) 
-        : (effectiveScope === 'PARCELA_SOCIO' ? selectedPlot?.ownerName : 'Red Cooperativa Nucleus'),
+        : (effectiveScope === 'PARCELA_SOCIO' ? selectedPlot?.ownerName : 'Red Cooperativa Nucleus')),
       category: formCategory,
       concept: formConcept.trim(),
       quantity: Number(formQuantity),
@@ -144,16 +165,20 @@ export default function FinancialReports() {
       receiptType: formReceiptType,
       receiptNumber: formReceiptNumber.trim() || `REC-${Math.floor(1000 + Math.random() * 9000)}`,
       supplierName: formSupplierName.trim() || 'Proveedor Local',
-      // Si es socio: queda en DECLARADO_SOCIO esperando auditoría cooperativa.
-      // Si es cooperativa: entra directamente como AUDITADO_CONFORME.
-      status: isSocio ? 'DECLARADO_SOCIO' : 'AUDITADO_CONFORME',
-      auditedBy: isCoopAdmin ? activeUser.name : undefined,
-      auditDate: isCoopAdmin ? new Date().toISOString().split('T')[0] : undefined,
+      status: existingExp ? existingExp.status : (isSocio ? 'DECLARADO_SOCIO' : 'AUDITADO_CONFORME'),
+      auditedBy: existingExp ? existingExp.auditedBy : (isCoopAdmin ? activeUser.name : undefined),
+      auditDate: existingExp ? existingExp.auditDate : (isCoopAdmin ? new Date().toISOString().split('T')[0] : undefined),
+      auditNotes: existingExp?.auditNotes,
       notes: formNotes.trim() || undefined,
-      createdAt: new Date().toISOString()
+      createdAt: existingExp?.createdAt || new Date().toISOString()
     };
 
-    await addOperationalExpense(newExpense);
+    if (editingExpenseId) {
+      await updateOperationalExpense(expensePayload);
+    } else {
+      await addOperationalExpense(expensePayload);
+    }
+    setEditingExpenseId(null);
     setIsAddModalOpen(false);
   };
 
@@ -841,42 +866,72 @@ export default function FinancialReports() {
 
                           {/* Acciones */}
                           <td className="py-3.5 px-4 text-center">
-                            {isCoopAdmin ? (
-                              <div className="flex items-center justify-center gap-1">
-                                {exp.status !== 'AUDITADO_CONFORME' && (
-                                  <button
-                                    onClick={() => auditOperationalExpense(exp.id, 'AUDITADO_CONFORME', activeUser.name, 'Comprobante y labor homologada conforme.')}
-                                    title="Aprobar y homologar costo"
-                                    className="p-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:text-emerald-400 rounded-lg transition-colors"
-                                  >
-                                    <Check size={14} />
-                                  </button>
-                                )}
-                                {exp.status !== 'OBSERVADO_REVISION' && (
-                                  <button
-                                    onClick={() => {
-                                      setAuditTargetExpense(exp);
-                                      setAuditNotesInput('');
-                                    }}
-                                    title="Observar para revisión"
-                                    className="p-1.5 bg-rose-50 text-rose-600 hover:bg-rose-100 dark:bg-rose-950/50 dark:text-rose-400 rounded-lg transition-colors"
-                                  >
-                                    <AlertTriangle size={14} />
-                                  </button>
-                                )}
+                            <div className="flex items-center justify-center gap-1">
+                              {isCoopAdmin && exp.status !== 'AUDITADO_CONFORME' && (
                                 <button
-                                  onClick={() => deleteOperationalExpense(exp.id)}
-                                  title="Eliminar registro"
-                                  className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg transition-colors"
+                                  onClick={() => auditOperationalExpense(exp.id, 'AUDITADO_CONFORME', activeUser.name, 'Comprobante y labor homologada conforme.')}
+                                  title="Aprobar y homologar costo"
+                                  className="p-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:text-emerald-400 rounded-lg transition-colors cursor-pointer"
                                 >
-                                  <X size={14} />
+                                  <Check size={14} />
                                 </button>
-                              </div>
-                            ) : (
-                              <span className="text-[10px] text-slate-400 font-mono">
-                                {exp.status === 'AUDITADO_CONFORME' ? 'Homologado' : 'En cola'}
-                              </span>
-                            )}
+                              )}
+                              {isCoopAdmin && exp.status !== 'OBSERVADO_REVISION' && (
+                                <button
+                                  onClick={() => {
+                                    setAuditTargetExpense(exp);
+                                    setAuditNotesInput('');
+                                  }}
+                                  title="Observar para revisión"
+                                  className="p-1.5 bg-amber-50 text-amber-600 hover:bg-amber-100 dark:bg-amber-950/50 dark:text-amber-400 rounded-lg transition-colors cursor-pointer"
+                                >
+                                  <AlertTriangle size={14} />
+                                </button>
+                              )}
+                              {(isCoopAdmin || exp.status !== 'AUDITADO_CONFORME') && (
+                                <button
+                                  onClick={() => handleOpenEditModal(exp)}
+                                  title="Editar registro"
+                                  className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+                                >
+                                  <Edit2 size={14} />
+                                </button>
+                              )}
+                              {(isCoopAdmin || exp.status !== 'AUDITADO_CONFORME') && (
+                                confirmDeleteExpenseId === exp.id ? (
+                                  <div className="flex items-center gap-1 bg-rose-50 dark:bg-rose-950/60 px-1.5 py-0.5 rounded-lg border border-rose-200 dark:border-rose-800">
+                                    <button
+                                      onClick={() => {
+                                        deleteOperationalExpense(exp.id);
+                                        setConfirmDeleteExpenseId(null);
+                                      }}
+                                      className="text-[10px] font-black text-rose-600 uppercase cursor-pointer"
+                                    >
+                                      Borrar
+                                    </button>
+                                    <button
+                                      onClick={() => setConfirmDeleteExpenseId(null)}
+                                      className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                                    >
+                                      <X size={12} />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => setConfirmDeleteExpenseId(exp.id)}
+                                    title="Eliminar registro"
+                                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                )
+                              )}
+                              {!isCoopAdmin && exp.status === 'AUDITADO_CONFORME' && (
+                                <span className="text-[10px] text-slate-400 font-mono">
+                                  Homologado
+                                </span>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );
@@ -1183,7 +1238,11 @@ export default function FinancialReports() {
                   REGISTRO DE COSTO OPERATIVO
                 </span>
                 <h3 className="text-xl font-black text-slate-900 dark:text-white mt-1">
-                  {isSocio ? 'Cargar Costo de Parcela' : 'Cargar Operación / Gasto'}
+                  {editingExpenseId
+                    ? 'Editar Operación / Gasto'
+                    : isSocio
+                    ? 'Cargar Costo de Parcela'
+                    : 'Cargar Operación / Gasto'}
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
                   {isSocio 

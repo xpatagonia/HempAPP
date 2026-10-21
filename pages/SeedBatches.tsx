@@ -40,7 +40,7 @@ const MetricCard = ({ label, value, subtext, icon: Icon, colorClass }: any) => (
 export default function SeedBatches() {
   const { 
     seedBatches, seedMovements, addSeedBatch, updateSeedBatch, 
-    deleteSeedBatch, addSeedMovement, updateSeedMovement, varieties, 
+    deleteSeedBatch, addSeedMovement, updateSeedMovement, deleteSeedMovement, varieties, 
     currentUser, clients, storagePoints, suppliers, plots 
   } = useAppContext();
   
@@ -62,6 +62,8 @@ export default function SeedBatches() {
   
   const [editingBatchId, setEditingBatchId] = useState<string | null>(null);
   const [selectedBatch, setSelectedBatch] = useState<SeedBatch | null>(null);
+  const [confirmDeleteBatchId, setConfirmDeleteBatchId] = useState<string | null>(null);
+  const [confirmDeleteMoveId, setConfirmDeleteMoveId] = useState<string | null>(null);
 
   const [entryUnit, setEntryUnit] = useState<MassUnit>('kg');
   const [moveUnit, setMoveUnit] = useState<MassUnit>('kg');
@@ -615,14 +617,46 @@ export default function SeedBatches() {
                                                     <QrCode size={14}/>
                                                   </button>
                                                   {isAdmin && (
-                                                    <button 
-                                                      type="button"
-                                                      onClick={() => { setBatchFormData({...batch, inputValue: batch.initialQuantity}); setEditingBatchId(batch.id); setIsBatchModalOpen(true); }} 
-                                                      className="p-1.5 text-slate-400 hover:text-emerald-600 bg-slate-100 dark:bg-slate-800 rounded-lg transition"
-                                                      title="Editar Lote"
-                                                    >
-                                                      <Edit2 size={14}/>
-                                                    </button>
+                                                    <>
+                                                      <button 
+                                                        type="button"
+                                                        onClick={() => { setBatchFormData({...batch, inputValue: batch.initialQuantity}); setEditingBatchId(batch.id); setIsBatchModalOpen(true); }} 
+                                                        className="p-1.5 text-slate-400 hover:text-emerald-600 bg-slate-100 dark:bg-slate-800 rounded-lg transition"
+                                                        title="Editar Lote"
+                                                      >
+                                                        <Edit2 size={14}/>
+                                                      </button>
+                                                      {confirmDeleteBatchId === batch.id ? (
+                                                        <div className="inline-flex items-center gap-1 bg-red-50 dark:bg-red-950/60 px-2 py-0.5 rounded-lg border border-red-200 dark:border-red-800">
+                                                          <button
+                                                            type="button"
+                                                            onClick={async () => {
+                                                              await deleteSeedBatch(batch.id);
+                                                              setConfirmDeleteBatchId(null);
+                                                            }}
+                                                            className="text-[9px] font-black uppercase text-red-600 hover:underline"
+                                                          >
+                                                            Borrar
+                                                          </button>
+                                                          <button
+                                                            type="button"
+                                                            onClick={() => setConfirmDeleteBatchId(null)}
+                                                            className="text-[9px] font-bold text-slate-400 hover:text-slate-600"
+                                                          >
+                                                            No
+                                                          </button>
+                                                        </div>
+                                                      ) : (
+                                                        <button 
+                                                          type="button"
+                                                          onClick={() => setConfirmDeleteBatchId(batch.id)} 
+                                                          className="p-1.5 text-slate-400 hover:text-red-600 bg-slate-100 dark:bg-slate-800 rounded-lg transition"
+                                                          title="Eliminar Lote"
+                                                        >
+                                                          <Trash2 size={14}/>
+                                                        </button>
+                                                      )}
+                                                    </>
                                                   )}
                                               </div>
                                           </td>
@@ -692,10 +726,13 @@ export default function SeedBatches() {
                               <th className="px-6 py-4">Itinerario & Destino</th>
                               <th className="px-6 py-4">Transportista & Patente</th>
                               <th className="px-6 py-4 text-center">Estado</th>
+                              <th className="px-6 py-4 text-right">Acción</th>
                           </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                          {filteredMovements.map(m => (
+                          {filteredMovements.length === 0 ? (
+                              <tr><td colSpan={7} className="p-12 text-center text-slate-400 italic">No hay guías de tránsito registradas.</td></tr>
+                          ) : filteredMovements.map(m => (
                               <tr key={m.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition">
                                   <td className="px-6 py-4 font-bold text-slate-900 dark:text-white">
                                       {m.transportGuideNumber}
@@ -714,13 +751,67 @@ export default function SeedBatches() {
                                       <div className="text-[9px] text-slate-400">Pat: {m.vehiclePlate || 'S/D'} · {m.vehicleModel || ''}</div>
                                   </td>
                                   <td className="px-6 py-4 text-center">
-                                      <span className={`px-2.5 py-1 rounded-xl text-[10px] font-bold ${
-                                        m.status === 'En Tránsito' 
-                                          ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300' 
-                                          : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
-                                      }`}>
+                                      <button
+                                        type="button"
+                                        onClick={() => updateSeedMovement({
+                                          ...m,
+                                          status: m.status === 'En Tránsito' ? 'Recibido' : 'En Tránsito'
+                                        })}
+                                        title="Clic para alternar recepción"
+                                        className={`px-2.5 py-1 rounded-xl text-[10px] font-bold transition ${
+                                          m.status === 'En Tránsito' 
+                                            ? 'bg-amber-100 text-amber-800 hover:bg-amber-200 dark:bg-amber-950/60 dark:text-amber-300' 
+                                            : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300'
+                                        }`}
+                                      >
                                         {m.status}
-                                      </span>
+                                      </button>
+                                  </td>
+                                  <td className="px-6 py-4 text-right">
+                                      <div className="flex justify-end items-center gap-1.5">
+                                          {m.status === 'En Tránsito' && (
+                                              <button
+                                                type="button"
+                                                onClick={() => updateSeedMovement({ ...m, status: 'Recibido' })}
+                                                className="px-2 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 text-[9px] font-black uppercase hover:bg-emerald-100 transition"
+                                                title="Confirmar Recepción en Destino"
+                                              >
+                                                Recibir
+                                              </button>
+                                          )}
+                                          {isAdmin && (
+                                              confirmDeleteMoveId === m.id ? (
+                                                <div className="inline-flex items-center gap-1 bg-red-50 dark:bg-red-950/60 px-2 py-0.5 rounded-lg border border-red-200 dark:border-red-800">
+                                                  <button
+                                                    type="button"
+                                                    onClick={async () => {
+                                                      await deleteSeedMovement(m.id);
+                                                      setConfirmDeleteMoveId(null);
+                                                    }}
+                                                    className="text-[9px] font-black uppercase text-red-600 hover:underline"
+                                                  >
+                                                    Borrar
+                                                  </button>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => setConfirmDeleteMoveId(null)}
+                                                    className="text-[9px] font-bold text-slate-400 hover:text-slate-600"
+                                                  >
+                                                    No
+                                                  </button>
+                                                </div>
+                                              ) : (
+                                                <button
+                                                  type="button"
+                                                  onClick={() => setConfirmDeleteMoveId(m.id)}
+                                                  className="p-1.5 text-slate-400 hover:text-red-600 bg-slate-100 dark:bg-slate-800 rounded-lg transition"
+                                                  title="Anular Remito"
+                                                >
+                                                  <Trash2 size={13} />
+                                                </button>
+                                              )
+                                          )}
+                                      </div>
                                   </td>
                               </tr>
                           ))}

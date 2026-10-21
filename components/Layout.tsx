@@ -1,14 +1,14 @@
-
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { 
   LayoutDashboard, Sprout, Menu, Leaf, LogOut, 
-  UserCircle, Calendar, Sun, Moon, 
+  Calendar, Sun, Moon, 
   Tractor, BookOpen, Bot, Settings, 
-  FolderKanban, CheckSquare, BarChart3, Users, Warehouse, Package, X, Bell, Globe, Building, ShieldAlert, FileText, BrainCircuit, Activity, FlaskConical, DownloadCloud, Satellite,
-  PanelLeftClose, PanelLeftOpen, ChevronLeft, ChevronRight, ShieldCheck, DollarSign,
-  Calculator, Truck, UserCheck, ClipboardList, Radio, Archive
+  FolderKanban, CheckSquare, BarChart3, Warehouse, Package, X, Bell, Globe, Building, ShieldAlert, FileText, BrainCircuit, Satellite,
+  PanelLeftClose, PanelLeftOpen, ShieldCheck, DollarSign,
+  Calculator, Truck, UserCheck, ClipboardList, Archive,
+  ChevronDown, ChevronRight, Search, Megaphone
 } from 'lucide-react';
 import NotificationCenterModal from './NotificationCenterModal';
 import SeedingProtocolModal from './SeedingProtocolModal';
@@ -22,32 +22,32 @@ import {
   evaluateUpcomingTasksReminders
 } from '../src/services/pushNotificationService';
 
-const NavItem = ({ to, icon: Icon, label, badge, special, isCollapsed }: any) => {
+const NavItem = ({ to, icon: Icon, label, badge, special, isCollapsed, onClickMobile }: any) => {
   const location = useLocation();
-  const isActive = location.pathname === to;
+  const isActive = location.pathname === to || (to !== '/' && location.pathname.startsWith(to));
   
   if (isCollapsed) {
     return (
       <Link 
         to={to} 
+        onClick={onClickMobile}
         title={label}
-        className={`flex items-center justify-center h-12 w-12 mx-auto rounded-2xl transition-all duration-200 relative group ${
+        className={`flex items-center justify-center h-10 w-10 mx-auto rounded-xl transition-all duration-150 relative group ${
           isActive 
-            ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30' 
+            ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/30' 
             : special 
-              ? 'text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-950/40 hover:bg-cyan-100 dark:hover:bg-cyan-900/40 border border-cyan-200 dark:border-cyan-800/60' 
+              ? 'text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-950/40 hover:bg-cyan-100 border border-cyan-200 dark:border-cyan-800/60' 
               : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white'
         }`}
       >
-        <Icon size={22} className={isActive ? 'text-white' : special ? 'text-cyan-500 dark:text-cyan-400' : 'text-slate-400 dark:text-slate-300'} />
+        <Icon size={19} className={isActive ? 'text-white' : special ? 'text-cyan-500 dark:text-cyan-400' : 'text-slate-400 dark:text-slate-300'} />
         {badge && (
-          <span className="absolute -top-1 -right-1 w-5 h-5 bg-amber-500 text-slate-950 text-[10px] font-mono font-black rounded-full flex items-center justify-center border-2 border-white dark:border-slate-900">
+          <span className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 text-slate-950 text-[9px] font-mono font-black rounded-full flex items-center justify-center border border-white dark:border-slate-900">
             {badge}
           </span>
         )}
         
-        {/* Floating Tooltip on Hover */}
-        <div className="absolute left-full ml-3 px-3 py-2 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-xs font-bold rounded-xl shadow-xl whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+        <div className="absolute left-full ml-3 px-2.5 py-1.5 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-xs font-bold rounded-lg shadow-xl whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
           {label}
         </div>
       </Link>
@@ -55,47 +55,68 @@ const NavItem = ({ to, icon: Icon, label, badge, special, isCollapsed }: any) =>
   }
 
   return (
-    <Link to={to} className={`flex items-center justify-between px-4 py-3 rounded-2xl transition-all duration-200 ${
+    <Link
+      to={to}
+      onClick={onClickMobile}
+      className={`flex items-center justify-between px-3 py-2 rounded-xl transition-all duration-150 ${
         isActive 
-          ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30 font-black' 
+          ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/25 font-black' 
           : special 
-            ? 'text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-950/40 hover:bg-cyan-100 dark:hover:bg-cyan-900/40 border border-cyan-200 dark:border-cyan-800/60' 
-            : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white'
-      }`}>
-      <div className="flex items-center space-x-3 min-w-0">
-        <Icon size={20} className={isActive ? 'text-white' : special ? 'text-cyan-500 dark:text-cyan-400' : 'text-slate-400 dark:text-slate-400'} />
-        <span className={`font-bold text-sm tracking-tight truncate ${special ? 'uppercase text-xs tracking-wider' : ''}`}>{label}</span>
+            ? 'text-cyan-700 dark:text-cyan-300 bg-cyan-50/80 dark:bg-cyan-950/40 hover:bg-cyan-100/80 border border-cyan-200/80 dark:border-cyan-800/60 font-bold' 
+            : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/70 hover:text-slate-900 dark:hover:text-white font-semibold'
+      }`}
+    >
+      <div className="flex items-center space-x-2.5 min-w-0">
+        <Icon size={17} className={isActive ? 'text-white shrink-0' : special ? 'text-cyan-500 dark:text-cyan-400 shrink-0' : 'text-slate-400 dark:text-slate-400 shrink-0'} />
+        <span className="text-xs tracking-tight truncate">{label}</span>
       </div>
-      {badge && <span className="text-xs font-mono font-black bg-amber-500 text-slate-950 px-2 py-0.5 rounded-full shrink-0 ml-2">{badge}</span>}
+      {badge && (
+        <span className="text-[10px] font-mono font-black bg-amber-500 text-slate-950 px-1.5 py-0.2 rounded-md shrink-0 ml-2">
+          {badge}
+        </span>
+      )}
     </Link>
   );
 };
 
 export default function Layout({ children }: { children?: React.ReactNode }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { currentUser, logout, theme, toggleTheme, tasks, plots, locations, appName, appLogo } = useAppContext();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [notifInitialTab, setNotifInitialTab] = useState<'all' | 'compose' | 'plot_critical' | 'task_reminder' | 'settings'>('all');
   const [isProtocolOpen, setIsProtocolOpen] = useState(false);
+  const [navSearch, setNavSearch] = useState('');
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
+    central: true,
+    campo: true,
+    logistica: true,
+    sistema: true
+  });
+
   const [unreadAlertsCount, setUnreadAlertsCount] = useState<number>(() => {
     return getStoredNotifications().filter(n => !n.read).length;
   });
   const [pushStatus, setPushStatus] = useState<'granted' | 'denied' | 'default' | 'unsupported'>('default');
 
   useEffect(() => {
-    // 1. Inicializar Service Worker
     registerServiceWorker().then(() => {
       setPushStatus(getNotificationPermissionStatus());
     });
 
-    // 2. Escuchar cambios de notificaciones
     const handleNotifChange = () => {
       setUnreadAlertsCount(getStoredNotifications().filter(n => !n.read).length);
       setPushStatus(getNotificationPermissionStatus());
     };
     window.addEventListener('nucleus:push-notification-change', handleNotifChange);
 
-    // 3. Escuchar navegación disparada desde clics en el Service Worker
+    const handleOpenComposerGlobal = () => {
+      setNotifInitialTab('compose');
+      setIsNotificationsOpen(true);
+    };
+    window.addEventListener('nucleus:open-push-composer', handleOpenComposerGlobal);
+
     const handleSwMessage = (event: MessageEvent) => {
       if (event.data && event.data.type === 'NAVIGATE' && event.data.path) {
         setIsNotificationsOpen(false);
@@ -106,7 +127,6 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
       navigator.serviceWorker.addEventListener('message', handleSwMessage);
     }
 
-    // 4. Evaluar alertas críticas de parcelas y tareas próximas
     if (plots && plots.length > 0) {
       evaluateCriticalPlotAlerts(plots, locations || []);
     }
@@ -116,6 +136,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
 
     return () => {
       window.removeEventListener('nucleus:push-notification-change', handleNotifChange);
+      window.removeEventListener('nucleus:open-push-composer', handleOpenComposerGlobal);
       if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
         navigator.serviceWorker.removeEventListener('message', handleSwMessage);
       }
@@ -138,230 +159,333 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
       return next;
     });
   };
+
+  const toggleGroup = (key: string) => {
+    setOpenGroups(prev => ({ ...prev, [key]: !prev[key] }));
+  };
   
   if (!currentUser) return <>{children}</>;
 
   const pendingTasksCount = tasks.filter(t => t.status === 'Pendiente').length;
   const isClient = currentUser.role === 'client';
 
+  const navGroups = [
+    {
+      id: 'central',
+      title: 'Comando & Telemetría',
+      items: [
+        { to: '/', icon: LayoutDashboard, label: 'Centro de Control' },
+        { to: '/agro40', icon: Satellite, label: 'Agro 4.0: NDVI & Clima', special: true },
+        { to: '/intelligence', icon: BrainCircuit, label: 'Inteligencia Agrónoma' },
+        { to: '/advisor', icon: Bot, label: 'Terminal Asesor IA' }
+      ]
+    },
+    {
+      id: 'campo',
+      title: 'Manejo Técnico & Campo',
+      items: [
+        { to: '/locations', icon: Tractor, label: 'Campos & Sitios' },
+        { to: '/plots', icon: Sprout, label: 'Parcelas de Cultivo' },
+        { to: '/campaigns', icon: FolderKanban, label: 'Campañas Agrícolas' },
+        { to: '/tasks', icon: CheckSquare, label: 'Labores Agrícolas', badge: pendingTasksCount > 0 ? pendingTasksCount : null },
+        { to: '/calendar', icon: Calendar, label: 'Ciclo Biológico (BBCH)' },
+        { to: '/trials-lite', icon: ClipboardList, label: 'Monitoreo Rápido' },
+        { to: '/phytosanitary', icon: ShieldCheck, label: 'Cuaderno Fitosanitario' },
+        { to: '/tools', icon: Calculator, label: 'Calculadoras de Dosis' }
+      ]
+    },
+    {
+      id: 'logistica',
+      title: 'Trazabilidad & Logística',
+      items: [
+        { to: '/logistics-map', icon: Globe, label: 'Torre de Control' },
+        { to: '/seed-batches', icon: Package, label: 'Semillas & Cosecha' },
+        { to: '/storage', icon: Warehouse, label: 'Almacenes & Custodia' },
+        { to: '/resources', icon: Archive, label: 'Insumos & Inventario' },
+        { to: '/varieties', icon: BookOpen, label: 'Banco Genético' },
+        ...(!isClient
+          ? [
+              { to: '/suppliers', icon: Truck, label: 'Proveedores' },
+              { to: '/clients', icon: Building, label: 'Socios de Red' }
+            ]
+          : [{ to: '/clients', icon: Building, label: 'Mi Organización' }])
+      ]
+    },
+    {
+      id: 'sistema',
+      title: 'Finanzas & Gobernanza',
+      items: [
+        { to: '/finances', icon: DollarSign, label: 'Costos & Finanzas' },
+        { to: '/analytics', icon: BarChart3, label: 'Comparativa Genética' },
+        { to: '/integrity', icon: ShieldAlert, label: 'Integridad & Licencias' },
+        ...(!isClient ? [{ to: '/users', icon: UserCheck, label: 'Equipo & Accesos' }] : []),
+        ...(currentUser.role === 'super_admin' ? [{ to: '/settings', icon: Settings, label: 'Admin Server' }] : [])
+      ]
+    }
+  ];
+
+  const openNotificationDrawer = (tab: 'all' | 'compose' = 'all') => {
+    setNotifInitialTab(tab);
+    setIsNotificationsOpen(true);
+  };
+
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
-      {/* OVERLAY MOBILE */}
-      {isMobileOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden backdrop-blur-sm" onClick={() => setIsMobileOpen(false)}></div>}
+      {isMobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden backdrop-blur-sm"
+          onClick={() => setIsMobileOpen(false)}
+        />
+      )}
 
-      {/* SIDEBAR */}
-      <aside className={`fixed lg:static inset-y-0 left-0 z-50 ${isCollapsed ? 'lg:w-20' : 'lg:w-72'} w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col transition-all duration-300 lg:translate-x-0 ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className={`h-24 flex items-center ${isCollapsed ? 'justify-center px-2' : 'justify-between px-6'} border-b border-slate-100 dark:border-slate-800 relative overflow-hidden shrink-0`}>
-          <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'space-x-3'} relative z-10 w-full`}>
-             <div className="bg-white dark:bg-slate-800 p-2 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm overflow-hidden flex items-center justify-center min-w-[44px] h-[44px]">
-                {appLogo ? <img src={appLogo} alt="Logo" className="w-full h-full object-contain" /> : <Leaf size={24} className="text-hemp-600" />}
-             </div>
-             {!isCollapsed && (
-               <span className="text-xl font-black tracking-tighter text-slate-900 dark:text-white truncate uppercase italic" title={appName}>{appName}</span>
-             )}
-          </div>
-          <button className="lg:hidden relative z-10 p-2 text-slate-400" onClick={() => setIsMobileOpen(false)}><X size={20}/></button>
+      {/* SIDEBAR COMPACTO Y ORGANIZADO */}
+      <aside className={`fixed lg:static inset-y-0 left-0 z-50 ${isCollapsed ? 'lg:w-20' : 'lg:w-64'} w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col transition-all duration-200 lg:translate-x-0 ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className={`h-16 flex items-center ${isCollapsed ? 'justify-center px-2' : 'justify-between px-4'} border-b border-slate-100 dark:border-slate-800 shrink-0`}>
+          <Link to="/" className={`flex items-center ${isCollapsed ? 'justify-center' : 'space-x-2.5'} min-w-0`}>
+            <div className="bg-white dark:bg-slate-800 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xs flex items-center justify-center w-9 h-9 shrink-0">
+              {appLogo ? <img src={appLogo} alt="Logo" className="w-full h-full object-contain" /> : <Leaf size={20} className="text-emerald-600" />}
+            </div>
+            {!isCollapsed && (
+              <div className="min-w-0">
+                <span className="text-base font-black tracking-tighter text-slate-900 dark:text-white truncate uppercase italic block leading-none">
+                  {appName}
+                </span>
+                <span className="text-[9px] font-mono font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">
+                  Red Nucleus v7.13
+                </span>
+              </div>
+            )}
+          </Link>
+          <button className="lg:hidden p-1.5 text-slate-400" onClick={() => setIsMobileOpen(false)}>
+            <X size={18} />
+          </button>
         </div>
 
-        <nav className={`flex-1 ${isCollapsed ? 'px-2 py-6 space-y-3' : 'px-4 py-8 space-y-1'} overflow-y-auto custom-scrollbar`}>
-          {/* Operación Central & Monitoreo */}
-          <NavItem to="/" icon={LayoutDashboard} label="Dashboard" isCollapsed={isCollapsed} />
-          <NavItem to="/agro40" icon={Satellite} label="Agro 4.0: NDVI & Suelos" special={true} isCollapsed={isCollapsed} />
-          <NavItem to="/intelligence" icon={BrainCircuit} label="Inteligencia Agrónoma" isCollapsed={isCollapsed} />
-          <NavItem to="/advisor" icon={Bot} label="AI Terminal" isCollapsed={isCollapsed} />
-          
-          {/* Manejo Técnico & Campo (Estructura Geográfica y Labores) */}
-          <div className={isCollapsed ? "pt-4 pb-1 border-t border-slate-200 dark:border-slate-800 my-2" : "pt-8 pb-3 px-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]"}>
-            {!isCollapsed && "Manejo Técnico & Campo"}
+        {/* Buscador Rápido de Módulos (cuando está expandido) */}
+        {!isCollapsed && (
+          <div className="px-3 pt-3 pb-1">
+            <div className="relative">
+              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                value={navSearch}
+                onChange={e => setNavSearch(e.target.value)}
+                placeholder="Buscar módulo..."
+                className="w-full pl-7 pr-2.5 py-1.5 bg-slate-100 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 rounded-lg text-xs text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+              {navSearch && (
+                <button
+                  onClick={() => setNavSearch('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
           </div>
-          <NavItem to="/locations" icon={Tractor} label="Campos & Sitios" isCollapsed={isCollapsed} />
-          <NavItem to="/plots" icon={Sprout} label="Parcelas de Cultivo" isCollapsed={isCollapsed} />
-          <NavItem to="/campaigns" icon={FolderKanban} label="Campañas Agrícolas" isCollapsed={isCollapsed} />
-          <NavItem to="/tasks" icon={CheckSquare} label="Labores Agrícolas" badge={pendingTasksCount > 0 ? pendingTasksCount : null} isCollapsed={isCollapsed} />
-          <NavItem to="/calendar" icon={Calendar} label="Ciclo Biológico (BBCH)" isCollapsed={isCollapsed} />
-          <NavItem to="/trials-lite" icon={ClipboardList} label="Monitoreo Agronómico" isCollapsed={isCollapsed} />
-          <NavItem to="/phytosanitary" icon={ShieldCheck} label="Cuaderno Fitosanitario" isCollapsed={isCollapsed} />
-          <NavItem to="/tools" icon={Calculator} label="Calculadoras Agronómicas" isCollapsed={isCollapsed} />
-          
-          {/* Botón Acceso Rápido Protocolo Técnico Anexo II */}
-          <div className="pt-1">
+        )}
+
+        <nav className={`flex-1 ${isCollapsed ? 'px-2 py-3 space-y-2' : 'px-3 py-2 space-y-3'} overflow-y-auto custom-scrollbar`}>
+          {navGroups.map(group => {
+            const filteredItems = group.items.filter(item =>
+              !navSearch.trim() || item.label.toLowerCase().includes(navSearch.toLowerCase())
+            );
+            if (filteredItems.length === 0) return null;
+
+            const isGroupActive = filteredItems.some(i => location.pathname === i.to);
+            const isOpen = navSearch.trim() ? true : (openGroups[group.id] ?? true);
+
+            return (
+              <div key={group.id} className="space-y-1">
+                {!isCollapsed ? (
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(group.id)}
+                    className="w-full flex items-center justify-between px-2 py-1 text-[10px] font-black text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 uppercase tracking-wider transition cursor-pointer"
+                  >
+                    <span className={isGroupActive ? 'text-emerald-600 dark:text-emerald-400' : ''}>{group.title}</span>
+                    {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                  </button>
+                ) : (
+                  <div className="border-t border-slate-100 dark:border-slate-800 my-1.5" />
+                )}
+
+                {(isCollapsed || isOpen) && (
+                  <div className="space-y-0.5">
+                    {filteredItems.map(item => (
+                      <NavItem
+                        key={item.to}
+                        {...item}
+                        isCollapsed={isCollapsed}
+                        onClickMobile={() => setIsMobileOpen(false)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {/* Acceso Directo Protocolo Anexo II y Descarga App */}
+          <div className="pt-2 border-t border-slate-200/80 dark:border-slate-800 space-y-1.5">
             <button
               type="button"
               onClick={() => setIsProtocolOpen(true)}
-              title="Protocolo Técnico de Siembra y Manejo Agronómico (Anexo II - PDF Oficial)"
+              title="Protocolo Técnico de Siembra (Anexo II - PDF)"
               className={isCollapsed
-                ? "flex items-center justify-center h-12 w-12 mx-auto rounded-2xl text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 border border-emerald-200 dark:border-emerald-800/60 transition-all relative group"
-                : "w-full flex items-center justify-between px-4 py-3 rounded-2xl text-emerald-800 dark:text-emerald-300 bg-emerald-50/80 dark:bg-emerald-950/40 hover:bg-emerald-100/80 dark:hover:bg-emerald-900/50 border border-emerald-200/90 dark:border-emerald-800/60 transition-all font-bold text-sm tracking-tight shadow-sm"
+                ? "flex items-center justify-center h-10 w-10 mx-auto rounded-xl text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 transition"
+                : "w-full flex items-center justify-between px-3 py-2 rounded-xl text-emerald-800 dark:text-emerald-300 bg-emerald-50/80 dark:bg-emerald-950/40 hover:bg-emerald-100/80 border border-emerald-200/90 dark:border-emerald-800/60 transition font-bold text-xs cursor-pointer"
               }
             >
-              <div className="flex items-center space-x-3 min-w-0">
-                <FileText size={isCollapsed ? 22 : 20} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
-                {!isCollapsed && <span className="font-bold text-sm tracking-tight truncate">Protocolo de Siembra</span>}
+              <div className="flex items-center space-x-2 min-w-0">
+                <FileText size={16} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                {!isCollapsed && <span className="truncate">Protocolo Anexo II</span>}
               </div>
               {!isCollapsed && (
-                <span className="text-[10px] font-mono font-black bg-emerald-600 text-white px-2 py-0.5 rounded-full shrink-0 ml-2 uppercase shadow-sm">
+                <span className="text-[9px] font-mono font-black bg-emerald-600 text-white px-1.5 py-0.5 rounded uppercase">
                   PDF
                 </span>
               )}
-              {isCollapsed && (
-                <div className="absolute left-full ml-3 px-3 py-2 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-xs font-bold rounded-xl shadow-xl whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                  Protocolo de Siembra (Anexo II)
-                </div>
-              )}
             </button>
-          </div>
 
-          {/* Cadena de Valor & Logística */}
-          <div className={isCollapsed ? "pt-4 pb-1 border-t border-slate-200 dark:border-slate-800 my-2" : "pt-8 pb-3 px-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]"}>
-            {!isCollapsed && "Cadena de Valor & Logística"}
-          </div>
-          <NavItem to="/logistics-map" icon={Globe} label="Torre de Control" isCollapsed={isCollapsed} />
-          <NavItem to="/seed-batches" icon={Package} label="Lotes de Semilla & Cosecha" isCollapsed={isCollapsed} />
-          <NavItem to="/storage" icon={Warehouse} label="Almacenes & Custodia" isCollapsed={isCollapsed} />
-          <NavItem to="/resources" icon={Archive} label="Insumos & Recursos" isCollapsed={isCollapsed} />
-          <NavItem to="/varieties" icon={BookOpen} label="Banco Genético" isCollapsed={isCollapsed} />
-          
-          {!isClient && (
-            <>
-              <NavItem to="/suppliers" icon={Truck} label="Proveedores Homologados" isCollapsed={isCollapsed} />
-              <NavItem to="/clients" icon={Building} label="Socios de Red" isCollapsed={isCollapsed} />
-            </>
-          )}
-          {isClient && (
-            <NavItem to="/clients" icon={Building} label="Mi Organización" isCollapsed={isCollapsed} />
-          )}
-
-          {/* Gestión Económica & Sistema */}
-          <div className={isCollapsed ? "pt-4 pb-1 border-t border-slate-200 dark:border-slate-800 my-2" : "pt-8 pb-3 px-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]"}>
-            {!isCollapsed && "Gestión & Sistema"}
-          </div>
-          <NavItem to="/finances" icon={DollarSign} label="Costos Operativos & Finanzas" isCollapsed={isCollapsed} />
-          <NavItem to="/analytics" icon={BarChart3} label="Comparativa Genética" isCollapsed={isCollapsed} />
-          <NavItem to="/integrity" icon={ShieldAlert} label="Integridad de Datos" isCollapsed={isCollapsed} />
-          
-          {!isClient && <NavItem to="/users" icon={UserCheck} label="Equipo & Accesos" isCollapsed={isCollapsed} />}
-          {currentUser.role === 'super_admin' && <NavItem to="/settings" icon={Settings} label="Admin Server" isCollapsed={isCollapsed} />}
-
-          {/* Descarga e Instalación de App Android & Windows Escritorio */}
-          <div className="pt-3 mt-3 border-t border-slate-200 dark:border-slate-800">
             <PWAInstallButton variant="sidebar" isCollapsed={isCollapsed} />
           </div>
         </nav>
 
-        <div className={`${isCollapsed ? 'p-3' : 'p-6'} border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 shrink-0`}>
-           <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'space-x-4 mb-6'}`}>
-               <div className="relative group">
-                    <img className="h-10 w-10 rounded-2xl object-cover border-2 border-white dark:border-slate-800 shadow-md" src={currentUser.avatar || `https://ui-avatars.com/api/?name=${currentUser.name}&background=16a34a&color=fff`} alt="Profile" />
-                    <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-green-500 border-2 border-white dark:border-slate-800 rounded-full"></div>
-               </div>
-               {!isCollapsed && (
-                 <div className="flex-1 min-w-0">
-                     <p className="text-sm font-black truncate text-slate-900 dark:text-white uppercase tracking-tight">{currentUser.name}</p>
-                     <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{currentUser.role.replace('_', ' ')}</p>
-                 </div>
-               )}
-           </div>
-           
-           {!isCollapsed ? (
-             <button onClick={logout} className="w-full flex items-center justify-center space-x-2 text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 p-3 rounded-2xl transition-all font-black uppercase tracking-widest border border-transparent hover:border-red-100 mt-2">
-                 <LogOut size={16} /> <span>Cerrar Conexión</span>
-             </button>
-           ) : (
-             <button onClick={logout} title="Cerrar Conexión" className="w-10 h-10 mx-auto flex items-center justify-center text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-2xl transition-all mt-3">
-                 <LogOut size={18} />
-             </button>
-           )}
+        {/* Perfil de Usuario Compacto */}
+        <div className={`${isCollapsed ? 'p-2' : 'p-3.5'} border-t border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/60 shrink-0`}>
+          <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-between gap-2'}`}>
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="relative shrink-0">
+                <img
+                  className="h-8 w-8 rounded-xl object-cover border border-slate-200 dark:border-slate-700"
+                  src={currentUser.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.name)}&background=16a34a&color=fff`}
+                  alt="Profile"
+                />
+                <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 border-2 border-white dark:border-slate-900 rounded-full" />
+              </div>
+              {!isCollapsed && (
+                <div className="min-w-0">
+                  <p className="text-xs font-black truncate text-slate-900 dark:text-white uppercase leading-tight">
+                    {currentUser.name}
+                  </p>
+                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider truncate">
+                    {currentUser.role.replace('_', ' ')}
+                  </p>
+                </div>
+              )}
+            </div>
 
-           {!isCollapsed && (
-             <div className="mt-3 text-center text-[10px] font-mono text-slate-400">
-                 Nucleus • v7.13.0 ONLINE
-             </div>
-           )}
+            <button
+              onClick={logout}
+              title="Cerrar Conexión"
+              className="p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl transition shrink-0 cursor-pointer"
+            >
+              <LogOut size={16} />
+            </button>
+          </div>
         </div>
       </aside>
 
+      {/* ÁREA PRINCIPAL */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-        <header className="h-20 bg-white/90 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800/80 px-4 md:px-8 flex items-center justify-between z-40 sticky top-0 shadow-sm">
-          <div className="flex items-center space-x-3">
-              <button onClick={() => setIsMobileOpen(true)} className="lg:hidden p-3 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-2xl transition-all">
-                <Menu size={22}/>
-              </button>
-              
-              {/* Botón Desktop para ocultar / mostrar menú lateral */}
-              <button 
-                onClick={toggleCollapse} 
-                title={isCollapsed ? "Expandir menú lateral" : "Ocultar menú lateral"}
-                className="hidden lg:flex p-2.5 text-slate-600 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-2xl transition-all border border-slate-200 dark:border-slate-800"
-              >
-                {isCollapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
-              </button>
+        <header className="h-16 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800/80 px-4 md:px-6 flex items-center justify-between z-40 sticky top-0">
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={() => setIsMobileOpen(true)}
+              className="lg:hidden p-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl"
+            >
+              <Menu size={20} />
+            </button>
 
-              <div className="hidden md:flex items-center space-x-3 text-slate-500 dark:text-slate-300 font-bold text-xs uppercase tracking-wider">
-                  <span className="text-emerald-600 dark:text-emerald-400 font-black">{new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-700/80 text-emerald-800 dark:text-emerald-200 text-xs font-mono font-bold tracking-tight">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    MODO CAMPO ONLINE
-                  </span>
-              </div>
+            <button 
+              onClick={toggleCollapse} 
+              title={isCollapsed ? "Expandir menú lateral" : "Compactar menú lateral"}
+              className="hidden lg:flex p-2 text-slate-600 dark:text-slate-300 hover:text-emerald-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition border border-slate-200 dark:border-slate-800 cursor-pointer"
+            >
+              {isCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+            </button>
+
+            <div className="hidden md:flex items-center gap-2.5 text-xs font-bold text-slate-500 dark:text-slate-300">
+              <span className="text-slate-800 dark:text-slate-200 font-black capitalize">
+                {new Date().toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' })}
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-100/80 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 text-[10px] font-mono font-bold">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                CAMPO ONLINE
+              </span>
+            </div>
           </div>
           
-          <div className="flex items-center space-x-3">
-              <div className="flex items-center space-x-1 mr-1 md:mr-3 border-r pr-2 md:pr-4 border-slate-200 dark:border-slate-800">
-                  {/* Botones Instalar App Android y Windows Escritorio */}
-                  <div className="flex items-center mr-1">
-                    <PWAInstallButton variant="header" />
-                  </div>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 pr-2 border-r border-slate-200 dark:border-slate-800">
+              <PWAInstallButton variant="header" />
 
-                  {/* Botón Protocolo de Siembra Anexo II en Header */}
-                  <button
-                    onClick={() => setIsProtocolOpen(true)}
-                    title="Protocolo Técnico de Siembra Oficial (Anexo II - PDF)"
-                    className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-xs font-bold transition-all shadow-sm mr-1 cursor-pointer"
-                  >
-                    <FileText size={16} className="text-emerald-600 dark:text-emerald-400" />
-                    <span className="font-mono text-[11px] font-black uppercase">Anexo II (PDF)</span>
-                  </button>
-
-                  <button 
-                    onClick={() => setIsNotificationsOpen(true)}
-                    title="Centro de Alertas & Push (Service Worker)"
-                    className="p-3 text-slate-500 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-2xl transition-all relative group cursor-pointer"
-                  >
-                      <Bell size={20} className={unreadAlertsCount > 0 ? 'text-slate-800 dark:text-white' : ''} />
-                      {unreadAlertsCount > 0 ? (
-                        <span className="absolute -top-0.5 -right-0.5 min-w-[20px] h-5 px-1 bg-rose-500 text-white text-[10px] font-mono font-black rounded-full flex items-center justify-center border-2 border-white dark:border-slate-900 shadow-sm animate-pulse">
-                          {unreadAlertsCount}
-                        </span>
-                      ) : pushStatus === 'default' ? (
-                        <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-amber-400 rounded-full border-2 border-white dark:border-slate-900" title="Push disponible para activar" />
-                      ) : null}
-                  </button>
-              </div>
-              <button onClick={toggleTheme} className="p-2.5 md:p-3 rounded-2xl bg-slate-100 dark:bg-slate-800/90 text-slate-700 dark:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-all flex items-center space-x-2 px-4 shadow-sm font-bold text-xs">
-                  {theme === 'dark' ? <Sun size={18} className="text-amber-400" /> : <Moon size={18} className="text-slate-700" />}
-                  <span className="font-mono text-xs font-bold hidden md:inline">{theme === 'dark' ? 'Modo Claro' : 'Modo Oscuro (Alto Contraste)'}</span>
+              <button
+                onClick={() => setIsProtocolOpen(true)}
+                title="Protocolo Técnico de Siembra Oficial (Anexo II - PDF)"
+                className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 text-xs font-bold transition cursor-pointer"
+              >
+                <FileText size={14} className="text-emerald-600 dark:text-emerald-400" />
+                <span className="font-mono text-[10px] font-black uppercase">Anexo II</span>
               </button>
+
+              {/* Botón Directo: Emitir Push Manual sin Scroll */}
+              <button
+                onClick={() => openNotificationDrawer('compose')}
+                title="Emitir Notificación Push Manual / Difusión Rápida"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-wider shadow-xs transition cursor-pointer"
+              >
+                <Megaphone size={14} />
+                <span className="hidden sm:inline text-[11px]">Emitir Push</span>
+              </button>
+
+              {/* Botón Bandeja de Notificaciones */}
+              <button 
+                onClick={() => openNotificationDrawer('all')}
+                title="Bandeja de Alertas & Configuración Push"
+                className="p-2 text-slate-600 dark:text-slate-300 hover:text-emerald-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition relative cursor-pointer border border-slate-200/70 dark:border-slate-800"
+              >
+                <Bell size={18} className={unreadAlertsCount > 0 ? 'text-slate-900 dark:text-white' : ''} />
+                {unreadAlertsCount > 0 ? (
+                  <span className="absolute -top-1 -right-1 min-w-[18px] h-4.5 px-1 bg-rose-500 text-white text-[9px] font-mono font-black rounded-full flex items-center justify-center border border-white dark:border-slate-900">
+                    {unreadAlertsCount}
+                  </span>
+                ) : pushStatus === 'default' ? (
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-amber-400 rounded-full" />
+                ) : null}
+              </button>
+            </div>
+
+            <button
+              onClick={toggleTheme}
+              title={theme === 'dark' ? 'Cambiar a Modo Claro' : 'Cambiar a Modo Oscuro'}
+              className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition flex items-center gap-1.5 px-3 font-bold text-xs cursor-pointer"
+            >
+              {theme === 'dark' ? <Sun size={16} className="text-amber-400" /> : <Moon size={16} className="text-slate-700" />}
+              <span className="font-mono text-[11px] font-bold hidden xl:inline">
+                {theme === 'dark' ? 'Claro' : 'Oscuro'}
+              </span>
+            </button>
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-6 lg:p-10 scroll-smooth">
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-6 scroll-smooth">
           {children}
         </div>
       </main>
 
-      {/* MODAL / DRAWER CENTRO DE NOTIFICACIONES PUSH */}
       <NotificationCenterModal 
         isOpen={isNotificationsOpen} 
-        onClose={() => setIsNotificationsOpen(false)} 
+        onClose={() => setIsNotificationsOpen(false)}
+        initialTab={notifInitialTab}
       />
 
-      {/* MODAL OFICIAL PROTOCOLO TÉCNICO DE SIEMBRA ANEXO II */}
       <SeedingProtocolModal
         isOpen={isProtocolOpen}
         onClose={() => setIsProtocolOpen(false)}
       />
 
-      {/* INDICADOR DE MODO CAMPO OFFLINE */}
       <OfflineIndicator />
     </div>
   );

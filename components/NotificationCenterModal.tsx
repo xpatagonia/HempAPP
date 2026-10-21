@@ -1,14 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { 
-  Bell, BellRing, Check, CheckCheck, Trash2, X, AlertTriangle, 
-  Clock, Sprout, ShieldAlert, Sparkles, Volume2, VolumeX, Settings,
-  ExternalLink, Info, CheckCircle2, RefreshCw, Send, Radio
+  BellRing, Check, CheckCheck, Trash2, X, 
+  Clock, ShieldAlert, Sparkles, Settings,
+  ExternalLink, CheckCircle2, Send, Radio,
+  Mail, Zap, Search, Megaphone, MapPin, UserCheck, RotateCw
 } from 'lucide-react';
 import { 
   PushNotificationItem, 
   PushSettings,
+  NotificationCategory,
+  NotificationSeverity,
   getStoredNotifications, 
   getNotificationPermissionStatus,
   requestPushPermission,
@@ -19,26 +22,85 @@ import {
   deleteStoredNotification,
   clearAllStoredNotifications,
   triggerTestPlotAlert,
-  triggerTestTaskReminder
+  triggerTestTaskReminder,
+  dispatchPushNotification,
+  evaluateCriticalPlotAlerts,
+  evaluateUpcomingTasksReminders
 } from '../src/services/pushNotificationService';
+import { sendAgronomicAlertEmail } from '../src/services/emailNotificationService';
 
 interface NotificationCenterModalProps {
   isOpen: boolean;
   onClose: () => void;
+  initialTab?: 'all' | 'compose' | 'plot_critical' | 'task_reminder' | 'settings';
 }
 
-export default function NotificationCenterModal({ isOpen, onClose }: NotificationCenterModalProps) {
+const QUICK_PUSH_TEMPLATES = [
+  {
+    id: 'tpl-frost',
+    label: '❄️ Alerta Helada',
+    title: '❄️ Alerta de Helada Agronómica Inminente',
+    body: 'Descenso térmico proyectado bajo 2°C en las próximas 6 horas. Activar protocolo de riego anti-helada y verificar cobertura en lote.',
+    category: 'plot_critical' as NotificationCategory,
+    severity: 'critical' as NotificationSeverity
+  },
+  {
+    id: 'tpl-hydric',
+    label: '💧 Déficit Hídrico',
+    title: '💧 Alerta de Estrés Hídrico en Parcela',
+    body: 'Humedad edáfica por debajo del umbral óptimo. Programar turno de riego suplementario y registrar caudal en monitoreo.',
+    category: 'plot_critical' as NotificationCategory,
+    severity: 'warning' as NotificationSeverity
+  },
+  {
+    id: 'tpl-task',
+    label: '🚜 Orden de Labor',
+    title: '🚜 Orden de Labor Agrícola Prioritaria',
+    body: 'Se requiere ejecución y homologación de labor cultural asignada en el lote. Verificar implementos, operario y condiciones de viento.',
+    category: 'task_reminder' as NotificationCategory,
+    severity: 'warning' as NotificationSeverity
+  },
+  {
+    id: 'tpl-senasa',
+    label: '🛡️ Carencia SENASA',
+    title: '🛡️ Restricción Fitosanitaria / Carencia Activa',
+    body: 'Lote con período de carencia legal vigente. Prohibido el corte o cosecha hasta el vencimiento del plazo sanitario.',
+    category: 'plot_critical' as NotificationCategory,
+    severity: 'critical' as NotificationSeverity
+  },
+  {
+    id: 'tpl-coop',
+    label: '📢 Comunicado Red',
+    title: '📢 Comunicado Oficial Red Cooperativa HempC',
+    body: 'Actualización de protocolo operativo de trazabilidad INASE/SENASA. Por favor sincronizar registros de campaña al cierre de la jornada.',
+    category: 'system' as NotificationCategory,
+    severity: 'info' as NotificationSeverity
+  }
+];
+
+export default function NotificationCenterModal({ isOpen, onClose, initialTab }: NotificationCenterModalProps) {
   const navigate = useNavigate();
-  const { plots, tasks } = useAppContext();
+  const { plots, locations, tasks, usersList, clients, currentUser } = useAppContext();
   const [notifications, setNotifications] = useState<PushNotificationItem[]>([]);
   const [permission, setPermission] = useState<'granted' | 'denied' | 'default' | 'unsupported'>('default');
   const [settings, setSettings] = useState<PushSettings>(getPushSettings());
-  const [activeTab, setActiveTab] = useState<'all' | 'plot_critical' | 'task_reminder' | 'settings'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'compose' | 'plot_critical' | 'task_reminder' | 'settings'>(initialTab || 'all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [isRequestingPermission, setIsRequestingPermission] = useState(false);
-  const [testSending, setTestSending] = useState<'plot' | 'task' | null>(null);
+  const [testSending, setTestSending] = useState<'plot' | 'task' | 'batch' | null>(null);
   const [swActive, setSwActive] = useState<boolean>(false);
 
-  // Cargar estado inicial y suscribir a cambios
+  // Estado del Emisor Manual Push ("Emitir Push")
+  const [pushTitle, setPushTitle] = useState('');
+  const [pushBody, setPushBody] = useState('');
+  const [pushSeverity, setPushSeverity] = useState<NotificationSeverity>('critical');
+  const [pushCategory, setPushCategory] = useState<NotificationCategory>('plot_critical');
+  const [selectedPlotId, setSelectedPlotId] = useState<string>('');
+  const [selectedRecipientEmail, setSelectedRecipientEmail] = useState<string>('');
+  const [alsoSendEmail, setAlsoSendEmail] = useState<boolean>(false);
+  const [isDispatchingManual, setIsDispatchingManual] = useState<boolean>(false);
+  const [feedbackBanner, setFeedbackBanner] = useState<{ type: 'success' | 'info'; text: string } | null>(null);
+
   const loadData = () => {
     setNotifications(getStoredNotifications());
     setPermission(getNotificationPermissionStatus());
@@ -49,28 +111,71 @@ export default function NotificationCenterModal({ isOpen, onClose }: Notificatio
   };
 
   useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab, isOpen]);
+
+  useEffect(() => {
     loadData();
 
-    const handleUpdate = () => {
-      loadData();
+    const handleUpdate = () => loadData();
+    const handleOpenComposer = (ev: Event) => {
+      const customEv = ev as CustomEvent;
+      setActiveTab('compose');
+      if (customEv.detail) {
+        if (customEv.detail.title) setPushTitle(customEv.detail.title);
+        if (customEv.detail.body) setPushBody(customEv.detail.body);
+        if (customEv.detail.plotId) setSelectedPlotId(customEv.detail.plotId);
+        if (customEv.detail.severity) setPushSeverity(customEv.detail.severity);
+      }
     };
 
     window.addEventListener('nucleus:push-notification-change', handleUpdate);
+    window.addEventListener('nucleus:open-push-composer', handleOpenComposer);
     return () => {
       window.removeEventListener('nucleus:push-notification-change', handleUpdate);
+      window.removeEventListener('nucleus:open-push-composer', handleOpenComposer);
     };
   }, [isOpen]);
 
+  // Auto-seleccionar email del productor cuando se elige una parcela
+  useEffect(() => {
+    if (!selectedPlotId) {
+      setSelectedRecipientEmail(currentUser?.email || 'gaston.barea.moreno@gmail.com');
+      return;
+    }
+    const plot = plots.find(p => p.id === selectedPlotId);
+    const loc = locations.find(l => l.id === plot?.locationId);
+    const client = clients.find(c => c.id === loc?.clientId);
+    const assignedUser = usersList.find(u => u.assignedPlotIds?.includes(selectedPlotId) || (loc?.clientId && u.clientId === loc.clientId));
+    setSelectedRecipientEmail(client?.email || assignedUser?.email || currentUser?.email || 'gaston.barea.moreno@gmail.com');
+  }, [selectedPlotId, plots, locations, clients, usersList, currentUser]);
+
+  const unreadCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications]);
+
+  const filteredNotifications = useMemo(() => {
+    return notifications.filter(item => {
+      if (activeTab === 'plot_critical' && item.category !== 'plot_critical') return false;
+      if (activeTab === 'task_reminder' && item.category !== 'task_reminder') return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        return (
+          item.title.toLowerCase().includes(q) ||
+          item.body.toLowerCase().includes(q) ||
+          (item.plotName && item.plotName.toLowerCase().includes(q))
+        );
+      }
+      return true;
+    });
+  }, [notifications, activeTab, searchQuery]);
+
   if (!isOpen) return null;
 
-  const unreadCount = notifications.filter(n => !n.read).length;
-
-  const filteredNotifications = notifications.filter(item => {
-    if (activeTab === 'all') return true;
-    if (activeTab === 'plot_critical') return item.category === 'plot_critical';
-    if (activeTab === 'task_reminder') return item.category === 'task_reminder';
-    return true;
-  });
+  const showTempBanner = (text: string, type: 'success' | 'info' = 'success') => {
+    setFeedbackBanner({ type, text });
+    setTimeout(() => setFeedbackBanner(null), 4000);
+  };
 
   const handleRequestPermission = async () => {
     setIsRequestingPermission(true);
@@ -78,10 +183,89 @@ export default function NotificationCenterModal({ isOpen, onClose }: Notificatio
     setPermission(getNotificationPermissionStatus());
     setIsRequestingPermission(false);
     if (granted) {
-      // Disparar alerta de bienvenida apuntando a lote real
       const targetPlot = plots[0];
       await triggerTestPlotAlert(targetPlot?.name, targetPlot?.id);
+      showTempBanner('Permisos Push activados en este dispositivo.');
     }
+  };
+
+  const handleApplyTemplate = (tpl: typeof QUICK_PUSH_TEMPLATES[0]) => {
+    const plotObj = plots.find(p => p.id === selectedPlotId);
+    const suffix = plotObj ? ` — ${plotObj.name}` : '';
+    setPushTitle(`${tpl.title}${suffix}`);
+    setPushBody(tpl.body);
+    setPushCategory(tpl.category);
+    setPushSeverity(tpl.severity);
+  };
+
+  const handleManualPushSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pushTitle.trim() || !pushBody.trim()) return;
+    setIsDispatchingManual(true);
+    try {
+      const targetPlot = plots.find(p => p.id === selectedPlotId);
+      const targetUrl = targetPlot
+        ? `/plots/${targetPlot.id}`
+        : pushCategory === 'task_reminder'
+        ? '/tasks'
+        : '/';
+
+      await dispatchPushNotification({
+        title: pushTitle.trim(),
+        body: pushBody.trim(),
+        category: pushCategory,
+        severity: pushSeverity,
+        plotId: targetPlot?.id,
+        plotName: targetPlot?.name,
+        targetUrl,
+        actionLabel: targetPlot ? `Abrir ${targetPlot.name}` : 'Ver en Plataforma'
+      });
+
+      if (alsoSendEmail && selectedRecipientEmail.trim()) {
+        const sevMap: Record<NotificationSeverity, 'Crítica' | 'Advertencia' | 'Informativa'> = {
+          critical: 'Crítica',
+          warning: 'Advertencia',
+          info: 'Informativa',
+          success: 'Informativa'
+        };
+        await sendAgronomicAlertEmail({
+          toEmail: selectedRecipientEmail.trim(),
+          toName: targetPlot?.ownerName || 'Productor Asociado Red HempC',
+          alertTitle: pushTitle.trim(),
+          plotName: targetPlot?.name || 'Red Cooperativa General',
+          alertDetails: pushBody.trim(),
+          severity: sevMap[pushSeverity],
+          actionUrl: `${window.location.origin}/#${targetUrl}`
+        });
+      }
+
+      loadData();
+      showTempBanner(
+        alsoSendEmail
+          ? `Push emitido en vivo + Email enviado a ${selectedRecipientEmail}`
+          : 'Notificación Push emitida inmediatamente a los dispositivos activos.'
+      );
+      setPushTitle('');
+      setPushBody('');
+    } finally {
+      setIsDispatchingManual(false);
+    }
+  };
+
+  const handleBatchSyncPush = async () => {
+    setTestSending('batch');
+    const critPlots = await evaluateCriticalPlotAlerts(plots, locations, { force: true });
+    const critTasks = await evaluateUpcomingTasksReminders(tasks, { force: true });
+    const total = critPlots.length + critTasks.length;
+    if (total === 0) {
+      const fallbackPlot = plots[0];
+      await triggerTestPlotAlert(fallbackPlot?.name, fallbackPlot?.id);
+    }
+    setTimeout(() => {
+      setTestSending(null);
+      loadData();
+      showTempBanner(`Barrido completado: ${Math.max(1, total)} alerta(s) push despachadas.`);
+    }, 350);
   };
 
   const handleTriggerTest = async (type: 'plot' | 'task') => {
@@ -96,13 +280,32 @@ export default function NotificationCenterModal({ isOpen, onClose }: Notificatio
     setTimeout(() => {
       setTestSending(null);
       loadData();
-    }, 400);
+      showTempBanner('Alerta Push de prueba emitida.');
+    }, 300);
+  };
+
+  const handleRePushItem = async (e: React.MouseEvent, notif: PushNotificationItem) => {
+    e.stopPropagation();
+    await dispatchPushNotification({
+      title: notif.title,
+      body: notif.body,
+      category: notif.category,
+      severity: notif.severity,
+      plotId: notif.plotId,
+      plotName: notif.plotName,
+      taskId: notif.taskId,
+      taskTitle: notif.taskTitle,
+      targetUrl: notif.targetUrl,
+      actionLabel: notif.actionLabel
+    });
+    loadData();
+    showTempBanner(`Re-enviado vía Push: ${notif.title}`);
   };
 
   const handleNavigate = (item: PushNotificationItem) => {
     markNotificationAsRead(item.id);
     onClose();
-    
+
     let target = item.targetUrl;
     if (item.category === 'plot_critical') {
       if (item.plotId && plots.some(p => p.id.toLowerCase() === item.plotId?.toLowerCase())) {
@@ -133,11 +336,11 @@ export default function NotificationCenterModal({ isOpen, onClose }: Notificatio
       const date = new Date(iso);
       const diffMs = Date.now() - date.getTime();
       const diffMins = Math.floor(diffMs / 60000);
-      if (diffMins < 1) return 'Hace instantes';
-      if (diffMins < 60) return `Hace ${diffMins} min`;
+      if (diffMins < 1) return 'Ahora';
+      if (diffMins < 60) return `${diffMins}m`;
       const diffHours = Math.floor(diffMins / 60);
-      if (diffHours < 24) return `Hace ${diffHours} h`;
-      return date.toLocaleDateString('es-AR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+      if (diffHours < 24) return `${diffHours}h`;
+      return date.toLocaleDateString('es-AR', { day: '2-digit', month: 'short' });
     } catch {
       return iso;
     }
@@ -145,366 +348,516 @@ export default function NotificationCenterModal({ isOpen, onClose }: Notificatio
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden flex justify-end animate-fadeIn">
-      {/* Fondo desenfocado */}
       <div 
         className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm transition-opacity"
         onClick={onClose}
       />
 
-      {/* Drawer Lateral */}
-      <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 shadow-2xl flex flex-col h-full border-l border-slate-200 dark:border-slate-800 z-10">
+      <div className="relative w-full max-w-xl bg-white dark:bg-slate-900 shadow-2xl flex flex-col h-full border-l border-slate-200 dark:border-slate-800 z-10">
         
-        {/* Header */}
-        <div className="p-5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/60 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
-              <BellRing size={20} className={unreadCount > 0 ? 'animate-bounce' : ''} />
+        {/* Header Compacto */}
+        <div className="px-4 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-slate-900 text-white flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-[#DDDB00]/20 border border-[#DDDB00]/40 flex items-center justify-center text-[#DDDB00]">
+              <BellRing size={18} className={unreadCount > 0 ? 'animate-bounce' : ''} />
             </div>
             <div>
-              <div className="flex items-center space-x-2">
-                <h2 className="text-base font-black text-slate-900 dark:text-white uppercase tracking-tight">Centro de Alertas & Push</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-black uppercase tracking-tight">Centro de Comando Push & Alertas</h2>
                 {unreadCount > 0 && (
-                  <span className="px-2 py-0.5 text-[10px] font-mono font-black bg-rose-500 text-white rounded-full">
-                    {unreadCount} nuevas
+                  <span className="px-2 py-0.5 text-[10px] font-mono font-black bg-rose-500 text-white rounded-md">
+                    {unreadCount} sin leer
                   </span>
                 )}
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                PatagonianC LTDA · CUIT: 30-71816113-0 · HempC (Unidad de Negocios)
-              </p>
+              <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                <span className={`w-2 h-2 rounded-full ${permission === 'granted' ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+                <span>{permission === 'granted' ? 'Canal Web Push Activo' : 'Permiso Push Pendiente'}</span>
+                <span>•</span>
+                <span className="font-mono text-[10px]">SW {swActive ? 'Online' : 'Listo'}</span>
+              </div>
             </div>
           </div>
-          <button 
-            onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all"
-          >
-            <X size={20} />
-          </button>
-        </div>
 
-        {/* Estado del Service Worker & Permisos */}
-        <div className="px-5 py-3.5 bg-slate-100/70 dark:bg-slate-950/40 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
-          <div className="flex items-center space-x-2">
-            <span className={`w-2.5 h-2.5 rounded-full ${permission === 'granted' ? 'bg-emerald-500 animate-pulse' : permission === 'denied' ? 'bg-rose-500' : 'bg-amber-500'}`} />
-            <span className="font-bold text-slate-700 dark:text-slate-300">
-              {permission === 'granted' 
-                ? 'Notificaciones Push: Activas' 
-                : permission === 'denied'
-                  ? 'Push Bloqueadas en Navegador'
-                  : 'Push Pendiente de Activación'}
-            </span>
-            <span className="text-[10px] font-mono px-2 py-0.5 bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-md">
-              SW {swActive ? 'Online' : 'Registrado'}
-            </span>
-          </div>
-
-          {permission !== 'granted' && (
+          <div className="flex items-center gap-1.5">
+            {permission !== 'granted' && (
+              <button
+                onClick={handleRequestPermission}
+                disabled={isRequestingPermission}
+                className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-black rounded-lg transition flex items-center gap-1 cursor-pointer"
+              >
+                <Radio size={12} />
+                <span>{isRequestingPermission ? '...' : 'Activar'}</span>
+              </button>
+            )}
             <button
-              onClick={handleRequestPermission}
-              disabled={isRequestingPermission}
-              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl shadow-sm transition-all flex items-center space-x-1"
+              onClick={() => setActiveTab(activeTab === 'compose' ? 'all' : 'compose')}
+              className={`px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition flex items-center gap-1.5 cursor-pointer ${
+                activeTab === 'compose'
+                  ? 'bg-[#DDDB00] text-slate-950'
+                  : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+              }`}
             >
-              <Radio size={12} className="animate-spin" />
-              <span>{isRequestingPermission ? 'Activando...' : 'Activar Push'}</span>
+              <Send size={12} />
+              <span>Emitir Push</span>
             </button>
-          )}
+            <button 
+              onClick={onClose}
+              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition cursor-pointer"
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
-        {/* Tabs de Filtro */}
-        <div className="px-5 pt-3 pb-2 flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80">
-          <div className="flex space-x-1">
+        {/* Banner de Confirmación Instantánea */}
+        {feedbackBanner && (
+          <div className="px-4 py-2 bg-emerald-600 text-white text-xs font-bold flex items-center justify-between animate-fadeIn">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 size={14} />
+              <span>{feedbackBanner.text}</span>
+            </div>
+            <button onClick={() => setFeedbackBanner(null)} className="text-white/80 hover:text-white">
+              <X size={14} />
+            </button>
+          </div>
+        )}
+
+        {/* Barra de Navegación por Pestañas + Acciones Rápidas */}
+        <div className="px-4 py-2 bg-slate-50 dark:bg-slate-950/70 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
             <button
               onClick={() => setActiveTab('all')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all ${activeTab === 'all' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+              className={`px-2.5 py-1.5 text-[11px] font-black uppercase tracking-wider rounded-lg transition cursor-pointer ${
+                activeTab === 'all'
+                  ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/70 dark:hover:bg-slate-800'
+              }`}
             >
-              Todas ({notifications.length})
+              Buzón ({notifications.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('compose')}
+              className={`px-2.5 py-1.5 text-[11px] font-black uppercase tracking-wider rounded-lg transition flex items-center gap-1 cursor-pointer ${
+                activeTab === 'compose'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20'
+              }`}
+            >
+              <Megaphone size={12} />
+              <span>Push Manual</span>
             </button>
             <button
               onClick={() => setActiveTab('plot_critical')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center space-x-1.5 ${activeTab === 'plot_critical' ? 'bg-rose-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+              className={`px-2.5 py-1.5 text-[11px] font-bold rounded-lg transition flex items-center gap-1 cursor-pointer ${
+                activeTab === 'plot_critical'
+                  ? 'bg-rose-600 text-white'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/70 dark:hover:bg-slate-800'
+              }`}
             >
-              <ShieldAlert size={13} />
-              <span>Parcelas</span>
+              <ShieldAlert size={12} />
+              <span>Lotes</span>
             </button>
             <button
               onClick={() => setActiveTab('task_reminder')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center space-x-1.5 ${activeTab === 'task_reminder' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+              className={`px-2.5 py-1.5 text-[11px] font-bold rounded-lg transition flex items-center gap-1 cursor-pointer ${
+                activeTab === 'task_reminder'
+                  ? 'bg-amber-600 text-white'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/70 dark:hover:bg-slate-800'
+              }`}
             >
-              <Clock size={13} />
+              <Clock size={12} />
               <span>Labores</span>
             </button>
             <button
               onClick={() => setActiveTab('settings')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center space-x-1.5 ${activeTab === 'settings' ? 'bg-slate-800 text-white dark:bg-slate-700 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+              className={`px-2.5 py-1.5 text-[11px] font-bold rounded-lg transition flex items-center gap-1 cursor-pointer ${
+                activeTab === 'settings'
+                  ? 'bg-slate-700 text-white'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/70 dark:hover:bg-slate-800'
+              }`}
             >
-              <Settings size={13} />
-              <span>Ajustes</span>
+              <Settings size={12} />
             </button>
           </div>
 
-          {activeTab !== 'settings' && notifications.length > 0 && (
-            <div className="flex items-center space-x-1">
+          {activeTab !== 'settings' && activeTab !== 'compose' && (
+            <div className="flex items-center gap-1 shrink-0">
               <button
-                onClick={markAllNotificationsAsRead}
-                title="Marcar todas como leídas"
-                className="p-1.5 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-all"
+                onClick={handleBatchSyncPush}
+                disabled={testSending === 'batch'}
+                title="Emitir Push de todas las alertas críticas activas ahora"
+                className="px-2 py-1 text-[10px] font-black uppercase bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/20 rounded-lg flex items-center gap-1 transition cursor-pointer"
               >
-                <CheckCheck size={16} />
+                <Zap size={11} />
+                <span>{testSending === 'batch' ? 'Enviando...' : 'Barrido Push'}</span>
               </button>
-              <button
-                onClick={clearAllStoredNotifications}
-                title="Borrar historial"
-                className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-all"
-              >
-                <Trash2 size={16} />
-              </button>
+              {notifications.length > 0 && (
+                <>
+                  <button
+                    onClick={markAllNotificationsAsRead}
+                    title="Marcar todas como leídas"
+                    className="p-1.5 text-slate-400 hover:text-emerald-600 rounded-lg transition cursor-pointer"
+                  >
+                    <CheckCheck size={14} />
+                  </button>
+                  <button
+                    onClick={clearAllStoredNotifications}
+                    title="Limpiar bandeja"
+                    className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg transition cursor-pointer"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>
 
-        {/* Contenedor Principal con Scroll */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-3">
-          
-          {/* VISTA: Ajustes de Push */}
-          {activeTab === 'settings' ? (
-            <div className="space-y-4">
-              <div className="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3">
-                <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300">Configuración de Emisión Push</h3>
-                
-                <div className="space-y-3 text-xs">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-bold text-slate-800 dark:text-white">Alertas Críticas de Parcelas</p>
-                      <p className="text-[11px] text-slate-500">Heladas (&lt;3°C), olas de calor, déficit hídrico y estrés</p>
-                    </div>
-                    <input 
-                      type="checkbox" 
-                      checked={settings.notifyCriticalPlots} 
-                      onChange={() => handleToggleSetting('notifyCriticalPlots')}
-                      className="w-4 h-4 text-emerald-600 rounded"
-                    />
-                  </div>
+        {/* Contenido Principal */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-4">
+          {activeTab === 'compose' ? (
+            /* EMISOR DE PUSH MANUAL SIN SCROLL INNECESARIO */
+            <form onSubmit={handleManualPushSubmit} className="space-y-3.5">
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    1. Plantillas Rápidas (1-Clic)
+                  </span>
+                  <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">
+                    Autocompleta mensaje
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {QUICK_PUSH_TEMPLATES.map(tpl => (
+                    <button
+                      key={tpl.id}
+                      type="button"
+                      onClick={() => handleApplyTemplate(tpl)}
+                      className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-emerald-500 text-slate-700 dark:text-slate-200 transition cursor-pointer"
+                    >
+                      {tpl.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-                  <div className="flex items-center justify-between border-t border-slate-200 dark:border-slate-800 pt-2.5">
-                    <div>
-                      <p className="font-bold text-slate-800 dark:text-white">Recordatorios de Tareas & Labores</p>
-                      <p className="text-[11px] text-slate-500">Vencimientos de hoy y labores agendadas en 48 horas</p>
-                    </div>
-                    <input 
-                      type="checkbox" 
-                      checked={settings.notifyUpcomingTasks} 
-                      onChange={() => handleToggleSetting('notifyUpcomingTasks')}
-                      className="w-4 h-4 text-emerald-600 rounded"
-                    />
-                  </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block mb-1">
+                    Parcela / Lote Objetivo
+                  </label>
+                  <select
+                    value={selectedPlotId}
+                    onChange={e => setSelectedPlotId(e.target.value)}
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="">🌐 Difusión General (Toda la Red)</option>
+                    {plots.map(p => (
+                      <option key={p.id} value={p.id}>
+                        📍 {p.name} ({p.status})
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-                  <div className="flex items-center justify-between border-t border-slate-200 dark:border-slate-800 pt-2.5">
-                    <div>
-                      <p className="font-bold text-slate-800 dark:text-white">Alertas de Catástrofes Regionales</p>
-                      <p className="text-[11px] text-slate-500">Riesgo de incendios (FWI) y vientos severos (&gt;45 km/h)</p>
-                    </div>
-                    <input 
-                      type="checkbox" 
-                      checked={settings.notifyCatastrophes} 
-                      onChange={() => handleToggleSetting('notifyCatastrophes')}
-                      className="w-4 h-4 text-emerald-600 rounded"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between border-t border-slate-200 dark:border-slate-800 pt-2.5">
-                    <div>
-                      <p className="font-bold text-slate-800 dark:text-white">Sonido de Notificación</p>
-                      <p className="text-[11px] text-slate-500">Emisión sonora armónica al recibir alerta crítica</p>
-                    </div>
-                    <input 
-                      type="checkbox" 
-                      checked={settings.soundEnabled} 
-                      onChange={() => handleToggleSetting('soundEnabled')}
-                      className="w-4 h-4 text-emerald-600 rounded"
-                    />
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block mb-1">
+                    Prioridad / Severidad
+                  </label>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {([
+                      { id: 'critical', label: 'Crítica', cls: 'bg-rose-600 text-white border-rose-600' },
+                      { id: 'warning', label: 'Alerta', cls: 'bg-amber-500 text-slate-950 border-amber-500' },
+                      { id: 'info', label: 'Info', cls: 'bg-sky-600 text-white border-sky-600' }
+                    ] as const).map(s => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => setPushSeverity(s.id)}
+                        className={`py-2 rounded-xl text-[11px] font-black uppercase border transition cursor-pointer ${
+                          pushSeverity === s.id
+                            ? s.cls
+                            : 'bg-white dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700'
+                        }`}
+                      >
+                        {s.label}
+                      </button>
+                    ))}
                   </div>
                 </div>
               </div>
 
-              {/* Botones de Prueba */}
-              <div className="p-4 bg-emerald-50/50 dark:bg-emerald-950/20 rounded-2xl border border-emerald-200/70 dark:border-emerald-800/40 space-y-3">
-                <div className="flex items-center space-x-2 text-emerald-700 dark:text-emerald-300">
-                  <Sparkles size={16} />
-                  <span className="text-xs font-black uppercase tracking-wider">Pruebas en Vivo de Service Worker</span>
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block mb-1">
+                  Título de la Notificación Push *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={pushTitle}
+                  onChange={e => setPushTitle(e.target.value)}
+                  placeholder="Ej: ❄️ Alerta de Helada en Lote Alfa - Activar Riego"
+                  className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                    Instrucción / Mensaje Operativo *
+                  </label>
+                  <span className="text-[10px] font-mono text-slate-400">{pushBody.length}/240</span>
                 </div>
-                <p className="text-xs text-slate-600 dark:text-slate-400">
-                  Envía una notificación push real a través del Service Worker registrado en tu navegador para verificar sonido y acción.
-                </p>
-                <div className="grid grid-cols-2 gap-2 pt-1">
+                <textarea
+                  rows={3}
+                  required
+                  maxLength={240}
+                  value={pushBody}
+                  onChange={e => setPushBody(e.target.value)}
+                  placeholder="Escriba la directiva agronómica o recordatorio para disparar por Push..."
+                  className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              {/* Opción de Despacho Dual Push + Email */}
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 space-y-2">
+                <label className="flex items-center justify-between cursor-pointer">
+                  <div className="flex items-center gap-2">
+                    <Mail size={14} className="text-emerald-600 dark:text-emerald-400" />
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                      Enviar copia simultánea por Correo Electrónico
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={alsoSendEmail}
+                    onChange={e => setAlsoSendEmail(e.target.checked)}
+                    className="w-4 h-4 accent-emerald-600 rounded"
+                  />
+                </label>
+
+                {alsoSendEmail && (
+                  <div className="pt-1">
+                    <input
+                      type="email"
+                      value={selectedRecipientEmail}
+                      onChange={e => setSelectedRecipientEmail(e.target.value)}
+                      placeholder="destinatario@campo.com.ar"
+                      className="w-full px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono text-slate-800 dark:text-white"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('all')}
+                  className="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                >
+                  Volver al Buzón
+                </button>
+                <button
+                  type="submit"
+                  disabled={isDispatchingManual || !pushTitle.trim() || !pushBody.trim()}
+                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md flex items-center gap-2 transition cursor-pointer"
+                >
+                  <Send size={14} />
+                  <span>{isDispatchingManual ? 'Emitiendo...' : alsoSendEmail ? 'Emitir Push + Email' : 'Emitir Push Ahora'}</span>
+                </button>
+              </div>
+            </form>
+          ) : activeTab === 'settings' ? (
+            /* CONFIGURACIÓN COMPACTA */
+            <div className="space-y-3">
+              <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2.5 text-xs">
+                <h3 className="text-[11px] font-black uppercase tracking-wider text-slate-500">Preferencias de Canal Push</h3>
+                
+                {[
+                  { key: 'notifyCriticalPlots', title: 'Alertas Críticas de Parcelas', desc: 'Heladas, déficit hídrico y bloqueos SENASA' },
+                  { key: 'notifyUpcomingTasks', title: 'Vencimiento de Labores Agrícolas', desc: 'Avisos 24h y 48h antes de cada labor' },
+                  { key: 'notifyCatastrophes', title: 'Riesgos Climáticos Regionales', desc: 'Índice FWI de incendio y vientos severos' },
+                  { key: 'soundEnabled', title: 'Alerta Sonora en Campo', desc: 'Tono acústico al recibir alertas críticas' }
+                ].map(cfg => (
+                  <label key={cfg.key} className="flex items-center justify-between py-1.5 border-b last:border-b-0 border-slate-200/70 dark:border-slate-800 cursor-pointer">
+                    <div>
+                      <p className="font-bold text-slate-800 dark:text-white">{cfg.title}</p>
+                      <p className="text-[11px] text-slate-500">{cfg.desc}</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(settings[cfg.key as keyof PushSettings])}
+                      onChange={() => handleToggleSetting(cfg.key as keyof PushSettings)}
+                      className="w-4 h-4 accent-emerald-600 rounded"
+                    />
+                  </label>
+                ))}
+              </div>
+
+              <div className="p-3.5 bg-emerald-50/50 dark:bg-emerald-950/20 rounded-xl border border-emerald-200/70 dark:border-emerald-800/40 space-y-2">
+                <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300">
+                  <Sparkles size={14} />
+                  <span className="text-[11px] font-black uppercase">Diagnóstico Rápido Service Worker</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
                   <button
                     onClick={() => handleTriggerTest('plot')}
                     disabled={testSending === 'plot'}
-                    className="p-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black flex items-center justify-center space-x-1.5 transition-all shadow-sm"
+                    className="p-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-black flex items-center justify-center gap-1.5 transition cursor-pointer"
                   >
-                    <ShieldAlert size={14} />
-                    <span>{testSending === 'plot' ? 'Emitiendo...' : 'Test Alerta Parcela'}</span>
+                    <ShieldAlert size={13} />
+                    <span>{testSending === 'plot' ? 'Enviando...' : 'Probar Push Lote'}</span>
                   </button>
                   <button
                     onClick={() => handleTriggerTest('task')}
                     disabled={testSending === 'task'}
-                    className="p-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black flex items-center justify-center space-x-1.5 transition-all shadow-sm"
+                    className="p-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-black flex items-center justify-center gap-1.5 transition cursor-pointer"
                   >
-                    <Clock size={14} />
-                    <span>{testSending === 'task' ? 'Emitiendo...' : 'Test Recordatorio'}</span>
+                    <Clock size={13} />
+                    <span>{testSending === 'task' ? 'Enviando...' : 'Probar Push Labor'}</span>
                   </button>
                 </div>
               </div>
             </div>
           ) : (
-            /* VISTA: Lista de Notificaciones */
-            <>
+            /* BUZÓN DE NOTIFICACIONES DE ALTA DENSIDAD (SIN EXCESO DE SCROLL) */
+            <div className="space-y-2.5">
+              {/* Buscador Rápido */}
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Filtrar alertas por lote, labor o palabra clave..."
+                  className="w-full pl-8 pr-3 py-1.5 bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
               {filteredNotifications.length === 0 ? (
-                <div className="text-center py-12 px-4 space-y-3">
-                  <div className="w-14 h-14 mx-auto rounded-3xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400">
-                    <CheckCircle2 size={28} />
+                <div className="text-center py-10 px-4 space-y-2">
+                  <div className="w-11 h-11 mx-auto rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400">
+                    <CheckCircle2 size={22} />
                   </div>
-                  <h4 className="text-sm font-black text-slate-800 dark:text-slate-200 uppercase tracking-tight">Sin alertas pendientes</h4>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs mx-auto">
-                    Todas las parcelas y labores programadas se encuentran en rangos operativos normales.
+                  <h4 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase">Bandeja al día</h4>
+                  <p className="text-[11px] text-slate-500 max-w-xs mx-auto">
+                    No hay notificaciones pendientes para este filtro. Puedes emitir un Push manual en un clic.
                   </p>
-                  <div className="pt-2">
-                    <button
-                      onClick={() => handleTriggerTest('plot')}
-                      className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline"
-                    >
-                      Disparar alerta de prueba para verificar
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => setActiveTab('compose')}
+                    className="mt-1 inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-black cursor-pointer"
+                  >
+                    <Send size={12} />
+                    <span>Redactar Push Manual</span>
+                  </button>
                 </div>
               ) : (
-                filteredNotifications.map((notif) => {
-                  const isCritical = notif.severity === 'critical';
-                  const isWarning = notif.severity === 'warning';
-                  
-                  return (
-                    <div 
-                      key={notif.id}
-                      onClick={() => handleNavigate(notif)}
-                      className={`p-4 rounded-2xl border transition-all relative group cursor-pointer hover:shadow-md ${
-                        !notif.read 
-                          ? isCritical 
-                            ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-300 dark:border-rose-900/60 shadow-sm hover:border-rose-400'
+                <div className="divide-y divide-slate-100 dark:divide-slate-800/80 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900">
+                  {filteredNotifications.map(notif => {
+                    const isCritical = notif.severity === 'critical';
+                    const isWarning = notif.severity === 'warning';
+
+                    return (
+                      <div
+                        key={notif.id}
+                        onClick={() => handleNavigate(notif)}
+                        className={`p-3 transition hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer flex items-start gap-2.5 ${
+                          !notif.read ? 'bg-slate-50/80 dark:bg-slate-800/30' : 'opacity-80'
+                        }`}
+                      >
+                        <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
+                          isCritical
+                            ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30'
                             : isWarning
-                              ? 'bg-amber-50/70 dark:bg-amber-950/20 border-amber-300 dark:border-amber-900/60 shadow-sm hover:border-amber-400'
-                              : 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-900/60 shadow-sm hover:border-emerald-400'
-                          : 'bg-white dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 opacity-80 hover:opacity-100 hover:border-slate-300 dark:hover:border-slate-700'
-                      }`}
-                    >
-                      <div className="flex items-start space-x-3">
-                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
-                          isCritical 
-                            ? 'bg-rose-500 text-white' 
-                            : isWarning 
-                              ? 'bg-amber-500 text-slate-950' 
-                              : 'bg-emerald-500 text-white'
+                            ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30'
+                            : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
                         }`}>
-                          {notif.category === 'plot_critical' ? <ShieldAlert size={16} /> : <Clock size={16} />}
+                          {notif.category === 'plot_critical' ? <ShieldAlert size={14} /> : <Clock size={14} />}
                         </div>
 
-                        <div className="flex-1 min-w-0 space-y-1">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                              {notif.category === 'plot_critical' ? 'Estado de Parcela' : 'Labor Agrícola'} • {formatTimestamp(notif.timestamp)}
-                            </span>
-                            {!notif.read && (
-                              <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
-                            )}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <h4 className="text-xs font-black text-slate-900 dark:text-white truncate">
+                              {notif.title}
+                            </h4>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <span className="text-[10px] font-mono text-slate-400">
+                                {formatTimestamp(notif.timestamp)}
+                              </span>
+                              {!notif.read && <span className="w-2 h-2 rounded-full bg-rose-500" />}
+                            </div>
                           </div>
 
-                          <h4 className="text-xs font-black text-slate-900 dark:text-white leading-tight">
-                            {notif.title}
-                          </h4>
-                          <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                          <p className="text-[11px] text-slate-600 dark:text-slate-300 line-clamp-2 mt-0.5 leading-snug">
                             {notif.body}
                           </p>
 
-                          <div className="pt-2 flex items-center justify-between">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleNavigate(notif);
-                              }}
-                              className={`inline-flex items-center space-x-1.5 px-3 py-1.5 text-white text-[11px] font-black rounded-xl transition-all shadow-sm ${
-                                isCritical 
-                                  ? 'bg-rose-600 hover:bg-rose-700' 
-                                  : isWarning 
-                                    ? 'bg-amber-600 hover:bg-amber-700' 
-                                    : 'bg-slate-900 hover:bg-black dark:bg-slate-700 dark:hover:bg-slate-600'
-                              }`}
-                            >
-                              <span>{notif.actionLabel || (notif.category === 'plot_critical' ? 'Ver Lote Crítico' : 'Ver Detalles')}</span>
-                              <ExternalLink size={12} />
-                            </button>
+                          <div className="flex items-center justify-between mt-2 pt-1">
+                            <span className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-600 dark:text-emerald-400 hover:underline">
+                              <span>{notif.actionLabel || 'Abrir módulo'}</span>
+                              <ExternalLink size={10} />
+                            </span>
 
-                            <div className="flex items-center space-x-1" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                              <button
+                                onClick={e => handleRePushItem(e, notif)}
+                                title="Re-emitir esta notificación vía Push ahora"
+                                className="px-2 py-0.5 rounded bg-slate-100 hover:bg-emerald-600 hover:text-white dark:bg-slate-800 dark:hover:bg-emerald-600 text-slate-600 dark:text-slate-300 text-[10px] font-bold flex items-center gap-1 transition cursor-pointer"
+                              >
+                                <Send size={10} />
+                                <span>Push</span>
+                              </button>
                               {!notif.read && (
                                 <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    markNotificationAsRead(notif.id);
-                                  }}
-                                  title="Marcar como leída"
-                                  className="p-1.5 text-slate-400 hover:text-emerald-600 rounded-lg transition-all"
+                                  onClick={() => markNotificationAsRead(notif.id)}
+                                  title="Marcar leída"
+                                  className="p-1 text-slate-400 hover:text-emerald-600 rounded transition cursor-pointer"
                                 >
-                                  <Check size={14} />
+                                  <Check size={13} />
                                 </button>
                               )}
                               <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  deleteStoredNotification(notif.id);
-                                }}
+                                onClick={() => deleteStoredNotification(notif.id)}
                                 title="Eliminar"
-                                className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg transition-all"
+                                className="p-1 text-slate-400 hover:text-rose-600 rounded transition cursor-pointer"
                               >
-                                <Trash2 size={14} />
+                                <Trash2 size={13} />
                               </button>
                             </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })
+                    );
+                  })}
+                </div>
               )}
-            </>
+            </div>
           )}
         </div>
 
-        {/* Footer con Quick Actions & Datos Cooperativos */}
-        <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/60 flex flex-col gap-2.5 text-xs">
-          <div className="flex items-center justify-between">
+        {/* Footer Compacto */}
+        <div className="px-4 py-2.5 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60 flex items-center justify-between text-[11px]">
+          <div className="flex items-center gap-3">
             <button
               onClick={() => handleTriggerTest('plot')}
-              className="flex items-center space-x-1.5 text-rose-600 dark:text-rose-400 font-bold hover:underline"
+              className="text-rose-600 dark:text-rose-400 font-bold hover:underline flex items-center gap-1 cursor-pointer"
             >
-              <ShieldAlert size={14} />
+              <ShieldAlert size={12} />
               <span>Simular Helada</span>
             </button>
-
             <button
               onClick={() => handleTriggerTest('task')}
-              className="flex items-center space-x-1.5 text-amber-600 dark:text-amber-400 font-bold hover:underline"
+              className="text-amber-600 dark:text-amber-400 font-bold hover:underline flex items-center gap-1 cursor-pointer"
             >
-              <Clock size={14} />
+              <Clock size={12} />
               <span>Simular Labor</span>
             </button>
-
-            <span className="text-[10px] font-mono text-slate-400">
-              Web Push Protocol
-            </span>
           </div>
-
-          <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800/60 text-[9px] font-mono text-slate-500 dark:text-slate-400 text-center">
-            PatagonianC LTDA Cooperativa de Trabajo · CUIT: 30-71816113-0 · HempC (Unidad de Negocios)
-          </div>
+          <span className="text-[10px] font-mono text-slate-400">
+            HempC Push Engine v2.4
+          </span>
         </div>
-
       </div>
     </div>
   );

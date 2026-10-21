@@ -73,6 +73,7 @@ interface AppContextType {
   seedMovements: SeedMovement[];
   addSeedMovement: (m: SeedMovement) => Promise<boolean>;
   updateSeedMovement: (m: SeedMovement) => Promise<boolean>;
+  deleteSeedMovement: (id: string) => Promise<boolean>;
   resources: Resource[];
   addResource: (r: Resource) => Promise<boolean>;
   updateResource: (r: Resource) => Promise<boolean>;
@@ -88,9 +89,11 @@ interface AppContextType {
   deleteStoragePoint: (id: string) => Promise<boolean>;
   hydricRecords: HydricRecord[];
   addHydricRecord: (r: HydricRecord) => Promise<boolean>;
+  updateHydricRecord: (r: HydricRecord) => Promise<boolean>;
   deleteHydricRecord: (id: string) => Promise<boolean>;
   logs: FieldLog[];
   addLog: (l: FieldLog) => Promise<boolean>;
+  updateLog: (l: FieldLog) => Promise<boolean>;
   deleteLog: (id: string) => Promise<boolean>;
   isRefreshing: boolean;
   refreshData: () => Promise<void>;
@@ -120,13 +123,47 @@ const toSnakeCase = (obj: any): any => {
     if (Array.isArray(obj)) return obj.map(v => toSnakeCase(v));
     if (obj !== null && obj.constructor === Object) {
         return Object.keys(obj).reduce((result, key) => {
+            if (obj[key] === undefined) return result;
             const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
             result[snakeKey] = toSnakeCase(obj[key]);
             return result;
         }, {} as any);
     }
     return obj;
-}
+};
+
+const DELETED_IDS_STORAGE_KEY = 'ht_deleted_ids_v1';
+
+const getDeletedIdsMap = (): Record<string, string[]> => {
+    if (typeof window === 'undefined') return {};
+    try {
+        const raw = localStorage.getItem(DELETED_IDS_STORAGE_KEY);
+        return raw ? JSON.parse(raw) : {};
+    } catch {
+        return {};
+    }
+};
+
+const markIdDeleted = (table: string, id: string) => {
+    if (typeof window === 'undefined' || !id) return;
+    try {
+        const map = getDeletedIdsMap();
+        const list = new Set(map[table] || []);
+        list.add(String(id));
+        map[table] = Array.from(list);
+        localStorage.setItem(DELETED_IDS_STORAGE_KEY, JSON.stringify(map));
+    } catch {}
+};
+
+const unmarkIdDeleted = (table: string, id: string) => {
+    if (typeof window === 'undefined' || !id) return;
+    try {
+        const map = getDeletedIdsMap();
+        if (!map[table]) return;
+        map[table] = map[table].filter(x => x !== String(id));
+        localStorage.setItem(DELETED_IDS_STORAGE_KEY, JSON.stringify(map));
+    } catch {}
+};
 
 
 
@@ -282,15 +319,51 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             if (connected) {
                 const fetchTable = async (table: string, setter: any, fallbackData?: any) => {
                     try {
+                      const deletedMap = getDeletedIdsMap();
+                      const deletedSet = new Set(deletedMap[table] || []);
+                      let localCached: any[] = [];
+                      try {
+                        const rawLocal = localStorage.getItem(`ht_${table}`);
+                        if (rawLocal) {
+                          const parsed = JSON.parse(rawLocal);
+                          if (Array.isArray(parsed)) localCached = parsed;
+                        }
+                      } catch {}
+
                       const { data, error } = await supabase.from(table).select('*');
                       if (!error && data !== null) {
-                        const mapped = toCamelCase(data);
-                        setter(mapped);
-                        try { localStorage.setItem(`ht_${table}`, JSON.stringify(mapped)); } catch (e) {}
+                        const remoteItems: any[] = toCamelCase(data).filter((item: any) => !deletedSet.has(String(item.id)));
+                        const localMap = new Map(localCached.map((item: any) => [String(item.id), item]));
+                        const remoteIds = new Set(remoteItems.map((item: any) => String(item.id)));
+
+                        // Fusionar campos enriquecidos locales que no existan como columnas en Supabase
+                        const mergedRemote = remoteItems.map((remoteItem: any) => {
+                          const localItem = localMap.get(String(remoteItem.id));
+                          if (!localItem) return remoteItem;
+                          const merged: any = { ...localItem };
+                          Object.keys(remoteItem).forEach(k => {
+                            if (remoteItem[k] !== null && remoteItem[k] !== undefined) {
+                              merged[k] = remoteItem[k];
+                            }
+                          });
+                          // Si el registro fue editado localmente en esta sesión, preservar sus campos enriquecidos
+                          if (localItem._localUpdatedAt) {
+                            return { ...merged, ...localItem };
+                          }
+                          return merged;
+                        });
+
+                        // Conservar registros creados localmente que aún no estén en Supabase
+                        const localOnly = localCached.filter((item: any) => item && item.id && !remoteIds.has(String(item.id)) && !deletedSet.has(String(item.id)));
+                        const finalData = [...localOnly, ...mergedRemote];
+
+                        const resolved = finalData.length > 0 ? finalData : (fallbackData ? fallbackData.filter((item: any) => !deletedSet.has(String(item.id))) : []);
+                        setter(resolved);
+                        try { localStorage.setItem(`ht_${table}`, JSON.stringify(resolved)); } catch (e) {}
                         return;
                       }
                       if (fallbackData) {
-                        setter((prev: any[]) => prev && prev.length > 0 ? prev : fallbackData);
+                        setter((prev: any[]) => (prev && prev.length > 0 ? prev : fallbackData).filter((item: any) => !deletedSet.has(String(item.id))));
                       }
                     } catch(e) {
                       if (fallbackData) setter((prev: any[]) => prev && prev.length > 0 ? prev : fallbackData);
@@ -831,26 +904,61 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     };
 
     const crud = async (table: string, item: any, action: 'insert' | 'update' | 'delete', idField = 'id') => {
-        // 1. Inmediatamente actualizar estado React y persistencia local
-        updateLocalState(table, item, action, idField);
+        // 1. Registrar tombstone en caso de eliminación o limpiar en caso de alta/edición
+        if (action === 'delete') {
+            const targetId = typeof item === 'object' && item !== null ? item[idField] : item;
+            markIdDeleted(table, String(targetId));
+        } else if (item && item[idField]) {
+            unmarkIdDeleted(table, String(item[idField]));
+        }
 
-        // 2. Si la base de datos Supabase está conectada o configurada, sincronizar
+        // 2. Inmediatamente actualizar estado React y persistencia local
+        const enrichedItem = action !== 'delete' && typeof item === 'object' && item !== null
+            ? { ...item, _localUpdatedAt: Date.now() }
+            : item;
+        updateLocalState(table, enrichedItem, action, idField);
+
+        // 3. Si la base de datos Supabase está conectada o configurada, sincronizar con auto-resiliencia de columnas
         const creds = getStoredCredentials();
         if (isDbConnected || creds.isConfigured) {
             try {
-                let payload = item;
-                if (action !== 'delete') payload = toSnakeCase(item);
-                if (action === 'insert') {
-                    const res = await supabase.from(table).insert([payload]);
-                    if (res.error) console.error(`Error inserting into ${table}:`, res.error);
-                } else if (action === 'update') {
-                    const res = await supabase.from(table).update(payload).eq(idField, item[idField]);
-                    if (res.error) console.error(`Error updating in ${table}:`, res.error);
-                } else if (action === 'delete') {
+                if (action === 'delete') {
                     const targetId = typeof item === 'object' && item !== null ? item[idField] : item;
                     const res = await supabase.from(table).delete().eq(idField, targetId);
                     if (res.error) {
-                        console.error(`Error deleting from ${table}:`, res.error);
+                        console.warn(`Sync warning deleting from ${table}:`, res.error.message);
+                    }
+                } else {
+                    const cleanItem = { ...item };
+                    delete cleanItem._localUpdatedAt;
+                    let payload = toSnakeCase(cleanItem);
+
+                    // Bucle resiliente ante columnas enriquecidas del frontend que aún no existan en el esquema SQL
+                    for (let attempt = 0; attempt < 18; attempt++) {
+                        const res = action === 'insert'
+                            ? await supabase.from(table).upsert([payload], { onConflict: idField })
+                            : await supabase.from(table).upsert([payload], { onConflict: idField });
+
+                        if (!res.error) {
+                            break;
+                        }
+
+                        const errMsg = res.error.message || '';
+                        const colMatch =
+                            errMsg.match(/Could not find the '([^']+)' column/i) ||
+                            errMsg.match(/column "([^"]+)" of relation/i) ||
+                            errMsg.match(/column ([^ ]+) does not exist/i);
+
+                        if (colMatch && colMatch[1]) {
+                            const offendingCol = colMatch[1].replace(/^["']|["']$/g, '');
+                            if (offendingCol in payload && offendingCol !== idField) {
+                                delete payload[offendingCol];
+                                continue;
+                            }
+                        }
+
+                        console.warn(`Sync warning for ${table} (${action}):`, res.error.message);
+                        break;
                     }
                 }
             } catch (e) {
@@ -987,7 +1095,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             clients, addClient: addClientWithRelations, updateClient: updateClientWithRelations, deleteClient: deleteClientSafe,
             suppliers, addSupplier: async (s) => { const ok = await crud('suppliers', s, 'insert'); return ok ? s.id : null; }, updateSupplier: (s) => crud('suppliers', s, 'update'), deleteSupplier: (id) => crud('suppliers', id, 'delete'),
             seedBatches, addSeedBatch: (b) => crud('seed_batches', b, 'insert'), updateSeedBatch: (b) => crud('seed_batches', b, 'update'), deleteSeedBatch: deleteSeedBatchSafe,
-            seedMovements, addSeedMovement: (m) => crud('seed_movements', m, 'insert'), updateSeedMovement: (m) => crud('seed_movements', m, 'update'),
+            seedMovements, addSeedMovement: (m) => crud('seed_movements', m, 'insert'), updateSeedMovement: (m) => crud('seed_movements', m, 'update'), deleteSeedMovement: (id) => crud('seed_movements', id, 'delete'),
             resources, addResource: (r) => crud('resources', r, 'insert'), updateResource: (r) => crud('resources', r, 'update'), deleteResource: (id) => crud('resources', id, 'delete'),
             operationalExpenses,
             addOperationalExpense: (exp) => crud('operational_expenses', exp, 'insert'),
@@ -997,8 +1105,8 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             switchUserRole,
             setCurrentUser,
             storagePoints, addStoragePoint: (s) => crud('storage_points', s, 'insert'), updateStoragePoint: (s) => crud('storage_points', s, 'update'), deleteStoragePoint: (id) => crud('storage_points', id, 'delete'),
-            hydricRecords, addHydricRecord: (r) => crud('hydric_records', r, 'insert'), deleteHydricRecord: (id) => crud('hydric_records', id, 'delete'),
-            logs, addLog: (l) => crud('field_logs', l, 'insert'), deleteLog: (id) => crud('field_logs', id, 'delete'),
+            hydricRecords, addHydricRecord: (r) => crud('hydric_records', r, 'insert'), updateHydricRecord: (r) => crud('hydric_records', r, 'update'), deleteHydricRecord: (id) => crud('hydric_records', id, 'delete'),
+            logs, addLog: (l) => crud('field_logs', l, 'insert'), updateLog: (l) => crud('field_logs', l, 'update'), deleteLog: (id) => crud('field_logs', id, 'delete'),
             isRefreshing, refreshData
         }}>
             {children}

@@ -6,7 +6,8 @@ import {
   FlaskConical, Save, Calendar, Activity, 
   Ruler, Thermometer, Droplets, ArrowRight,
   ClipboardList, CheckCircle2, Clock, AlertTriangle, ChevronRight, Leaf, History, TrendingUp,
-  Sun, Moon, Target, AlertCircle, Loader2, ExternalLink, Filter, Search, Check, Sprout, ChevronLeft
+  Sun, Moon, Target, AlertCircle, Loader2, ExternalLink, Filter, Search, Check, Sprout, ChevronLeft,
+  Edit2, Trash2, X
 } from 'lucide-react';
 
 const fastUUID = () => {
@@ -29,7 +30,7 @@ const calculateLunarPhase = (dateStr: string) => {
 };
 
 export default function TrialManager() {
-  const { plots, trialRecords, addTrialRecord, currentUser, locations, varieties } = useAppContext();
+  const { plots, trialRecords, addTrialRecord, updateTrialRecord, deleteTrialRecord, currentUser, locations, varieties } = useAppContext();
   const [selectedPlotId, setSelectedPlotId] = useState<string>('');
   const [justSaved, setJustSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -38,6 +39,8 @@ export default function TrialManager() {
   const [autoAdvance, setAutoAdvance] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'Ensayo' | 'Comercial'>('all');
+  const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
+  const [confirmDeleteRecordId, setConfirmDeleteRecordId] = useState<string | null>(null);
 
   // Valores predeterminados oficiales idénticos a la ficha técnica "Informe periódico Nucleus Trace"
   const [formData, setFormData] = useState<Partial<TrialRecord>>({
@@ -196,37 +199,54 @@ export default function TrialManager() {
           });
 
           // Disparar sincronización ambiental con las coordenadas del campo
+          setEditingRecordId(null);
           syncEnvironmentalData(today, currentPlotData.location);
       }
   }, [currentPlotData?.plot.id]);
+
+  const handleEditRecord = (record: TrialRecord) => {
+    setEditingRecordId(record.id);
+    setFormData({
+      ...record
+    });
+    setActiveTab('form');
+  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentPlotData?.plot.id) return;
 
     setIsSaving(true);
-    const newId = (window.crypto as any).randomUUID ? (window.crypto as any).randomUUID() : fastUUID();
+    const recordId = editingRecordId || ((window.crypto as any).randomUUID ? (window.crypto as any).randomUUID() : fastUUID());
 
     try {
-        const success = await addTrialRecord({
+        const payload: TrialRecord = {
             ...formData,
-            id: newId,
+            id: recordId,
             plotId: currentPlotData.plot.id,
-            createdBy: currentUser?.id,
-            createdByName: currentUser?.name
-        } as TrialRecord);
+            createdBy: formData.createdBy || currentUser?.id,
+            createdByName: formData.createdByName || currentUser?.name
+        } as TrialRecord;
+
+        const success = editingRecordId
+            ? await updateTrialRecord(payload)
+            : await addTrialRecord(payload);
 
         if (success) {
             setJustSaved(true);
+            const wasEditing = Boolean(editingRecordId);
+            setEditingRecordId(null);
             setTimeout(() => {
                 setJustSaved(false);
-                if (autoAdvance) {
+                if (wasEditing) {
+                    setActiveTab('history');
+                } else if (autoAdvance) {
                     const currentIndex = plotQueue.findIndex(p => p.plot.id === currentPlotData.plot.id);
                     if (currentIndex < plotQueue.length - 1) {
                         setSelectedPlotId(plotQueue[currentIndex + 1].plot.id);
                     }
                 }
-            }, 1200);
+            }, 900);
         }
     } finally {
         setIsSaving(false);
@@ -678,18 +698,32 @@ export default function TrialManager() {
                                         <span>Avanzar automáticamente al siguiente lote de la recorrida</span>
                                     </label>
 
-                                    <button 
-                                        type="submit"
-                                        disabled={isSaving || isFetchingConditions}
-                                        className={`w-full sm:w-auto px-10 py-5 rounded-[28px] font-black text-xs uppercase tracking-[0.25em] shadow-2xl flex items-center justify-center transition-all hover:scale-[1.01] active:scale-95 disabled:opacity-50 ${
-                                            justSaved 
-                                            ? 'bg-emerald-600 text-white' 
-                                            : 'bg-slate-900 dark:bg-emerald-600 text-white hover:bg-black dark:hover:bg-emerald-700'
-                                        }`}
-                                    >
-                                        {isSaving ? <Loader2 className="animate-spin mr-2" size={18}/> : justSaved ? <CheckCircle2 className="mr-2" size={18}/> : <Save className="mr-2" size={18}/>}
-                                        {justSaved ? '¡Informe Sellado con Éxito!' : 'Sellar Informe periódico Nucleus'}
-                                    </button>
+                                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                                        {editingRecordId && (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setEditingRecordId(null);
+                                                    setActiveTab('history');
+                                                }}
+                                                className="px-5 py-5 rounded-[28px] font-black text-xs uppercase tracking-wider bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300 transition"
+                                            >
+                                                Cancelar Edición
+                                            </button>
+                                        )}
+                                        <button 
+                                            type="submit"
+                                            disabled={isSaving || isFetchingConditions}
+                                            className={`w-full sm:w-auto px-10 py-5 rounded-[28px] font-black text-xs uppercase tracking-[0.25em] shadow-2xl flex items-center justify-center transition-all hover:scale-[1.01] active:scale-95 disabled:opacity-50 ${
+                                                justSaved 
+                                                ? 'bg-emerald-600 text-white' 
+                                                : 'bg-slate-900 dark:bg-emerald-600 text-white hover:bg-black dark:hover:bg-emerald-700'
+                                            }`}
+                                        >
+                                            {isSaving ? <Loader2 className="animate-spin mr-2" size={18}/> : justSaved ? <CheckCircle2 className="mr-2" size={18}/> : <Save className="mr-2" size={18}/>}
+                                            {justSaved ? '¡Informe Sellado con Éxito!' : editingRecordId ? 'Guardar Cambios en Informe' : 'Sellar Informe periódico Nucleus'}
+                                        </button>
+                                    </div>
                                 </div>
                             </form>
                         </div>
@@ -708,7 +742,7 @@ export default function TrialManager() {
                                     </p>
                                 </div>
                                 <button
-                                    onClick={() => setActiveTab('form')}
+                                    onClick={() => { setEditingRecordId(null); setActiveTab('form'); }}
                                     className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider shadow-md hover:bg-emerald-700 transition"
                                 >
                                     + Cargar Nuevo Informe
@@ -735,9 +769,49 @@ export default function TrialManager() {
                                                         {record.stage}
                                                     </span>
                                                 </div>
-                                                <span className="text-[10px] text-slate-400 font-bold uppercase">
-                                                    Auditado por: {record.createdByName || 'Técnico Nucleus'}
-                                                </span>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-[10px] text-slate-400 font-bold uppercase mr-2">
+                                                        Auditado por: {record.createdByName || 'Técnico Nucleus'}
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleEditRecord(record)}
+                                                        className="p-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-emerald-600 transition"
+                                                        title="Editar Informe"
+                                                    >
+                                                        <Edit2 size={13} />
+                                                    </button>
+                                                    {confirmDeleteRecordId === record.id ? (
+                                                        <div className="inline-flex items-center gap-1.5 bg-red-50 dark:bg-red-950/60 px-2.5 py-1 rounded-lg border border-red-200 dark:border-red-800">
+                                                            <button
+                                                                type="button"
+                                                                onClick={async () => {
+                                                                    await deleteTrialRecord(record.id);
+                                                                    setConfirmDeleteRecordId(null);
+                                                                }}
+                                                                className="text-[9px] font-black uppercase text-red-600 hover:underline"
+                                                            >
+                                                                Confirmar
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setConfirmDeleteRecordId(null)}
+                                                                className="text-[9px] font-bold text-slate-400 hover:text-slate-600"
+                                                            >
+                                                                No
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setConfirmDeleteRecordId(record.id)}
+                                                            className="p-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-red-600 transition"
+                                                            title="Eliminar Informe"
+                                                        >
+                                                            <Trash2 size={13} />
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </div>
 
                                             <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3 text-xs">
