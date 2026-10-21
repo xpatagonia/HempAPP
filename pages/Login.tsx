@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { checkConnection, supabase } from "../supabaseClient";
 import { sendPasswordResetEmail } from "../src/services/emailNotificationService";
+import { PWAInstallButton, AndroidLogo, WindowsLogo } from "../components/PWAInstallButton";
 
 export default function Login() {
   const { currentUser, login, appName, appLogo, usersList, updateUser, addUser } = useAppContext();
@@ -201,23 +202,24 @@ export default function Login() {
           </div>
         </div>
 
-        {/* ACCESO MÓVIL POR CÓDIGO QR */}
+        {/* ACCESO MÓVIL POR CÓDIGO QR & APPS */}
         <div className="absolute bottom-12 left-20 z-20 animate-in slide-in-from-bottom-6 duration-1000">
-          <div className="bg-white/20 backdrop-blur-md border border-white/40 p-4 rounded-3xl flex items-center gap-5 shadow-xl max-w-sm">
-            <div className="bg-white p-2 rounded-2xl shadow-inner">
+          <div className="bg-white/25 backdrop-blur-md border border-white/50 p-4 rounded-3xl flex items-center gap-5 shadow-xl max-w-md">
+            <div className="bg-white p-2 rounded-2xl shadow-inner shrink-0">
               <img 
                 src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(currentUrl)}`} 
                 alt="Mobile Login QR" 
                 className="w-20 h-20 mix-blend-multiply opacity-90"
               />
             </div>
-            <div>
-              <div className="flex items-center gap-2 mb-1 text-[#006633]">
-                <Smartphone size={18} />
-                <p className="font-black text-xs uppercase tracking-widest">Acceso Móvil</p>
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2 text-[#006633]">
+                <AndroidLogo size={18} className="text-[#006633]" />
+                <WindowsLogo size={15} className="text-[#006633]" />
+                <p className="font-black text-xs uppercase tracking-widest">App Android & Windows</p>
               </div>
-              <p className="text-[#006633] text-[10px] font-bold leading-tight max-w-[140px]">
-                Escanea para operar la estación de campo desde tu celular.
+              <p className="text-[#006633] text-[11px] font-bold leading-tight">
+                Escanea el código QR con tu celular Android o descarga la aplicación de escritorio para Windows.
               </p>
             </div>
           </div>
@@ -272,7 +274,7 @@ export default function Login() {
                 autoCapitalize="none"
                 spellCheck="false"
                 className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-2xl focus:ring-4 focus:ring-[#006633]/10 focus:border-[#006633] dark:focus:border-emerald-500 outline-none transition-all text-slate-900 dark:text-white font-bold placeholder-slate-400 text-sm shadow-sm" 
-                placeholder="ej: admin o admin@hempc.com.ar" 
+                placeholder="usuario@hempc.com.ar" 
                 value={email} 
                 onChange={e => setEmail(e.target.value)} 
               />
@@ -288,7 +290,7 @@ export default function Login() {
                   type={showPassword ? "text" : "password"} 
                   autoComplete="current-password"
                   className="w-full px-5 py-4 pr-12 bg-slate-50 dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-2xl focus:ring-4 focus:ring-[#006633]/10 focus:border-[#006633] dark:focus:border-emerald-500 outline-none transition-all text-slate-900 dark:text-white font-bold placeholder-slate-400 text-sm shadow-sm" 
-                  placeholder="admin" 
+                  placeholder="••••••••••••" 
                   value={password} 
                   onChange={e => setPassword(e.target.value)} 
                 />
@@ -299,48 +301,6 @@ export default function Login() {
                   title={showPassword ? "Ocultar contraseña" : "Ver contraseña"}
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </div>
-            </div>
-
-            {/* Accesos rápidos de Administrador */}
-            <div className="bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/60 rounded-2xl p-3 space-y-2">
-              <div className="flex items-center justify-between text-[11px] font-black text-emerald-800 dark:text-emerald-300">
-                <span className="flex items-center gap-1.5 uppercase tracking-wider">
-                  <ShieldCheck size={14} className="text-[#006633] dark:text-emerald-400" />
-                  Credenciales de Administrador:
-                </span>
-                <span className="text-[10px] font-mono text-emerald-700 dark:text-emerald-400">clave: admin</span>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEmail("admin");
-                    setPassword("admin");
-                    setError("");
-                  }}
-                  className="text-left px-3 py-2 bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-800 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 hover:border-[#006633] hover:bg-emerald-50 dark:hover:bg-emerald-900/40 transition cursor-pointer shadow-sm active:scale-95"
-                >
-                  <div className="text-[10px] uppercase tracking-wider text-emerald-700 dark:text-emerald-400 font-black flex items-center gap-1">
-                    👑 Admin Central
-                  </div>
-                  <div className="truncate text-[11px] font-mono text-slate-600 dark:text-slate-300">admin / admin</div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEmail("xpatagonia.com@gmail.com");
-                    setPassword("admin");
-                    setError("");
-                  }}
-                  className="text-left px-3 py-2 bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-800 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 hover:border-[#006633] hover:bg-emerald-50 dark:hover:bg-emerald-900/40 transition cursor-pointer shadow-sm active:scale-95"
-                >
-                  <div className="text-[10px] uppercase tracking-wider text-emerald-700 dark:text-emerald-400 font-black flex items-center gap-1">
-                    🌱 xpatagonia
-                  </div>
-                  <div className="truncate text-[11px] font-mono text-slate-600 dark:text-slate-300">xpatagonia / admin</div>
                 </button>
               </div>
             </div>
@@ -382,6 +342,9 @@ export default function Login() {
             </button>
           </form>
 
+          {/* DESCARGA E INSTALACIÓN DE APP ANDROID Y WINDOWS ESCRITORIO */}
+          <PWAInstallButton variant="login" />
+
           {/* AVISO INSTITUCIONAL DE REGISTRO CERRADO */}
           <div className="bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 text-[11px] text-slate-500 dark:text-slate-400 flex items-start gap-3">
             <ShieldCheck size={18} className="text-[#006633] dark:text-emerald-400 mt-0.5 flex-shrink-0" />
@@ -411,7 +374,7 @@ export default function Login() {
             </div>
 
             <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">
-              &copy; 2026 HempC Nucleus | Red de Cáñamo Industrial Argentina
+              &copy; 2026 HempC Nucleus v7.13.0 | Red de Cáñamo Industrial Argentina
             </p>
           </div>
         </div>

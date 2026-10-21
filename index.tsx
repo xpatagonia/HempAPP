@@ -3,12 +3,18 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
 
-// V7.0.6-STABLE - PRODUCTION PROTOCOL
-const version = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'V7.0.6-STABLE';
+// V7.13.0-STABLE - PRODUCTION PROTOCOL
+const version = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'V7.13.0-STABLE';
 const buildTime = typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : new Date().toISOString();
 
 console.log(`%c NUCLEUS APP ${version} `, 'background: #006633; color: #fff; font-weight: bold; padding: 10px; font-size: 20px; border: 2px solid #DDDB00;');
 console.log(`%c BUILD: ${buildTime} `, 'background: #000; color: #888; font-family: monospace;');
+
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then((registrations) => {
+    registrations.forEach((reg) => reg.update().catch(() => {}));
+  }).catch(() => {});
+}
 
 // Normalizador automático de rutas directas para escáneres QR móviles
 // Si un teléfono abre /trace/:id sin hash, lo reescribe a /#/trace/:id para que HashRouter lo resuelva inmediatamente.

@@ -241,6 +241,11 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
           
           {!isClient && <NavItem to="/users" icon={UserCheck} label="Equipo & Accesos" isCollapsed={isCollapsed} />}
           {currentUser.role === 'super_admin' && <NavItem to="/settings" icon={Settings} label="Admin Server" isCollapsed={isCollapsed} />}
+
+          {/* Descarga e Instalación de App Android & Windows Escritorio */}
+          <div className="pt-3 mt-3 border-t border-slate-200 dark:border-slate-800">
+            <PWAInstallButton variant="sidebar" isCollapsed={isCollapsed} />
+          </div>
         </nav>
 
         <div className={`${isCollapsed ? 'p-3' : 'p-6'} border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 shrink-0`}>
@@ -269,7 +274,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
 
            {!isCollapsed && (
              <div className="mt-3 text-center text-[10px] font-mono text-slate-400">
-                 Nucleus • v7.12.2 ONLINE
+                 Nucleus • v7.13.0 ONLINE
              </div>
            )}
         </div>
@@ -302,9 +307,9 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
           
           <div className="flex items-center space-x-3">
               <div className="flex items-center space-x-1 mr-1 md:mr-3 border-r pr-2 md:pr-4 border-slate-200 dark:border-slate-800">
-                  {/* Botón Instalar App PWA */}
-                  <div className="hidden sm:flex items-center mr-1">
-                    <PWAInstallButton />
+                  {/* Botones Instalar App Android y Windows Escritorio */}
+                  <div className="flex items-center mr-1">
+                    <PWAInstallButton variant="header" />
                   </div>
 
                   {/* Botón Protocolo de Siembra Anexo II en Header */}
