@@ -18,6 +18,7 @@ import {
 } from 'recharts';
 import { MapContainer, TileLayer, Polygon, Marker, Tooltip as LeafletTooltip, useMap, ZoomControl } from 'react-leaflet';
 import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { 
   fetchLiveSoilAndAgroData, 
   calculateWaterEfficiency, 
@@ -41,26 +42,76 @@ const MapResizer = () => {
   const map = useMap();
   useEffect(() => {
     if (!map) return;
-    const observer = new ResizeObserver(() => {
-      requestAnimationFrame(() => map.invalidateSize({ animate: false }));
-    });
+    const trigger = () => {
+      requestAnimationFrame(() => {
+        try {
+          map.invalidateSize({ animate: false });
+        } catch (e) {}
+      });
+    };
+    trigger();
+    const t1 = setTimeout(trigger, 60);
+    const t2 = setTimeout(trigger, 200);
+    const t3 = setTimeout(trigger, 500);
+    const observer = new ResizeObserver(trigger);
     observer.observe(map.getContainer());
-    map.invalidateSize();
-    return () => observer.disconnect();
+    window.addEventListener('resize', trigger);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+      observer.disconnect();
+      window.removeEventListener('resize', trigger);
+    };
   }, [map]);
   return null;
 };
 
-const MapRecenter = ({ polygon, center }: { polygon?: { lat: number; lng: number }[]; center?: { lat: number; lng: number } }) => {
+const MapRecenter = ({ 
+  polygon, 
+  locationPolygon,
+  center, 
+  focusMode = 'plot',
+  fitTrigger = 0
+}: { 
+  polygon?: { lat: number; lng: number }[]; 
+  locationPolygon?: { lat: number; lng: number }[];
+  center?: { lat: number; lng: number };
+  focusMode?: 'plot' | 'field';
+  fitTrigger?: number;
+}) => {
   const map = useMap();
   useEffect(() => {
-    if (polygon && polygon.length >= 3) {
-      const bounds = L.latLngBounds(polygon.map(p => [p.lat, p.lng]));
-      map.fitBounds(bounds, { padding: [35, 35], maxZoom: 16 });
-    } else if (center) {
-      map.setView([center.lat, center.lng], 14);
-    }
-  }, [polygon, center, map]);
+    if (!map) return;
+    const applyFit = () => {
+      try {
+        map.invalidateSize({ animate: false });
+        if (focusMode === 'field' && locationPolygon && locationPolygon.length >= 3) {
+          const locBounds = L.latLngBounds(locationPolygon.map(p => [p.lat, p.lng]));
+          if (locBounds.isValid()) {
+            map.fitBounds(locBounds, { padding: [35, 35], maxZoom: 18, animate: true });
+            return;
+          }
+        }
+        if (polygon && polygon.length >= 3) {
+          const validPts = polygon.filter(p => p && !isNaN(p.lat) && !isNaN(p.lng));
+          if (validPts.length >= 3) {
+            const bounds = L.latLngBounds(validPts.map(p => [p.lat, p.lng]));
+            if (bounds.isValid()) {
+              map.fitBounds(bounds, { padding: [55, 55], maxZoom: 21, animate: true });
+              return;
+            }
+          }
+        }
+        if (center && !isNaN(center.lat) && !isNaN(center.lng)) {
+          map.setView([center.lat, center.lng], 18);
+        }
+      } catch (e) {}
+    };
+    applyFit();
+    const timer = setTimeout(applyFit, 120);
+    return () => clearTimeout(timer);
+  }, [polygon, locationPolygon, center, focusMode, fitTrigger, map]);
   return null;
 };
 
@@ -192,6 +243,9 @@ export default function Agriculture40() {
   const [mapLayer, setMapLayer] = useState<'satellite' | 'ndvi_layer' | 'foliage_layer' | 'moisture_layer' | 'street'>('ndvi_layer');
   const [layerOpacity, setLayerOpacity] = useState<number>(0.75);
   const [showPixelGrid, setShowPixelGrid] = useState<boolean>(true);
+  const [showGeodesy, setShowGeodesy] = useState<boolean>(true);
+  const [mapFocusMode, setMapFocusMode] = useState<'plot' | 'field'>('plot');
+  const [mapFitTrigger, setMapFitTrigger] = useState<number>(0);
   const [showSatelliteApiModal, setShowSatelliteApiModal] = useState<boolean>(false);
   const [satelliteApiConfig, setSatelliteApiConfig] = useState<{
     provider: 'builtin' | 'sentinel_hub' | 'agromonitoring';
@@ -523,53 +577,297 @@ export default function Agriculture40() {
     exportNDVITimeSeriesCSV(selectedPlot, satellitePasses);
   };
 
+  // Normalizador universal de coordenadas geodésicas (soporta {lat,lng}, [lat,lng] o JSON string)
+  const parsePolygonCoords = (rawPoly: any): { lat: number; lng: number }[] => {
+    if (!rawPoly) return [];
+    let arr = rawPoly;
+    if (typeof rawPoly === 'string') {
+      try { arr = JSON.parse(rawPoly); } catch { return []; }
+    }
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .map((pt: any) => {
+        if (Array.isArray(pt) && pt.length >= 2) {
+          const lat = Number(pt[0]);
+          const lng = Number(pt[1]);
+          return !isNaN(lat) && !isNaN(lng) ? { lat, lng } : null;
+        }
+        if (pt && typeof pt === 'object') {
+          const lat = Number(pt.lat ?? pt.latitude);
+          const lng = Number(pt.lng ?? pt.lon ?? pt.longitude);
+          return !isNaN(lat) && !isNaN(lng) ? { lat, lng } : null;
+        }
+        return null;
+      })
+      .filter((pt): pt is { lat: number; lng: number } => pt !== null && pt.lat !== 0 && pt.lng !== 0);
+  };
+
   // Coordenadas y polígono vectorial del lote (con síntesis parcelaria de alta precisión si no fue dibujado)
   const mapCenter = useMemo(() => {
-    return selectedPlot?.coordinates || selectedLocation?.coordinates || { lat: -31.42, lng: -64.18 };
+    const pCoords = selectedPlot?.coordinates;
+    if (pCoords && !isNaN(Number(pCoords.lat)) && !isNaN(Number(pCoords.lng)) && Number(pCoords.lat) !== 0) {
+      return { lat: Number(pCoords.lat), lng: Number(pCoords.lng) };
+    }
+    const parsedPoly = parsePolygonCoords(selectedPlot?.polygon);
+    if (parsedPoly.length >= 3) {
+      return {
+        lat: Number((parsedPoly.reduce((s, p) => s + p.lat, 0) / parsedPoly.length).toFixed(6)),
+        lng: Number((parsedPoly.reduce((s, p) => s + p.lng, 0) / parsedPoly.length).toFixed(6))
+      };
+    }
+    const lCoords = selectedLocation?.coordinates;
+    if (lCoords && !isNaN(Number(lCoords.lat)) && !isNaN(Number(lCoords.lng)) && Number(lCoords.lat) !== 0) {
+      return { lat: Number(lCoords.lat), lng: Number(lCoords.lng) };
+    }
+    return { lat: -43.308558, lng: -65.28907 };
   }, [selectedPlot, selectedLocation]);
 
+  const locationPolygon = useMemo(() => {
+    const parsed = parsePolygonCoords(selectedLocation?.polygon);
+    return parsed.length >= 3 ? parsed : [];
+  }, [selectedLocation]);
+
+  const siblingPlots = useMemo(() => {
+    if (!selectedPlot) return [];
+    return plots
+      .filter(p => p.id !== selectedPlot.id && p.locationId === selectedPlot.locationId)
+      .map(p => ({
+        id: p.id,
+        name: p.name,
+        surfaceArea: p.surfaceArea,
+        surfaceUnit: p.surfaceUnit,
+        color: p.color || '#38bdf8',
+        polygon: parsePolygonCoords(p.polygon)
+      }))
+      .filter(p => p.polygon.length >= 3);
+  }, [plots, selectedPlot]);
+
   const plotPolygon = useMemo(() => {
-    if (selectedPlot?.polygon && selectedPlot.polygon.length >= 3) {
-      return selectedPlot.polygon;
+    const parsed = parsePolygonCoords(selectedPlot?.polygon);
+    if (parsed.length >= 3) {
+      return parsed;
     }
-    // Si la parcela no tiene polígono vectorial explícito, generamos una geometría perimetral basada en su superficie real y centro
+    // Si la parcela no tiene polígono vectorial explícito, generamos una geometría perimetral geodésica exacta basada en su superficie real y centro
     const center = mapCenter;
     const surfaceM2 = selectedPlot?.surfaceUnit === 'm2'
-      ? (selectedPlot.surfaceArea || 9)
+      ? (selectedPlot.surfaceArea || 9.72)
       : (selectedPlot?.surfaceUnit === 'ac' ? (selectedPlot.surfaceArea || 1) * 4046.86 : (selectedPlot?.surfaceArea || 1) * 10000);
     const sideMeters = Math.max(3, Math.sqrt(surfaceM2));
     const deltaLat = (sideMeters / 111320) / 2;
     const cosLat = Math.cos((center.lat * Math.PI) / 180);
-    const deltaLng = (sideMeters / (111320 * (cosLat || 0.85))) / 2;
+    const deltaLng = (sideMeters / (111320 * (cosLat || 0.73))) / 2;
 
     return [
-      { lat: Number((center.lat + deltaLat).toFixed(6)), lng: Number((center.lng - deltaLng).toFixed(6)) },
-      { lat: Number((center.lat + deltaLat * 0.96).toFixed(6)), lng: Number((center.lng + deltaLng * 1.04).toFixed(6)) },
-      { lat: Number((center.lat - deltaLat * 1.02).toFixed(6)), lng: Number((center.lng + deltaLng * 0.98).toFixed(6)) },
-      { lat: Number((center.lat - deltaLat * 0.98).toFixed(6)), lng: Number((center.lng - deltaLng * 1.02).toFixed(6)) }
+      { lat: Number((center.lat + deltaLat).toFixed(7)), lng: Number((center.lng - deltaLng).toFixed(7)) },
+      { lat: Number((center.lat + deltaLat * 0.96).toFixed(7)), lng: Number((center.lng + deltaLng * 1.04).toFixed(7)) },
+      { lat: Number((center.lat - deltaLat * 1.02).toFixed(7)), lng: Number((center.lng + deltaLng * 0.98).toFixed(7)) },
+      { lat: Number((center.lat - deltaLat * 0.98).toFixed(7)), lng: Number((center.lng - deltaLng * 1.02).toFixed(7)) }
     ];
   }, [selectedPlot, mapCenter]);
 
-  // Generador de micro-zonas espectrales y píxeles Sentinel-2 (resolución espacial 10m x 10m)
+  // Vértices geodésicos únicos (sin repetir el punto de cierre final si coincide con el primero)
+  const uniquePlotVertices = useMemo(() => {
+    if (!plotPolygon || plotPolygon.length < 3) return [];
+    const first = plotPolygon[0];
+    const last = plotPolygon[plotPolygon.length - 1];
+    const isClosedDuplicate = plotPolygon.length > 3 && Math.abs(first.lat - last.lat) < 1e-7 && Math.abs(first.lng - last.lng) < 1e-7;
+    return isClosedDuplicate ? plotPolygon.slice(0, plotPolygon.length - 1) : plotPolygon;
+  }, [plotPolygon]);
+
+  // Cálculo de Geodesia de la Parcela (distancias Haversine por lado, perímetro en metros y superficie geodésica en m²)
+  const geodesicMetrics = useMemo(() => {
+    if (uniquePlotVertices.length < 3) {
+      return { vertices: [], perimeterMeters: 0, geodesicAreaM2: 0 };
+    }
+    const R = 6378137;
+    const toRad = (deg: number) => (deg * Math.PI) / 180;
+    const haversineMeters = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => {
+      const dLat = toRad(b.lat - a.lat);
+      const dLng = toRad(b.lng - a.lng);
+      const sinLat = Math.sin(dLat / 2);
+      const sinLng = Math.sin(dLng / 2);
+      const h = sinLat * sinLat + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * sinLng * sinLng;
+      return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+    };
+
+    let perimeter = 0;
+    let sphericalSum = 0;
+    const vertices = uniquePlotVertices.map((pt, idx) => {
+      const nextPt = uniquePlotVertices[(idx + 1) % uniquePlotVertices.length];
+      const sideM = haversineMeters(pt, nextPt);
+      perimeter += sideM;
+      sphericalSum += (toRad(nextPt.lng) - toRad(pt.lng)) * (2 + Math.sin(toRad(pt.lat)) + Math.sin(toRad(nextPt.lat)));
+      return {
+        index: idx + 1,
+        label: `V${idx + 1}`,
+        lat: pt.lat,
+        lng: pt.lng,
+        nextLabel: `V${((idx + 1) % uniquePlotVertices.length) + 1}`,
+        sideLengthMeters: Number(sideM.toFixed(2)),
+        midPoint: {
+          lat: (pt.lat + nextPt.lat) / 2,
+          lng: (pt.lng + nextPt.lng) / 2
+        }
+      };
+    });
+
+    const geodesicAreaM2 = Math.abs((sphericalSum * R * R) / 2.0);
+    return {
+      vertices,
+      perimeterMeters: Number(perimeter.toFixed(2)),
+      geodesicAreaM2: Number(geodesicAreaM2.toFixed(2))
+    };
+  }, [uniquePlotVertices]);
+
+  // Generador de micro-zonas espectrales y píxeles Sentinel-2 alineados exactamente a la geodesia de la parcela
   const spectralCells = useMemo(() => {
-    if (!plotPolygon || plotPolygon.length < 3 || !activePass) return [];
+    if (!uniquePlotVertices || uniquePlotVertices.length < 3 || !activePass) return [];
 
     let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
-    plotPolygon.forEach(p => {
+    uniquePlotVertices.forEach(p => {
       if (p.lat < minLat) minLat = p.lat;
       if (p.lat > maxLat) maxLat = p.lat;
       if (p.lng < minLng) minLng = p.lng;
       if (p.lng > maxLng) maxLng = p.lng;
     });
 
+    const isMicroPlot = selectedPlot?.surfaceUnit === 'm2' || (selectedPlot?.surfaceArea || 1) < 0.05;
+    const steps = isMicroPlot ? 6 : 8;
+    const cells = [];
+
+    // Semilla pseudo-aleatoria determinística para consistencia agronómica
+    const seed = (activePass.date || '2026-04-03').split('-').reduce((acc, v) => acc + parseInt(v, 10), 0) + (selectedPlot?.id?.length || 7);
+
+    const buildCellMetrics = (r: number, c: number, cellBounds: [number, number][], centerPt: { lat: number; lng: number }) => {
+      const centerDistLat = Math.abs(r - (steps - 1) / 2) / (steps / 2);
+      const centerDistLng = Math.abs(c - (steps - 1) / 2) / (steps / 2);
+      const edgeFactor = 1 - (centerDistLat * 0.12 + centerDistLng * 0.12);
+
+      const pseudoNoise = Math.abs((Math.sin((r + 1) * 12.9898 + (c + 1) * 78.233 + seed) * 43758.5453) % 1);
+      const range = Math.max(0.05, activePass.ndviMax - activePass.ndviMin);
+      let cellNdvi = activePass.ndviAverage + (pseudoNoise - 0.5) * range * 0.85 * edgeFactor;
+      cellNdvi = Math.min(0.95, Math.max(0.15, Number(cellNdvi.toFixed(2))));
+
+      let cellFoliage = Math.round(activePass.canopyCoveragePct * (cellNdvi / (activePass.ndviAverage || 0.75)));
+      cellFoliage = Math.min(99, Math.max(6, cellFoliage));
+
+      let cellMoisture = Number((cellNdvi * 0.72 + (pseudoNoise - 0.5) * 0.08).toFixed(2));
+      cellMoisture = Math.min(0.90, Math.max(0.10, cellMoisture));
+
+      let fillColor = '#10b981';
+      let statusLabel = 'Vigor Óptimo';
+
+      if (mapLayer === 'ndvi_layer') {
+        if (cellNdvi >= 0.78) {
+          fillColor = '#047857';
+          statusLabel = 'Vigor Óptimo (>0.78)';
+        } else if (cellNdvi >= 0.65) {
+          fillColor = '#10b981';
+          statusLabel = 'Vigor Alto (0.65-0.77)';
+        } else if (cellNdvi >= 0.48) {
+          fillColor = '#84cc16';
+          statusLabel = 'Vigor Moderado (0.48-0.64)';
+        } else if (cellNdvi >= 0.35) {
+          fillColor = '#eab308';
+          statusLabel = 'Estrés Leve / Clorosis (0.35-0.47)';
+        } else if (cellNdvi >= 0.25) {
+          fillColor = '#f97316';
+          statusLabel = 'Bajo Vigor (0.25-0.34)';
+        } else {
+          fillColor = '#ef4444';
+          statusLabel = 'Suelo Desnudo / Falla (<0.25)';
+        }
+      } else if (mapLayer === 'foliage_layer') {
+        if (cellFoliage >= 85) {
+          fillColor = '#065f46';
+          statusLabel = 'Dosel Cerrado (85-100%)';
+        } else if (cellFoliage >= 70) {
+          fillColor = '#059669';
+          statusLabel = 'Follaje Denso (70-84%)';
+        } else if (cellFoliage >= 45) {
+          fillColor = '#34d399';
+          statusLabel = 'Follaje Moderado (45-69%)';
+        } else if (cellFoliage >= 25) {
+          fillColor = '#a7f3d0';
+          statusLabel = 'Follaje Ralo (25-44%)';
+        } else {
+          fillColor = '#fde68a';
+          statusLabel = 'Suelo Descubierto (<25%)';
+        }
+      } else if (mapLayer === 'moisture_layer') {
+        if (cellMoisture >= 0.55) {
+          fillColor = '#0284c7';
+          statusLabel = 'Alta Turgencia / Saturación (>0.55)';
+        } else if (cellMoisture >= 0.40) {
+          fillColor = '#38bdf8';
+          statusLabel = 'Humedad Óptima (0.40-0.54)';
+        } else if (cellMoisture >= 0.28) {
+          fillColor = '#fbbf24';
+          statusLabel = 'Estrés Hídrico Moderado (0.28-0.39)';
+        } else {
+          fillColor = '#ea580c';
+          statusLabel = 'Déficit Hídrico Severo (<0.28)';
+        }
+      }
+
+      return {
+        id: `cell-${r}-${c}`,
+        bounds: cellBounds,
+        center: centerPt,
+        ndvi: cellNdvi,
+        foliage: cellFoliage,
+        moisture: cellMoisture,
+        fillColor,
+        statusLabel,
+        pixelSize: isMicroPlot ? `Sub-celda Geodésica (${((selectedPlot?.surfaceArea || 9.72) / (steps * steps)).toFixed(2)} m²)` : '10m x 10m'
+      };
+    };
+
+    // Si el polígono tiene 4 vértices geodésicos (ej. TW-PAR-A3 501 y parcelas experimentales/productivas rectangulares o inclinadas),
+    // aplicamos interpolación bilineal exacta entre V1, V2, V3 y V4 para que la malla espectral dibuje al 100% la geodesia real rotada de la parcela.
+    if (uniquePlotVertices.length === 4) {
+      const [v0, v1, v2, v3] = uniquePlotVertices;
+      const bilerp = (u: number, v: number) => ({
+        lat: (1 - u) * (1 - v) * v0.lat + u * (1 - v) * v1.lat + u * v * v2.lat + (1 - u) * v * v3.lat,
+        lng: (1 - u) * (1 - v) * v0.lng + u * (1 - v) * v1.lng + u * v * v2.lng + (1 - u) * v * v3.lng
+      });
+
+      for (let r = 0; r < steps; r++) {
+        for (let c = 0; c < steps; c++) {
+          const u0 = c / steps;
+          const u1 = (c + 1) / steps;
+          const w0 = r / steps;
+          const w1 = (r + 1) / steps;
+          const p00 = bilerp(u0, w0);
+          const p10 = bilerp(u1, w0);
+          const p11 = bilerp(u1, w1);
+          const p01 = bilerp(u0, w1);
+          const centerPt = bilerp((u0 + u1) / 2, (w0 + w1) / 2);
+
+          cells.push(
+            buildCellMetrics(
+              r,
+              c,
+              [
+                [p00.lat, p00.lng],
+                [p10.lat, p10.lng],
+                [p11.lat, p11.lng],
+                [p01.lat, p01.lng]
+              ],
+              centerPt
+            )
+          );
+        }
+      }
+      return cells;
+    }
+
+    // Para polígonos de N vértices (N != 4), evaluamos pertenencia dentro del polígono geodésico
     const isPointInPolygon = (pt: { lat: number; lng: number }, poly: { lat: number; lng: number }[]) => {
-      const cleanPoly = (poly.length > 3 && poly[0].lat === poly[poly.length - 1].lat && poly[0].lng === poly[poly.length - 1].lng)
-        ? poly.slice(0, poly.length - 1)
-        : poly;
       let inside = false;
-      for (let i = 0, j = cleanPoly.length - 1; i < cleanPoly.length; j = i++) {
-        const xi = cleanPoly[i].lng, yi = cleanPoly[i].lat;
-        const xj = cleanPoly[j].lng, yj = cleanPoly[j].lat;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const xi = poly[i].lng, yi = poly[i].lat;
+        const xj = poly[j].lng, yj = poly[j].lat;
         const intersect = ((yi > pt.lat) !== (yj > pt.lat))
           && (pt.lng < (xj - xi) * (pt.lat - yi) / (yj - yi) + xi);
         if (intersect) inside = !inside;
@@ -577,14 +875,8 @@ export default function Agriculture40() {
       return inside;
     };
 
-    // Determinamos resolución de cuadrícula: ~8x8 celdas (representando píxeles Sentinel-2 de 10m)
-    const steps = 8;
     const stepLat = (maxLat - minLat) / steps;
     const stepLng = (maxLng - minLng) / steps;
-    const cells = [];
-
-    // Semilla pseudo-aleatoria determinística para consistencia agronómica
-    const seed = (activePass.date || '2026-04-03').split('-').reduce((acc, v) => acc + parseInt(v, 10), 0) + (selectedPlot?.id?.length || 7);
 
     for (let r = 0; r < steps; r++) {
       for (let c = 0; c < steps; c++) {
@@ -594,136 +886,26 @@ export default function Agriculture40() {
         const cLng1 = minLng + (c + 1) * stepLng;
         const centerPt = { lat: (cLat0 + cLat1) / 2, lng: (cLng0 + cLng1) / 2 };
 
-        if (isPointInPolygon(centerPt, plotPolygon)) {
-          // Variación espacial: vigor típicamente más denso hacia el centro y variaciones por pendiente/drenaje
-          const centerDistLat = Math.abs(r - (steps - 1) / 2) / (steps / 2);
-          const centerDistLng = Math.abs(c - (steps - 1) / 2) / (steps / 2);
-          const edgeFactor = 1 - (centerDistLat * 0.12 + centerDistLng * 0.12);
-
-          // Pseudo-ruido espacial consistente
-          const pseudoNoise = (Math.sin(r * 12.9898 + c * 78.233 + seed) * 43758.5453) % 1;
-          const noiseNorm = (pseudoNoise + 1) / 2; // 0 a 1
-
-          const range = Math.max(0.05, activePass.ndviMax - activePass.ndviMin);
-          let cellNdvi = activePass.ndviAverage + (noiseNorm - 0.5) * range * 0.85 * edgeFactor;
-          cellNdvi = Math.min(0.95, Math.max(0.15, Number(cellNdvi.toFixed(2))));
-
-          // Follaje / Cobertura de dosel (%)
-          let cellFoliage = Math.round(activePass.canopyCoveragePct * (cellNdvi / (activePass.ndviAverage || 0.75)));
-          cellFoliage = Math.min(99, Math.max(6, cellFoliage));
-
-          // Humedad / NDWI
-          let cellMoisture = Number((cellNdvi * 0.72 + (noiseNorm - 0.5) * 0.08).toFixed(2));
-          cellMoisture = Math.min(0.90, Math.max(0.10, cellMoisture));
-
-          // Color según capa activa
-          let fillColor = '#10b981';
-          let statusLabel = 'Vigor Óptimo';
-
-          if (mapLayer === 'ndvi_layer') {
-            if (cellNdvi >= 0.78) {
-              fillColor = '#047857'; // Verde esmeralda intenso
-              statusLabel = 'Vigor Óptimo (>0.78)';
-            } else if (cellNdvi >= 0.65) {
-              fillColor = '#10b981'; // Verde vivo
-              statusLabel = 'Vigor Alto (0.65-0.77)';
-            } else if (cellNdvi >= 0.48) {
-              fillColor = '#84cc16'; // Lima
-              statusLabel = 'Vigor Moderado (0.48-0.64)';
-            } else if (cellNdvi >= 0.35) {
-              fillColor = '#eab308'; // Amarillo
-              statusLabel = 'Estrés Leve / Clorosis (0.35-0.47)';
-            } else if (cellNdvi >= 0.25) {
-              fillColor = '#f97316'; // Naranja
-              statusLabel = 'Bajo Vigor (0.25-0.34)';
-            } else {
-              fillColor = '#ef4444'; // Rojo
-              statusLabel = 'Suelo Desnudo / Falla (<0.25)';
-            }
-          } else if (mapLayer === 'foliage_layer') {
-            if (cellFoliage >= 85) {
-              fillColor = '#065f46';
-              statusLabel = 'Dosel Cerrado (85-100%)';
-            } else if (cellFoliage >= 70) {
-              fillColor = '#059669';
-              statusLabel = 'Follaje Denso (70-84%)';
-            } else if (cellFoliage >= 45) {
-              fillColor = '#34d399';
-              statusLabel = 'Follaje Moderado (45-69%)';
-            } else if (cellFoliage >= 25) {
-              fillColor = '#a7f3d0';
-              statusLabel = 'Follaje Ralo (25-44%)';
-            } else {
-              fillColor = '#fde68a';
-              statusLabel = 'Suelo Descubierto (<25%)';
-            }
-          } else if (mapLayer === 'moisture_layer') {
-            if (cellMoisture >= 0.55) {
-              fillColor = '#0284c7';
-              statusLabel = 'Alta Turgencia / Saturación (>0.55)';
-            } else if (cellMoisture >= 0.40) {
-              fillColor = '#38bdf8';
-              statusLabel = 'Humedad Óptima (0.40-0.54)';
-            } else if (cellMoisture >= 0.28) {
-              fillColor = '#fbbf24';
-              statusLabel = 'Estrés Hídrico Moderado (0.28-0.39)';
-            } else {
-              fillColor = '#ea580c';
-              statusLabel = 'Déficit Hídrico Severo (<0.28)';
-            }
-          }
-
-          cells.push({
-            id: `cell-${r}-${c}`,
-            bounds: [
-              [cLat0, cLng0],
-              [cLat0, cLng1],
-              [cLat1, cLng1],
-              [cLat1, cLng0]
-            ] as [number, number][],
-            center: centerPt,
-            ndvi: cellNdvi,
-            foliage: cellFoliage,
-            moisture: cellMoisture,
-            fillColor,
-            statusLabel,
-            pixelSize: '10m x 10m'
-          });
+        if (isPointInPolygon(centerPt, uniquePlotVertices)) {
+          cells.push(
+            buildCellMetrics(
+              r,
+              c,
+              [
+                [cLat0, cLng0],
+                [cLat0, cLng1],
+                [cLat1, cLng1],
+                [cLat1, cLng0]
+              ],
+              centerPt
+            )
+          );
         }
       }
     }
 
-    // Para micro-parcelas experimentales (< 100m² como ensayos de 9 m²), si ninguna celda de la cuadrícula cayó dentro, renderizamos el polígono completo como micro-píxel espectral
-    if (cells.length === 0 && plotPolygon.length >= 3) {
-      let cellNdvi = activePass.ndviAverage;
-      let cellFoliage = activePass.canopyCoveragePct;
-      let cellMoisture = Number((activePass.ndviAverage * 0.72).toFixed(2));
-      let fillColor = '#10b981';
-      let statusLabel = activePassColor.label;
-
-      if (mapLayer === 'ndvi_layer') {
-        fillColor = activePassColor.fill;
-      } else if (mapLayer === 'foliage_layer') {
-        fillColor = cellFoliage >= 85 ? '#065f46' : cellFoliage >= 70 ? '#059669' : '#34d399';
-      } else if (mapLayer === 'moisture_layer') {
-        fillColor = cellMoisture >= 0.55 ? '#0284c7' : '#38bdf8';
-      }
-
-      cells.push({
-        id: `micro-cell-plot`,
-        bounds: plotPolygon.map(p => [p.lat, p.lng]) as [number, number][],
-        center: { lat: (minLat + maxLat) / 2, lng: (minLng + maxLng) / 2 },
-        ndvi: cellNdvi,
-        foliage: cellFoliage,
-        moisture: cellMoisture,
-        fillColor,
-        statusLabel,
-        pixelSize: selectedPlot?.surfaceUnit === 'm2' ? `${selectedPlot.surfaceArea || 9} m²` : 'Micro-lote'
-      });
-    }
-
     return cells;
-  }, [plotPolygon, activePass, mapLayer, selectedPlot]);
+  }, [uniquePlotVertices, activePass, mapLayer, selectedPlot]);
 
   // Descargar Certificado Técnico Oficial en PDF
   const handleDownloadPdf = () => {
@@ -1829,7 +2011,44 @@ export default function Agriculture40() {
                       </p>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {/* Botones de Enfoque Geodésico (Parcela vs Predio) */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMapFocusMode('plot');
+                          setMapFitTrigger(prev => prev + 1);
+                        }}
+                        title="Enfocar con zoom de alta precisión sobre la geodesia de la parcela"
+                        className={`flex items-center space-x-1 px-2.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider border transition-all ${
+                          mapFocusMode === 'plot'
+                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                            : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        <Compass size={12} />
+                        <span>Enfocar Parcela</span>
+                      </button>
+
+                      {locationPolygon.length >= 3 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMapFocusMode('field');
+                            setMapFitTrigger(prev => prev + 1);
+                          }}
+                          title="Ver ubicación de la parcela dentro del perímetro del Campo Padre"
+                          className={`flex items-center space-x-1 px-2.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider border transition-all ${
+                            mapFocusMode === 'field'
+                              ? 'bg-amber-600 text-white border-amber-600 shadow-sm'
+                              : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
+                          }`}
+                        >
+                          <Layers size={12} />
+                          <span>Ver Predio</span>
+                        </button>
+                      )}
+
                       {/* Botón Estado y Modal de API Satelital */}
                       <button
                         onClick={() => setShowSatelliteApiModal(true)}
@@ -1888,36 +2107,52 @@ export default function Agriculture40() {
                       </button>
                     </div>
 
-                    {/* Controles de Opacidad y Grilla cuando hay capa activa */}
-                    {mapLayer !== 'satellite' && mapLayer !== 'street' && (
-                      <div className="flex items-center gap-3 px-2 py-1 bg-white/70 dark:bg-slate-900/70 rounded-xl text-[10px] font-bold text-slate-600 dark:text-slate-300">
-                        <div className="flex items-center gap-1.5">
-                          <SlidersHorizontal size={12} className="text-slate-400" />
-                          <span>Opacidad: {Math.round(layerOpacity * 100)}%</span>
-                          <input
-                            type="range"
-                            min="0.30"
-                            max="0.95"
-                            step="0.05"
-                            value={layerOpacity}
-                            onChange={(e) => setLayerOpacity(parseFloat(e.target.value))}
-                            className="w-16 h-1.5 accent-emerald-500 cursor-pointer"
-                          />
-                        </div>
-                        <button
-                          onClick={() => setShowPixelGrid(!showPixelGrid)}
-                          className={`px-2 py-0.5 rounded text-[9px] font-black uppercase transition-all ${
-                            showPixelGrid ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' : 'text-slate-400'
-                          }`}
-                        >
-                          Píxeles 10m: {showPixelGrid ? 'ON' : 'OFF'}
-                        </button>
-                      </div>
-                    )}
+                    {/* Controles de Geodesia, Opacidad y Grilla */}
+                    <div className="flex flex-wrap items-center gap-2 px-2 py-1 bg-white/70 dark:bg-slate-900/70 rounded-xl text-[10px] font-bold text-slate-600 dark:text-slate-300">
+                      <button
+                        type="button"
+                        onClick={() => setShowGeodesy(!showGeodesy)}
+                        className={`px-2 py-0.5 rounded text-[9px] font-black uppercase transition-all border ${
+                          showGeodesy
+                            ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/40'
+                            : 'text-slate-400 border-transparent'
+                        }`}
+                        title="Mostrar u ocultar vértices geodésicos (V1..Vn) y cotas métricas de la parcela"
+                      >
+                        📐 Geodesia: {showGeodesy ? 'ON' : 'OFF'}
+                      </button>
+
+                      {mapLayer !== 'satellite' && mapLayer !== 'street' && (
+                        <>
+                          <div className="flex items-center gap-1.5">
+                            <SlidersHorizontal size={12} className="text-slate-400" />
+                            <span>Opacidad: {Math.round(layerOpacity * 100)}%</span>
+                            <input
+                              type="range"
+                              min="0.30"
+                              max="0.95"
+                              step="0.05"
+                              value={layerOpacity}
+                              onChange={(e) => setLayerOpacity(parseFloat(e.target.value))}
+                              className="w-16 h-1.5 accent-emerald-500 cursor-pointer"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setShowPixelGrid(!showPixelGrid)}
+                            className={`px-2 py-0.5 rounded text-[9px] font-black uppercase transition-all ${
+                              showPixelGrid ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' : 'text-slate-400'
+                            }`}
+                          >
+                            Malla S2: {showPixelGrid ? 'ON' : 'OFF'}
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
 
                   {/* Contenedor del Mapa */}
-                  <div className="h-[430px] rounded-3xl overflow-hidden border border-slate-100 dark:border-slate-800 relative z-0">
+                  <div className="h-[440px] rounded-3xl overflow-hidden border border-slate-200 dark:border-slate-800 relative z-0 bg-slate-950">
                     
                     {/* Floating HUD Chip con telemetría espectral */}
                     {activePass && (
@@ -1940,31 +2175,55 @@ export default function Agriculture40() {
                       </div>
                     )}
 
-                    {/* Badge informativo de Píxeles calculados */}
-                    {spectralCells.length > 0 && mapLayer !== 'satellite' && mapLayer !== 'street' && (
-                      <div className="absolute bottom-3 left-3 z-[400] pointer-events-none bg-slate-900/85 backdrop-blur-md text-white border border-white/10 rounded-xl px-3 py-1.5 text-[10px] font-black uppercase tracking-wider flex items-center gap-2 shadow-lg">
-                        <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                        <span>{spectralCells.length} Píxeles S2 (10x10m) Mapeados</span>
-                      </div>
-                    )}
+                    {/* Badge informativo de Geodesia y Píxeles calculados */}
+                    <div className="absolute bottom-3 left-3 z-[400] pointer-events-none bg-slate-900/90 backdrop-blur-md text-white border border-white/15 rounded-xl px-3 py-1.5 text-[10px] font-black uppercase tracking-wider flex flex-wrap items-center gap-2 shadow-lg">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                      <span>
+                        Geodesia: {geodesicMetrics.vertices.length} Vértices • Perímetro {geodesicMetrics.perimeterMeters}m
+                      </span>
+                      {spectralCells.length > 0 && mapLayer !== 'satellite' && mapLayer !== 'street' && (
+                        <span className="text-emerald-300 border-l border-white/20 pl-2">
+                          {spectralCells.length} Celdas S2 Mapeadas
+                        </span>
+                      )}
+                    </div>
 
                     <MapContainer
+                      key={`agro-map-${selectedPlot?.id || 'default'}`}
                       center={[mapCenter.lat, mapCenter.lng]}
-                      zoom={15}
-                      scrollWheelZoom={false}
+                      zoom={19}
+                      maxZoom={22}
+                      scrollWheelZoom={true}
                       zoomControl={false}
                       className="w-full h-full"
+                      style={{ width: '100%', height: '100%' }}
                     >
                       <ZoomControl position="bottomright" />
                       <MapResizer />
-                      <MapRecenter polygon={plotPolygon || undefined} center={mapCenter} />
+                      <MapRecenter 
+                        polygon={plotPolygon || undefined} 
+                        locationPolygon={locationPolygon.length >= 3 ? locationPolygon : undefined}
+                        center={mapCenter} 
+                        focusMode={mapFocusMode}
+                        fitTrigger={mapFitTrigger}
+                      />
 
-                      {/* Capa Base Satelital (Esri World Imagery) para todas las vistas espectrales y satélite */}
+                      {/* Capa Base Satelital de Alta Resolución con soporte de Overzoom hasta nivel 22 para micro-parcelas (9.72 m²) */}
                       {mapLayer !== 'street' && (
-                        <TileLayer
-                          url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-                          attribution='&copy; Esri World Imagery & Sentinel-2'
-                        />
+                        <>
+                          <TileLayer
+                            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                            attribution='&copy; Esri World Imagery & Sentinel-2'
+                            maxNativeZoom={17}
+                            maxZoom={22}
+                          />
+                          <TileLayer
+                            url="https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"
+                            attribution='&copy; Google Satellite & Sentinel-2'
+                            maxNativeZoom={19}
+                            maxZoom={22}
+                          />
+                        </>
                       )}
 
                       {/* Capa Base Plano para OpenStreetMap */}
@@ -1972,10 +2231,61 @@ export default function Agriculture40() {
                         <TileLayer
                           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                           attribution='&copy; OpenStreetMap'
+                          maxNativeZoom={19}
+                          maxZoom={22}
                         />
                       )}
 
-                      {/* Malla Espectral de Píxeles Sentinel-2 (10m x 10m) interpolada sobre la parcela */}
+                      {/* 1. Perímetro Geodésico del Campo Padre (Referencia Catastral) */}
+                      {locationPolygon.length >= 3 && (
+                        <Polygon
+                          positions={locationPolygon.map(p => [p.lat, p.lng])}
+                          interactive={false}
+                          pathOptions={{
+                            color: '#f59e0b',
+                            fillColor: '#f59e0b',
+                            fillOpacity: 0.03,
+                            weight: 2,
+                            dashArray: '6, 6'
+                          }}
+                        />
+                      )}
+
+                      {/* 2. Parcelas Vecinas del mismo Establecimiento (Contexto de Ensayo/Bloques) */}
+                      {siblingPlots.map(sib => (
+                        <Polygon
+                          key={`sib-${sib.id}`}
+                          positions={sib.polygon.map(p => [p.lat, p.lng])}
+                          pathOptions={{
+                            color: '#38bdf8',
+                            fillColor: '#0284c7',
+                            fillOpacity: 0.12,
+                            weight: 1.8,
+                            dashArray: '3, 5'
+                          }}
+                        >
+                          <LeafletTooltip direction="top" offset={[0, -4]} className="font-bold text-[10px] bg-slate-900/90 text-sky-300 rounded-lg px-2 py-1 border border-sky-500/30">
+                            Parcela Vecina: {sib.name} ({sib.surfaceArea} {sib.surfaceUnit})
+                          </LeafletTooltip>
+                        </Polygon>
+                      ))}
+
+                      {/* 3. Halo / Borde Exterior de Contraste Geodésico de la Parcela Seleccionada */}
+                      {plotPolygon && plotPolygon.length >= 3 && (
+                        <Polygon
+                          positions={plotPolygon.map(p => [p.lat, p.lng])}
+                          interactive={false}
+                          pathOptions={{
+                            color: '#020617',
+                            fillColor: activePassColor.fill,
+                            fillOpacity: mapLayer === 'satellite' ? 0.28 : (mapLayer === 'street' ? 0.22 : layerOpacity * 0.35),
+                            weight: 6,
+                            opacity: 0.85
+                          }}
+                        />
+                      )}
+
+                      {/* 4. Malla Espectral Geodésica Interpolada sobre la Parcela */}
                       {mapLayer !== 'satellite' && mapLayer !== 'street' && spectralCells.map((cell) => (
                         <Polygon
                           key={cell.id}
@@ -1983,14 +2293,14 @@ export default function Agriculture40() {
                           pathOptions={{
                             fillColor: cell.fillColor,
                             fillOpacity: layerOpacity,
-                            color: showPixelGrid ? 'rgba(255, 255, 255, 0.28)' : 'transparent',
-                            weight: showPixelGrid ? 0.8 : 0
+                            color: showPixelGrid ? 'rgba(255, 255, 255, 0.38)' : cell.fillColor,
+                            weight: showPixelGrid ? 1 : 0.4
                           }}
                         >
                           <LeafletTooltip direction="top" offset={[0, -5]} className="font-bold text-xs bg-slate-900 text-white rounded-xl p-2 shadow-xl border border-white/10">
                             <div className="space-y-0.5">
                               <p className="font-black text-emerald-400 text-[11px] flex items-center justify-between gap-2">
-                                <span>Píxel Sentinel-2 ({cell.pixelSize})</span>
+                                <span>{cell.pixelSize}</span>
                                 <span className="text-[10px] text-slate-400 font-mono">{activePass?.date}</span>
                               </p>
                               {mapLayer === 'ndvi_layer' && (
@@ -2009,40 +2319,69 @@ export default function Agriculture40() {
                                 </p>
                               )}
                               <p className="text-[9px] text-slate-400">
-                                Cobertura vegetal: {cell.foliage}% | Lote {selectedPlot?.name}
+                                Cobertura vegetal: {cell.foliage}% | {selectedPlot?.name} ({selectedPlot?.surfaceArea} {selectedPlot?.surfaceUnit})
                               </p>
                             </div>
                           </LeafletTooltip>
                         </Polygon>
                       ))}
 
-                      {/* Perímetro Vectorial del Lote (interactivo solo en capas satelitales planas para evitar superposición con tooltips de píxeles) */}
-                      {plotPolygon && (
+                      {/* 5. Vector Oficial del Perímetro Geodésico de la Parcela */}
+                      {plotPolygon && plotPolygon.length >= 3 && (
                         <Polygon
                           positions={plotPolygon.map(p => [p.lat, p.lng])}
                           interactive={mapLayer === 'satellite' || mapLayer === 'street'}
                           pathOptions={{
-                            color: mapLayer === 'satellite' ? activePassColor.stroke : '#ffffff',
+                            color: mapLayer === 'satellite' ? '#10b981' : '#ffffff',
                             fillColor: activePassColor.fill,
-                            fillOpacity: mapLayer === 'satellite' ? 0.35 : 0,
-                            weight: mapLayer === 'satellite' ? 3 : 2.5,
-                            dashArray: mapLayer === 'satellite' ? undefined : '4, 4'
+                            fillOpacity: mapLayer === 'satellite' ? 0.25 : 0,
+                            weight: 3.5,
+                            dashArray: showGeodesy ? undefined : '5, 5'
                           }}
                         >
                           {(mapLayer === 'satellite' || mapLayer === 'street') && (
                             <LeafletTooltip direction="top" offset={[0, -10]} className="font-bold text-xs bg-slate-900 text-white rounded-xl p-2 shadow-xl border border-white/10">
                               <span className="font-black text-emerald-400">{selectedPlot?.name} ({selectedPlot?.surfaceArea || 1} {selectedPlot?.surfaceUnit || 'ha'})</span>
-                              <span className="block text-[11px] text-slate-300 font-normal">{activePass?.stageName} • NDVI Promedio: {activePass?.ndviAverage.toFixed(2)}</span>
+                              <span className="block text-[11px] text-slate-300 font-normal">
+                                Perímetro Geodésico: {geodesicMetrics.perimeterMeters} m • {geodesicMetrics.vertices.length} vértices
+                              </span>
+                              <span className="block text-[11px] text-emerald-300 font-normal">
+                                {activePass?.stageName} • NDVI Promedio: {activePass?.ndviAverage.toFixed(2)}
+                              </span>
                             </LeafletTooltip>
                           )}
                         </Polygon>
                       )}
 
-                      {!plotPolygon && (
-                        <Marker position={[mapCenter.lat, mapCenter.lng]}>
-                          <LeafletTooltip direction="top" offset={[0, -10]}>{selectedPlot?.name}</LeafletTooltip>
-                        </Marker>
-                      )}
+                      {/* 6. Vértices Geodésicos Oficiales (V1..Vn) y Cotas de Lado en Metros */}
+                      {showGeodesy && geodesicMetrics.vertices.map((v) => {
+                        const vertexIcon = L.divIcon({
+                          className: 'geodesic-vertex-marker',
+                          html: `<div style="display:flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:#059669;color:#ffffff;font-weight:900;font-size:9px;font-family:monospace;border:2px solid #ffffff;box-shadow:0 2px 8px rgba(0,0,0,0.65);">${v.label}</div>`,
+                          iconSize: [20, 20],
+                          iconAnchor: [10, 10]
+                        });
+
+                        const sideBadgeIcon = L.divIcon({
+                          className: 'geodesic-side-label',
+                          html: `<div style="background:rgba(15,23,42,0.88);color:#6ee7b7;font-family:monospace;font-weight:800;font-size:9px;padding:1px 5px;border-radius:6px;border:1px solid rgba(16,185,129,0.5);white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,0.5);pointer-events:none;">${v.sideLengthMeters}m</div>`,
+                          iconSize: [44, 16],
+                          iconAnchor: [22, 8]
+                        });
+
+                        return (
+                          <React.Fragment key={`geodesy-${v.label}`}>
+                            <Marker position={[v.lat, v.lng]} icon={vertexIcon}>
+                              <LeafletTooltip direction="top" offset={[0, -10]} className="bg-slate-900 text-white rounded-xl p-2 shadow-xl border border-emerald-500/40 font-mono text-[10px]">
+                                <div className="font-black text-emerald-400">Vértice Geodésico {v.label} ({selectedPlot?.name})</div>
+                                <div className="text-slate-200">Lat: {v.lat.toFixed(7)}° | Lng: {v.lng.toFixed(7)}°</div>
+                                <div className="text-amber-300 font-bold">Tramo {v.label} → {v.nextLabel}: {v.sideLengthMeters} m</div>
+                              </LeafletTooltip>
+                            </Marker>
+                            <Marker position={[v.midPoint.lat, v.midPoint.lng]} icon={sideBadgeIcon} interactive={false} />
+                          </React.Fragment>
+                        );
+                      })}
                     </MapContainer>
                   </div>
 
@@ -2096,11 +2435,53 @@ export default function Agriculture40() {
 
                     {(mapLayer === 'satellite' || mapLayer === 'street') && (
                       <div className="flex items-center justify-between w-full text-xs text-slate-500 font-medium">
-                        <span>🛰️ Visualización Óptica Natural (Esri World Imagery + Geometría Vectorial del Lote).</span>
+                        <span>🛰️ Visualización Óptica Natural + Geodesia Vectorial de la Parcela ({geodesicMetrics.vertices.length} vértices).</span>
                         <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">Pasa a "Capa NDVI" o "Follaje" para ver reflectancia espectral</span>
                       </div>
                     )}
                   </div>
+
+                  {/* Ficha Técnica de Geodesia de la Parcela (Vértices GPS y Dimensiones Métricas) */}
+                  {geodesicMetrics.vertices.length > 0 && (
+                    <div className="p-4 bg-slate-900 text-white rounded-2xl border border-emerald-500/20 space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2.5">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400 font-mono text-[10px] font-black uppercase border border-emerald-500/30">
+                            Geodesia Activa
+                          </span>
+                          <span className="text-xs font-black uppercase tracking-tight">
+                            Relevamiento Planimétrico • {selectedPlot?.name}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-3 text-[11px] font-mono">
+                          <span className="text-slate-300">
+                            Área Declarada: <strong className="text-emerald-400">{selectedPlot?.surfaceArea || 1} {selectedPlot?.surfaceUnit || 'ha'}</strong>
+                          </span>
+                          <span className="text-slate-300">
+                            Perímetro: <strong className="text-amber-300">{geodesicMetrics.perimeterMeters} m</strong>
+                          </span>
+                          <span className="text-slate-300">
+                            Centroide: <strong className="text-sky-300">{mapCenter.lat.toFixed(6)}°, {mapCenter.lng.toFixed(6)}°</strong>
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        {geodesicMetrics.vertices.map((v) => (
+                          <div key={`card-v-${v.label}`} className="bg-slate-800/80 border border-slate-700/70 rounded-xl p-2 text-[10px] font-mono">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="font-black text-emerald-400 bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-500/30">
+                                {v.label} → {v.nextLabel}
+                              </span>
+                              <span className="font-black text-amber-300">{v.sideLengthMeters} m</span>
+                            </div>
+                            <div className="text-slate-300 truncate">Lat: {v.lat.toFixed(6)}°</div>
+                            <div className="text-slate-400 truncate">Lng: {v.lng.toFixed(6)}°</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Panel de Diagnóstico de la Pasada Activa */}

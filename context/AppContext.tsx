@@ -287,21 +287,87 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         return enriched;
     };
 
+    const normalizePolygonPoints = (rawPoly: any): { lat: number; lng: number }[] => {
+        if (!rawPoly) return [];
+        let parsed = rawPoly;
+        if (typeof rawPoly === 'string') {
+            try { parsed = JSON.parse(rawPoly); } catch { return []; }
+        }
+        if (!Array.isArray(parsed)) return [];
+        return parsed
+            .map((pt: any) => {
+                if (Array.isArray(pt) && pt.length >= 2) {
+                    const lat = Number(pt[0]);
+                    const lng = Number(pt[1]);
+                    return !isNaN(lat) && !isNaN(lng) ? { lat, lng } : null;
+                }
+                if (pt && typeof pt === 'object') {
+                    const lat = Number(pt.lat ?? pt.latitude);
+                    const lng = Number(pt.lng ?? pt.lon ?? pt.longitude);
+                    return !isNaN(lat) && !isNaN(lng) ? { lat, lng } : null;
+                }
+                return null;
+            })
+            .filter((pt): pt is { lat: number; lng: number } => pt !== null && pt.lat !== 0 && pt.lng !== 0);
+    };
+
+    const healLocationsWithPolygons = (locList: Location[]): Location[] => {
+        const demoById = new Map(DEMO_LOCATIONS.map(l => [String(l.id), l]));
+        const demoByName = new Map(DEMO_LOCATIONS.map(l => [l.name.trim().toLowerCase(), l]));
+        return (locList || []).map((loc: Location) => {
+            const demoMatch = demoById.get(String(loc.id)) || (loc.name ? demoByName.get(loc.name.trim().toLowerCase()) : undefined);
+            const normPoly = normalizePolygonPoints((loc as any).polygon);
+            const finalPoly = normPoly.length >= 3 ? normPoly : (demoMatch?.polygon || []);
+            const rawCoords = (loc as any).coordinates;
+            const validCoords = rawCoords && !isNaN(Number(rawCoords.lat)) && !isNaN(Number(rawCoords.lng)) && Number(rawCoords.lat) !== 0
+                ? { lat: Number(rawCoords.lat), lng: Number(rawCoords.lng) }
+                : (demoMatch?.coordinates || (finalPoly.length > 0 ? finalPoly[0] : { lat: -43.308362, lng: -65.289033 }));
+            return {
+                ...loc,
+                coordinates: validCoords,
+                polygon: finalPoly
+            };
+        });
+    };
+
     const healPlotsWithSeedBatches = (plotsList: Plot[], batchesList: SeedBatch[] = DEMO_SEED_BATCHES): Plot[] => {
+        const demoPlotById = new Map(DEMO_PLOTS.map(dp => [String(dp.id), dp]));
+        const demoPlotByName = new Map(DEMO_PLOTS.map(dp => [dp.name.trim().toLowerCase(), dp]));
+
         return (plotsList || []).map((p: Plot) => {
-            if (!p.seedBatchId && p.varietyId) {
+            const demoMatch = demoPlotById.get(String(p.id)) || (p.name ? demoPlotByName.get(p.name.trim().toLowerCase()) : undefined);
+            let resolvedBatchId = p.seedBatchId || demoMatch?.seedBatchId;
+            if (!resolvedBatchId && p.varietyId) {
                 const match = batchesList.find(b => b.varietyId === p.varietyId && b.isActive && (!b.materialType || b.materialType === 'seed'))
                     || DEMO_SEED_BATCHES.find(b => b.varietyId === p.varietyId && b.isActive);
                 if (match) {
-                    return { ...p, seedBatchId: match.id };
+                    resolvedBatchId = match.id;
                 }
             }
-            return p;
+
+            const normPoly = normalizePolygonPoints((p as any).polygon);
+            const finalPoly = normPoly.length >= 3 ? normPoly : (demoMatch?.polygon || []);
+
+            const rawCoords = (p as any).coordinates;
+            const validCoords = rawCoords && !isNaN(Number(rawCoords.lat)) && !isNaN(Number(rawCoords.lng)) && Number(rawCoords.lat) !== 0
+                ? { lat: Number(rawCoords.lat), lng: Number(rawCoords.lng) }
+                : (demoMatch?.coordinates || (finalPoly.length > 0 ? {
+                    lat: Number((finalPoly.reduce((s, pt) => s + pt.lat, 0) / finalPoly.length).toFixed(6)),
+                    lng: Number((finalPoly.reduce((s, pt) => s + pt.lng, 0) / finalPoly.length).toFixed(6))
+                } : null));
+
+            return {
+                ...(demoMatch || {}),
+                ...p,
+                seedBatchId: resolvedBatchId || p.seedBatchId,
+                coordinates: validCoords,
+                polygon: finalPoly
+            };
         });
     };
 
     const [locations, setLocations] = useState<Location[]>(() => 
-        getStoredCollection('ht_locations', DEMO_LOCATIONS)
+        healLocationsWithPolygons(getStoredCollection('ht_locations', DEMO_LOCATIONS))
     );
     const [seedBatches, setSeedBatches] = useState<SeedBatch[]>(() => 
         healSeedBatches(getStoredCollection('ht_seed_batches', DEMO_SEED_BATCHES))
@@ -439,7 +505,11 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                     fetchSettings(),
                     fetchTable('users', setUsersList, DEMO_USERS_LIST),
                     fetchTable('varieties', setVarieties, DEMO_VARIETIES),
-                    fetchTable('locations', setLocations, DEMO_LOCATIONS),
+                    fetchTable('locations', (data: any[]) => {
+                        const healed = healLocationsWithPolygons(data || []);
+                        setLocations(healed);
+                        try { localStorage.setItem('ht_locations', JSON.stringify(healed)); } catch (e) {}
+                    }, DEMO_LOCATIONS),
                     fetchTable('plots', (data: any[]) => {
                         const healed = healPlotsWithSeedBatches(data || []);
                         setPlots(healed);
@@ -465,6 +535,11 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             } else {
                 // Modo Autónomo / Local: respeta fielmente los datos del usuario en memoria/localStorage
                 setUsersList(prev => prev.length > 0 ? prev : [DEMO_USER]);
+                setLocations(prev => {
+                    const healed = healLocationsWithPolygons(prev);
+                    try { localStorage.setItem('ht_locations', JSON.stringify(healed)); } catch (e) {}
+                    return healed;
+                });
                 setSeedBatches(prev => {
                     const healed = healSeedBatches(prev);
                     try { localStorage.setItem('ht_seed_batches', JSON.stringify(healed)); } catch (e) {}
