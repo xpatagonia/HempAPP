@@ -5108,8 +5108,8 @@ export const DEMO_STORAGE_POINTS: StoragePoint[] = [
     "city": "Puerto Madryn",
     "province": "Chubut",
     "coordinates": {
-      "lat": 42.7422222,
-      "lng": 65.2756944
+      "lat": -42.7422222,
+      "lng": -65.2756944
     },
     "responsibleUserId": "1767102643518",
     "clientId": "06585f64-6d04-4567-a23f-a7f046ee06b4",
@@ -5126,7 +5126,7 @@ export const DEMO_SUPPLIERS: Supplier[] = [
     "category": "Semillas",
     "cuit": "",
     "country": "Argentina",
-    "province": "",
+    "province": "CABA",
     "city": "Buenos Aires",
     "address": "",
     "email": "",
@@ -5148,10 +5148,10 @@ export const DEMO_SUPPLIERS: Supplier[] = [
     "name": "HEMPIT France",
     "category": "Semillas",
     "cuit": "",
-    "country": "Argentina",
-    "province": "",
-    "city": "",
-    "address": "",
+    "country": "Francia",
+    "province": "Pays de la Loire",
+    "city": "Beaufort-en-Anjou",
+    "address": "Beaufort-en-Vallée, Maine-et-Loire",
     "email": "",
     "coordinates": {
       "lat": 47.440610799006066,

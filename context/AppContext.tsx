@@ -470,6 +470,54 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         return healed;
     };
 
+    const healStoragePoints = (spList: StoragePoint[]): StoragePoint[] => {
+        const deletedMap = getDeletedIdsMap();
+        const deletedSet = new Set(deletedMap['storage_points'] || []);
+        const demoById = new Map(DEMO_STORAGE_POINTS.map(s => [String(s.id), s]));
+        return (spList || [])
+            .filter(s => !deletedSet.has(String(s.id)) && !isPurgedDemoItem(s))
+            .map((s: StoragePoint) => {
+                const demoMatch = demoById.get(String(s.id));
+                let coords = s.coordinates || demoMatch?.coordinates;
+                // Saneamiento de signo geodésico en hemisferio sur para CAP Centro Medioambiental (Puerto Madryn, Chubut)
+                if (
+                    coords &&
+                    (String(s.id) === 'f9235100-cd67-4f65-9ba1-303e7cc5a063' || (s.city && s.city.toLowerCase().includes('madryn'))) &&
+                    (coords.lat > 0 || coords.lng > 0)
+                ) {
+                    coords = {
+                        lat: -Math.abs(Number(coords.lat)),
+                        lng: -Math.abs(Number(coords.lng))
+                    };
+                }
+                return {
+                    ...(demoMatch || {}),
+                    ...s,
+                    coordinates: coords
+                };
+            });
+    };
+
+    const healSuppliers = (supList: Supplier[]): Supplier[] => {
+        const deletedMap = getDeletedIdsMap();
+        const deletedSet = new Set(deletedMap['suppliers'] || []);
+        const demoById = new Map(DEMO_SUPPLIERS.map(s => [String(s.id), s]));
+        return (supList || [])
+            .filter(s => !deletedSet.has(String(s.id)) && !isPurgedDemoItem(s))
+            .map((s: Supplier) => {
+                const demoMatch = demoById.get(String(s.id));
+                const isHempItFrance = String(s.id) === '3bfc9bcd-4ab1-4149-b46a-1a5d1e3392cd' || s.name?.toLowerCase().includes('hempit');
+                return {
+                    ...(demoMatch || {}),
+                    ...s,
+                    country: isHempItFrance ? 'Francia' : (s.country || demoMatch?.country || 'Argentina'),
+                    province: s.province || demoMatch?.province || '',
+                    city: s.city || demoMatch?.city || '',
+                    address: s.address || demoMatch?.address || ''
+                };
+            });
+    };
+
     const [locations, setLocations] = useState<Location[]>(() => 
         healLocationsWithPolygons(getStoredCollection('ht_locations', DEMO_LOCATIONS))
     );
@@ -492,7 +540,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         getStoredCollection('ht_clients', DEMO_CLIENTS)
     );
     const [suppliers, setSuppliers] = useState<Supplier[]>(() => 
-        getStoredCollection('ht_suppliers', DEMO_SUPPLIERS)
+        healSuppliers(getStoredCollection('ht_suppliers', DEMO_SUPPLIERS))
     );
     const [seedMovements, setSeedMovements] = useState<SeedMovement[]>(() => 
         getStoredCollection('ht_seed_movements', DEMO_SEED_MOVEMENTS)
@@ -501,7 +549,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         getStoredCollection('ht_resources', DEMO_RESOURCES)
     );
     const [storagePoints, setStoragePoints] = useState<StoragePoint[]>(() => 
-        getStoredCollection('ht_storage_points', DEMO_STORAGE_POINTS)
+        healStoragePoints(getStoredCollection('ht_storage_points', DEMO_STORAGE_POINTS))
     );
     const [hydricRecords, setHydricRecords] = useState<HydricRecord[]>(() => 
         healHydricRecords(getStoredCollection('ht_hydric_records', DEMO_HYDRIC))
@@ -627,7 +675,11 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                     fetchTable('tasks', setTasks, DEMO_TASKS),
                     fetchTable('projects', setProjects, DEMO_PROJECTS),
                     fetchTable('clients', setClients, DEMO_CLIENTS),
-                    fetchTable('suppliers', setSuppliers, DEMO_SUPPLIERS),
+                    fetchTable('suppliers', (data: any[]) => {
+                        const healed = healSuppliers(data || []);
+                        setSuppliers(healed);
+                        try { localStorage.setItem('ht_suppliers', JSON.stringify(healed)); } catch (e) {}
+                    }, DEMO_SUPPLIERS),
                     fetchTable('seed_batches', (data: any[]) => {
                         const healed = healSeedBatches(data || []);
                         setSeedBatches(healed);
@@ -635,7 +687,11 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                     }, DEMO_SEED_BATCHES),
                     fetchTable('seed_movements', setSeedMovements, DEMO_SEED_MOVEMENTS),
                     fetchTable('resources', setResources, DEMO_RESOURCES),
-                    fetchTable('storage_points', setStoragePoints, DEMO_STORAGE_POINTS),
+                    fetchTable('storage_points', (data: any[]) => {
+                        const healed = healStoragePoints(data || []);
+                        setStoragePoints(healed);
+                        try { localStorage.setItem('ht_storage_points', JSON.stringify(healed)); } catch (e) {}
+                    }, DEMO_STORAGE_POINTS),
                     fetchTable('hydric_records', (data: any[]) => {
                         const healed = healHydricRecords(data || []);
                         setHydricRecords(healed);
