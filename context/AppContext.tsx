@@ -237,13 +237,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     );
     const [varieties, setVarieties] = useState<Variety[]>(() => {
         const stored = getStoredCollection('ht_varieties', DEMO_VARIETIES);
-        // Migrar variedades anteriores a la denominación protocolar Anexo II
-        let updated = stored.filter(v => 
-            !v.id?.includes('ostara') && 
-            !v.id?.includes('futura83') && 
-            !v.name?.toLowerCase().includes('ostara') && 
-            !v.name?.toLowerCase().includes('futura 83')
-        );
+        let updated = [...stored];
         DEMO_VARIETIES.forEach(dv => {
             if (!updated.some(v => v.id === dv.id || v.name.toLowerCase() === dv.name.toLowerCase())) {
                 updated.unshift(dv);
@@ -366,6 +360,94 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         });
     };
 
+    const healTrialRecords = (recordsList: TrialRecord[]): TrialRecord[] => {
+        const deletedMap = getDeletedIdsMap();
+        const deletedSet = new Set(deletedMap['trial_records'] || []);
+        const demoById = new Map(DEMO_TRIALS.map(t => [String(t.id), t]));
+        const plotMap = new Map(DEMO_PLOTS.map(p => [String(p.id), p]));
+
+        // IDs de registros que fueron corregidos para sincronizar fechas, horas, clima y altura con la siembra real
+        const overriddenDemoIds = new Set([
+            '0177e162-8536-4463-aed6-6b40e40428dd',
+            '3e633379-49c3-4717-a5ae-56af256675c3',
+            '7ceb33bd-91e1-4bfe-b545-005bce122cf0',
+            'trial-1',
+            'trial-2'
+        ]);
+
+        const healed: TrialRecord[] = (recordsList || []).map((r: TrialRecord) => {
+            const demoMatch = demoById.get(String(r.id));
+            if (demoMatch && overriddenDemoIds.has(String(r.id)) && !(r as any)._localUpdatedAt) {
+                return { ...demoMatch };
+            }
+            const plot = plotMap.get(String(r.plotId));
+            const lat = plot?.coordinates?.lat ?? -43.308576;
+            const dateStr = r.date || demoMatch?.date || plot?.sowingDate || '2026-01-15';
+            const doy = Math.max(1, Math.min(365, Math.floor((new Date(dateStr).getTime() - new Date(new Date(dateStr).getFullYear(), 0, 0).getTime()) / 86400000)));
+            const decl = 23.45 * Math.sin((2 * Math.PI / 365) * (284 + doy)) * (Math.PI / 180);
+            const latRad = lat * (Math.PI / 180);
+            const cosOmega = Math.max(-0.99, Math.min(0.99, -Math.tan(latRad) * Math.tan(decl)));
+            const computedLight = Number(((2 * Math.acos(cosOmega) * 180 / Math.PI) / 15).toFixed(2));
+
+            return {
+                ...(demoMatch || {}),
+                ...r,
+                time: r.time || demoMatch?.time || '10:00',
+                temperature: r.temperature != null ? Number(r.temperature) : (demoMatch?.temperature ?? 21.5),
+                humidity: r.humidity != null ? Number(r.humidity) : (demoMatch?.humidity ?? 46),
+                lightHours: (r.lightHours == null || r.lightHours === 18) ? (demoMatch?.lightHours || computedLight) : Number(r.lightHours),
+                lunarPhase: r.lunarPhase || demoMatch?.lunarPhase || 'Creciente',
+            };
+        });
+
+        DEMO_TRIALS.forEach(dt => {
+            if (overriddenDemoIds.has(String(dt.id)) && !deletedSet.has(String(dt.id)) && !healed.some(r => String(r.id) === String(dt.id))) {
+                healed.push(dt);
+            }
+        });
+
+        return healed;
+    };
+
+    const healHydricRecords = (recordsList: HydricRecord[]): HydricRecord[] => {
+        const deletedMap = getDeletedIdsMap();
+        const deletedSet = new Set(deletedMap['hydric_records'] || []);
+        const demoById = new Map(DEMO_HYDRIC.map(h => [String(h.id), h]));
+        const plotMap = new Map(DEMO_PLOTS.map(p => [String(p.id), p]));
+
+        const overriddenHydricIds = new Set([
+            '1768260282197',
+            '1768260337822',
+            '1768751041862',
+            '1768752791534',
+            'hydric-1',
+            'hydric-2',
+            'hydric-3'
+        ]);
+
+        const healed: HydricRecord[] = (recordsList || []).map((h: HydricRecord) => {
+            const demoMatch = demoById.get(String(h.id));
+            if (demoMatch && overriddenHydricIds.has(String(h.id)) && !(h as any)._localUpdatedAt) {
+                return { ...demoMatch };
+            }
+            const plot = h.plotId ? plotMap.get(String(h.plotId)) : undefined;
+            return {
+                ...(demoMatch || {}),
+                ...h,
+                locationId: plot?.locationId || demoMatch?.locationId || h.locationId,
+                time: h.time || demoMatch?.time || '08:30',
+            };
+        });
+
+        DEMO_HYDRIC.forEach(dh => {
+            if (!deletedSet.has(String(dh.id)) && !healed.some(h => String(h.id) === String(dh.id))) {
+                healed.push(dh);
+            }
+        });
+
+        return healed;
+    };
+
     const [locations, setLocations] = useState<Location[]>(() => 
         healLocationsWithPolygons(getStoredCollection('ht_locations', DEMO_LOCATIONS))
     );
@@ -376,7 +458,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         healPlotsWithSeedBatches(getStoredCollection('ht_plots', DEMO_PLOTS))
     );
     const [trialRecords, setTrialRecords] = useState<TrialRecord[]>(() => 
-        getStoredCollection('ht_trial_records', DEMO_TRIALS)
+        healTrialRecords(getStoredCollection('ht_trial_records', DEMO_TRIALS))
     );
     const [tasks, setTasks] = useState<Task[]>(() => 
         getStoredCollection('ht_tasks', DEMO_TASKS)
@@ -400,7 +482,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         getStoredCollection('ht_storage_points', DEMO_STORAGE_POINTS)
     );
     const [hydricRecords, setHydricRecords] = useState<HydricRecord[]>(() => 
-        getStoredCollection('ht_hydric_records', DEMO_HYDRIC)
+        healHydricRecords(getStoredCollection('ht_hydric_records', DEMO_HYDRIC))
     );
     const [logs, setLogs] = useState<FieldLog[]>(() => 
         getStoredCollection('ht_field_logs', [])
@@ -515,7 +597,11 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                         setPlots(healed);
                         try { localStorage.setItem('ht_plots', JSON.stringify(healed)); } catch (e) {}
                     }, DEMO_PLOTS),
-                    fetchTable('trial_records', setTrialRecords, DEMO_TRIALS),
+                    fetchTable('trial_records', (data: any[]) => {
+                        const healed = healTrialRecords(data || []);
+                        setTrialRecords(healed);
+                        try { localStorage.setItem('ht_trial_records', JSON.stringify(healed)); } catch (e) {}
+                    }, DEMO_TRIALS),
                     fetchTable('tasks', setTasks, DEMO_TASKS),
                     fetchTable('projects', setProjects, DEMO_PROJECTS),
                     fetchTable('clients', setClients, DEMO_CLIENTS),
@@ -528,7 +614,11 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                     fetchTable('seed_movements', setSeedMovements, DEMO_SEED_MOVEMENTS),
                     fetchTable('resources', setResources, DEMO_RESOURCES),
                     fetchTable('storage_points', setStoragePoints, DEMO_STORAGE_POINTS),
-                    fetchTable('hydric_records', setHydricRecords, DEMO_HYDRIC),
+                    fetchTable('hydric_records', (data: any[]) => {
+                        const healed = healHydricRecords(data || []);
+                        setHydricRecords(healed);
+                        try { localStorage.setItem('ht_hydric_records', JSON.stringify(healed)); } catch (e) {}
+                    }, DEMO_HYDRIC),
                     fetchTable('operational_expenses', setOperationalExpenses, DEMO_OPERATIONAL_EXPENSES),
                     fetchTable('field_logs', setLogs),
                 ]);

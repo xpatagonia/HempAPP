@@ -477,7 +477,7 @@ export interface TrialRecord {
   plotId: string;
   date: string;
   time?: string;
-  stage: 'Vegetativo' | 'Floración' | 'Maduración' | 'Cosecha';
+  stage: 'Emergencia' | 'Vegetativo' | 'Floración' | 'Maduración' | 'Cosecha';
   temperature?: number;
   humidity?: number;
   plantHeight?: number;
@@ -847,13 +847,15 @@ export interface PlotNDVIAlert {
 
 export type ToxicologicalBand = 'Banda Verde (Banda IV - Poco Peligroso)' | 'Banda Azul (Banda III - Cuidado)' | 'Banda Amarilla (Banda II - Nocivo)' | 'Banda Roja (Banda I - Muy Tóxico)' | 'Biológico / Orgánico Certificado';
 
+export type AgrochemicalCategory = 'Fertilizante Edáfico' | 'Fertilizante Foliar' | 'Insecticida' | 'Fungicida' | 'Bioestimulante' | 'Enmienda Orgánica' | 'Herbicida' | 'Bioinsumo / Orgánico';
+
 export interface AgrochemicalApplication {
   id: string;
   plotId: string;
   plotName: string;
   date: string;
   time?: string;
-  category: 'Fertilizante Edáfico' | 'Fertilizante Foliar' | 'Insecticida' | 'Fungicida' | 'Bioestimulante' | 'Enmienda Orgánica' | 'Herbicida';
+  category: AgrochemicalCategory;
   productName: string; // Marca comercial
   activeIngredient: string; // Principio activo o composición NPK/Biológica
   manufacturer: string; // Fabricante / Marca / Laboratorio

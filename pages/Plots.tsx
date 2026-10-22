@@ -96,7 +96,24 @@ export default function Plots() {
     if (locParam) {
       setFilterLoc(locParam);
     }
-  }, [searchParams]);
+    const editId = searchParams.get('editPlotId');
+    if (editId && plots.length > 0) {
+      const target = plots.find(p => p.id === editId);
+      if (target) {
+        setEditingPlot(target);
+        setFormData({
+          ...target,
+          lat: target.coordinates?.lat?.toString() || '',
+          lng: target.coordinates?.lng?.toString() || '',
+          polygon: target.polygon || [],
+          campaign: target.campaign || '2025/2026',
+          activeCampaigns: target.activeCampaigns || (target.campaign ? [target.campaign] : ['2025/2026']),
+          color: target.color || '#10b981'
+        });
+        setIsAddModalOpen(true);
+      }
+    }
+  }, [searchParams, plots]);
   const [filterType, setFilterType] = useState<'all' | 'Ensayo' | 'Producción'>('all');
   const [filterStatus, setFilterStatus] = useState('all');
   const [selectedCampaign, setSelectedCampaign] = useState<string>('2025/2026'); // Campaña por defecto
@@ -234,6 +251,13 @@ export default function Plots() {
       return sum + area;
     }, 0);
 
+    const totalM2 = currentPlots.reduce((sum, p) => {
+      let areaM2 = p.surfaceArea || 0;
+      if (p.surfaceUnit === 'ha') areaM2 = areaM2 * 10000;
+      if (p.surfaceUnit === 'ac') areaM2 = areaM2 * 4046.86;
+      return sum + areaM2;
+    }, 0);
+
     const trialCount = currentPlots.filter(p => p.type === 'Ensayo').length;
     const productionCount = currentPlots.filter(p => p.type === 'Producción').length;
 
@@ -242,10 +266,78 @@ export default function Plots() {
       activeCount,
       pausedCount,
       totalHa,
+      totalM2,
       trialCount,
       productionCount
     };
   }, [plots, selectedCampaign]);
+
+  // Resumen sincronizado de Ciclo Biológico y Fotoperiodo Local (UTC-3) por parcela
+  const getPlotSyncSummary = (p: Plot, vari?: Variety, loc?: Location) => {
+    const cycleLimit = vari?.cycleDays || 150;
+    const sowStr = p.sowingDate || '2026-01-13';
+    const sowDate = new Date(`${sowStr}T09:00:00`);
+    const now = new Date();
+    const rawElapsed = Math.max(1, Math.floor((now.getTime() - sowDate.getTime()) / 86400000));
+    const activeDds = Math.min(cycleLimit, rawElapsed);
+    const progressPct = Math.min(100, Math.max(0, Math.round((activeDds / cycleLimit) * 100)));
+
+    const stage =
+      p.status === 'Cosechada' || progressPct >= 95 ? 'Maduración / Cosecha' :
+      progressPct >= 72 ? 'Maduración' :
+      progressPct >= 42 ? 'Floración' :
+      progressPct >= 12 ? 'Vegetativo' : 'Emergencia';
+
+    const coords =
+      p.coordinates && !isNaN(p.coordinates.lat) && p.coordinates.lat !== 0
+        ? p.coordinates
+        : loc?.coordinates || { lat: -43.308576, lng: -65.289047 };
+
+    const startOfYear = new Date(Date.UTC(now.getUTCFullYear(), 0, 0));
+    const doy = Math.max(1, Math.min(366, Math.floor((now.getTime() - startOfYear.getTime()) / 86400000)));
+    const gamma = ((2 * Math.PI) / 365) * (doy - 1 + 0.5);
+    const eqTime =
+      229.18 *
+      (0.000075 +
+        0.001868 * Math.cos(gamma) -
+        0.032077 * Math.sin(gamma) -
+        0.014615 * Math.cos(2 * gamma) -
+        0.040849 * Math.sin(2 * gamma));
+    const decl =
+      0.006918 -
+      0.399912 * Math.cos(gamma) +
+      0.070257 * Math.sin(gamma) -
+      0.006758 * Math.cos(2 * gamma) +
+      0.000907 * Math.sin(2 * gamma) -
+      0.002697 * Math.cos(3 * gamma) +
+      0.00148 * Math.sin(3 * gamma);
+    const latRad = (coords.lat * Math.PI) / 180;
+    const zenithRad = (90.833 * Math.PI) / 180;
+    const cosH = Math.max(-0.999, Math.min(0.999, (Math.cos(zenithRad) / (Math.cos(latRad) * Math.cos(decl))) - Math.tan(latRad) * Math.tan(decl)));
+    const hourAngleDeg = (Math.acos(cosH) * 180) / Math.PI;
+    const solarNoonMin = 720 - 4 * coords.lng - eqTime - 180; // UTC-3 Argentina
+    const srMin = Math.round(solarNoonMin - hourAngleDeg * 4);
+    const ssMin = Math.round(solarNoonMin + hourAngleDeg * 4);
+    const fmt = (m: number) => {
+      const n = ((m % 1440) + 1440) % 1440;
+      return `${String(Math.floor(n / 60)).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`;
+    };
+    const dayH = (2 * hourAngleDeg) / 15;
+    const dh = Math.floor(dayH);
+    const dm = Math.round((dayH - dh) * 60);
+
+    return {
+      cycleLimit,
+      sowStr,
+      activeDds,
+      progressPct,
+      stage,
+      coords,
+      sunriseLocal: fmt(srMin),
+      sunsetLocal: fmt(ssMin),
+      photoperiodFormatted: `${dh}h ${String(dm === 60 ? 0 : dm).padStart(2, '0')}m`
+    };
+  };
 
   // Alternar rápidamente si una Unidad Productiva está activa en la campaña actual
   const handleTogglePlotCampaign = async (plot: Plot, e: React.MouseEvent) => {
@@ -641,22 +733,23 @@ export default function Plots() {
 
       {/* 3. VISTAS DE CONTENIDO: TABLA O GALERÍA */}
       {viewMode === 'table' ? (
-        <div className="bg-white dark:bg-slate-900/90 rounded-2xl md:rounded-3xl border border-slate-200/80 dark:border-slate-800 overflow-hidden shadow-sm overflow-x-auto">
+        <div className="bg-white dark:bg-slate-900/95 rounded-2xl md:rounded-3xl border border-slate-200/80 dark:border-slate-800 overflow-hidden shadow-sm overflow-x-auto">
           <table className="min-w-full text-xs text-left">
-            <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 uppercase text-[9px] font-mono font-bold tracking-widest border-b border-slate-100 dark:border-slate-800">
+            <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 uppercase text-[10px] font-mono font-bold tracking-wider border-b border-slate-100 dark:border-slate-800">
               <tr>
-                <th className="px-6 py-4">Unidad / Lote</th>
-                <th className="px-6 py-4">Campo & Estado Campaña</th>
-                <th className="px-6 py-4">Campaña</th>
-                <th className="px-6 py-4">Genética</th>
-                <th className="px-6 py-4 text-center">Superficie</th>
-                <th className="px-6 py-4 text-right">Gestión de Campaña</th>
+                <th className="px-5 py-4">Unidad / Parcela</th>
+                <th className="px-5 py-4">Establecimiento & Geodesia</th>
+                <th className="px-5 py-4">Genética & Trazabilidad INASE</th>
+                <th className="px-5 py-4">Ciclo Fenológico & Siembra</th>
+                <th className="px-5 py-4 text-center">Fotoperiodo Local (UTC-3)</th>
+                <th className="px-5 py-4 text-right">Superficie</th>
+                <th className="px-5 py-4 text-right">Acciones Técnicas</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium font-mono tabular-nums">
               {filteredPlots.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="p-16 text-center text-slate-400 font-mono text-xs">
+                  <td colSpan={7} className="p-16 text-center text-slate-400 font-mono text-xs">
                     Sin unidades productivas para la campaña seleccionada ({selectedCampaign}).
                   </td>
                 </tr>
@@ -668,122 +761,140 @@ export default function Plots() {
                   const locCampaigns = loc?.activeCampaigns || ['2024/2025', '2025/2026'];
                   const isParentCampoActive = locCampaigns.includes(targetCamp);
                   const isPlotActiveInCampaign = (p.activeCampaigns || [p.campaign || '2025/2026']).includes(targetCamp) && p.status === 'Activa';
+                  const sync = getPlotSyncSummary(p, vari, loc);
+                  const linkedBatch =
+                    seedBatches.find(b => b.id === p.seedBatchId) ||
+                    seedBatches.find(b => b.varietyId === p.varietyId && (!b.materialType || b.materialType === 'seed')) ||
+                    seedBatches.find(b => !b.materialType || b.materialType === 'seed');
 
                   return (
-                    <tr 
-                      key={p.id} 
+                    <tr
+                      key={p.id}
                       className="hover:bg-slate-50 dark:hover:bg-slate-800/40 cursor-pointer group transition-colors"
-                      onClick={() => window.location.hash = `#/plots/${p.id}`}
+                      onClick={() => (window.location.hash = `#/plots/${p.id}`)}
                     >
-                      <td className="px-6 py-4">
+                      <td className="px-5 py-4">
                         <div className="flex items-center gap-2.5">
                           <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: p.color || '#10b981' }} />
                           <div>
-                            <span className="font-mono font-black text-slate-900 dark:text-white text-xs group-hover:text-emerald-600 transition-colors uppercase">
+                            <span className="font-mono font-black text-slate-900 dark:text-white text-xs group-hover:text-emerald-600 transition-colors uppercase block">
                               {p.name}
                             </span>
-                            <span className="text-[9px] font-mono text-slate-400 block mt-0.5">
-                              {p.type} · Siembra: {p.sowingDate}
+                            <span className="text-[10px] font-mono text-slate-400 block mt-0.5">
+                              {p.type} · Campaña {p.campaign || targetCamp}
                             </span>
                           </div>
                         </div>
                       </td>
 
-                      <td className="px-6 py-4">
+                      <td className="px-5 py-4">
                         <div className="font-mono font-bold text-slate-800 dark:text-slate-200 text-xs">
                           {loc?.name || 'S/D'}
                         </div>
+                        <span className="text-[10px] font-mono text-slate-400 block mt-0.5">
+                          {loc?.city || loc?.province} · {sync.coords.lat.toFixed(4)}°, {sync.coords.lng.toFixed(4)}°
+                        </span>
                         {!isParentCampoActive && (
                           <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 px-1.5 py-0.5 rounded mt-0.5 border border-amber-200 dark:border-amber-800">
-                            <AlertCircle size={10} /> Campo Inactivo en {targetCamp}
-                          </span>
-                        )}
-                        {isParentCampoActive && (
-                          <span className="text-[9px] font-mono text-slate-400 block">
-                            {loc?.city || loc?.province}
+                            <AlertCircle size={10} /> Campo en Barbecho ({targetCamp})
                           </span>
                         )}
                       </td>
 
-                      <td className="px-6 py-4">
-                        <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-                          {p.campaign || targetCamp}
-                        </span>
-                      </td>
-
-                      <td className="px-6 py-4">
+                      <td className="px-5 py-4">
                         <div className="space-y-1">
-                          <span className="px-2 py-1 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 rounded-lg text-[10px] font-mono font-bold border border-emerald-200 dark:border-emerald-800/60 inline-block">
+                          <span className="px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 rounded-md text-[10px] font-mono font-bold border border-emerald-200 dark:border-emerald-800/60 inline-block">
                             {vari?.name || 'Genética Certificada'}
                           </span>
-                          {(() => {
-                            const linkedBatch =
-                              seedBatches.find(b => b.id === p.seedBatchId) ||
-                              seedBatches.find(b => b.varietyId === p.varietyId && (!b.materialType || b.materialType === 'seed')) ||
-                              seedBatches.find(b => !b.materialType || b.materialType === 'seed');
-                            return (
-                              <div className="text-[9.5px] font-mono text-slate-600 dark:text-slate-400 flex flex-col gap-0.5 pt-0.5">
-                                <span className="flex items-center gap-1 font-bold text-slate-800 dark:text-slate-200">
-                                  <Award size={10} className="text-emerald-600 shrink-0" />
-                                  <span>N° Lote Semilla: {linkedBatch?.certificationNumber || linkedBatch?.batchCode || 'LOT-2025-FED17-C1'}</span>
-                                </span>
-                                <span className="text-[8.5px] text-slate-400">
-                                  Rótulo INASE: {linkedBatch?.labelSerialNumber || 'INA-2025-008492'} · {linkedBatch?.qualityGrade === 'GRADO_B_ESTANDAR' ? 'Grado B' : 'Grado A'}
-                                </span>
-                              </div>
-                            );
-                          })()}
+                          <div className="text-[10px] font-mono text-slate-600 dark:text-slate-400 flex flex-col">
+                            <span className="font-bold text-slate-800 dark:text-slate-200">
+                              Lote: {linkedBatch?.certificationNumber || linkedBatch?.batchCode || '103'}
+                            </span>
+                            <span className="text-[9px] text-slate-400">
+                              Rótulo INASE: {linkedBatch?.labelSerialNumber || '00000012'}
+                            </span>
+                          </div>
                         </div>
                       </td>
 
-                      <td className="px-6 py-4 text-center font-mono font-black text-slate-800 dark:text-slate-200">
+                      <td className="px-5 py-4">
+                        <div className="w-36 space-y-1">
+                          <div className="flex items-center justify-between text-[10px]">
+                            <span className="font-bold text-emerald-600 dark:text-emerald-400">{sync.stage}</span>
+                            <span className="text-slate-500">{sync.activeDds}/{sync.cycleLimit}d</span>
+                          </div>
+                          <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-emerald-500 rounded-full"
+                              style={{ width: `${sync.progressPct}%` }}
+                            />
+                          </div>
+                          <span className="text-[9.5px] text-slate-400 block">
+                            Siembra: {sync.sowStr}
+                          </span>
+                        </div>
+                      </td>
+
+                      <td className="px-5 py-4 text-center">
+                        <div className="inline-flex flex-col items-center px-2.5 py-1 rounded-lg bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/70 dark:border-amber-800/50">
+                          <span className="text-xs font-black text-amber-700 dark:text-amber-300">
+                            {sync.photoperiodFormatted}
+                          </span>
+                          <span className="text-[9px] text-slate-500 dark:text-slate-400">
+                            🌅 {sync.sunriseLocal} · 🌇 {sync.sunsetLocal}
+                          </span>
+                        </div>
+                      </td>
+
+                      <td className="px-5 py-4 text-right font-mono font-black text-slate-900 dark:text-white text-xs">
                         {p.surfaceArea} {p.surfaceUnit}
                       </td>
 
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-2" onClick={e => e.stopPropagation()}>
+                      <td className="px-5 py-4 text-right">
+                        <div className="flex items-center justify-end gap-1.5" onClick={e => e.stopPropagation()}>
                           {canManage && (
                             <button
-                              onClick={(e) => handleTogglePlotCampaign(p, e)}
-                              className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1 transition ${
-                                isPlotActiveInCampaign
-                                  ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
-                                  : 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                              }`}
-                              title={isPlotActiveInCampaign ? `Pausar en campaña ${targetCamp}` : `Activar en campaña ${targetCamp}`}
+                              onClick={e => handleEditPlot(p, e)}
+                              className="p-1.5 text-slate-500 hover:text-emerald-600 bg-slate-100 hover:bg-emerald-50 dark:bg-slate-800 rounded-lg transition cursor-pointer"
+                              title="Editar Unidad Productiva"
                             >
-                              <Power size={11} />
-                              <span>{isPlotActiveInCampaign ? 'Pausar' : 'Activar'}</span>
+                              <Edit2 size={13} />
                             </button>
                           )}
 
-                          <span className={`px-2 py-0.5 rounded text-[9px] font-mono font-black uppercase ${
-                            p.status === 'Activa' 
-                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300' 
-                              : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
-                          }`}>
-                            {p.status}
-                          </span>
-
                           <button
                             type="button"
-                            onClick={(e) => {
+                            onClick={e => {
                               e.stopPropagation();
                               setSelectedPlotForIdModal(p);
                             }}
-                            className="p-1.5 text-slate-500 hover:text-emerald-600 bg-slate-100 hover:bg-emerald-50 dark:bg-slate-800 dark:hover:bg-emerald-950/40 rounded-lg transition"
+                            className="p-1.5 text-slate-500 hover:text-emerald-600 bg-slate-100 hover:bg-emerald-50 dark:bg-slate-800 rounded-lg transition cursor-pointer"
                             title="Rótulo QR y Cartel Oficial de Tranquera (Ley 27.669)"
                           >
                             <QrCode size={13} />
                           </button>
 
+                          {canManage && (
+                            <button
+                              onClick={e => handleTogglePlotCampaign(p, e)}
+                              className={`px-2 py-1 rounded-lg text-[10px] font-mono font-bold uppercase flex items-center gap-1 transition cursor-pointer ${
+                                isPlotActiveInCampaign
+                                  ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
+                                  : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                              }`}
+                            >
+                              <Power size={10} />
+                              <span>{isPlotActiveInCampaign ? 'Pausar' : 'Activar'}</span>
+                            </button>
+                          )}
+
                           {isAdmin && (
-                            <button 
-                              onClick={(e) => handleDeletePlot(e, p.id)} 
-                              className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg transition"
+                            <button
+                              onClick={e => handleDeletePlot(e, p.id)}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg transition cursor-pointer"
                               title="Eliminar Unidad"
                             >
-                              <Trash2 size={13}/>
+                              <Trash2 size={13} />
                             </button>
                           )}
 
@@ -798,7 +909,7 @@ export default function Plots() {
           </table>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {filteredPlots.length === 0 ? (
             <div className="col-span-full py-16 text-center bg-white dark:bg-slate-900/90 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800 p-8 space-y-3">
               <Sprout size={40} className="mx-auto text-slate-400" />
@@ -817,165 +928,180 @@ export default function Plots() {
               const locCampaigns = loc?.activeCampaigns || ['2024/2025', '2025/2026'];
               const isParentCampoActive = locCampaigns.includes(targetCamp);
               const isPlotActiveInCampaign = (p.activeCampaigns || [p.campaign || '2025/2026']).includes(targetCamp) && p.status === 'Activa';
+              const sync = getPlotSyncSummary(p, vari, loc);
+              const linkedBatch =
+                seedBatches.find(b => b.id === p.seedBatchId) ||
+                seedBatches.find(b => b.varietyId === p.varietyId && (!b.materialType || b.materialType === 'seed')) ||
+                seedBatches.find(b => !b.materialType || b.materialType === 'seed');
 
               return (
-                <div 
-                  key={p.id} 
-                  className={`bg-white dark:bg-slate-900/90 rounded-2xl md:rounded-3xl border transition-all flex flex-col h-full overflow-hidden group hover:shadow-md ${
+                <div
+                  key={p.id}
+                  className={`bg-white dark:bg-slate-900/95 rounded-2xl border transition-all flex flex-col h-full overflow-hidden group hover:shadow-md ${
                     !isPlotActiveInCampaign || !isParentCampoActive
-                      ? 'border-slate-200/60 dark:border-slate-800/80 opacity-80 hover:opacity-100'
+                      ? 'border-slate-200/60 dark:border-slate-800/80 opacity-85 hover:opacity-100'
                       : 'border-slate-200/80 dark:border-slate-800 hover:border-emerald-500/40'
                   }`}
                 >
-                  <div className="p-6 flex-1 flex flex-col justify-between space-y-4">
-                    <div>
+                  <div className="p-5 sm:p-6 flex-1 flex flex-col justify-between space-y-4">
+                    <div className="space-y-3.5">
                       {/* Cabecera de la Tarjeta */}
-                      <div className="flex justify-between items-start gap-2 mb-3">
+                      <div className="flex justify-between items-start gap-2">
                         <div className="flex items-center gap-2.5">
-                          <div 
-                            className="w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-sm"
+                          <div
+                            className="w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-sm shrink-0"
                             style={{ backgroundColor: p.color || '#10b981' }}
                           >
-                            <Sprout size={20} />
+                            <Sprout size={19} />
                           </div>
                           <div>
-                            <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-slate-400 block">
+                            <span className="text-[9.5px] font-mono font-bold uppercase tracking-wider text-slate-400 block">
                               {p.type} · Campaña {p.campaign || targetCamp}
                             </span>
-                            <h3 className="font-mono font-black text-slate-900 dark:text-white text-base uppercase tracking-tight group-hover:text-emerald-600 transition-colors">
+                            <Link
+                              to={`/plots/${p.id}`}
+                              className="font-mono font-black text-slate-900 dark:text-white text-base uppercase tracking-tight hover:text-emerald-600 transition-colors block"
+                            >
                               {p.name}
-                            </h3>
+                            </Link>
                           </div>
                         </div>
 
-                        <span className={`px-2 py-0.5 rounded text-[9px] font-mono font-black uppercase shrink-0 ${
-                          p.status === 'Activa' 
-                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300' 
-                            : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
-                        }`}>
-                          {p.status}
+                        <span
+                          className={`px-2 py-0.5 rounded-md text-[9.5px] font-mono font-black uppercase shrink-0 border ${
+                            p.status === 'Activa'
+                              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60'
+                              : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+                          }`}
+                        >
+                          ● {p.status}
                         </span>
                       </div>
 
-                      {/* Alerta si el Campo Padre está inactivo en la campaña */}
-                      {!isParentCampoActive && (
-                        <div className="mb-3 p-2 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl text-[10px] font-medium text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
-                          <AlertCircle size={12} className="text-amber-500 shrink-0" />
-                          <span>Campo "{loc?.name}" en Barbecho/Inactivo en {targetCamp}</span>
+                      {/* Campo Padre y Geodesia */}
+                      <div className="flex items-center justify-between text-[11px] font-mono text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/40 px-3 py-2 rounded-xl border border-slate-100 dark:border-slate-800">
+                        <span className="flex items-center gap-1.5 truncate">
+                          <MapPin size={12} className="text-emerald-500 shrink-0" />
+                          <Link
+                            to={`/locations?search=${encodeURIComponent(loc?.name || '')}`}
+                            className="hover:text-emerald-600 dark:hover:text-emerald-400 font-bold text-slate-700 dark:text-slate-200 truncate"
+                          >
+                            {loc?.name || 'S/D'} ({loc?.city || loc?.province})
+                          </Link>
+                        </span>
+                        <span className="text-[10px] text-slate-400 shrink-0 tabular-nums">
+                          {p.polygon?.length || 4} vértices
+                        </span>
+                      </div>
+
+                      {/* Barra de Sincronización de Ciclo Fenológico y Fotoperiodo Local */}
+                      <div className="p-3 rounded-xl bg-slate-900 text-white font-mono tabular-nums space-y-2">
+                        <div className="flex items-center justify-between text-[10px]">
+                          <span className="text-emerald-400 font-bold uppercase">
+                            {sync.stage} (Siembra {sync.sowStr})
+                          </span>
+                          <span className="text-slate-300 font-bold">
+                            {sync.activeDds}/{sync.cycleLimit} DDS ({sync.progressPct}%)
+                          </span>
                         </div>
-                      )}
+                        <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full"
+                            style={{ width: `${sync.progressPct}%` }}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between text-[10px] pt-1 border-t border-slate-800 text-slate-300">
+                          <span className="text-amber-300 font-bold">
+                            ☀️ Fotoperiodo: {sync.photoperiodFormatted}
+                          </span>
+                          <span>
+                            Salida {sync.sunriseLocal} · Ocaso {sync.sunsetLocal}
+                          </span>
+                        </div>
+                      </div>
 
-                      {/* Campo Padre y Localidad con enlace interactivo */}
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono flex items-center gap-1.5">
-                        <MapPin size={12} className="text-emerald-500 shrink-0" />
-                        <Link 
-                          to={`/locations?search=${encodeURIComponent(loc?.name || '')}`}
-                          className="hover:text-emerald-600 dark:hover:text-emerald-400 hover:underline transition-colors font-bold"
-                          title="Ver detalles del Campo / Sitio Padre"
-                        >
-                          {loc?.name || 'S/D'} ({loc?.city || loc?.province})
-                        </Link>
-                      </p>
-
-                      {/* Grid de Métricas de Parcela */}
-                      <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 text-[10px]">
-                        <div className="p-2.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-100 dark:border-slate-800 text-center">
-                          <span className="text-[8px] font-mono font-bold uppercase text-slate-400 block">Superficie</span>
-                          <strong className="text-xs font-mono font-black text-slate-900 dark:text-white block mt-0.5">
+                      {/* Grid de Métricas: Superficie & Cultivar */}
+                      <div className="grid grid-cols-2 gap-2 text-[10px] font-mono tabular-nums">
+                        <div className="p-2.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/60 dark:border-slate-800">
+                          <span className="text-[8.5px] font-bold uppercase text-slate-400 block">Superficie Geodésica</span>
+                          <strong className="text-xs font-black text-slate-900 dark:text-white block mt-0.5">
                             {p.surfaceArea} {p.surfaceUnit}
                           </strong>
                         </div>
 
-                        <div className="p-2.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-100 dark:border-slate-800 text-center">
-                          <span className="text-[8px] font-mono font-bold uppercase text-slate-400 block">Cultivar</span>
-                          <strong className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400 truncate block mt-0.5" title={vari?.name}>
+                        <div className="p-2.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/60 dark:border-slate-800">
+                          <span className="text-[8.5px] font-bold uppercase text-slate-400 block">Cultivar Homologado</span>
+                          <strong className="text-xs font-bold text-emerald-600 dark:text-emerald-400 truncate block mt-0.5" title={vari?.name}>
                             {vari?.name || 'Certificada'}
                           </strong>
                         </div>
                       </div>
 
-                      {/* Bloque de Lote de Siembra & Personal Interviniente */}
-                      {(() => {
-                        const linkedBatch =
-                          seedBatches.find(b => b.id === p.seedBatchId) ||
-                          seedBatches.find(b => b.varietyId === p.varietyId && (!b.materialType || b.materialType === 'seed')) ||
-                          seedBatches.find(b => !b.materialType || b.materialType === 'seed');
-                        const obtainedCount = seedBatches.filter(b => b.originPlotId === p.id && b.materialType !== 'seed').length;
-                        return (
-                          <div className="mt-3 p-2.5 rounded-xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200/60 dark:border-indigo-900/40 text-[10px] font-mono space-y-1">
-                            <div className="flex items-center justify-between gap-1">
-                              <span className="font-bold text-indigo-800 dark:text-indigo-300 flex items-center gap-1 truncate">
-                                <Award size={11} className="text-emerald-600 shrink-0" />
-                                N° Lote Semilla: {linkedBatch?.certificationNumber || linkedBatch?.batchCode || 'LOT-2025-FED17-C1'}
-                              </span>
-                              <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-black text-[8.5px] border border-emerald-500/20 shrink-0">
-                                {linkedBatch?.qualityGrade === 'GRADO_B_ESTANDAR' ? 'Grado B' : 'Grado A Élite'}
-                              </span>
-                            </div>
-                            <div className="text-[9px] text-slate-500 dark:text-slate-400 flex items-center justify-between">
-                              <span className="truncate">Rótulo INASE: <strong>{linkedBatch?.labelSerialNumber || 'INA-2025-008492'}</strong></span>
-                              <span className="truncate text-[8.5px]">Traz.: {linkedBatch?.batchCode || 'TRZ-2025-C1'}</span>
-                            </div>
-                            <div className="flex items-center justify-between text-[9px] text-slate-500 dark:text-slate-400 pt-0.5 border-t border-indigo-100 dark:border-indigo-900/40">
-                              <span className="flex items-center gap-1 truncate">
-                                <UserCheck size={10} className="text-indigo-500 shrink-0" />
-                                Muestreo/DT: <strong>{p.samplingResponsibleName || linkedBatch?.samplerName || 'M. Quintana'}</strong>
-                              </span>
-                              {obtainedCount > 0 && (
-                                <span className="text-amber-600 dark:text-amber-400 font-bold shrink-0">
-                                  +{obtainedCount} Mat. Obtenido
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })()}
+                      {/* Bloque de Lote de Semilla INASE */}
+                      <div className="p-2.5 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-900/40 text-[10px] font-mono tabular-nums space-y-1">
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1 truncate">
+                            <Award size={11} className="text-emerald-600 shrink-0" />
+                            N° Lote Semilla: {linkedBatch?.certificationNumber || linkedBatch?.batchCode || '103'}
+                          </span>
+                          <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold text-[8.5px] border border-emerald-500/20 shrink-0">
+                            Rótulo {linkedBatch?.labelSerialNumber || '00000012'}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-[9px] text-slate-500 dark:text-slate-400">
+                          <span className="truncate">Código: {linkedBatch?.batchCode || 'FUT-83-25-HEM'}</span>
+                          <span className="shrink-0 font-bold">Resp: {p.samplingResponsibleName || linkedBatch?.samplerName || 'M. Quintana'}</span>
+                        </div>
+                      </div>
                     </div>
 
                     {/* Acciones Inferiores */}
-                    <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
-                      {canManage && (
-                        <button
-                          onClick={(e) => handleTogglePlotCampaign(p, e)}
-                          className={`px-3 py-1.5 rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 transition ${
-                            isPlotActiveInCampaign
-                              ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
-                              : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20'
-                          }`}
-                          title={isPlotActiveInCampaign ? `Pausar unidad en campaña ${targetCamp}` : `Habilitar unidad en campaña ${targetCamp}`}
-                        >
-                          <Power size={11} className={isPlotActiveInCampaign ? 'text-amber-600' : 'text-white'} />
-                          <span>{isPlotActiveInCampaign ? `Pausar (${targetCamp.slice(2)})` : `Activar (${targetCamp.slice(2)})`}</span>
-                        </button>
-                      )}
-
-                      <Link 
-                        to={`/plots/${p.id}`} 
-                        className="flex-1 py-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1 transition shadow-sm active:scale-95"
+                    <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-1.5">
+                      <Link
+                        to={`/plots/${p.id}`}
+                        className="flex-1 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white rounded-xl text-xs font-mono font-bold uppercase tracking-wider flex items-center justify-center gap-1 transition shadow-sm"
                       >
                         <span>Ficha Técnica</span>
                         <ChevronRight size={13} />
                       </Link>
 
+                      <Link
+                        to={`/agriculture-40?plotId=${p.id}`}
+                        className="p-2 text-emerald-700 dark:text-emerald-300 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/50 rounded-xl transition border border-emerald-200 dark:border-emerald-800/60"
+                        title="Teledetección Satelital Sentinel-2A & NDVI"
+                      >
+                        <Layers size={14} />
+                      </Link>
+
                       <button
                         type="button"
-                        onClick={(e) => {
+                        onClick={e => {
                           e.stopPropagation();
                           setSelectedPlotForIdModal(p);
                         }}
-                        className="p-2 text-slate-600 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 bg-slate-100 hover:bg-emerald-50 dark:bg-slate-800 dark:hover:bg-emerald-950/40 rounded-xl transition border border-slate-200 dark:border-slate-700"
-                        title="Emitir Rótulo QR y Cartel Oficial de Tranquera (Ley 27.669)"
+                        className="p-2 text-slate-600 dark:text-slate-300 hover:text-emerald-600 bg-slate-100 hover:bg-emerald-50 dark:bg-slate-800 rounded-xl transition border border-slate-200 dark:border-slate-700 cursor-pointer"
+                        title="Rótulo QR y Cartel Oficial de Tranquera (Ley 27.669)"
                       >
                         <QrCode size={14} />
                       </button>
 
+                      {canManage && (
+                        <button
+                          onClick={e => handleEditPlot(p, e)}
+                          className="p-2 text-slate-600 dark:text-slate-300 hover:text-emerald-600 bg-slate-100 hover:bg-emerald-50 dark:bg-slate-800 rounded-xl transition border border-slate-200 dark:border-slate-700 cursor-pointer"
+                          title="Editar Parcela"
+                        >
+                          <Edit2 size={14} />
+                        </button>
+                      )}
+
                       {isAdmin && (
-                        <button 
-                          onClick={(e) => handleDeletePlot(e, p.id)} 
-                          className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg transition"
+                        <button
+                          onClick={e => handleDeletePlot(e, p.id)}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg transition cursor-pointer"
                           title="Eliminar Unidad"
                         >
-                          <Trash2 size={14}/>
+                          <Trash2 size={14} />
                         </button>
                       )}
                     </div>
