@@ -792,22 +792,70 @@ export interface NDVISample {
   ndviAverage: number;
   ndviMin: number;
   ndviMax: number;
+  ndreAverage?: number;
+  rviSarAverage?: number;
   canopyCoveragePct: number;
   biomassIndex: number;
   stressDetected: boolean;
+}
+
+export interface StacBandAssets {
+  redB04?: string;
+  rededge1B05?: string;
+  rededge2B06?: string;
+  rededge3B07?: string;
+  nirB08?: string;
+  nirNarrowB8A?: string;
+  swirB11?: string;
+  scl?: string;
+  visual?: string;
+  thumbnail?: string;
+  vv?: string;
+  vh?: string;
 }
 
 export interface SatellitePass {
   id: string;
   plotId: string;
   date: string;
-  satellite: 'Sentinel-2A' | 'Sentinel-2B' | 'Landsat-9' | 'Dron Multiespectral';
+  acquisitionTimeUtc?: string;
+  acquisitionTimeLocal?: string;
+  satellite: 'Sentinel-2A' | 'Sentinel-2B' | 'Sentinel-2C' | 'Sentinel-1A (SAR)' | 'Sentinel-1C (SAR)' | 'Sentinel-1D (SAR)' | 'Landsat-9' | 'Dron Multiespectral';
+  sensorMode?: 'OPTICAL_MSI' | 'SAR_C_BAND';
   cycleDay: number;
   stageName: string;
   cloudCoveragePct: number;
   ndviAverage: number;
   ndviMin: number;
   ndviMax: number;
+  // Índices de Borde Rojo (Sentinel-2 Bandas 5, 6, 7 y 8A a 20m) para dosel cerrado
+  ndreAverage?: number;
+  ndreMin?: number;
+  ndreMax?: number;
+  redEdgeB5Reflectance?: number; // 705 nm
+  redEdgeB6Reflectance?: number; // 740 nm
+  redEdgeB7Reflectance?: number; // 783 nm
+  reciChlorophyllIndex?: number; // (B7 / B5) - 1
+  ndmiMoistureIndex?: number;    // (B8A - B11) / (B8A + B11)
+  isCanopyClosed?: boolean;      // true cuando cobertura >= 75% (recomienda priorizar NDRE sobre NDVI)
+  // Telemetría Radar de Apertura Sintética Sentinel-1 (Banda C 5.405 GHz - Libre de nubes)
+  sarRviIndex?: number;          // Radar Vegetation Index (0 a 1+)
+  sarVvDb?: number;              // Retrodispersión VV en dB (ej. -10.4 dB)
+  sarVhDb?: number;              // Retrodispersión VH en dB (ej. -16.8 dB)
+  sarVhVvRatioDb?: number;       // Relación cruzada VH - VV (dB) sensible a estructura de tallo
+  sarOrbitState?: 'ascending' | 'descending';
+  sarRelativeOrbit?: number;
+  sarPolarizations?: string[];
+  // Metadatos reales del Catálogo STAC (Copernicus CDSE / Element84 Earth Search)
+  stacItemId?: string;
+  stacCollection?: string;
+  stacProvider?: string;
+  mgrsTile?: string;
+  sunElevationDeg?: number;
+  sunAzimuthDeg?: number;
+  processingBaseline?: string;
+  isLiveStac?: boolean;
+  stacAssets?: StacBandAssets;
   optimalAreaPct: number;
   moderateAreaPct: number;
   stressedAreaPct: number;
