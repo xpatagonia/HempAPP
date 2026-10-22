@@ -111,12 +111,21 @@ const RECEIVEABLE_INPUT_PRESETS = [
 export default function PhytosanitaryBook() {
   const { plots, currentUser, locations, varieties, clients } = useAppContext();
 
-  // Carga reactiva de aplicaciones sincronizada con localStorage
+  // Carga reactiva de aplicaciones sincronizada con localStorage (purgando demos sintéticos previos)
   const [applications, setApplications] = useState<AgrochemicalApplication[]>(() => {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('ht_agrochemical_apps');
       if (stored) {
-        try { return JSON.parse(stored); } catch (e) {}
+        try {
+          const parsed: AgrochemicalApplication[] = JSON.parse(stored);
+          const cleaned = parsed.filter(
+            a => !a.id?.startsWith('app-bio-') && !a.id?.startsWith('app-foliar-') && !a.id?.startsWith('app-insect-')
+          );
+          if (cleaned.length !== parsed.length) {
+            localStorage.setItem('ht_agrochemical_apps', JSON.stringify(cleaned));
+          }
+          return cleaned;
+        } catch (e) {}
       }
     }
     return getPlotAgrochemicalApplications(plots);

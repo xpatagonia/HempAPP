@@ -181,52 +181,35 @@ export const getStoredNotifications = (): PushNotificationItem[] => {
   try {
     const raw = localStorage.getItem(STORAGE_NOTIFICATIONS_KEY);
     if (!raw) {
-      // Datos demo iniciales apuntando a lotes y labores reales de la plataforma
-      const initial: PushNotificationItem[] = [
-        {
-          id: 'demo-alert-1',
-          title: '❄️ Alerta Helada Agroclimática',
-          body: 'Riesgo inminente detectado en Lote Alfa (Córdoba). Temperatura proyectada bajo 2.2°C con riesgo para plántulas.',
-          category: 'plot_critical',
-          severity: 'critical',
-          timestamp: new Date(Date.now() - 1000 * 60 * 35).toISOString(),
-          read: false,
-          plotId: 'plot-alfa-cordoba',
-          plotName: 'Lote Alfa - Ensayo Densidad Fibra',
-          targetUrl: '/plots/plot-alfa-cordoba',
-          actionLabel: 'Ver Lote Crítico'
-        },
-        {
-          id: 'demo-alert-2',
-          title: '⏰ Labor Agrícola Pendiente',
-          body: 'Planificación de Corte Mecánico & Cosecha en Lote Beta (Pergamino). Revisión de implementos programada.',
-          category: 'task_reminder',
-          severity: 'warning',
-          timestamp: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
-          read: false,
-          taskId: 'labor-pergamino-03',
-          taskTitle: 'Planificación de Corte Mecánico & Cosecha',
-          plotId: 'plot-beta-pergamino',
-          targetUrl: '/tasks',
-          actionLabel: 'Ver Tarea'
-        }
-      ];
-      localStorage.setItem(STORAGE_NOTIFICATIONS_KEY, JSON.stringify(initial));
-      return initial;
+      return [];
     }
     
-    // Auto-sanitizar notificaciones previas en cache para asegurar enlaces directos a lotes existentes
+    // Auto-sanitizar y purgar notificaciones demo previas en cache
     const parsed: PushNotificationItem[] = JSON.parse(raw);
     let mutated = false;
-    const sanitized = parsed.map(item => {
+    const filtered = parsed.filter(item => {
+      if (
+        item.id?.startsWith('demo-alert') ||
+        item.plotId === 'plot-alfa-cordoba' ||
+        item.plotId === 'plot-beta-pergamino' ||
+        item.plotId === 'plot-demo-1' ||
+        item.taskId === 'labor-pergamino-03'
+      ) {
+        mutated = true;
+        return false;
+      }
+      return true;
+    });
+
+    const sanitized = filtered.map(item => {
       if (item.category === 'plot_critical') {
-        if (!item.plotId || item.plotId === 'plot-demo-1') {
-          item.plotId = 'plot-alfa-cordoba';
-          item.plotName = item.plotName || 'Lote Alfa - Ensayo Densidad Fibra';
+        if (!item.plotId) {
+          item.plotId = 'e6efc399-d47d-4173-995b-ac74301762b5';
+          item.plotName = item.plotName || 'TW-PAR-A2 103';
           mutated = true;
         }
         if (item.targetUrl === '/plots' || !item.targetUrl.startsWith('/plots/')) {
-          item.targetUrl = `/plots/${item.plotId || 'plot-alfa-cordoba'}`;
+          item.targetUrl = `/plots/${item.plotId}`;
           mutated = true;
         }
         if (!item.actionLabel || item.actionLabel === 'Ver Parcela') {
@@ -274,8 +257,8 @@ export const dispatchPushNotification = async (
   let normalizedTargetUrl = item.targetUrl;
   let normalizedPlotId = item.plotId;
   if (item.category === 'plot_critical') {
-    if (!normalizedPlotId || normalizedPlotId === 'plot-demo-1') {
-      normalizedPlotId = 'plot-alfa-cordoba';
+    if (!normalizedPlotId || normalizedPlotId === 'plot-demo-1' || normalizedPlotId === 'plot-alfa-cordoba') {
+      normalizedPlotId = 'e6efc399-d47d-4173-995b-ac74301762b5';
     }
     if (normalizedTargetUrl === '/plots' || !normalizedTargetUrl.startsWith('/plots/')) {
       normalizedTargetUrl = `/plots/${normalizedPlotId}`;
@@ -532,8 +515,8 @@ export const triggerTestPlotAlert = async (
   plotName?: string, 
   plotId?: string
 ): Promise<PushNotificationItem> => {
-  const targetPlotId = plotId || 'plot-alfa-cordoba';
-  const name = plotName || 'Lote Alfa - Ensayo Densidad Fibra';
+  const targetPlotId = plotId || 'e6efc399-d47d-4173-995b-ac74301762b5';
+  const name = plotName || 'TW-PAR-A2 103';
   return await dispatchPushNotification({
     title: `❄️ Riesgo Helada Inminente: ${name}`,
     body: `Telemetría satelital registra 1.8°C en descenso rápido. Activar protocolo anti-heladas y riego térmico en ${name}.`,
@@ -547,13 +530,13 @@ export const triggerTestPlotAlert = async (
 };
 
 export const triggerTestTaskReminder = async (
-  taskTitle = 'Fertirriego y Aplicación de Bioestimulante',
+  taskTitle = 'Monitoreo Fenológico y Control de Malezas',
   taskId?: string
 ): Promise<PushNotificationItem> => {
-  const targetTaskId = taskId || 'labor-pergamino-03';
+  const targetTaskId = taskId || `task-test-${Date.now()}`;
   return await dispatchPushNotification({
     title: `⏰ Labor Agrícola Programada: ${taskTitle}`,
-    body: `Vencimiento programado hoy a las 18:00 hs. Insumos asignados: Trichoderma harzianum 2.5 L/ha.`,
+    body: `Vencimiento programado hoy a las 18:00 hs. Verificar implementos y registrar avance en sistema.`,
     category: 'task_reminder',
     severity: 'warning',
     taskId: targetTaskId,

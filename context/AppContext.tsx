@@ -134,6 +134,38 @@ const toSnakeCase = (obj: any): any => {
 
 const DELETED_IDS_STORAGE_KEY = 'ht_deleted_ids_v1';
 
+// Registros demostrativos o huérfanos depurados definitivamente para producción
+const PURGED_DEMO_IDS = new Set([
+    'trial-1',
+    'trial-2',
+    '0177e162-8536-4463-aed6-6b40e40428dd',
+    '3e633379-49c3-4717-a5ae-56af256675c3',
+    'hydric-1',
+    'hydric-2',
+    'hydric-3',
+    '1768260282197',
+    '1768260337822',
+    'mov-1',
+    'mov-2',
+    'default-storage',
+    'mat-obt-tw-par-a2-103-grano',
+    'var-multiproposito-biomasa',
+    'var-grano-alimento',
+    'user-admin-xpatagonia',
+    '91ce0dcf-a760-41fe-82d5-52c438685944',
+    'res-1', 'res-2', 'res-3', 'res-4', 'res-5', 'res-6', 'res-7', 'res-8',
+    'insp-1', 'insp-2', 'insp-3', 'insp-4'
+]);
+
+const isPurgedDemoItem = (item: any): boolean => {
+    if (!item || typeof item !== 'object') return false;
+    const id = String(item.id || '');
+    if (PURGED_DEMO_IDS.has(id)) return true;
+    if (id.startsWith('exp-demo-') || id.startsWith('demo-alert-')) return true;
+    if (item.plotId && String(item.plotId) === '91ce0dcf-a760-41fe-82d5-52c438685944') return true;
+    return false;
+};
+
 const getDeletedIdsMap = (): Record<string, string[]> => {
     if (typeof window === 'undefined') return {};
     try {
@@ -204,19 +236,20 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 if (stored) {
                     const parsed = JSON.parse(stored);
                     if (Array.isArray(parsed) && parsed.length > 0) {
-                        const hasAdmin = parsed.some((u: any) => u.email?.toLowerCase() === "admin@hempc.com.ar");
+                        const cleaned = parsed.filter((u: any) => !isPurgedDemoItem(u));
+                        const hasAdmin = cleaned.some((u: any) => u.email?.toLowerCase() === "admin@hempc.com.ar");
                         if (!hasAdmin) {
-                            parsed.unshift(ADMIN_USER);
-                            try { localStorage.setItem("ht_users", JSON.stringify(parsed)); } catch (e) {}
+                            cleaned.unshift(ADMIN_USER);
                         }
-                        return parsed;
+                        try { localStorage.setItem("ht_users", JSON.stringify(cleaned)); } catch (e) {}
+                        return cleaned;
                     }
                 }
             } catch (e) {}
         }
         return initialList;
     });
-    // Función auxiliar para leer colecciones persistentes respetando borrados y altas en producción
+    // Función auxiliar para leer colecciones persistentes respetando borrados y depurando demos obsoletos
     const getStoredCollection = <T,>(key: string, fallback: T[]): T[] => {
         if (typeof window !== 'undefined') {
             try {
@@ -224,7 +257,11 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 if (stored !== null) {
                     const parsed = JSON.parse(stored);
                     if (Array.isArray(parsed)) {
-                        return parsed;
+                        const cleaned = parsed.filter(item => !isPurgedDemoItem(item));
+                        if (cleaned.length !== parsed.length) {
+                            try { localStorage.setItem(key, JSON.stringify(cleaned)); } catch (e) {}
+                        }
+                        return cleaned;
                     }
                 }
             } catch (e) {}
@@ -236,10 +273,12 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         getStoredCollection('ht_operational_expenses', DEMO_OPERATIONAL_EXPENSES)
     );
     const [varieties, setVarieties] = useState<Variety[]>(() => {
+        const deletedMap = getDeletedIdsMap();
+        const deletedSet = new Set(deletedMap['varieties'] || []);
         const stored = getStoredCollection('ht_varieties', DEMO_VARIETIES);
-        let updated = [...stored];
+        let updated = stored.filter(v => !deletedSet.has(String(v.id)) && !isPurgedDemoItem(v));
         DEMO_VARIETIES.forEach(dv => {
-            if (!updated.some(v => v.id === dv.id || v.name.toLowerCase() === dv.name.toLowerCase())) {
+            if (!deletedSet.has(String(dv.id)) && !updated.some(v => v.id === dv.id || v.name.toLowerCase() === dv.name.toLowerCase())) {
                 updated.unshift(dv);
             }
         });
@@ -251,26 +290,28 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         const demoMapById = new Map(DEMO_SEED_BATCHES.map(b => [String(b.id), b]));
         const demoMapByCode = new Map(DEMO_SEED_BATCHES.map(b => [String(b.batchCode), b]));
 
-        const enriched: SeedBatch[] = (list || []).map((b: SeedBatch): SeedBatch => {
-            const demoMatch = demoMapById.get(String(b.id)) || demoMapByCode.get(String(b.batchCode));
-            return {
-                ...(demoMatch || {}),
-                ...b,
-                labelSerialNumber: b.labelSerialNumber || demoMatch?.labelSerialNumber || '00000012',
-                certificationNumber: b.certificationNumber || demoMatch?.certificationNumber || 'S/N',
-                originInspectionId: b.originInspectionId || demoMatch?.originInspectionId,
-                qualityGrade: b.qualityGrade || demoMatch?.qualityGrade,
-                qualityScore: b.qualityScore ?? demoMatch?.qualityScore,
-                samplerName: b.samplerName || demoMatch?.samplerName,
-                samplerMatricula: b.samplerMatricula || demoMatch?.samplerMatricula,
-                sampleCode: b.sampleCode || demoMatch?.sampleCode,
-                inspectorName: b.inspectorName || demoMatch?.inspectorName,
-                inspectorMatricula: b.inspectorMatricula || demoMatch?.inspectorMatricula,
-                parentSeedBatchId: b.parentSeedBatchId || demoMatch?.parentSeedBatchId,
-                originPlotId: b.originPlotId || demoMatch?.originPlotId,
-                materialType: b.materialType || demoMatch?.materialType,
-            };
-        });
+        const enriched: SeedBatch[] = (list || [])
+            .filter(b => !deletedSet.has(String(b.id)) && !isPurgedDemoItem(b))
+            .map((b: SeedBatch): SeedBatch => {
+                const demoMatch = demoMapById.get(String(b.id)) || demoMapByCode.get(String(b.batchCode));
+                return {
+                    ...(demoMatch || {}),
+                    ...b,
+                    labelSerialNumber: b.labelSerialNumber || demoMatch?.labelSerialNumber || '00000012',
+                    certificationNumber: b.certificationNumber || demoMatch?.certificationNumber || 'S/N',
+                    originInspectionId: b.originInspectionId || demoMatch?.originInspectionId,
+                    qualityGrade: b.qualityGrade || demoMatch?.qualityGrade,
+                    qualityScore: b.qualityScore ?? demoMatch?.qualityScore,
+                    samplerName: b.samplerName || demoMatch?.samplerName,
+                    samplerMatricula: b.samplerMatricula || demoMatch?.samplerMatricula,
+                    sampleCode: b.sampleCode || demoMatch?.sampleCode,
+                    inspectorName: b.inspectorName || demoMatch?.inspectorName,
+                    inspectorMatricula: b.inspectorMatricula || demoMatch?.inspectorMatricula,
+                    parentSeedBatchId: b.parentSeedBatchId || demoMatch?.parentSeedBatchId,
+                    originPlotId: b.originPlotId || demoMatch?.originPlotId,
+                    materialType: b.materialType || demoMatch?.materialType,
+                };
+            });
 
         DEMO_SEED_BATCHES.forEach(db => {
             if (!deletedSet.has(String(db.id)) && !enriched.some(b => String(b.id) === String(db.id) || String(b.batchCode) === String(db.batchCode))) {
@@ -306,58 +347,66 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     };
 
     const healLocationsWithPolygons = (locList: Location[]): Location[] => {
+        const deletedMap = getDeletedIdsMap();
+        const deletedSet = new Set(deletedMap['locations'] || []);
         const demoById = new Map(DEMO_LOCATIONS.map(l => [String(l.id), l]));
         const demoByName = new Map(DEMO_LOCATIONS.map(l => [l.name.trim().toLowerCase(), l]));
-        return (locList || []).map((loc: Location) => {
-            const demoMatch = demoById.get(String(loc.id)) || (loc.name ? demoByName.get(loc.name.trim().toLowerCase()) : undefined);
-            const normPoly = normalizePolygonPoints((loc as any).polygon);
-            const finalPoly = normPoly.length >= 3 ? normPoly : (demoMatch?.polygon || []);
-            const rawCoords = (loc as any).coordinates;
-            const validCoords = rawCoords && !isNaN(Number(rawCoords.lat)) && !isNaN(Number(rawCoords.lng)) && Number(rawCoords.lat) !== 0
-                ? { lat: Number(rawCoords.lat), lng: Number(rawCoords.lng) }
-                : (demoMatch?.coordinates || (finalPoly.length > 0 ? finalPoly[0] : { lat: -43.308362, lng: -65.289033 }));
-            return {
-                ...loc,
-                coordinates: validCoords,
-                polygon: finalPoly
-            };
-        });
+        return (locList || [])
+            .filter(loc => !deletedSet.has(String(loc.id)) && !isPurgedDemoItem(loc))
+            .map((loc: Location) => {
+                const demoMatch = demoById.get(String(loc.id)) || (loc.name ? demoByName.get(loc.name.trim().toLowerCase()) : undefined);
+                const normPoly = normalizePolygonPoints((loc as any).polygon);
+                const finalPoly = normPoly.length >= 3 ? normPoly : (demoMatch?.polygon || []);
+                const rawCoords = (loc as any).coordinates;
+                const validCoords = rawCoords && !isNaN(Number(rawCoords.lat)) && !isNaN(Number(rawCoords.lng)) && Number(rawCoords.lat) !== 0
+                    ? { lat: Number(rawCoords.lat), lng: Number(rawCoords.lng) }
+                    : (demoMatch?.coordinates || (finalPoly.length > 0 ? finalPoly[0] : { lat: -43.308362, lng: -65.289033 }));
+                return {
+                    ...loc,
+                    coordinates: validCoords,
+                    polygon: finalPoly
+                };
+            });
     };
 
     const healPlotsWithSeedBatches = (plotsList: Plot[], batchesList: SeedBatch[] = DEMO_SEED_BATCHES): Plot[] => {
+        const deletedMap = getDeletedIdsMap();
+        const deletedSet = new Set(deletedMap['plots'] || []);
         const demoPlotById = new Map(DEMO_PLOTS.map(dp => [String(dp.id), dp]));
         const demoPlotByName = new Map(DEMO_PLOTS.map(dp => [dp.name.trim().toLowerCase(), dp]));
 
-        return (plotsList || []).map((p: Plot) => {
-            const demoMatch = demoPlotById.get(String(p.id)) || (p.name ? demoPlotByName.get(p.name.trim().toLowerCase()) : undefined);
-            let resolvedBatchId = p.seedBatchId || demoMatch?.seedBatchId;
-            if (!resolvedBatchId && p.varietyId) {
-                const match = batchesList.find(b => b.varietyId === p.varietyId && b.isActive && (!b.materialType || b.materialType === 'seed'))
-                    || DEMO_SEED_BATCHES.find(b => b.varietyId === p.varietyId && b.isActive);
-                if (match) {
-                    resolvedBatchId = match.id;
+        return (plotsList || [])
+            .filter(p => !deletedSet.has(String(p.id)) && !isPurgedDemoItem(p))
+            .map((p: Plot) => {
+                const demoMatch = demoPlotById.get(String(p.id)) || (p.name ? demoPlotByName.get(p.name.trim().toLowerCase()) : undefined);
+                let resolvedBatchId = p.seedBatchId || demoMatch?.seedBatchId;
+                if (!resolvedBatchId && p.varietyId) {
+                    const match = batchesList.find(b => b.varietyId === p.varietyId && b.isActive && (!b.materialType || b.materialType === 'seed'))
+                        || DEMO_SEED_BATCHES.find(b => b.varietyId === p.varietyId && b.isActive);
+                    if (match) {
+                        resolvedBatchId = match.id;
+                    }
                 }
-            }
 
-            const normPoly = normalizePolygonPoints((p as any).polygon);
-            const finalPoly = normPoly.length >= 3 ? normPoly : (demoMatch?.polygon || []);
+                const normPoly = normalizePolygonPoints((p as any).polygon);
+                const finalPoly = normPoly.length >= 3 ? normPoly : (demoMatch?.polygon || []);
 
-            const rawCoords = (p as any).coordinates;
-            const validCoords = rawCoords && !isNaN(Number(rawCoords.lat)) && !isNaN(Number(rawCoords.lng)) && Number(rawCoords.lat) !== 0
-                ? { lat: Number(rawCoords.lat), lng: Number(rawCoords.lng) }
-                : (demoMatch?.coordinates || (finalPoly.length > 0 ? {
-                    lat: Number((finalPoly.reduce((s, pt) => s + pt.lat, 0) / finalPoly.length).toFixed(6)),
-                    lng: Number((finalPoly.reduce((s, pt) => s + pt.lng, 0) / finalPoly.length).toFixed(6))
-                } : null));
+                const rawCoords = (p as any).coordinates;
+                const validCoords = rawCoords && !isNaN(Number(rawCoords.lat)) && !isNaN(Number(rawCoords.lng)) && Number(rawCoords.lat) !== 0
+                    ? { lat: Number(rawCoords.lat), lng: Number(rawCoords.lng) }
+                    : (demoMatch?.coordinates || (finalPoly.length > 0 ? {
+                        lat: Number((finalPoly.reduce((s, pt) => s + pt.lat, 0) / finalPoly.length).toFixed(6)),
+                        lng: Number((finalPoly.reduce((s, pt) => s + pt.lng, 0) / finalPoly.length).toFixed(6))
+                    } : null));
 
-            return {
-                ...(demoMatch || {}),
-                ...p,
-                seedBatchId: resolvedBatchId || p.seedBatchId,
-                coordinates: validCoords,
-                polygon: finalPoly
-            };
-        });
+                return {
+                    ...(demoMatch || {}),
+                    ...p,
+                    seedBatchId: resolvedBatchId || p.seedBatchId,
+                    coordinates: validCoords,
+                    polygon: finalPoly
+                };
+            });
     };
 
     const healTrialRecords = (recordsList: TrialRecord[]): TrialRecord[] => {
@@ -366,45 +415,29 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         const demoById = new Map(DEMO_TRIALS.map(t => [String(t.id), t]));
         const plotMap = new Map(DEMO_PLOTS.map(p => [String(p.id), p]));
 
-        // IDs de registros que fueron corregidos para sincronizar fechas, horas, clima y altura con la siembra real
-        const overriddenDemoIds = new Set([
-            '0177e162-8536-4463-aed6-6b40e40428dd',
-            '3e633379-49c3-4717-a5ae-56af256675c3',
-            '7ceb33bd-91e1-4bfe-b545-005bce122cf0',
-            'trial-1',
-            'trial-2'
-        ]);
+        const healed: TrialRecord[] = (recordsList || [])
+            .filter(r => !deletedSet.has(String(r.id)) && !isPurgedDemoItem(r))
+            .map((r: TrialRecord) => {
+                const demoMatch = demoById.get(String(r.id));
+                const plot = plotMap.get(String(r.plotId));
+                const lat = plot?.coordinates?.lat ?? -43.308576;
+                const dateStr = r.date || demoMatch?.date || plot?.sowingDate || '2026-01-15';
+                const doy = Math.max(1, Math.min(365, Math.floor((new Date(dateStr).getTime() - new Date(new Date(dateStr).getFullYear(), 0, 0).getTime()) / 86400000)));
+                const decl = 23.45 * Math.sin((2 * Math.PI / 365) * (284 + doy)) * (Math.PI / 180);
+                const latRad = lat * (Math.PI / 180);
+                const cosOmega = Math.max(-0.99, Math.min(0.99, -Math.tan(latRad) * Math.tan(decl)));
+                const computedLight = Number(((2 * Math.acos(cosOmega) * 180 / Math.PI) / 15).toFixed(2));
 
-        const healed: TrialRecord[] = (recordsList || []).map((r: TrialRecord) => {
-            const demoMatch = demoById.get(String(r.id));
-            if (demoMatch && overriddenDemoIds.has(String(r.id)) && !(r as any)._localUpdatedAt) {
-                return { ...demoMatch };
-            }
-            const plot = plotMap.get(String(r.plotId));
-            const lat = plot?.coordinates?.lat ?? -43.308576;
-            const dateStr = r.date || demoMatch?.date || plot?.sowingDate || '2026-01-15';
-            const doy = Math.max(1, Math.min(365, Math.floor((new Date(dateStr).getTime() - new Date(new Date(dateStr).getFullYear(), 0, 0).getTime()) / 86400000)));
-            const decl = 23.45 * Math.sin((2 * Math.PI / 365) * (284 + doy)) * (Math.PI / 180);
-            const latRad = lat * (Math.PI / 180);
-            const cosOmega = Math.max(-0.99, Math.min(0.99, -Math.tan(latRad) * Math.tan(decl)));
-            const computedLight = Number(((2 * Math.acos(cosOmega) * 180 / Math.PI) / 15).toFixed(2));
-
-            return {
-                ...(demoMatch || {}),
-                ...r,
-                time: r.time || demoMatch?.time || '10:00',
-                temperature: r.temperature != null ? Number(r.temperature) : (demoMatch?.temperature ?? 21.5),
-                humidity: r.humidity != null ? Number(r.humidity) : (demoMatch?.humidity ?? 46),
-                lightHours: (r.lightHours == null || r.lightHours === 18) ? (demoMatch?.lightHours || computedLight) : Number(r.lightHours),
-                lunarPhase: r.lunarPhase || demoMatch?.lunarPhase || 'Creciente',
-            };
-        });
-
-        DEMO_TRIALS.forEach(dt => {
-            if (overriddenDemoIds.has(String(dt.id)) && !deletedSet.has(String(dt.id)) && !healed.some(r => String(r.id) === String(dt.id))) {
-                healed.push(dt);
-            }
-        });
+                return {
+                    ...(demoMatch || {}),
+                    ...r,
+                    time: r.time || demoMatch?.time || '10:00',
+                    temperature: r.temperature != null ? Number(r.temperature) : (demoMatch?.temperature ?? 21.5),
+                    humidity: r.humidity != null ? Number(r.humidity) : (demoMatch?.humidity ?? 46),
+                    lightHours: (r.lightHours == null || r.lightHours === 18) ? (demoMatch?.lightHours || computedLight) : Number(r.lightHours),
+                    lunarPhase: r.lunarPhase || demoMatch?.lunarPhase || 'Creciente',
+                };
+            });
 
         return healed;
     };
@@ -415,29 +448,18 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         const demoById = new Map(DEMO_HYDRIC.map(h => [String(h.id), h]));
         const plotMap = new Map(DEMO_PLOTS.map(p => [String(p.id), p]));
 
-        const overriddenHydricIds = new Set([
-            '1768260282197',
-            '1768260337822',
-            '1768751041862',
-            '1768752791534',
-            'hydric-1',
-            'hydric-2',
-            'hydric-3'
-        ]);
-
-        const healed: HydricRecord[] = (recordsList || []).map((h: HydricRecord) => {
-            const demoMatch = demoById.get(String(h.id));
-            if (demoMatch && overriddenHydricIds.has(String(h.id)) && !(h as any)._localUpdatedAt) {
-                return { ...demoMatch };
-            }
-            const plot = h.plotId ? plotMap.get(String(h.plotId)) : undefined;
-            return {
-                ...(demoMatch || {}),
-                ...h,
-                locationId: plot?.locationId || demoMatch?.locationId || h.locationId,
-                time: h.time || demoMatch?.time || '08:30',
-            };
-        });
+        const healed: HydricRecord[] = (recordsList || [])
+            .filter(h => !deletedSet.has(String(h.id)) && !isPurgedDemoItem(h))
+            .map((h: HydricRecord) => {
+                const demoMatch = demoById.get(String(h.id));
+                const plot = h.plotId ? plotMap.get(String(h.plotId)) : undefined;
+                return {
+                    ...(demoMatch || {}),
+                    ...h,
+                    locationId: plot?.locationId || demoMatch?.locationId || h.locationId,
+                    time: h.time || demoMatch?.time || '08:30',
+                };
+            });
 
         DEMO_HYDRIC.forEach(dh => {
             if (!deletedSet.has(String(dh.id)) && !healed.some(h => String(h.id) === String(dh.id))) {
@@ -523,13 +545,13 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                         const rawLocal = localStorage.getItem(`ht_${table}`);
                         if (rawLocal) {
                           const parsed = JSON.parse(rawLocal);
-                          if (Array.isArray(parsed)) localCached = parsed;
+                          if (Array.isArray(parsed)) localCached = parsed.filter((item: any) => !isPurgedDemoItem(item));
                         }
                       } catch {}
 
                       const { data, error } = await supabase.from(table).select('*');
                       if (!error && data !== null) {
-                        const remoteItems: any[] = toCamelCase(data).filter((item: any) => !deletedSet.has(String(item.id)));
+                        const remoteItems: any[] = toCamelCase(data).filter((item: any) => !deletedSet.has(String(item.id)) && !isPurgedDemoItem(item));
                         const localMap = new Map(localCached.map((item: any) => [String(item.id), item]));
                         const remoteIds = new Set(remoteItems.map((item: any) => String(item.id)));
 
@@ -550,17 +572,17 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                           return merged;
                         });
 
-                        // Conservar registros creados localmente que aún no estén en Supabase
-                        const localOnly = localCached.filter((item: any) => item && item.id && !remoteIds.has(String(item.id)) && !deletedSet.has(String(item.id)));
+                        // Conservar registros creados localmente en esta sesión que aún no estén en Supabase
+                        const localOnly = localCached.filter((item: any) => item && item.id && item._localUpdatedAt && !remoteIds.has(String(item.id)) && !deletedSet.has(String(item.id)) && !isPurgedDemoItem(item));
                         const finalData = [...localOnly, ...mergedRemote];
 
-                        const resolved = finalData.length > 0 ? finalData : (fallbackData ? fallbackData.filter((item: any) => !deletedSet.has(String(item.id))) : []);
+                        const resolved = finalData.length > 0 ? finalData : (fallbackData ? fallbackData.filter((item: any) => !deletedSet.has(String(item.id)) && !isPurgedDemoItem(item)) : []);
                         setter(resolved);
                         try { localStorage.setItem(`ht_${table}`, JSON.stringify(resolved)); } catch (e) {}
                         return;
                       }
                       if (fallbackData) {
-                        setter((prev: any[]) => (prev && prev.length > 0 ? prev : fallbackData).filter((item: any) => !deletedSet.has(String(item.id))));
+                        setter((prev: any[]) => (prev && prev.length > 0 ? prev : fallbackData).filter((item: any) => !deletedSet.has(String(item.id)) && !isPurgedDemoItem(item)));
                       }
                     } catch(e) {
                       if (fallbackData) setter((prev: any[]) => prev && prev.length > 0 ? prev : fallbackData);
@@ -1241,17 +1263,35 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     };
 
     const deleteLocationSafe = async (id: string): Promise<boolean> => {
-        // Desvincular de clientes locales para mantener consistencia
+        // Desvincular de clientes, parcelas y puntos de acopio locales para mantener consistencia
         setClients(prev => {
             const next = prev.map(c => c.locationId === id ? { ...c, locationId: undefined } : c);
             try { localStorage.setItem('ht_clients', JSON.stringify(next)); } catch (e) {}
+            return next;
+        });
+        setPlots(prev => {
+            const next = prev.map(p => p.locationId === id ? { ...p, locationId: '' } : p);
+            try { localStorage.setItem('ht_plots', JSON.stringify(next)); } catch (e) {}
+            return next;
+        });
+        setStoragePoints(prev => {
+            const next = prev.map(s => (s as any).locationId === id ? { ...s, locationId: undefined } as StoragePoint : s);
+            try { localStorage.setItem('ht_storage_points', JSON.stringify(next)); } catch (e) {}
             return next;
         });
         return await crud('locations', id, 'delete');
     };
 
     const deletePlotSafe = async (id: string): Promise<boolean> => {
-        // Cascada segura de registros técnicos de la parcela
+        // Cascada segura de registros técnicos de la parcela (local + Supabase)
+        const childTrialIds = trialRecords.filter(r => r.plotId === id).map(r => r.id);
+        const childHydricIds = hydricRecords.filter(r => r.plotId === id).map(r => r.id);
+        const childLogIds = logs.filter(l => l.plotId === id).map(l => l.id);
+
+        childTrialIds.forEach(cid => markIdDeleted('trial_records', cid));
+        childHydricIds.forEach(cid => markIdDeleted('hydric_records', cid));
+        childLogIds.forEach(cid => markIdDeleted('field_logs', cid));
+
         setTrialRecords(prev => {
             const next = prev.filter(r => r.plotId !== id);
             try { localStorage.setItem('ht_trial_records', JSON.stringify(next)); } catch (e) {}
@@ -1272,6 +1312,20 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             try { localStorage.setItem('ht_tasks', JSON.stringify(next)); } catch (e) {}
             return next;
         });
+
+        const creds = getStoredCredentials();
+        if (isDbConnected || creds.isConfigured) {
+            try {
+                await Promise.all([
+                    supabase.from('trial_records').delete().eq('plot_id', id),
+                    supabase.from('hydric_records').delete().eq('plot_id', id),
+                    supabase.from('field_logs').delete().eq('plot_id', id)
+                ]);
+            } catch (e) {
+                console.warn('Cascade plot children delete warning:', e);
+            }
+        }
+
         return await crud('plots', id, 'delete');
     };
 
@@ -1288,17 +1342,94 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             try { localStorage.setItem('ht_locations', JSON.stringify(next)); } catch (e) {}
             return next;
         });
+        // Desvincular de despachos de semillas
+        setSeedMovements(prev => {
+            const next = prev.map(m => m.clientId === id ? { ...m, clientId: undefined } : m);
+            try { localStorage.setItem('ht_seed_movements', JSON.stringify(next)); } catch (e) {}
+            return next;
+        });
         return await crud('clients', id, 'delete');
     };
 
     const deleteSeedBatchSafe = async (id: string): Promise<boolean> => {
-        // Desvincular de parcelas
+        // Desvincular de parcelas y eliminar movimientos huérfanos del lote
         setPlots(prev => {
             const next = prev.map(p => p.seedBatchId === id ? { ...p, seedBatchId: undefined } : p);
             try { localStorage.setItem('ht_plots', JSON.stringify(next)); } catch (e) {}
             return next;
         });
+        const orphanMovIds = seedMovements.filter(m => m.batchId === id).map(m => m.id);
+        orphanMovIds.forEach(mid => markIdDeleted('seed_movements', mid));
+        setSeedMovements(prev => {
+            const next = prev.filter(m => m.batchId !== id);
+            try { localStorage.setItem('ht_seed_movements', JSON.stringify(next)); } catch (e) {}
+            return next;
+        });
+        const creds = getStoredCredentials();
+        if ((isDbConnected || creds.isConfigured) && orphanMovIds.length > 0) {
+            try {
+                await supabase.from('seed_movements').delete().eq('batch_id', id);
+            } catch {}
+        }
         return await crud('seed_batches', id, 'delete');
+    };
+
+    const deleteVarietySafe = async (id: string): Promise<boolean> => {
+        setPlots(prev => {
+            const next = prev.map(p => p.varietyId === id ? { ...p, varietyId: '' } : p);
+            try { localStorage.setItem('ht_plots', JSON.stringify(next)); } catch (e) {}
+            return next;
+        });
+        setSeedBatches(prev => {
+            const next = prev.map(b => b.varietyId === id ? { ...b, varietyId: '' } : b);
+            try { localStorage.setItem('ht_seed_batches', JSON.stringify(next)); } catch (e) {}
+            return next;
+        });
+        return await crud('varieties', id, 'delete');
+    };
+
+    const deleteSupplierSafe = async (id: string): Promise<boolean> => {
+        setVarieties(prev => {
+            const next = prev.map(v => v.supplierId === id ? { ...v, supplierId: '' } : v);
+            try { localStorage.setItem('ht_varieties', JSON.stringify(next)); } catch (e) {}
+            return next;
+        });
+        setSeedBatches(prev => {
+            const next = prev.map(b => b.supplierId === id ? { ...b, supplierId: undefined } : b);
+            try { localStorage.setItem('ht_seed_batches', JSON.stringify(next)); } catch (e) {}
+            return next;
+        });
+        return await crud('suppliers', id, 'delete');
+    };
+
+    const deleteStoragePointSafe = async (id: string): Promise<boolean> => {
+        setSeedBatches(prev => {
+            const next = prev.map(b => b.storagePointId === id ? { ...b, storagePointId: undefined } : b);
+            try { localStorage.setItem('ht_seed_batches', JSON.stringify(next)); } catch (e) {}
+            return next;
+        });
+        return await crud('storage_points', id, 'delete');
+    };
+
+    const deleteProjectSafe = async (id: string): Promise<boolean> => {
+        setPlots(prev => {
+            const next = prev.map(p => p.projectId === id ? { ...p, projectId: undefined } : p);
+            try { localStorage.setItem('ht_plots', JSON.stringify(next)); } catch (e) {}
+            return next;
+        });
+        return await crud('projects', id, 'delete');
+    };
+
+    const deleteSeedMovementSafe = async (id: string): Promise<boolean> => {
+        const mov = seedMovements.find(m => m.id === id);
+        if (mov && mov.batchId && mov.quantity > 0) {
+            const batch = seedBatches.find(b => b.id === mov.batchId);
+            if (batch) {
+                const restoredStock = Number(((batch.remainingQuantity || 0) + mov.quantity).toFixed(2));
+                await crud('seed_batches', { ...batch, remainingQuantity: restoredStock }, 'update');
+            }
+        }
+        return await crud('seed_movements', id, 'delete');
     };
 
     return (
@@ -1308,17 +1439,17 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             updateUser: (user: User) => crud('users', user, 'update'),
             deleteUser: deleteUserSafe,
             theme, toggleTheme, appName, appLogo, updateBranding,
-            varieties, addVariety: (v) => crud('varieties', v, 'insert'), updateVariety: (v) => crud('varieties', v, 'update'), deleteVariety: (id) => crud('varieties', id, 'delete'),
+            varieties, addVariety: (v) => crud('varieties', v, 'insert'), updateVariety: (v) => crud('varieties', v, 'update'), deleteVariety: deleteVarietySafe,
             locations, addLocation: (l) => crud('locations', l, 'insert'), updateLocation: (l) => crud('locations', l, 'update'), deleteLocation: deleteLocationSafe,
             plots, addPlot: (p) => crud('plots', p, 'insert'), updatePlot: (p) => crud('plots', p, 'update'), deletePlot: deletePlotSafe, updatePlotPhenology,
             trialRecords, getPlotHistory: (pid) => trialRecords.filter(r => r.plotId === pid), getLatestRecord: (pid) => trialRecords.filter(r => r.plotId === pid).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0],
             addTrialRecord: (r) => crud('trial_records', r, 'insert'), updateTrialRecord: (r) => crud('trial_records', r, 'update'), deleteTrialRecord: (id) => crud('trial_records', id, 'delete'),
             tasks, addTask: addTaskWithSync, updateTask: updateTaskWithSync, deleteTask: (id) => crud('tasks', id, 'delete'), homologateLabor,
-            projects, addProject: (p) => crud('projects', p, 'insert'), updateProject: (p) => crud('projects', p, 'update'), deleteProject: (id) => crud('projects', id, 'delete'),
+            projects, addProject: (p) => crud('projects', p, 'insert'), updateProject: (p) => crud('projects', p, 'update'), deleteProject: deleteProjectSafe,
             clients, addClient: addClientWithRelations, updateClient: updateClientWithRelations, deleteClient: deleteClientSafe,
-            suppliers, addSupplier: async (s) => { const ok = await crud('suppliers', s, 'insert'); return ok ? s.id : null; }, updateSupplier: (s) => crud('suppliers', s, 'update'), deleteSupplier: (id) => crud('suppliers', id, 'delete'),
+            suppliers, addSupplier: async (s) => { const ok = await crud('suppliers', s, 'insert'); return ok ? s.id : null; }, updateSupplier: (s) => crud('suppliers', s, 'update'), deleteSupplier: deleteSupplierSafe,
             seedBatches, addSeedBatch: (b) => crud('seed_batches', b, 'insert'), updateSeedBatch: (b) => crud('seed_batches', b, 'update'), deleteSeedBatch: deleteSeedBatchSafe,
-            seedMovements, addSeedMovement: (m) => crud('seed_movements', m, 'insert'), updateSeedMovement: (m) => crud('seed_movements', m, 'update'), deleteSeedMovement: (id) => crud('seed_movements', id, 'delete'),
+            seedMovements, addSeedMovement: (m) => crud('seed_movements', m, 'insert'), updateSeedMovement: (m) => crud('seed_movements', m, 'update'), deleteSeedMovement: deleteSeedMovementSafe,
             resources, addResource: (r) => crud('resources', r, 'insert'), updateResource: (r) => crud('resources', r, 'update'), deleteResource: (id) => crud('resources', id, 'delete'),
             operationalExpenses,
             addOperationalExpense: (exp) => crud('operational_expenses', exp, 'insert'),
@@ -1327,7 +1458,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             auditOperationalExpense,
             switchUserRole,
             setCurrentUser,
-            storagePoints, addStoragePoint: (s) => crud('storage_points', s, 'insert'), updateStoragePoint: (s) => crud('storage_points', s, 'update'), deleteStoragePoint: (id) => crud('storage_points', id, 'delete'),
+            storagePoints, addStoragePoint: (s) => crud('storage_points', s, 'insert'), updateStoragePoint: (s) => crud('storage_points', s, 'update'), deleteStoragePoint: deleteStoragePointSafe,
             hydricRecords, addHydricRecord: (r) => crud('hydric_records', r, 'insert'), updateHydricRecord: (r) => crud('hydric_records', r, 'update'), deleteHydricRecord: (id) => crud('hydric_records', id, 'delete'),
             logs, addLog: (l) => crud('field_logs', l, 'insert'), updateLog: (l) => crud('field_logs', l, 'update'), deleteLog: (id) => crud('field_logs', id, 'delete'),
             isRefreshing, refreshData

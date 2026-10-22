@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import {
@@ -7,7 +7,8 @@ import {
   Layers, Activity, Sun, Clock,
   Target, FlaskConical, Eye, Edit2, X, Loader2, Save, Printer,
   AlertCircle, CloudRain, ShieldAlert, Sparkles, Compass, Maximize2,
-  Moon, Zap, ChevronUp, ChevronDown, Wifi, Radio, Sliders, Mail, Send, CheckCircle2, AlertTriangle, QrCode, FileText, Award, Wind, Gauge
+  Moon, Zap, ChevronUp, ChevronDown, Wifi, Radio, Sliders, Mail, Send, CheckCircle2, AlertTriangle, QrCode, FileText, Award, Wind, Gauge,
+  Camera, Upload, Image as ImageIcon
 } from 'lucide-react';
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -18,7 +19,7 @@ import HydricBalance from '../components/HydricBalance';
 import { PlotIdentificationModal } from '../components/PlotIdentificationModal';
 import SeedingProtocolModal from '../components/SeedingProtocolModal';
 import { LiveTelemetryPanel } from '../components/LiveTelemetryPanel';
-import { TrialRecord, AgrochemicalApplication, AgrochemicalCategory, HempStageId } from '../types';
+import { TrialRecord, AgrochemicalApplication, AgrochemicalCategory, HempStageId, FieldLog } from '../types';
 import { sendAgronomicAlertEmail } from '../src/services/emailNotificationService';
 
 // ============================================================================
@@ -158,13 +159,49 @@ const getLunarPhase = (date: Date) => {
   return { name: 'Cuarto Menguante', icon: '🌘', desc: 'Óptimo para labores de suelo y secado' };
 };
 
+// Compresión de imágenes en cliente para Bitácora Multimedia (Escritorio + Cámara Móvil)
+async function compressImageFileToDataUrl(file: File, maxDimension = 1280, quality = 0.82): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('No se pudo leer el archivo de imagen.'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Formato de imagen inválido.'));
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxDimension || height > maxDimension) {
+          if (width > height) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          } else {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(String(reader.result));
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.src = String(reader.result);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function PlotDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
   const {
     plots, locations, varieties, projects, getPlotHistory,
     addTrialRecord, updateTrialRecord, deleteTrialRecord,
-    currentUser, hydricRecords, logs, addLog, deleteLog, seedBatches, clients,
+    currentUser, hydricRecords, logs, addLog, updateLog, deleteLog, seedBatches, clients,
     updatePlotPhenology
   } = useAppContext();
 
@@ -178,8 +215,20 @@ export default function PlotDetails() {
   const [isViewMode, setIsViewMode] = useState(false);
   const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
+  // Estado Bitácora Multimedia (Escritorio + Cámara Celular + Edición CRUD)
+  const [editingLogId, setEditingLogId] = useState<string | null>(null);
   const [newLogNote, setNewLogNote] = useState('');
   const [newLogPhoto, setNewLogPhoto] = useState('');
+  const [newLogDate, setNewLogDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [newLogTime, setNewLogTime] = useState(() => new Date().toTimeString().slice(0, 5));
+  const [isProcessingImage, setIsProcessingImage] = useState(false);
+  const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const fileInputDesktopRef = useRef<HTMLInputElement | null>(null);
+  const fileInputMobileCameraRef = useRef<HTMLInputElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const cameraStreamRef = useRef<MediaStream | null>(null);
 
   // Reloj en vivo sincronizado con el huso horario de la locación
   const [nowTick, setNowTick] = useState<Date>(() => new Date());
@@ -198,29 +247,37 @@ export default function PlotDetails() {
   const [alertDetails, setAlertDetails] = useState('');
   const [emailAlertToast, setEmailAlertToast] = useState<{ message: string; via: string; sentTo: string } | null>(null);
 
-  // Estado para Cuaderno Fitosanitario SENASA
+  // Estado para Cuaderno Fitosanitario SENASA (unificado con ht_agrochemical_apps y sin datos demo)
   const [agroApps, setAgroApps] = useState<AgrochemicalApplication[]>(() => {
     try {
-      const saved = localStorage.getItem('nucleus_agro_apps_v1');
-      if (saved) return JSON.parse(saved);
+      const saved = localStorage.getItem('ht_agrochemical_apps') || localStorage.getItem('nucleus_agro_apps_v1');
+      if (saved) {
+        const parsed: AgrochemicalApplication[] = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter(
+            a => !a.id?.startsWith('app-bio-') && !a.id?.startsWith('app-foliar-') && !a.id?.startsWith('app-insect-')
+          );
+        }
+      }
     } catch {}
     return [];
   });
   const [isAgroModalOpen, setIsAgroModalOpen] = useState(false);
+  const [editingAgroId, setEditingAgroId] = useState<string | null>(null);
   const [agroForm, setAgroForm] = useState({
     date: new Date().toISOString().split('T')[0],
     productName: '',
     activeIngredient: '',
     senasaRegisterNumber: '',
-    category: 'Bioinsumo / Orgánico' as AgrochemicalCategory,
+    category: 'Bioestimulante' as AgrochemicalCategory,
     batchNumber: '',
     dosagePerHa: 2.5,
-    dosageUnit: 'L/ha' as 'L/ha' | 'kg/ha' | 'cc/hl' | 'gr/hl',
+    dosageUnit: 'L/ha' as AgrochemicalApplication['dosageUnit'],
     totalAppliedAmount: 5,
-    safetyPeriodDays: 15,
-    applicationMethod: 'Pulverización Terrestre' as 'Pulverización Terrestre' | 'Fertirriego' | 'Dron Agrícola' | 'Aplicación Manual Mochila',
+    safetyPeriodDays: 0,
+    applicationMethod: 'Pulverización Terrestre' as AgrochemicalApplication['applicationMethod'],
     targetPestOrPurpose: '',
-    responsibleAgronomist: currentUser?.name || 'Ing. Agr. Matías Quintana',
+    responsibleAgronomist: currentUser?.name || 'Ing. Agr. Gastón Barea',
     agronomistLicense: 'MP-4821-CIAFBA',
     weatherConditionsAtApp: '21°C | Hum: 48% | Viento: 9 km/h',
     notes: ''
@@ -228,7 +285,8 @@ export default function PlotDetails() {
 
   useEffect(() => {
     try {
-      localStorage.setItem('nucleus_agro_apps_v1', JSON.stringify(agroApps));
+      localStorage.setItem('ht_agrochemical_apps', JSON.stringify(agroApps));
+      localStorage.removeItem('nucleus_agro_apps_v1');
     } catch {}
   }, [agroApps]);
 
@@ -1899,7 +1957,7 @@ export default function PlotDetails() {
         )}
 
         {/* -------------------------------------------------------------------
-            PESTAÑA 4: BITÁCORA MULTIMEDIA
+            PESTAÑA 4: BITÁCORA MULTIMEDIA (ESCRITORIO + CÁMARA CELULAR + CRUD)
         ------------------------------------------------------------------- */}
         {activeTab === 'logs' && (
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-6 shadow-sm space-y-6 animate-in fade-in duration-300">
@@ -1910,7 +1968,7 @@ export default function PlotDetails() {
                   <span>Bitácora Multimedia de Campo ({plotLogs.length} entradas)</span>
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  Novedades operativas, inspecciones visuales y registro fotográfico georreferenciado en {plot.name}.
+                  Carga de fotografías desde el escritorio o toma directa con cámara de celular en {plot.name}.
                 </p>
               </div>
               <span className="text-xs font-mono text-slate-400 tabular-nums">
@@ -1923,20 +1981,92 @@ export default function PlotDetails() {
                 onSubmit={async e => {
                   e.preventDefault();
                   if (!newLogNote.trim()) return;
-                  await addLog({
-                    id: crypto.randomUUID(),
+                  const payload: FieldLog = {
+                    id: editingLogId || crypto.randomUUID(),
                     plotId: plot.id,
-                    date: localClockData.dateIso,
-                    time: localClockData.shortTimeStr,
+                    date: newLogDate || localClockData.dateIso,
+                    time: newLogTime || localClockData.shortTimeStr,
                     note: newLogNote.trim(),
                     photoUrl: newLogPhoto.trim() || undefined
-                  });
+                  };
+                  if (editingLogId) {
+                    await updateLog(payload);
+                  } else {
+                    await addLog(payload);
+                  }
+                  setEditingLogId(null);
                   setNewLogNote('');
                   setNewLogPhoto('');
+                  setNewLogDate(localClockData.dateIso);
+                  setNewLogTime(localClockData.shortTimeStr);
                 }}
-                className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-800 space-y-3"
+                className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-800 space-y-4"
               >
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-mono font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+                    {editingLogId ? '✏️ Editando Entrada de Bitácora' : '➕ Nueva Entrada en Bitácora de Campo'}
+                  </span>
+                  {editingLogId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingLogId(null);
+                        setNewLogNote('');
+                        setNewLogPhoto('');
+                        setNewLogDate(localClockData.dateIso);
+                        setNewLogTime(localClockData.shortTimeStr);
+                      }}
+                      className="text-[11px] font-mono font-bold text-slate-500 hover:text-rose-600 uppercase cursor-pointer"
+                    >
+                      Cancelar Edición ✕
+                    </button>
+                  )}
+                </div>
+
+                {/* Inputs ocultos para Escritorio/Galería y Cámara Nativa Celular */}
+                <input
+                  ref={fileInputDesktopRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={async e => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setIsProcessingImage(true);
+                    try {
+                      const compressedDataUrl = await compressImageFileToDataUrl(file);
+                      setNewLogPhoto(compressedDataUrl);
+                    } catch (err) {
+                      console.error(err);
+                    } finally {
+                      setIsProcessingImage(false);
+                      e.target.value = '';
+                    }
+                  }}
+                />
+                <input
+                  ref={fileInputMobileCameraRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={async e => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setIsProcessingImage(true);
+                    try {
+                      const compressedDataUrl = await compressImageFileToDataUrl(file);
+                      setNewLogPhoto(compressedDataUrl);
+                    } catch (err) {
+                      console.error(err);
+                    } finally {
+                      setIsProcessingImage(false);
+                      e.target.value = '';
+                    }
+                  }}
+                />
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                   <div className="md:col-span-2">
                     <label className={labelClass}>Observación Agronómica / Novedad de Campo *</label>
                     <input
@@ -1949,30 +2079,136 @@ export default function PlotDetails() {
                     />
                   </div>
                   <div>
-                    <label className={labelClass}>URL Fotografía Evidencia (Opcional)</label>
-                    <div className="flex gap-2">
-                      <input
-                        type="url"
-                        placeholder="https://..."
-                        value={newLogPhoto}
-                        onChange={e => setNewLogPhoto(e.target.value)}
-                        className={inputStyle}
-                      />
-                      <button
-                        type="submit"
-                        className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-mono font-bold text-xs uppercase tracking-wider shrink-0 cursor-pointer"
-                      >
-                        Registrar
-                      </button>
-                    </div>
+                    <label className={labelClass}>Fecha del Registro</label>
+                    <input
+                      type="date"
+                      value={newLogDate}
+                      onChange={e => setNewLogDate(e.target.value)}
+                      className={inputStyle}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Hora Local (UTC-3)</label>
+                    <input
+                      type="time"
+                      value={newLogTime}
+                      onChange={e => setNewLogTime(e.target.value)}
+                      className={inputStyle}
+                    />
                   </div>
                 </div>
+
+                {/* Barra de Captura Fotográfica: Escritorio + Cámara Celular + Visor WebRTC + URL */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-end pt-1">
+                  <div className="lg:col-span-7 flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={isProcessingImage}
+                      onClick={() => fileInputDesktopRef.current?.click()}
+                      className="px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 hover:border-emerald-500 text-slate-700 dark:text-slate-200 font-mono font-bold text-xs uppercase tracking-wider flex items-center gap-2 shadow-sm transition cursor-pointer"
+                    >
+                      {isProcessingImage ? <Loader2 size={14} className="animate-spin text-emerald-500" /> : <Upload size={14} className="text-emerald-600" />}
+                      <span>Subir Foto (Escritorio / Galería)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={isProcessingImage}
+                      onClick={() => fileInputMobileCameraRef.current?.click()}
+                      className="px-3.5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-mono font-bold text-xs uppercase tracking-wider flex items-center gap-2 shadow-sm transition cursor-pointer"
+                    >
+                      <Camera size={14} />
+                      <span>Tomar Foto (Cámara Celular)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setCameraError(null);
+                        setIsCameraModalOpen(true);
+                        try {
+                          if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                            const stream = await navigator.mediaDevices.getUserMedia({
+                              video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+                              audio: false
+                            });
+                            cameraStreamRef.current = stream;
+                            setTimeout(() => {
+                              if (videoRef.current) {
+                                videoRef.current.srcObject = stream;
+                                videoRef.current.play().catch(() => {});
+                              }
+                            }, 120);
+                          } else {
+                            setCameraError('Tu navegador no soporta cámara en vivo. Usa el botón "Tomar Foto (Cámara Celular)".');
+                          }
+                        } catch (err: any) {
+                          setCameraError('No se pudo acceder a la cámara en vivo. Puedes usar "Tomar Foto (Cámara Celular)" o "Subir Foto".');
+                        }
+                      }}
+                      className="px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 font-mono font-bold text-[11px] uppercase tracking-wider flex items-center gap-1.5 transition cursor-pointer"
+                      title="Abrir cámara en vivo desde navegador"
+                    >
+                      <Camera size={13} className="text-amber-400" />
+                      <span>Cámara en Vivo</span>
+                    </button>
+                  </div>
+
+                  <div className="lg:col-span-5 flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="O pegar URL de foto (https://...)"
+                      value={newLogPhoto.startsWith('data:image/') ? '' : newLogPhoto}
+                      onChange={e => setNewLogPhoto(e.target.value)}
+                      className={inputStyle}
+                    />
+                    <button
+                      type="submit"
+                      disabled={isProcessingImage || !newLogNote.trim()}
+                      className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl font-mono font-bold text-xs uppercase tracking-wider shrink-0 cursor-pointer flex items-center gap-1.5 shadow-sm"
+                    >
+                      <Save size={14} />
+                      <span>{editingLogId ? 'Guardar Cambios' : 'Registrar'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Previsualización de Fotografía Adjunta antes de guardar */}
+                {newLogPhoto && (
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-800/70">
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={newLogPhoto}
+                        alt="Previsualización"
+                        className="w-16 h-16 object-cover rounded-lg border border-slate-200 dark:border-slate-700"
+                      />
+                      <div className="font-mono">
+                        <span className="text-[10px] font-bold uppercase text-emerald-600 dark:text-emerald-400 block">
+                          ✓ Fotografía Lista para Guardar en Base de Datos
+                        </span>
+                        <span className="text-[11px] text-slate-500">
+                          {newLogPhoto.startsWith('data:image/')
+                            ? `Imagen optimizada (${Math.round((newLogPhoto.length * 0.75) / 1024)} KB)`
+                            : 'Enlace externo vinculado'}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setNewLogPhoto('')}
+                      className="px-2.5 py-1.5 rounded-lg bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 text-[10px] font-mono font-bold uppercase cursor-pointer"
+                    >
+                      Quitar Foto
+                    </button>
+                  </div>
+                )}
               </form>
             )}
 
             {plotLogs.length === 0 ? (
-              <div className="py-12 text-center font-mono text-xs text-slate-400 uppercase">
-                No hay registros multimedia cargados en la bitácora de esta parcela.
+              <div className="py-12 text-center font-mono text-xs text-slate-400 uppercase space-y-2">
+                <ImageIcon size={32} className="mx-auto text-slate-300 dark:text-slate-700" />
+                <p>No hay registros multimedia cargados en la bitácora de esta parcela.</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1985,13 +2221,30 @@ export default function PlotDetails() {
                       <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 tabular-nums">
                         <span>📅 {log.date} · 🕒 {log.time || '10:00'} hs (UTC-3)</span>
                         {canCreate && (
-                          <button
-                            onClick={() => deleteLog(log.id)}
-                            className="text-slate-400 hover:text-rose-600 transition cursor-pointer"
-                            title="Eliminar entrada"
-                          >
-                            <Trash2 size={14} />
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingLogId(log.id);
+                                setNewLogNote(log.note || '');
+                                setNewLogPhoto(log.photoUrl || '');
+                                setNewLogDate(log.date || localClockData.dateIso);
+                                setNewLogTime(log.time || localClockData.shortTimeStr);
+                              }}
+                              className="text-slate-400 hover:text-sky-600 transition cursor-pointer"
+                              title="Editar entrada"
+                            >
+                              <Edit2 size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => deleteLog(log.id)}
+                              className="text-slate-400 hover:text-rose-600 transition cursor-pointer"
+                              title="Eliminar entrada"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
                         )}
                       </div>
                       <p className="text-xs text-slate-800 dark:text-slate-200 font-medium leading-relaxed">
@@ -2003,7 +2256,7 @@ export default function PlotDetails() {
                         src={log.photoUrl}
                         alt="Evidencia de campo"
                         onClick={() => setPreviewPhoto(log.photoUrl || null)}
-                        className="w-full h-44 object-cover rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:opacity-90 transition"
+                        className="w-full h-48 object-cover rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:opacity-90 transition"
                       />
                     )}
                   </div>
@@ -2195,7 +2448,28 @@ export default function PlotDetails() {
 
                 {canCreate && (
                   <button
-                    onClick={() => setIsAgroModalOpen(true)}
+                    onClick={() => {
+                      setEditingAgroId(null);
+                      setAgroForm({
+                        date: localClockData.dateIso,
+                        productName: '',
+                        activeIngredient: '',
+                        senasaRegisterNumber: '',
+                        category: 'Bioestimulante',
+                        batchNumber: '',
+                        dosagePerHa: 2.5,
+                        dosageUnit: 'L/ha',
+                        totalAppliedAmount: 5,
+                        safetyPeriodDays: 0,
+                        applicationMethod: 'Pulverización Terrestre',
+                        targetPestOrPurpose: '',
+                        responsibleAgronomist: currentUser?.name || 'Ing. Agr. Gastón Barea',
+                        agronomistLicense: 'MP-4821-CIAFBA',
+                        weatherConditionsAtApp: `${stats.liveTemp}°C | Hum: ${stats.liveHum}% | Viento: ${stats.liveWind} km/h`,
+                        notes: ''
+                      });
+                      setIsAgroModalOpen(true);
+                    }}
                     className="px-4 py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-mono font-bold text-xs uppercase tracking-wider flex items-center gap-2 shadow-sm cursor-pointer"
                   >
                     <Plus size={15} />
@@ -2238,15 +2512,58 @@ export default function PlotDetails() {
                             <p className="text-[11px] text-slate-500">{app.activeIngredient}</p>
                           </div>
 
-                          {isUnderSafety ? (
-                            <span className="px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 font-mono font-bold text-[9px] border border-amber-300 dark:border-amber-800 flex items-center gap-1">
-                              <Clock size={10} /> Carencia ({daysLeft}d)
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-mono font-bold text-[9px] border border-emerald-300 dark:border-emerald-800 flex items-center gap-1">
-                              <CheckCircle2 size={10} /> Apto Cosecha
-                            </span>
-                          )}
+                          <div className="flex items-center gap-1.5">
+                            {isUnderSafety ? (
+                              <span className="px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 font-mono font-bold text-[9px] border border-amber-300 dark:border-amber-800 flex items-center gap-1">
+                                <Clock size={10} /> Carencia ({daysLeft}d)
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-mono font-bold text-[9px] border border-emerald-300 dark:border-emerald-800 flex items-center gap-1">
+                                <CheckCircle2 size={10} /> Apto Cosecha
+                              </span>
+                            )}
+                            {canCreate && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingAgroId(app.id);
+                                    setAgroForm({
+                                      date: app.date,
+                                      productName: app.productName,
+                                      activeIngredient: app.activeIngredient,
+                                      senasaRegisterNumber: app.senasaRegisterNumber,
+                                      category: app.category,
+                                      batchNumber: app.batchNumber,
+                                      dosagePerHa: app.dosagePerHa,
+                                      dosageUnit: app.dosageUnit,
+                                      totalAppliedAmount: app.totalAppliedAmount,
+                                      safetyPeriodDays: app.safetyPeriodDays,
+                                      applicationMethod: app.applicationMethod,
+                                      targetPestOrPurpose: app.notes || '',
+                                      responsibleAgronomist: app.responsibleAgronomist,
+                                      agronomistLicense: app.agronomistLicense,
+                                      weatherConditionsAtApp: `${app.weatherCondition?.temperatureC || 21}°C`,
+                                      notes: app.notes || ''
+                                    });
+                                    setIsAgroModalOpen(true);
+                                  }}
+                                  className="p-1 text-slate-400 hover:text-sky-600 cursor-pointer"
+                                  title="Editar aplicación"
+                                >
+                                  <Edit2 size={13} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setAgroApps(prev => prev.filter(x => x.id !== app.id))}
+                                  className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
+                                  title="Eliminar aplicación"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </div>
 
                         <div className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-100 dark:border-slate-800 text-[11px] font-mono space-y-1">
@@ -2268,6 +2585,256 @@ export default function PlotDetails() {
           </div>
         )}
       </div>
+
+      {/* Modal Cámara en Vivo WebRTC para Bitácora Multimedia */}
+      {isCameraModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[180] flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-5 space-y-4 text-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Camera size={18} className="text-emerald-400" />
+                <h3 className="text-sm font-mono font-black uppercase">Cámara de Campo en Vivo ({plot.name})</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (cameraStreamRef.current) {
+                    cameraStreamRef.current.getTracks().forEach(t => t.stop());
+                    cameraStreamRef.current = null;
+                  }
+                  setIsCameraModalOpen(false);
+                }}
+                className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-800 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {cameraError ? (
+              <div className="p-4 rounded-xl bg-amber-950/50 border border-amber-700/60 text-xs font-mono text-amber-200 space-y-3">
+                <p>{cameraError}</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCameraModalOpen(false);
+                    fileInputMobileCameraRef.current?.click();
+                  }}
+                  className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold uppercase text-xs cursor-pointer"
+                >
+                  Abrir Cámara Nativa del Celular
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="relative rounded-xl overflow-hidden bg-black aspect-video border border-slate-800">
+                  <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+                </div>
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (cameraStreamRef.current) {
+                        cameraStreamRef.current.getTracks().forEach(t => t.stop());
+                        cameraStreamRef.current = null;
+                      }
+                      setIsCameraModalOpen(false);
+                    }}
+                    className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 font-mono font-bold text-xs uppercase cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!videoRef.current) return;
+                      const video = videoRef.current;
+                      const canvas = document.createElement('canvas');
+                      canvas.width = video.videoWidth || 1280;
+                      canvas.height = video.videoHeight || 720;
+                      const ctx = canvas.getContext('2d');
+                      if (ctx) {
+                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                        const dataUrl = canvas.toDataURL('image/jpeg', 0.84);
+                        setNewLogPhoto(dataUrl);
+                      }
+                      if (cameraStreamRef.current) {
+                        cameraStreamRef.current.getTracks().forEach(t => t.stop());
+                        cameraStreamRef.current = null;
+                      }
+                      setIsCameraModalOpen(false);
+                    }}
+                    className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-mono font-bold text-xs uppercase flex items-center gap-2 cursor-pointer"
+                  >
+                    <Camera size={14} />
+                    <span>Capturar Fotografía</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal Alta/Edición de Aplicación Fitosanitaria */}
+      {isAgroModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-xl w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <h3 className="text-sm font-mono font-black uppercase text-slate-900 dark:text-white">
+                {editingAgroId ? 'Editar Aplicación Fitosanitaria' : `Registrar Aplicación en ${plot.name}`}
+              </h3>
+              <button onClick={() => setIsAgroModalOpen(false)} className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer">
+                <X size={18} />
+              </button>
+            </div>
+            <form
+              onSubmit={e => {
+                e.preventDefault();
+                if (!agroForm.productName.trim()) return;
+                const safetyDays = Number(agroForm.safetyPeriodDays) || 0;
+                const appDateObj = new Date(`${agroForm.date}T12:00:00`);
+                const harvestSafetyDate = new Date(appDateObj.getTime() + safetyDays * 86400000).toISOString().split('T')[0];
+                const newApp: AgrochemicalApplication = {
+                  id: editingAgroId || `agro-${Date.now()}`,
+                  plotId: plot.id,
+                  plotName: plot.name,
+                  date: agroForm.date,
+                  time: localClockData.shortTimeStr,
+                  category: agroForm.category,
+                  productName: agroForm.productName.trim(),
+                  activeIngredient: agroForm.activeIngredient.trim() || 'Bioinsumo Agrícola',
+                  manufacturer: 'Elaborador Homologado',
+                  supplierName: 'Insumos Red HempC',
+                  senasaRegisterNumber: agroForm.senasaRegisterNumber.trim() || 'SENASA S/N',
+                  toxicologicalClass: 'Biológico / Orgánico Certificado',
+                  dosagePerHa: Number(agroForm.dosagePerHa) || 1,
+                  dosageUnit: agroForm.dosageUnit,
+                  totalAppliedAmount: Number(agroForm.totalAppliedAmount) || 1,
+                  applicationMethod: agroForm.applicationMethod,
+                  batchNumber: agroForm.batchNumber.trim() || 'LOT-2026',
+                  expirationDate: '2027-12-31',
+                  senasaComplianceStatus: 'Conforme SENASA (Normativa VIGENTE)',
+                  safetyPeriodDays: safetyDays,
+                  harvestSafetyDate,
+                  responsibleAgronomist: agroForm.responsibleAgronomist,
+                  agronomistLicense: agroForm.agronomistLicense,
+                  weatherCondition: {
+                    temperatureC: stats.liveTemp,
+                    windSpeedKmH: stats.liveWind,
+                    relativeHumidityPct: stats.liveHum
+                  },
+                  notes: agroForm.notes,
+                  status: new Date() < new Date(harvestSafetyDate) ? 'En Carencia' : 'Apto Cosecha'
+                };
+                setAgroApps(prev =>
+                  editingAgroId ? prev.map(x => (x.id === editingAgroId ? newApp : x)) : [newApp, ...prev]
+                );
+                setIsAgroModalOpen(false);
+                setEditingAgroId(null);
+              }}
+              className="space-y-3"
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className={labelClass}>Producto / Bioinsumo *</label>
+                  <input
+                    type="text"
+                    required
+                    value={agroForm.productName}
+                    onChange={e => setAgroForm({ ...agroForm, productName: e.target.value })}
+                    className={inputStyle}
+                    placeholder="Ej: Trichoderma harzianum"
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Principio Activo</label>
+                  <input
+                    type="text"
+                    value={agroForm.activeIngredient}
+                    onChange={e => setAgroForm({ ...agroForm, activeIngredient: e.target.value })}
+                    className={inputStyle}
+                    placeholder="Ej: Cepa TH-35"
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Fecha de Aplicación</label>
+                  <input
+                    type="date"
+                    required
+                    value={agroForm.date}
+                    onChange={e => setAgroForm({ ...agroForm, date: e.target.value })}
+                    className={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Registro SENASA N°</label>
+                  <input
+                    type="text"
+                    value={agroForm.senasaRegisterNumber}
+                    onChange={e => setAgroForm({ ...agroForm, senasaRegisterNumber: e.target.value })}
+                    className={inputStyle}
+                    placeholder="SENASA N°..."
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Lote de Insumo</label>
+                  <input
+                    type="text"
+                    value={agroForm.batchNumber}
+                    onChange={e => setAgroForm({ ...agroForm, batchNumber: e.target.value })}
+                    className={inputStyle}
+                    placeholder="LOT-..."
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Dosis ({agroForm.dosageUnit})</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={agroForm.dosagePerHa}
+                    onChange={e => setAgroForm({ ...agroForm, dosagePerHa: Number(e.target.value) })}
+                    className={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Días de Carencia</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={agroForm.safetyPeriodDays}
+                    onChange={e => setAgroForm({ ...agroForm, safetyPeriodDays: Number(e.target.value) })}
+                    className={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Ing. Agrónomo Responsable</label>
+                  <input
+                    type="text"
+                    value={agroForm.responsibleAgronomist}
+                    onChange={e => setAgroForm({ ...agroForm, responsibleAgronomist: e.target.value })}
+                    className={inputStyle}
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsAgroModalOpen(false)}
+                  className="px-4 py-2 text-xs font-mono font-bold uppercase text-slate-500 cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-mono font-bold text-xs uppercase cursor-pointer"
+                >
+                  Guardar en Cuaderno
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* =====================================================================
           MODALES AUXILIARES (QR, PROTOCOLO ANEXO II, MUESTREO, ALERTA EMAIL)
