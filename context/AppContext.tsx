@@ -1622,27 +1622,85 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                     const lng = plot.polygon.reduce((s, pt) => s + pt.lng, 0) / plot.polygon.length;
                     coords = { lat: Number(lat.toFixed(6)), lng: Number(lng.toFixed(6)) };
                 }
+                if (coords && loc?.coordinates && !isNaN(loc.coordinates.lat) && loc.coordinates.lat !== 0) {
+                    const dLat = Math.abs(coords.lat - loc.coordinates.lat);
+                    const dLng = Math.abs(coords.lng - loc.coordinates.lng);
+                    if (dLat > 0.5 || dLng > 0.5) {
+                        coords = loc.coordinates;
+                    }
+                }
                 if (!coords && loc?.coordinates && !isNaN(loc.coordinates.lat)) {
                     coords = loc.coordinates;
                 }
                 if (!coords) continue;
 
                 const sowStr = plot.sowingDate || '2026-01-01';
-                const dailyRainMap = new Map<string, number>();
+                interface RainEventHourlyStat {
+                    mm: number;
+                    startHm: string;
+                    endHm: string;
+                    activeHours: number;
+                    peakHm: string;
+                    peakMm: number;
+                    modelLabel: string;
+                }
+                const dailyRainMap = new Map<string, RainEventHourlyStat>();
+
+                const extractHourlyEvents = (
+                    hTimes: string[],
+                    hPrecs: number[],
+                    modelLabel: string,
+                    minDate: string,
+                    maxDate: string
+                ) => {
+                    const byDay = new Map<string, { hm: string; val: number }[]>();
+                    for (let i = 0; i < hTimes.length; i++) {
+                        const rawT = hTimes[i] || '';
+                        const [dStr, hm] = rawT.split('T');
+                        if (!dStr || !hm || dStr < minDate || dStr > maxDate) continue;
+                        const val = Number(hPrecs[i] || 0);
+                        if (!byDay.has(dStr)) byDay.set(dStr, []);
+                        byDay.get(dStr)!.push({ hm, val });
+                    }
+                    for (const [dStr, hours] of byDay.entries()) {
+                        const rainyHours = hours.filter(h => h.val >= 0.1);
+                        const sumMm = Number(hours.reduce((s, h) => s + h.val, 0).toFixed(1));
+                        if (sumMm >= 0.5 && rainyHours.length > 0) {
+                            const startHm = rainyHours[0].hm;
+                            const lastHm = rainyHours[rainyHours.length - 1].hm;
+                            const endHourNum = (parseInt(lastHm.split(':')[0], 10) + 1) % 24;
+                            const endHm = `${String(endHourNum).padStart(2, '0')}:00`;
+                            const peak = rainyHours.reduce((best, cur) => (cur.val > best.val ? cur : best), rainyHours[0]);
+                            const prev = dailyRainMap.get(dStr);
+                            if (!prev || sumMm >= prev.mm) {
+                                dailyRainMap.set(dStr, {
+                                    mm: sumMm,
+                                    startHm,
+                                    endHm,
+                                    activeHours: rainyHours.length,
+                                    peakHm: peak.hm,
+                                    peakMm: Number(peak.val.toFixed(1)),
+                                    modelLabel
+                                });
+                            }
+                        }
+                    }
+                };
 
                 try {
-                    const forecastUrl = `https://api.open-meteo.com/v1/forecast?latitude=${coords.lat}&longitude=${coords.lng}&daily=precipitation_sum&past_days=14&forecast_days=1&timezone=auto`;
+                    const forecastUrl = `https://api.open-meteo.com/v1/forecast?latitude=${coords.lat}&longitude=${coords.lng}&hourly=precipitation&past_days=14&forecast_days=1&timezone=America%2FArgentina%2FBuenos_Aires`;
                     const fRes = await fetch(forecastUrl);
                     if (fRes.ok) {
                         const fData = await fRes.json();
-                        const times: string[] = fData.daily?.time || [];
-                        const precs: number[] = fData.daily?.precipitation_sum || [];
-                        times.forEach((dStr, idx) => {
-                            const val = Number(precs[idx] || 0);
-                            if (dStr >= sowStr && dStr <= todayIso && val >= 0.5) {
-                                dailyRainMap.set(dStr, Number(val.toFixed(1)));
-                            }
-                        });
+                        if (fData.hourly?.time && fData.hourly?.precipitation) {
+                            extractHourlyEvents(
+                                fData.hourly.time,
+                                fData.hourly.precipitation,
+                                'NOAA GFS / ECMWF IFS (Telemetría Sinóptica)',
+                                sowStr,
+                                todayIso
+                            );
+                        }
                     }
 
                     // Si se solicita sincronización profunda o la parcela no tiene lluvias automáticas asentadas aún, consultar también ERA5 Archive
@@ -1656,36 +1714,37 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                         if (archiveEndObj >= sowDate) {
                             const startIso = sowDate.toISOString().split('T')[0];
                             const endIso = archiveEndObj.toISOString().split('T')[0];
-                            const archiveUrl = `https://archive-api.open-meteo.com/v1/archive?latitude=${coords.lat}&longitude=${coords.lng}&start_date=${startIso}&end_date=${endIso}&daily=precipitation_sum&timezone=auto`;
+                            const archiveUrl = `https://archive-api.open-meteo.com/v1/archive?latitude=${coords.lat}&longitude=${coords.lng}&start_date=${startIso}&end_date=${endIso}&hourly=precipitation&timezone=America%2FArgentina%2FBuenos_Aires`;
                             const aRes = await fetch(archiveUrl);
                             if (aRes.ok) {
                                 const aData = await aRes.json();
-                                const aTimes: string[] = aData.daily?.time || [];
-                                const aPrecs: number[] = aData.daily?.precipitation_sum || [];
-                                aTimes.forEach((dStr, idx) => {
-                                    const val = Number(aPrecs[idx] || 0);
-                                    if (dStr >= sowStr && dStr <= todayIso && val >= 0.5) {
-                                        const prev = dailyRainMap.get(dStr) || 0;
-                                        if (val > prev) {
-                                            dailyRainMap.set(dStr, Number(val.toFixed(1)));
-                                        }
-                                    }
-                                });
+                                if (aData.hourly?.time && aData.hourly?.precipitation) {
+                                    extractHourlyEvents(
+                                        aData.hourly.time,
+                                        aData.hourly.precipitation,
+                                        'ECMWF ERA5-Land (Reanálisis Satelital ~9km)',
+                                        sowStr,
+                                        todayIso
+                                    );
+                                }
                             }
                         }
                     }
 
                     const sortedEntries = Array.from(dailyRainMap.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-                    for (const [rainDate, mm] of sortedEntries) {
-                        if (mm < 0.5) continue;
+                    for (const [rainDate, detail] of sortedEntries) {
+                        if (detail.mm < 0.5) continue;
                         const deterministicId = `auto-rain-${plot.id}-${rainDate}`;
                         if (!forcePersist && deletedHydricIds.has(deterministicId)) continue;
 
+                        const existingAutoRecord = hydricRecords.find(r => r.id === deterministicId);
                         const alreadyExists = hydricRecords.some(
                             r =>
                                 r.id === deterministicId ||
                                 (r.type === 'Lluvia' && r.date === rainDate && r.plotId === plot.id)
                         );
+
+                        const detailedNotes = `Pluviómetro Satelital ${detail.modelLabel} • Ventana de lluvia: ${detail.startHm} a ${detail.endHm} hs (${detail.activeHours}h efectivas • Pico máx: ${detail.peakMm} mm/h a las ${detail.peakHm} hs) • Celda GPS (${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)})`;
 
                         if (!alreadyExists) {
                             const newRainRecord: HydricRecord = {
@@ -1693,13 +1752,24 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                                 locationId: plot.locationId,
                                 plotId: plot.id,
                                 date: rainDate,
-                                time: '06:00',
+                                time: detail.startHm,
+                                endTime: detail.endHm,
                                 type: 'Lluvia',
-                                amountMm: Number(mm.toFixed(1)),
-                                notes: 'Asentado automático continuo por Pluviómetro Satelital (Open-Meteo ERA5/GFS)',
+                                amountMm: Number(detail.mm.toFixed(1)),
+                                notes: detailedNotes,
                                 createdBy: currentUser?.id || 'system-auto-pluviometer'
                             };
                             await crud('hydric_records', newRainRecord, 'insert');
+                            totalInserted++;
+                        } else if (existingAutoRecord && (existingAutoRecord.time === '06:00' || !existingAutoRecord.endTime)) {
+                            const updatedRainRecord: HydricRecord = {
+                                ...existingAutoRecord,
+                                time: detail.startHm,
+                                endTime: detail.endHm,
+                                amountMm: Number(detail.mm.toFixed(1)),
+                                notes: detailedNotes
+                            };
+                            await crud('hydric_records', updatedRainRecord, 'update');
                             totalInserted++;
                         }
                     }

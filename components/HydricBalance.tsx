@@ -28,7 +28,21 @@ export default function HydricBalance({ locationId, plotId, startDate, waterNeed
   const plot = plotId ? plots.find(p => p.id === plotId) : undefined;
 
   const activeCoords = useMemo(() => {
+    const locCoords =
+      location?.coordinates && !isNaN(location.coordinates.lat) && !isNaN(location.coordinates.lng)
+        ? location.coordinates
+        : null;
+
     if (plot?.coordinates && !isNaN(plot.coordinates.lat) && !isNaN(plot.coordinates.lng) && plot.coordinates.lat !== 0) {
+      // Salvaguarda geodésica: si la parcela quedó con coordenadas por defecto de CABA (-34.6037, -58.3816)
+      // o a más de 55 km (0.5°) de su Establecimiento padre, usar las coordenadas reales del Establecimiento
+      if (locCoords) {
+        const dLat = Math.abs(plot.coordinates.lat - locCoords.lat);
+        const dLng = Math.abs(plot.coordinates.lng - locCoords.lng);
+        if (dLat > 0.5 || dLng > 0.5) {
+          return locCoords;
+        }
+      }
       return plot.coordinates;
     }
     if (plot?.polygon && plot.polygon.length >= 3) {
@@ -36,8 +50,8 @@ export default function HydricBalance({ locationId, plotId, startDate, waterNeed
       const lng = plot.polygon.reduce((s, p) => s + p.lng, 0) / plot.polygon.length;
       return { lat: Number(lat.toFixed(6)), lng: Number(lng.toFixed(6)) };
     }
-    if (location?.coordinates && !isNaN(location.coordinates.lat) && !isNaN(location.coordinates.lng)) {
-      return location.coordinates;
+    if (locCoords) {
+      return locCoords;
     }
     return { lat: -43.308576, lng: -65.289047 };
   }, [plot, location]);
@@ -110,11 +124,21 @@ export default function HydricBalance({ locationId, plotId, startDate, waterNeed
   });
 
   const manualRecords = useMemo(() => {
-    const data = hydricRecords.filter(h => {
+    const raw = hydricRecords.filter(h => {
       if (plotId) {
         return h.plotId === plotId || (h.locationId === locationId && !h.plotId);
       }
       return h.locationId === locationId;
+    });
+
+    // Deduplicar eventos automáticos por fecha cuando se visualiza a nivel Establecimiento o cuando coexisten registros de campo/parcela
+    const seenAutoByDate = new Set<string>();
+    const data = raw.filter(r => {
+      const isAuto = String(r.id).startsWith('auto-rain-') || (r.notes || '').includes('Pluviómetro Satelital');
+      if (!isAuto) return true;
+      if (seenAutoByDate.has(r.date)) return false;
+      seenAutoByDate.add(r.date);
+      return true;
     });
 
     return data.sort((a, b) => {
@@ -156,7 +180,7 @@ export default function HydricBalance({ locationId, plotId, startDate, waterNeed
 
   const toggleSort = () => setSortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'));
 
-  // MOTOR DE SINCRONIZACIÓN Y ASENTAMIENTO AUTOMÁTICO DE LLUVIAS EN LA BASE DE DATOS
+  // MOTOR DE SINCRONIZACIÓN Y ASENTAMIENTO AUTOMÁTICO HORARIO DE LLUVIAS EN LA BASE DE DATOS
   const syncSatelliteAndPersistRainEvents = useCallback(
     async (forcePersist = false) => {
       if (!activeCoords?.lat || !activeCoords?.lng) return;
@@ -166,27 +190,98 @@ export default function HydricBalance({ locationId, plotId, startDate, waterNeed
       try {
         const sowStr = startDate || plot?.sowingDate || '2026-01-01';
         const todayIso = getLocalTodayIso();
-        const dailyRainMap = new Map<string, number>();
 
-        // 1. Consulta de pronóstico y últimos 14 días (Open-Meteo Forecast)
-        const forecastUrl = `https://api.open-meteo.com/v1/forecast?latitude=${activeCoords.lat}&longitude=${activeCoords.lng}&daily=precipitation_sum,et0_fao_evapotranspiration&past_days=14&forecast_days=2&timezone=auto`;
+        interface DailyHourlyRainDetail {
+          mm: number;
+          startHm: string;
+          endHm: string;
+          activeHours: number;
+          peakHm: string;
+          peakMm: number;
+          modelLabel: string;
+        }
+
+        const dailyRainMap = new Map<string, DailyHourlyRainDetail>();
+
+        const ingestHourlySeries = (hTimes: string[], hPrecs: number[], modelLabel: string) => {
+          const byDay = new Map<string, { hm: string; val: number }[]>();
+          for (let i = 0; i < hTimes.length; i++) {
+            const [dStr, hm] = (hTimes[i] || '').split('T');
+            if (!dStr || dStr < sowStr || dStr > todayIso) continue;
+            const val = Number(hPrecs[i] || 0);
+            if (!byDay.has(dStr)) byDay.set(dStr, []);
+            byDay.get(dStr)!.push({ hm: hm || '00:00', val });
+          }
+
+          byDay.forEach((hours, dStr) => {
+            const sumMm = Number(hours.reduce((s, h) => s + h.val, 0).toFixed(1));
+            const rainyHours = hours.filter(h => h.val >= 0.1);
+            if (sumMm > 0) {
+              const firstHm = rainyHours.length > 0 ? rainyHours[0].hm : '00:00';
+              const lastHm = rainyHours.length > 0 ? rainyHours[rainyHours.length - 1].hm : firstHm;
+              const endHourNum = (parseInt(lastHm.split(':')[0] || '0', 10) + 1) % 24;
+              const endHm = `${String(endHourNum).padStart(2, '0')}:00`;
+              const peak = rainyHours.length > 0
+                ? rainyHours.reduce((best, cur) => (cur.val > best.val ? cur : best), rainyHours[0])
+                : { hm: firstHm, val: sumMm };
+
+              const prev = dailyRainMap.get(dStr);
+              if (!prev || sumMm >= prev.mm) {
+                dailyRainMap.set(dStr, {
+                  mm: sumMm,
+                  startHm: firstHm,
+                  endHm,
+                  activeHours: Math.max(1, rainyHours.length),
+                  peakHm: peak.hm,
+                  peakMm: Number(peak.val.toFixed(1)),
+                  modelLabel
+                });
+              }
+            }
+          });
+        };
+
+        // 1. Consulta de archivo histórico horario desde la fecha de siembra (ECMWF ERA5-Land Reanalysis)
+        const sowDate = new Date(`${sowStr}T00:00:00`);
+        const nowDate = new Date(`${todayIso}T00:00:00`);
+        const archiveEndObj = new Date(nowDate.getTime() - 2 * 86400000);
+
+        if (archiveEndObj >= sowDate) {
+          const startIso = sowDate.toISOString().split('T')[0];
+          const endIso = archiveEndObj.toISOString().split('T')[0];
+          const archiveUrl = `https://archive-api.open-meteo.com/v1/archive?latitude=${activeCoords.lat}&longitude=${activeCoords.lng}&start_date=${startIso}&end_date=${endIso}&hourly=precipitation&timezone=America%2FArgentina%2FBuenos_Aires`;
+          const aRes = await fetch(archiveUrl);
+          if (aRes.ok) {
+            const aData = await aRes.json();
+            if (aData.hourly?.time && aData.hourly?.precipitation) {
+              ingestHourlySeries(
+                aData.hourly.time,
+                aData.hourly.precipitation,
+                'ECMWF ERA5-Land (Reanálisis Satelital ~9km)'
+              );
+            }
+          }
+        }
+
+        // 2. Consulta horaria y diaria de los últimos 14 días + hoy (NOAA GFS / ECMWF IFS)
+        const forecastUrl = `https://api.open-meteo.com/v1/forecast?latitude=${activeCoords.lat}&longitude=${activeCoords.lng}&daily=precipitation_sum,et0_fao_evapotranspiration&hourly=precipitation&past_days=14&forecast_days=2&timezone=America%2FArgentina%2FBuenos_Aires`;
         const fRes = await fetch(forecastUrl);
         let recentSum = 0;
 
         if (fRes.ok) {
           const fData = await fRes.json();
+          if (fData.hourly?.time && fData.hourly?.precipitation) {
+            ingestHourlySeries(
+              fData.hourly.time,
+              fData.hourly.precipitation,
+              'NOAA GFS / ECMWF IFS (Telemetría Sinóptica)'
+            );
+          }
+
           const times: string[] = fData.daily?.time || [];
           const precs: number[] = fData.daily?.precipitation_sum || [];
           const et0s: number[] = fData.daily?.et0_fao_evapotranspiration || [];
 
-          times.forEach((dStr, idx) => {
-            const val = Number(precs[idx] || 0);
-            if (dStr >= sowStr && dStr <= todayIso) {
-              dailyRainMap.set(dStr, Number(val.toFixed(1)));
-            }
-          });
-
-          // Últimos 7 días hasta hoy
           const todayIdx = times.indexOf(todayIso);
           const sliceEnd = todayIdx >= 0 ? todayIdx + 1 : Math.min(times.length, 15);
           const sliceStart = Math.max(0, sliceEnd - 7);
@@ -200,42 +295,14 @@ export default function HydricBalance({ locationId, plotId, startDate, waterNeed
         }
         setRecentRain7d(Number(recentSum.toFixed(1)));
 
-        // 2. Consulta de archivo histórico desde la fecha de siembra (Open-Meteo ERA5 Archive)
-        const sowDate = new Date(`${sowStr}T00:00:00`);
-        const nowDate = new Date(`${todayIso}T00:00:00`);
-        const maxEndDate = new Date(sowDate.getTime() + 165 * 86400000);
-        const targetEnd = nowDate < maxEndDate ? nowDate : maxEndDate;
-        const archiveEndObj = new Date(targetEnd.getTime() - 2 * 86400000);
-
-        if (archiveEndObj >= sowDate) {
-          const startIso = sowDate.toISOString().split('T')[0];
-          const endIso = archiveEndObj.toISOString().split('T')[0];
-          const archiveUrl = `https://archive-api.open-meteo.com/v1/archive?latitude=${activeCoords.lat}&longitude=${activeCoords.lng}&start_date=${startIso}&end_date=${endIso}&daily=precipitation_sum&timezone=auto`;
-          const aRes = await fetch(archiveUrl);
-          if (aRes.ok) {
-            const aData = await aRes.json();
-            const aTimes: string[] = aData.daily?.time || [];
-            const aPrecs: number[] = aData.daily?.precipitation_sum || [];
-            aTimes.forEach((dStr, idx) => {
-              const val = Number(aPrecs[idx] || 0);
-              if (dStr >= sowStr && dStr <= todayIso) {
-                const prev = dailyRainMap.get(dStr) || 0;
-                if (val > prev) {
-                  dailyRainMap.set(dStr, Number(val.toFixed(1)));
-                }
-              }
-            });
-          }
-        }
-
         let totalSatSum = 0;
-        dailyRainMap.forEach(mm => {
-          totalSatSum += mm;
+        dailyRainMap.forEach(detail => {
+          totalSatSum += detail.mm;
         });
 
         setAutoRain(Number(totalSatSum.toFixed(1)));
 
-        // 3. ASENTAMIENTO AUTOMÁTICO EN LA BASE DE DATOS CADA VEZ QUE LLUEVE (mm >= 0.5)
+        // 3. ASENTAMIENTO Y ACTUALIZACIÓN HORARIA AUTOMÁTICA EN LA BASE DE DATOS (mm >= 0.5)
         if (autoSyncRainToDb || forcePersist) {
           let deletedHydricIds = new Set<string>();
           try {
@@ -250,14 +317,15 @@ export default function HydricBalance({ locationId, plotId, startDate, waterNeed
           let insertedCount = 0;
 
           const sortedEntries = Array.from(dailyRainMap.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-          for (const [rainDate, mm] of sortedEntries) {
-            if (mm < 0.5) continue; // Umbral mínimo agronómico (0.5 mm)
+          for (const [rainDate, detail] of sortedEntries) {
+            if (detail.mm < 0.5) continue; // Umbral mínimo agronómico (0.5 mm)
             const deterministicId = `auto-rain-${scopeKey}-${rainDate}`;
 
-            // Respetar si el usuario eliminó manualmente ese registro automático
             if (!forcePersist && deletedHydricIds.has(deterministicId)) continue;
 
-            const alreadyExists = hydricRecords.some(
+            const richNote = `Pluviómetro Satelital ${detail.modelLabel} • Ventana de lluvia: ${detail.startHm} a ${detail.endHm} hs (${detail.activeHours}h efectivas • Pico máx: ${detail.peakMm} mm/h a las ${detail.peakHm} hs) • Celda GPS (${activeCoords.lat.toFixed(4)}, ${activeCoords.lng.toFixed(4)})`;
+
+            const existingRecord = hydricRecords.find(
               r =>
                 r.id === deterministicId ||
                 (r.type === 'Lluvia' &&
@@ -265,20 +333,32 @@ export default function HydricBalance({ locationId, plotId, startDate, waterNeed
                   ((plotId && r.plotId === plotId) || (!plotId && r.locationId === locationId)))
             );
 
-            if (!alreadyExists) {
+            if (!existingRecord) {
               const newRainRecord: HydricRecord = {
                 id: deterministicId,
                 locationId,
                 plotId,
                 date: rainDate,
-                time: '06:00',
+                time: detail.startHm,
+                endTime: detail.endHm,
                 type: 'Lluvia',
-                amountMm: Number(mm.toFixed(1)),
-                notes: 'Asentado automático en BD por Pluviómetro Satelital (Open-Meteo ERA5/GFS)',
+                amountMm: Number(detail.mm.toFixed(1)),
+                notes: richNote,
                 createdBy: currentUser?.id || 'system-auto-pluviometer'
               };
               await addHydricRecord(newRainRecord);
               insertedCount++;
+            } else if (
+              String(existingRecord.id).startsWith('auto-rain-') &&
+              (existingRecord.time === '06:00' || !existingRecord.endTime || forcePersist)
+            ) {
+              await updateHydricRecord({
+                ...existingRecord,
+                time: detail.startHm,
+                endTime: detail.endHm,
+                amountMm: Number(detail.mm.toFixed(1)),
+                notes: richNote
+              });
             }
           }
 
@@ -293,7 +373,7 @@ export default function HydricBalance({ locationId, plotId, startDate, waterNeed
         setIsSyncingDb(false);
       }
     },
-    [activeCoords.lat, activeCoords.lng, startDate, plot?.sowingDate, autoSyncRainToDb, plotId, locationId, hydricRecords, addHydricRecord, currentUser?.id]
+    [activeCoords.lat, activeCoords.lng, startDate, plot?.sowingDate, autoSyncRainToDb, plotId, locationId, hydricRecords, addHydricRecord, updateHydricRecord, currentUser?.id]
   );
 
   useEffect(() => {
@@ -781,8 +861,8 @@ export default function HydricBalance({ locationId, plotId, startDate, waterNeed
                         <div className="flex items-center gap-2">
                           <Calendar size={12} className="text-slate-400" />
                           <span>{r.date}</span>
-                          <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] text-slate-600 dark:text-slate-300 flex items-center gap-1">
-                            <Clock size={10} /> {r.time || '08:30'} hs
+                          <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] text-slate-600 dark:text-slate-300 flex items-center gap-1" title="Ventana horaria de inicio y fin del evento hídrico">
+                            <Clock size={10} /> {r.time || '00:00'}{r.endTime ? ` → ${r.endTime}` : ''} hs
                           </span>
                         </div>
                       </td>
