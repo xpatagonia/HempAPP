@@ -8,7 +8,7 @@ import {
   Target, FlaskConical, Eye, Edit2, X, Loader2, Save, Printer,
   AlertCircle, CloudRain, ShieldAlert, Sparkles, Compass, Maximize2,
   Moon, Zap, ChevronUp, ChevronDown, Wifi, Radio, Sliders, Mail, Send, CheckCircle2, AlertTriangle, QrCode, FileText, Award, Wind, Gauge,
-  Camera, Upload, Image as ImageIcon
+  Camera, Upload, Image as ImageIcon, Tractor, Wrench, Download
 } from 'lucide-react';
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -19,7 +19,7 @@ import HydricBalance from '../components/HydricBalance';
 import { PlotIdentificationModal } from '../components/PlotIdentificationModal';
 import SeedingProtocolModal from '../components/SeedingProtocolModal';
 import { LiveTelemetryPanel } from '../components/LiveTelemetryPanel';
-import { TrialRecord, AgrochemicalApplication, AgrochemicalCategory, HempStageId, FieldLog } from '../types';
+import { TrialRecord, AgrochemicalApplication, AgrochemicalCategory, HempStageId, FieldLog, Task, AgriculturalLaborType } from '../types';
 import { sendAgronomicAlertEmail } from '../src/services/emailNotificationService';
 
 // ============================================================================
@@ -202,10 +202,11 @@ export default function PlotDetails() {
     plots, locations, varieties, projects, getPlotHistory,
     addTrialRecord, updateTrialRecord, deleteTrialRecord,
     currentUser, hydricRecords, logs, addLog, updateLog, deleteLog, seedBatches, clients,
-    updatePlotPhenology, closePlotCycle, reopenPlotCycle
+    updatePlotPhenology, closePlotCycle, reopenPlotCycle,
+    tasks, addTask, updateTask, deleteTask, homologateLabor, usersList
   } = useAppContext();
 
-  const [activeTab, setActiveTab] = useState<'analytics' | 'map' | 'astro' | 'logs' | 'water' | 'phytosanitary' | 'iot'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'map' | 'labors' | 'astro' | 'logs' | 'water' | 'phytosanitary' | 'iot'>('analytics');
   const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [isProtocolModalOpen, setIsProtocolModalOpen] = useState(false);
@@ -291,6 +292,45 @@ export default function PlotDetails() {
   }, [agroApps]);
 
   const plotAgroApps = useMemo(() => agroApps.filter(a => a.plotId === id), [agroApps, id]);
+
+  // Estado para selección múltiple de parcelas en Mapa de Geodesia
+  const [selectedMapPlotIds, setSelectedMapPlotIds] = useState<string[]>(() => (id ? [id] : []));
+  useEffect(() => {
+    if (id) setSelectedMapPlotIds([id]);
+  }, [id]);
+
+  // Estado para Registro de Labores Agrícolas & Preparación de Suelo anexado a la Parcela / Lote
+  const [isLaborModalOpen, setIsLaborModalOpen] = useState(false);
+  const [editingLaborId, setEditingLaborId] = useState<string | null>(null);
+  const [laborCategoryFilter, setLaborCategoryFilter] = useState<'ALL' | 'SOIL_PREP' | 'CULTURAL'>('ALL');
+  const [applyLaborToWholeBlock, setApplyLaborToWholeBlock] = useState(false);
+  const [laborForm, setLaborForm] = useState({
+    title: 'Cincelado profundo + Rastra de disco (Cama de siembra)',
+    description: 'Roturación vertical a 30 cm, desterronado superficial y refinado de cama de siembra.',
+    laborType: 'PREPARACION_SUELO' as AgriculturalLaborType,
+    targetStage: 'BBCH_00_09' as HempStageId,
+    executionDate: new Date().toISOString().split('T')[0],
+    priority: 'Alta' as Task['priority'],
+    status: 'Completada' as Task['status'],
+    assignedTo: currentUser?.id || '1',
+    operatorName: currentUser?.name || '',
+    tractor: 'Tractor John Deere 5090E (90 HP)',
+    implement: 'Cincel 7 púas + Rastra excéntrica 20 discos',
+    soilDepthCm: 28,
+    soilCondition: 'Humedad óptima (Capacidad de campo 65%) · Sin compactación',
+    machineHours: 2.5,
+    fuelConsumptionLiters: 18,
+    directCostUsd: 85,
+    notes: ''
+  });
+
+  // Labores vinculadas a esta parcela
+  const plotLabors = useMemo(() => {
+    if (!id) return [];
+    return tasks
+      .filter(t => t.plotId === id)
+      .sort((a, b) => new Date(b.executionDate || b.dueDate).getTime() - new Date(a.executionDate || a.dueDate).getTime());
+  }, [tasks, id]);
 
   // Estado para Telemetría IoT
   const [iotAlertsConfig, setIotAlertsConfig] = useState({
@@ -1379,6 +1419,7 @@ export default function PlotDetails() {
         {[
           { id: 'analytics', label: 'Monitoreo & Curvas', icon: Activity },
           { id: 'map', label: 'Mapa & Geocerca', icon: Compass },
+          { id: 'labors', label: `Labores & Prep. Suelo (${plotLabors.length})`, icon: Tractor },
           { id: 'astro', label: 'Ciclo de Luz', icon: Sun },
           { id: 'logs', label: 'Bitácora Multimedia', icon: Sparkles },
           { id: 'water', label: 'Pluviómetro', icon: Droplets },
@@ -1751,10 +1792,11 @@ export default function PlotDetails() {
               </div>
             </div>
 
-            {/* Visor Cartográfico Satelital con Etiquetas Permanentes y Cotas Métricas */}
+            {/* Visor Cartográfico Satelital con Etiquetas Inteligentes, Clic para Inspeccionar y Captura/Descarga */}
             <div className="h-[580px] rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-inner">
               <MapEditor
                 key={`plot-details-map-${plot.id}`}
+                activePlotId={plot.id}
                 initialCenter={activeCoords}
                 initialPolygon={plot.polygon || []}
                 referencePolygon={location?.polygon || []}
@@ -1764,10 +1806,107 @@ export default function PlotDetails() {
                 polygonSubLabel={`${variety?.name || 'Genética'} · ${plot.surfaceArea} ${plot.surfaceUnit} · ${plot.block || 'Ensayo'}`}
                 referenceLabel={location?.name ? `Perímetro Campo Padre: ${location.name}` : 'Campo Padre'}
                 onExtraPolygonClick={(targetPlotId) => navigate(`/plots/${targetPlotId}`)}
+                selectedPolygonIds={selectedMapPlotIds}
+                onSelectedPolygonIdsChange={setSelectedMapPlotIds}
                 readOnly={true}
                 height="100%"
               />
             </div>
+
+            {/* Tabla Sincronizada de Parcelas Seleccionadas en el Selector Multi-Parcela del Mapa */}
+            {selectedMapPlotIds.length > 0 && (
+              <div className="p-4 rounded-2xl bg-emerald-950/10 dark:bg-emerald-950/20 border border-emerald-500/30 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 size={15} className="text-emerald-500" />
+                    <span className="text-xs font-mono font-black uppercase tracking-wider text-slate-900 dark:text-white">
+                      Inspección Multi-Parcela Activa ({selectedMapPlotIds.length} {selectedMapPlotIds.length === 1 ? 'parcela seleccionada' : 'parcelas seleccionadas'} en el mapa)
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const selectedPlotsData = plots.filter(p => selectedMapPlotIds.includes(p.id));
+                        const headers = ['ID', 'Parcela', 'Bloque', 'Repetición', 'Genética', 'Superficie', 'Unidad', 'Perímetro (m)', 'Fecha Siembra', 'Latitud', 'Longitud'];
+                        const rows = selectedPlotsData.map(sp => {
+                          const vName = varieties.find(v => v.id === sp.varietyId)?.name || 'S/D';
+                          return [
+                            sp.id,
+                            `"${sp.name}"`,
+                            `"${sp.block || ''}"`,
+                            sp.replicate || 1,
+                            `"${vName}"`,
+                            sp.surfaceArea,
+                            sp.surfaceUnit,
+                            sp.perimeter || 12,
+                            sp.sowingDate || '',
+                            sp.coordinates?.lat || activeCoords.lat,
+                            sp.coordinates?.lng || activeCoords.lng
+                          ].join(',');
+                        });
+                        const csv = '\uFEFF' + [headers.join(','), ...rows].join('\n');
+                        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `Parcelas_Seleccionadas_${location?.name?.replace(/\s+/g, '_') || 'Ensayo'}.csv`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Download size={12} />
+                      <span>Descargar Selección (CSV)</span>
+                    </button>
+                    {selectedMapPlotIds.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedMapPlotIds([plot.id])}
+                        className="px-2.5 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[10px] font-mono font-bold uppercase cursor-pointer"
+                      >
+                        Solo Parcela Actual
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 font-mono text-xs">
+                  {plots
+                    .filter(p => selectedMapPlotIds.includes(p.id))
+                    .map(sp => {
+                      const spVar = varieties.find(v => v.id === sp.varietyId);
+                      return (
+                        <div
+                          key={sp.id}
+                          className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2"
+                        >
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: sp.color || '#10b981' }} />
+                              <strong className="text-slate-900 dark:text-white truncate">{sp.name}</strong>
+                              <span className="text-[10px] text-slate-400">({sp.block || 'B1'})</span>
+                            </div>
+                            <p className="text-[10px] text-emerald-600 dark:text-emerald-400 truncate mt-0.5">
+                              {spVar?.name || 'Cultivar'} · {sp.surfaceArea} {sp.surfaceUnit}
+                            </p>
+                          </div>
+                          {sp.id !== plot.id && (
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/plots/${sp.id}`)}
+                              className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 hover:bg-emerald-600 hover:text-white text-[10px] font-bold transition cursor-pointer shrink-0"
+                            >
+                              Ir →
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+            )}
 
             {/* Panel Inferior de Vinculación de Datos, Herencia del Sitio y Vértices Geodésicos */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 pt-1">
@@ -2851,7 +2990,750 @@ export default function PlotDetails() {
             </div>
           </div>
         )}
+
+        {/* -------------------------------------------------------------------
+            PESTAÑA 8: LABORES AGRÍCOLAS & PREPARACIÓN DE SUELO (ANEXADAS A LA PARCELA / LOTE)
+        ------------------------------------------------------------------- */}
+        {activeTab === 'labors' && (
+          <div className="space-y-6 animate-in fade-in duration-300">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-6 shadow-sm space-y-6">
+              <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 pb-5 border-b border-slate-100 dark:border-slate-800">
+                <div className="flex items-start gap-3.5">
+                  <div className="p-3 bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-xl border border-amber-500/20 shrink-0">
+                    <Tractor size={22} />
+                  </div>
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-base font-black text-slate-900 dark:text-white uppercase tracking-tight">
+                        Registro de Preparación de Suelo & Labores Agrícolas ({plot.name})
+                      </h3>
+                      <span className="px-2.5 py-0.5 rounded-md text-[10px] font-mono font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60">
+                        Anexado a Parcela y Lote Padre ({location?.name || 'Predio'})
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-1">
+                      Bitácora auditable de preparación de cama de siembra (cincelado, rastra, subsolado, nivelación, humedad edáfica), siembra y labores culturales vinculadas a usuarios declarados del sistema.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {canCreate && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const sowDateObj = new Date(`${plot.sowingDate || localClockData.dateIso}T12:00:00Z`);
+                          const dMinus15 = new Date(sowDateObj.getTime() - 15 * 86400000).toISOString().split('T')[0];
+                          const dMinus7 = new Date(sowDateObj.getTime() - 7 * 86400000).toISOString().split('T')[0];
+                          const dMinus2 = new Date(sowDateObj.getTime() - 2 * 86400000).toISOString().split('T')[0];
+                          const defaultTech = plot.sowingResponsibleName || plot.technicalResponsibleName || currentUser?.name || 'Ing. Agr. Julian PIZARRO';
+
+                          const standardLabors: Task[] = [
+                            {
+                              id: `prep-subsolado-${plot.id}-${Date.now()}-1`,
+                              title: 'Labranza Vertical: Cincelado Profundo & Descompactación (30 cm)',
+                              description: `Roturación vertical del perfil edáfico (${plot.soilType || location?.soilType || 'Franco'}) a 30 cm de profundidad sin inversión de pan de tierra para optimizar drenaje y desarrollo radicular pivotante.`,
+                              dueDate: dMinus15,
+                              executionDate: dMinus15,
+                              priority: 'Alta',
+                              status: 'Homologada',
+                              assignedToIds: [currentUser?.id || '1'],
+                              createdBy: currentUser?.id || '1',
+                              plotId: plot.id,
+                              laborType: 'PREPARACION_SUELO',
+                              targetStage: 'BBCH_00_09',
+                              operator: defaultTech,
+                              machinery: {
+                                tractor: 'Tractor 95 HP Doble Tracción',
+                                implement: 'Cincel rígido 7 púas con rolo destorronador',
+                                machineHours: 1.5,
+                                fuelConsumptionLiters: 14
+                              },
+                              directCostUsd: 65,
+                              homologatedBy: plot.technicalResponsibleName || defaultTech,
+                              homologatedAt: dMinus15,
+                              notes: 'Profundidad efectiva: 30 cm | Humedad edáfica friable | Sin piso de arado.'
+                            },
+                            {
+                              id: `prep-rastra-${plot.id}-${Date.now()}-2`,
+                              title: 'Afinado de Cama de Siembra: Rastra de Disco + Nivelación Superficial',
+                              description: 'Doble pasada cruzada de rastra liviana y rabasto nivelador para asegurar contacto íntimo semilla-suelo a 2-3 cm de profundidad.',
+                              dueDate: dMinus7,
+                              executionDate: dMinus7,
+                              priority: 'Alta',
+                              status: 'Homologada',
+                              assignedToIds: [currentUser?.id || '1'],
+                              createdBy: currentUser?.id || '1',
+                              plotId: plot.id,
+                              laborType: 'PREPARACION_SUELO',
+                              targetStage: 'BBCH_00_09',
+                              operator: defaultTech,
+                              machinery: {
+                                tractor: 'Tractor 95 HP',
+                                implement: 'Rastra excéntrica 20 discos + Rolo compactador',
+                                machineHours: 1.2,
+                                fuelConsumptionLiters: 11
+                              },
+                              directCostUsd: 55,
+                              homologatedBy: plot.technicalResponsibleName || defaultTech,
+                              homologatedAt: dMinus7,
+                              notes: 'Cama de siembra mullida y nivelada | Pendiente controlada 0.4%.'
+                            },
+                            {
+                              id: `prep-asiento-${plot.id}-${Date.now()}-3`,
+                              title: 'Riego de Asiento Presiembra & Verificación de Capacidad de Campo',
+                              description: `Lámina de humectación inicial (${plot.irrigationType || location?.irrigationSystem || 'Goteo'}) para llevar los primeros 25 cm a 70% de capacidad de campo antes de la implantación.`,
+                              dueDate: dMinus2,
+                              executionDate: dMinus2,
+                              priority: 'Media',
+                              status: 'Homologada',
+                              assignedToIds: [currentUser?.id || '1'],
+                              createdBy: currentUser?.id || '1',
+                              plotId: plot.id,
+                              laborType: 'PREPARACION_SUELO',
+                              targetStage: 'BBCH_00_09',
+                              operator: plot.samplingResponsibleName || defaultTech,
+                              machinery: {
+                                tractor: 'Cabezal de Bombeo Presurizado',
+                                implement: plot.irrigationType || 'Cinta de goteo 16mm',
+                                machineHours: 4.0,
+                                fuelConsumptionLiters: 0
+                              },
+                              directCostUsd: 30,
+                              homologatedBy: plot.technicalResponsibleName || defaultTech,
+                              homologatedAt: dMinus2,
+                              notes: 'Humedad edáfica verificada lista para siembra de precisión.'
+                            }
+                          ];
+
+                          for (const item of standardLabors) {
+                            await addTask(item);
+                          }
+                        }}
+                        className="px-3.5 py-2.5 bg-amber-50 dark:bg-amber-950/60 hover:bg-amber-600 text-amber-800 dark:text-amber-300 hover:text-white border border-amber-300 dark:border-amber-800 rounded-xl font-mono font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition cursor-pointer"
+                        title="Genera automáticamente las 3 etapas reglamentarias de preparación de suelo previas a la fecha de siembra"
+                      >
+                        <Wrench size={14} />
+                        <span>+ Protocolo Prep. Suelo (3 Etapas)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingLaborId(null);
+                          setApplyLaborToWholeBlock(false);
+                          setLaborForm({
+                            title: 'Cincelado profundo + Rastra de disco (Cama de siembra)',
+                            description: 'Roturación vertical a 28-30 cm, desterronado superficial y refinado de cama de siembra.',
+                            laborType: 'PREPARACION_SUELO',
+                            targetStage: 'BBCH_00_09',
+                            executionDate: plot.sowingDate || localClockData.dateIso,
+                            priority: 'Alta',
+                            status: 'Completada',
+                            assignedTo: currentUser?.id || '1',
+                            operatorName: plot.sowingResponsibleName || currentUser?.name || usersList[0]?.name || '',
+                            tractor: 'Tractor 90 HP Doble Tracción',
+                            implement: 'Cincel 7 púas + Rastra de disco',
+                            soilDepthCm: 28,
+                            soilCondition: 'Humedad óptima (Capacidad de campo 65%)',
+                            machineHours: 2.0,
+                            fuelConsumptionLiters: 15,
+                            directCostUsd: 75,
+                            notes: ''
+                          });
+                          setIsLaborModalOpen(true);
+                        }}
+                        className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-mono font-bold text-xs uppercase tracking-wider flex items-center gap-2 shadow-sm cursor-pointer"
+                      >
+                        <Plus size={15} />
+                        <span>Registrar Labor / Prep. Suelo</span>
+                      </button>
+                    </>
+                  )}
+
+                  {plotLabors.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const headers = ['Fecha', 'Categoría', 'Labor / Operación', 'Estado', 'Responsable / Operador', 'Maquinaria / Implemento', 'Horas Máquina', 'Combustible (L)', 'Costo (USD)', 'Observaciones Técnicas'];
+                        const rows = plotLabors.map(l => [
+                          l.executionDate || l.dueDate,
+                          l.laborType || 'PREPARACION_SUELO',
+                          `"${(l.title || '').replace(/"/g, '""')}"`,
+                          l.status,
+                          `"${(l.operator || '').replace(/"/g, '""')}"`,
+                          `"${[l.machinery?.tractor, l.machinery?.implement].filter(Boolean).join(' + ')}"`,
+                          l.machinery?.machineHours || 0,
+                          l.machinery?.fuelConsumptionLiters || 0,
+                          l.directCostUsd || 0,
+                          `"${(l.notes || l.description || '').replace(/"/g, '""')}"`
+                        ].join(','));
+                        const csv = '\uFEFF' + [headers.join(','), ...rows].join('\n');
+                        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `Labores_Prep_Suelo_${plot.name}.csv`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                      }}
+                      className="px-3.5 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl font-mono font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Download size={14} />
+                      <span>Exportar CSV</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Resumen Operativo de Suelo, Personal Interviniente y Costos de Labranza */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono">
+                <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-800">
+                  <span className="text-[10px] font-bold uppercase text-slate-400 block">Prep. Suelo Registradas</span>
+                  <p className="text-2xl font-black text-amber-600 dark:text-amber-400 mt-1">
+                    {plotLabors.filter(l => l.laborType === 'PREPARACION_SUELO').length}
+                  </p>
+                  <span className="text-[10px] text-slate-500">Textura: {plot.soilType || location?.soilType || 'Franco'} · Riego {plot.irrigationType || location?.irrigationSystem || 'Goteo'}</span>
+                </div>
+                <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-800">
+                  <span className="text-[10px] font-bold uppercase text-slate-400 block">Labores Culturales & Siembra</span>
+                  <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">
+                    {plotLabors.filter(l => l.laborType !== 'PREPARACION_SUELO').length}
+                  </p>
+                  <span className="text-[10px] text-slate-500">Marco: {plot.density || 48} pl/m² ({plot.rowDistance || 20} cm)</span>
+                </div>
+                <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-800">
+                  <span className="text-[10px] font-bold uppercase text-slate-400 block">Jefe Operativo Siembra</span>
+                  <p className="text-sm font-black text-slate-900 dark:text-white mt-1.5 truncate">
+                    {plot.sowingResponsibleName || 'Ing. Agr. Gastón BAREA'}
+                  </p>
+                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400">Dir. Técnico: {plot.technicalResponsibleName || 'Ing. PIZARRO'}</span>
+                </div>
+                <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-800">
+                  <span className="text-[10px] font-bold uppercase text-slate-400 block">Inversión Acumulada Labores</span>
+                  <p className="text-2xl font-black text-slate-900 dark:text-white mt-1">
+                    USD {plotLabors.reduce((acc, t) => acc + Number(t.directCostUsd || 0), 0).toLocaleString()}
+                  </p>
+                  <span className="text-[10px] text-slate-500">
+                    {plotLabors.reduce((acc, t) => acc + Number(t.machinery?.machineHours || 0), 0).toFixed(1)} hs máq. acumuladas
+                  </span>
+                </div>
+              </div>
+
+              {/* Filtros rápidos por tipo de labor */}
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 font-mono text-xs">
+                  {[
+                    { id: 'ALL', label: `Todas las Labores (${plotLabors.length})` },
+                    { id: 'SOIL_PREP', label: `Preparación de Suelo (${plotLabors.filter(l => l.laborType === 'PREPARACION_SUELO').length})` },
+                    { id: 'CULTURAL', label: `Siembra & Culturales (${plotLabors.filter(l => l.laborType !== 'PREPARACION_SUELO').length})` }
+                  ].map(f => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => setLaborCategoryFilter(f.id as any)}
+                      className={`px-3 py-1.5 rounded-xl font-bold uppercase text-[11px] transition cursor-pointer ${
+                        laborCategoryFilter === f.id
+                          ? 'bg-slate-900 dark:bg-emerald-600 text-white'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Listado de Labores y Preparación de Suelo */}
+              {plotLabors.length === 0 ? (
+                <div className="py-12 text-center space-y-3 bg-slate-50/60 dark:bg-slate-800/20 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
+                  <Tractor size={38} className="mx-auto text-amber-500/60" />
+                  <p className="text-xs font-mono font-bold uppercase text-slate-700 dark:text-slate-300">
+                    Sin Labores de Preparación de Suelo o Culturales Registradas en {plot.name}
+                  </p>
+                  <p className="text-xs text-slate-500 max-w-lg mx-auto">
+                    Podés anexar en 1 clic el protocolo estándar de preparación de cama de siembra (Cincelado + Rastra + Riego de Asiento) o registrar labores individuales asignadas a usuarios del sistema.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {plotLabors
+                    .filter(l => {
+                      if (laborCategoryFilter === 'SOIL_PREP') return l.laborType === 'PREPARACION_SUELO';
+                      if (laborCategoryFilter === 'CULTURAL') return l.laborType !== 'PREPARACION_SUELO';
+                      return true;
+                    })
+                    .map(labor => {
+                      const isSoilPrep = labor.laborType === 'PREPARACION_SUELO';
+                      return (
+                        <div
+                          key={labor.id}
+                          className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4"
+                        >
+                          <div className="space-y-1.5 flex-1">
+                            <div className="flex flex-wrap items-center gap-2 font-mono">
+                              <span
+                                className={`px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase ${
+                                  isSoilPrep
+                                    ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30'
+                                    : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
+                                }`}
+                              >
+                                {labor.laborType?.replace(/_/g, ' ') || 'PREPARACIÓN SUELO'}
+                              </span>
+                              <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
+                                📅 {labor.executionDate || labor.dueDate}
+                              </span>
+                              <span
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                  labor.status === 'Completada'
+                                    ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'
+                                    : 'bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-300'
+                                }`}
+                              >
+                                {labor.status}
+                              </span>
+                              {labor.homologatedBy && (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 flex items-center gap-1">
+                                  <CheckCircle2 size={10} /> Homologado ({labor.homologatedBy})
+                                </span>
+                              )}
+                            </div>
+
+                            <h4 className="text-sm font-black text-slate-900 dark:text-white">
+                              {labor.title}
+                            </h4>
+                            {labor.description && (
+                              <p className="text-xs text-slate-600 dark:text-slate-400">{labor.description}</p>
+                            )}
+
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1 text-[11px] font-mono text-slate-500 dark:text-slate-400">
+                              <span>
+                                👤 Operador/Resp.: <strong className="text-slate-800 dark:text-slate-200">{labor.operator || 'Asignado'}</strong>
+                              </span>
+                              {labor.machinery?.tractor && (
+                                <span>
+                                  🚜 Equipo: <strong className="text-slate-800 dark:text-slate-200">{labor.machinery.tractor} + {labor.machinery.implement}</strong>
+                                </span>
+                              )}
+                              {labor.machinery?.machineHours != null && (
+                                <span>
+                                  ⏱️ {labor.machinery.machineHours} hs máq. ({labor.machinery.fuelConsumptionLiters || 0} L gasoil)
+                                </span>
+                              )}
+                              {labor.directCostUsd != null && (
+                                <span>
+                                  💲 Costo: <strong className="text-emerald-600 dark:text-emerald-400">USD {labor.directCostUsd}</strong>
+                                </span>
+                              )}
+                            </div>
+                            {labor.notes && (
+                              <p className="text-[11px] font-mono text-amber-700 dark:text-amber-300 bg-amber-50/70 dark:bg-amber-950/30 px-2.5 py-1 rounded-lg border border-amber-200/60 dark:border-amber-800/50 mt-1">
+                                📋 {labor.notes}
+                              </p>
+                            )}
+                          </div>
+
+                          {canCreate && (
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {!labor.homologatedBy && (
+                                <button
+                                  type="button"
+                                  onClick={() => homologateLabor(labor.id, plot.technicalResponsibleName || currentUser?.name || 'Director Técnico')}
+                                  className="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-mono font-bold uppercase cursor-pointer"
+                                  title="Homologar técnica y agronómicamente esta labor"
+                                >
+                                  Homologar
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingLaborId(labor.id);
+                                  setApplyLaborToWholeBlock(false);
+                                  setLaborForm({
+                                    title: labor.title,
+                                    description: labor.description || '',
+                                    laborType: labor.laborType || 'PREPARACION_SUELO',
+                                    targetStage: labor.targetStage || 'BBCH_00_09',
+                                    executionDate: labor.executionDate || labor.dueDate,
+                                    priority: labor.priority || 'Alta',
+                                    status: labor.status || 'Completada',
+                                    assignedTo: labor.assignedToIds?.[0] || currentUser?.id || '1',
+                                    operatorName: labor.operator || currentUser?.name || '',
+                                    tractor: labor.machinery?.tractor || '',
+                                    implement: labor.machinery?.implement || '',
+                                    soilDepthCm: 28,
+                                    soilCondition: 'Humedad óptima',
+                                    machineHours: labor.machinery?.machineHours || 1.5,
+                                    fuelConsumptionLiters: labor.machinery?.fuelConsumptionLiters || 12,
+                                    directCostUsd: labor.directCostUsd || 50,
+                                    notes: labor.notes || ''
+                                  });
+                                  setIsLaborModalOpen(true);
+                                }}
+                                className="p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-sky-600 cursor-pointer"
+                                title="Editar labor"
+                              >
+                                <Edit2 size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => deleteTask(labor.id)}
+                                className="p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-rose-600 cursor-pointer"
+                                title="Eliminar labor"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Modal Alta/Edición de Labor Agrícola & Preparación de Suelo Anexada a la Parcela */}
+      {isLaborModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-sm z-[160] flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-2xl w-full p-6 space-y-4 shadow-2xl my-8">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Tractor size={18} className="text-amber-500" />
+                <h3 className="text-sm font-mono font-black uppercase text-slate-900 dark:text-white">
+                  {editingLaborId ? 'Editar Labor Agrícola / Prep. Suelo' : `Anexar Preparación de Suelo o Labor en ${plot.name}`}
+                </h3>
+              </div>
+              <button type="button" onClick={() => setIsLaborModalOpen(false)} className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer">
+                <X size={18} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={async e => {
+                e.preventDefault();
+                if (!laborForm.title.trim()) return;
+
+                const matchedUser = usersList.find(u => u.name === laborForm.operatorName);
+                const enrichedNotes =
+                  laborForm.laborType === 'PREPARACION_SUELO'
+                    ? `Profundidad labor: ${laborForm.soilDepthCm} cm | Condición edáfica: ${laborForm.soilCondition}${laborForm.notes ? ` | ${laborForm.notes}` : ''}`
+                    : laborForm.notes;
+
+                const baseTask: Task = {
+                  id: editingLaborId || `labor-${plot.id}-${Date.now()}`,
+                  title: laborForm.title.trim(),
+                  description: laborForm.description.trim(),
+                  dueDate: laborForm.executionDate,
+                  executionDate: laborForm.executionDate,
+                  priority: laborForm.priority,
+                  status: laborForm.status,
+                  assignedToIds: [matchedUser?.id || laborForm.assignedTo || currentUser?.id || '1'],
+                  createdBy: currentUser?.id || '1',
+                  plotId: plot.id,
+                  laborType: laborForm.laborType,
+                  targetStage: laborForm.targetStage,
+                  operator: laborForm.operatorName,
+                  machinery: {
+                    tractor: laborForm.tractor,
+                    implement: laborForm.implement,
+                    machineHours: Number(laborForm.machineHours || 0),
+                    fuelConsumptionLiters: Number(laborForm.fuelConsumptionLiters || 0)
+                  },
+                  directCostUsd: Number(laborForm.directCostUsd || 0),
+                  notes: enrichedNotes
+                };
+
+                if (editingLaborId) {
+                  await updateTask(baseTask);
+                } else {
+                  await addTask(baseTask);
+                  if (applyLaborToWholeBlock && siblingPlotsInLocation.length > 0) {
+                    for (const sp of siblingPlotsInLocation) {
+                      await addTask({
+                        ...baseTask,
+                        id: `labor-${sp.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                        plotId: sp.id
+                      });
+                    }
+                  }
+                }
+                setIsLaborModalOpen(false);
+              }}
+              className="space-y-4 font-mono text-xs"
+            >
+              {/* Plantillas Rápidas de Preparación de Suelo y Labores */}
+              <div>
+                <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1.5">
+                  Plantillas Rápidas de Labranza & Manejo Agronómico
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    {
+                      label: '1. Cincelado / Subsolado (30cm)',
+                      type: 'PREPARACION_SUELO' as AgriculturalLaborType,
+                      title: 'Labranza Vertical: Cincelado Profundo & Descompactación (30 cm)',
+                      desc: 'Roturación vertical del suelo sin inversión de prisma para aireación y drenaje.',
+                      imp: 'Cincel rígido 7 púas + rolo'
+                    },
+                    {
+                      label: '2. Rastra de Disco + Nivelación',
+                      type: 'PREPARACION_SUELO' as AgriculturalLaborType,
+                      title: 'Afinado de Cama de Siembra: Rastra de Disco + Nivelación',
+                      desc: 'Desterronado superficial y nivelación para asegurar profundidad uniforme de siembra (2-3 cm).',
+                      imp: 'Rastra excéntrica 20 discos'
+                    },
+                    {
+                      label: '3. Enmienda Orgánica / Basal',
+                      type: 'PREPARACION_SUELO' as AgriculturalLaborType,
+                      title: 'Incorporación de Enmienda Orgánica & Corrección Basal de Suelo',
+                      desc: 'Aplicación e incorporación superficial de compost estabilizado y corrección mineral.',
+                      imp: 'Esparcidor de enmiendas'
+                    },
+                    {
+                      label: '4. Riego de Asiento Presiembra',
+                      type: 'PREPARACION_SUELO' as AgriculturalLaborType,
+                      title: 'Riego de Asiento Presiembra (Capacidad de Campo 70%)',
+                      desc: 'Humectación uniforme del perfil superficial previo a la siembra.',
+                      imp: plot.irrigationType || 'Sistema de Goteo'
+                    },
+                    {
+                      label: '5. Siembra de Precisión INASE',
+                      type: 'SIEMBRA' as AgriculturalLaborType,
+                      title: `Siembra Oficial en Hilera (${variety?.name || 'Cultivar'} · ${plot.density || 48} pl/m²)`,
+                      desc: `Implantación a ${plot.rowDistance || 20} cm entre líneas con lote certificado INASE.`,
+                      imp: 'Sembradora de precisión experimental'
+                    },
+                    {
+                      label: '6. Escardillado / Control Mecánico',
+                      type: 'LABOR_CULTURAL' as AgriculturalLaborType,
+                      title: 'Escardillado Entre Líneas & Control Mecánico de Malezas',
+                      desc: 'Carpida superficial en entrelínea y aireación de costra superficial.',
+                      imp: 'Escardillo mecánico / manual'
+                    }
+                  ].map((tpl, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() =>
+                        setLaborForm(prev => ({
+                          ...prev,
+                          laborType: tpl.type,
+                          title: tpl.title,
+                          description: tpl.desc,
+                          implement: tpl.imp
+                        }))
+                      }
+                      className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-amber-500/20 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 text-[10px] font-bold transition cursor-pointer"
+                    >
+                      {tpl.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Categoría de Labor *</label>
+                  <select
+                    value={laborForm.laborType}
+                    onChange={e => setLaborForm({ ...laborForm, laborType: e.target.value as AgriculturalLaborType })}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold text-slate-900 dark:text-white"
+                  >
+                    <option value="PREPARACION_SUELO">PREPARACIÓN DE SUELO (Presiembra)</option>
+                    <option value="SIEMBRA">SIEMBRA & IMPLANTACIÓN</option>
+                    <option value="LABOR_CULTURAL">LABOR CULTURAL / ESCARDILLADO</option>
+                    <option value="FERTIRRIEGO">FERTIRRIEGO & NUTRICIÓN</option>
+                    <option value="MANEJO_HIDRICO">MANEJO HÍDRICO</option>
+                    <option value="MONITOREO">MUESTREO & MONITOREO</option>
+                    <option value="COSECHA">COSECHA & CORTE</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Fecha de Ejecución *</label>
+                  <input
+                    type="date"
+                    required
+                    value={laborForm.executionDate}
+                    onChange={e => setLaborForm({ ...laborForm, executionDate: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold text-slate-900 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Estado Operativo *</label>
+                  <select
+                    value={laborForm.status}
+                    onChange={e => setLaborForm({ ...laborForm, status: e.target.value as Task['status'] })}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold text-slate-900 dark:text-white"
+                  >
+                    <option value="Completada">Completada (Ejecutada)</option>
+                    <option value="En Progreso">En Progreso</option>
+                    <option value="Pendiente">Programada / Pendiente</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Título de la Labor / Operación *</label>
+                <input
+                  type="text"
+                  required
+                  value={laborForm.title}
+                  onChange={e => setLaborForm({ ...laborForm, title: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold text-slate-900 dark:text-white"
+                />
+              </div>
+
+              {/* Selección Obligatoria de Usuario y Rol del Sistema */}
+              <div className="p-3.5 rounded-xl bg-emerald-950/10 dark:bg-emerald-950/30 border border-emerald-500/30 space-y-2">
+                <label className="text-[10px] font-black uppercase text-emerald-700 dark:text-emerald-300 block">
+                  Responsable / Operador Interviniente (Asociado a Usuarios y Roles Declarados del Sistema) *
+                </label>
+                <select
+                  required
+                  value={laborForm.operatorName}
+                  onChange={e => setLaborForm({ ...laborForm, operatorName: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-emerald-500/40 font-bold text-slate-900 dark:text-white"
+                >
+                  <option value="">-- Seleccionar Usuario Declarado en el Sistema --</option>
+                  {usersList.map(u => {
+                    const roleMap: Record<string, string> = {
+                      super_admin: 'Director General / Super Admin',
+                      admin: 'Director Técnico / Admin Agronómico',
+                      technician: 'Jefe Operativo / Técnico de Campo',
+                      partner_viewer: 'Socio / Auditor'
+                    };
+                    return (
+                      <option key={u.id} value={u.name}>
+                        {u.name} — [{roleMap[u.role] || u.role}] {u.jobTitle ? `· ${u.jobTitle}` : ''}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              {laborForm.laborType === 'PREPARACION_SUELO' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-300/60 dark:border-amber-800/60">
+                  <div>
+                    <label className="text-[10px] font-bold uppercase text-amber-800 dark:text-amber-300 block mb-1">
+                      Profundidad de Labranza (cm)
+                    </label>
+                    <input
+                      type="number"
+                      value={laborForm.soilDepthCm}
+                      onChange={e => setLaborForm({ ...laborForm, soilDepthCm: Number(e.target.value) })}
+                      className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-800 font-bold text-slate-900 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase text-amber-800 dark:text-amber-300 block mb-1">
+                      Condición Física / Humedad del Suelo
+                    </label>
+                    <input
+                      type="text"
+                      value={laborForm.soilCondition}
+                      onChange={e => setLaborForm({ ...laborForm, soilCondition: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-800 font-bold text-slate-900 dark:text-white"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Tractor / Unidad Motriz</label>
+                  <input
+                    type="text"
+                    value={laborForm.tractor}
+                    onChange={e => setLaborForm({ ...laborForm, tractor: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Implemento / Herramienta</label>
+                  <input
+                    type="text"
+                    value={laborForm.implement}
+                    onChange={e => setLaborForm({ ...laborForm, implement: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Horas Máquina</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={laborForm.machineHours}
+                    onChange={e => setLaborForm({ ...laborForm, machineHours: Number(e.target.value) })}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Combustible (L)</label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    value={laborForm.fuelConsumptionLiters}
+                    onChange={e => setLaborForm({ ...laborForm, fuelConsumptionLiters: Number(e.target.value) })}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Costo Directo (USD)</label>
+                  <input
+                    type="number"
+                    step="1"
+                    value={laborForm.directCostUsd}
+                    onChange={e => setLaborForm({ ...laborForm, directCostUsd: Number(e.target.value) })}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+                  />
+                </div>
+              </div>
+
+              {!editingLaborId && siblingPlotsInLocation.length > 0 && (
+                <label className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={applyLaborToWholeBlock}
+                    onChange={e => setApplyLaborToWholeBlock(e.target.checked)}
+                    className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Replicar esta preparación de suelo en todas las {siblingPlotsInLocation.length + 1} parcelas del establecimiento ({location?.name})
+                  </span>
+                </label>
+              )}
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsLaborModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold uppercase cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold uppercase flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Save size={14} />
+                  <span>Guardar en Parcela</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Modal Cámara en Vivo WebRTC para Bitácora Multimedia */}
       {isCameraModalOpen && (

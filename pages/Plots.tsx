@@ -81,11 +81,31 @@ const COLOR_PALETTE = [
 
 export default function Plots() {
   const { 
-    plots, locations, varieties, projects, currentUser, clients,
+    plots, locations, varieties, projects, currentUser, usersList, clients,
     seedBatches, deletePlot, updatePlot, 
     addPlot, updateLocation, updateSeedBatch, storagePoints, appName,
     activeCampaign, setActiveCampaign, closePlotCycle, reopenPlotCycle
   } = useAppContext();
+
+  const ROLE_BADGE_LABELS: Record<string, string> = {
+    super_admin: 'Super Admin / Dirección',
+    admin: 'Admin / Director Proyecto',
+    technician: 'Técnico / Ing. Agrónomo',
+    client: 'Socio Productor / Titular',
+    viewer: 'Auditor / Consultor Agrónomo'
+  };
+
+  // Usuarios declarados y habilitados en el sistema con su rol oficial
+  const declaredSystemUsers = useMemo(() => {
+    return (usersList || []).map(u => ({
+      id: u.id,
+      name: u.name,
+      role: u.role,
+      jobTitle: u.jobTitle || ROLE_BADGE_LABELS[u.role] || 'Personal Declarado',
+      roleLabel: ROLE_BADGE_LABELS[u.role] || u.role,
+      displayOption: `${u.name} — [${ROLE_BADGE_LABELS[u.role] || u.role}${u.jobTitle ? ` · ${u.jobTitle}` : ''}]`
+    }));
+  }, [usersList]);
   
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -465,10 +485,28 @@ export default function Plots() {
           }
         }
 
+        // Vincular automáticamente los IDs de los usuarios del sistema seleccionados como personal interviniente
+        const matchedUserIds = declaredSystemUsers
+          .filter(
+            u =>
+              u.name === cleanFormData.samplingResponsibleName ||
+              u.name === cleanFormData.sowingResponsibleName ||
+              u.name === cleanFormData.technicalResponsibleName ||
+              `Ing. Agr. ${u.name}` === cleanFormData.technicalResponsibleName
+          )
+          .map(u => u.id);
+
+        const combinedResponsibleIds = Array.from(
+          new Set([
+            ...((!isAdmin && currentUser) ? [currentUser.id] : (cleanFormData.responsibleIds || [])),
+            ...matchedUserIds
+          ])
+        );
+
         const payload: Plot = {
             ...cleanFormData,
             id: editingPlot ? editingPlot.id : generateId(),
-            responsibleIds: (!isAdmin && currentUser) ? [currentUser.id] : (cleanFormData.responsibleIds || []),
+            responsibleIds: combinedResponsibleIds,
             surfaceArea: Number(formData.surfaceArea),
             density: Number(formData.density),
             campaign: assignedCampaign,
@@ -874,6 +912,7 @@ export default function Plots() {
               <div className="h-[580px] rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800">
                 <MapEditor
                   key={`plots-overview-map-${activeMapLocation?.id || 'all'}-${mapPlotLayers.length}`}
+                  activePlotId={primaryPlot?.id || 'overview-main'}
                   initialCenter={
                     primaryPlot?.coordinates ||
                     activeMapLocation?.coordinates || { lat: -43.308576, lng: -65.289047 }
@@ -1684,40 +1723,95 @@ export default function Plots() {
                     </div>
                   </div>
 
-                  {/* PERSONAL INTERVINIENTE EN MUESTREO, SIEMBRA Y TRAZABILIDAD */}
-                  <div className="p-4 bg-indigo-50/70 dark:bg-indigo-950/25 rounded-2xl border border-indigo-200 dark:border-indigo-900/50 space-y-2.5">
-                    <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-indigo-800 dark:text-indigo-300 flex items-center gap-1.5">
-                      <UserCheck size={14} className="text-indigo-600" />
-                      <span>Personal Interviniente (Muestreo & Siembra)</span>
-                    </h3>
+                  {/* PERSONAL INTERVINIENTE EN MUESTREO, SIEMBRA Y TRAZABILIDAD (ESTRICTAMENTE VINCULADO A USUARIOS DEL SISTEMA) */}
+                  <div className="p-4 bg-indigo-50/70 dark:bg-indigo-950/25 rounded-2xl border border-indigo-200 dark:border-indigo-900/50 space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-indigo-800 dark:text-indigo-300 flex items-center gap-1.5">
+                        <UserCheck size={14} className="text-indigo-600" />
+                        <span>Personal Interviniente (Usuarios & Roles Declarados)</span>
+                      </h3>
+                      <Link
+                        to="/users"
+                        className="text-[9.5px] font-mono font-bold text-indigo-700 dark:text-indigo-300 bg-white dark:bg-slate-900 px-2 py-0.5 rounded border border-indigo-300 dark:border-indigo-800 hover:bg-indigo-50"
+                        title="Ir al padrón de Usuarios & Roles para declarar nuevo personal"
+                      >
+                        + Declarar Usuario
+                      </Link>
+                    </div>
+
+                    <p className="text-[10px] font-mono text-indigo-700/90 dark:text-indigo-300/90 bg-white/70 dark:bg-slate-900/60 px-2.5 py-1.5 rounded-lg border border-indigo-200/70 dark:border-indigo-800/50">
+                      🔒 <strong>Control de Trazabilidad:</strong> Solo personal registrado y con rol activo en el sistema puede asignarse a Muestreo, Siembra y Dirección Técnica.
+                    </p>
+
                     <div>
-                      <label className={labelClass}>Responsable Toma de Muestras en Lote</label>
-                      <input
+                      <label className={labelClass}>1. Responsable Toma de Muestras en Lote *</label>
+                      <select
+                        required
                         className={inputClass}
-                        placeholder="Ej: Matias QUINTANA"
                         value={formData.samplingResponsibleName || ''}
                         onChange={e => setFormData({ ...formData, samplingResponsibleName: e.target.value })}
-                      />
+                      >
+                        <option value="">Seleccionar usuario habilitado para muestreo...</option>
+                        {declaredSystemUsers.map(u => (
+                          <option key={`samp-${u.id}`} value={u.name}>
+                            {u.displayOption}
+                          </option>
+                        ))}
+                      </select>
                     </div>
-                    <div className="grid grid-cols-2 gap-2.5">
-                      <div>
-                        <label className={labelClass}>Jefe Operativo de Siembra</label>
-                        <input
-                          className={inputClass}
-                          placeholder="Ej: Joaquin AREZO"
-                          value={formData.sowingResponsibleName || ''}
-                          onChange={e => setFormData({ ...formData, sowingResponsibleName: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <label className={labelClass}>Director Técnico Agrónomo</label>
-                        <input
-                          className={inputClass}
-                          placeholder="Ej: Ing. Agr. Julian PIZARRO"
-                          value={formData.technicalResponsibleName || ''}
-                          onChange={e => setFormData({ ...formData, technicalResponsibleName: e.target.value })}
-                        />
-                      </div>
+
+                    <div>
+                      <label className={labelClass}>2. Jefe Operativo de Siembra *</label>
+                      <select
+                        required
+                        className={inputClass}
+                        value={formData.sowingResponsibleName || ''}
+                        onChange={e => setFormData({ ...formData, sowingResponsibleName: e.target.value })}
+                      >
+                        <option value="">Seleccionar jefe operativo de siembra...</option>
+                        {declaredSystemUsers.map(u => (
+                          <option key={`sow-${u.id}`} value={u.name}>
+                            {u.displayOption}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className={labelClass}>3. Director Técnico Agrónomo *</label>
+                      <select
+                        required
+                        className={inputClass}
+                        value={
+                          declaredSystemUsers.some(u => u.name === formData.technicalResponsibleName)
+                            ? formData.technicalResponsibleName
+                            : (formData.technicalResponsibleName || '').replace(/^Ing\.\s*Agr\.\s*/i, '')
+                        }
+                        onChange={e => {
+                          const chosenName = e.target.value;
+                          const chosenUser = declaredSystemUsers.find(u => u.name === chosenName);
+                          const isAgro = (chosenUser?.jobTitle || '').toLowerCase().includes('agr');
+                          setFormData({
+                            ...formData,
+                            technicalResponsibleName: isAgro && !chosenName.startsWith('Ing.') ? `Ing. Agr. ${chosenName}` : chosenName
+                          });
+                        }}
+                      >
+                        <option value="">Seleccionar Director Técnico / Agrónomo...</option>
+                        {declaredSystemUsers
+                          .filter(
+                            u =>
+                              u.role === 'technician' ||
+                              u.role === 'admin' ||
+                              u.role === 'super_admin' ||
+                              (u.jobTitle || '').toLowerCase().includes('agr')
+                          )
+                          .map(u => (
+                            <option key={`tech-${u.id}`} value={u.name}>
+                              {u.displayOption}
+                            </option>
+                          ))}
+                      </select>
                     </div>
                   </div>
 

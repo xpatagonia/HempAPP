@@ -21,11 +21,29 @@ export default function HydricBalance({ locationId, plotId, startDate, waterNeed
     deleteHydricRecord,
     currentUser,
     locations,
-    plots
+    plots,
+    varieties
   } = useAppContext();
 
   const location = locations.find(l => l.id === locationId);
   const plot = plotId ? plots.find(p => p.id === plotId) : undefined;
+  const variety = plot?.varietyId ? varieties.find(v => v.id === plot.varietyId) : undefined;
+
+  // Ventana biológica estricta desde Fecha de Siembra hasta Fin de Ciclo / Cosecha
+  const cycleWindow = useMemo(() => {
+    const sowIso = startDate || plot?.sowingDate || '2026-01-13';
+    const cycleDays = variety?.cycleDays || 150;
+    const sowDateObj = new Date(`${sowIso}T00:00:00`);
+    const theoreticalEndObj = new Date(sowDateObj.getTime() + cycleDays * 86400000);
+    const theoreticalEndIso = theoreticalEndObj.toISOString().split('T')[0];
+    const effectiveEndIso = plot?.closedAt || theoreticalEndIso;
+    return {
+      sowIso,
+      cycleDays,
+      theoreticalEndIso,
+      effectiveEndIso
+    };
+  }, [startDate, plot?.sowingDate, plot?.closedAt, variety?.cycleDays]);
 
   const activeCoords = useMemo(() => {
     const locCoords =
@@ -60,12 +78,16 @@ export default function HydricBalance({ locationId, plotId, startDate, waterNeed
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
   const [isLoadingAuto, setIsLoadingAuto] = useState(false);
   const [isSyncingDb, setIsSyncingDb] = useState(false);
+  const [isCompactingDb, setIsCompactingDb] = useState(false);
+  const [compactedMsg, setCompactedMsg] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [autoRain, setAutoRain] = useState(0);
   const [recentRain7d, setRecentRain7d] = useState(0);
   const [et0Daily, setEt0Daily] = useState<number | null>(null);
   const [lastSyncedRainCount, setLastSyncedRainCount] = useState<number>(0);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  // Por defecto acotamos los registros de la parcela a su ventana de ciclo biológico [Siembra -> Cosecha]
+  const [scopeWindowMode, setScopeWindowMode] = useState<'cycle' | 'all'>('cycle');
 
   // Configuración de asentamiento automático de lluvias en la Base de Datos
   const [autoSyncRainToDb, setAutoSyncRainToDb] = useState<boolean>(() => {
@@ -125,13 +147,21 @@ export default function HydricBalance({ locationId, plotId, startDate, waterNeed
 
   const manualRecords = useMemo(() => {
     const raw = hydricRecords.filter(h => {
-      if (plotId) {
-        return h.plotId === plotId || (h.locationId === locationId && !h.plotId);
+      const matchesEntity = plotId
+        ? h.plotId === plotId || (h.locationId === locationId && !h.plotId) || (h.locationId === locationId && h.type === 'Lluvia')
+        : h.locationId === locationId;
+      if (!matchesEntity) return false;
+
+      // Si estamos en una parcela y el filtro de Ciclo Biológico está activo, mostramos solo desde Siembra hasta Fin de Ciclo
+      if (plotId && scopeWindowMode === 'cycle') {
+        if (h.date < cycleWindow.sowIso || h.date > cycleWindow.effectiveEndIso) {
+          return false;
+        }
       }
-      return h.locationId === locationId;
+      return true;
     });
 
-    // Deduplicar eventos automáticos por fecha cuando se visualiza a nivel Establecimiento o cuando coexisten registros de campo/parcela
+    // Deduplicar eventos automáticos por fecha cuando coexisten registros de establecimiento padre y parcela
     const seenAutoByDate = new Set<string>();
     const data = raw.filter(r => {
       const isAuto = String(r.id).startsWith('auto-rain-') || (r.notes || '').includes('Pluviómetro Satelital');
@@ -146,7 +176,81 @@ export default function HydricBalance({ locationId, plotId, startDate, waterNeed
       const dateB = new Date(b.date + (b.time ? 'T' + b.time : 'T08:00')).getTime();
       return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
     });
-  }, [hydricRecords, locationId, plotId, sortOrder]);
+  }, [hydricRecords, locationId, plotId, sortOrder, scopeWindowMode, cycleWindow.sowIso, cycleWindow.effectiveEndIso]);
+
+  // Diagnóstico de almacenamiento en Base de Datos para tranquilidad operativa
+  const dbStorageStats = useMemo(() => {
+    const totalRowsInDb = hydricRecords.length;
+    const estBytes = totalRowsInDb * 240; // ~240 bytes promedio por fila en PostgreSQL
+    const estKb = (estBytes / 1024).toFixed(1);
+    const supabaseFreeLimitMb = 500;
+    const usagePct = ((estBytes / (supabaseFreeLimitMb * 1024 * 1024)) * 100).toFixed(4);
+    const siblingPlotsCount = plots.filter(p => p.locationId === locationId).length;
+
+    // Detectar si existen registros auto-rain duplicados por parcela en el mismo establecimiento o lloviznas < 1.0 mm
+    const autoRecordsInLoc = hydricRecords.filter(
+      r => r.locationId === locationId && (String(r.id).startsWith('auto-rain-') || (r.notes || '').includes('Pluviómetro Satelital'))
+    );
+    const seenDates = new Set<string>();
+    const redundantIds: string[] = [];
+    for (const r of autoRecordsInLoc) {
+      const key = r.date;
+      if (seenDates.has(key) || Number(r.amountMm || 0) < 1.0) {
+        redundantIds.push(r.id);
+      } else {
+        seenDates.add(key);
+      }
+    }
+
+    return {
+      totalRowsInDb,
+      estKb,
+      usagePct,
+      siblingPlotsCount,
+      redundantIds
+    };
+  }, [hydricRecords, locationId, plots]);
+
+  const handleCompactDatabase = async () => {
+    if (isCompactingDb) return;
+    setIsCompactingDb(true);
+    setCompactedMsg(null);
+    try {
+      // Eliminar registros automáticos redundantes (duplicados por sub-parcela en la misma fecha o trazas < 1.0 mm)
+      const allAuto = hydricRecords.filter(
+        r => String(r.id).startsWith('auto-rain-') || (r.notes || '').includes('Pluviómetro Satelital')
+      );
+      const keptByLocAndDate = new Set<string>();
+      let removed = 0;
+
+      // Priorizar registros unificados a nivel locación (!r.plotId)
+      const sortedAuto = [...allAuto].sort((a, b) => {
+        const aIsLoc = !a.plotId ? 0 : 1;
+        const bIsLoc = !b.plotId ? 0 : 1;
+        return aIsLoc - bIsLoc;
+      });
+
+      for (const rec of sortedAuto) {
+        const locDateKey = `${rec.locationId}__${rec.date}`;
+        if (keptByLocAndDate.has(locDateKey) || Number(rec.amountMm || 0) < 1.0) {
+          await deleteHydricRecord(rec.id);
+          removed++;
+        } else {
+          keptByLocAndDate.add(locDateKey);
+        }
+      }
+
+      setCompactedMsg(
+        removed > 0
+          ? `Optimización completada: se depuraron ${removed} registros redundantes o trazas (<1 mm). Serie consolidada por Establecimiento Padre.`
+          : `Base de datos optimizada: 0 duplicados encontrados. Las lluvias están deduplicadas por Establecimiento Padre (${dbStorageStats.estKb} KB en total).`
+      );
+    } catch (e) {
+      console.warn('Error al compactar registros hídricos:', e);
+    } finally {
+      setIsCompactingDb(false);
+    }
+  };
 
   const manualRainMm = useMemo(
     () => Number(manualRecords.filter(r => r.type === 'Lluvia').reduce((sum, r) => sum + Number(r.amountMm || 0), 0).toFixed(1)),
@@ -181,6 +285,7 @@ export default function HydricBalance({ locationId, plotId, startDate, waterNeed
   const toggleSort = () => setSortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'));
 
   // MOTOR DE SINCRONIZACIÓN Y ASENTAMIENTO AUTOMÁTICO HORARIO DE LLUVIAS EN LA BASE DE DATOS
+  // Optimizado con Deduplicación por Establecimiento Padre (locationId) y Ventana de Ciclo Biológico
   const syncSatelliteAndPersistRainEvents = useCallback(
     async (forcePersist = false) => {
       if (!activeCoords?.lat || !activeCoords?.lng) return;
@@ -188,8 +293,13 @@ export default function HydricBalance({ locationId, plotId, startDate, waterNeed
       if (forcePersist) setIsSyncingDb(true);
 
       try {
-        const sowStr = startDate || plot?.sowingDate || '2026-01-01';
+        const sowStr = cycleWindow.sowIso;
         const todayIso = getLocalTodayIso();
+        // Límite superior: si filtramos por ciclo biológico, cortamos en la fecha de fin de ciclo o en hoy (lo que sea menor)
+        const maxQueryIso =
+          plotId && scopeWindowMode === 'cycle' && cycleWindow.effectiveEndIso < todayIso
+            ? cycleWindow.effectiveEndIso
+            : todayIso;
 
         interface DailyHourlyRainDetail {
           mm: number;
@@ -207,7 +317,7 @@ export default function HydricBalance({ locationId, plotId, startDate, waterNeed
           const byDay = new Map<string, { hm: string; val: number }[]>();
           for (let i = 0; i < hTimes.length; i++) {
             const [dStr, hm] = (hTimes[i] || '').split('T');
-            if (!dStr || dStr < sowStr || dStr > todayIso) continue;
+            if (!dStr || dStr < sowStr || dStr > maxQueryIso) continue;
             const val = Number(hPrecs[i] || 0);
             if (!byDay.has(dStr)) byDay.set(dStr, []);
             byDay.get(dStr)!.push({ hm: hm || '00:00', val });
@@ -216,7 +326,7 @@ export default function HydricBalance({ locationId, plotId, startDate, waterNeed
           byDay.forEach((hours, dStr) => {
             const sumMm = Number(hours.reduce((s, h) => s + h.val, 0).toFixed(1));
             const rainyHours = hours.filter(h => h.val >= 0.1);
-            if (sumMm > 0) {
+            if (sumMm >= 1.0) {
               const firstHm = rainyHours.length > 0 ? rainyHours[0].hm : '00:00';
               const lastHm = rainyHours.length > 0 ? rainyHours[rainyHours.length - 1].hm : firstHm;
               const endHourNum = (parseInt(lastHm.split(':')[0] || '0', 10) + 1) % 24;
@@ -241,14 +351,14 @@ export default function HydricBalance({ locationId, plotId, startDate, waterNeed
           });
         };
 
-        // 1. Consulta de archivo histórico horario desde la fecha de siembra (ECMWF ERA5-Land Reanalysis)
+        // 1. Consulta de archivo histórico horario desde la fecha de siembra hasta fin de ciclo (ECMWF ERA5-Land Reanalysis)
         const sowDate = new Date(`${sowStr}T00:00:00`);
         const nowDate = new Date(`${todayIso}T00:00:00`);
-        const archiveEndObj = new Date(nowDate.getTime() - 2 * 86400000);
+        const archiveLimitObj = new Date(Math.min(nowDate.getTime() - 2 * 86400000, new Date(`${maxQueryIso}T00:00:00`).getTime()));
 
-        if (archiveEndObj >= sowDate) {
+        if (archiveLimitObj >= sowDate) {
           const startIso = sowDate.toISOString().split('T')[0];
-          const endIso = archiveEndObj.toISOString().split('T')[0];
+          const endIso = archiveLimitObj.toISOString().split('T')[0];
           const archiveUrl = `https://archive-api.open-meteo.com/v1/archive?latitude=${activeCoords.lat}&longitude=${activeCoords.lng}&start_date=${startIso}&end_date=${endIso}&hourly=precipitation&timezone=America%2FArgentina%2FBuenos_Aires`;
           const aRes = await fetch(archiveUrl);
           if (aRes.ok) {
@@ -302,7 +412,7 @@ export default function HydricBalance({ locationId, plotId, startDate, waterNeed
 
         setAutoRain(Number(totalSatSum.toFixed(1)));
 
-        // 3. ASENTAMIENTO Y ACTUALIZACIÓN HORARIA AUTOMÁTICA EN LA BASE DE DATOS (mm >= 0.5)
+        // 3. ASENTAMIENTO UNIFICADO POR ESTABLECIMIENTO PADRE (locationId) PARA EVITAR MULTIPLICAR REGISTROS POR PARCELA (mm >= 1.0)
         if (autoSyncRainToDb || forcePersist) {
           let deletedHydricIds = new Set<string>();
           try {
@@ -313,31 +423,29 @@ export default function HydricBalance({ locationId, plotId, startDate, waterNeed
             }
           } catch {}
 
-          const scopeKey = plotId || locationId;
           let insertedCount = 0;
 
           const sortedEntries = Array.from(dailyRainMap.entries()).sort((a, b) => a[0].localeCompare(b[0]));
           for (const [rainDate, detail] of sortedEntries) {
-            if (detail.mm < 0.5) continue; // Umbral mínimo agronómico (0.5 mm)
-            const deterministicId = `auto-rain-${scopeKey}-${rainDate}`;
+            if (detail.mm < 1.0) continue; // Umbral agronómico efectivo (1.0 mm) para no sobrecargar la BD con rocío/trazas
+            // Clave determinística por Establecimiento Padre (compartida por todas las parcelas del mismo sitio)
+            const deterministicLocId = `auto-rain-loc-${locationId}-${rainDate}`;
 
-            if (!forcePersist && deletedHydricIds.has(deterministicId)) continue;
+            if (!forcePersist && deletedHydricIds.has(deterministicLocId)) continue;
 
-            const richNote = `Pluviómetro Satelital ${detail.modelLabel} • Ventana de lluvia: ${detail.startHm} a ${detail.endHm} hs (${detail.activeHours}h efectivas • Pico máx: ${detail.peakMm} mm/h a las ${detail.peakHm} hs) • Celda GPS (${activeCoords.lat.toFixed(4)}, ${activeCoords.lng.toFixed(4)})`;
+            const richNote = `Pluviómetro Satelital ${detail.modelLabel} • Ventana de lluvia: ${detail.startHm} a ${detail.endHm} hs (${detail.activeHours}h efectivas • Pico máx: ${detail.peakMm} mm/h a las ${detail.peakHm} hs) • Sitio: ${location?.name || 'Campo'} (${activeCoords.lat.toFixed(4)}, ${activeCoords.lng.toFixed(4)})`;
 
             const existingRecord = hydricRecords.find(
               r =>
-                r.id === deterministicId ||
-                (r.type === 'Lluvia' &&
-                  r.date === rainDate &&
-                  ((plotId && r.plotId === plotId) || (!plotId && r.locationId === locationId)))
+                r.id === deterministicLocId ||
+                (r.type === 'Lluvia' && r.date === rainDate && r.locationId === locationId)
             );
 
             if (!existingRecord) {
               const newRainRecord: HydricRecord = {
-                id: deterministicId,
+                id: deterministicLocId,
                 locationId,
-                plotId,
+                plotId: undefined, // Se guarda a nivel Establecimiento Padre para que lo hereden todas sus parcelas sin duplicar filas
                 date: rainDate,
                 time: detail.startHm,
                 endTime: detail.endHm,
@@ -373,12 +481,12 @@ export default function HydricBalance({ locationId, plotId, startDate, waterNeed
         setIsSyncingDb(false);
       }
     },
-    [activeCoords.lat, activeCoords.lng, startDate, plot?.sowingDate, autoSyncRainToDb, plotId, locationId, hydricRecords, addHydricRecord, updateHydricRecord, currentUser?.id]
+    [activeCoords.lat, activeCoords.lng, cycleWindow.sowIso, cycleWindow.effectiveEndIso, scopeWindowMode, autoSyncRainToDb, plotId, locationId, location?.name, hydricRecords, addHydricRecord, updateHydricRecord, currentUser?.id]
   );
 
   useEffect(() => {
     syncSatelliteAndPersistRainEvents(false);
-  }, [activeCoords.lat, activeCoords.lng, startDate, plot?.sowingDate, autoSyncRainToDb]);
+  }, [activeCoords.lat, activeCoords.lng, cycleWindow.sowIso, cycleWindow.effectiveEndIso, scopeWindowMode, autoSyncRainToDb]);
 
   // SUGERENCIA SATELITAL AL CARGAR REGISTRO MANUAL
   useEffect(() => {
@@ -495,11 +603,11 @@ export default function HydricBalance({ locationId, plotId, startDate, waterNeed
                 Pluviómetro Autónomo & Balance Hídrico en Base de Datos
               </h3>
               <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 flex items-center gap-1">
-                <Database size={10} /> {autoSyncRainToDb ? 'Auto-Asentamiento en BD Activo' : 'Modo Manual'}
+                <Database size={10} /> {autoSyncRainToDb ? 'Deduplicado por Sitio Padre' : 'Modo Manual'}
               </span>
               {autoPersistedCount > 0 && (
                 <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800/60">
-                  {autoPersistedCount} lluvias asentadas automáticamente
+                  {autoPersistedCount} lluvias efectivas en ciclo (≥1.0 mm)
                 </span>
               )}
             </div>
@@ -509,7 +617,9 @@ export default function HydricBalance({ locationId, plotId, startDate, waterNeed
                 {location?.name || 'Establecimiento'} ({activeCoords.lat.toFixed(5)}, {activeCoords.lng.toFixed(5)})
               </span>
               <span>•</span>
-              <span>Inicio Ciclo: <strong>{startDate || plot?.sowingDate || '2026-01-13'}</strong></span>
+              <span>
+                Ventana Ciclo: <strong>{cycleWindow.sowIso} → {cycleWindow.effectiveEndIso}</strong> ({cycleWindow.cycleDays}d)
+              </span>
               {et0Daily !== null && (
                 <>
                   <span>•</span>
@@ -521,6 +631,35 @@ export default function HydricBalance({ locationId, plotId, startDate, waterNeed
         </div>
 
         <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto justify-end">
+          {plotId && (
+            <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+              <button
+                type="button"
+                onClick={() => setScopeWindowMode('cycle')}
+                className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold uppercase transition cursor-pointer ${
+                  scopeWindowMode === 'cycle'
+                    ? 'bg-sky-600 text-white shadow-sm'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+                }`}
+                title="Muestra únicamente las lluvias ocurridas desde el día de la siembra hasta el fin del ciclo biológico de la parcela"
+              >
+                Ciclo Siembra→Cosecha
+              </button>
+              <button
+                type="button"
+                onClick={() => setScopeWindowMode('all')}
+                className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold uppercase transition cursor-pointer ${
+                  scopeWindowMode === 'all'
+                    ? 'bg-sky-600 text-white shadow-sm'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+                }`}
+                title="Muestra todo el historial anual del establecimiento incluyendo post-cosecha"
+              >
+                Año Completo
+              </button>
+            </div>
+          )}
+
           <button
             type="button"
             onClick={handleToggleAutoSync}
@@ -532,7 +671,7 @@ export default function HydricBalance({ locationId, plotId, startDate, waterNeed
             title="Activa o desactiva el registro automático en la base de datos cada vez que se detecta lluvia satelital en el lote"
           >
             <CheckCircle2 size={13} />
-            <span>Auto-Registro Lluvia: {autoSyncRainToDb ? 'ON' : 'OFF'}</span>
+            <span>Auto-BD: {autoSyncRainToDb ? 'ON' : 'OFF'}</span>
           </button>
 
           <button
@@ -543,7 +682,7 @@ export default function HydricBalance({ locationId, plotId, startDate, waterNeed
             title="Consultar precipitaciones satelitales desde la siembra y asentarlas en la base de datos"
           >
             <RefreshCw size={13} className={isSyncingDb || isLoadingAuto ? 'animate-spin text-sky-500' : 'text-sky-500'} />
-            <span>Sincronizar Lluvias a BD</span>
+            <span>Sincronizar Lluvias</span>
           </button>
 
           <button
@@ -557,10 +696,50 @@ export default function HydricBalance({ locationId, plotId, startDate, waterNeed
         </div>
       </div>
 
+      {/* PANEL DE SALUD Y ARQUITECTURA DE ALMACENAMIENTO HÍDRICO (ANTI-SOBRECARGA SUPABASE) */}
+      <div className="bg-slate-50 dark:bg-slate-900/70 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3 text-xs font-mono">
+        <div className="space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold text-[10px] border border-emerald-500/20">
+              ARQUITECTURA ANTI-SOBRECARGA BD
+            </span>
+            <strong className="text-slate-800 dark:text-slate-100">
+              ¿Desde cuándo se toman y cuánto espacio ocupan?
+            </strong>
+          </div>
+          <p className="text-[11px] text-slate-600 dark:text-slate-400 font-sans leading-relaxed">
+            1) Se toman estrictamente desde la <strong>Fecha de Siembra ({cycleWindow.sowIso})</strong> hasta el <strong>Fin del Ciclo ({cycleWindow.effectiveEndIso})</strong> con umbral agronómico <strong>≥ 1.0 mm</strong>.{' '}
+            2) <strong>No sobrecargan la base de datos:</strong> las lluvias satelitales se guardan <strong>1 sola vez por Establecimiento Padre ({location?.name || 'Sitio'})</strong> y son heredadas por sus <strong>{dbStorageStats.siblingPlotsCount} parcelas</strong> sin duplicar filas. Peso actual total en Supabase: <strong>{dbStorageStats.estKb} KB ({dbStorageStats.totalRowsInDb} filas = {dbStorageStats.usagePct}% del plan Free de 500 MB)</strong>.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            disabled={isCompactingDb}
+            onClick={handleCompactDatabase}
+            className="px-3 py-2 rounded-xl bg-white dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 transition cursor-pointer shadow-sm"
+            title="Elimina registros duplicados por sub-parcela o lloviznas menores a 1.0 mm para mantener la tabla hydric_records ultraligera"
+          >
+            <Database size={12} className="text-emerald-500" />
+            <span>{isCompactingDb ? 'Compactando...' : `Compactar / Deduplicar BD${dbStorageStats.redundantIds.length > 0 ? ` (${dbStorageStats.redundantIds.length})` : ''}`}</span>
+          </button>
+        </div>
+      </div>
+
+      {compactedMsg && (
+        <div className="p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800 text-indigo-800 dark:text-indigo-200 text-xs font-mono flex items-center justify-between">
+          <span>✓ {compactedMsg}</span>
+          <button onClick={() => setCompactedMsg(null)} className="text-indigo-600 hover:opacity-75 cursor-pointer">
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       {lastSyncedRainCount > 0 && (
         <div className="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800/70 text-emerald-800 dark:text-emerald-200 text-xs font-mono flex items-center justify-between">
           <span>
-            ✓ Se asentaron automáticamente <strong>{lastSyncedRainCount}</strong> eventos de precipitación detectados en el lote dentro de la base de datos (`hydric_records`).
+            ✓ Se asentaron automáticamente <strong>{lastSyncedRainCount}</strong> eventos de precipitación efectivos (≥ 1.0 mm) a nivel Establecimiento Padre en la base de datos (`hydric_records`).
           </span>
           <button onClick={() => setLastSyncedRainCount(0)} className="text-emerald-600 hover:opacity-75 cursor-pointer">
             <X size={14} />

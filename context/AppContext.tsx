@@ -1668,30 +1668,41 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 }
             } catch {}
 
+            // Agrupamos por Establecimiento Padre (locationId) para consultar y guardar 1 sola serie pluvial por campo
+            // evitando multiplicar registros idénticos por cada microparcela del mismo sitio
             const activePlotsToSync = plots.filter(p => p.status === 'Activa');
-            for (const plot of activePlotsToSync) {
-                const loc = locations.find(l => l.id === plot.locationId);
-                let coords = plot.coordinates && !isNaN(plot.coordinates.lat) && plot.coordinates.lat !== 0
-                    ? plot.coordinates
+            const locationGroups = new Map<string, Plot[]>();
+            for (const p of activePlotsToSync) {
+                if (!p.locationId) continue;
+                if (!locationGroups.has(p.locationId)) locationGroups.set(p.locationId, []);
+                locationGroups.get(p.locationId)!.push(p);
+            }
+
+            for (const [locId, locPlots] of locationGroups.entries()) {
+                const loc = locations.find(l => l.id === locId);
+                const firstPlot = locPlots[0];
+                let coords = loc?.coordinates && !isNaN(loc.coordinates.lat) && loc.coordinates.lat !== 0
+                    ? loc.coordinates
+                    : firstPlot?.coordinates && !isNaN(firstPlot.coordinates.lat) && firstPlot.coordinates.lat !== 0
+                    ? firstPlot.coordinates
                     : undefined;
-                if (!coords && plot.polygon && plot.polygon.length >= 3) {
-                    const lat = plot.polygon.reduce((s, pt) => s + pt.lat, 0) / plot.polygon.length;
-                    const lng = plot.polygon.reduce((s, pt) => s + pt.lng, 0) / plot.polygon.length;
+
+                if (!coords && firstPlot?.polygon && firstPlot.polygon.length >= 3) {
+                    const lat = firstPlot.polygon.reduce((s, pt) => s + pt.lat, 0) / firstPlot.polygon.length;
+                    const lng = firstPlot.polygon.reduce((s, pt) => s + pt.lng, 0) / firstPlot.polygon.length;
                     coords = { lat: Number(lat.toFixed(6)), lng: Number(lng.toFixed(6)) };
-                }
-                if (coords && loc?.coordinates && !isNaN(loc.coordinates.lat) && loc.coordinates.lat !== 0) {
-                    const dLat = Math.abs(coords.lat - loc.coordinates.lat);
-                    const dLng = Math.abs(coords.lng - loc.coordinates.lng);
-                    if (dLat > 0.5 || dLng > 0.5) {
-                        coords = loc.coordinates;
-                    }
-                }
-                if (!coords && loc?.coordinates && !isNaN(loc.coordinates.lat)) {
-                    coords = loc.coordinates;
                 }
                 if (!coords) continue;
 
-                const sowStr = plot.sowingDate || '2026-01-01';
+                // Fecha de siembra más temprana del bloque activo y fin de ciclo máximo (~150 días)
+                const sowDates = locPlots.map(p => p.sowingDate || '2026-01-13').sort();
+                const sowStr = sowDates[0] || '2026-01-13';
+                const maxSowStr = sowDates[sowDates.length - 1] || sowStr;
+                const cycleEndIso = new Date(new Date(`${maxSowStr}T00:00:00`).getTime() + 155 * 86400000)
+                    .toISOString()
+                    .split('T')[0];
+                const maxAllowedIso = cycleEndIso < todayIso ? cycleEndIso : todayIso;
+
                 interface RainEventHourlyStat {
                     mm: number;
                     startHm: string;
@@ -1722,7 +1733,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                     for (const [dStr, hours] of byDay.entries()) {
                         const rainyHours = hours.filter(h => h.val >= 0.1);
                         const sumMm = Number(hours.reduce((s, h) => s + h.val, 0).toFixed(1));
-                        if (sumMm >= 0.5 && rainyHours.length > 0) {
+                        if (sumMm >= 1.0 && rainyHours.length > 0) {
                             const startHm = rainyHours[0].hm;
                             const lastHm = rainyHours[rainyHours.length - 1].hm;
                             const endHourNum = (parseInt(lastHm.split(':')[0], 10) + 1) % 24;
@@ -1755,19 +1766,20 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                                 fData.hourly.precipitation,
                                 'NOAA GFS / ECMWF IFS (Telemetría Sinóptica)',
                                 sowStr,
-                                todayIso
+                                maxAllowedIso
                             );
                         }
                     }
 
-                    // Si se solicita sincronización profunda o la parcela no tiene lluvias automáticas asentadas aún, consultar también ERA5 Archive
-                    const hasAnyAutoForPlot = hydricRecords.some(
-                        r => r.plotId === plot.id && String(r.id).startsWith('auto-rain-')
+                    const hasAnyAutoForLoc = hydricRecords.some(
+                        r => r.locationId === locId && String(r.id).startsWith('auto-rain-')
                     );
-                    if (forcePersist || !hasAnyAutoForPlot) {
+                    if (forcePersist || !hasAnyAutoForLoc) {
                         const sowDate = new Date(`${sowStr}T00:00:00`);
                         const nowDate = new Date(`${todayIso}T00:00:00`);
-                        const archiveEndObj = new Date(nowDate.getTime() - 2 * 86400000);
+                        const archiveEndObj = new Date(
+                            Math.min(nowDate.getTime() - 2 * 86400000, new Date(`${maxAllowedIso}T00:00:00`).getTime())
+                        );
                         if (archiveEndObj >= sowDate) {
                             const startIso = sowDate.toISOString().split('T')[0];
                             const endIso = archiveEndObj.toISOString().split('T')[0];
@@ -1781,7 +1793,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                                         aData.hourly.precipitation,
                                         'ECMWF ERA5-Land (Reanálisis Satelital ~9km)',
                                         sowStr,
-                                        todayIso
+                                        maxAllowedIso
                                     );
                                 }
                             }
@@ -1790,24 +1802,24 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
                     const sortedEntries = Array.from(dailyRainMap.entries()).sort((a, b) => a[0].localeCompare(b[0]));
                     for (const [rainDate, detail] of sortedEntries) {
-                        if (detail.mm < 0.5) continue;
-                        const deterministicId = `auto-rain-${plot.id}-${rainDate}`;
-                        if (!forcePersist && deletedHydricIds.has(deterministicId)) continue;
+                        if (detail.mm < 1.0) continue;
+                        const deterministicLocId = `auto-rain-loc-${locId}-${rainDate}`;
+                        if (!forcePersist && deletedHydricIds.has(deterministicLocId)) continue;
 
-                        const existingAutoRecord = hydricRecords.find(r => r.id === deterministicId);
+                        const existingAutoRecord = hydricRecords.find(r => r.id === deterministicLocId);
                         const alreadyExists = hydricRecords.some(
                             r =>
-                                r.id === deterministicId ||
-                                (r.type === 'Lluvia' && r.date === rainDate && r.plotId === plot.id)
+                                r.id === deterministicLocId ||
+                                (r.type === 'Lluvia' && r.date === rainDate && r.locationId === locId)
                         );
 
-                        const detailedNotes = `Pluviómetro Satelital ${detail.modelLabel} • Ventana de lluvia: ${detail.startHm} a ${detail.endHm} hs (${detail.activeHours}h efectivas • Pico máx: ${detail.peakMm} mm/h a las ${detail.peakHm} hs) • Celda GPS (${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)})`;
+                        const detailedNotes = `Pluviómetro Satelital ${detail.modelLabel} • Ventana de lluvia: ${detail.startHm} a ${detail.endHm} hs (${detail.activeHours}h efectivas • Pico máx: ${detail.peakMm} mm/h a las ${detail.peakHm} hs) • Sitio: ${loc?.name || 'Campo'} (${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)})`;
 
                         if (!alreadyExists) {
                             const newRainRecord: HydricRecord = {
-                                id: deterministicId,
-                                locationId: plot.locationId,
-                                plotId: plot.id,
+                                id: deterministicLocId,
+                                locationId: locId,
+                                plotId: undefined,
                                 date: rainDate,
                                 time: detail.startHm,
                                 endTime: detail.endHm,
@@ -1831,7 +1843,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                         }
                     }
                 } catch (err) {
-                    console.warn(`Aviso pluviómetro continuo en parcela ${plot.name}:`, err);
+                    console.warn(`Aviso pluviómetro continuo en establecimiento ${loc?.name || locId}:`, err);
                 }
             }
         } finally {
