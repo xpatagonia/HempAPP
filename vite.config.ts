@@ -25,7 +25,7 @@ export default defineConfig(({ mode }) => {
       cors: true
     },
     define: {
-      "__APP_VERSION__": JSON.stringify("V7.15.0-STABLE"),
+      "__APP_VERSION__": JSON.stringify("V7.15.1-STABLE"),
       "__BUILD_TIME__": JSON.stringify(new Date().toISOString()),
       ...(supabaseUrl ? { "import.meta.env.VITE_SUPABASE_URL": JSON.stringify(supabaseUrl) } : {}),
       ...(supabaseAnonKey ? { "import.meta.env.VITE_SUPABASE_ANON_KEY": JSON.stringify(supabaseAnonKey) } : {}),
