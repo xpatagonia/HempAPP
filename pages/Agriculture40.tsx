@@ -2302,11 +2302,15 @@ export default function Agriculture40() {
                       <button
                         onClick={() => setMapLayer('sar_layer')}
                         title="Radar de Apertura Sintética Sentinel-1 (Banda C · Polarización VV/VH): Penetra el 100% de las nubes"
-                        className={`px-2.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
+                        className={`px-2.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${
                           mapLayer === 'sar_layer' ? 'bg-indigo-600 text-white shadow-sm ring-2 ring-indigo-500/30' : 'text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30'
                         }`}
                       >
-                        📡 Radar SAR (S-1)
+                        <Radio size={12} className={mapLayer === 'sar_layer' ? 'animate-pulse' : ''} />
+                        <span>{mapLayer === 'sar_layer' ? 'Radar S-1 SAR (Activo)' : 'Activar Radar S-1 SAR'}</span>
+                        {((activePass?.cloudCoveragePct || 0) >= 20 || activePass?.notes?.includes('Sentinel-1 SAR')) && mapLayer !== 'sar_layer' && (
+                          <span className="px-1 py-0.2 bg-amber-300 text-slate-950 rounded text-[8px] font-black animate-pulse">REC</span>
+                        )}
                       </button>
                       <button
                         onClick={() => setMapLayer('foliage_layer')}
