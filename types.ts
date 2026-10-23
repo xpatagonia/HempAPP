@@ -352,6 +352,7 @@ export interface Plot {
   coordinates?: { lat: number; lng: number };
   polygon?: { lat: number; lng: number }[];
   irrigationType?: string;
+  soilType?: string;
   usedSeedValue?: number;
   usedSeedUnit?: 'gr' | 'kg' | 'tn';
   color?: string; // Nuevo campo para el color de referencia

@@ -159,6 +159,7 @@ const PURGED_DEMO_IDS = new Set([
     'var-grano-alimento',
     'user-admin-xpatagonia',
     '91ce0dcf-a760-41fe-82d5-52c438685944',
+    '7076a122-77b5-49ce-80fa-890440c2d66c',
     'res-1', 'res-2', 'res-3', 'res-4', 'res-5', 'res-6', 'res-7', 'res-8',
     'insp-1', 'insp-2', 'insp-3', 'insp-4'
 ]);
@@ -168,7 +169,7 @@ const isPurgedDemoItem = (item: any): boolean => {
     const id = String(item.id || '');
     if (PURGED_DEMO_IDS.has(id)) return true;
     if (id.startsWith('exp-demo-') || id.startsWith('demo-alert-')) return true;
-    if (item.plotId && String(item.plotId) === '91ce0dcf-a760-41fe-82d5-52c438685944') return true;
+    if (item.plotId && (String(item.plotId) === '91ce0dcf-a760-41fe-82d5-52c438685944' || String(item.plotId) === '7076a122-77b5-49ce-80fa-890440c2d66c')) return true;
     return false;
 };
 
@@ -382,7 +383,12 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                     ? { lat: Number(rawCoords.lat), lng: Number(rawCoords.lng) }
                     : (demoMatch?.coordinates || (finalPoly.length > 0 ? finalPoly[0] : { lat: -43.308362, lng: -65.289033 }));
                 return {
+                    ...(demoMatch || {}),
                     ...loc,
+                    climate: loc.climate || demoMatch?.climate || 'Templado Semiárido',
+                    responsiblePerson: loc.responsiblePerson || demoMatch?.responsiblePerson || loc.ownerName || 'Dirección Técnica',
+                    soilType: loc.soilType || demoMatch?.soilType || 'Franco',
+                    irrigationSystem: loc.irrigationSystem || demoMatch?.irrigationSystem || 'Goteo / Surcos',
                     coordinates: validCoords,
                     polygon: finalPoly
                 };
@@ -394,35 +400,86 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         const deletedSet = new Set(deletedMap['plots'] || []);
         const demoPlotById = new Map(DEMO_PLOTS.map(dp => [String(dp.id), dp]));
         const demoPlotByName = new Map(DEMO_PLOTS.map(dp => [dp.name.trim().toLowerCase(), dp]));
+        const locMap = new Map(DEMO_LOCATIONS.map(l => [String(l.id), l]));
 
         return (plotsList || [])
             .filter(p => !deletedSet.has(String(p.id)) && !isPurgedDemoItem(p))
             .map((p: Plot) => {
                 const demoMatch = demoPlotById.get(String(p.id)) || (p.name ? demoPlotByName.get(p.name.trim().toLowerCase()) : undefined);
+                const parentLoc = locMap.get(String(p.locationId || demoMatch?.locationId || ''));
+
+                // Corrección determinística para códigos genéticos mal vinculados (B03-103 y TW-PAR-C1 105)
+                let resolvedVarietyId = p.varietyId || demoMatch?.varietyId;
                 let resolvedBatchId = p.seedBatchId || demoMatch?.seedBatchId;
-                if (!resolvedBatchId && p.varietyId) {
-                    const match = batchesList.find(b => b.varietyId === p.varietyId && b.isActive && (!b.materialType || b.materialType === 'seed'))
-                        || DEMO_SEED_BATCHES.find(b => b.varietyId === p.varietyId && b.isActive);
+                if (String(p.id) === '299fd7fa-a85f-4ea1-862c-98653a873f71') {
+                    resolvedVarietyId = 'd4f3c2b2-3942-43cc-8814-250d2cb4293e';
+                    resolvedBatchId = '7ad8fa91-6cba-4229-9074-d754f068480a';
+                } else if (String(p.id) === '1d4f3b6e-91b4-435a-ab4f-6f6cb88ad7d4') {
+                    resolvedVarietyId = 'ce04b1d9-bde3-4040-94f3-3b57599ad4e7';
+                    resolvedBatchId = '37ef1587-3298-40fa-b7d4-372bacb23c11';
+                }
+
+                if (!resolvedBatchId && resolvedVarietyId) {
+                    const match = batchesList.find(b => b.varietyId === resolvedVarietyId && b.isActive && (!b.materialType || b.materialType === 'seed'))
+                        || DEMO_SEED_BATCHES.find(b => b.varietyId === resolvedVarietyId && b.isActive);
                     if (match) {
                         resolvedBatchId = match.id;
                     }
                 }
+                const linkedBatch = batchesList.find(b => b.id === resolvedBatchId) || DEMO_SEED_BATCHES.find(b => b.id === resolvedBatchId);
 
                 const normPoly = normalizePolygonPoints((p as any).polygon);
                 const finalPoly = normPoly.length >= 3 ? normPoly : (demoMatch?.polygon || []);
 
                 const rawCoords = (p as any).coordinates;
-                const validCoords = rawCoords && !isNaN(Number(rawCoords.lat)) && !isNaN(Number(rawCoords.lng)) && Number(rawCoords.lat) !== 0
+                let validCoords = rawCoords && !isNaN(Number(rawCoords.lat)) && !isNaN(Number(rawCoords.lng)) && Number(rawCoords.lat) !== 0
                     ? { lat: Number(rawCoords.lat), lng: Number(rawCoords.lng) }
                     : (demoMatch?.coordinates || (finalPoly.length > 0 ? {
                         lat: Number((finalPoly.reduce((s, pt) => s + pt.lat, 0) / finalPoly.length).toFixed(6)),
                         lng: Number((finalPoly.reduce((s, pt) => s + pt.lng, 0) / finalPoly.length).toFixed(6))
                     } : null));
 
+                // Candado geodésico: si las coordenadas están a >0.5° del campo padre, heredar centroide del polígono o del campo
+                if (validCoords && parentLoc?.coordinates) {
+                    const dLat = Math.abs(validCoords.lat - parentLoc.coordinates.lat);
+                    const dLng = Math.abs(validCoords.lng - parentLoc.coordinates.lng);
+                    if (dLat > 0.5 || dLng > 0.5) {
+                        validCoords = demoMatch?.coordinates || parentLoc.coordinates;
+                    }
+                }
+                if (!validCoords && parentLoc?.coordinates) {
+                    validCoords = parentLoc.coordinates;
+                }
+
+                // Herencia agronómica automática desde Sitio Padre y Lote de Semilla
+                const inheritedSoil = p.soilType || (demoMatch as any)?.soilType || parentLoc?.soilType || 'Franco';
+                const inheritedIrrigation = p.irrigationType || demoMatch?.irrigationType || parentLoc?.irrigationSystem || 'Goteo / Surcos';
+                const inheritedOwner = p.ownerName || demoMatch?.ownerName || parentLoc?.ownerName || 'Red Cooperativa';
+                const inheritedDensity = (p.density && p.density > 0) ? p.density : (demoMatch?.density || 48);
+                const inheritedRowDist = p.rowDistance || demoMatch?.rowDistance || 20;
+                const inheritedBlock = p.block || demoMatch?.block || 'Bloque I';
+                const inheritedReplicate = p.replicate || demoMatch?.replicate || 1;
+                const inheritedPerimeter = p.perimeter || demoMatch?.perimeter || 12;
+                const resolvedUnit = (String(p.id) === '8552fa5e-028d-4aa8-8ada-82802df299e9') ? 'm2' : (p.surfaceUnit || demoMatch?.surfaceUnit || 'm2');
+
                 return {
                     ...(demoMatch || {}),
                     ...p,
+                    name: (p.name || demoMatch?.name || '').trim(),
+                    varietyId: resolvedVarietyId || p.varietyId,
                     seedBatchId: resolvedBatchId || p.seedBatchId,
+                    surfaceUnit: resolvedUnit,
+                    soilType: inheritedSoil,
+                    irrigationType: inheritedIrrigation,
+                    ownerName: inheritedOwner,
+                    density: inheritedDensity,
+                    rowDistance: inheritedRowDist,
+                    block: inheritedBlock,
+                    replicate: inheritedReplicate,
+                    perimeter: inheritedPerimeter,
+                    samplingResponsibleName: p.samplingResponsibleName || linkedBatch?.samplerName || parentLoc?.ownerName || 'Matías QUINTANA',
+                    sowingResponsibleName: p.sowingResponsibleName || linkedBatch?.sowingResponsibleName || 'Joaquín AREZO',
+                    technicalResponsibleName: p.technicalResponsibleName || linkedBatch?.inspectorName || 'Ing. Agr. Julián PIZARRO',
                     coordinates: validCoords,
                     polygon: finalPoly
                 };

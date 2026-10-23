@@ -365,112 +365,6 @@ export const DEMO_VARIETIES: Variety[] = [
 
 export const DEMO_LOCATIONS: Location[] = [
   {
-    "id": "1766450631873",
-    "name": "INTA ENSAYO EXPERIMENTAL",
-    "province": "Buenos Aires",
-    "city": "Hilario Ascasubi",
-    "address": "",
-    "coordinates": {
-      "lat": -39.393075,
-      "lng": -62.621037
-    },
-    "polygon": [
-      {
-        "lat": -39.39280043809902,
-        "lng": -62.62211466367793
-      },
-      {
-        "lat": -39.3934653198508,
-        "lng": -62.62036412076698
-      },
-      {
-        "lat": -39.39293319211308,
-        "lng": -62.61996235609982
-      },
-      {
-        "lat": -39.39293787764567,
-        "lng": -62.61996326251915
-      },
-      {
-        "lat": -39.39293444235995,
-        "lng": -62.61995880990507
-      },
-      {
-        "lat": -39.39277292684446,
-        "lng": -62.62032309789089
-      },
-      {
-        "lat": -39.3927650798784,
-        "lng": -62.62031704611384
-      },
-      {
-        "lat": -39.39268505891869,
-        "lng": -62.62205280265421
-      },
-      {
-        "lat": -39.39280043809902,
-        "lng": -62.62211466367793
-      }
-    ],
-    "clientId": "94f8da54-90dc-44e7-b9df-e9b6c2be5266",
-    "capacityHa": 0.82,
-    "soilType": "Franco",
-    "climate": "",
-    "responsiblePerson": "",
-    "ownerName": "Matías QUINTANA",
-    "ownerLegalName": "",
-    "ownerCuit": "",
-    "ownerContact": "",
-    "ownerType": "Empresa Privada",
-    "irrigationSystem": "Goteo",
-    "responsibleIds": []
-  },
-  {
-    "id": "1766444697119",
-    "name": "Chacra La Regina",
-    "province": "Chubut",
-    "city": "Trelew",
-    "address": "Chacra 23 parcela 13 Ruta 3 km 1462",
-    "coordinates": {
-      "lat": -43.308362,
-      "lng": -65.289033
-    },
-    "polygon": [
-      {
-        "lat": -43.30836120674232,
-        "lng": -65.2893988383408
-      },
-      {
-        "lat": -43.30862918713058,
-        "lng": -65.28904720688814
-      },
-      {
-        "lat": -43.30834628100673,
-        "lng": -65.28866768894476
-      },
-      {
-        "lat": -43.30809481178991,
-        "lng": -65.2890183642173
-      },
-      {
-        "lat": -43.30836120674232,
-        "lng": -65.2893988383408
-      }
-    ],
-    "clientId": "2b9a277c-1035-4229-be01-e31d6aa871cb",
-    "capacityHa": 0.18,
-    "soilType": "Arcilloso",
-    "climate": "",
-    "responsiblePerson": "",
-    "ownerName": "Ricardo La Regina",
-    "ownerLegalName": "",
-    "ownerCuit": "",
-    "ownerContact": "",
-    "ownerType": "Empresa Privada",
-    "irrigationSystem": "Gravedad / Surcos",
-    "responsibleIds": []
-  },
-  {
     "id": "1766471895190",
     "name": "CAP CENTRO AMBIENTAL PATAGONICO",
     "province": "Chubut",
@@ -505,8 +399,8 @@ export const DEMO_LOCATIONS: Location[] = [
     "clientId": "06585f64-6d04-4567-a23f-a7f046ee06b4",
     "capacityHa": 0.17,
     "soilType": "Arenoso",
-    "climate": "",
-    "responsiblePerson": "",
+    "climate": "Árido Marítimo Patagónico (Golfo Nuevo)",
+    "responsiblePerson": "Salvador MERELLE / Joaquín AREZO",
     "ownerName": "Salvador MERELE",
     "ownerLegalName": "",
     "ownerCuit": "",
@@ -558,9 +452,115 @@ export const DEMO_LOCATIONS: Location[] = [
     "clientId": "7503c132-5d7d-48f0-9c0f-7692b1bdf348",
     "capacityHa": 1.92,
     "soilType": "Franco Arcilloso",
-    "climate": "",
-    "responsiblePerson": "",
+    "climate": "Templado Árido Patagónico (Parque Industrial)",
+    "responsiblePerson": "Ing. Gastón BAREA",
     "ownerName": "PatagonianC LTDA",
+    "ownerLegalName": "",
+    "ownerCuit": "",
+    "ownerContact": "",
+    "ownerType": "Empresa Privada",
+    "irrigationSystem": "Gravedad / Surcos",
+    "responsibleIds": []
+  },
+  {
+    "id": "1766450631873",
+    "name": "INTA ENSAYO EXPERIMENTAL",
+    "province": "Buenos Aires",
+    "city": "Hilario Ascasubi",
+    "address": "",
+    "coordinates": {
+      "lat": -39.393075,
+      "lng": -62.621037
+    },
+    "polygon": [
+      {
+        "lat": -39.39280043809902,
+        "lng": -62.62211466367793
+      },
+      {
+        "lat": -39.3934653198508,
+        "lng": -62.62036412076698
+      },
+      {
+        "lat": -39.39293319211308,
+        "lng": -62.61996235609982
+      },
+      {
+        "lat": -39.39293787764567,
+        "lng": -62.61996326251915
+      },
+      {
+        "lat": -39.39293444235995,
+        "lng": -62.61995880990507
+      },
+      {
+        "lat": -39.39277292684446,
+        "lng": -62.62032309789089
+      },
+      {
+        "lat": -39.3927650798784,
+        "lng": -62.62031704611384
+      },
+      {
+        "lat": -39.39268505891869,
+        "lng": -62.62205280265421
+      },
+      {
+        "lat": -39.39280043809902,
+        "lng": -62.62211466367793
+      }
+    ],
+    "clientId": "94f8da54-90dc-44e7-b9df-e9b6c2be5266",
+    "capacityHa": 0.82,
+    "soilType": "Franco",
+    "climate": "Semiárido Templado (Valle Bonaerense del Río Colorado)",
+    "responsiblePerson": "Matías QUINTANA / Ing. Agr. Julián PIZARRO",
+    "ownerName": "Matías QUINTANA",
+    "ownerLegalName": "",
+    "ownerCuit": "",
+    "ownerContact": "",
+    "ownerType": "Empresa Privada",
+    "irrigationSystem": "Goteo",
+    "responsibleIds": []
+  },
+  {
+    "id": "1766444697119",
+    "name": "Chacra La Regina",
+    "province": "Chubut",
+    "city": "Trelew",
+    "address": "Chacra 23 parcela 13 Ruta 3 km 1462",
+    "coordinates": {
+      "lat": -43.308362,
+      "lng": -65.289033
+    },
+    "polygon": [
+      {
+        "lat": -43.30836120674232,
+        "lng": -65.2893988383408
+      },
+      {
+        "lat": -43.30862918713058,
+        "lng": -65.28904720688814
+      },
+      {
+        "lat": -43.30834628100673,
+        "lng": -65.28866768894476
+      },
+      {
+        "lat": -43.30809481178991,
+        "lng": -65.2890183642173
+      },
+      {
+        "lat": -43.30836120674232,
+        "lng": -65.2893988383408
+      }
+    ],
+    "clientId": "2b9a277c-1035-4229-be01-e31d6aa871cb",
+    "capacityHa": 0.18,
+    "soilType": "Arcilloso",
+    "climate": "Templado Árido Patagónico (VIRCh)",
+    "responsiblePerson": "Ricardo LA REGINA / Ing. Agr. Gastón BAREA",
+    "ownerName": "Ricardo La Regina",
     "ownerLegalName": "",
     "ownerCuit": "",
     "ownerContact": "",
@@ -581,15 +581,15 @@ export const DEMO_PLOTS: Plot[] = [
     "type": "Ensayo",
     "status": "Activa",
     "sowingDate": "2026-01-13",
-    "block": null,
-    "replicate": null,
+    "block": "Bloque A",
+    "replicate": 1,
     "surfaceArea": 9,
     "surfaceUnit": "m2",
-    "density": 0,
-    "ownerName": null,
+    "density": 46,
+    "ownerName": "Ricardo La Regina",
     "responsibleIds": [],
-    "rowDistance": null,
-    "perimeter": null,
+    "rowDistance": 20,
+    "perimeter": 12.2,
     "coordinates": {
       "lat": -43.308576,
       "lng": -65.289047
@@ -616,66 +616,11 @@ export const DEMO_PLOTS: Plot[] = [
         "lng": -65.28908111760784
       }
     ],
-    "irrigationType": null,
+    "irrigationType": "Gravedad / Surcos",
     "observations": null,
     "usedSeedValue": 25,
     "usedSeedUnit": "gr",
-    "color": "#16a34a",
-    "campaign": "2025/2026",
-    "activeCampaigns": [
-      "2025/2026"
-    ]
-  },
-  {
-    "id": "c7ffc59e-219a-477d-8612-5da603b3063d",
-    "locationId": "1766444697119",
-    "projectId": "1766443392119",
-    "varietyId": "5e115db0-7f9d-4640-abe5-769f414fe293",
-    "seedBatchId": "f3bbf23a-7eac-428a-8252-2b00c394fdcd",
-    "name": "TW-PAR-A3 501",
-    "type": "Ensayo",
-    "status": "Activa",
-    "sowingDate": "2026-01-13",
-    "block": null,
-    "replicate": null,
-    "surfaceArea": 9.72,
-    "surfaceUnit": "m2",
-    "density": 0,
-    "ownerName": null,
-    "responsibleIds": [],
-    "rowDistance": null,
-    "perimeter": null,
-    "coordinates": {
-      "lat": -43.308558,
-      "lng": -65.28907
-    },
-    "polygon": [
-      {
-        "lat": -43.30854544589207,
-        "lng": -65.28903596446129
-      },
-      {
-        "lat": -43.30853503620728,
-        "lng": -65.28905026016915
-      },
-      {
-        "lat": -43.3085699073353,
-        "lng": -65.28910501265874
-      },
-      {
-        "lat": -43.30858086008471,
-        "lng": -65.28909145199901
-      },
-      {
-        "lat": -43.30854544589207,
-        "lng": -65.28903596446129
-      }
-    ],
-    "irrigationType": null,
-    "observations": "Suelo arcilloso",
-    "usedSeedValue": 25,
-    "usedSeedUnit": "gr",
-    "color": "#16a34a",
+    "color": "#d97706",
     "campaign": "2025/2026",
     "activeCampaigns": [
       "2025/2026"
@@ -691,15 +636,15 @@ export const DEMO_PLOTS: Plot[] = [
     "type": "Ensayo",
     "status": "Activa",
     "sowingDate": "2026-01-09",
-    "block": null,
-    "replicate": null,
+    "block": "Bloque A",
+    "replicate": 1,
     "surfaceArea": 9.44,
     "surfaceUnit": "m2",
-    "density": 0,
-    "ownerName": null,
+    "density": 46,
+    "ownerName": "Ricardo La Regina",
     "responsibleIds": [],
-    "rowDistance": null,
-    "perimeter": null,
+    "rowDistance": 20,
+    "perimeter": 12.2,
     "coordinates": {
       "lat": -43.308593,
       "lng": -65.289025
@@ -726,11 +671,11 @@ export const DEMO_PLOTS: Plot[] = [
         "lng": -65.28899116899437
       }
     ],
-    "irrigationType": null,
+    "irrigationType": "Gravedad / Surcos",
     "observations": "",
     "usedSeedValue": 25,
     "usedSeedUnit": "gr",
-    "color": "#d97706",
+    "color": "#16a34a",
     "campaign": "2025/2026",
     "activeCampaigns": [
       "2025/2026"
@@ -746,15 +691,15 @@ export const DEMO_PLOTS: Plot[] = [
     "type": "Ensayo",
     "status": "Activa",
     "sowingDate": "2026-01-09",
-    "block": null,
-    "replicate": null,
+    "block": "Bloque B",
+    "replicate": 2,
     "surfaceArea": 9.71,
     "surfaceUnit": "m2",
-    "density": 0,
-    "ownerName": null,
+    "density": 46,
+    "ownerName": "Ricardo La Regina",
     "responsibleIds": [],
-    "rowDistance": null,
-    "perimeter": null,
+    "rowDistance": 20,
+    "perimeter": 12.2,
     "coordinates": {
       "lat": -43.308548,
       "lng": -65.288959
@@ -781,62 +726,11 @@ export const DEMO_PLOTS: Plot[] = [
         "lng": -65.28892346927776
       }
     ],
-    "irrigationType": null,
+    "irrigationType": "Gravedad / Surcos",
     "observations": null,
     "usedSeedValue": 25,
     "usedSeedUnit": "gr",
-    "color": "#dc2626",
-    "campaign": "2025/2026",
-    "activeCampaigns": [
-      "2025/2026"
-    ]
-  },
-  {
-    "id": "8552fa5e-028d-4aa8-8ada-82802df299e9",
-    "locationId": "1766450631873",
-    "projectId": "1766443392119",
-    "varietyId": "ce04b1d9-bde3-4040-94f3-3b57599ad4e7",
-    "seedBatchId": "9952ee6d-573c-4815-8099-2ee9ee03adaf",
-    "name": "B1-105",
-    "type": "Ensayo",
-    "status": "Activa",
-    "sowingDate": "2025-12-26",
-    "block": null,
-    "replicate": null,
-    "surfaceArea": 9,
-    "surfaceUnit": "ha",
-    "density": 0,
-    "ownerName": null,
-    "responsibleIds": [],
-    "rowDistance": null,
-    "perimeter": null,
-    "coordinates": {
-      "lat": -39.392475,
-      "lng": -62.620437
-    },
-    "polygon": [
-      {
-        "lat": -39.392525,
-        "lng": -62.620487000000004
-      },
-      {
-        "lat": -39.392525,
-        "lng": -62.620387
-      },
-      {
-        "lat": -39.392424999999996,
-        "lng": -62.620387
-      },
-      {
-        "lat": -39.392424999999996,
-        "lng": -62.620487000000004
-      }
-    ],
-    "irrigationType": null,
-    "observations": "Suelo libre de malezas, parcelas roovateada. Riego presiembra ",
-    "usedSeedValue": 80,
-    "usedSeedUnit": "gr",
-    "color": "#16a34a",
+    "color": "#2563eb",
     "campaign": "2025/2026",
     "activeCampaigns": [
       "2025/2026"
@@ -852,42 +746,46 @@ export const DEMO_PLOTS: Plot[] = [
     "type": "Ensayo",
     "status": "Activa",
     "sowingDate": "2025-12-26",
-    "block": null,
-    "replicate": null,
+    "block": "Bloque II",
+    "replicate": 2,
     "surfaceArea": 9,
     "surfaceUnit": "m2",
-    "density": 0,
-    "ownerName": null,
+    "density": 48,
+    "ownerName": "Matías QUINTANA",
     "responsibleIds": [],
-    "rowDistance": null,
-    "perimeter": null,
+    "rowDistance": 20,
+    "perimeter": 12,
     "coordinates": {
-      "lat": -39.393075,
-      "lng": -62.620287
+      "lat": -39.39297,
+      "lng": -62.620944
     },
     "polygon": [
       {
-        "lat": -39.393125000000005,
-        "lng": -62.620337
+        "lat": -39.392956,
+        "lng": -62.620961
       },
       {
-        "lat": -39.393125000000005,
-        "lng": -62.620236999999996
+        "lat": -39.392956,
+        "lng": -62.620927
       },
       {
-        "lat": -39.393025,
-        "lng": -62.620236999999996
+        "lat": -39.392983,
+        "lng": -62.620927
       },
       {
-        "lat": -39.393025,
-        "lng": -62.620337
+        "lat": -39.392983,
+        "lng": -62.620961
+      },
+      {
+        "lat": -39.392956,
+        "lng": -62.620961
       }
     ],
-    "irrigationType": null,
+    "irrigationType": "Goteo",
     "observations": "Lote libre de malezas. Parcelas rotovateadas. Riego presiembra. Dosis de PDA (80kg.ha) ",
     "usedSeedValue": 80,
     "usedSeedUnit": "gr",
-    "color": "#16a34a",
+    "color": "#9333ea",
     "campaign": "2025/2026",
     "activeCampaigns": [
       "2025/2026"
@@ -903,93 +801,46 @@ export const DEMO_PLOTS: Plot[] = [
     "type": "Ensayo",
     "status": "Activa",
     "sowingDate": "2025-12-26",
-    "block": null,
-    "replicate": null,
+    "block": "Bloque III",
+    "replicate": 3,
     "surfaceArea": 9,
     "surfaceUnit": "m2",
-    "density": 0,
-    "ownerName": null,
+    "density": 48,
+    "ownerName": "Matías QUINTANA",
     "responsibleIds": [],
-    "rowDistance": null,
-    "perimeter": null,
+    "rowDistance": 20,
+    "perimeter": 12,
     "coordinates": {
-      "lat": -39.392925,
-      "lng": -62.620137
+      "lat": -39.39302,
+      "lng": -62.620944
     },
     "polygon": [
       {
-        "lat": -39.392975,
-        "lng": -62.620187
+        "lat": -39.393006,
+        "lng": -62.620961
       },
       {
-        "lat": -39.392975,
-        "lng": -62.620087
+        "lat": -39.393006,
+        "lng": -62.620927
       },
       {
-        "lat": -39.392875,
-        "lng": -62.620087
+        "lat": -39.393034,
+        "lng": -62.620927
       },
       {
-        "lat": -39.392875,
-        "lng": -62.620187
+        "lat": -39.393034,
+        "lng": -62.620961
+      },
+      {
+        "lat": -39.393006,
+        "lng": -62.620961
       }
     ],
-    "irrigationType": null,
+    "irrigationType": "Goteo",
     "observations": "Lote libre de malezas. Parcelas rotovateadas. Riego presiembra. PDA 80kg.ha",
     "usedSeedValue": 80,
     "usedSeedUnit": "gr",
-    "color": "#16a34a",
-    "campaign": "2025/2026",
-    "activeCampaigns": [
-      "2025/2026"
-    ]
-  },
-  {
-    "id": "2ebb09f7-2960-468e-a5e1-4b2fd64255bd",
-    "locationId": "1766450631873",
-    "projectId": "1766443392119",
-    "varietyId": "3ccfe7b3-0707-4dc5-904b-a727579ced26",
-    "seedBatchId": "aeeeffdd-4c0c-46a6-9715-717ecb4a4279",
-    "name": "B01-101",
-    "type": "Ensayo",
-    "status": "Activa",
-    "sowingDate": "2025-12-26",
-    "block": null,
-    "replicate": null,
-    "surfaceArea": 9,
-    "surfaceUnit": "m2",
-    "density": 0,
-    "ownerName": null,
-    "responsibleIds": [],
-    "rowDistance": null,
-    "perimeter": null,
-    "coordinates": {
-      "lat": -39.392775,
-      "lng": -62.621037
-    },
-    "polygon": [
-      {
-        "lat": -39.392825,
-        "lng": -62.621087
-      },
-      {
-        "lat": -39.392825,
-        "lng": -62.620987
-      },
-      {
-        "lat": -39.392725,
-        "lng": -62.620987
-      },
-      {
-        "lat": -39.392725,
-        "lng": -62.621087
-      }
-    ],
-    "irrigationType": null,
-    "observations": "Lote libre de malezas. Parcelas rotovateada. Riego presiembra. PDA 80kg.ha",
-    "usedSeedValue": 80,
-    "usedSeedUnit": "gr",
-    "color": "#dc2626",
+    "color": "#9333ea",
     "campaign": "2025/2026",
     "activeCampaigns": [
       "2025/2026"
@@ -1005,144 +856,46 @@ export const DEMO_PLOTS: Plot[] = [
     "type": "Ensayo",
     "status": "Activa",
     "sowingDate": "2025-12-26",
-    "block": null,
-    "replicate": null,
+    "block": "Bloque II",
+    "replicate": 2,
     "surfaceArea": 9,
     "surfaceUnit": "m2",
-    "density": 0,
-    "ownerName": null,
+    "density": 48,
+    "ownerName": "Matías QUINTANA",
     "responsibleIds": [],
-    "rowDistance": null,
-    "perimeter": null,
+    "rowDistance": 20,
+    "perimeter": 12,
     "coordinates": {
-      "lat": -39.392625,
-      "lng": -62.620887
+      "lat": -39.39297,
+      "lng": -62.62106
     },
     "polygon": [
       {
-        "lat": -39.392675000000004,
-        "lng": -62.620937000000005
+        "lat": -39.392956,
+        "lng": -62.621077
       },
       {
-        "lat": -39.392675000000004,
-        "lng": -62.620837
+        "lat": -39.392956,
+        "lng": -62.621043
       },
       {
-        "lat": -39.392575,
-        "lng": -62.620837
+        "lat": -39.392983,
+        "lng": -62.621043
       },
       {
-        "lat": -39.392575,
-        "lng": -62.620937000000005
+        "lat": -39.392983,
+        "lng": -62.621077
+      },
+      {
+        "lat": -39.392956,
+        "lng": -62.621077
       }
     ],
-    "irrigationType": null,
+    "irrigationType": "Goteo",
     "observations": "Lote libre de malezas. Parcelas rotovateada. Riego presiembra. PDA 80kg.ha",
     "usedSeedValue": 80,
     "usedSeedUnit": "gr",
-    "color": "#dc2626",
-    "campaign": "2025/2026",
-    "activeCampaigns": [
-      "2025/2026"
-    ]
-  },
-  {
-    "id": "fcb2595e-1f32-46fa-b8e5-898f036a0a18",
-    "locationId": "1766450631873",
-    "projectId": "1766443392119",
-    "varietyId": "3ccfe7b3-0707-4dc5-904b-a727579ced26",
-    "seedBatchId": "aeeeffdd-4c0c-46a6-9715-717ecb4a4279",
-    "name": "B03-101",
-    "type": "Ensayo",
-    "status": "Activa",
-    "sowingDate": "2025-12-26",
-    "block": null,
-    "replicate": null,
-    "surfaceArea": 9,
-    "surfaceUnit": "m2",
-    "density": 0,
-    "ownerName": null,
-    "responsibleIds": [],
-    "rowDistance": null,
-    "perimeter": null,
-    "coordinates": {
-      "lat": -39.392475,
-      "lng": -62.620737
-    },
-    "polygon": [
-      {
-        "lat": -39.392525,
-        "lng": -62.620787
-      },
-      {
-        "lat": -39.392525,
-        "lng": -62.620687
-      },
-      {
-        "lat": -39.392424999999996,
-        "lng": -62.620687
-      },
-      {
-        "lat": -39.392424999999996,
-        "lng": -62.620787
-      }
-    ],
-    "irrigationType": null,
-    "observations": "Lote libre de malezas. Parcelas rotovateada. Riego presiembra. PDA 80kg.ha",
-    "usedSeedValue": 80,
-    "usedSeedUnit": "gr",
-    "color": "#dc2626",
-    "campaign": "2025/2026",
-    "activeCampaigns": [
-      "2025/2026"
-    ]
-  },
-  {
-    "id": "0be6ffef-91b6-44b0-9027-eeceda088149",
-    "locationId": "1766450631873",
-    "projectId": "1766443392119",
-    "varietyId": "5e115db0-7f9d-4640-abe5-769f414fe293",
-    "seedBatchId": "8020a641-279d-4f74-b7f1-61324f9f0eba",
-    "name": "B01-501 ",
-    "type": "Ensayo",
-    "status": "Activa",
-    "sowingDate": "2025-12-26",
-    "block": null,
-    "replicate": null,
-    "surfaceArea": 9,
-    "surfaceUnit": "m2",
-    "density": 0,
-    "ownerName": null,
-    "responsibleIds": [],
-    "rowDistance": null,
-    "perimeter": null,
-    "coordinates": {
-      "lat": -39.393075,
-      "lng": -62.620587
-    },
-    "polygon": [
-      {
-        "lat": -39.393125000000005,
-        "lng": -62.620637
-      },
-      {
-        "lat": -39.393125000000005,
-        "lng": -62.620537
-      },
-      {
-        "lat": -39.393025,
-        "lng": -62.620537
-      },
-      {
-        "lat": -39.393025,
-        "lng": -62.620637
-      }
-    ],
-    "irrigationType": null,
-    "observations": "Lote libre de malezas. Parcelas rotovateada. Riego presiembra. PDA 80kg.ha. La semilla vino curada ",
-    "usedSeedValue": 80,
-    "usedSeedUnit": "gr",
-    "color": "#2563eb",
+    "color": "#16a34a",
     "campaign": "2025/2026",
     "activeCampaigns": [
       "2025/2026"
@@ -1158,89 +911,42 @@ export const DEMO_PLOTS: Plot[] = [
     "type": "Ensayo",
     "status": "Activa",
     "sowingDate": "2025-12-26",
-    "block": null,
-    "replicate": null,
+    "block": "Bloque II",
+    "replicate": 2,
     "surfaceArea": 9,
     "surfaceUnit": "m2",
-    "density": 0,
-    "ownerName": null,
+    "density": 48,
+    "ownerName": "Matías QUINTANA",
     "responsibleIds": [],
-    "rowDistance": null,
-    "perimeter": null,
+    "rowDistance": 20,
+    "perimeter": 12,
     "coordinates": {
-      "lat": -39.392925,
-      "lng": -62.620437
+      "lat": -39.39297,
+      "lng": -62.620886
     },
     "polygon": [
       {
-        "lat": -39.392975,
-        "lng": -62.620487000000004
+        "lat": -39.392956,
+        "lng": -62.620903
       },
       {
-        "lat": -39.392975,
-        "lng": -62.620387
+        "lat": -39.392956,
+        "lng": -62.620869
       },
       {
-        "lat": -39.392875,
-        "lng": -62.620387
+        "lat": -39.392983,
+        "lng": -62.620869
       },
       {
-        "lat": -39.392875,
-        "lng": -62.620487000000004
+        "lat": -39.392983,
+        "lng": -62.620903
+      },
+      {
+        "lat": -39.392956,
+        "lng": -62.620903
       }
     ],
-    "irrigationType": null,
-    "observations": "Lote libre de malezas. Parcelas rotovateada. Riego presiembra. PDA 80kg.ha. La semilla vino curada ",
-    "usedSeedValue": 80,
-    "usedSeedUnit": "gr",
-    "color": "#2563eb",
-    "campaign": "2025/2026",
-    "activeCampaigns": [
-      "2025/2026"
-    ]
-  },
-  {
-    "id": "31f68215-95c6-4736-bb8b-f910615ca0ba",
-    "locationId": "1766450631873",
-    "projectId": "1766443392119",
-    "varietyId": "5e115db0-7f9d-4640-abe5-769f414fe293",
-    "seedBatchId": "8020a641-279d-4f74-b7f1-61324f9f0eba",
-    "name": "B03-501",
-    "type": "Ensayo",
-    "status": "Activa",
-    "sowingDate": "2025-12-26",
-    "block": null,
-    "replicate": null,
-    "surfaceArea": 9,
-    "surfaceUnit": "m2",
-    "density": 0,
-    "ownerName": null,
-    "responsibleIds": [],
-    "rowDistance": null,
-    "perimeter": null,
-    "coordinates": {
-      "lat": -39.392775,
-      "lng": -62.620287
-    },
-    "polygon": [
-      {
-        "lat": -39.392825,
-        "lng": -62.620337
-      },
-      {
-        "lat": -39.392825,
-        "lng": -62.620236999999996
-      },
-      {
-        "lat": -39.392725,
-        "lng": -62.620236999999996
-      },
-      {
-        "lat": -39.392725,
-        "lng": -62.620337
-      }
-    ],
-    "irrigationType": null,
+    "irrigationType": "Goteo",
     "observations": "Lote libre de malezas. Parcelas rotovateada. Riego presiembra. PDA 80kg.ha. La semilla vino curada ",
     "usedSeedValue": 80,
     "usedSeedUnit": "gr",
@@ -1260,89 +966,42 @@ export const DEMO_PLOTS: Plot[] = [
     "type": "Ensayo",
     "status": "Activa",
     "sowingDate": "2025-12-26",
-    "block": null,
-    "replicate": null,
+    "block": "Bloque I",
+    "replicate": 1,
     "surfaceArea": 9,
     "surfaceUnit": "m2",
-    "density": 0,
-    "ownerName": null,
+    "density": 48,
+    "ownerName": "Matías QUINTANA",
     "responsibleIds": [],
-    "rowDistance": null,
-    "perimeter": null,
+    "rowDistance": 20,
+    "perimeter": 12,
     "coordinates": {
-      "lat": -39.392625,
-      "lng": -62.620137
+      "lat": -39.39292,
+      "lng": -62.621002
     },
     "polygon": [
       {
-        "lat": -39.392675000000004,
-        "lng": -62.620187
+        "lat": -39.392906,
+        "lng": -62.621019
       },
       {
-        "lat": -39.392675000000004,
-        "lng": -62.620087
+        "lat": -39.392906,
+        "lng": -62.620984
       },
       {
-        "lat": -39.392575,
-        "lng": -62.620087
+        "lat": -39.392933,
+        "lng": -62.620984
       },
       {
-        "lat": -39.392575,
-        "lng": -62.620187
+        "lat": -39.392933,
+        "lng": -62.621019
+      },
+      {
+        "lat": -39.392906,
+        "lng": -62.621019
       }
     ],
-    "irrigationType": null,
-    "observations": "Lote libre de malezas. Parcelas rotovateada. Riego presiembra. PDA 80kg.ha. ",
-    "usedSeedValue": 80,
-    "usedSeedUnit": "gr",
-    "color": "#d97706",
-    "campaign": "2025/2026",
-    "activeCampaigns": [
-      "2025/2026"
-    ]
-  },
-  {
-    "id": "f77b53bb-54be-4af1-9f97-59e87531fff0",
-    "locationId": "1766450631873",
-    "projectId": "1766443392119",
-    "varietyId": "d4f3c2b2-3942-43cc-8814-250d2cb4293e",
-    "seedBatchId": "7ad8fa91-6cba-4229-9074-d754f068480a",
-    "name": "B02-103",
-    "type": "Ensayo",
-    "status": "Activa",
-    "sowingDate": "2025-12-26",
-    "block": null,
-    "replicate": null,
-    "surfaceArea": 9,
-    "surfaceUnit": "m2",
-    "density": 0,
-    "ownerName": null,
-    "responsibleIds": [],
-    "rowDistance": null,
-    "perimeter": null,
-    "coordinates": {
-      "lat": -39.392475,
-      "lng": -62.621037
-    },
-    "polygon": [
-      {
-        "lat": -39.392525,
-        "lng": -62.621087
-      },
-      {
-        "lat": -39.392525,
-        "lng": -62.620987
-      },
-      {
-        "lat": -39.392424999999996,
-        "lng": -62.620987
-      },
-      {
-        "lat": -39.392424999999996,
-        "lng": -62.621087
-      }
-    ],
-    "irrigationType": null,
+    "irrigationType": "Goteo",
     "observations": "Lote libre de malezas. Parcelas rotovateada. Riego presiembra. PDA 80kg.ha. ",
     "usedSeedValue": 80,
     "usedSeedUnit": "gr",
@@ -1356,44 +1015,48 @@ export const DEMO_PLOTS: Plot[] = [
     "id": "299fd7fa-a85f-4ea1-862c-98653a873f71",
     "locationId": "1766450631873",
     "projectId": "1766443392119",
-    "varietyId": "5e115db0-7f9d-4640-abe5-769f414fe293",
-    "seedBatchId": "f3bbf23a-7eac-428a-8252-2b00c394fdcd",
+    "varietyId": "d4f3c2b2-3942-43cc-8814-250d2cb4293e",
+    "seedBatchId": "7ad8fa91-6cba-4229-9074-d754f068480a",
     "name": "B03-103",
     "type": "Ensayo",
     "status": "Activa",
     "sowingDate": "2025-12-26",
-    "block": null,
-    "replicate": null,
+    "block": "Bloque III",
+    "replicate": 3,
     "surfaceArea": 9,
     "surfaceUnit": "m2",
-    "density": 0,
-    "ownerName": null,
+    "density": 48,
+    "ownerName": "Matías QUINTANA",
     "responsibleIds": [],
-    "rowDistance": null,
-    "perimeter": null,
+    "rowDistance": 20,
+    "perimeter": 12,
     "coordinates": {
-      "lat": -39.393075,
-      "lng": -62.620887
+      "lat": -39.39302,
+      "lng": -62.621002
     },
     "polygon": [
       {
-        "lat": -39.393125000000005,
-        "lng": -62.620937000000005
+        "lat": -39.393006,
+        "lng": -62.621019
       },
       {
-        "lat": -39.393125000000005,
-        "lng": -62.620837
+        "lat": -39.393006,
+        "lng": -62.620984
       },
       {
-        "lat": -39.393025,
-        "lng": -62.620837
+        "lat": -39.393034,
+        "lng": -62.620984
       },
       {
-        "lat": -39.393025,
-        "lng": -62.620937000000005
+        "lat": -39.393034,
+        "lng": -62.621019
+      },
+      {
+        "lat": -39.393006,
+        "lng": -62.621019
       }
     ],
-    "irrigationType": null,
+    "irrigationType": "Goteo",
     "observations": "Lote libre de malezas. Parcelas rotovateada. Riego presiembra. PDA 80kg.ha. ",
     "usedSeedValue": 80,
     "usedSeedUnit": "gr",
@@ -1404,53 +1067,53 @@ export const DEMO_PLOTS: Plot[] = [
     ]
   },
   {
-    "id": "973fe497-b4fb-4dec-8879-aae1d21e3f82",
-    "locationId": "1766444697119",
+    "id": "8552fa5e-028d-4aa8-8ada-82802df299e9",
+    "locationId": "1766450631873",
     "projectId": "1766443392119",
     "varietyId": "ce04b1d9-bde3-4040-94f3-3b57599ad4e7",
-    "seedBatchId": "37ef1587-3298-40fa-b7d4-372bacb23c11",
-    "name": "TW-PAR-B2 105",
+    "seedBatchId": "9952ee6d-573c-4815-8099-2ee9ee03adaf",
+    "name": "B1-105",
     "type": "Ensayo",
     "status": "Activa",
-    "sowingDate": "2026-01-09",
-    "block": null,
-    "replicate": null,
-    "surfaceArea": 8.73,
+    "sowingDate": "2025-12-26",
+    "block": "Bloque I",
+    "replicate": 1,
+    "surfaceArea": 9,
     "surfaceUnit": "m2",
-    "density": 0,
-    "ownerName": null,
+    "density": 48,
+    "ownerName": "Matías QUINTANA",
     "responsibleIds": [],
-    "rowDistance": null,
-    "perimeter": null,
+    "rowDistance": 20,
+    "perimeter": 12,
     "coordinates": {
-      "lat": -43.308532,
-      "lng": -65.288981
+      "lat": -39.39292,
+      "lng": -62.620944
     },
     "polygon": [
       {
-        "lat": -43.30854521915703,
-        "lng": -65.28901420691567
+        "lat": -39.392906,
+        "lng": -62.620961
       },
       {
-        "lat": -43.30855499087826,
-        "lng": -65.28900236561157
+        "lat": -39.392906,
+        "lng": -62.620927
       },
       {
-        "lat": -43.30851772440386,
-        "lng": -65.28894709105651
+        "lat": -39.392933,
+        "lng": -62.620927
       },
       {
-        "lat": -43.30850848353746,
-        "lng": -65.28895928291472
+        "lat": -39.392933,
+        "lng": -62.620961
       },
       {
-        "lat": -43.30854521915703,
-        "lng": -65.28901420691567
+        "lat": -39.392906,
+        "lng": -62.620961
       }
     ],
-    "irrigationType": null,
-    "observations": "",
-    "usedSeedValue": 25,
+    "irrigationType": "Goteo",
+    "observations": "Suelo libre de malezas, parcelas roovateada. Riego presiembra ",
+    "usedSeedValue": 80,
     "usedSeedUnit": "gr",
     "color": "#9333ea",
     "campaign": "2025/2026",
@@ -1462,21 +1125,21 @@ export const DEMO_PLOTS: Plot[] = [
     "id": "1d4f3b6e-91b4-435a-ab4f-6f6cb88ad7d4",
     "locationId": "1766444697119",
     "projectId": "1766443392119",
-    "varietyId": "d4f3c2b2-3942-43cc-8814-250d2cb4293e",
-    "seedBatchId": "d99fe71a-fd56-4d97-8dae-b986fd71a66e",
+    "varietyId": "ce04b1d9-bde3-4040-94f3-3b57599ad4e7",
+    "seedBatchId": "37ef1587-3298-40fa-b7d4-372bacb23c11",
     "name": "TW-PAR-C1 105",
     "type": "Ensayo",
     "status": "Activa",
     "sowingDate": "2026-01-09",
-    "block": null,
-    "replicate": null,
+    "block": "Bloque C",
+    "replicate": 3,
     "surfaceArea": 8.75,
     "surfaceUnit": "m2",
-    "density": 0,
-    "ownerName": null,
+    "density": 46,
+    "ownerName": "Ricardo La Regina",
     "responsibleIds": [],
-    "rowDistance": null,
-    "perimeter": null,
+    "rowDistance": 20,
+    "perimeter": 12.2,
     "coordinates": {
       "lat": -43.308504,
       "lng": -65.288895
@@ -1503,11 +1166,11 @@ export const DEMO_PLOTS: Plot[] = [
         "lng": -65.2888611144261
       }
     ],
-    "irrigationType": null,
+    "irrigationType": "Gravedad / Surcos",
     "observations": null,
     "usedSeedValue": 25,
     "usedSeedUnit": "gr",
-    "color": "#16a34a",
+    "color": "#9333ea",
     "campaign": "2025/2026",
     "activeCampaigns": [
       "2025/2026"
@@ -1523,15 +1186,15 @@ export const DEMO_PLOTS: Plot[] = [
     "type": "Ensayo",
     "status": "Activa",
     "sowingDate": "2026-01-09",
-    "block": null,
-    "replicate": null,
+    "block": "Bloque C",
+    "replicate": 3,
     "surfaceArea": 8.58,
     "surfaceUnit": "m2",
-    "density": 0,
-    "ownerName": null,
+    "density": 46,
+    "ownerName": "Ricardo La Regina",
     "responsibleIds": [],
-    "rowDistance": null,
-    "perimeter": null,
+    "rowDistance": 20,
+    "perimeter": 12.2,
     "coordinates": {
       "lat": -43.308472,
       "lng": -65.288938
@@ -1558,11 +1221,11 @@ export const DEMO_PLOTS: Plot[] = [
         "lng": -65.28890395234376
       }
     ],
-    "irrigationType": null,
+    "irrigationType": "Gravedad / Surcos",
     "observations": null,
     "usedSeedValue": 25,
     "usedSeedUnit": "gr",
-    "color": "#16a34a",
+    "color": "#d97706",
     "campaign": "2025/2026",
     "activeCampaigns": [
       "2025/2026"
@@ -1578,15 +1241,15 @@ export const DEMO_PLOTS: Plot[] = [
     "type": "Ensayo",
     "status": "Activa",
     "sowingDate": "2026-01-09",
-    "block": null,
-    "replicate": null,
+    "block": "Bloque D",
+    "replicate": 4,
     "surfaceArea": 8.94,
     "surfaceUnit": "m2",
-    "density": 0,
-    "ownerName": null,
+    "density": 46,
+    "ownerName": "Ricardo La Regina",
     "responsibleIds": [],
-    "rowDistance": null,
-    "perimeter": null,
+    "rowDistance": 20,
+    "perimeter": 12.2,
     "coordinates": {
       "lat": -43.308444,
       "lng": -65.288853
@@ -1613,66 +1276,11 @@ export const DEMO_PLOTS: Plot[] = [
         "lng": -65.28888691264262
       }
     ],
-    "irrigationType": null,
+    "irrigationType": "Gravedad / Surcos",
     "observations": null,
     "usedSeedValue": 25,
     "usedSeedUnit": "gr",
-    "color": "#16a34a",
-    "campaign": "2025/2026",
-    "activeCampaigns": [
-      "2025/2026"
-    ]
-  },
-  {
-    "id": "7076a122-77b5-49ce-80fa-890440c2d66c",
-    "locationId": "1766444697119",
-    "projectId": "1766443392119",
-    "varietyId": "5e115db0-7f9d-4640-abe5-769f414fe293",
-    "seedBatchId": "f3bbf23a-7eac-428a-8252-2b00c394fdcd",
-    "name": "TW-PAR-C2 501",
-    "type": "Ensayo",
-    "status": "Activa",
-    "sowingDate": "2026-01-09",
-    "block": null,
-    "replicate": null,
-    "surfaceArea": 8.37,
-    "surfaceUnit": "m2",
-    "density": 0,
-    "ownerName": null,
-    "responsibleIds": [],
-    "rowDistance": null,
-    "perimeter": null,
-    "coordinates": {
-      "lat": -43.308488,
-      "lng": -65.288917
-    },
-    "polygon": [
-      {
-        "lat": -43.30850304705669,
-        "lng": -65.28894975430019
-      },
-      {
-        "lat": -43.30851171434914,
-        "lng": -65.28893811735149
-      },
-      {
-        "lat": -43.30847217106844,
-        "lng": -65.28888350510825
-      },
-      {
-        "lat": -43.30846346939934,
-        "lng": -65.28889473619662
-      },
-      {
-        "lat": -43.30850304705669,
-        "lng": -65.28894975430019
-      }
-    ],
-    "irrigationType": null,
-    "observations": "",
-    "usedSeedValue": 0.017,
-    "usedSeedUnit": "gr",
-    "color": "#dc2626",
+    "color": "#d97706",
     "campaign": "2025/2026",
     "activeCampaigns": [
       "2025/2026"
@@ -1688,15 +1296,15 @@ export const DEMO_PLOTS: Plot[] = [
     "type": "Ensayo",
     "status": "Activa",
     "sowingDate": "2026-01-09",
-    "block": null,
-    "replicate": null,
+    "block": "Bloque B",
+    "replicate": 2,
     "surfaceArea": 9.61,
     "surfaceUnit": "m2",
-    "density": 0,
-    "ownerName": null,
+    "density": 46,
+    "ownerName": "Ricardo La Regina",
     "responsibleIds": [],
-    "rowDistance": null,
-    "perimeter": null,
+    "rowDistance": 20,
+    "perimeter": 12.2,
     "coordinates": {
       "lat": -43.308516,
       "lng": -65.289004
@@ -1723,11 +1331,11 @@ export const DEMO_PLOTS: Plot[] = [
         "lng": -65.28896921003063
       }
     ],
-    "irrigationType": null,
+    "irrigationType": "Gravedad / Surcos",
     "observations": null,
     "usedSeedValue": 25,
     "usedSeedUnit": "gr",
-    "color": "#d97706",
+    "color": "#16a34a",
     "campaign": "2025/2026",
     "activeCampaigns": [
       "2025/2026"
@@ -1743,15 +1351,15 @@ export const DEMO_PLOTS: Plot[] = [
     "type": "Ensayo",
     "status": "Activa",
     "sowingDate": "2026-01-09",
-    "block": null,
-    "replicate": null,
+    "block": "Bloque D",
+    "replicate": 4,
     "surfaceArea": 7.47,
     "surfaceUnit": "m2",
-    "density": 0,
-    "ownerName": null,
+    "density": 46,
+    "ownerName": "Ricardo La Regina",
     "responsibleIds": [],
-    "rowDistance": null,
-    "perimeter": null,
+    "rowDistance": 20,
+    "perimeter": 12.2,
     "coordinates": {
       "lat": -43.30846,
       "lng": -65.288831
@@ -1778,11 +1386,11 @@ export const DEMO_PLOTS: Plot[] = [
         "lng": -65.2887990935948
       }
     ],
-    "irrigationType": null,
+    "irrigationType": "Gravedad / Surcos",
     "observations": null,
     "usedSeedValue": 25,
     "usedSeedUnit": "gr",
-    "color": "#d97706",
+    "color": "#16a34a",
     "campaign": "2025/2026",
     "activeCampaigns": [
       "2025/2026"
@@ -1798,15 +1406,15 @@ export const DEMO_PLOTS: Plot[] = [
     "type": "Ensayo",
     "status": "Activa",
     "sowingDate": "2026-01-09",
-    "block": null,
-    "replicate": null,
+    "block": "Bloque C",
+    "replicate": 3,
     "surfaceArea": 8.37,
     "surfaceUnit": "m2",
-    "density": 0,
-    "ownerName": null,
+    "density": 46,
+    "ownerName": "Ricardo La Regina",
     "responsibleIds": [],
-    "rowDistance": null,
-    "perimeter": null,
+    "rowDistance": 20,
+    "perimeter": 12.2,
     "coordinates": {
       "lat": -43.308488,
       "lng": -65.288917
@@ -1833,11 +1441,1166 @@ export const DEMO_PLOTS: Plot[] = [
         "lng": -65.28894975430019
       }
     ],
-    "irrigationType": null,
+    "irrigationType": "Gravedad / Surcos",
     "observations": null,
     "usedSeedValue": 18,
     "usedSeedUnit": "gr",
-    "color": "#dc2626",
+    "color": "#2563eb",
+    "campaign": "2025/2026",
+    "activeCampaigns": [
+      "2025/2026"
+    ]
+  },
+  {
+    "id": "805296a6-54c5-4899-8e67-85a6d08b6de5",
+    "locationId": "1766471895190",
+    "projectId": "1766443392119",
+    "varietyId": "3ccfe7b3-0707-4dc5-904b-a727579ced26",
+    "seedBatchId": "bd5b1a2a-cdfc-4bf9-9b29-4c59dce6295d",
+    "name": "PM-01-101",
+    "type": "Ensayo",
+    "status": "Activa",
+    "sowingDate": "2026-02-07",
+    "block": "Bloque I",
+    "replicate": 1,
+    "surfaceArea": 9.1,
+    "surfaceUnit": "m2",
+    "density": 45,
+    "ownerName": "Salvador MERELE",
+    "responsibleIds": [],
+    "rowDistance": 20,
+    "perimeter": 12.4,
+    "coordinates": {
+      "lat": -42.747525,
+      "lng": -65.2798
+    },
+    "polygon": [
+      {
+        "lat": -42.74755,
+        "lng": -65.27981
+      },
+      {
+        "lat": -42.74755,
+        "lng": -65.27979
+      },
+      {
+        "lat": -42.7475,
+        "lng": -65.27979
+      },
+      {
+        "lat": -42.7475,
+        "lng": -65.27981
+      },
+      {
+        "lat": -42.74755,
+        "lng": -65.27981
+      }
+    ],
+    "irrigationType": "Gravedad / Surcos",
+    "observations": "Parcela sembrada en el area con compost de langostino",
+    "usedSeedValue": 45,
+    "usedSeedUnit": "gr",
+    "color": "#16a34a",
+    "campaign": "2025/2026",
+    "activeCampaigns": [
+      "2025/2026"
+    ]
+  },
+  {
+    "id": "c9a89da4-708d-41b3-85d1-8e09cb5da881",
+    "locationId": "1766471895190",
+    "projectId": "1766443392119",
+    "varietyId": "d4f3c2b2-3942-43cc-8814-250d2cb4293e",
+    "seedBatchId": "3731018c-7ebb-43fb-a9c0-58730ae54394",
+    "name": "PM-02-103",
+    "type": "Ensayo",
+    "status": "Activa",
+    "sowingDate": "2026-02-07",
+    "block": "Bloque I",
+    "replicate": 1,
+    "surfaceArea": 9.1,
+    "surfaceUnit": "m2",
+    "density": 45,
+    "ownerName": "Salvador MERELE",
+    "responsibleIds": [],
+    "rowDistance": 20,
+    "perimeter": 12.4,
+    "coordinates": {
+      "lat": -42.747525,
+      "lng": -65.27976
+    },
+    "polygon": [
+      {
+        "lat": -42.74755,
+        "lng": -65.27977
+      },
+      {
+        "lat": -42.74755,
+        "lng": -65.27975
+      },
+      {
+        "lat": -42.7475,
+        "lng": -65.27975
+      },
+      {
+        "lat": -42.7475,
+        "lng": -65.27977
+      },
+      {
+        "lat": -42.74755,
+        "lng": -65.27977
+      }
+    ],
+    "irrigationType": "Gravedad / Surcos",
+    "observations": "Siembra en suelo con compost",
+    "usedSeedValue": 45,
+    "usedSeedUnit": "gr",
+    "color": "#d97706",
+    "campaign": "2025/2026",
+    "activeCampaigns": [
+      "2025/2026"
+    ]
+  },
+  {
+    "id": "23fd9282-28e4-413a-9aef-524081632316",
+    "locationId": "1766471895190",
+    "projectId": "1766443392119",
+    "varietyId": "ce04b1d9-bde3-4040-94f3-3b57599ad4e7",
+    "seedBatchId": "74ac9336-0dab-462c-a560-d9d9e324ca14",
+    "name": "PM-03-105",
+    "type": "Ensayo",
+    "status": "Activa",
+    "sowingDate": "2026-02-07",
+    "block": "Bloque I",
+    "replicate": 1,
+    "surfaceArea": 9.1,
+    "surfaceUnit": "m2",
+    "density": 45,
+    "ownerName": "Salvador MERELE",
+    "responsibleIds": [],
+    "rowDistance": 20,
+    "perimeter": 12.4,
+    "coordinates": {
+      "lat": -42.747525,
+      "lng": -65.27972
+    },
+    "polygon": [
+      {
+        "lat": -42.74755,
+        "lng": -65.27973
+      },
+      {
+        "lat": -42.74755,
+        "lng": -65.27971
+      },
+      {
+        "lat": -42.7475,
+        "lng": -65.27971
+      },
+      {
+        "lat": -42.7475,
+        "lng": -65.27973
+      },
+      {
+        "lat": -42.74755,
+        "lng": -65.27973
+      }
+    ],
+    "irrigationType": "Gravedad / Surcos",
+    "observations": "Siembra en suelo con compost de langostino",
+    "usedSeedValue": 45,
+    "usedSeedUnit": "gr",
+    "color": "#9333ea",
+    "campaign": "2025/2026",
+    "activeCampaigns": [
+      "2025/2026"
+    ]
+  },
+  {
+    "id": "13d3e263-baff-4cba-a9ee-3fc7c0e5631b",
+    "locationId": "1766471895190",
+    "projectId": "1766443392119",
+    "varietyId": "ce04b1d9-bde3-4040-94f3-3b57599ad4e7",
+    "seedBatchId": "74ac9336-0dab-462c-a560-d9d9e324ca14",
+    "name": "PM-04-105",
+    "type": "Ensayo",
+    "status": "Activa",
+    "sowingDate": "2026-02-07",
+    "block": "Bloque II",
+    "replicate": 2,
+    "surfaceArea": 9.1,
+    "surfaceUnit": "m2",
+    "density": 45,
+    "ownerName": "Salvador MERELE",
+    "responsibleIds": [],
+    "rowDistance": 20,
+    "perimeter": 12.4,
+    "coordinates": {
+      "lat": -42.747435,
+      "lng": -65.2798
+    },
+    "polygon": [
+      {
+        "lat": -42.74746,
+        "lng": -65.27981
+      },
+      {
+        "lat": -42.74746,
+        "lng": -65.27979
+      },
+      {
+        "lat": -42.74741,
+        "lng": -65.27979
+      },
+      {
+        "lat": -42.74741,
+        "lng": -65.27981
+      },
+      {
+        "lat": -42.74746,
+        "lng": -65.27981
+      }
+    ],
+    "irrigationType": "Gravedad / Surcos",
+    "observations": "Siembra en suelo con compost de langostino.",
+    "usedSeedValue": 45,
+    "usedSeedUnit": "gr",
+    "color": "#9333ea",
+    "campaign": "2025/2026",
+    "activeCampaigns": [
+      "2025/2026"
+    ]
+  },
+  {
+    "id": "dd1de6f3-4aab-497f-91cc-93493da3beee",
+    "locationId": "1766471895190",
+    "projectId": "1766443392119",
+    "varietyId": "3ccfe7b3-0707-4dc5-904b-a727579ced26",
+    "seedBatchId": "bd5b1a2a-cdfc-4bf9-9b29-4c59dce6295d",
+    "name": "PM-06-101",
+    "type": "Ensayo",
+    "status": "Activa",
+    "sowingDate": "2026-02-07",
+    "block": "Bloque II",
+    "replicate": 2,
+    "surfaceArea": 9.1,
+    "surfaceUnit": "m2",
+    "density": 45,
+    "ownerName": "Salvador MERELE",
+    "responsibleIds": [],
+    "rowDistance": 20,
+    "perimeter": 12.4,
+    "coordinates": {
+      "lat": -42.747435,
+      "lng": -65.27972
+    },
+    "polygon": [
+      {
+        "lat": -42.74746,
+        "lng": -65.27973
+      },
+      {
+        "lat": -42.74746,
+        "lng": -65.27971
+      },
+      {
+        "lat": -42.74741,
+        "lng": -65.27971
+      },
+      {
+        "lat": -42.74741,
+        "lng": -65.27973
+      },
+      {
+        "lat": -42.74746,
+        "lng": -65.27973
+      }
+    ],
+    "irrigationType": "Gravedad / Surcos",
+    "observations": "Siembra en suelo con compost de langostino.\n",
+    "usedSeedValue": 45,
+    "usedSeedUnit": "gr",
+    "color": "#16a34a",
+    "campaign": "2025/2026",
+    "activeCampaigns": [
+      "2025/2026"
+    ]
+  },
+  {
+    "id": "c7ffc59e-219a-477d-8612-5da603b3063d",
+    "locationId": "1766444697119",
+    "projectId": "1766443392119",
+    "varietyId": "5e115db0-7f9d-4640-abe5-769f414fe293",
+    "seedBatchId": "f3bbf23a-7eac-428a-8252-2b00c394fdcd",
+    "name": "TW-PAR-A3 501",
+    "type": "Ensayo",
+    "status": "Activa",
+    "sowingDate": "2026-01-13",
+    "block": "Bloque A",
+    "replicate": 1,
+    "surfaceArea": 9.72,
+    "surfaceUnit": "m2",
+    "density": 46,
+    "ownerName": "Ricardo La Regina",
+    "responsibleIds": [],
+    "rowDistance": 20,
+    "perimeter": 12.2,
+    "coordinates": {
+      "lat": -43.308558,
+      "lng": -65.28907
+    },
+    "polygon": [
+      {
+        "lat": -43.30854544589207,
+        "lng": -65.28903596446129
+      },
+      {
+        "lat": -43.30853503620728,
+        "lng": -65.28905026016915
+      },
+      {
+        "lat": -43.3085699073353,
+        "lng": -65.28910501265874
+      },
+      {
+        "lat": -43.30858086008471,
+        "lng": -65.28909145199901
+      },
+      {
+        "lat": -43.30854544589207,
+        "lng": -65.28903596446129
+      }
+    ],
+    "irrigationType": "Gravedad / Surcos",
+    "observations": "Suelo arcilloso",
+    "usedSeedValue": 25,
+    "usedSeedUnit": "gr",
+    "color": "#2563eb",
+    "campaign": "2025/2026",
+    "activeCampaigns": [
+      "2025/2026"
+    ]
+  },
+  {
+    "id": "34db68c7-f06d-4a73-9bad-a16e142fd32e",
+    "locationId": "1766471895190",
+    "projectId": "1766443392119",
+    "varietyId": "5e115db0-7f9d-4640-abe5-769f414fe293",
+    "seedBatchId": "0ad60b68-ab77-4f9b-a717-4fadae05989d",
+    "name": "PM-07-501",
+    "type": "Ensayo",
+    "status": "Activa",
+    "sowingDate": "2026-02-07",
+    "block": "Bloque III",
+    "replicate": 3,
+    "surfaceArea": 9.1,
+    "surfaceUnit": "m2",
+    "density": 45,
+    "ownerName": "Salvador MERELE",
+    "responsibleIds": [],
+    "rowDistance": 20,
+    "perimeter": 12.4,
+    "coordinates": {
+      "lat": -42.747345,
+      "lng": -65.2798
+    },
+    "polygon": [
+      {
+        "lat": -42.74737,
+        "lng": -65.27981
+      },
+      {
+        "lat": -42.74737,
+        "lng": -65.27979
+      },
+      {
+        "lat": -42.74732,
+        "lng": -65.27979
+      },
+      {
+        "lat": -42.74732,
+        "lng": -65.27981
+      },
+      {
+        "lat": -42.74737,
+        "lng": -65.27981
+      }
+    ],
+    "irrigationType": "Gravedad / Surcos",
+    "observations": "Siembra en suelo con compost de langostino.\n",
+    "usedSeedValue": 45,
+    "usedSeedUnit": "gr",
+    "color": "#2563eb",
+    "campaign": "2025/2026",
+    "activeCampaigns": [
+      "2025/2026"
+    ]
+  },
+  {
+    "id": "4e3314be-853d-40b6-9356-ae2dc629ce23",
+    "locationId": "1766471895190",
+    "projectId": "1766443392119",
+    "varietyId": "ce04b1d9-bde3-4040-94f3-3b57599ad4e7",
+    "seedBatchId": "74ac9336-0dab-462c-a560-d9d9e324ca14",
+    "name": "PM-08-105",
+    "type": "Ensayo",
+    "status": "Activa",
+    "sowingDate": "2026-02-07",
+    "block": "Bloque III",
+    "replicate": 3,
+    "surfaceArea": 9.1,
+    "surfaceUnit": "m2",
+    "density": 45,
+    "ownerName": "Salvador MERELE",
+    "responsibleIds": [],
+    "rowDistance": 20,
+    "perimeter": 12.4,
+    "coordinates": {
+      "lat": -42.747345,
+      "lng": -65.27976
+    },
+    "polygon": [
+      {
+        "lat": -42.74737,
+        "lng": -65.27977
+      },
+      {
+        "lat": -42.74737,
+        "lng": -65.27975
+      },
+      {
+        "lat": -42.74732,
+        "lng": -65.27975
+      },
+      {
+        "lat": -42.74732,
+        "lng": -65.27977
+      },
+      {
+        "lat": -42.74737,
+        "lng": -65.27977
+      }
+    ],
+    "irrigationType": "Gravedad / Surcos",
+    "observations": "Siembra en suelo con compost de langostino.\n",
+    "usedSeedValue": 45,
+    "usedSeedUnit": "gr",
+    "color": "#9333ea",
+    "campaign": "2025/2026",
+    "activeCampaigns": [
+      "2025/2026"
+    ]
+  },
+  {
+    "id": "ebfd8dd5-e9a4-42f3-bcfb-4b7e623fb343",
+    "locationId": "1766471895190",
+    "projectId": "1766443392119",
+    "varietyId": "d4f3c2b2-3942-43cc-8814-250d2cb4293e",
+    "seedBatchId": "3731018c-7ebb-43fb-a9c0-58730ae54394",
+    "name": "PM-09-103",
+    "type": "Ensayo",
+    "status": "Activa",
+    "sowingDate": "2026-02-19",
+    "block": "Bloque III",
+    "replicate": 3,
+    "surfaceArea": 9.1,
+    "surfaceUnit": "m2",
+    "density": 45,
+    "ownerName": "Salvador MERELE",
+    "responsibleIds": [],
+    "rowDistance": 20,
+    "perimeter": 12.4,
+    "coordinates": {
+      "lat": -42.747345,
+      "lng": -65.27972
+    },
+    "polygon": [
+      {
+        "lat": -42.74737,
+        "lng": -65.27973
+      },
+      {
+        "lat": -42.74737,
+        "lng": -65.27971
+      },
+      {
+        "lat": -42.74732,
+        "lng": -65.27971
+      },
+      {
+        "lat": -42.74732,
+        "lng": -65.27973
+      },
+      {
+        "lat": -42.74737,
+        "lng": -65.27973
+      }
+    ],
+    "irrigationType": "Gravedad / Surcos",
+    "observations": "Siembra en suelo con compost de langostino.\n",
+    "usedSeedValue": 45,
+    "usedSeedUnit": "gr",
+    "color": "#d97706",
+    "campaign": "2025/2026",
+    "activeCampaigns": [
+      "2025/2026"
+    ]
+  },
+  {
+    "id": "4f2f50cf-0cd2-46f2-911a-5bf3d7f900e3",
+    "locationId": "1766471895190",
+    "projectId": "1766443392119",
+    "varietyId": "d4f3c2b2-3942-43cc-8814-250d2cb4293e",
+    "seedBatchId": "3731018c-7ebb-43fb-a9c0-58730ae54394",
+    "name": "PM-10-103",
+    "type": "Ensayo",
+    "status": "Activa",
+    "sowingDate": "2026-02-07",
+    "block": "Bloque IV",
+    "replicate": 4,
+    "surfaceArea": 9.1,
+    "surfaceUnit": "m2",
+    "density": 45,
+    "ownerName": "Salvador MERELE",
+    "responsibleIds": [],
+    "rowDistance": 20,
+    "perimeter": 12.4,
+    "coordinates": {
+      "lat": -42.747255,
+      "lng": -65.2798
+    },
+    "polygon": [
+      {
+        "lat": -42.74728,
+        "lng": -65.27981
+      },
+      {
+        "lat": -42.74728,
+        "lng": -65.27979
+      },
+      {
+        "lat": -42.74723,
+        "lng": -65.27979
+      },
+      {
+        "lat": -42.74723,
+        "lng": -65.27981
+      },
+      {
+        "lat": -42.74728,
+        "lng": -65.27981
+      }
+    ],
+    "irrigationType": "Gravedad / Surcos",
+    "observations": "Siembra en suelo con compost de langostino.\n",
+    "usedSeedValue": 45,
+    "usedSeedUnit": "gr",
+    "color": "#d97706",
+    "campaign": "2025/2026",
+    "activeCampaigns": [
+      "2025/2026"
+    ]
+  },
+  {
+    "id": "dc4778c9-ee6d-4b5f-873c-efa68ecf6ad2",
+    "locationId": "1766471895190",
+    "projectId": "1766443392119",
+    "varietyId": "3ccfe7b3-0707-4dc5-904b-a727579ced26",
+    "seedBatchId": "bd5b1a2a-cdfc-4bf9-9b29-4c59dce6295d",
+    "name": "PM-11-101",
+    "type": "Ensayo",
+    "status": "Activa",
+    "sowingDate": "2026-02-07",
+    "block": "Bloque IV",
+    "replicate": 4,
+    "surfaceArea": 9.1,
+    "surfaceUnit": "m2",
+    "density": 45,
+    "ownerName": "Salvador MERELE",
+    "responsibleIds": [],
+    "rowDistance": 20,
+    "perimeter": 12.4,
+    "coordinates": {
+      "lat": -42.747255,
+      "lng": -65.27976
+    },
+    "polygon": [
+      {
+        "lat": -42.74728,
+        "lng": -65.27977
+      },
+      {
+        "lat": -42.74728,
+        "lng": -65.27975
+      },
+      {
+        "lat": -42.74723,
+        "lng": -65.27975
+      },
+      {
+        "lat": -42.74723,
+        "lng": -65.27977
+      },
+      {
+        "lat": -42.74728,
+        "lng": -65.27977
+      }
+    ],
+    "irrigationType": "Gravedad / Surcos",
+    "observations": "Siembra en suelo con compost de langostino.\n",
+    "usedSeedValue": 45,
+    "usedSeedUnit": "gr",
+    "color": "#16a34a",
+    "campaign": "2025/2026",
+    "activeCampaigns": [
+      "2025/2026"
+    ]
+  },
+  {
+    "id": "0fb5cb52-47b7-42b1-bdda-0723d8ded513",
+    "locationId": "1766471895190",
+    "projectId": "1766443392119",
+    "varietyId": "3ccfe7b3-0707-4dc5-904b-a727579ced26",
+    "seedBatchId": "bd5b1a2a-cdfc-4bf9-9b29-4c59dce6295d",
+    "name": "PM-13-101",
+    "type": "Ensayo",
+    "status": "Activa",
+    "sowingDate": "2026-02-07",
+    "block": "Bloque V",
+    "replicate": 5,
+    "surfaceArea": 9.1,
+    "surfaceUnit": "m2",
+    "density": 45,
+    "ownerName": "Salvador MERELE",
+    "responsibleIds": [],
+    "rowDistance": 20,
+    "perimeter": 12.4,
+    "coordinates": {
+      "lat": -42.747165,
+      "lng": -65.2798
+    },
+    "polygon": [
+      {
+        "lat": -42.74719,
+        "lng": -65.27981
+      },
+      {
+        "lat": -42.74719,
+        "lng": -65.27979
+      },
+      {
+        "lat": -42.74714,
+        "lng": -65.27979
+      },
+      {
+        "lat": -42.74714,
+        "lng": -65.27981
+      },
+      {
+        "lat": -42.74719,
+        "lng": -65.27981
+      }
+    ],
+    "irrigationType": "Gravedad / Surcos",
+    "observations": "Siembra en suelo con compost de langostino.\n",
+    "usedSeedValue": 45,
+    "usedSeedUnit": "gr",
+    "color": "#16a34a",
+    "campaign": "2025/2026",
+    "activeCampaigns": [
+      "2025/2026"
+    ]
+  },
+  {
+    "id": "56533e31-8591-465c-be87-dfce87cf9978",
+    "locationId": "1766471895190",
+    "projectId": "1766443392119",
+    "varietyId": "d4f3c2b2-3942-43cc-8814-250d2cb4293e",
+    "seedBatchId": "3731018c-7ebb-43fb-a9c0-58730ae54394",
+    "name": "PM-14-103",
+    "type": "Ensayo",
+    "status": "Activa",
+    "sowingDate": "2026-02-07",
+    "block": "Bloque V",
+    "replicate": 5,
+    "surfaceArea": 9.1,
+    "surfaceUnit": "m2",
+    "density": 45,
+    "ownerName": "Salvador MERELE",
+    "responsibleIds": [],
+    "rowDistance": 20,
+    "perimeter": 12.4,
+    "coordinates": {
+      "lat": -42.747165,
+      "lng": -65.27976
+    },
+    "polygon": [
+      {
+        "lat": -42.74719,
+        "lng": -65.27977
+      },
+      {
+        "lat": -42.74719,
+        "lng": -65.27975
+      },
+      {
+        "lat": -42.74714,
+        "lng": -65.27975
+      },
+      {
+        "lat": -42.74714,
+        "lng": -65.27977
+      },
+      {
+        "lat": -42.74719,
+        "lng": -65.27977
+      }
+    ],
+    "irrigationType": "Gravedad / Surcos",
+    "observations": "Siembra en suelo con compost de langostino.\n",
+    "usedSeedValue": 45,
+    "usedSeedUnit": "gr",
+    "color": "#d97706",
+    "campaign": "2025/2026",
+    "activeCampaigns": [
+      "2025/2026"
+    ]
+  },
+  {
+    "id": "eb498be7-0710-4617-8f29-6b6c01a60ea8",
+    "locationId": "1766471895190",
+    "projectId": "1766443392119",
+    "varietyId": "ce04b1d9-bde3-4040-94f3-3b57599ad4e7",
+    "seedBatchId": "74ac9336-0dab-462c-a560-d9d9e324ca14",
+    "name": "PM-15-105",
+    "type": "Ensayo",
+    "status": "Activa",
+    "sowingDate": "2026-02-07",
+    "block": "Bloque V",
+    "replicate": 5,
+    "surfaceArea": 9.1,
+    "surfaceUnit": "m2",
+    "density": 45,
+    "ownerName": "Salvador MERELE",
+    "responsibleIds": [],
+    "rowDistance": 20,
+    "perimeter": 12.4,
+    "coordinates": {
+      "lat": -42.747165,
+      "lng": -65.27972
+    },
+    "polygon": [
+      {
+        "lat": -42.74719,
+        "lng": -65.27973
+      },
+      {
+        "lat": -42.74719,
+        "lng": -65.27971
+      },
+      {
+        "lat": -42.74714,
+        "lng": -65.27971
+      },
+      {
+        "lat": -42.74714,
+        "lng": -65.27973
+      },
+      {
+        "lat": -42.74719,
+        "lng": -65.27973
+      }
+    ],
+    "irrigationType": "Gravedad / Surcos",
+    "observations": "Siembra en suelo con compost de langostino.\n",
+    "usedSeedValue": 45,
+    "usedSeedUnit": "gr",
+    "color": "#9333ea",
+    "campaign": "2025/2026",
+    "activeCampaigns": [
+      "2025/2026"
+    ]
+  },
+  {
+    "id": "2ebb09f7-2960-468e-a5e1-4b2fd64255bd",
+    "locationId": "1766450631873",
+    "projectId": "1766443392119",
+    "varietyId": "3ccfe7b3-0707-4dc5-904b-a727579ced26",
+    "seedBatchId": "aeeeffdd-4c0c-46a6-9715-717ecb4a4279",
+    "name": "B01-101",
+    "type": "Ensayo",
+    "status": "Activa",
+    "sowingDate": "2025-12-26",
+    "block": "Bloque I",
+    "replicate": 1,
+    "surfaceArea": 9,
+    "surfaceUnit": "m2",
+    "density": 48,
+    "ownerName": "Matías QUINTANA",
+    "responsibleIds": [],
+    "rowDistance": 20,
+    "perimeter": 12,
+    "coordinates": {
+      "lat": -39.39292,
+      "lng": -62.62106
+    },
+    "polygon": [
+      {
+        "lat": -39.392906,
+        "lng": -62.621077
+      },
+      {
+        "lat": -39.392906,
+        "lng": -62.621043
+      },
+      {
+        "lat": -39.392933,
+        "lng": -62.621043
+      },
+      {
+        "lat": -39.392933,
+        "lng": -62.621077
+      },
+      {
+        "lat": -39.392906,
+        "lng": -62.621077
+      }
+    ],
+    "irrigationType": "Goteo",
+    "observations": "Lote libre de malezas. Parcelas rotovateada. Riego presiembra. PDA 80kg.ha",
+    "usedSeedValue": 80,
+    "usedSeedUnit": "gr",
+    "color": "#16a34a",
+    "campaign": "2025/2026",
+    "activeCampaigns": [
+      "2025/2026"
+    ]
+  },
+  {
+    "id": "fcb2595e-1f32-46fa-b8e5-898f036a0a18",
+    "locationId": "1766450631873",
+    "projectId": "1766443392119",
+    "varietyId": "3ccfe7b3-0707-4dc5-904b-a727579ced26",
+    "seedBatchId": "aeeeffdd-4c0c-46a6-9715-717ecb4a4279",
+    "name": "B03-101",
+    "type": "Ensayo",
+    "status": "Activa",
+    "sowingDate": "2025-12-26",
+    "block": "Bloque III",
+    "replicate": 3,
+    "surfaceArea": 9,
+    "surfaceUnit": "m2",
+    "density": 48,
+    "ownerName": "Matías QUINTANA",
+    "responsibleIds": [],
+    "rowDistance": 20,
+    "perimeter": 12,
+    "coordinates": {
+      "lat": -39.39302,
+      "lng": -62.62106
+    },
+    "polygon": [
+      {
+        "lat": -39.393006,
+        "lng": -62.621077
+      },
+      {
+        "lat": -39.393006,
+        "lng": -62.621043
+      },
+      {
+        "lat": -39.393034,
+        "lng": -62.621043
+      },
+      {
+        "lat": -39.393034,
+        "lng": -62.621077
+      },
+      {
+        "lat": -39.393006,
+        "lng": -62.621077
+      }
+    ],
+    "irrigationType": "Goteo",
+    "observations": "Lote libre de malezas. Parcelas rotovateada. Riego presiembra. PDA 80kg.ha",
+    "usedSeedValue": 80,
+    "usedSeedUnit": "gr",
+    "color": "#16a34a",
+    "campaign": "2025/2026",
+    "activeCampaigns": [
+      "2025/2026"
+    ]
+  },
+  {
+    "id": "0be6ffef-91b6-44b0-9027-eeceda088149",
+    "locationId": "1766450631873",
+    "projectId": "1766443392119",
+    "varietyId": "5e115db0-7f9d-4640-abe5-769f414fe293",
+    "seedBatchId": "8020a641-279d-4f74-b7f1-61324f9f0eba",
+    "name": "B01-501",
+    "type": "Ensayo",
+    "status": "Activa",
+    "sowingDate": "2025-12-26",
+    "block": "Bloque I",
+    "replicate": 1,
+    "surfaceArea": 9,
+    "surfaceUnit": "m2",
+    "density": 48,
+    "ownerName": "Matías QUINTANA",
+    "responsibleIds": [],
+    "rowDistance": 20,
+    "perimeter": 12,
+    "coordinates": {
+      "lat": -39.39292,
+      "lng": -62.620886
+    },
+    "polygon": [
+      {
+        "lat": -39.392906,
+        "lng": -62.620903
+      },
+      {
+        "lat": -39.392906,
+        "lng": -62.620869
+      },
+      {
+        "lat": -39.392933,
+        "lng": -62.620869
+      },
+      {
+        "lat": -39.392933,
+        "lng": -62.620903
+      },
+      {
+        "lat": -39.392906,
+        "lng": -62.620903
+      }
+    ],
+    "irrigationType": "Goteo",
+    "observations": "Lote libre de malezas. Parcelas rotovateada. Riego presiembra. PDA 80kg.ha. La semilla vino curada ",
+    "usedSeedValue": 80,
+    "usedSeedUnit": "gr",
+    "color": "#2563eb",
+    "campaign": "2025/2026",
+    "activeCampaigns": [
+      "2025/2026"
+    ]
+  },
+  {
+    "id": "641be69f-45e2-4dca-b98a-746e9fc1cbf4",
+    "locationId": "1766471895190",
+    "projectId": "1766443392119",
+    "varietyId": "5e115db0-7f9d-4640-abe5-769f414fe293",
+    "seedBatchId": "0ad60b68-ab77-4f9b-a717-4fadae05989d",
+    "name": "PM-05-501",
+    "type": "Ensayo",
+    "status": "Activa",
+    "sowingDate": "2026-02-07",
+    "block": "Bloque II",
+    "replicate": 2,
+    "surfaceArea": 9.1,
+    "surfaceUnit": "m2",
+    "density": 45,
+    "ownerName": "Salvador MERELE",
+    "responsibleIds": [],
+    "rowDistance": 20,
+    "perimeter": 12.4,
+    "coordinates": {
+      "lat": -42.747435,
+      "lng": -65.27976
+    },
+    "polygon": [
+      {
+        "lat": -42.74746,
+        "lng": -65.27977
+      },
+      {
+        "lat": -42.74746,
+        "lng": -65.27975
+      },
+      {
+        "lat": -42.74741,
+        "lng": -65.27975
+      },
+      {
+        "lat": -42.74741,
+        "lng": -65.27977
+      },
+      {
+        "lat": -42.74746,
+        "lng": -65.27977
+      }
+    ],
+    "irrigationType": "Gravedad / Surcos",
+    "observations": "Siembra en suelo con compost de langostino.",
+    "usedSeedValue": 45,
+    "usedSeedUnit": "gr",
+    "color": "#2563eb",
+    "campaign": "2025/2026",
+    "activeCampaigns": [
+      "2025/2026"
+    ]
+  },
+  {
+    "id": "31f68215-95c6-4736-bb8b-f910615ca0ba",
+    "locationId": "1766450631873",
+    "projectId": "1766443392119",
+    "varietyId": "5e115db0-7f9d-4640-abe5-769f414fe293",
+    "seedBatchId": "8020a641-279d-4f74-b7f1-61324f9f0eba",
+    "name": "B03-501",
+    "type": "Ensayo",
+    "status": "Activa",
+    "sowingDate": "2025-12-26",
+    "block": "Bloque III",
+    "replicate": 3,
+    "surfaceArea": 9,
+    "surfaceUnit": "m2",
+    "density": 48,
+    "ownerName": "Matías QUINTANA",
+    "responsibleIds": [],
+    "rowDistance": 20,
+    "perimeter": 12,
+    "coordinates": {
+      "lat": -39.39302,
+      "lng": -62.620886
+    },
+    "polygon": [
+      {
+        "lat": -39.393006,
+        "lng": -62.620903
+      },
+      {
+        "lat": -39.393006,
+        "lng": -62.620869
+      },
+      {
+        "lat": -39.393034,
+        "lng": -62.620869
+      },
+      {
+        "lat": -39.393034,
+        "lng": -62.620903
+      },
+      {
+        "lat": -39.393006,
+        "lng": -62.620903
+      }
+    ],
+    "irrigationType": "Goteo",
+    "observations": "Lote libre de malezas. Parcelas rotovateada. Riego presiembra. PDA 80kg.ha. La semilla vino curada ",
+    "usedSeedValue": 80,
+    "usedSeedUnit": "gr",
+    "color": "#2563eb",
+    "campaign": "2025/2026",
+    "activeCampaigns": [
+      "2025/2026"
+    ]
+  },
+  {
+    "id": "f77b53bb-54be-4af1-9f97-59e87531fff0",
+    "locationId": "1766450631873",
+    "projectId": "1766443392119",
+    "varietyId": "d4f3c2b2-3942-43cc-8814-250d2cb4293e",
+    "seedBatchId": "7ad8fa91-6cba-4229-9074-d754f068480a",
+    "name": "B02-103",
+    "type": "Ensayo",
+    "status": "Activa",
+    "sowingDate": "2025-12-26",
+    "block": "Bloque II",
+    "replicate": 2,
+    "surfaceArea": 9,
+    "surfaceUnit": "m2",
+    "density": 48,
+    "ownerName": "Matías QUINTANA",
+    "responsibleIds": [],
+    "rowDistance": 20,
+    "perimeter": 12,
+    "coordinates": {
+      "lat": -39.39297,
+      "lng": -62.621002
+    },
+    "polygon": [
+      {
+        "lat": -39.392956,
+        "lng": -62.621019
+      },
+      {
+        "lat": -39.392956,
+        "lng": -62.620984
+      },
+      {
+        "lat": -39.392983,
+        "lng": -62.620984
+      },
+      {
+        "lat": -39.392983,
+        "lng": -62.621019
+      },
+      {
+        "lat": -39.392956,
+        "lng": -62.621019
+      }
+    ],
+    "irrigationType": "Goteo",
+    "observations": "Lote libre de malezas. Parcelas rotovateada. Riego presiembra. PDA 80kg.ha. ",
+    "usedSeedValue": 80,
+    "usedSeedUnit": "gr",
+    "color": "#d97706",
+    "campaign": "2025/2026",
+    "activeCampaigns": [
+      "2025/2026"
+    ]
+  },
+  {
+    "id": "973fe497-b4fb-4dec-8879-aae1d21e3f82",
+    "locationId": "1766444697119",
+    "projectId": "1766443392119",
+    "varietyId": "ce04b1d9-bde3-4040-94f3-3b57599ad4e7",
+    "seedBatchId": "37ef1587-3298-40fa-b7d4-372bacb23c11",
+    "name": "TW-PAR-B2 105",
+    "type": "Ensayo",
+    "status": "Activa",
+    "sowingDate": "2026-01-09",
+    "block": "Bloque B",
+    "replicate": 2,
+    "surfaceArea": 8.73,
+    "surfaceUnit": "m2",
+    "density": 46,
+    "ownerName": "Ricardo La Regina",
+    "responsibleIds": [],
+    "rowDistance": 20,
+    "perimeter": 12.2,
+    "coordinates": {
+      "lat": -43.308532,
+      "lng": -65.288981
+    },
+    "polygon": [
+      {
+        "lat": -43.30854521915703,
+        "lng": -65.28901420691567
+      },
+      {
+        "lat": -43.30855499087826,
+        "lng": -65.28900236561157
+      },
+      {
+        "lat": -43.30851772440386,
+        "lng": -65.28894709105651
+      },
+      {
+        "lat": -43.30850848353746,
+        "lng": -65.28895928291472
+      },
+      {
+        "lat": -43.30854521915703,
+        "lng": -65.28901420691567
+      }
+    ],
+    "irrigationType": "Gravedad / Surcos",
+    "observations": "",
+    "usedSeedValue": 25,
+    "usedSeedUnit": "gr",
+    "color": "#9333ea",
     "campaign": "2025/2026",
     "activeCampaigns": [
       "2025/2026"
@@ -1853,15 +2616,15 @@ export const DEMO_PLOTS: Plot[] = [
     "type": "Ensayo",
     "status": "Activa",
     "sowingDate": "2026-01-09",
-    "block": null,
-    "replicate": null,
+    "block": "Bloque D",
+    "replicate": 4,
     "surfaceArea": 9.09,
     "surfaceUnit": "m2",
-    "density": 0,
-    "ownerName": null,
+    "density": 46,
+    "ownerName": "Ricardo La Regina",
     "responsibleIds": [],
-    "rowDistance": null,
-    "perimeter": null,
+    "rowDistance": 20,
+    "perimeter": 12.2,
     "coordinates": {
       "lat": -43.308429,
       "lng": -65.288872
@@ -1888,616 +2651,11 @@ export const DEMO_PLOTS: Plot[] = [
         "lng": -65.28883769439615
       }
     ],
-    "irrigationType": null,
+    "irrigationType": "Gravedad / Surcos",
     "observations": null,
     "usedSeedValue": 25,
     "usedSeedUnit": "gr",
     "color": "#9333ea",
-    "campaign": "2025/2026",
-    "activeCampaigns": [
-      "2025/2026"
-    ]
-  },
-  {
-    "id": "805296a6-54c5-4899-8e67-85a6d08b6de5",
-    "locationId": "1766471895190",
-    "projectId": "1766443392119",
-    "varietyId": "3ccfe7b3-0707-4dc5-904b-a727579ced26",
-    "seedBatchId": "bd5b1a2a-cdfc-4bf9-9b29-4c59dce6295d",
-    "name": "PM-01-101",
-    "type": "Ensayo",
-    "status": "Activa",
-    "sowingDate": "2026-02-07",
-    "block": null,
-    "replicate": null,
-    "surfaceArea": 9.1,
-    "surfaceUnit": "m2",
-    "density": 0,
-    "ownerName": null,
-    "responsibleIds": [],
-    "rowDistance": null,
-    "perimeter": null,
-    "coordinates": {
-      "lat": -42.747525,
-      "lng": -65.2798
-    },
-    "polygon": [
-      {
-        "lat": -42.74755,
-        "lng": -65.27981
-      },
-      {
-        "lat": -42.74755,
-        "lng": -65.27979
-      },
-      {
-        "lat": -42.7475,
-        "lng": -65.27979
-      },
-      {
-        "lat": -42.7475,
-        "lng": -65.27981
-      },
-      {
-        "lat": -42.74755,
-        "lng": -65.27981
-      }
-    ],
-    "irrigationType": null,
-    "observations": "Parcela sembrada en el area con compost de langostino",
-    "usedSeedValue": 45,
-    "usedSeedUnit": "gr",
-    "color": "#16a34a",
-    "campaign": "2025/2026",
-    "activeCampaigns": [
-      "2025/2026"
-    ]
-  },
-  {
-    "id": "c9a89da4-708d-41b3-85d1-8e09cb5da881",
-    "locationId": "1766471895190",
-    "projectId": "1766443392119",
-    "varietyId": "d4f3c2b2-3942-43cc-8814-250d2cb4293e",
-    "seedBatchId": "3731018c-7ebb-43fb-a9c0-58730ae54394",
-    "name": "PM-02-103",
-    "type": "Ensayo",
-    "status": "Activa",
-    "sowingDate": "2026-02-07",
-    "block": null,
-    "replicate": null,
-    "surfaceArea": 9.1,
-    "surfaceUnit": "m2",
-    "density": 0,
-    "ownerName": null,
-    "responsibleIds": [],
-    "rowDistance": null,
-    "perimeter": null,
-    "coordinates": {
-      "lat": -42.747525,
-      "lng": -65.27976
-    },
-    "polygon": [
-      {
-        "lat": -42.74755,
-        "lng": -65.27977
-      },
-      {
-        "lat": -42.74755,
-        "lng": -65.27975
-      },
-      {
-        "lat": -42.7475,
-        "lng": -65.27975
-      },
-      {
-        "lat": -42.7475,
-        "lng": -65.27977
-      },
-      {
-        "lat": -42.74755,
-        "lng": -65.27977
-      }
-    ],
-    "irrigationType": null,
-    "observations": "Siembra en suelo con compost",
-    "usedSeedValue": 45,
-    "usedSeedUnit": "gr",
-    "color": "#d97706",
-    "campaign": "2025/2026",
-    "activeCampaigns": [
-      "2025/2026"
-    ]
-  },
-  {
-    "id": "23fd9282-28e4-413a-9aef-524081632316",
-    "locationId": "1766471895190",
-    "projectId": "1766443392119",
-    "varietyId": "ce04b1d9-bde3-4040-94f3-3b57599ad4e7",
-    "seedBatchId": "74ac9336-0dab-462c-a560-d9d9e324ca14",
-    "name": "PM-03-105",
-    "type": "Ensayo",
-    "status": "Activa",
-    "sowingDate": "2026-02-07",
-    "block": null,
-    "replicate": null,
-    "surfaceArea": 9.1,
-    "surfaceUnit": "m2",
-    "density": 0,
-    "ownerName": null,
-    "responsibleIds": [],
-    "rowDistance": null,
-    "perimeter": null,
-    "coordinates": {
-      "lat": -42.747525,
-      "lng": -65.27972
-    },
-    "polygon": [
-      {
-        "lat": -42.74755,
-        "lng": -65.27973
-      },
-      {
-        "lat": -42.74755,
-        "lng": -65.27971
-      },
-      {
-        "lat": -42.7475,
-        "lng": -65.27971
-      },
-      {
-        "lat": -42.7475,
-        "lng": -65.27973
-      },
-      {
-        "lat": -42.74755,
-        "lng": -65.27973
-      }
-    ],
-    "irrigationType": null,
-    "observations": "Siembra en suelo con compost de langostino",
-    "usedSeedValue": 45,
-    "usedSeedUnit": "gr",
-    "color": "#9333ea",
-    "campaign": "2025/2026",
-    "activeCampaigns": [
-      "2025/2026"
-    ]
-  },
-  {
-    "id": "13d3e263-baff-4cba-a9ee-3fc7c0e5631b",
-    "locationId": "1766471895190",
-    "projectId": "1766443392119",
-    "varietyId": "ce04b1d9-bde3-4040-94f3-3b57599ad4e7",
-    "seedBatchId": "74ac9336-0dab-462c-a560-d9d9e324ca14",
-    "name": "PM-04-105",
-    "type": "Ensayo",
-    "status": "Activa",
-    "sowingDate": "2026-02-07",
-    "block": null,
-    "replicate": null,
-    "surfaceArea": 9.1,
-    "surfaceUnit": "m2",
-    "density": 0,
-    "ownerName": null,
-    "responsibleIds": [],
-    "rowDistance": null,
-    "perimeter": null,
-    "coordinates": {
-      "lat": -42.747435,
-      "lng": -65.2798
-    },
-    "polygon": [
-      {
-        "lat": -42.74746,
-        "lng": -65.27981
-      },
-      {
-        "lat": -42.74746,
-        "lng": -65.27979
-      },
-      {
-        "lat": -42.74741,
-        "lng": -65.27979
-      },
-      {
-        "lat": -42.74741,
-        "lng": -65.27981
-      },
-      {
-        "lat": -42.74746,
-        "lng": -65.27981
-      }
-    ],
-    "irrigationType": null,
-    "observations": "Siembra en suelo con compost de langostino.",
-    "usedSeedValue": 45,
-    "usedSeedUnit": "gr",
-    "color": "#9333ea",
-    "campaign": "2025/2026",
-    "activeCampaigns": [
-      "2025/2026"
-    ]
-  },
-  {
-    "id": "641be69f-45e2-4dca-b98a-746e9fc1cbf4",
-    "locationId": "1766471895190",
-    "projectId": "1766443392119",
-    "varietyId": "5e115db0-7f9d-4640-abe5-769f414fe293",
-    "seedBatchId": "0ad60b68-ab77-4f9b-a717-4fadae05989d",
-    "name": "PM-05-501",
-    "type": "Ensayo",
-    "status": "Activa",
-    "sowingDate": "2026-02-07",
-    "block": null,
-    "replicate": null,
-    "surfaceArea": 9.1,
-    "surfaceUnit": "m2",
-    "density": 0,
-    "ownerName": null,
-    "responsibleIds": [],
-    "rowDistance": null,
-    "perimeter": null,
-    "coordinates": {
-      "lat": -42.747435,
-      "lng": -65.27976
-    },
-    "polygon": [
-      {
-        "lat": -42.74746,
-        "lng": -65.27977
-      },
-      {
-        "lat": -42.74746,
-        "lng": -65.27975
-      },
-      {
-        "lat": -42.74741,
-        "lng": -65.27975
-      },
-      {
-        "lat": -42.74741,
-        "lng": -65.27977
-      },
-      {
-        "lat": -42.74746,
-        "lng": -65.27977
-      }
-    ],
-    "irrigationType": null,
-    "observations": "Siembra en suelo con compost de langostino.",
-    "usedSeedValue": 45,
-    "usedSeedUnit": "gr",
-    "color": "#2563eb",
-    "campaign": "2025/2026",
-    "activeCampaigns": [
-      "2025/2026"
-    ]
-  },
-  {
-    "id": "dd1de6f3-4aab-497f-91cc-93493da3beee",
-    "locationId": "1766471895190",
-    "projectId": "1766443392119",
-    "varietyId": "3ccfe7b3-0707-4dc5-904b-a727579ced26",
-    "seedBatchId": "bd5b1a2a-cdfc-4bf9-9b29-4c59dce6295d",
-    "name": "PM-06-101",
-    "type": "Ensayo",
-    "status": "Activa",
-    "sowingDate": "2026-02-07",
-    "block": null,
-    "replicate": null,
-    "surfaceArea": 9.1,
-    "surfaceUnit": "m2",
-    "density": 0,
-    "ownerName": null,
-    "responsibleIds": [],
-    "rowDistance": null,
-    "perimeter": null,
-    "coordinates": {
-      "lat": -42.747435,
-      "lng": -65.27972
-    },
-    "polygon": [
-      {
-        "lat": -42.74746,
-        "lng": -65.27973
-      },
-      {
-        "lat": -42.74746,
-        "lng": -65.27971
-      },
-      {
-        "lat": -42.74741,
-        "lng": -65.27971
-      },
-      {
-        "lat": -42.74741,
-        "lng": -65.27973
-      },
-      {
-        "lat": -42.74746,
-        "lng": -65.27973
-      }
-    ],
-    "irrigationType": null,
-    "observations": "Siembra en suelo con compost de langostino.\n",
-    "usedSeedValue": 45,
-    "usedSeedUnit": "gr",
-    "color": "#16a34a",
-    "campaign": "2025/2026",
-    "activeCampaigns": [
-      "2025/2026"
-    ]
-  },
-  {
-    "id": "34db68c7-f06d-4a73-9bad-a16e142fd32e",
-    "locationId": "1766471895190",
-    "projectId": "1766443392119",
-    "varietyId": "5e115db0-7f9d-4640-abe5-769f414fe293",
-    "seedBatchId": "0ad60b68-ab77-4f9b-a717-4fadae05989d",
-    "name": "PM-07-501",
-    "type": "Ensayo",
-    "status": "Activa",
-    "sowingDate": "2026-02-07",
-    "block": null,
-    "replicate": null,
-    "surfaceArea": 9.1,
-    "surfaceUnit": "m2",
-    "density": 0,
-    "ownerName": null,
-    "responsibleIds": [],
-    "rowDistance": null,
-    "perimeter": null,
-    "coordinates": {
-      "lat": -42.747345,
-      "lng": -65.2798
-    },
-    "polygon": [
-      {
-        "lat": -42.74737,
-        "lng": -65.27981
-      },
-      {
-        "lat": -42.74737,
-        "lng": -65.27979
-      },
-      {
-        "lat": -42.74732,
-        "lng": -65.27979
-      },
-      {
-        "lat": -42.74732,
-        "lng": -65.27981
-      },
-      {
-        "lat": -42.74737,
-        "lng": -65.27981
-      }
-    ],
-    "irrigationType": null,
-    "observations": "Siembra en suelo con compost de langostino.\n",
-    "usedSeedValue": 45,
-    "usedSeedUnit": "gr",
-    "color": "#2563eb",
-    "campaign": "2025/2026",
-    "activeCampaigns": [
-      "2025/2026"
-    ]
-  },
-  {
-    "id": "4e3314be-853d-40b6-9356-ae2dc629ce23",
-    "locationId": "1766471895190",
-    "projectId": "1766443392119",
-    "varietyId": "ce04b1d9-bde3-4040-94f3-3b57599ad4e7",
-    "seedBatchId": "74ac9336-0dab-462c-a560-d9d9e324ca14",
-    "name": "PM-08-105",
-    "type": "Ensayo",
-    "status": "Activa",
-    "sowingDate": "2026-02-07",
-    "block": null,
-    "replicate": null,
-    "surfaceArea": 9.1,
-    "surfaceUnit": "m2",
-    "density": 0,
-    "ownerName": null,
-    "responsibleIds": [],
-    "rowDistance": null,
-    "perimeter": null,
-    "coordinates": {
-      "lat": -42.747345,
-      "lng": -65.27976
-    },
-    "polygon": [
-      {
-        "lat": -42.74737,
-        "lng": -65.27977
-      },
-      {
-        "lat": -42.74737,
-        "lng": -65.27975
-      },
-      {
-        "lat": -42.74732,
-        "lng": -65.27975
-      },
-      {
-        "lat": -42.74732,
-        "lng": -65.27977
-      },
-      {
-        "lat": -42.74737,
-        "lng": -65.27977
-      }
-    ],
-    "irrigationType": null,
-    "observations": "Siembra en suelo con compost de langostino.\n",
-    "usedSeedValue": 45,
-    "usedSeedUnit": "gr",
-    "color": "#9333ea",
-    "campaign": "2025/2026",
-    "activeCampaigns": [
-      "2025/2026"
-    ]
-  },
-  {
-    "id": "ebfd8dd5-e9a4-42f3-bcfb-4b7e623fb343",
-    "locationId": "1766471895190",
-    "projectId": "1766443392119",
-    "varietyId": "d4f3c2b2-3942-43cc-8814-250d2cb4293e",
-    "seedBatchId": "3731018c-7ebb-43fb-a9c0-58730ae54394",
-    "name": "PM-09-103",
-    "type": "Ensayo",
-    "status": "Activa",
-    "sowingDate": "2026-02-19",
-    "block": null,
-    "replicate": null,
-    "surfaceArea": 9.1,
-    "surfaceUnit": "m2",
-    "density": 0,
-    "ownerName": null,
-    "responsibleIds": [],
-    "rowDistance": null,
-    "perimeter": null,
-    "coordinates": {
-      "lat": -42.747345,
-      "lng": -65.27972
-    },
-    "polygon": [
-      {
-        "lat": -42.74737,
-        "lng": -65.27973
-      },
-      {
-        "lat": -42.74737,
-        "lng": -65.27971
-      },
-      {
-        "lat": -42.74732,
-        "lng": -65.27971
-      },
-      {
-        "lat": -42.74732,
-        "lng": -65.27973
-      },
-      {
-        "lat": -42.74737,
-        "lng": -65.27973
-      }
-    ],
-    "irrigationType": null,
-    "observations": "Siembra en suelo con compost de langostino.\n",
-    "usedSeedValue": 45,
-    "usedSeedUnit": "gr",
-    "color": "#d97706",
-    "campaign": "2025/2026",
-    "activeCampaigns": [
-      "2025/2026"
-    ]
-  },
-  {
-    "id": "4f2f50cf-0cd2-46f2-911a-5bf3d7f900e3",
-    "locationId": "1766471895190",
-    "projectId": "1766443392119",
-    "varietyId": "d4f3c2b2-3942-43cc-8814-250d2cb4293e",
-    "seedBatchId": "3731018c-7ebb-43fb-a9c0-58730ae54394",
-    "name": "PM-10-103",
-    "type": "Ensayo",
-    "status": "Activa",
-    "sowingDate": "2026-02-07",
-    "block": null,
-    "replicate": null,
-    "surfaceArea": 9.1,
-    "surfaceUnit": "m2",
-    "density": 0,
-    "ownerName": null,
-    "responsibleIds": [],
-    "rowDistance": null,
-    "perimeter": null,
-    "coordinates": {
-      "lat": -42.747255,
-      "lng": -65.2798
-    },
-    "polygon": [
-      {
-        "lat": -42.74728,
-        "lng": -65.27981
-      },
-      {
-        "lat": -42.74728,
-        "lng": -65.27979
-      },
-      {
-        "lat": -42.74723,
-        "lng": -65.27979
-      },
-      {
-        "lat": -42.74723,
-        "lng": -65.27981
-      },
-      {
-        "lat": -42.74728,
-        "lng": -65.27981
-      }
-    ],
-    "irrigationType": null,
-    "observations": "Siembra en suelo con compost de langostino.\n",
-    "usedSeedValue": 45,
-    "usedSeedUnit": "gr",
-    "color": "#d97706",
-    "campaign": "2025/2026",
-    "activeCampaigns": [
-      "2025/2026"
-    ]
-  },
-  {
-    "id": "dc4778c9-ee6d-4b5f-873c-efa68ecf6ad2",
-    "locationId": "1766471895190",
-    "projectId": "1766443392119",
-    "varietyId": "3ccfe7b3-0707-4dc5-904b-a727579ced26",
-    "seedBatchId": "bd5b1a2a-cdfc-4bf9-9b29-4c59dce6295d",
-    "name": "PM-11-101",
-    "type": "Ensayo",
-    "status": "Activa",
-    "sowingDate": "2026-02-07",
-    "block": null,
-    "replicate": null,
-    "surfaceArea": 9.1,
-    "surfaceUnit": "m2",
-    "density": 0,
-    "ownerName": null,
-    "responsibleIds": [],
-    "rowDistance": null,
-    "perimeter": null,
-    "coordinates": {
-      "lat": -42.747255,
-      "lng": -65.27976
-    },
-    "polygon": [
-      {
-        "lat": -42.74728,
-        "lng": -65.27977
-      },
-      {
-        "lat": -42.74728,
-        "lng": -65.27975
-      },
-      {
-        "lat": -42.74723,
-        "lng": -65.27975
-      },
-      {
-        "lat": -42.74723,
-        "lng": -65.27977
-      },
-      {
-        "lat": -42.74728,
-        "lng": -65.27977
-      }
-    ],
-    "irrigationType": null,
-    "observations": "Siembra en suelo con compost de langostino.\n",
-    "usedSeedValue": 45,
-    "usedSeedUnit": "gr",
-    "color": "#16a34a",
     "campaign": "2025/2026",
     "activeCampaigns": [
       "2025/2026"
@@ -2513,15 +2671,15 @@ export const DEMO_PLOTS: Plot[] = [
     "type": "Ensayo",
     "status": "Activa",
     "sowingDate": "2026-02-07",
-    "block": null,
-    "replicate": null,
+    "block": "Bloque IV",
+    "replicate": 4,
     "surfaceArea": 9.1,
     "surfaceUnit": "m2",
-    "density": 0,
-    "ownerName": null,
+    "density": 45,
+    "ownerName": "Salvador MERELE",
     "responsibleIds": [],
-    "rowDistance": null,
-    "perimeter": null,
+    "rowDistance": 20,
+    "perimeter": 12.4,
     "coordinates": {
       "lat": -42.747255,
       "lng": -65.27972
@@ -2548,172 +2706,7 @@ export const DEMO_PLOTS: Plot[] = [
         "lng": -65.27973
       }
     ],
-    "irrigationType": null,
-    "observations": "Siembra en suelo con compost de langostino.\n",
-    "usedSeedValue": 45,
-    "usedSeedUnit": "gr",
-    "color": "#9333ea",
-    "campaign": "2025/2026",
-    "activeCampaigns": [
-      "2025/2026"
-    ]
-  },
-  {
-    "id": "0fb5cb52-47b7-42b1-bdda-0723d8ded513",
-    "locationId": "1766471895190",
-    "projectId": "1766443392119",
-    "varietyId": "3ccfe7b3-0707-4dc5-904b-a727579ced26",
-    "seedBatchId": "bd5b1a2a-cdfc-4bf9-9b29-4c59dce6295d",
-    "name": "PM-13-101",
-    "type": "Ensayo",
-    "status": "Activa",
-    "sowingDate": "2026-02-07",
-    "block": null,
-    "replicate": null,
-    "surfaceArea": 9.1,
-    "surfaceUnit": "m2",
-    "density": 0,
-    "ownerName": null,
-    "responsibleIds": [],
-    "rowDistance": null,
-    "perimeter": null,
-    "coordinates": {
-      "lat": -42.747165,
-      "lng": -65.2798
-    },
-    "polygon": [
-      {
-        "lat": -42.74719,
-        "lng": -65.27981
-      },
-      {
-        "lat": -42.74719,
-        "lng": -65.27979
-      },
-      {
-        "lat": -42.74714,
-        "lng": -65.27979
-      },
-      {
-        "lat": -42.74714,
-        "lng": -65.27981
-      },
-      {
-        "lat": -42.74719,
-        "lng": -65.27981
-      }
-    ],
-    "irrigationType": null,
-    "observations": "Siembra en suelo con compost de langostino.\n",
-    "usedSeedValue": 45,
-    "usedSeedUnit": "gr",
-    "color": "#16a34a",
-    "campaign": "2025/2026",
-    "activeCampaigns": [
-      "2025/2026"
-    ]
-  },
-  {
-    "id": "56533e31-8591-465c-be87-dfce87cf9978",
-    "locationId": "1766471895190",
-    "projectId": "1766443392119",
-    "varietyId": "d4f3c2b2-3942-43cc-8814-250d2cb4293e",
-    "seedBatchId": "3731018c-7ebb-43fb-a9c0-58730ae54394",
-    "name": "PM-14-103",
-    "type": "Ensayo",
-    "status": "Activa",
-    "sowingDate": "2026-02-07",
-    "block": null,
-    "replicate": null,
-    "surfaceArea": 9.1,
-    "surfaceUnit": "m2",
-    "density": 0,
-    "ownerName": null,
-    "responsibleIds": [],
-    "rowDistance": null,
-    "perimeter": null,
-    "coordinates": {
-      "lat": -42.747165,
-      "lng": -65.27976
-    },
-    "polygon": [
-      {
-        "lat": -42.74719,
-        "lng": -65.27977
-      },
-      {
-        "lat": -42.74719,
-        "lng": -65.27975
-      },
-      {
-        "lat": -42.74714,
-        "lng": -65.27975
-      },
-      {
-        "lat": -42.74714,
-        "lng": -65.27977
-      },
-      {
-        "lat": -42.74719,
-        "lng": -65.27977
-      }
-    ],
-    "irrigationType": null,
-    "observations": "Siembra en suelo con compost de langostino.\n",
-    "usedSeedValue": 45,
-    "usedSeedUnit": "gr",
-    "color": "#d97706",
-    "campaign": "2025/2026",
-    "activeCampaigns": [
-      "2025/2026"
-    ]
-  },
-  {
-    "id": "eb498be7-0710-4617-8f29-6b6c01a60ea8",
-    "locationId": "1766471895190",
-    "projectId": "1766443392119",
-    "varietyId": "ce04b1d9-bde3-4040-94f3-3b57599ad4e7",
-    "seedBatchId": "74ac9336-0dab-462c-a560-d9d9e324ca14",
-    "name": "PM-15-105",
-    "type": "Ensayo",
-    "status": "Activa",
-    "sowingDate": "2026-02-07",
-    "block": null,
-    "replicate": null,
-    "surfaceArea": 9.1,
-    "surfaceUnit": "m2",
-    "density": 0,
-    "ownerName": null,
-    "responsibleIds": [],
-    "rowDistance": null,
-    "perimeter": null,
-    "coordinates": {
-      "lat": -42.747165,
-      "lng": -65.27972
-    },
-    "polygon": [
-      {
-        "lat": -42.74719,
-        "lng": -65.27973
-      },
-      {
-        "lat": -42.74719,
-        "lng": -65.27971
-      },
-      {
-        "lat": -42.74714,
-        "lng": -65.27971
-      },
-      {
-        "lat": -42.74714,
-        "lng": -65.27973
-      },
-      {
-        "lat": -42.74719,
-        "lng": -65.27973
-      }
-    ],
-    "irrigationType": null,
+    "irrigationType": "Gravedad / Surcos",
     "observations": "Siembra en suelo con compost de langostino.\n",
     "usedSeedValue": 45,
     "usedSeedUnit": "gr",

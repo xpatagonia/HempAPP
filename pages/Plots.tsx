@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { Plot, Variety, Location, Project, TrialRecord, SeedBatch, CAMPAIGNS } from '../types';
 import { 
@@ -88,7 +88,8 @@ export default function Plots() {
   } = useAppContext();
   
   const [searchParams] = useSearchParams();
-  const [viewMode, setViewMode] = useState<'table' | 'gallery'>('gallery');
+  const navigate = useNavigate();
+  const [viewMode, setViewMode] = useState<'table' | 'gallery' | 'map'>('gallery');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterLoc, setFilterLoc] = useState<string>(searchParams.get('locationId') || 'all');
 
@@ -101,20 +102,29 @@ export default function Plots() {
     if (editId && plots.length > 0) {
       const target = plots.find(p => p.id === editId);
       if (target) {
+        const parentLoc = locations.find(l => l.id === target.locationId);
         setEditingPlot(target);
         setFormData({
           ...target,
-          lat: target.coordinates?.lat?.toString() || '',
-          lng: target.coordinates?.lng?.toString() || '',
+          lat: target.coordinates?.lat?.toString() || parentLoc?.coordinates?.lat?.toString() || '',
+          lng: target.coordinates?.lng?.toString() || parentLoc?.coordinates?.lng?.toString() || '',
           polygon: target.polygon || [],
           campaign: target.campaign || '2025/2026',
           activeCampaigns: target.activeCampaigns || (target.campaign ? [target.campaign] : ['2025/2026']),
-          color: target.color || '#10b981'
+          color: target.color || '#10b981',
+          soilType: target.soilType || parentLoc?.soilType || 'Franco',
+          irrigationType: target.irrigationType || parentLoc?.irrigationSystem || 'Goteo',
+          ownerName: target.ownerName || parentLoc?.ownerName || parentLoc?.responsiblePerson || 'Red Nucleus',
+          block: target.block || 'Bloque 1',
+          replicate: target.replicate || 1,
+          rowDistance: target.rowDistance || 20,
+          density: target.density || 48,
+          perimeter: target.perimeter || 12
         });
         setIsAddModalOpen(true);
       }
     }
-  }, [searchParams, plots]);
+  }, [searchParams, plots, locations]);
   const [filterType, setFilterType] = useState<'all' | 'Ensayo' | 'Producción'>('all');
   const [filterStatus, setFilterStatus] = useState('all');
   const selectedCampaign = activeCampaign;
@@ -138,9 +148,16 @@ export default function Plots() {
       campaign: '2025/2026',
       activeCampaigns: ['2025/2026', '2026/2027'],
       sowingDate: new Date().toISOString().split('T')[0],
-      surfaceArea: 0,
-      surfaceUnit: 'ha',
-      density: 0,
+      surfaceArea: 9,
+      surfaceUnit: 'm2',
+      density: 48,
+      rowDistance: 20,
+      perimeter: 12,
+      block: 'Bloque 1',
+      replicate: 1,
+      soilType: '',
+      irrigationType: '',
+      ownerName: '',
       observations: '',
       lat: '',
       lng: '',
@@ -161,12 +178,33 @@ export default function Plots() {
   const canManage = isAdmin || isClient || isTechnician;
 
   const resetForm = () => {
+    const defaultLoc = filterLoc !== 'all' ? locations.find(l => l.id === filterLoc) : undefined;
     setFormData({ 
-      name: '', type: 'Ensayo', locationId: '', projectId: '', varietyId: '', seedBatchId: '', 
-      status: 'Activa', campaign: selectedCampaign === 'all' ? '2025/2026' : selectedCampaign,
+      name: '',
+      type: 'Ensayo',
+      locationId: defaultLoc?.id || '',
+      projectId: projects[0]?.id || '',
+      varietyId: '',
+      seedBatchId: '', 
+      status: 'Activa',
+      campaign: selectedCampaign === 'all' ? '2025/2026' : selectedCampaign,
       activeCampaigns: [selectedCampaign === 'all' ? '2025/2026' : selectedCampaign],
-      sowingDate: new Date().toISOString().split('T')[0], surfaceArea: 0, 
-      surfaceUnit: 'ha', density: 0, lat: '', lng: '', polygon: [], usedSeedValue: 0, usedSeedUnit: 'kg',
+      sowingDate: new Date().toISOString().split('T')[0],
+      surfaceArea: 9, 
+      surfaceUnit: 'm2',
+      density: 48,
+      rowDistance: 20,
+      perimeter: 12,
+      block: 'Bloque 1',
+      replicate: 1,
+      soilType: defaultLoc?.soilType || 'Franco',
+      irrigationType: defaultLoc?.irrigationSystem || 'Goteo',
+      ownerName: defaultLoc?.ownerName || defaultLoc?.responsiblePerson || 'Red Nucleus',
+      lat: defaultLoc?.coordinates?.lat?.toString() || '',
+      lng: defaultLoc?.coordinates?.lng?.toString() || '',
+      polygon: [],
+      usedSeedValue: 0,
+      usedSeedUnit: 'kg',
       color: '#10b981',
       samplingResponsibleName: currentUser?.name || 'Matias QUINTANA',
       sowingResponsibleName: 'Joaquin AREZO',
@@ -495,11 +533,28 @@ export default function Plots() {
   };
 
   const handlePolygonChange = (newPoly: { lat: number, lng: number }[], areaHa: number, center: { lat: number, lng: number }) => {
+      const areaM2 = areaHa * 10000;
+      const isMicroPlot = areaM2 > 0 && areaM2 < 2500;
+      // Calcular perímetro real Haversine en metros
+      const R = 6378137;
+      const toRad = (x: number) => (x * Math.PI) / 180;
+      let perim = 0;
+      if (newPoly.length >= 2) {
+        for (let i = 0; i < newPoly.length; i++) {
+          const p1 = newPoly[i];
+          const p2 = newPoly[(i + 1) % newPoly.length];
+          const dLat = toRad(p2.lat - p1.lat);
+          const dLng = toRad(p2.lng - p1.lng);
+          const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(p1.lat)) * Math.cos(toRad(p2.lat)) * Math.sin(dLng / 2) ** 2;
+          perim += 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        }
+      }
       setFormData((prev: any) => ({ 
           ...prev, 
           polygon: newPoly, 
-          surfaceArea: areaHa > 0 ? Number(areaHa.toFixed(2)) : prev.surfaceArea, 
-          surfaceUnit: 'ha', 
+          surfaceArea: areaHa > 0 ? Number((isMicroPlot ? areaM2 : areaHa).toFixed(2)) : prev.surfaceArea, 
+          surfaceUnit: areaHa > 0 ? (isMicroPlot ? 'm2' : 'ha') : prev.surfaceUnit,
+          perimeter: perim > 0 ? Number(perim.toFixed(1)) : prev.perimeter,
           lat: center.lat.toFixed(6), 
           lng: center.lng.toFixed(6) 
       }));
@@ -514,15 +569,24 @@ export default function Plots() {
 
   const handleEditPlot = (plot: Plot, e: React.MouseEvent) => {
     e.stopPropagation();
+    const parentLoc = locations.find(l => l.id === plot.locationId);
     setEditingPlot(plot);
     setFormData({
       ...plot,
-      lat: plot.coordinates?.lat?.toString() || '',
-      lng: plot.coordinates?.lng?.toString() || '',
+      lat: plot.coordinates?.lat?.toString() || parentLoc?.coordinates?.lat?.toString() || '',
+      lng: plot.coordinates?.lng?.toString() || parentLoc?.coordinates?.lng?.toString() || '',
       polygon: plot.polygon || [],
       campaign: plot.campaign || '2025/2026',
       activeCampaigns: plot.activeCampaigns || (plot.campaign ? [plot.campaign] : ['2025/2026']),
-      color: plot.color || '#10b981'
+      color: plot.color || '#10b981',
+      soilType: plot.soilType || parentLoc?.soilType || 'Franco',
+      irrigationType: plot.irrigationType || parentLoc?.irrigationSystem || 'Goteo',
+      ownerName: plot.ownerName || parentLoc?.ownerName || parentLoc?.responsiblePerson || 'Red Nucleus',
+      block: plot.block || 'Bloque 1',
+      replicate: plot.replicate || 1,
+      rowDistance: plot.rowDistance || 20,
+      density: plot.density || 48,
+      perimeter: plot.perimeter || 12
     });
     setIsAddModalOpen(true);
   };
@@ -559,7 +623,7 @@ export default function Plots() {
               </span>
             </h1>
             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1 font-medium max-w-2xl">
-              Gestión agronómica de lotes comerciales, ensayos de densidad, microparcelas y siembras activas.
+              Gestión agronómica con herencia automática de suelo, riego y geodesia del sitio padre, trazabilidad INASE y cartografía satelital etiquetada.
             </p>
           </div>
 
@@ -568,17 +632,27 @@ export default function Plots() {
             <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200/60 dark:border-slate-700 shadow-sm">
               <button 
                 onClick={() => setViewMode('table')} 
-                className={`p-2 rounded-lg transition ${viewMode === 'table' ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                className={`p-2 rounded-lg transition flex items-center gap-1.5 text-xs font-mono font-bold ${viewMode === 'table' ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                 title="Vista Tabla Técnica"
               >
-                <List size={17}/>
+                <List size={16}/>
+                <span className="hidden xl:inline">Tabla</span>
               </button>
               <button 
                 onClick={() => setViewMode('gallery')} 
-                className={`p-2 rounded-lg transition ${viewMode === 'gallery' ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                className={`p-2 rounded-lg transition flex items-center gap-1.5 text-xs font-mono font-bold ${viewMode === 'gallery' ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                 title="Vista Tarjetas / Galería"
               >
-                <LayoutGrid size={17}/>
+                <LayoutGrid size={16}/>
+                <span className="hidden xl:inline">Tarjetas</span>
+              </button>
+              <button 
+                onClick={() => setViewMode('map')} 
+                className={`p-2 rounded-lg transition flex items-center gap-1.5 text-xs font-mono font-bold ${viewMode === 'map' ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                title="Vista Cartografía Satelital con Etiquetas de Parcelas"
+              >
+                <Globe size={16}/>
+                <span className="hidden xl:inline">Mapa Geodésico</span>
               </button>
             </div>
 
@@ -733,18 +807,126 @@ export default function Plots() {
         </select>
       </div>
 
-      {/* 3. VISTAS DE CONTENIDO: TABLA O GALERÍA */}
-      {viewMode === 'table' ? (
+      {/* 3. VISTAS DE CONTENIDO: MAPA GEODÉSICO, TABLA O GALERÍA */}
+      {viewMode === 'map' ? (
+        (() => {
+          const activeMapLocation =
+            filterLoc !== 'all'
+              ? availableLocations.find(l => l.id === filterLoc) || availableLocations[0]
+              : availableLocations.find(l => plots.some(p => p.locationId === l.id && p.polygon && p.polygon.length >= 3)) || availableLocations[0];
+
+          const plotsInActiveMapLoc = filteredPlots.filter(p =>
+            activeMapLocation ? p.locationId === activeMapLocation.id : true
+          );
+
+          const mapPlotLayers = plotsInActiveMapLoc
+            .filter(p => p.polygon && p.polygon.length >= 3)
+            .map(p => {
+              const vari = varieties.find(v => v.id === p.varietyId);
+              return {
+                id: p.id,
+                polygon: p.polygon!,
+                label: `${p.name} (${p.surfaceArea} ${p.surfaceUnit})`,
+                shortLabel: p.name,
+                subLabel: `${vari?.name || 'Ensayo'} · ${p.surfaceArea} ${p.surfaceUnit}`,
+                color: p.color || '#10b981'
+              };
+            });
+
+          const primaryPlot = plotsInActiveMapLoc.find(p => p.polygon && p.polygon.length >= 3);
+
+          return (
+            <div className="bg-white dark:bg-slate-900/95 rounded-2xl md:rounded-3xl border border-slate-200/80 dark:border-slate-800 p-5 md:p-6 shadow-sm space-y-4">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-sm font-mono font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2">
+                    <Globe size={16} className="text-emerald-500" />
+                    <span>Cartografía Satelital de Parcelas Etiquetadas — {activeMapLocation?.name || 'Red Experimental'}</span>
+                  </h3>
+                  <p className="text-xs font-mono text-slate-500 dark:text-slate-400 mt-0.5">
+                    Suelo heredado: <strong className="text-emerald-600 dark:text-emerald-400">{activeMapLocation?.soilType || 'Franco'}</strong> · Riego: <strong className="text-sky-600 dark:text-sky-400">{activeMapLocation?.irrigationSystem || 'Goteo'}</strong> · {mapPlotLayers.length} polígonos georreferenciados (clic en cualquier parcela para abrir su Ficha Técnica)
+                  </p>
+                </div>
+
+                {/* Selector rápido de Predio / Sitio Experimental para enfocar el mapa */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {availableLocations.map(locItem => {
+                    const countInLoc = plots.filter(pl => pl.locationId === locItem.id).length;
+                    const isSelected = activeMapLocation?.id === locItem.id;
+                    return (
+                      <button
+                        key={locItem.id}
+                        type="button"
+                        onClick={() => setFilterLoc(locItem.id)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition cursor-pointer border ${
+                          isSelected
+                            ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-emerald-500/50'
+                        }`}
+                      >
+                        📍 {locItem.name} ({countInLoc})
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="h-[580px] rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800">
+                <MapEditor
+                  key={`plots-overview-map-${activeMapLocation?.id || 'all'}-${mapPlotLayers.length}`}
+                  initialCenter={
+                    primaryPlot?.coordinates ||
+                    activeMapLocation?.coordinates || { lat: -43.308576, lng: -65.289047 }
+                  }
+                  initialPolygon={primaryPlot?.polygon || []}
+                  polygonLabel={primaryPlot ? `Parcela ${primaryPlot.name} (${primaryPlot.surfaceArea} ${primaryPlot.surfaceUnit})` : 'Parcela'}
+                  polygonShortLabel={primaryPlot?.name}
+                  polygonSubLabel={
+                    primaryPlot
+                      ? `${varieties.find(v => v.id === primaryPlot.varietyId)?.name || 'Ensayo'} · ${primaryPlot.surfaceArea} ${primaryPlot.surfaceUnit}`
+                      : undefined
+                  }
+                  referencePolygon={activeMapLocation?.polygon || []}
+                  referenceLabel={activeMapLocation ? `Perímetro Campo: ${activeMapLocation.name}` : 'Campo Padre'}
+                  extraPolygons={mapPlotLayers.filter(l => l.id !== primaryPlot?.id)}
+                  onExtraPolygonClick={targetId => navigate(`/plots/${targetId}`)}
+                  readOnly={true}
+                  height="100%"
+                />
+              </div>
+
+              {/* Botonera rápida de acceso directo a las parcelas del sitio */}
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {plotsInActiveMapLoc.map(pItem => {
+                  const vItem = varieties.find(v => v.id === pItem.varietyId);
+                  return (
+                    <button
+                      key={pItem.id}
+                      type="button"
+                      onClick={() => navigate(`/plots/${pItem.id}`)}
+                      className="px-2.5 py-1.5 rounded-xl text-[10px] font-mono font-bold bg-slate-50 dark:bg-slate-800/80 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:border-emerald-500/50 transition flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: pItem.color || '#10b981' }} />
+                      <span>{pItem.name}</span>
+                      <span className="text-slate-400">({vItem?.name?.split(' ')[0] || 'Futura'} · {pItem.surfaceArea}{pItem.surfaceUnit})</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()
+      ) : viewMode === 'table' ? (
         <div className="bg-white dark:bg-slate-900/95 rounded-2xl md:rounded-3xl border border-slate-200/80 dark:border-slate-800 overflow-hidden shadow-sm overflow-x-auto">
           <table className="min-w-full text-xs text-left">
             <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 uppercase text-[10px] font-mono font-bold tracking-wider border-b border-slate-100 dark:border-slate-800">
               <tr>
                 <th className="px-5 py-4">Unidad / Parcela</th>
-                <th className="px-5 py-4">Establecimiento & Geodesia</th>
+                <th className="px-5 py-4">Establecimiento & Herencia</th>
                 <th className="px-5 py-4">Genética & Trazabilidad INASE</th>
                 <th className="px-5 py-4">Ciclo Fenológico & Siembra</th>
                 <th className="px-5 py-4 text-center">Fotoperiodo Local (UTC-3)</th>
-                <th className="px-5 py-4 text-right">Superficie</th>
+                <th className="px-5 py-4 text-right">Superficie / Marco</th>
                 <th className="px-5 py-4 text-right">Acciones Técnicas</th>
               </tr>
             </thead>
@@ -773,7 +955,7 @@ export default function Plots() {
                     <tr
                       key={p.id}
                       className="hover:bg-slate-50 dark:hover:bg-slate-800/40 cursor-pointer group transition-colors"
-                      onClick={() => (window.location.hash = `#/plots/${p.id}`)}
+                      onClick={() => navigate(`/plots/${p.id}`)}
                     >
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-2.5">
@@ -783,7 +965,7 @@ export default function Plots() {
                               {p.name}
                             </span>
                             <span className="text-[10px] font-mono text-slate-400 block mt-0.5">
-                              {p.type} · Campaña {p.campaign || targetCamp}
+                              {p.block || p.type} {p.replicate ? `· Rep. ${p.replicate}` : ''} · {p.campaign || targetCamp}
                             </span>
                           </div>
                         </div>
@@ -793,8 +975,11 @@ export default function Plots() {
                         <div className="font-mono font-bold text-slate-800 dark:text-slate-200 text-xs">
                           {loc?.name || 'S/D'}
                         </div>
-                        <span className="text-[10px] font-mono text-slate-400 block mt-0.5">
-                          {loc?.city || loc?.province} · {sync.coords.lat.toFixed(4)}°, {sync.coords.lng.toFixed(4)}°
+                        <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 block mt-0.5">
+                          Suelo: <strong className="text-emerald-600 dark:text-emerald-400">{p.soilType || loc?.soilType || 'Franco'}</strong> · Riego: <strong className="text-sky-600 dark:text-sky-400">{p.irrigationType || loc?.irrigationSystem || 'Goteo'}</strong>
+                        </span>
+                        <span className="text-[9.5px] font-mono text-slate-400 block">
+                          GPS: {sync.coords.lat.toFixed(5)}°, {sync.coords.lng.toFixed(5)}° ({p.polygon?.length || 5} vértices)
                         </span>
                         {!isParentCampoActive && (
                           <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 px-1.5 py-0.5 rounded mt-0.5 border border-amber-200 dark:border-amber-800">
@@ -848,8 +1033,13 @@ export default function Plots() {
                         </div>
                       </td>
 
-                      <td className="px-5 py-4 text-right font-mono font-black text-slate-900 dark:text-white text-xs">
-                        {p.surfaceArea} {p.surfaceUnit}
+                      <td className="px-5 py-4 text-right font-mono text-xs">
+                        <strong className="font-black text-slate-900 dark:text-white block">
+                          {p.surfaceArea} {p.surfaceUnit}
+                        </strong>
+                        <span className="text-[9.5px] text-slate-400 block">
+                          {p.density || 48} pl/m² · {p.rowDistance || 20} cm
+                        </span>
                       </td>
 
                       <td className="px-5 py-4 text-right">
@@ -1057,9 +1247,9 @@ export default function Plots() {
                       {/* Grid de Métricas: Superficie & Cultivar */}
                       <div className="grid grid-cols-2 gap-2 text-[10px] font-mono tabular-nums">
                         <div className="p-2.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/60 dark:border-slate-800">
-                          <span className="text-[8.5px] font-bold uppercase text-slate-400 block">Superficie Geodésica</span>
-                          <strong className="text-xs font-black text-slate-900 dark:text-white block mt-0.5">
-                            {p.surfaceArea} {p.surfaceUnit}
+                          <span className="text-[8.5px] font-bold uppercase text-slate-400 block">Superficie & Perímetro</span>
+                          <strong className="text-xs font-black text-slate-900 dark:text-slate-100 block mt-0.5">
+                            {p.surfaceArea} {p.surfaceUnit} <span className="text-[10px] font-normal text-slate-400">({p.perimeter || 12}m)</span>
                           </strong>
                         </div>
 
@@ -1068,6 +1258,22 @@ export default function Plots() {
                           <strong className="text-xs font-bold text-emerald-600 dark:text-emerald-400 truncate block mt-0.5" title={vari?.name}>
                             {vari?.name || 'Certificada'}
                           </strong>
+                        </div>
+                      </div>
+
+                      {/* Bloque de Herencia Agronómica del Sitio Padre & Diseño Experimental DBCA */}
+                      <div className="grid grid-cols-3 gap-1.5 text-[9.5px] font-mono tabular-nums">
+                        <div className="px-2 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800 truncate">
+                          <span className="text-[8px] text-slate-400 uppercase block">Diseño DBCA</span>
+                          <strong className="text-indigo-600 dark:text-indigo-400">{p.block || 'Bloque 1'} · R{p.replicate || 1}</strong>
+                        </div>
+                        <div className="px-2 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800 truncate">
+                          <span className="text-[8px] text-slate-400 uppercase block">Suelo (Heredado)</span>
+                          <strong className="text-emerald-600 dark:text-emerald-400">{p.soilType || loc?.soilType || 'Franco'}</strong>
+                        </div>
+                        <div className="px-2 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800 truncate">
+                          <span className="text-[8px] text-slate-400 uppercase block">Riego / Marco</span>
+                          <strong className="text-sky-600 dark:text-sky-400">{p.irrigationType || loc?.irrigationSystem || 'Goteo'} · {p.density || 48}pl</strong>
                         </div>
                       </div>
 
@@ -1196,7 +1402,7 @@ export default function Plots() {
                     </div>
 
                     <div>
-                      <label className={labelClass}>Campo / Sitio Padre *</label>
+                      <label className={labelClass}>Campo / Sitio Padre * (Hereda Suelo, Riego y Geodesia)</label>
                       <select 
                         required 
                         className={inputClass} 
@@ -1204,14 +1410,19 @@ export default function Plots() {
                         onChange={e => {
                           const chosenLocId = e.target.value;
                           const chosenLoc = locations.find(l => l.id === chosenLocId);
-                          const updates: any = { locationId: chosenLocId };
+                          const updates: any = {
+                            locationId: chosenLocId,
+                            soilType: chosenLoc?.soilType || 'Franco',
+                            irrigationType: chosenLoc?.irrigationSystem || 'Goteo',
+                            ownerName: chosenLoc?.ownerName || chosenLoc?.responsiblePerson || 'Red Nucleus'
+                          };
                           if (chosenLoc?.coordinates?.lat && chosenLoc?.coordinates?.lng) {
                             if (!formData.polygon || formData.polygon.length === 0) {
                               updates.lat = chosenLoc.coordinates.lat.toString();
                               updates.lng = chosenLoc.coordinates.lng.toString();
                             }
                           }
-                          setFormData(prev => ({ ...prev, ...updates }));
+                          setFormData((prev: any) => ({ ...prev, ...updates }));
                         }}
                       >
                         <option value="">Seleccionar campo...</option>
@@ -1240,31 +1451,123 @@ export default function Plots() {
                       </select>
                     </div>
 
-                    <div>
-                      <label className={labelClass}>Tipo de Unidad</label>
-                      <select 
-                        className={inputClass} 
-                        value={formData.type} 
-                        onChange={e => setFormData({ ...formData, type: e.target.value })}
-                      >
-                        <option value="Ensayo">Ensayo / Microparcela</option>
-                        <option value="Producción">Lote Comercial / Producción</option>
-                      </select>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <div>
+                        <label className={labelClass}>Tipo de Unidad</label>
+                        <select 
+                          className={inputClass} 
+                          value={formData.type} 
+                          onChange={e => setFormData({ ...formData, type: e.target.value })}
+                        >
+                          <option value="Ensayo">Ensayo / Microparcela</option>
+                          <option value="Producción">Lote Comercial</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className={labelClass}>Estado Operativo</label>
+                        <select 
+                          className={inputClass} 
+                          value={formData.status} 
+                          onChange={e => setFormData({ ...formData, status: e.target.value })}
+                        >
+                          <option value="Activa">Activa en Producción</option>
+                          <option value="Pausada">Pausada en Campaña</option>
+                          <option value="En Barbecho">En Barbecho</option>
+                          <option value="Cosechada">Cosechada</option>
+                          <option value="Cancelada">Cancelada</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* PANEL DE ATRIBUTOS HEREDADOS DEL SITIO PADRE & DISEÑO DBCA */}
+                  <div className="p-4 bg-emerald-50/60 dark:bg-emerald-950/20 rounded-2xl border border-emerald-200/70 dark:border-emerald-900/40 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-[11px] font-mono font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                        <Layers size={13} className="text-emerald-600" />
+                        <span>Herencia del Sitio & Diseño DBCA</span>
+                      </h3>
+                      {formData.locationId && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const parentLoc = locations.find(l => l.id === formData.locationId);
+                            if (parentLoc) {
+                              setFormData((prev: any) => ({
+                                ...prev,
+                                soilType: parentLoc.soilType || 'Franco',
+                                irrigationType: parentLoc.irrigationSystem || 'Goteo',
+                                ownerName: parentLoc.ownerName || parentLoc.responsiblePerson || 'Red Nucleus'
+                              }));
+                            }
+                          }}
+                          className="text-[9.5px] font-mono font-bold text-emerald-700 dark:text-emerald-300 bg-white dark:bg-slate-900 px-2 py-0.5 rounded border border-emerald-300 dark:border-emerald-800 hover:bg-emerald-50 cursor-pointer"
+                        >
+                          ↻ Re-sincronizar del Campo
+                        </button>
+                      )}
                     </div>
 
-                    <div>
-                      <label className={labelClass}>Estado Operativo</label>
-                      <select 
-                        className={inputClass} 
-                        value={formData.status} 
-                        onChange={e => setFormData({ ...formData, status: e.target.value })}
-                      >
-                        <option value="Activa">Activa en Producción</option>
-                        <option value="Pausada">Pausada en esta Campaña</option>
-                        <option value="En Barbecho">En Barbecho / Descanso</option>
-                        <option value="Cosechada">Cosechada</option>
-                        <option value="Cancelada">Cancelada</option>
-                      </select>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <div>
+                        <label className={labelClass}>Suelo (Heredado)</label>
+                        <input
+                          className={inputClass}
+                          placeholder="Ej: Franco Arenoso"
+                          value={formData.soilType || ''}
+                          onChange={e => setFormData({ ...formData, soilType: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Sistema Riego (Heredado)</label>
+                        <input
+                          className={inputClass}
+                          placeholder="Ej: Goteo Automatizado"
+                          value={formData.irrigationType || ''}
+                          onChange={e => setFormData({ ...formData, irrigationType: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Bloque Experimental</label>
+                        <input
+                          className={inputClass}
+                          placeholder="Ej: Bloque 1"
+                          value={formData.block || ''}
+                          onChange={e => setFormData({ ...formData, block: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Repetición DBCA</label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="20"
+                          className={inputClass}
+                          value={formData.replicate || 1}
+                          onChange={e => setFormData({ ...formData, replicate: Number(e.target.value) })}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Densidad Obj. (pl/m²)</label>
+                        <input
+                          type="number"
+                          step="1"
+                          className={inputClass}
+                          value={formData.density || 48}
+                          onChange={e => setFormData({ ...formData, density: Number(e.target.value) })}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Dist. Hileras (cm)</label>
+                        <input
+                          type="number"
+                          step="1"
+                          className={inputClass}
+                          value={formData.rowDistance || 20}
+                          onChange={e => setFormData({ ...formData, rowDistance: Number(e.target.value) })}
+                        />
+                      </div>
                     </div>
                   </div>
 
@@ -1509,7 +1812,7 @@ export default function Plots() {
                       );
                     })()}
 
-                    <div className="flex-1 min-h-[240px] rounded-xl overflow-hidden mb-3 bg-slate-900 border border-slate-200 dark:border-slate-700">
+                    <div className="flex-1 min-h-[260px] rounded-xl overflow-hidden mb-3 bg-slate-900 border border-slate-200 dark:border-slate-700">
                       <MapEditor 
                         key={`plot-map-${formData.locationId || 'default'}-${editingPlot?.id || 'new'}`}
                         initialCenter={
@@ -1519,7 +1822,23 @@ export default function Plots() {
                         } 
                         initialPolygon={formData.polygon || []} 
                         referencePolygon={locations.find(l => l.id === formData.locationId)?.polygon || []}
-                        polygonLabel="Perímetro Parcela"
+                        extraPolygons={
+                          formData.locationId
+                            ? plots
+                                .filter(sp => sp.locationId === formData.locationId && sp.id !== editingPlot?.id && sp.polygon && sp.polygon.length >= 3)
+                                .map(sp => ({
+                                  id: sp.id,
+                                  polygon: sp.polygon!,
+                                  label: `${sp.name} (${sp.surfaceArea} ${sp.surfaceUnit})`,
+                                  shortLabel: sp.name,
+                                  subLabel: `${sp.surfaceArea} ${sp.surfaceUnit}`,
+                                  color: sp.color || '#0284c7'
+                                }))
+                            : []
+                        }
+                        polygonLabel={formData.name ? `Parcela ${formData.name}` : 'Perímetro Parcela'}
+                        polygonShortLabel={formData.name || 'NUEVA PARCELA'}
+                        polygonSubLabel={`${formData.surfaceArea || 9} ${formData.surfaceUnit || 'm2'}`}
                         referenceLabel={locations.find(l => l.id === formData.locationId)?.name ? `Límite Campo: ${locations.find(l => l.id === formData.locationId)?.name}` : 'Perímetro Campo Padre'}
                         onPolygonChange={handlePolygonChange} 
                         height="100%" 

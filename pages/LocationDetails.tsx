@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { ArrowLeft, MapPin, Globe, Droplets, User, Building, ExternalLink, Ruler, Sprout, ChevronRight, Waves, CloudRain, Package, CheckCircle2, Truck, ClipboardCheck, Info, Tag, Activity, Archive, Landmark, Warehouse, AlertCircle, AlertTriangle, LayoutGrid, Box, TrendingDown } from 'lucide-react';
 import WeatherWidget from '../components/WeatherWidget';
@@ -20,6 +20,7 @@ const stringToColor = (str: string) => {
 
 export default function LocationDetails() {
     const { id } = useParams();
+    const navigate = useNavigate();
     const { locations, plots, varieties, clients, seedMovements, seedBatches, currentUser, storagePoints } = useAppContext();
     const [activeTab, setActiveTab] = useState<'info' | 'water' | 'stock'>('info');
 
@@ -117,13 +118,18 @@ export default function LocationDetails() {
     const activePlotLayers = useMemo(() => {
         return locationPlots
             .filter(p => p.status === 'Activa' && p.polygon && p.polygon.length > 2)
-            .map(p => ({
-                id: p.id,
-                polygon: p.polygon!,
-                label: `${p.name} (${p.surfaceArea} ${p.surfaceUnit})`,
-                color: p.color || stringToColor(p.name)
-            }));
-    }, [locationPlots]);
+            .map(p => {
+                const vari = varieties.find(v => v.id === p.varietyId);
+                return {
+                    id: p.id,
+                    polygon: p.polygon!,
+                    label: `${p.name} (${p.surfaceArea} ${p.surfaceUnit})`,
+                    shortLabel: p.name,
+                    subLabel: `${vari?.name || 'Ensayo'} · ${p.surfaceArea} ${p.surfaceUnit}`,
+                    color: p.color || stringToColor(p.name)
+                };
+            });
+    }, [locationPlots, varieties]);
     
     const client = clients.find(c => c.id === location?.clientId);
     const ownerLabel = client ? client.name : 'Planta Central (Propio)';
@@ -222,12 +228,15 @@ export default function LocationDetails() {
                             <div className="px-8 py-6 border-b dark:border-slate-800 bg-gray-50/50 dark:bg-slate-950/50 font-black text-xs uppercase tracking-widest dark:text-white flex items-center">
                                 <Globe size={16} className="mr-2 text-blue-600"/> Cartografía de Precisión
                             </div>
-                            <div className="h-80 w-full bg-slate-100">
+                            <div className="h-[460px] w-full bg-slate-100">
                                 {location.polygon && location.polygon.length > 2 ? (
                                     <MapEditor 
                                         initialCenter={location.coordinates} 
                                         initialPolygon={location.polygon} 
+                                        polygonShortLabel={location.name}
+                                        polygonSubLabel={`${locationPlots.length} Parcelas`}
                                         extraPolygons={activePlotLayers}
+                                        onExtraPolygonClick={(plotId) => navigate(`/plots/${plotId}`)}
                                         readOnly={true} 
                                         height="100%"
                                     />

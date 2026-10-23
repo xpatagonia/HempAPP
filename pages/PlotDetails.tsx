@@ -323,6 +323,30 @@ export default function PlotDetails() {
     [seedBatches, plot]
   );
 
+  // Parcelas vecinas / hermanas dentro del mismo Establecimiento (para etiquetado y contexto en el mapa satelital)
+  const siblingPlotsInLocation = useMemo(() => {
+    if (!plot?.locationId) return [];
+    return plots
+      .filter(p => p.locationId === plot.locationId && p.id !== plot.id)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [plots, plot]);
+
+  const siblingPlotLayers = useMemo(() => {
+    return siblingPlotsInLocation
+      .filter(sp => sp.polygon && sp.polygon.length >= 3)
+      .map(sp => {
+        const spVari = varieties.find(v => v.id === sp.varietyId);
+        return {
+          id: sp.id,
+          polygon: sp.polygon!,
+          label: `${sp.name} (${sp.surfaceArea} ${sp.surfaceUnit})`,
+          shortLabel: sp.name,
+          subLabel: `${spVari?.name || 'Ensayo'} · ${sp.surfaceArea} ${sp.surfaceUnit}`,
+          color: sp.color || '#0284c7'
+        };
+      });
+  }, [siblingPlotsInLocation, varieties]);
+
   // Coordenadas geodésicas activas de la parcela (prioriza centroide del polígono de la parcela, luego locación)
   const activeCoords = useMemo(() => {
     if (plot?.coordinates && !isNaN(plot.coordinates.lat) && !isNaN(plot.coordinates.lng) && plot.coordinates.lat !== 0) {
@@ -966,7 +990,30 @@ export default function PlotDetails() {
               <span className="text-xs font-mono text-slate-500 dark:text-slate-400 tabular-nums">
                 Superficie: <strong className="text-slate-800 dark:text-slate-200">{plot.surfaceArea} {plot.surfaceUnit}</strong>
                 {' · '}
+                Perímetro: <strong className="text-slate-800 dark:text-slate-200">{plot.perimeter || 12} m</strong>
+                {' · '}
                 GPS: <strong className="text-slate-700 dark:text-slate-300">{activeCoords.lat.toFixed(6)}, {activeCoords.lng.toFixed(6)}</strong>
+              </span>
+            </div>
+
+            {/* Fila de Herencia Agronómica & Trazabilidad Vinculada (Sitio + Semilla + DBCA) */}
+            <div className="flex flex-wrap items-center gap-2 pt-1.5">
+              {(plot.block || plot.replicate) && (
+                <span className="px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60">
+                  DBCA: {plot.block || 'Bloque 1'} {plot.replicate ? `· Rep. ${plot.replicate}` : ''}
+                </span>
+              )}
+              <span className="px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                Suelo (Heredado): <strong className="text-emerald-600 dark:text-emerald-400">{plot.soilType || location?.soilType || 'Franco'}</strong>
+              </span>
+              <span className="px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                Riego (Heredado): <strong className="text-sky-600 dark:text-sky-400">{plot.irrigationType || location?.irrigationSystem || 'Goteo'}</strong>
+              </span>
+              <span className="px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                Marco Siembra: <strong>{plot.density || 48} pl/m² · Hilera {plot.rowDistance || 20} cm</strong>
+              </span>
+              <span className="px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold bg-emerald-50/80 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60">
+                Lote Semilla INASE: <strong>Cert. #{seedBatch?.certificationNumber || '103'}</strong> · Rótulo <strong>{seedBatch?.labelSerialNumber || '00000012'}</strong>
               </span>
             </div>
           </div>
@@ -1660,18 +1707,41 @@ export default function PlotDetails() {
             PESTAÑA 2: MAPA & GEOCERCA GEODÉSICA
         ------------------------------------------------------------------- */}
         {activeTab === 'map' && (
-          <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-5 animate-in fade-in duration-300">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-6 animate-in fade-in duration-300">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
               <div>
-                <h3 className="text-sm font-mono font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2">
-                  <Compass size={16} className="text-emerald-500" />
-                  <span>Geodesia Satelital & Polígono de la Parcela ({plot.name})</span>
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 font-mono mt-0.5">
-                  Centroide GPS: {activeCoords.lat.toFixed(6)}, {activeCoords.lng.toFixed(6)} · Vértices: {plot.polygon?.length || 0} puntos · Superficie: {plot.surfaceArea} {plot.surfaceUnit}
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-sm font-mono font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2">
+                    <Compass size={16} className="text-emerald-500" />
+                    <span>Geodesia Satelital & Polígono de la Parcela ({plot.name})</span>
+                  </h3>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                    Zoom Ultra-Precisión 22x · {1 + siblingPlotLayers.length} Parcelas Etiquetadas en {location?.name || 'Sitio'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-mono mt-1">
+                  Centroide GPS: <strong className="text-slate-800 dark:text-slate-200">{activeCoords.lat.toFixed(6)}, {activeCoords.lng.toFixed(6)}</strong> · Vértices: <strong className="text-slate-800 dark:text-slate-200">{plot.polygon?.length || 0} puntos</strong> · Superficie: <strong className="text-emerald-600 dark:text-emerald-400">{plot.surfaceArea} {plot.surfaceUnit}</strong> · Perímetro: <strong className="text-slate-800 dark:text-slate-200">{plot.perimeter || 12} m</strong>
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                {siblingPlotsInLocation.length > 0 && (
+                  <select
+                    value={plot.id}
+                    onChange={e => navigate(`/plots/${e.target.value}`)}
+                    className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-mono font-bold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-emerald-500"
+                    title="Saltar a otra parcela del mismo ensayo/predio"
+                  >
+                    <option value={plot.id}>📍 Activa: {plot.name} ({variety?.name || 'Cultivar'})</option>
+                    {siblingPlotsInLocation.map(sp => {
+                      const spVar = varieties.find(v => v.id === sp.varietyId);
+                      return (
+                        <option key={sp.id} value={sp.id}>
+                          ↳ Ir a {sp.name} ({spVar?.name || 'Cultivar'} · {sp.block || 'Ensayo'})
+                        </option>
+                      );
+                    })}
+                  </select>
+                )}
                 <Link
                   to={`/agriculture-40?plotId=${plot.id}`}
                   className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-mono font-bold uppercase tracking-wider transition"
@@ -1681,17 +1751,176 @@ export default function PlotDetails() {
               </div>
             </div>
 
-            <div className="h-[540px] rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800">
+            {/* Visor Cartográfico Satelital con Etiquetas Permanentes y Cotas Métricas */}
+            <div className="h-[580px] rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-inner">
               <MapEditor
+                key={`plot-details-map-${plot.id}`}
                 initialCenter={activeCoords}
                 initialPolygon={plot.polygon || []}
                 referencePolygon={location?.polygon || []}
+                extraPolygons={siblingPlotLayers}
                 polygonLabel={`Parcela ${plot.name} (${plot.surfaceArea} ${plot.surfaceUnit})`}
-                referenceLabel={location?.name ? `Perímetro Campo: ${location.name}` : 'Campo Padre'}
+                polygonShortLabel={plot.name}
+                polygonSubLabel={`${variety?.name || 'Genética'} · ${plot.surfaceArea} ${plot.surfaceUnit} · ${plot.block || 'Ensayo'}`}
+                referenceLabel={location?.name ? `Perímetro Campo Padre: ${location.name}` : 'Campo Padre'}
+                onExtraPolygonClick={(targetPlotId) => navigate(`/plots/${targetPlotId}`)}
                 readOnly={true}
                 height="100%"
               />
             </div>
+
+            {/* Panel Inferior de Vinculación de Datos, Herencia del Sitio y Vértices Geodésicos */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 pt-1">
+              {/* Columna 1: Datos Heredados del Campo Padre y Genética */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-800 space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-200/70 dark:border-slate-700/70 pb-2">
+                  <span className="text-[10px] font-mono font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                    1. Herencia Territorial & Sitio Padre
+                  </span>
+                  <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                    VINCULADO OK
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2.5 text-xs font-mono">
+                  <div>
+                    <span className="text-[9px] text-slate-400 uppercase block">Campo / Predio</span>
+                    <strong className="text-slate-800 dark:text-slate-100">{location?.name || 'S/D'}</strong>
+                  </div>
+                  <div>
+                    <span className="text-[9px] text-slate-400 uppercase block">Provincia / Ciudad</span>
+                    <strong className="text-slate-800 dark:text-slate-100">{location?.city || location?.province || 'Argentina'}</strong>
+                  </div>
+                  <div>
+                    <span className="text-[9px] text-slate-400 uppercase block">Suelo Heredado</span>
+                    <strong className="text-emerald-600 dark:text-emerald-400">{plot.soilType || location?.soilType || 'Franco'}</strong>
+                  </div>
+                  <div>
+                    <span className="text-[9px] text-slate-400 uppercase block">Sistema de Riego</span>
+                    <strong className="text-sky-600 dark:text-sky-400">{plot.irrigationType || location?.irrigationSystem || 'Goteo'}</strong>
+                  </div>
+                  <div>
+                    <span className="text-[9px] text-slate-400 uppercase block">Clima Regional</span>
+                    <strong className="text-slate-700 dark:text-slate-200">{location?.climate || 'Templado / Árido'}</strong>
+                  </div>
+                  <div>
+                    <span className="text-[9px] text-slate-400 uppercase block">Titular / Custodio</span>
+                    <strong className="text-slate-700 dark:text-slate-200">{plot.ownerName || location?.ownerName || location?.responsiblePerson || 'Red Nucleus'}</strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* Columna 2: Diseño Experimental DBCA & Trazabilidad INASE */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-800 space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-200/70 dark:border-slate-700/70 pb-2">
+                  <span className="text-[10px] font-mono font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                    2. Diseño DBCA & Semilla INASE
+                  </span>
+                  <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
+                    {plot.block || 'Bloque'} · Rep {plot.replicate || 1}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2.5 text-xs font-mono">
+                  <div>
+                    <span className="text-[9px] text-slate-400 uppercase block">Cultivar Asignado</span>
+                    <strong className="text-emerald-600 dark:text-emerald-400">{variety?.name || 'Genética Homologada'}</strong>
+                  </div>
+                  <div>
+                    <span className="text-[9px] text-slate-400 uppercase block">Lote Semilla INASE</span>
+                    <strong className="text-slate-800 dark:text-slate-100">Cert. #{seedBatch?.certificationNumber || '103'}</strong>
+                  </div>
+                  <div>
+                    <span className="text-[9px] text-slate-400 uppercase block">Rótulo Oficial</span>
+                    <strong className="text-slate-800 dark:text-slate-100">#{seedBatch?.labelSerialNumber || '00000012'}</strong>
+                  </div>
+                  <div>
+                    <span className="text-[9px] text-slate-400 uppercase block">Marco de Plantación</span>
+                    <strong className="text-slate-800 dark:text-slate-100">{plot.density || 48} pl/m² ({plot.rowDistance || 20} cm)</strong>
+                  </div>
+                  <div>
+                    <span className="text-[9px] text-slate-400 uppercase block">Muestreador Lote</span>
+                    <strong className="text-slate-700 dark:text-slate-200">{plot.samplingResponsibleName || seedBatch?.samplerName || 'Matias QUINTANA'}</strong>
+                  </div>
+                  <div>
+                    <span className="text-[9px] text-slate-400 uppercase block">Director Técnico</span>
+                    <strong className="text-slate-700 dark:text-slate-200">{plot.technicalResponsibleName || 'Ing. Agr. Julian PIZARRO'}</strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* Columna 3: Coordenadas de Vértices del Polígono (WGS84) */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-800 space-y-2.5">
+                <div className="flex items-center justify-between border-b border-slate-200/70 dark:border-slate-700/70 pb-2">
+                  <span className="text-[10px] font-mono font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                    3. Vértices Geodésicos WGS84 ({plot.polygon?.length || 0})
+                  </span>
+                  <span className="text-[10px] font-mono font-bold text-slate-500">
+                    {plot.surfaceArea} {plot.surfaceUnit} · {plot.perimeter || 12}m
+                  </span>
+                </div>
+                <div className="max-h-36 overflow-y-auto space-y-1 pr-1 font-mono text-[11px]">
+                  {plot.polygon && plot.polygon.length > 0 ? (
+                    plot.polygon.map((pt, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800"
+                      >
+                        <span className="font-black text-emerald-600 dark:text-emerald-400">
+                          V{idx + 1} {idx === plot.polygon!.length - 1 && pt.lat === plot.polygon![0].lat && pt.lng === plot.polygon![0].lng ? '(Cierre)' : ''}
+                        </span>
+                        <span className="text-slate-700 dark:text-slate-300 tabular-nums">
+                          {pt.lat.toFixed(6)}°, {pt.lng.toFixed(6)}°
+                        </span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-xs text-slate-400 py-4 text-center">
+                      Centroide: {activeCoords.lat.toFixed(6)}°, {activeCoords.lng.toFixed(6)}°
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Navegador Rápido de Parcelas Vecinas en el mismo Sitio Experimental */}
+            {siblingPlotsInLocation.length > 0 && (
+              <div className="p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/30 border border-slate-200/70 dark:border-slate-800 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-mono font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    Parcelas Vecinas en {location?.name} ({siblingPlotsInLocation.length + 1} unidades en el bloque experimental — clic para inspeccionar)
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {plots
+                    .filter(p => p.locationId === plot.locationId)
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .map(item => {
+                      const isCurrent = item.id === plot.id;
+                      const itemVar = varieties.find(v => v.id === item.varietyId);
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => navigate(`/plots/${item.id}`)}
+                          className={`px-2.5 py-1.5 rounded-xl text-[10px] font-mono font-bold transition flex items-center gap-1.5 cursor-pointer border ${
+                            isCurrent
+                              ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm'
+                              : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-emerald-500/60'
+                          }`}
+                        >
+                          <span
+                            className="w-2 h-2 rounded-full shrink-0"
+                            style={{ backgroundColor: isCurrent ? '#ffffff' : item.color || '#10b981' }}
+                          />
+                          <span>{item.name}</span>
+                          <span className={isCurrent ? 'text-emerald-100 text-[9px]' : 'text-slate-400 text-[9px]'}>
+                            ({itemVar?.name?.split(' ')[0] || 'Futura'})
+                          </span>
+                        </button>
+                      );
+                    })}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
