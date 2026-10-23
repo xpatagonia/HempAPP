@@ -593,6 +593,146 @@ export default function HydricBalance({ locationId, plotId, startDate, waterNeed
         </div>
       </div>
 
+      {/* PANEL DE HUELLA HÍDRICA POR PARCELA (ISO 14046) & REGISTRO CONTINUO DE LLUVIAS */}
+      {(() => {
+        let plotAreaHa = plot?.surfaceArea || 1;
+        if (plot?.surfaceUnit === 'm2') plotAreaHa = plotAreaHa / 10000;
+        else if (plot?.surfaceUnit === 'ac') plotAreaHa = plotAreaHa * 0.404686;
+        plotAreaHa = Math.max(0.01, Number(plotAreaHa.toFixed(2)));
+
+        // 1 mm = 10 m³/ha = 10,000 L/ha
+        const greenWaterM3Ha = Number((effectiveRainMm * 10).toFixed(1));
+        const blueWaterM3Ha = Number((manualIrrigationMm * 10).toFixed(1));
+        const totalWaterM3Ha = Number((totalHydricFootprint * 10).toFixed(1));
+        const totalPlotVolumeM3 = Number((totalWaterM3Ha * plotAreaHa).toFixed(1));
+        const estimatedBiomassKgHa = 6500; // Biomasa/fibra seca referencia 6.5 Tn/ha
+        const waterEfficiencyLPerKg = Math.round((totalWaterM3Ha * 1000) / estimatedBiomassKgHa);
+
+        const chronologicalRainEvents = [...manualRecords]
+          .filter(r => r.type === 'Lluvia')
+          .sort((a, b) => a.date.localeCompare(b.date));
+
+        let runningMm = 0;
+        const cumulativeSeries = chronologicalRainEvents.map(ev => {
+          runningMm += Number(ev.amountMm || 0);
+          return {
+            id: ev.id,
+            date: ev.date,
+            mm: Number(ev.amountMm || 0),
+            cumulativeMm: Number(runningMm.toFixed(1)),
+            isAuto: String(ev.id).startsWith('auto-rain-') || (ev.notes || '').includes('Pluviómetro Satelital')
+          };
+        });
+
+        return (
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-sm space-y-5">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono font-black uppercase bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
+                    ISO 14046 • Trazabilidad Hídrica
+                  </span>
+                  <h4 className="text-sm font-black uppercase tracking-tight text-slate-900 dark:text-white">
+                    Huella Hídrica Consolidada & Registro Continuo de Lluvias por Parcela
+                  </h4>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Contabilidad continua de Agua Verde (precipitación efectiva) y Agua Azul (riego suplementario) sobre{' '}
+                  <strong>{plotAreaHa} ha</strong> ({plot?.name || location?.name || 'Lote'}).
+                </p>
+              </div>
+              <div className="text-right font-mono">
+                <span className="text-[10px] uppercase text-slate-400 block">Volumen Total Aplicado en Lote</span>
+                <strong className="text-lg font-black text-indigo-600 dark:text-indigo-400">
+                  {totalPlotVolumeM3.toLocaleString()} m³ ({Math.round(totalPlotVolumeM3 * 1000).toLocaleString()} L)
+                </strong>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 font-mono tabular-nums">
+              <div className="p-3.5 rounded-xl bg-sky-50/70 dark:bg-sky-950/30 border border-sky-200/70 dark:border-sky-800/50">
+                <span className="text-[10px] font-bold uppercase text-sky-700 dark:text-sky-300 block">
+                  Huella Hídrica Verde (Lluvia)
+                </span>
+                <p className="text-xl font-black text-sky-900 dark:text-white mt-1">
+                  {greenWaterM3Ha} <span className="text-xs font-bold text-sky-600">m³/ha</span>
+                </p>
+                <span className="text-[10px] text-slate-500 block mt-0.5">
+                  {effectiveRainMm} mm • {chronologicalRainEvents.length} eventos registrados
+                </span>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/70 dark:border-emerald-800/50">
+                <span className="text-[10px] font-bold uppercase text-emerald-700 dark:text-emerald-300 block">
+                  Huella Hídrica Azul (Riego)
+                </span>
+                <p className="text-xl font-black text-emerald-900 dark:text-white mt-1">
+                  {blueWaterM3Ha} <span className="text-xs font-bold text-emerald-600">m³/ha</span>
+                </p>
+                <span className="text-[10px] text-slate-500 block mt-0.5">
+                  {manualIrrigationMm} mm • {manualRecords.filter(r => r.type === 'Riego').length} riegos
+                </span>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200/70 dark:border-indigo-800/50">
+                <span className="text-[10px] font-bold uppercase text-indigo-700 dark:text-indigo-300 block">
+                  Huella Hídrica Total Unidad
+                </span>
+                <p className="text-xl font-black text-indigo-900 dark:text-white mt-1">
+                  {totalWaterM3Ha} <span className="text-xs font-bold text-indigo-600">m³/ha</span>
+                </p>
+                <span className="text-[10px] text-slate-500 block mt-0.5">
+                  Meta ciclo: {waterNeedMm * 10} m³/ha ({hydricCompletionPct}%)
+                </span>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-800">
+                <span className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 block">
+                  Eficiencia Hídrica (WUE)
+                </span>
+                <p className="text-xl font-black text-slate-900 dark:text-white mt-1">
+                  {waterEfficiencyLPerKg} <span className="text-xs font-bold text-slate-500">L / kg MS</span>
+                </p>
+                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 block mt-0.5">
+                  {greenWaterM3Ha >= blueWaterM3Ha ? 'Predominio Pluvial Sostenible' : 'Asistido por Riego'}
+                </span>
+              </div>
+            </div>
+
+            {/* Curva / Línea de Tiempo Continua de Eventos de Lluvia */}
+            {cumulativeSeries.length > 0 && (
+              <div className="pt-2">
+                <div className="flex items-center justify-between text-[10px] font-mono uppercase text-slate-500 mb-2">
+                  <span>Pulso Continuo de Precipitaciones en el Ciclo ({cumulativeSeries.length} lluvias asentadas)</span>
+                  <span>Acumulado: {runningMm.toFixed(1)} mm</span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2 max-h-40 overflow-y-auto pr-1">
+                  {cumulativeSeries.slice(-16).map(item => (
+                    <div
+                      key={item.id}
+                      className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-800 font-mono text-[10px] flex flex-col justify-between"
+                    >
+                      <div className="flex items-center justify-between text-[9px] text-slate-400">
+                        <span>{item.date.slice(5)}</span>
+                        <span className={item.isAuto ? 'text-sky-500 font-bold' : 'text-emerald-500 font-bold'}>
+                          {item.isAuto ? 'SAT' : 'MAN'}
+                        </span>
+                      </div>
+                      <div className="my-1 font-black text-xs text-slate-900 dark:text-white">
+                        +{item.mm.toFixed(1)} mm
+                      </div>
+                      <div className="text-[9px] text-indigo-600 dark:text-indigo-400 font-bold border-t border-slate-200/60 dark:border-slate-700/60 pt-0.5">
+                        Σ {item.cumulativeMm} mm
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
       {/* TABLA DE HISTORIAL PLUVIOMÉTRICO Y DE RIEGO */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 overflow-hidden shadow-sm">
         <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2">

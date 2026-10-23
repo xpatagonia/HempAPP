@@ -202,7 +202,7 @@ export default function PlotDetails() {
     plots, locations, varieties, projects, getPlotHistory,
     addTrialRecord, updateTrialRecord, deleteTrialRecord,
     currentUser, hydricRecords, logs, addLog, updateLog, deleteLog, seedBatches, clients,
-    updatePlotPhenology
+    updatePlotPhenology, closePlotCycle, reopenPlotCycle
   } = useAppContext();
 
   const [activeTab, setActiveTab] = useState<'analytics' | 'map' | 'astro' | 'logs' | 'water' | 'phytosanitary' | 'iot'>('analytics');
@@ -1016,6 +1016,44 @@ export default function PlotDetails() {
             >
               <Printer size={15} />
             </button>
+
+            {canCreate && plot.status === 'Activa' && (
+              <button
+                type="button"
+                onClick={async () => {
+                  const ok = await closePlotCycle(plot.id, {
+                    notes: `Cierre de ciclo y cosecha certificado desde Ficha Técnica (${plot.campaign || '2025/2026'}).`
+                  });
+                  if (ok) {
+                    setEmailAlertToast({
+                      message: `Ciclo cerrado: ${plot.name} archivada como Cosechada`,
+                      via: 'Gestión de Campaña',
+                      sentTo: plot.campaign || '2025/2026'
+                    });
+                    setTimeout(() => setEmailAlertToast(null), 5000);
+                  }
+                }}
+                className="px-3.5 py-2 bg-amber-500/15 hover:bg-amber-600 text-amber-700 dark:text-amber-300 hover:text-white border border-amber-400/40 rounded-xl text-xs font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 transition cursor-pointer"
+                title="Cerrar ciclo productivo / Cosechar (Retira la parcela del Dashboard Operativo Activo)"
+              >
+                <CheckCircle2 size={14} />
+                <span>Cerrar Ciclo / Cosechar</span>
+              </button>
+            )}
+
+            {canCreate && plot.status === 'Cosechada' && (
+              <button
+                type="button"
+                onClick={async () => {
+                  await reopenPlotCycle(plot.id);
+                }}
+                className="px-3.5 py-2 bg-emerald-500/15 hover:bg-emerald-600 text-emerald-700 dark:text-emerald-300 hover:text-white border border-emerald-400/40 rounded-xl text-xs font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 transition cursor-pointer"
+                title="Reabrir ciclo en campaña activa"
+              >
+                <Sprout size={14} />
+                <span>Reabrir Ciclo Activo</span>
+              </button>
+            )}
 
             {canCreate && (
               <button

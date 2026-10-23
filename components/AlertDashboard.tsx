@@ -46,12 +46,16 @@ export interface UnifiedAlert {
 interface AlertDashboardProps {
   onAlertSent?: (msg: string) => void;
   defaultCompact?: boolean;
+  campaignFilter?: string;
+  socioFilter?: string;
   onOpenPushComposer?: (prefill?: { title?: string; body?: string; plotId?: string; severity?: 'critical' | 'warning' | 'info' }) => void;
 }
 
 export default function AlertDashboard({
   onAlertSent,
   defaultCompact = true,
+  campaignFilter,
+  socioFilter = 'all',
   onOpenPushComposer
 }: AlertDashboardProps) {
   const {
@@ -63,8 +67,29 @@ export default function AlertDashboard({
     seedBatches,
     clients,
     usersList,
-    currentUser
+    currentUser,
+    activeCampaign
   } = useAppContext();
+
+  const effectiveCampaign = campaignFilter || activeCampaign || '2025/2026';
+
+  // Solo las parcelas con ciclo ACTIVO en la campaña y socio seleccionado participan del motor de alertas operativas
+  const activeOperationalPlots = useMemo(() => {
+    return plots.filter(p => {
+      if (p.status !== 'Activa') return false;
+      if (effectiveCampaign !== 'all') {
+        const plotCamps = p.activeCampaigns || (p.campaign ? [p.campaign] : ['2025/2026']);
+        const campStatus = p.campaignStatuses?.[effectiveCampaign];
+        if (campStatus && campStatus !== 'Activa') return false;
+        if (!plotCamps.includes(effectiveCampaign) && p.campaign !== effectiveCampaign) return false;
+      }
+      if (socioFilter && socioFilter !== 'all') {
+        const loc = locations.find(l => l.id === p.locationId);
+        if (loc?.clientId !== socioFilter) return false;
+      }
+      return true;
+    });
+  }, [plots, locations, effectiveCampaign, socioFilter]);
 
   const [selectedCategory, setSelectedCategory] = useState<AlertCategory>('all');
   const [selectedSeverity, setSelectedSeverity] = useState<AlertSeverity>('all');
@@ -120,9 +145,9 @@ export default function AlertDashboard({
       };
     };
 
-    // A. ALERTAS AGRONÓMICAS: DESVÍOS NDVI SATELITAL SENTINEL-2
+    // A. ALERTAS AGRONÓMICAS: DESVÍOS NDVI SATELITAL SENTINEL-2 (SOLO LOTES EN CICLO ACTIVO)
     try {
-      plots.forEach(plot => {
+      activeOperationalPlots.forEach(plot => {
         const variety = varieties.find(v => v.id === plot.varietyId);
         const trials = trialRecords.filter(t => t.plotId === plot.id);
         const a = getPlotNDVIAlertStatus(plot, variety, trials);
@@ -155,9 +180,9 @@ export default function AlertDashboard({
       console.warn('Error derivando alertas NDVI:', e);
     }
 
-    // B. ALERTAS AGRONÓMICAS: RIESGOS CLIMÁTICOS TEMPRANOS & CATÁSTROFE (AGRO 4.0)
+    // B. ALERTAS AGRONÓMICAS: RIESGOS CLIMÁTICOS TEMPRANOS & CATÁSTROFE (AGRO 4.0 - SOLO LOTES ACTIVOS)
     try {
-      const catastropheAlerts = getRegionalCatastropheAlerts(plots, locations);
+      const catastropheAlerts = getRegionalCatastropheAlerts(activeOperationalPlots, locations);
       catastropheAlerts.forEach(c => {
         if (c.level === 'Alto' || c.level === 'Extremo' || c.score >= 50) {
           const prod = getPlotProducer(c.plotId);
@@ -190,7 +215,7 @@ export default function AlertDashboard({
     }
 
     // C. ALERTAS AGRONÓMICAS: LOTES ACTIVOS SIN MONITOREO (>7 DÍAS)
-    plots.forEach(plot => {
+    activeOperationalPlots.forEach(plot => {
       if (plot.status === 'Activa') {
         const plotTrials = trialRecords.filter(t => t.plotId === plot.id);
         const latest = plotTrials.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
@@ -230,7 +255,7 @@ export default function AlertDashboard({
       const isHighPest = (tr.pestsScore && tr.pestsScore >= 2);
       const isHighDisease = (tr.diseasesScore && tr.diseasesScore >= 2);
       if (isHighPest || isHighDisease) {
-        const plot = plots.find(p => p.id === tr.plotId);
+        const plot = activeOperationalPlots.find(p => p.id === tr.plotId);
         if (plot && plot.status === 'Activa') {
           const prod = getPlotProducer(plot.id);
           const isCritical = (tr.pestsScore && tr.pestsScore >= 3) || (tr.diseasesScore && tr.diseasesScore >= 3);
@@ -261,7 +286,7 @@ export default function AlertDashboard({
 
     // E. ALERTAS FITOSANITARIAS: PERÍODOS DE CARENCIA SENASA ACTIVOS
     try {
-      const apps = getPlotAgrochemicalApplications(plots);
+      const apps = getPlotAgrochemicalApplications(activeOperationalPlots);
       apps.forEach(app => {
         if (app.safetyPeriodDays && app.safetyPeriodDays > 0) {
           const harvestSafety = new Date(app.harvestSafetyDate);
@@ -355,7 +380,7 @@ export default function AlertDashboard({
     });
 
     return list;
-  }, [plots, locations, varieties, trialRecords, resources, seedBatches, clients, usersList, currentUser]);
+  }, [activeOperationalPlots, plots, locations, varieties, trialRecords, resources, seedBatches, clients, usersList, currentUser]);
 
   const counts = useMemo(() => {
     const activeAlerts = allAlerts.filter(a => !dismissedAlertIds.includes(a.id));

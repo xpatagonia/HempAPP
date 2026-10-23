@@ -97,6 +97,12 @@ interface AppContextType {
   deleteLog: (id: string) => Promise<boolean>;
   isRefreshing: boolean;
   refreshData: () => Promise<void>;
+  activeCampaign: string;
+  setActiveCampaign: (camp: string) => void;
+  closePlotCycle: (plotId: string, options?: { harvestYieldKg?: number; notes?: string; closedDate?: string }) => Promise<boolean>;
+  reopenPlotCycle: (plotId: string, campaign?: string) => Promise<boolean>;
+  syncAllPlotsContinuousRainfall: (forcePersist?: boolean) => Promise<number>;
+  isSyncingGlobalRainfall: boolean;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -227,6 +233,20 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     const [appLogo, setAppLogo] = useState(localStorage.getItem('ht_app_logo') || '');
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isDbConnected, setIsDbConnected] = useState(false);
+    const [isSyncingGlobalRainfall, setIsSyncingGlobalRainfall] = useState(false);
+    const [activeCampaign, setActiveCampaignState] = useState<string>(() => {
+        if (typeof window !== 'undefined') {
+            return localStorage.getItem('ht_active_campaign') || '2025/2026';
+        }
+        return '2025/2026';
+    });
+
+    const setActiveCampaign = (camp: string) => {
+        setActiveCampaignState(camp);
+        if (typeof window !== 'undefined') {
+            try { localStorage.setItem('ht_active_campaign', camp); } catch {}
+        }
+    };
 
     const [usersList, setUsersList] = useState<User[]>(() => {
         let initialList = DEMO_USERS_LIST;
@@ -1488,6 +1508,226 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         return await crud('seed_movements', id, 'delete');
     };
 
+    const closePlotCycle = async (
+        plotId: string,
+        options?: { harvestYieldKg?: number; notes?: string; closedDate?: string }
+    ): Promise<boolean> => {
+        const target = plots.find(p => p.id === plotId);
+        if (!target) return false;
+        const closedDateIso = options?.closedDate || new Date().toISOString().split('T')[0];
+        const camp = target.campaign || (activeCampaign === 'all' ? '2025/2026' : activeCampaign);
+        const nextCampStatuses: Record<string, 'Activa' | 'Pausada' | 'En Barbecho' | 'Cosechada'> = {
+            ...(target.campaignStatuses || {}),
+            [camp]: 'Cosechada'
+        };
+
+        // Calcular huella hídrica acumulada (m³/ha) de la parcela al momento del cierre
+        const plotHydric = hydricRecords.filter(
+            h => h.plotId === plotId || (h.locationId === target.locationId && !h.plotId)
+        );
+        const totalMm = plotHydric.reduce((sum, r) => sum + Number(r.amountMm || 0), 0);
+        const waterFootprintM3Ha = Number((totalMm * 10).toFixed(1));
+
+        const stageEntry = {
+            stageId: 'BBCH_89_99' as HempStageId,
+            date: closedDateIso,
+            certifiedBy: currentUser?.name || 'Dirección Técnica',
+            notes: options?.notes || 'Cierre de ciclo productivo y cosecha certificada.'
+        };
+
+        const updatedPlot: Plot = {
+            ...target,
+            status: 'Cosechada',
+            currentPhenologicalStage: 'BBCH_89_99',
+            lastStageUpdateDate: closedDateIso,
+            campaignStatuses: nextCampStatuses,
+            closedAt: closedDateIso,
+            closedBy: currentUser?.name || 'Dirección Técnica',
+            closureNotes: options?.notes || 'Ciclo completado y cerrado operativamente.',
+            actualHarvestYieldKg: options?.harvestYieldKg !== undefined ? Number(options.harvestYieldKg) : target.actualHarvestYieldKg,
+            waterFootprintM3Ha,
+            stageHistory: [...(target.stageHistory || []), stageEntry]
+        };
+
+        const ok = await crud('plots', updatedPlot, 'update');
+
+        // Cerrar tareas pendientes asociadas a la parcela cosechada
+        const pendingPlotTasks = tasks.filter(t => t.plotId === plotId && t.status === 'Pendiente');
+        for (const t of pendingPlotTasks) {
+            await crud('tasks', { ...t, status: 'Completada' }, 'update');
+        }
+
+        // Registrar acta de cierre en la bitácora de campo
+        const closureLog: FieldLog = {
+            id: `log-close-${plotId}-${Date.now()}`,
+            plotId,
+            date: closedDateIso,
+            time: '18:00',
+            note: `🏁 CIERRE DE CICLO / COSECHA (${camp}): Parcela cerrada operativamente por ${currentUser?.name || 'Dirección Técnica'}. ${
+                options?.harvestYieldKg ? `Rinde cosechado: ${options.harvestYieldKg} kg. ` : ''
+            }Huella Hídrica Consolidada: ${waterFootprintM3Ha} m³/ha. ${options?.notes || ''}`.trim()
+        };
+        await crud('field_logs', closureLog, 'insert');
+
+        return ok;
+    };
+
+    const reopenPlotCycle = async (plotId: string, campaign?: string): Promise<boolean> => {
+        const target = plots.find(p => p.id === plotId);
+        if (!target) return false;
+        const camp = campaign || target.campaign || (activeCampaign === 'all' ? '2025/2026' : activeCampaign);
+        const nextCampStatuses: Record<string, 'Activa' | 'Pausada' | 'En Barbecho' | 'Cosechada'> = {
+            ...(target.campaignStatuses || {}),
+            [camp]: 'Activa'
+        };
+        const activeCampaignsList = Array.from(new Set([...(target.activeCampaigns || []), camp]));
+
+        const updatedPlot: Plot = {
+            ...target,
+            status: 'Activa',
+            campaign: camp,
+            activeCampaigns: activeCampaignsList,
+            campaignStatuses: nextCampStatuses
+        };
+        return await crud('plots', updatedPlot, 'update');
+    };
+
+    const syncAllPlotsContinuousRainfall = async (forcePersist = false): Promise<number> => {
+        if (isSyncingGlobalRainfall) return 0;
+        const autoSyncEnabled = typeof window === 'undefined' || localStorage.getItem('ht_auto_rain_db_sync') !== 'false';
+        if (!autoSyncEnabled && !forcePersist) return 0;
+
+        setIsSyncingGlobalRainfall(true);
+        let totalInserted = 0;
+
+        try {
+            const todayIso = new Date().toISOString().split('T')[0];
+            let deletedHydricIds = new Set<string>();
+            try {
+                const rawDel = localStorage.getItem('ht_deleted_ids_v1');
+                if (rawDel) {
+                    const parsedDel = JSON.parse(rawDel);
+                    deletedHydricIds = new Set(parsedDel['hydric_records'] || []);
+                }
+            } catch {}
+
+            const activePlotsToSync = plots.filter(p => p.status === 'Activa');
+            for (const plot of activePlotsToSync) {
+                const loc = locations.find(l => l.id === plot.locationId);
+                let coords = plot.coordinates && !isNaN(plot.coordinates.lat) && plot.coordinates.lat !== 0
+                    ? plot.coordinates
+                    : undefined;
+                if (!coords && plot.polygon && plot.polygon.length >= 3) {
+                    const lat = plot.polygon.reduce((s, pt) => s + pt.lat, 0) / plot.polygon.length;
+                    const lng = plot.polygon.reduce((s, pt) => s + pt.lng, 0) / plot.polygon.length;
+                    coords = { lat: Number(lat.toFixed(6)), lng: Number(lng.toFixed(6)) };
+                }
+                if (!coords && loc?.coordinates && !isNaN(loc.coordinates.lat)) {
+                    coords = loc.coordinates;
+                }
+                if (!coords) continue;
+
+                const sowStr = plot.sowingDate || '2026-01-01';
+                const dailyRainMap = new Map<string, number>();
+
+                try {
+                    const forecastUrl = `https://api.open-meteo.com/v1/forecast?latitude=${coords.lat}&longitude=${coords.lng}&daily=precipitation_sum&past_days=14&forecast_days=1&timezone=auto`;
+                    const fRes = await fetch(forecastUrl);
+                    if (fRes.ok) {
+                        const fData = await fRes.json();
+                        const times: string[] = fData.daily?.time || [];
+                        const precs: number[] = fData.daily?.precipitation_sum || [];
+                        times.forEach((dStr, idx) => {
+                            const val = Number(precs[idx] || 0);
+                            if (dStr >= sowStr && dStr <= todayIso && val >= 0.5) {
+                                dailyRainMap.set(dStr, Number(val.toFixed(1)));
+                            }
+                        });
+                    }
+
+                    // Si se solicita sincronización profunda o la parcela no tiene lluvias automáticas asentadas aún, consultar también ERA5 Archive
+                    const hasAnyAutoForPlot = hydricRecords.some(
+                        r => r.plotId === plot.id && String(r.id).startsWith('auto-rain-')
+                    );
+                    if (forcePersist || !hasAnyAutoForPlot) {
+                        const sowDate = new Date(`${sowStr}T00:00:00`);
+                        const nowDate = new Date(`${todayIso}T00:00:00`);
+                        const archiveEndObj = new Date(nowDate.getTime() - 2 * 86400000);
+                        if (archiveEndObj >= sowDate) {
+                            const startIso = sowDate.toISOString().split('T')[0];
+                            const endIso = archiveEndObj.toISOString().split('T')[0];
+                            const archiveUrl = `https://archive-api.open-meteo.com/v1/archive?latitude=${coords.lat}&longitude=${coords.lng}&start_date=${startIso}&end_date=${endIso}&daily=precipitation_sum&timezone=auto`;
+                            const aRes = await fetch(archiveUrl);
+                            if (aRes.ok) {
+                                const aData = await aRes.json();
+                                const aTimes: string[] = aData.daily?.time || [];
+                                const aPrecs: number[] = aData.daily?.precipitation_sum || [];
+                                aTimes.forEach((dStr, idx) => {
+                                    const val = Number(aPrecs[idx] || 0);
+                                    if (dStr >= sowStr && dStr <= todayIso && val >= 0.5) {
+                                        const prev = dailyRainMap.get(dStr) || 0;
+                                        if (val > prev) {
+                                            dailyRainMap.set(dStr, Number(val.toFixed(1)));
+                                        }
+                                    }
+                                });
+                            }
+                        }
+                    }
+
+                    const sortedEntries = Array.from(dailyRainMap.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+                    for (const [rainDate, mm] of sortedEntries) {
+                        if (mm < 0.5) continue;
+                        const deterministicId = `auto-rain-${plot.id}-${rainDate}`;
+                        if (!forcePersist && deletedHydricIds.has(deterministicId)) continue;
+
+                        const alreadyExists = hydricRecords.some(
+                            r =>
+                                r.id === deterministicId ||
+                                (r.type === 'Lluvia' && r.date === rainDate && r.plotId === plot.id)
+                        );
+
+                        if (!alreadyExists) {
+                            const newRainRecord: HydricRecord = {
+                                id: deterministicId,
+                                locationId: plot.locationId,
+                                plotId: plot.id,
+                                date: rainDate,
+                                time: '06:00',
+                                type: 'Lluvia',
+                                amountMm: Number(mm.toFixed(1)),
+                                notes: 'Asentado automático continuo por Pluviómetro Satelital (Open-Meteo ERA5/GFS)',
+                                createdBy: currentUser?.id || 'system-auto-pluviometer'
+                            };
+                            await crud('hydric_records', newRainRecord, 'insert');
+                            totalInserted++;
+                        }
+                    }
+                } catch (err) {
+                    console.warn(`Aviso pluviómetro continuo en parcela ${plot.name}:`, err);
+                }
+            }
+        } finally {
+            setIsSyncingGlobalRainfall(false);
+        }
+
+        return totalInserted;
+    };
+
+    // Sincronización automática de lluvias al iniciar sesión / abrir la plataforma (con control de frecuencia por sesión)
+    useEffect(() => {
+        if (typeof window === 'undefined' || plots.length === 0) return;
+        const lastGlobalSync = sessionStorage.getItem('ht_global_rain_sync_ts');
+        const now = Date.now();
+        if (!lastGlobalSync || now - Number(lastGlobalSync) > 15 * 60 * 1000) {
+            sessionStorage.setItem('ht_global_rain_sync_ts', String(now));
+            const timer = setTimeout(() => {
+                syncAllPlotsContinuousRainfall(false).catch(() => {});
+            }, 1800);
+            return () => clearTimeout(timer);
+        }
+    }, [plots.length]);
+
     return (
         <AppContext.Provider value={{
             currentUser, usersList, isDbConnected, login, loginDemo, logout, 
@@ -1517,7 +1757,10 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             storagePoints, addStoragePoint: (s) => crud('storage_points', s, 'insert'), updateStoragePoint: (s) => crud('storage_points', s, 'update'), deleteStoragePoint: deleteStoragePointSafe,
             hydricRecords, addHydricRecord: (r) => crud('hydric_records', r, 'insert'), updateHydricRecord: (r) => crud('hydric_records', r, 'update'), deleteHydricRecord: (id) => crud('hydric_records', id, 'delete'),
             logs, addLog: (l) => crud('field_logs', l, 'insert'), updateLog: (l) => crud('field_logs', l, 'update'), deleteLog: (id) => crud('field_logs', id, 'delete'),
-            isRefreshing, refreshData
+            isRefreshing, refreshData,
+            activeCampaign, setActiveCampaign,
+            closePlotCycle, reopenPlotCycle,
+            syncAllPlotsContinuousRainfall, isSyncingGlobalRainfall
         }}>
             {children}
         </AppContext.Provider>

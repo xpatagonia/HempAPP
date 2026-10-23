@@ -6,10 +6,10 @@ import {
   Bot, Sprout, TrendingUp, AlertTriangle, 
   Calendar, ArrowUpRight, Zap, AlertCircle, Clock, FlaskConical, Plus, ClipboardList,
   Satellite, Sparkles, RefreshCw, CheckCircle2, CheckSquare, Download, Package, ArrowRight,
-  SlidersHorizontal, BarChart3, Award, DollarSign, Megaphone
+  SlidersHorizontal, BarChart3, Award, DollarSign, Megaphone, CloudRain, Droplets, Archive, Users, RotateCcw
 } from 'lucide-react';
 import { getPlotNDVIAlertStatus, exportNDVITimeSeriesPDF, generateDetailedSatellitePasses, getPlotAgrochemicalApplications } from '../src/services/agro40Service';
-import { PlotNDVIAlert, Task, AgrochemicalApplication } from '../types';
+import { PlotNDVIAlert, Task, AgrochemicalApplication, Plot, CAMPAIGNS } from '../types';
 import { sendAgronomicAlertEmail } from '../src/services/emailNotificationService';
 import { dispatchPushNotification } from '../src/services/pushNotificationService';
 import AlertDashboard from '../components/AlertDashboard';
@@ -119,15 +119,194 @@ const MetricCard: React.FC<MetricCardProps> = ({
 };
 
 export default function Dashboard() {
-  const { varieties, locations, plots, currentUser, getLatestRecord, trialRecords, tasks, addTask, appName, clients, usersList } = useAppContext();
+  const {
+    varieties, locations, plots, currentUser, getLatestRecord, trialRecords,
+    tasks, addTask, appName, clients, usersList, hydricRecords,
+    activeCampaign, setActiveCampaign, closePlotCycle, reopenPlotCycle,
+    syncAllPlotsContinuousRainfall, isSyncingGlobalRainfall
+  } = useAppContext();
 
-  const relevantPlots = currentUser?.role === 'client' ? plots.filter(p => p.responsibleIds?.includes(currentUser?.id || '')) : plots;
-  const pendingTasks = tasks.filter(t => t.status === 'Pendiente').length;
-  const highPriorityTasks = tasks.filter(t => t.status === 'Pendiente' && t.priority === 'Alta').length;
+  const [selectedSocioId, setSelectedSocioId] = useState<string>('all');
+  const [cycleViewMode, setCycleViewMode] = useState<'active' | 'closed'>('active');
+
+  // Modal de Cierre de Ciclo / Cosecha de Parcela
+  const [closingPlot, setClosingPlot] = useState<Plot | null>(null);
+  const [closureYieldKg, setClosureYieldKg] = useState<string>('');
+  const [closureDate, setClosureDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [closureNotes, setClosureNotes] = useState<string>('');
+  const [isClosingCycle, setIsClosingCycle] = useState(false);
+
+  // Socios que participan en la campaña seleccionada
+  const campaignSocios = useMemo(() => {
+    const plotLocIds = new Set(
+      plots
+        .filter(p => {
+          if (activeCampaign === 'all') return true;
+          const camps = p.activeCampaigns || (p.campaign ? [p.campaign] : ['2025/2026']);
+          return camps.includes(activeCampaign) || p.campaign === activeCampaign;
+        })
+        .map(p => p.locationId)
+    );
+    const socioIds = new Set(
+      locations
+        .filter(l => plotLocIds.has(l.id) || (activeCampaign === 'all' ? true : (l.activeCampaigns || ['2025/2026']).includes(activeCampaign)))
+        .map(l => l.clientId)
+        .filter(Boolean) as string[]
+    );
+    return clients.filter(c => socioIds.has(c.id) || clients.length <= 10);
+  }, [plots, locations, clients, activeCampaign]);
+
+  // Todas las parcelas vinculadas a la campaña y socio (tanto activas como cerradas)
+  const campaignScopedPlots = useMemo(() => {
+    const basePlots = currentUser?.role === 'client'
+      ? plots.filter(p => p.responsibleIds?.includes(currentUser?.id || ''))
+      : plots;
+
+    return basePlots.filter(p => {
+      if (activeCampaign !== 'all') {
+        const plotCamps = p.activeCampaigns || (p.campaign ? [p.campaign] : ['2025/2026']);
+        if (!plotCamps.includes(activeCampaign) && p.campaign !== activeCampaign) return false;
+      }
+      if (selectedSocioId !== 'all') {
+        const loc = locations.find(l => l.id === p.locationId);
+        if (loc?.clientId !== selectedSocioId) return false;
+      }
+      return true;
+    });
+  }, [plots, locations, currentUser, activeCampaign, selectedSocioId]);
+
+  // Parcelas OPERATIVAS ACTIVAS (las parcelas con ciclo cerrado / cosechadas desaparecen del dashboard operativo actual)
+  const relevantPlots = useMemo(() => {
+    return campaignScopedPlots.filter(p => {
+      if (activeCampaign !== 'all' && p.campaignStatuses?.[activeCampaign] === 'Cosechada') return false;
+      return p.status === 'Activa';
+    });
+  }, [campaignScopedPlots, activeCampaign]);
+
+  // Parcelas de CICLO CERRADO / COSECHADAS en la campaña actual (Archivo de Cosecha)
+  const closedCampaignPlots = useMemo(() => {
+    return campaignScopedPlots.filter(p => {
+      if (activeCampaign !== 'all' && p.campaignStatuses?.[activeCampaign] === 'Cosechada') return true;
+      return p.status === 'Cosechada';
+    });
+  }, [campaignScopedPlots, activeCampaign]);
+
+  const activePlotIdsSet = useMemo(() => new Set(relevantPlots.map(p => p.id)), [relevantPlots]);
+  const pendingTasks = tasks.filter(t => t.status === 'Pendiente' && (!t.plotId || activePlotIdsSet.has(t.plotId))).length;
+  const highPriorityTasks = tasks.filter(t => t.status === 'Pendiente' && t.priority === 'Alta' && (!t.plotId || activePlotIdsSet.has(t.plotId))).length;
 
   // Vista activa: 'overview' muestra el tablero ejecutivo compacto sin scroll excesivo
-  const [activeSection, setActiveSection] = useState<'overview' | 'satellite' | 'senasa' | 'yield' | 'finances' | 'licenses'>('overview');
+  const [activeSection, setActiveSection] = useState<'overview' | 'water' | 'satellite' | 'senasa' | 'yield' | 'finances' | 'licenses'>('overview');
   const [rightFeedTab, setRightFeedTab] = useState<'risk' | 'activity'>('risk');
+
+  // Cálculo continuo de Huella Hídrica por Parcela (Verde + Azul en m³/ha y m³ totales)
+  const plotWaterFootprintList = useMemo(() => {
+    const targetList = cycleViewMode === 'active' ? relevantPlots : closedCampaignPlots;
+    return targetList.map(plot => {
+      const loc = locations.find(l => l.id === plot.locationId);
+      const socio = clients.find(c => c.id === loc?.clientId);
+      const vari = varieties.find(v => v.id === plot.varietyId);
+      const waterNeedMm = vari?.waterNeedMm || 480;
+
+      let areaHa = plot.surfaceArea || 1;
+      if (plot.surfaceUnit === 'm2') areaHa = areaHa / 10000;
+      else if (plot.surfaceUnit === 'ac') areaHa = areaHa * 0.404686;
+      areaHa = Math.max(0.01, Number(areaHa.toFixed(2)));
+
+      const records = hydricRecords.filter(
+        r => r.plotId === plot.id || (r.locationId === plot.locationId && !r.plotId)
+      );
+      const rainRecords = records.filter(r => r.type === 'Lluvia');
+      const irrigRecords = records.filter(r => r.type === 'Riego');
+
+      const rainMm = Number(rainRecords.reduce((s, r) => s + Number(r.amountMm || 0), 0).toFixed(1));
+      const irrigMm = Number(irrigRecords.reduce((s, r) => s + Number(r.amountMm || 0), 0).toFixed(1));
+      const totalMm = Number((rainMm + irrigMm).toFixed(1));
+
+      const greenWaterM3Ha = Number((rainMm * 10).toFixed(1));
+      const blueWaterM3Ha = Number((irrigMm * 10).toFixed(1));
+      const totalWaterM3Ha = Number((totalMm * 10).toFixed(1));
+      const totalVolumeM3 = Number((totalWaterM3Ha * areaHa).toFixed(1));
+      const completionPct = Math.min(100, Math.round((totalMm / Math.max(1, waterNeedMm)) * 100));
+      const lastRainDate = rainRecords.length > 0
+        ? [...rainRecords].sort((a, b) => b.date.localeCompare(a.date))[0].date
+        : null;
+
+      return {
+        plot,
+        loc,
+        socio,
+        vari,
+        areaHa,
+        rainMm,
+        irrigMm,
+        totalMm,
+        greenWaterM3Ha,
+        blueWaterM3Ha,
+        totalWaterM3Ha,
+        totalVolumeM3,
+        waterNeedMm,
+        completionPct,
+        rainEventsCount: rainRecords.length,
+        lastRainDate
+      };
+    });
+  }, [cycleViewMode, relevantPlots, closedCampaignPlots, locations, clients, varieties, hydricRecords]);
+
+  const globalWaterSummary = useMemo(() => {
+    if (plotWaterFootprintList.length === 0) {
+      return { avgM3Ha: 0, totalVolumeM3: 0, totalRainEvents: 0, avgRainMm: 0 };
+    }
+    const totalVolumeM3 = plotWaterFootprintList.reduce((s, item) => s + item.totalVolumeM3, 0);
+    const avgM3Ha = plotWaterFootprintList.reduce((s, item) => s + item.totalWaterM3Ha, 0) / plotWaterFootprintList.length;
+    const avgRainMm = plotWaterFootprintList.reduce((s, item) => s + item.rainMm, 0) / plotWaterFootprintList.length;
+    const totalRainEvents = plotWaterFootprintList.reduce((s, item) => s + item.rainEventsCount, 0);
+    return {
+      avgM3Ha: Number(avgM3Ha.toFixed(1)),
+      totalVolumeM3: Number(totalVolumeM3.toFixed(1)),
+      totalRainEvents,
+      avgRainMm: Number(avgRainMm.toFixed(1))
+    };
+  }, [plotWaterFootprintList]);
+
+  const handleConfirmCloseCycle = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!closingPlot || isClosingCycle) return;
+    setIsClosingCycle(true);
+    try {
+      const yieldNum = closureYieldKg.trim() !== '' ? Number(closureYieldKg) : undefined;
+      const ok = await closePlotCycle(closingPlot.id, {
+        harvestYieldKg: yieldNum,
+        closedDate: closureDate,
+        notes: closureNotes.trim() || 'Ciclo biológico completado desde siembra hasta cosecha.'
+      });
+      if (ok) {
+        setEmailAlertToast({
+          show: true,
+          message: `Ciclo cerrado: ${closingPlot.name} archivada en Cosechadas (${activeCampaign})`,
+          sentTo: `Campaña ${activeCampaign}`,
+          via: 'Gestión de Ciclo'
+        });
+        setClosingPlot(null);
+        setClosureYieldKg('');
+        setClosureNotes('');
+      }
+    } finally {
+      setIsClosingCycle(false);
+    }
+  };
+
+  const handleSyncNetworkRainfall = async () => {
+    const count = await syncAllPlotsContinuousRainfall(true);
+    setEmailAlertToast({
+      show: true,
+      message: count > 0
+        ? `Pluviómetro Satelital: ${count} nuevas lluvias asentadas en BD`
+        : 'Pluviómetro al día: todas las lluvias del ciclo ya están asentadas en BD',
+      sentTo: `${relevantPlots.length} parcelas activas`,
+      via: 'Open-Meteo ERA5/GFS'
+    });
+  };
 
   // Gestión de Alertas Agronómicas por Correo Electrónico
   const [selectedAlertForEmail, setSelectedAlertForEmail] = useState<PlotNDVIAlert | null>(null);
@@ -447,16 +626,110 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* BARRA DE CONTROL OPERATIVO: CAMPAÑA AGRÍCOLA + SOCIO EN CAMPAÑA + ESTADO DE CICLO */}
+        <div className="mt-4 pt-3.5 border-t border-slate-100 dark:border-slate-800 flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Selector de Campaña */}
+            <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800/90 px-2.5 py-1.5 rounded-xl border border-slate-200/70 dark:border-slate-700">
+              <Calendar size={13} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <span className="text-[10px] font-mono font-black uppercase text-slate-500 dark:text-slate-400">Campaña:</span>
+              <select
+                value={activeCampaign}
+                onChange={e => setActiveCampaign(e.target.value)}
+                className="bg-transparent text-xs font-mono font-black text-slate-900 dark:text-white outline-none cursor-pointer"
+              >
+                {CAMPAIGNS.map(c => (
+                  <option key={c} value={c} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
+                    {c} {c === '2025/2026' ? '(Actual)' : ''}
+                  </option>
+                ))}
+                <option value="all" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
+                  Todas las Campañas
+                </option>
+              </select>
+            </div>
+
+            {/* Selector de Socio en la Campaña */}
+            <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800/90 px-2.5 py-1.5 rounded-xl border border-slate-200/70 dark:border-slate-700">
+              <Users size={13} className="text-sky-600 dark:text-sky-400 shrink-0" />
+              <span className="text-[10px] font-mono font-black uppercase text-slate-500 dark:text-slate-400">Socio:</span>
+              <select
+                value={selectedSocioId}
+                onChange={e => setSelectedSocioId(e.target.value)}
+                className="bg-transparent text-xs font-mono font-bold text-slate-900 dark:text-white outline-none cursor-pointer max-w-[200px] truncate"
+              >
+                <option value="all" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
+                  Todos los Socios ({campaignSocios.length})
+                </option>
+                {campaignSocios.map(s => (
+                  <option key={s.id} value={s.id} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Conmutador Operativo: En Cultivo Activo vs Ciclos Cerrados / Cosechados */}
+            <div className="inline-flex rounded-xl p-1 bg-slate-100 dark:bg-slate-800 border border-slate-200/70 dark:border-slate-700">
+              <button
+                type="button"
+                onClick={() => setCycleViewMode('active')}
+                className={`px-3 py-1 rounded-lg text-[11px] font-mono font-black uppercase transition flex items-center gap-1.5 cursor-pointer ${
+                  cycleViewMode === 'active'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+                title="Muestra únicamente las parcelas con ciclo biológico activo. Las parcelas cosechadas desaparecen de esta vista operativa."
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                <span>En Cultivo Activo ({relevantPlots.length})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setCycleViewMode('closed')}
+                className={`px-3 py-1 rounded-lg text-[11px] font-mono font-black uppercase transition flex items-center gap-1.5 cursor-pointer ${
+                  cycleViewMode === 'closed'
+                    ? 'bg-amber-600 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+                title="Archivo de parcelas que completaron su ciclo (Cosechadas) en esta campaña."
+              >
+                <Archive size={12} />
+                <span>Ciclos Cerrados / Cosechados ({closedCampaignPlots.length})</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Estado de Pluviómetro Continuo & Sincronización Global */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleSyncNetworkRainfall}
+              disabled={isSyncingGlobalRainfall}
+              className="px-3 py-1.5 rounded-xl bg-sky-50 dark:bg-sky-950/60 hover:bg-sky-100 dark:hover:bg-sky-900/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800/70 text-[11px] font-mono font-bold uppercase flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
+              title="Sincroniza las lluvias satelitales (Open-Meteo ERA5/GFS) de todas las parcelas activas y actualiza la huella hídrica en BD"
+            >
+              <CloudRain size={13} className={isSyncingGlobalRainfall ? 'animate-bounce text-sky-500' : 'text-sky-500'} />
+              <span>
+                {isSyncingGlobalRainfall
+                  ? 'Sincronizando Pluviómetro...'
+                  : `Pluviómetro Continuo: ${globalWaterSummary.avgM3Ha} m³/ha`}
+              </span>
+            </button>
+          </div>
+        </div>
+
         {/* Selector de Módulos del Dashboard (Evita apilar 6 pantallas largas a la vez) */}
-        <div className="flex items-center gap-1.5 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 overflow-x-auto no-scrollbar">
+        <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 overflow-x-auto no-scrollbar">
           <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-widest mr-1 shrink-0 flex items-center gap-1">
             <SlidersHorizontal size={11} /> Vista:
           </span>
           {([
-            { id: 'overview', label: 'Resumen Ejecutivo (Compacto)', icon: null, activeCls: 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' },
+            { id: 'overview', label: 'Resumen Ejecutivo (Operativo)', icon: null, activeCls: 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' },
+            { id: 'water', label: `Huella Hídrica & Lluvias (${globalWaterSummary.totalRainEvents})`, icon: CloudRain, activeCls: 'bg-sky-600 text-white' },
             { id: 'satellite', label: `Satelital NDVI (${criticalAlerts.length})`, icon: Satellite, activeCls: 'bg-emerald-600 text-white' },
             { id: 'senasa', label: 'SENASA & Fitosanitario', icon: ShieldCheck, activeCls: 'bg-purple-600 text-white' },
-            { id: 'yield', label: 'Rendimiento & Cosecha', icon: BarChart3, activeCls: 'bg-sky-600 text-white' },
+            { id: 'yield', label: 'Rendimiento & Cosecha', icon: BarChart3, activeCls: 'bg-indigo-600 text-white' },
             { id: 'finances', label: 'Costos & ROI', icon: DollarSign, activeCls: 'bg-emerald-700 text-white' },
             { id: 'licenses', label: 'Licencias & Integridad', icon: Award, activeCls: 'bg-amber-600 text-white' }
           ] as const).map(tab => {
@@ -480,29 +753,32 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* 2. TIRAS DE 4 KPIS PRINCIPALES (CLICABLES) */}
+      {/* 2. TIRAS DE 4 KPIS PRINCIPALES (CLICABLES & FILTRADOS POR CICLO ACTIVO EN CAMPAÑA) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         <MetricCard 
-          label="Lotes Activos" 
-          value={relevantPlots.filter(p => p.status === 'Activa').length} 
-          unit={`/ ${relevantPlots.length}`}
-          trend={`${liveFinancialSummary.totalAreaHa} ha`} 
+          label={cycleViewMode === 'active' ? 'Lotes en Cultivo Activo' : 'Ciclos Cerrados / Cosecha'} 
+          value={cycleViewMode === 'active' ? relevantPlots.length : closedCampaignPlots.length} 
+          unit={`Camp. ${activeCampaign === 'all' ? 'Global' : activeCampaign}`}
+          trend={`${liveFinancialSummary.totalAreaHa} ha activas`} 
           trendPositive={true}
           icon={Sprout} 
           accentColor="emerald"
-          subtext="Parcelas en seguimiento biológico"
+          subtext={
+            closedCampaignPlots.length > 0
+              ? `${closedCampaignPlots.length} lote(s) cerrado(s) fuera del tablero activo`
+              : 'Parcelas en seguimiento biológico actual'
+          }
           to="/plots"
         />
         <MetricCard 
-          label="Labores Pendientes" 
-          value={pendingTasks} 
-          unit="Órdenes"
-          trend={highPriorityTasks > 0 ? `${highPriorityTasks} Alta Prioridad` : 'Al día'}
-          trendPositive={highPriorityTasks === 0}
-          icon={Zap} 
-          accentColor="amber"
-          subtext="Sincronizadas con costos y BBCH"
-          to="/tasks"
+          label="Huella Hídrica Media" 
+          value={globalWaterSummary.avgM3Ha} 
+          unit="m³/ha"
+          trend={`${globalWaterSummary.avgRainMm} mm lluvia`}
+          trendPositive={true}
+          icon={CloudRain} 
+          accentColor="sky"
+          subtext={`Volumen total: ${globalWaterSummary.totalVolumeM3.toLocaleString()} m³ (${globalWaterSummary.totalRainEvents} lluvias BD)`}
         />
         <MetricCard 
           label="Vigor Medio NDVI" 
@@ -511,12 +787,12 @@ export default function Dashboard() {
           trend={criticalAlerts.length > 0 ? `${criticalAlerts.length} Alertas` : 'Óptimo'} 
           trendPositive={criticalAlerts.length === 0}
           icon={Satellite} 
-          accentColor="sky"
-          subtext="Telemetría multiespectral activa"
+          accentColor="amber"
+          subtext={`Labores pendientes: ${pendingTasks} (${highPriorityTasks} alta prio.)`}
           to="/agro40"
         />
         <MetricCard 
-          label="Margen Proyectado" 
+          label="Margen Operativo Activo" 
           value={`$${(liveFinancialSummary.netMarginUsd / 1000).toFixed(1)}k`} 
           unit="USD"
           trend={`ROI +${liveFinancialSummary.avgRoiPct}%`} 
@@ -528,6 +804,130 @@ export default function Dashboard() {
         />
       </div>
 
+      {/* PANEL ESPECIAL CUANDO EL USUARIO CONMUTA A "CICLOS CERRADOS / COSECHADOS" */}
+      {cycleViewMode === 'closed' && (
+        <div className="bg-white dark:bg-slate-900/95 rounded-2xl p-5 md:p-6 border border-amber-300/80 dark:border-amber-800/80 shadow-sm space-y-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                <Archive size={20} />
+              </div>
+              <div>
+                <h2 className="text-base font-black uppercase tracking-tight text-slate-900 dark:text-white">
+                  Archivo de Parcelas con Ciclo Cerrado / Cosechadas ({closedCampaignPlots.length})
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Estas unidades completaron su ciclo en la campaña <strong>{activeCampaign}</strong> y fueron retiradas automáticamente del tablero operativo activo para no distorsionar alertas ni promedios.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setCycleViewMode('active')}
+              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-mono font-bold uppercase flex items-center gap-1.5 cursor-pointer self-start md:self-auto"
+            >
+              <Sprout size={14} />
+              <span>Volver a Cultivos Activos ({relevantPlots.length})</span>
+            </button>
+          </div>
+
+          {closedCampaignPlots.length === 0 ? (
+            <div className="py-10 text-center bg-slate-50 dark:bg-slate-950/40 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+              <CheckCircle2 className="mx-auto text-emerald-500 mb-2" size={26} />
+              <p className="text-xs font-mono font-bold text-slate-600 dark:text-slate-400 uppercase">
+                No hay parcelas con ciclo cerrado en la campaña {activeCampaign}. Todas las unidades están en cultivo activo.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {closedCampaignPlots.map(p => {
+                const loc = locations.find(l => l.id === p.locationId);
+                const socio = clients.find(c => c.id === loc?.clientId);
+                const vari = varieties.find(v => v.id === p.varietyId);
+                const wf = plotWaterFootprintList.find(w => w.plot.id === p.id);
+                return (
+                  <div
+                    key={p.id}
+                    className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-800 flex flex-col justify-between space-y-3 font-mono"
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                            🏁 Ciclo Cerrado / Cosechada
+                          </span>
+                          <h3 className="text-sm font-black uppercase text-slate-900 dark:text-white mt-1.5">
+                            {p.name}
+                          </h3>
+                          <p className="text-[11px] text-slate-500">
+                            {loc?.name || 'Establecimiento'} • Socio: <strong>{socio?.name || p.ownerName || 'Red HempC'}</strong>
+                          </p>
+                        </div>
+                        <span className="text-xs font-black text-slate-700 dark:text-slate-300">
+                          {p.surfaceArea} {p.surfaceUnit}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 pt-2 text-[11px]">
+                        <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800">
+                          <span className="text-[9px] uppercase text-slate-400 block">Siembra → Cierre</span>
+                          <strong className="text-slate-800 dark:text-slate-200">
+                            {p.sowingDate} → {p.closedAt || 'Cosecha'}
+                          </strong>
+                        </div>
+                        <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800">
+                          <span className="text-[9px] uppercase text-slate-400 block">Huella Hídrica Ciclo</span>
+                          <strong className="text-sky-600 dark:text-sky-400">
+                            {p.waterFootprintM3Ha ?? wf?.totalWaterM3Ha ?? 0} m³/ha
+                          </strong>
+                        </div>
+                      </div>
+
+                      {p.actualHarvestYieldKg !== undefined && (
+                        <div className="p-2 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/60 dark:border-emerald-800/50 flex justify-between items-center text-xs">
+                          <span className="text-[10px] uppercase font-bold text-emerald-700 dark:text-emerald-300">
+                            Rinde Cosechado Real:
+                          </span>
+                          <strong className="font-black text-emerald-800 dark:text-emerald-200">
+                            {p.actualHarvestYieldKg.toLocaleString()} kg ({vari?.name || 'Cáñamo'})
+                          </strong>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between gap-2">
+                      <Link
+                        to={`/plots/${p.id}`}
+                        className="px-3 py-1.5 rounded-xl bg-slate-900 dark:bg-slate-700 text-white text-[10px] font-bold uppercase flex items-center gap-1"
+                      >
+                        <span>Ver Historial</span>
+                        <ChevronRight size={12} />
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await reopenPlotCycle(p.id, activeCampaign === 'all' ? undefined : activeCampaign);
+                          setEmailAlertToast({
+                            show: true,
+                            message: `Parcela ${p.name} reabierta en el ciclo activo`,
+                            sentTo: p.name,
+                            via: 'Gestión de Ciclo'
+                          });
+                        }}
+                        className="px-2.5 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-[10px] font-bold uppercase flex items-center gap-1 cursor-pointer"
+                      >
+                        <RotateCcw size={11} />
+                        <span>Reabrir Ciclo</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* 3. VISTA POR PESTAÑA SELECCIONADA */}
       {activeSection === 'overview' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-5 items-start">
@@ -535,6 +935,8 @@ export default function Dashboard() {
           <div className="lg:col-span-2 space-y-4">
             <AlertDashboard
               defaultCompact={true}
+              campaignFilter={activeCampaign}
+              socioFilter={selectedSocioId}
               onOpenPushComposer={openPushComposerDrawer}
             />
 
@@ -801,6 +1203,195 @@ export default function Dashboard() {
                 <ChevronRight size={13} />
               </Link>
             </div>
+
+            {/* Tarjeta Lateral de Gestión de Ciclo & Huella Hídrica Rápida */}
+            <div className="bg-white dark:bg-slate-900/95 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
+                    <CloudRain size={16} />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-black uppercase text-slate-900 dark:text-white">
+                      Huella Hídrica & Ciclo por Lote
+                    </h3>
+                    <p className="text-[10px] text-slate-500">
+                      Lluvia continua + Cierre de ciclo al cosechar
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveSection('water')}
+                  className="text-[10px] font-mono font-bold text-sky-600 dark:text-sky-400 hover:underline cursor-pointer"
+                >
+                  Ver Todo →
+                </button>
+              </div>
+
+              <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                {plotWaterFootprintList.slice(0, 4).map(item => (
+                  <div
+                    key={item.plot.id}
+                    className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800 flex items-center justify-between gap-2 font-mono"
+                  >
+                    <div className="min-w-0">
+                      <Link
+                        to={`/plots/${item.plot.id}`}
+                        className="text-xs font-black text-slate-900 dark:text-white hover:text-sky-600 truncate block uppercase"
+                      >
+                        {item.plot.name}
+                      </Link>
+                      <span className="text-[10px] text-slate-500 block">
+                        🌧️ {item.rainMm} mm ({item.greenWaterM3Ha} m³/ha) • 💧 {item.blueWaterM3Ha} m³/ha
+                      </span>
+                    </div>
+                    {item.plot.status === 'Activa' && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setClosingPlot(item.plot);
+                          setClosureDate(new Date().toISOString().split('T')[0]);
+                        }}
+                        className="px-2 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-600 text-amber-700 dark:text-amber-300 hover:text-white border border-amber-500/20 text-[9.5px] font-bold uppercase shrink-0 transition cursor-pointer"
+                        title="Completar y cerrar el ciclo de esta parcela (Pasa a Cosechada y sale del tablero activo)"
+                      >
+                        Cerrar Ciclo
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PESTAÑA: HUELLA HÍDRICA CONTINUA & GESTIÓN DE CICLOS POR PARCELA */}
+      {activeSection === 'water' && (
+        <div className="bg-white dark:bg-slate-900/95 rounded-2xl p-5 md:p-6 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-5">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-sky-500/10 text-sky-600 dark:text-sky-400 rounded-xl border border-sky-500/20">
+                <CloudRain size={22} />
+              </div>
+              <div>
+                <h2 className="text-base md:text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">
+                  Registro Continuo de Lluvias & Huella Hídrica por Parcela (Campaña {activeCampaign})
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Pluviómetro satelital automatizado (Open-Meteo ERA5/GFS) + Riego suplementario y cierre operativo de ciclo por socio.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleSyncNetworkRainfall}
+                disabled={isSyncingGlobalRainfall}
+                className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-mono font-bold uppercase flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw size={13} className={isSyncingGlobalRainfall ? 'animate-spin' : ''} />
+                <span>{isSyncingGlobalRainfall ? 'Sincronizando Red...' : 'Sincronizar Lluvias Ahora'}</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-left font-mono tabular-nums">
+              <thead className="bg-slate-50 dark:bg-slate-800/60 text-[10px] font-bold uppercase text-slate-500 border-b border-slate-100 dark:border-slate-800">
+                <tr>
+                  <th className="px-4 py-3.5">Parcela & Socio</th>
+                  <th className="px-4 py-3.5">Siembra & Estado</th>
+                  <th className="px-4 py-3.5 text-right">Agua Verde (Lluvia)</th>
+                  <th className="px-4 py-3.5 text-right">Agua Azul (Riego)</th>
+                  <th className="px-4 py-3.5 text-right">Huella Hídrica (m³/ha)</th>
+                  <th className="px-4 py-3.5 text-right">Volumen Lote (m³)</th>
+                  <th className="px-4 py-3.5 text-right">Acciones de Ciclo</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {plotWaterFootprintList.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-10 text-center text-slate-400">
+                      No hay parcelas registradas para el filtro actual.
+                    </td>
+                  </tr>
+                ) : (
+                  plotWaterFootprintList.map(item => (
+                    <tr key={item.plot.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
+                      <td className="px-4 py-3.5">
+                        <Link
+                          to={`/plots/${item.plot.id}`}
+                          className="font-black text-slate-900 dark:text-white hover:text-sky-600 uppercase block"
+                        >
+                          {item.plot.name}
+                        </Link>
+                        <span className="text-[10px] text-slate-400 block">
+                          {item.loc?.name || 'Campo'} • Socio: {item.socio?.name || item.plot.ownerName || 'Red HempC'} ({item.areaHa} ha)
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <span className="text-slate-700 dark:text-slate-300 font-bold block">
+                          Siembra: {item.plot.sowingDate}
+                        </span>
+                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400">
+                          ● {item.plot.status} {item.lastRainDate ? `• Últ. lluvia: ${item.lastRainDate}` : ''}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 text-right">
+                        <strong className="text-sky-600 dark:text-sky-400">{item.greenWaterM3Ha} m³/ha</strong>
+                        <span className="text-[10px] text-slate-400 block">
+                          {item.rainMm} mm ({item.rainEventsCount} lluvias)
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 text-right">
+                        <strong className="text-emerald-600 dark:text-emerald-400">{item.blueWaterM3Ha} m³/ha</strong>
+                        <span className="text-[10px] text-slate-400 block">{item.irrigMm} mm</span>
+                      </td>
+                      <td className="px-4 py-3.5 text-right">
+                        <strong className="text-indigo-600 dark:text-indigo-400 text-sm">{item.totalWaterM3Ha} m³/ha</strong>
+                        <span className="text-[10px] text-slate-400 block">{item.completionPct}% del ciclo</span>
+                      </td>
+                      <td className="px-4 py-3.5 text-right font-black text-slate-900 dark:text-white">
+                        {item.totalVolumeM3.toLocaleString()} m³
+                      </td>
+                      <td className="px-4 py-3.5 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Link
+                            to={`/plots/${item.plot.id}`}
+                            className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-[10px] font-bold uppercase"
+                          >
+                            Pluviómetro
+                          </Link>
+                          {item.plot.status === 'Activa' ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setClosingPlot(item.plot);
+                                setClosureDate(new Date().toISOString().split('T')[0]);
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-[10px] font-bold uppercase cursor-pointer"
+                            >
+                              Cerrar Ciclo
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => reopenPlotCycle(item.plot.id)}
+                              className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold uppercase cursor-pointer"
+                            >
+                              Reabrir
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
@@ -1212,6 +1803,101 @@ export default function Dashboard() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL PARA COMPLETAR Y CERRAR CICLO DE PARCELA (COSECHA) */}
+      {closingPlot && (
+        <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-md w-full p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                  <Archive size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black uppercase text-slate-900 dark:text-white">
+                    Cerrar Ciclo & Archivar Parcela
+                  </h3>
+                  <p className="text-[10px] font-mono text-slate-400">
+                    Campaña {activeCampaign} • {closingPlot.name}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setClosingPlot(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmCloseCycle} className="space-y-4">
+              <div className="p-3 rounded-xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/70 dark:border-amber-800/60 text-xs text-amber-900 dark:text-amber-200">
+                Al confirmar el cierre de ciclo, la parcela pasará a estado <strong>Cosechada</strong>, consolidará su Huella Hídrica final y <strong>desaparecerá del Dashboard Operativo Activo</strong>, quedando resguardada en el archivo histórico de la campaña.
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-mono font-bold uppercase text-slate-500 block mb-1">
+                    Fecha de Cierre / Cosecha
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={closureDate}
+                    onChange={e => setClosureDate(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-mono font-bold text-slate-900 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-mono font-bold uppercase text-slate-500 block mb-1">
+                    Rinde Cosechado (kg tot.)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    placeholder="Ej: 1850"
+                    value={closureYieldKg}
+                    onChange={e => setClosureYieldKg(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-mono font-bold text-slate-900 dark:text-white"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-mono font-bold uppercase text-slate-500 block mb-1">
+                  Acta Técnica / Observaciones de Cierre
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Ej: Corte y enfardado finalizado con humedad 13%. Lote liberado para barbecho..."
+                  value={closureNotes}
+                  onChange={e => setClosureNotes(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-medium text-slate-900 dark:text-white"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setClosingPlot(null)}
+                  className="px-4 py-2 text-xs font-mono font-bold uppercase text-slate-500 cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isClosingCycle}
+                  className="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-mono font-black uppercase tracking-wider flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  {isClosingCycle ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+                  <span>Confirmar Cierre de Ciclo</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

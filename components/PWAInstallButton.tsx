@@ -369,7 +369,7 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
           {/* Modal Footer */}
           <div className="px-6 py-4 bg-slate-50 dark:bg-slate-950/60 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
             <span className="text-[11px] font-mono text-slate-400">
-              HempC Nucleus • PWA & Desktop v7.15.1
+              HempC Nucleus • PWA & Desktop v7.15.2
             </span>
             <button
               type="button"

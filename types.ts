@@ -372,6 +372,12 @@ export interface Plot {
   sowingResponsibleName?: string;    // Personal responsable de siembra
   technicalResponsibleName?: string; // Ingeniero Agrónomo responsable del seguimiento
   technicalResponsibleMatricula?: string; // Matrícula del Director Técnico
+  // CIERRE DE CICLO AGRONÓMICO Y HUELLA HÍDRICA CONSOLIDADA
+  closedAt?: string;                 // Fecha ISO de cierre de ciclo / cosecha
+  closedBy?: string;                 // Responsable que certificó el cierre de ciclo
+  closureNotes?: string;             // Acta / Observaciones de cierre de ciclo y cosecha
+  actualHarvestYieldKg?: number;     // Rendimiento real cosechado (kg totales en parcela)
+  waterFootprintM3Ha?: number;       // Huella hídrica consolidada al cierre (m³/ha)
 }
 
 export type BiologicalMaterialType = 'seed' | 'harvested_grain' | 'fiber_bales' | 'biomass_cbg' | 'hurds';

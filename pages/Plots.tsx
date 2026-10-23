@@ -83,7 +83,8 @@ export default function Plots() {
   const { 
     plots, locations, varieties, projects, currentUser, clients,
     seedBatches, deletePlot, updatePlot, 
-    addPlot, updateLocation, updateSeedBatch, storagePoints, appName
+    addPlot, updateLocation, updateSeedBatch, storagePoints, appName,
+    activeCampaign, setActiveCampaign, closePlotCycle, reopenPlotCycle
   } = useAppContext();
   
   const [searchParams] = useSearchParams();
@@ -116,7 +117,8 @@ export default function Plots() {
   }, [searchParams, plots]);
   const [filterType, setFilterType] = useState<'all' | 'Ensayo' | 'Producción'>('all');
   const [filterStatus, setFilterStatus] = useState('all');
-  const [selectedCampaign, setSelectedCampaign] = useState<string>('2025/2026'); // Campaña por defecto
+  const selectedCampaign = activeCampaign;
+  const setSelectedCampaign = setActiveCampaign;
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -873,6 +875,38 @@ export default function Plots() {
                           >
                             <QrCode size={13} />
                           </button>
+
+                          {canManage && p.status === 'Activa' && (
+                            <button
+                              type="button"
+                              onClick={async e => {
+                                e.stopPropagation();
+                                await closePlotCycle(p.id, {
+                                  notes: `Cierre de ciclo certificado desde padrón de parcelas (${targetCamp}).`
+                                });
+                              }}
+                              className="px-2 py-1 rounded-lg text-[10px] font-mono font-bold uppercase flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 transition cursor-pointer"
+                              title="Cerrar ciclo / Cosechar parcela (Desaparece del Dashboard Operativo Activo)"
+                            >
+                              <Archive size={10} />
+                              <span>Cerrar Ciclo</span>
+                            </button>
+                          )}
+
+                          {canManage && p.status === 'Cosechada' && (
+                            <button
+                              type="button"
+                              onClick={async e => {
+                                e.stopPropagation();
+                                await reopenPlotCycle(p.id, targetCamp);
+                              }}
+                              className="px-2 py-1 rounded-lg text-[10px] font-mono font-bold uppercase flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 transition cursor-pointer"
+                              title="Reabrir ciclo en campaña activa"
+                            >
+                              <CheckCircle2 size={10} />
+                              <span>Reabrir</span>
+                            </button>
+                          )}
 
                           {canManage && (
                             <button
