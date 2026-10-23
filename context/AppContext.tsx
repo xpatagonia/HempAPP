@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
 import { supabase, checkConnection, getStoredCredentials } from '../supabaseClient';
 import { 
   User, Location, Plot, TrialRecord, Task, Project, Variety, 
@@ -12,12 +12,24 @@ import {
   DEMO_STORAGE_POINTS, DEMO_SUPPLIERS, DEMO_SEED_BATCHES, DEMO_SEED_MOVEMENTS, DEMO_RESOURCES,
   DEMO_OPERATIONAL_EXPENSES
 } from '../src/data/initialDemoData';
+import {
+  canAccessClient,
+  canAccessLocation,
+  canAccessPlot,
+  canAccessStoragePoint,
+  canAccessSeedBatch,
+  canAccessTask,
+  hasGlobalReadScope
+} from '../src/utils/structurePermissions';
 
 interface AppContextType {
   currentUser: User | null;
   setCurrentUser: React.Dispatch<React.SetStateAction<User | null>>;
   usersList: User[];
   switchUserRole: (userId: string) => void;
+  impersonatingAdmin: User | null;
+  startImpersonation: (userId: string) => void;
+  stopImpersonation: () => void;
   isDbConnected: boolean;
   login: (email: string, password: string) => Promise<boolean>;
   loginDemo: () => Promise<boolean>;
@@ -35,10 +47,12 @@ interface AppContextType {
   updateVariety: (v: Variety) => Promise<boolean>;
   deleteVariety: (id: string) => Promise<boolean>;
   locations: Location[];
+  allLocations: Location[];
   addLocation: (l: Location) => Promise<boolean>;
   updateLocation: (l: Location) => Promise<boolean>;
   deleteLocation: (id: string) => Promise<boolean>;
   plots: Plot[];
+  allPlots: Plot[];
   addPlot: (p: Plot) => Promise<boolean>;
   updatePlot: (p: Plot) => Promise<boolean>;
   deletePlot: (id: string) => Promise<boolean>;
@@ -59,6 +73,7 @@ interface AppContextType {
   updateProject: (p: Project) => Promise<boolean>;
   deleteProject: (id: string) => Promise<boolean>;
   clients: Client[];
+  allClients: Client[];
   addClient: (c: Client, teamIds?: string[]) => Promise<boolean>;
   updateClient: (c: Client, teamIds?: string[]) => Promise<boolean>;
   deleteClient: (id: string) => Promise<boolean>;
@@ -84,6 +99,7 @@ interface AppContextType {
   deleteOperationalExpense: (id: string) => Promise<boolean>;
   auditOperationalExpense: (id: string, status: ExpenseAuditStatus, auditorName: string, notes?: string) => Promise<boolean>;
   storagePoints: StoragePoint[];
+  allStoragePoints: StoragePoint[];
   addStoragePoint: (s: StoragePoint) => Promise<boolean>;
   updateStoragePoint: (s: StoragePoint) => Promise<boolean>;
   deleteStoragePoint: (id: string) => Promise<boolean>;
@@ -207,6 +223,69 @@ const unmarkIdDeleted = (table: string, id: string) => {
 
 
 export const AppProvider = ({ children }: { children?: ReactNode }) => {
+    const healSingleUser = (u: User): User => {
+        if (!u) return u;
+        const demoById = DEMO_USERS_LIST.find(d => String(d.id) === String(u.id));
+        const demoByEmail = u.email ? DEMO_USERS_LIST.find(d => d.email?.toLowerCase() === u.email.toLowerCase()) : undefined;
+        const demoMatch = demoById || demoByEmail;
+        if (!demoMatch) return u;
+        return {
+            ...demoMatch,
+            ...u,
+            role: u.role || demoMatch.role,
+            structureRole: u.structureRole || demoMatch.structureRole,
+            memberType: u.memberType || demoMatch.memberType,
+            organizationName: u.organizationName || demoMatch.organizationName,
+            clientId: u.clientId !== undefined ? u.clientId : demoMatch.clientId,
+            isNetworkMember: u.isNetworkMember !== undefined ? u.isNetworkMember : demoMatch.isNetworkMember
+        };
+    };
+
+    const healUsersList = (list: User[]): User[] => {
+        const deletedMap = getDeletedIdsMap();
+        const deletedSet = new Set(deletedMap['users'] || []);
+        const cleaned = (list || [])
+            .filter((u: any) => u && !deletedSet.has(String(u.id)) && !isPurgedDemoItem(u))
+            .map(u => healSingleUser(u));
+
+        DEMO_USERS_LIST.forEach(du => {
+            if (!deletedSet.has(String(du.id)) && !cleaned.some(u => String(u.id) === String(du.id) || u.email?.toLowerCase() === du.email.toLowerCase())) {
+                cleaned.push(du);
+            }
+        });
+
+        const hasAdmin = cleaned.some((u: any) => u.email?.toLowerCase() === "admin@hempc.com.ar");
+        if (!hasAdmin) {
+            cleaned.unshift(ADMIN_USER);
+        }
+        return cleaned;
+    };
+
+    const healClients = (clientList: Client[]): Client[] => {
+        const deletedMap = getDeletedIdsMap();
+        const deletedSet = new Set(deletedMap['clients'] || []);
+        const demoById = new Map(DEMO_CLIENTS.map(c => [String(c.id), c]));
+        const healed: Client[] = (clientList || [])
+            .filter(c => !deletedSet.has(String(c.id)) && !isPurgedDemoItem(c))
+            .map((c: Client) => {
+                const demoMatch = demoById.get(String(c.id));
+                return {
+                    ...(demoMatch || {}),
+                    ...c,
+                    relatedUserId: c.relatedUserId || demoMatch?.relatedUserId || undefined,
+                    teamUserIds: (c.teamUserIds && c.teamUserIds.length > 0) ? c.teamUserIds : (demoMatch?.teamUserIds || []),
+                    locationId: c.locationId || demoMatch?.locationId,
+                    email: c.email || demoMatch?.email || ''
+                };
+            });
+        DEMO_CLIENTS.forEach(dc => {
+            if (!deletedSet.has(String(dc.id)) && !healed.some(c => String(c.id) === String(dc.id))) {
+                healed.push(dc);
+            }
+        });
+        return healed;
+    };
+
     // Sesión persistente: solo restaura si el usuario inició sesión previamente y no cerró sesión.
     const [currentUser, setCurrentUser] = useState<User | null>(() => {
         if (typeof window !== 'undefined') {
@@ -218,13 +297,27 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 try {
                     const parsed = JSON.parse(storedUser);
                     if (parsed && parsed.email) {
-                        return parsed;
+                        const healed = healSingleUser(parsed);
+                        try { localStorage.setItem('ht_session_user', JSON.stringify(healed)); } catch {}
+                        return healed;
                     }
                 } catch(e) {
                     localStorage.removeItem('ht_session_user');
                 }
             }
             return null;
+        }
+        return null;
+    });
+
+    const [impersonatingAdmin, setImpersonatingAdmin] = useState<User | null>(() => {
+        if (typeof window !== 'undefined') {
+            try {
+                const raw = sessionStorage.getItem('ht_impersonating_admin');
+                return raw ? JSON.parse(raw) : null;
+            } catch {
+                return null;
+            }
         }
         return null;
     });
@@ -250,25 +343,20 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     };
 
     const [usersList, setUsersList] = useState<User[]>(() => {
-        let initialList = DEMO_USERS_LIST;
         if (typeof window !== "undefined") {
             try {
                 const stored = localStorage.getItem("ht_users");
                 if (stored) {
                     const parsed = JSON.parse(stored);
                     if (Array.isArray(parsed) && parsed.length > 0) {
-                        const cleaned = parsed.filter((u: any) => !isPurgedDemoItem(u));
-                        const hasAdmin = cleaned.some((u: any) => u.email?.toLowerCase() === "admin@hempc.com.ar");
-                        if (!hasAdmin) {
-                            cleaned.unshift(ADMIN_USER);
-                        }
-                        try { localStorage.setItem("ht_users", JSON.stringify(cleaned)); } catch (e) {}
-                        return cleaned;
+                        const healed = healUsersList(parsed);
+                        try { localStorage.setItem("ht_users", JSON.stringify(healed)); } catch (e) {}
+                        return healed;
                     }
                 }
             } catch (e) {}
         }
-        return initialList;
+        return healUsersList(DEMO_USERS_LIST);
     });
     // Función auxiliar para leer colecciones persistentes respetando borrados y depurando demos obsoletos
     const getStoredCollection = <T,>(key: string, fallback: T[]): T[] => {
@@ -385,6 +473,10 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 return {
                     ...(demoMatch || {}),
                     ...loc,
+                    clientId: loc.clientId || demoMatch?.clientId,
+                    responsibleIds: (loc.responsibleIds && loc.responsibleIds.length > 0)
+                        ? loc.responsibleIds
+                        : (demoMatch?.responsibleIds || []),
                     climate: loc.climate || demoMatch?.climate || 'Templado Semiárido',
                     responsiblePerson: loc.responsiblePerson || demoMatch?.responsiblePerson || loc.ownerName || 'Dirección Técnica',
                     soilType: loc.soilType || demoMatch?.soilType || 'Franco',
@@ -406,7 +498,8 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             .filter(p => !deletedSet.has(String(p.id)) && !isPurgedDemoItem(p))
             .map((p: Plot) => {
                 const demoMatch = demoPlotById.get(String(p.id)) || (p.name ? demoPlotByName.get(p.name.trim().toLowerCase()) : undefined);
-                const parentLoc = locMap.get(String(p.locationId || demoMatch?.locationId || ''));
+                const locIdStr = String(p.locationId || demoMatch?.locationId || '');
+                const parentLoc = locMap.get(locIdStr);
 
                 // Corrección determinística para códigos genéticos mal vinculados (B03-103 y TW-PAR-C1 105)
                 let resolvedVarietyId = p.varietyId || demoMatch?.varietyId;
@@ -462,9 +555,59 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 const inheritedPerimeter = p.perimeter || demoMatch?.perimeter || 12;
                 const resolvedUnit = (String(p.id) === '8552fa5e-028d-4aa8-8ada-82802df299e9') ? 'm2' : (p.surfaceUnit || demoMatch?.surfaceUnit || 'm2');
 
+                // Personal responsable estricto según establecimiento (sin contaminación cruzada entre campos)
+                let estSampler = parentLoc?.ownerName || 'Gastón BAREA M.';
+                let estSower = parentLoc?.ownerName || 'Gastón BAREA M.';
+                let estTech = 'Gastón BAREA M.';
+                let estRespIds: string[] = parentLoc?.responsibleIds || [];
+
+                if (locIdStr === '1766444697119') {
+                    // Chacra La Regina (Trelew) -> Ricardo La Regina + Dir. Técnica Central Gastón Barea
+                    estSampler = 'Ricardo La Regina';
+                    estSower = 'Ricardo La Regina';
+                    estTech = 'Gastón BAREA M.';
+                    estRespIds = ['1766443862879'];
+                } else if (locIdStr === '1766471895190') {
+                    // CAP Centro Ambiental Patagónico (Puerto Madryn) -> Salvador Merelle & Joaquín Arezo
+                    estSampler = 'Joaquin AREZO';
+                    estSower = 'Joaquin AREZO';
+                    estTech = 'Gastón BAREA M.';
+                    estRespIds = ['1767102643518', '1766471712087'];
+                } else if (locIdStr === '1766450631873') {
+                    // INTA Hilario Ascasubi -> Matías Quintana & Ing. Julián Pizarro
+                    estSampler = 'Matias QUINTANA';
+                    estSower = 'Matias QUINTANA';
+                    estTech = 'Julian PIZARRO';
+                    estRespIds = ['1766450364369', '1766683825719'];
+                } else if (locIdStr === '1767119987079') {
+                    // BIOC Parque Industrial Trelew -> Gastón Barea & Andrea Andrade
+                    estSampler = 'Gastón BAREA M.';
+                    estSower = 'Gastón BAREA M.';
+                    estTech = 'Gastón BAREA M.';
+                    estRespIds = ['1766442369713', '1792513420994'];
+                }
+
+                const isForeignDefaultSampler = p.samplingResponsibleName === 'Matías QUINTANA' && locIdStr !== '1766450631873';
+                const isForeignDefaultSower = p.sowingResponsibleName === 'Joaquín AREZO' && locIdStr !== '1766471895190';
+                const isForeignDefaultTech = (p.technicalResponsibleName === 'Ing. Agr. Julián PIZARRO' || p.technicalResponsibleName === 'Julian PIZARRO') && locIdStr !== '1766450631873';
+
+                const resolvedSampler = (!p.samplingResponsibleName || isForeignDefaultSampler)
+                    ? estSampler
+                    : p.samplingResponsibleName;
+                const resolvedSower = (!p.sowingResponsibleName || isForeignDefaultSower)
+                    ? estSower
+                    : p.sowingResponsibleName;
+                const resolvedTech = (!p.technicalResponsibleName || isForeignDefaultTech)
+                    ? estTech
+                    : p.technicalResponsibleName;
+                const resolvedRespIds = (p.responsibleIds && p.responsibleIds.length > 0)
+                    ? p.responsibleIds
+                    : estRespIds;
+
                 return {
                     ...(demoMatch || {}),
                     ...p,
+                    locationId: locIdStr,
                     name: (p.name || demoMatch?.name || '').trim(),
                     varietyId: resolvedVarietyId || p.varietyId,
                     seedBatchId: resolvedBatchId || p.seedBatchId,
@@ -477,9 +620,10 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                     block: inheritedBlock,
                     replicate: inheritedReplicate,
                     perimeter: inheritedPerimeter,
-                    samplingResponsibleName: p.samplingResponsibleName || linkedBatch?.samplerName || parentLoc?.ownerName || 'Matías QUINTANA',
-                    sowingResponsibleName: p.sowingResponsibleName || linkedBatch?.sowingResponsibleName || 'Joaquín AREZO',
-                    technicalResponsibleName: p.technicalResponsibleName || linkedBatch?.inspectorName || 'Ing. Agr. Julián PIZARRO',
+                    responsibleIds: resolvedRespIds,
+                    samplingResponsibleName: resolvedSampler,
+                    sowingResponsibleName: resolvedSower,
+                    technicalResponsibleName: resolvedTech,
                     coordinates: validCoords,
                     polygon: finalPoly
                 };
@@ -614,7 +758,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         getStoredCollection('ht_projects', DEMO_PROJECTS)
     );
     const [clients, setClients] = useState<Client[]>(() => 
-        getStoredCollection('ht_clients', DEMO_CLIENTS)
+        healClients(getStoredCollection('ht_clients', DEMO_CLIENTS))
     );
     const [suppliers, setSuppliers] = useState<Supplier[]>(() => 
         healSuppliers(getStoredCollection('ht_suppliers', DEMO_SUPPLIERS))
@@ -732,7 +876,19 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
                 await Promise.all([
                     fetchSettings(),
-                    fetchTable('users', setUsersList, DEMO_USERS_LIST),
+                    fetchTable('users', (data: any[]) => {
+                        const healed = healUsersList(data || []);
+                        setUsersList(healed);
+                        try { localStorage.setItem('ht_users', JSON.stringify(healed)); } catch (e) {}
+                        // Actualizar currentUser si está logueado para reflejar su clientId y rol saneados
+                        setCurrentUser(prev => {
+                            if (!prev) return null;
+                            const match = healed.find(u => String(u.id) === String(prev.id) || u.email?.toLowerCase() === prev.email?.toLowerCase());
+                            const updated = match ? healSingleUser({ ...prev, ...match }) : healSingleUser(prev);
+                            try { localStorage.setItem('ht_session_user', JSON.stringify(updated)); } catch {}
+                            return updated;
+                        });
+                    }, DEMO_USERS_LIST),
                     fetchTable('varieties', setVarieties, DEMO_VARIETIES),
                     fetchTable('locations', (data: any[]) => {
                         const healed = healLocationsWithPolygons(data || []);
@@ -751,7 +907,11 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                     }, DEMO_TRIALS),
                     fetchTable('tasks', setTasks, DEMO_TASKS),
                     fetchTable('projects', setProjects, DEMO_PROJECTS),
-                    fetchTable('clients', setClients, DEMO_CLIENTS),
+                    fetchTable('clients', (data: any[]) => {
+                        const healed = healClients(data || []);
+                        setClients(healed);
+                        try { localStorage.setItem('ht_clients', JSON.stringify(healed)); } catch (e) {}
+                    }, DEMO_CLIENTS),
                     fetchTable('suppliers', (data: any[]) => {
                         const healed = healSuppliers(data || []);
                         setSuppliers(healed);
@@ -779,7 +939,16 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 ]);
             } else {
                 // Modo Autónomo / Local: respeta fielmente los datos del usuario en memoria/localStorage
-                setUsersList(prev => prev.length > 0 ? prev : [DEMO_USER]);
+                setUsersList(prev => {
+                    const healed = healUsersList(prev.length > 0 ? prev : DEMO_USERS_LIST);
+                    try { localStorage.setItem('ht_users', JSON.stringify(healed)); } catch (e) {}
+                    return healed;
+                });
+                setClients(prev => {
+                    const healed = healClients(prev);
+                    try { localStorage.setItem('ht_clients', JSON.stringify(healed)); } catch (e) {}
+                    return healed;
+                });
                 setLocations(prev => {
                     const healed = healLocationsWithPolygons(prev);
                     try { localStorage.setItem('ht_locations', JSON.stringify(healed)); } catch (e) {}
@@ -842,7 +1011,9 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                         (trimmedPassword === "@Admin130126@" && tEmail === "admin@hempc.com.ar");
 
                     if (isPasswordValid) {
-                        const mappedUser = toCamelCase(data) as User;
+                        const mappedUser = healSingleUser(toCamelCase(data) as User);
+                        setImpersonatingAdmin(null);
+                        try { sessionStorage.removeItem('ht_impersonating_admin'); } catch {}
                         setCurrentUser(mappedUser); 
                         localStorage.removeItem("ht_logged_out");
                         localStorage.setItem("ht_session_user", JSON.stringify(mappedUser)); 
@@ -871,9 +1042,12 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 (!localUser.password && (trimmedPassword === "admin" || trimmedPassword === "123456"));
 
             if (matchesPassword) {
-                setCurrentUser(localUser);
+                const healedLocal = healSingleUser(localUser);
+                setImpersonatingAdmin(null);
+                try { sessionStorage.removeItem('ht_impersonating_admin'); } catch {}
+                setCurrentUser(healedLocal);
                 localStorage.removeItem("ht_logged_out");
-                localStorage.setItem("ht_session_user", JSON.stringify(localUser));
+                localStorage.setItem("ht_session_user", JSON.stringify(healedLocal));
                 return true;
             }
         }
@@ -941,6 +1115,8 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
     const logout = () => {
         setCurrentUser(null);
+        setImpersonatingAdmin(null);
+        try { sessionStorage.removeItem('ht_impersonating_admin'); } catch {}
         localStorage.setItem('ht_logged_out', 'true');
         localStorage.removeItem('ht_session_user');
     };
@@ -1091,10 +1267,31 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     const switchUserRole = (userId: string) => {
         const found = usersList.find(u => u.id === userId);
         if (found) {
-            setCurrentUser(found);
-            localStorage.setItem('ht_session_user', JSON.stringify(found));
+            const healed = healSingleUser(found);
+            setCurrentUser(healed);
+            localStorage.setItem('ht_session_user', JSON.stringify(healed));
             localStorage.removeItem('ht_logged_out');
         }
+    };
+
+    const startImpersonation = (userId: string) => {
+        const target = usersList.find(u => u.id === userId);
+        if (!target || !currentUser) return;
+        const adminOrigin = impersonatingAdmin || currentUser;
+        setImpersonatingAdmin(adminOrigin);
+        try { sessionStorage.setItem('ht_impersonating_admin', JSON.stringify(adminOrigin)); } catch {}
+        const healedTarget = healSingleUser(target);
+        setCurrentUser(healedTarget);
+        localStorage.setItem('ht_session_user', JSON.stringify(healedTarget));
+    };
+
+    const stopImpersonation = () => {
+        if (!impersonatingAdmin) return;
+        const restored = healSingleUser(impersonatingAdmin);
+        setCurrentUser(restored);
+        setImpersonatingAdmin(null);
+        try { sessionStorage.removeItem('ht_impersonating_admin'); } catch {}
+        localStorage.setItem('ht_session_user', JSON.stringify(restored));
     };
 
     const auditOperationalExpense = async (
@@ -1867,6 +2064,94 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         }
     }, [plots.length]);
 
+    // ============================================================================
+    // AISLAMIENTO MULTI-ESTABLECIMIENTO CENTRALIZADO POR USUARIO Y ROL
+    // ============================================================================
+    const scopedClients = useMemo(
+        () => clients.filter(c => canAccessClient(currentUser, c, locations)),
+        [clients, locations, currentUser]
+    );
+
+    const scopedLocations = useMemo(
+        () => locations.filter(l => canAccessLocation(currentUser, l, clients)),
+        [locations, clients, currentUser]
+    );
+
+    const scopedPlots = useMemo(
+        () => plots.filter(p => canAccessPlot(currentUser, p, locations, clients)),
+        [plots, locations, clients, currentUser]
+    );
+
+    const scopedPlotIds = useMemo(
+        () => new Set(scopedPlots.map(p => String(p.id))),
+        [scopedPlots]
+    );
+
+    const scopedLocationIds = useMemo(
+        () => new Set(scopedLocations.map(l => String(l.id))),
+        [scopedLocations]
+    );
+
+    const scopedClientIds = useMemo(
+        () => new Set(scopedClients.map(c => String(c.id))),
+        [scopedClients]
+    );
+
+    const scopedTrialRecords = useMemo(() => {
+        if (hasGlobalReadScope(currentUser)) return trialRecords;
+        return trialRecords.filter(r => scopedPlotIds.has(String(r.plotId)));
+    }, [trialRecords, scopedPlotIds, currentUser]);
+
+    const scopedTasks = useMemo(
+        () => tasks.filter(t => canAccessTask(currentUser, t, plots, locations, clients)),
+        [tasks, plots, locations, clients, currentUser]
+    );
+
+    const scopedHydricRecords = useMemo(() => {
+        if (hasGlobalReadScope(currentUser)) return hydricRecords;
+        return hydricRecords.filter(
+            h =>
+                (h.plotId && scopedPlotIds.has(String(h.plotId))) ||
+                (h.locationId && scopedLocationIds.has(String(h.locationId)))
+        );
+    }, [hydricRecords, scopedPlotIds, scopedLocationIds, currentUser]);
+
+    const scopedLogs = useMemo(() => {
+        if (hasGlobalReadScope(currentUser)) return logs;
+        return logs.filter(l => scopedPlotIds.has(String(l.plotId)));
+    }, [logs, scopedPlotIds, currentUser]);
+
+    const scopedStoragePoints = useMemo(
+        () => storagePoints.filter(sp => canAccessStoragePoint(currentUser, sp, locations, clients)),
+        [storagePoints, locations, clients, currentUser]
+    );
+
+    const scopedSeedBatches = useMemo(
+        () => seedBatches.filter(sb => canAccessSeedBatch(currentUser, sb, storagePoints, plots, locations, clients)),
+        [seedBatches, storagePoints, plots, locations, clients, currentUser]
+    );
+
+    const scopedSeedMovements = useMemo(() => {
+        if (hasGlobalReadScope(currentUser)) return seedMovements;
+        const allowedSpIds = new Set(scopedStoragePoints.map(sp => String(sp.id)));
+        return seedMovements.filter(
+            m =>
+                (m.clientId && scopedClientIds.has(String(m.clientId))) ||
+                (m.targetLocationId && scopedLocationIds.has(String(m.targetLocationId))) ||
+                (m.originStorageId && allowedSpIds.has(String(m.originStorageId)))
+        );
+    }, [seedMovements, scopedClientIds, scopedLocationIds, scopedStoragePoints, currentUser]);
+
+    const scopedOperationalExpenses = useMemo(() => {
+        if (hasGlobalReadScope(currentUser)) return operationalExpenses;
+        return operationalExpenses.filter(
+            e =>
+                (e.plotId && scopedPlotIds.has(String(e.plotId))) ||
+                (currentUser?.id && String(e.socioId) === String(currentUser.id)) ||
+                (currentUser?.clientId && String(e.socioId) === String(currentUser.clientId))
+        );
+    }, [operationalExpenses, scopedPlotIds, currentUser]);
+
     return (
         <AppContext.Provider value={{
             currentUser, usersList, isDbConnected, login, loginDemo, logout, 
@@ -1875,27 +2160,30 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             deleteUser: deleteUserSafe,
             theme, toggleTheme, appName, appLogo, updateBranding,
             varieties, addVariety: (v) => crud('varieties', v, 'insert'), updateVariety: (v) => crud('varieties', v, 'update'), deleteVariety: deleteVarietySafe,
-            locations, addLocation: (l) => crud('locations', l, 'insert'), updateLocation: (l) => crud('locations', l, 'update'), deleteLocation: deleteLocationSafe,
-            plots, addPlot: (p) => crud('plots', p, 'insert'), updatePlot: (p) => crud('plots', p, 'update'), deletePlot: deletePlotSafe, updatePlotPhenology,
-            trialRecords, getPlotHistory: (pid) => trialRecords.filter(r => r.plotId === pid), getLatestRecord: (pid) => trialRecords.filter(r => r.plotId === pid).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0],
+            locations: scopedLocations, allLocations: locations, addLocation: (l) => crud('locations', l, 'insert'), updateLocation: (l) => crud('locations', l, 'update'), deleteLocation: deleteLocationSafe,
+            plots: scopedPlots, allPlots: plots, addPlot: (p) => crud('plots', p, 'insert'), updatePlot: (p) => crud('plots', p, 'update'), deletePlot: deletePlotSafe, updatePlotPhenology,
+            trialRecords: scopedTrialRecords, getPlotHistory: (pid) => scopedTrialRecords.filter(r => r.plotId === pid), getLatestRecord: (pid) => scopedTrialRecords.filter(r => r.plotId === pid).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0],
             addTrialRecord: (r) => crud('trial_records', r, 'insert'), updateTrialRecord: (r) => crud('trial_records', r, 'update'), deleteTrialRecord: (id) => crud('trial_records', id, 'delete'),
-            tasks, addTask: addTaskWithSync, updateTask: updateTaskWithSync, deleteTask: (id) => crud('tasks', id, 'delete'), homologateLabor,
+            tasks: scopedTasks, addTask: addTaskWithSync, updateTask: updateTaskWithSync, deleteTask: (id) => crud('tasks', id, 'delete'), homologateLabor,
             projects, addProject: (p) => crud('projects', p, 'insert'), updateProject: (p) => crud('projects', p, 'update'), deleteProject: deleteProjectSafe,
-            clients, addClient: addClientWithRelations, updateClient: updateClientWithRelations, deleteClient: deleteClientSafe,
+            clients: scopedClients, allClients: clients, addClient: addClientWithRelations, updateClient: updateClientWithRelations, deleteClient: deleteClientSafe,
             suppliers, addSupplier: async (s) => { const ok = await crud('suppliers', s, 'insert'); return ok ? s.id : null; }, updateSupplier: (s) => crud('suppliers', s, 'update'), deleteSupplier: deleteSupplierSafe,
-            seedBatches, addSeedBatch: (b) => crud('seed_batches', b, 'insert'), updateSeedBatch: (b) => crud('seed_batches', b, 'update'), deleteSeedBatch: deleteSeedBatchSafe,
-            seedMovements, addSeedMovement: (m) => crud('seed_movements', m, 'insert'), updateSeedMovement: (m) => crud('seed_movements', m, 'update'), deleteSeedMovement: deleteSeedMovementSafe,
+            seedBatches: scopedSeedBatches, addSeedBatch: (b) => crud('seed_batches', b, 'insert'), updateSeedBatch: (b) => crud('seed_batches', b, 'update'), deleteSeedBatch: deleteSeedBatchSafe,
+            seedMovements: scopedSeedMovements, addSeedMovement: (m) => crud('seed_movements', m, 'insert'), updateSeedMovement: (m) => crud('seed_movements', m, 'update'), deleteSeedMovement: deleteSeedMovementSafe,
             resources, addResource: (r) => crud('resources', r, 'insert'), updateResource: (r) => crud('resources', r, 'update'), deleteResource: (id) => crud('resources', id, 'delete'),
-            operationalExpenses,
+            operationalExpenses: scopedOperationalExpenses,
             addOperationalExpense: (exp) => crud('operational_expenses', exp, 'insert'),
             updateOperationalExpense: (exp) => crud('operational_expenses', exp, 'update'),
             deleteOperationalExpense: (id) => crud('operational_expenses', id, 'delete'),
             auditOperationalExpense,
             switchUserRole,
+            impersonatingAdmin,
+            startImpersonation,
+            stopImpersonation,
             setCurrentUser,
-            storagePoints, addStoragePoint: (s) => crud('storage_points', s, 'insert'), updateStoragePoint: (s) => crud('storage_points', s, 'update'), deleteStoragePoint: deleteStoragePointSafe,
-            hydricRecords, addHydricRecord: (r) => crud('hydric_records', r, 'insert'), updateHydricRecord: (r) => crud('hydric_records', r, 'update'), deleteHydricRecord: (id) => crud('hydric_records', id, 'delete'),
-            logs, addLog: (l) => crud('field_logs', l, 'insert'), updateLog: (l) => crud('field_logs', l, 'update'), deleteLog: (id) => crud('field_logs', id, 'delete'),
+            storagePoints: scopedStoragePoints, allStoragePoints: storagePoints, addStoragePoint: (s) => crud('storage_points', s, 'insert'), updateStoragePoint: (s) => crud('storage_points', s, 'update'), deleteStoragePoint: deleteStoragePointSafe,
+            hydricRecords: scopedHydricRecords, addHydricRecord: (r) => crud('hydric_records', r, 'insert'), updateHydricRecord: (r) => crud('hydric_records', r, 'update'), deleteHydricRecord: (id) => crud('hydric_records', id, 'delete'),
+            logs: scopedLogs, addLog: (l) => crud('field_logs', l, 'insert'), updateLog: (l) => crud('field_logs', l, 'update'), deleteLog: (id) => crud('field_logs', id, 'delete'),
             isRefreshing, refreshData,
             activeCampaign, setActiveCampaign,
             closePlotCycle, reopenPlotCycle,

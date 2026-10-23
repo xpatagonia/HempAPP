@@ -82,7 +82,10 @@ const NavItem = ({ to, icon: Icon, label, badge, special, isCollapsed, onClickMo
 export default function Layout({ children }: { children?: React.ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { currentUser, logout, theme, toggleTheme, tasks, plots, locations, appName, appLogo } = useAppContext();
+  const {
+    currentUser, logout, theme, toggleTheme, tasks, plots, locations, clients,
+    appName, appLogo, impersonatingAdmin, startImpersonation, stopImpersonation, usersList
+  } = useAppContext();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [notifInitialTab, setNotifInitialTab] = useState<'all' | 'compose' | 'plot_critical' | 'task_reminder' | 'settings'>('all');
@@ -389,6 +392,45 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
 
       {/* ÁREA PRINCIPAL */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+        {impersonatingAdmin && (
+          <div className="bg-amber-500 text-slate-950 px-4 py-2 flex flex-wrap items-center justify-between gap-2 text-xs font-mono font-bold z-50 border-b border-amber-600 shadow-sm">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="px-2 py-0.5 rounded bg-slate-950 text-amber-400 text-[10px] font-black uppercase">
+                Simulación de Rol Activa
+              </span>
+              <span>
+                Viendo sistema como: <strong className="uppercase">{currentUser.name}</strong> ({currentUser.role})
+              </span>
+              <span className="hidden sm:inline">•</span>
+              <span className="px-2 py-0.5 rounded bg-amber-400/60 border border-slate-950/20 text-[11px] font-black">
+                {currentUser.clientId
+                  ? `🔒 Establecimiento Aislado: ${clients.find(c => c.id === currentUser.clientId)?.name || currentUser.organizationName || 'Socio'} (${plots.length} parcelas)`
+                  : `🌐 Red Global (${plots.length} parcelas)`}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <select
+                value={currentUser.id}
+                onChange={e => startImpersonation(e.target.value)}
+                className="px-2.5 py-1 rounded-lg bg-white/90 text-slate-900 text-[11px] font-mono font-bold border border-slate-950/20 outline-none cursor-pointer"
+                title="Cambiar usuario simulado"
+              >
+                {usersList.map(u => (
+                  <option key={u.id} value={u.id}>
+                    {u.name} ({u.role}) — {u.organizationName || 'Red Central'}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => stopImpersonation()}
+                className="px-3 py-1 rounded-lg bg-slate-950 hover:bg-slate-800 text-white text-[11px] font-mono font-black uppercase cursor-pointer"
+              >
+                Salir de Simulación
+              </button>
+            </div>
+          </div>
+        )}
         <header className="h-16 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800/80 px-4 md:px-6 flex items-center justify-between z-40 sticky top-0">
           <div className="flex items-center gap-2.5">
             <button
@@ -411,6 +453,18 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
                 {new Date().toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' })}
               </span>
               <OfflineIndicator />
+              <span
+                className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-black uppercase border ${
+                  currentUser.clientId
+                    ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60'
+                    : 'bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800/60'
+                }`}
+                title="Alcance de datos habilitado para la sesión actual"
+              >
+                {currentUser.clientId
+                  ? `Establecimiento: ${clients.find(c => c.id === currentUser.clientId)?.name || currentUser.organizationName || 'Socio'} (${plots.length} Lotes)`
+                  : `Red Global (${plots.length} Lotes)`}
+              </span>
             </div>
           </div>
           

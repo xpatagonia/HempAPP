@@ -9,6 +9,8 @@ export const ADMIN_USER: User = {
   "name": "Admin Master",
   "email": "admin@hempc.com.ar",
   "role": "super_admin",
+  "memberType": "Cooperativa_Central",
+  "organizationName": "Dirección Central Cooperativa HempC",
   "password": "@Admin130126@",
   "jobTitle": "System Director",
   "isNetworkMember": true
@@ -19,12 +21,14 @@ export const DEMO_USER: User = {
   "name": "Gastón BAREA M.",
   "email": "gaston@hempc.com.ar",
   "role": "admin",
+  "memberType": "Cooperativa_Central",
+  "organizationName": "HempC de PatagonianC LTDA",
   "password": "Gas@2025Tom",
   "jobTitle": "Director Proyecto",
   "phone": "",
   "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix&backgroundColor=b6e3f4",
   "clientId": null,
-  "isNetworkMember": false
+  "isNetworkMember": true
 };
 
 export const DEMO_USERS_LIST: User[] = [
@@ -33,6 +37,8 @@ export const DEMO_USERS_LIST: User[] = [
     "name": "Admin Master",
     "email": "admin@hempc.com.ar",
     "role": "super_admin",
+    "memberType": "Cooperativa_Central",
+    "organizationName": "Dirección Central Cooperativa HempC",
     "password": "@Admin130126@",
     "jobTitle": "System Director",
     "isNetworkMember": true
@@ -42,30 +48,38 @@ export const DEMO_USERS_LIST: User[] = [
     "name": "Gastón BAREA M.",
     "email": "gaston@hempc.com.ar",
     "role": "admin",
+    "memberType": "Cooperativa_Central",
+    "organizationName": "HempC de PatagonianC LTDA",
     "password": "Gas@2025Tom",
     "jobTitle": "Director Proyecto",
     "phone": "",
     "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix&backgroundColor=b6e3f4",
     "clientId": null,
-    "isNetworkMember": false
+    "isNetworkMember": true
   },
   {
     "id": "1766683825719",
     "name": "Julian PIZARRO",
     "email": "julian@hempc.com.ar",
     "role": "technician",
+    "structureRole": "agronomo",
+    "memberType": "Socio_Productor",
+    "organizationName": "INTA Estación Experimental",
     "password": "J@251225u",
     "jobTitle": "Ing. Agrónomo",
     "phone": "",
     "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix&backgroundColor=b6e3f4",
     "clientId": "94f8da54-90dc-44e7-b9df-e9b6c2be5266",
-    "isNetworkMember": false
+    "isNetworkMember": true
   },
   {
     "id": "1766443862879",
     "name": "Ricardo La Regina",
     "email": "ricardo@hempc.com.ar",
     "role": "client",
+    "structureRole": "propietario",
+    "memberType": "Socio_Productor",
+    "organizationName": "Establecimiento La Regina",
     "password": "Ri@241225@",
     "jobTitle": "Productor",
     "phone": "",
@@ -78,6 +92,9 @@ export const DEMO_USERS_LIST: User[] = [
     "name": "Remy Hilgengra",
     "email": "remy@hempc.com.ar",
     "role": "viewer",
+    "structureRole": "monitoreador",
+    "memberType": "Auditor_Tecnico",
+    "organizationName": "Auditoría Internacional / HempIT",
     "password": "ReMy19/01/26",
     "jobTitle": "Ingeniero Agrónomo",
     "phone": "",
@@ -90,6 +107,9 @@ export const DEMO_USERS_LIST: User[] = [
     "name": "Jean-Eric Ponthou",
     "email": "hempit@hempc.com.ar",
     "role": "viewer",
+    "structureRole": "monitoreador",
+    "memberType": "Auditor_Tecnico",
+    "organizationName": "HempIT France - Auditoría Genética",
     "password": "JeAn19/01/2026",
     "jobTitle": "Ingeniero Agrónomo",
     "phone": "",
@@ -102,18 +122,24 @@ export const DEMO_USERS_LIST: User[] = [
     "name": "Salvador MERELLE",
     "email": "centroambientalpatagonico@gmail.com",
     "role": "client",
+    "structureRole": "propietario",
+    "memberType": "Socio_Productor",
+    "organizationName": "CAP Centro Ambiental Patagónico",
     "password": "S@l123025@",
     "jobTitle": "Cliente - Productor",
     "phone": "",
     "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix&backgroundColor=b6e3f4",
     "clientId": "06585f64-6d04-4567-a23f-a7f046ee06b4",
-    "isNetworkMember": false
+    "isNetworkMember": true
   },
   {
     "id": "1766450364369",
     "name": "Matias QUINTANA",
     "email": "matias@hempc.com.ar",
     "role": "technician",
+    "structureRole": "encargado",
+    "memberType": "Socio_Productor",
+    "organizationName": "INTA Estación Experimental",
     "password": "Ma@2025Inta",
     "jobTitle": "Gestión de Campo",
     "phone": "",
@@ -126,6 +152,9 @@ export const DEMO_USERS_LIST: User[] = [
     "name": "Joaquin AREZO",
     "email": "joaquin@hempc.com.ar",
     "role": "technician",
+    "structureRole": "encargado",
+    "memberType": "Socio_Productor",
+    "organizationName": "CAP Centro Ambiental Patagónico",
     "password": "J@a2025@A",
     "jobTitle": "Productor",
     "phone": "",
@@ -138,12 +167,14 @@ export const DEMO_USERS_LIST: User[] = [
     "name": "Andrea Andrade",
     "email": "andrea@patagonianc.com.ar",
     "role": "admin",
+    "memberType": "Cooperativa_Central",
+    "organizationName": "HempC de PatagonianC LTDA",
     "password": "@ndreA2023@",
     "jobTitle": "Admin Sistema",
     "phone": "",
     "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=Lola&backgroundColor=ffdfbf",
     "clientId": null,
-    "isNetworkMember": false
+    "isNetworkMember": true
   }
 ];
 
@@ -154,33 +185,37 @@ export const DEMO_CLIENTS: Client[] = [
     "type": "Empresa Privada",
     "contactName": "Matias Quintana",
     "contactPhone": "",
-    "email": "",
+    "email": "matias@hempc.com.ar",
     "isNetworkMember": true,
     "membershipLevel": "Activo",
     "contractDate": "2025-12-23",
     "cuit": "",
-    "notes": "",
-    "relatedUserId": null,
+    "notes": "Estación Experimental Agropecuaria INTA Hilario Ascasubi",
+    "relatedUserId": "1766450364369",
+    "teamUserIds": ["1766450364369", "1766683825719"],
+    "locationId": "1766450631873",
     "coordinates": {
       "lat": -39.39201292739132,
       "lng": -62.62906957116449
     },
-    "address": "",
+    "address": "Ruta Nacional 3 Km 794, Hilario Ascasubi",
     "totalHectares": 1
   },
   {
     "id": "06585f64-6d04-4567-a23f-a7f046ee06b4",
     "name": "CAP Centro Ambiental Patagonico",
     "type": "Empresa Privada",
-    "contactName": "Salvador Merele",
+    "contactName": "Salvador Merelle",
     "contactPhone": "",
-    "email": "",
+    "email": "centroambientalpatagonico@gmail.com",
     "isNetworkMember": true,
     "membershipLevel": "Activo",
     "contractDate": "2025-12-23",
     "cuit": "",
-    "notes": "",
-    "relatedUserId": null,
+    "notes": "Centro Ambiental Patagónico - Puerto Madryn",
+    "relatedUserId": "1767102643518",
+    "teamUserIds": ["1767102643518", "1766471712087"],
+    "locationId": "1766471895190",
     "coordinates": {
       "lat": -42.7353017,
       "lng": -65.2745207
@@ -194,13 +229,15 @@ export const DEMO_CLIENTS: Client[] = [
     "type": "Empresa Privada",
     "contactName": "Gastón Barea",
     "contactPhone": "+542804697193",
-    "email": "",
+    "email": "gaston@hempc.com.ar",
     "isNetworkMember": true,
-    "membershipLevel": "Activo",
+    "membershipLevel": "Premium",
     "contractDate": "2025-12-22",
     "cuit": "30718161130",
-    "notes": "",
-    "relatedUserId": null,
+    "notes": "Sede Central Cooperativa & Parque Industrial Trelew",
+    "relatedUserId": "1766442369713",
+    "teamUserIds": ["1766442369713", "1792513420994"],
+    "locationId": "1767119987079",
     "coordinates": {
       "lat": -43.2564339,
       "lng": -65.3760866
@@ -214,13 +251,15 @@ export const DEMO_CLIENTS: Client[] = [
     "type": "Productor Mediano (5-15 ha)",
     "contactName": "Ricardo La Regina",
     "contactPhone": "",
-    "email": "",
+    "email": "ricardo@hempc.com.ar",
     "isNetworkMember": true,
     "membershipLevel": "Activo",
     "contractDate": "2025-12-22",
     "cuit": "",
-    "notes": "",
-    "relatedUserId": null,
+    "notes": "Establecimiento Productivo Chacra La Regina - Trelew",
+    "relatedUserId": "1766443862879",
+    "teamUserIds": ["1766443862879"],
+    "locationId": "1766444697119",
     "coordinates": {
       "lat": -43.3081835,
       "lng": -65.2898851
@@ -407,7 +446,7 @@ export const DEMO_LOCATIONS: Location[] = [
     "ownerContact": "",
     "ownerType": "Empresa Privada",
     "irrigationSystem": "Gravedad / Surcos",
-    "responsibleIds": []
+    "responsibleIds": ["1767102643518", "1766471712087"]
   },
   {
     "id": "1767119987079",
@@ -460,7 +499,7 @@ export const DEMO_LOCATIONS: Location[] = [
     "ownerContact": "",
     "ownerType": "Empresa Privada",
     "irrigationSystem": "Gravedad / Surcos",
-    "responsibleIds": []
+    "responsibleIds": ["1766442369713", "1792513420994"]
   },
   {
     "id": "1766450631873",
@@ -521,7 +560,7 @@ export const DEMO_LOCATIONS: Location[] = [
     "ownerContact": "",
     "ownerType": "Empresa Privada",
     "irrigationSystem": "Goteo",
-    "responsibleIds": []
+    "responsibleIds": ["1766450364369", "1766683825719"]
   },
   {
     "id": "1766444697119",
@@ -566,7 +605,7 @@ export const DEMO_LOCATIONS: Location[] = [
     "ownerContact": "",
     "ownerType": "Empresa Privada",
     "irrigationSystem": "Gravedad / Surcos",
-    "responsibleIds": []
+    "responsibleIds": ["1766443862879"]
   }
 ];
 

@@ -156,13 +156,9 @@ export default function Dashboard() {
     return clients.filter(c => socioIds.has(c.id) || clients.length <= 10);
   }, [plots, locations, clients, activeCampaign]);
 
-  // Todas las parcelas vinculadas a la campaña y socio (tanto activas como cerradas)
+  // Todas las parcelas vinculadas a la campaña y socio (ya aisladas por establecimiento desde AppContext)
   const campaignScopedPlots = useMemo(() => {
-    const basePlots = currentUser?.role === 'client'
-      ? plots.filter(p => p.responsibleIds?.includes(currentUser?.id || ''))
-      : plots;
-
-    return basePlots.filter(p => {
+    return plots.filter(p => {
       if (activeCampaign !== 'all') {
         const plotCamps = p.activeCampaigns || (p.campaign ? [p.campaign] : ['2025/2026']);
         if (!plotCamps.includes(activeCampaign) && p.campaign !== activeCampaign) return false;
@@ -173,7 +169,13 @@ export default function Dashboard() {
       }
       return true;
     });
-  }, [plots, locations, currentUser, activeCampaign, selectedSocioId]);
+  }, [plots, locations, activeCampaign, selectedSocioId]);
+
+  useEffect(() => {
+    if (selectedSocioId !== 'all' && !clients.some(c => c.id === selectedSocioId)) {
+      setSelectedSocioId('all');
+    }
+  }, [clients, selectedSocioId]);
 
   // Parcelas OPERATIVAS ACTIVAS (las parcelas con ciclo cerrado / cosechadas desaparecen del dashboard operativo actual)
   const relevantPlots = useMemo(() => {

@@ -954,8 +954,22 @@ export default function PlotDetails() {
 
   if (!plot) {
     return (
-      <div className="p-16 text-center font-mono text-xs uppercase text-slate-400">
-        Unidad productiva no localizada en el padrón activo.
+      <div className="p-12 max-w-xl mx-auto text-center space-y-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm mt-8">
+        <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-500 flex items-center justify-center mx-auto">
+          <ShieldAlert size={24} />
+        </div>
+        <h2 className="text-base font-black uppercase tracking-tight text-slate-900 dark:text-white">
+          Acceso Restringido por Aislamiento de Establecimiento
+        </h2>
+        <p className="text-xs font-mono text-slate-500 dark:text-slate-400">
+          La parcela solicitada no pertenece a su establecimiento productivo habilitado ({currentUser?.organizationName || 'Socio'}) o no se encuentra activa en el padrón.
+        </p>
+        <button
+          onClick={() => navigate('/plots')}
+          className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-mono font-bold uppercase cursor-pointer"
+        >
+          Volver a Mis Parcelas Autorizadas
+        </button>
       </div>
     );
   }
@@ -3603,19 +3617,28 @@ export default function PlotDetails() {
                   className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-emerald-500/40 font-bold text-slate-900 dark:text-white"
                 >
                   <option value="">-- Seleccionar Usuario Declarado en el Sistema --</option>
-                  {usersList.map(u => {
-                    const roleMap: Record<string, string> = {
-                      super_admin: 'Director General / Super Admin',
-                      admin: 'Director Técnico / Admin Agronómico',
-                      technician: 'Jefe Operativo / Técnico de Campo',
-                      partner_viewer: 'Socio / Auditor'
-                    };
-                    return (
-                      <option key={u.id} value={u.name}>
-                        {u.name} — [{roleMap[u.role] || u.role}] {u.jobTitle ? `· ${u.jobTitle}` : ''}
-                      </option>
-                    );
-                  })}
+                  {usersList
+                    .filter(u => {
+                      if (u.role === 'super_admin' || u.role === 'admin') return true;
+                      if (!location?.clientId) return true;
+                      if (u.clientId && String(u.clientId) === String(location.clientId)) return true;
+                      if (location?.responsibleIds?.includes(u.id)) return true;
+                      return false;
+                    })
+                    .map(u => {
+                      const roleMap: Record<string, string> = {
+                        super_admin: 'Director General / Super Admin',
+                        admin: 'Director Técnico / Admin Agronómico',
+                        technician: 'Jefe Operativo / Técnico de Campo',
+                        client: 'Socio Productor / Titular',
+                        viewer: 'Auditor / Consultor'
+                      };
+                      return (
+                        <option key={u.id} value={u.name}>
+                          {u.name} — [{roleMap[u.role] || u.role}] {u.jobTitle ? `· ${u.jobTitle}` : ''}
+                        </option>
+                      );
+                    })}
                 </select>
               </div>
 

@@ -95,56 +95,12 @@ export default function Plots() {
     viewer: 'Auditor / Consultor Agrónomo'
   };
 
-  // Usuarios declarados y habilitados en el sistema con su rol oficial
-  const declaredSystemUsers = useMemo(() => {
-    return (usersList || []).map(u => ({
-      id: u.id,
-      name: u.name,
-      role: u.role,
-      jobTitle: u.jobTitle || ROLE_BADGE_LABELS[u.role] || 'Personal Declarado',
-      roleLabel: ROLE_BADGE_LABELS[u.role] || u.role,
-      displayOption: `${u.name} — [${ROLE_BADGE_LABELS[u.role] || u.role}${u.jobTitle ? ` · ${u.jobTitle}` : ''}]`
-    }));
-  }, [usersList]);
-  
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [viewMode, setViewMode] = useState<'table' | 'gallery' | 'map'>('gallery');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterLoc, setFilterLoc] = useState<string>(searchParams.get('locationId') || 'all');
 
-  useEffect(() => {
-    const locParam = searchParams.get('locationId');
-    if (locParam) {
-      setFilterLoc(locParam);
-    }
-    const editId = searchParams.get('editPlotId');
-    if (editId && plots.length > 0) {
-      const target = plots.find(p => p.id === editId);
-      if (target) {
-        const parentLoc = locations.find(l => l.id === target.locationId);
-        setEditingPlot(target);
-        setFormData({
-          ...target,
-          lat: target.coordinates?.lat?.toString() || parentLoc?.coordinates?.lat?.toString() || '',
-          lng: target.coordinates?.lng?.toString() || parentLoc?.coordinates?.lng?.toString() || '',
-          polygon: target.polygon || [],
-          campaign: target.campaign || '2025/2026',
-          activeCampaigns: target.activeCampaigns || (target.campaign ? [target.campaign] : ['2025/2026']),
-          color: target.color || '#10b981',
-          soilType: target.soilType || parentLoc?.soilType || 'Franco',
-          irrigationType: target.irrigationType || parentLoc?.irrigationSystem || 'Goteo',
-          ownerName: target.ownerName || parentLoc?.ownerName || parentLoc?.responsiblePerson || 'Red Nucleus',
-          block: target.block || 'Bloque 1',
-          replicate: target.replicate || 1,
-          rowDistance: target.rowDistance || 20,
-          density: target.density || 48,
-          perimeter: target.perimeter || 12
-        });
-        setIsAddModalOpen(true);
-      }
-    }
-  }, [searchParams, plots, locations]);
   const [filterType, setFilterType] = useState<'all' | 'Ensayo' | 'Producción'>('all');
   const [filterStatus, setFilterStatus] = useState('all');
   const selectedCampaign = activeCampaign;
@@ -185,11 +141,68 @@ export default function Plots() {
       usedSeedValue: 0,
       usedSeedUnit: 'kg',
       color: '#10b981',
-      samplingResponsibleName: 'Matias QUINTANA',
-      sowingResponsibleName: 'Joaquin AREZO',
-      technicalResponsibleName: 'Ing. Agr. Julian PIZARRO',
+      samplingResponsibleName: currentUser?.name || 'Gastón BAREA M.',
+      sowingResponsibleName: currentUser?.name || 'Gastón BAREA M.',
+      technicalResponsibleName: 'Gastón BAREA M.',
       technicalResponsibleMatricula: 'MP CIAFBA 14.892'
   });
+
+  // Usuarios declarados y habilitados para el establecimiento seleccionado (+ Dirección Central)
+  const declaredSystemUsers = useMemo(() => {
+    const activeLocId = formData.locationId || (filterLoc !== 'all' ? filterLoc : '');
+    const selectedLoc = locations.find(l => l.id === activeLocId);
+    const targetClientId = selectedLoc?.clientId || currentUser?.clientId || null;
+
+    const filteredUsers = (usersList || []).filter(u => {
+      if (u.role === 'super_admin' || u.role === 'admin') return true;
+      if (!targetClientId) return true;
+      if (u.clientId && String(u.clientId) === String(targetClientId)) return true;
+      if (selectedLoc?.responsibleIds?.includes(u.id)) return true;
+      return false;
+    });
+
+    return filteredUsers.map(u => ({
+      id: u.id,
+      name: u.name,
+      role: u.role,
+      jobTitle: u.jobTitle || ROLE_BADGE_LABELS[u.role] || 'Personal Declarado',
+      roleLabel: ROLE_BADGE_LABELS[u.role] || u.role,
+      displayOption: `${u.name} — [${ROLE_BADGE_LABELS[u.role] || u.role}${u.jobTitle ? ` · ${u.jobTitle}` : ''}]`
+    }));
+  }, [usersList, formData.locationId, filterLoc, locations, currentUser]);
+
+  useEffect(() => {
+    const locParam = searchParams.get('locationId');
+    if (locParam) {
+      setFilterLoc(locParam);
+    }
+    const editId = searchParams.get('editPlotId');
+    if (editId && plots.length > 0) {
+      const target = plots.find(p => p.id === editId);
+      if (target) {
+        const parentLoc = locations.find(l => l.id === target.locationId);
+        setEditingPlot(target);
+        setFormData({
+          ...target,
+          lat: target.coordinates?.lat?.toString() || parentLoc?.coordinates?.lat?.toString() || '',
+          lng: target.coordinates?.lng?.toString() || parentLoc?.coordinates?.lng?.toString() || '',
+          polygon: target.polygon || [],
+          campaign: target.campaign || '2025/2026',
+          activeCampaigns: target.activeCampaigns || (target.campaign ? [target.campaign] : ['2025/2026']),
+          color: target.color || '#10b981',
+          soilType: target.soilType || parentLoc?.soilType || 'Franco',
+          irrigationType: target.irrigationType || parentLoc?.irrigationSystem || 'Goteo',
+          ownerName: target.ownerName || parentLoc?.ownerName || parentLoc?.responsiblePerson || 'Red Nucleus',
+          block: target.block || 'Bloque 1',
+          replicate: target.replicate || 1,
+          rowDistance: target.rowDistance || 20,
+          density: target.density || 48,
+          perimeter: target.perimeter || 12
+        });
+        setIsAddModalOpen(true);
+      }
+    }
+  }, [searchParams, plots, locations]);
 
   const isSuperAdmin = currentUser?.role === 'super_admin';
   const isAdmin = currentUser?.role === 'admin' || isSuperAdmin;
@@ -197,8 +210,27 @@ export default function Plots() {
   const isTechnician = currentUser?.role === 'technician';
   const canManage = isAdmin || isClient || isTechnician;
 
+  const getEstablishmentDefaults = (locId?: string) => {
+    const idStr = String(locId || '');
+    if (idStr === '1766444697119') {
+      return { sampler: 'Ricardo La Regina', sower: 'Ricardo La Regina', tech: 'Gastón BAREA M.' };
+    }
+    if (idStr === '1766471895190') {
+      return { sampler: 'Joaquin AREZO', sower: 'Joaquin AREZO', tech: 'Gastón BAREA M.' };
+    }
+    if (idStr === '1766450631873') {
+      return { sampler: 'Matias QUINTANA', sower: 'Matias QUINTANA', tech: 'Julian PIZARRO' };
+    }
+    return {
+      sampler: currentUser?.name || 'Gastón BAREA M.',
+      sower: currentUser?.name || 'Gastón BAREA M.',
+      tech: 'Gastón BAREA M.'
+    };
+  };
+
   const resetForm = () => {
-    const defaultLoc = filterLoc !== 'all' ? locations.find(l => l.id === filterLoc) : undefined;
+    const defaultLoc = filterLoc !== 'all' ? locations.find(l => l.id === filterLoc) : locations[0];
+    const defs = getEstablishmentDefaults(defaultLoc?.id);
     setFormData({ 
       name: '',
       type: 'Ensayo',
@@ -226,9 +258,9 @@ export default function Plots() {
       usedSeedValue: 0,
       usedSeedUnit: 'kg',
       color: '#10b981',
-      samplingResponsibleName: currentUser?.name || 'Matias QUINTANA',
-      sowingResponsibleName: 'Joaquin AREZO',
-      technicalResponsibleName: 'Ing. Agr. Julian PIZARRO',
+      samplingResponsibleName: defs.sampler,
+      sowingResponsibleName: defs.sower,
+      technicalResponsibleName: defs.tech,
       technicalResponsibleMatricula: 'MP CIAFBA 14.892'
     });
     setEditingPlot(null);
@@ -254,15 +286,20 @@ export default function Plots() {
     if (formData.seedBatchId) {
         const selectedBatch = seedBatches.find(b => b.id === formData.seedBatchId);
         if (selectedBatch) {
+            const allowedNames = new Set(declaredSystemUsers.map(u => u.name));
             setFormData((prev: any) => ({
                 ...prev,
                 varietyId: selectedBatch.varietyId || prev.varietyId,
-                samplingResponsibleName: selectedBatch.samplerName || prev.samplingResponsibleName || 'Matias QUINTANA',
-                technicalResponsibleName: selectedBatch.inspectorName || prev.technicalResponsibleName || 'Ing. Agr. Julian PIZARRO'
+                samplingResponsibleName: (selectedBatch.samplerName && allowedNames.has(selectedBatch.samplerName))
+                    ? selectedBatch.samplerName
+                    : prev.samplingResponsibleName,
+                technicalResponsibleName: (selectedBatch.inspectorName && allowedNames.has(selectedBatch.inspectorName))
+                    ? selectedBatch.inspectorName
+                    : prev.technicalResponsibleName
             }));
         }
     }
-  }, [formData.seedBatchId, seedBatches]);
+  }, [formData.seedBatchId, seedBatches, declaredSystemUsers]);
 
   const calculatedUsedKg = useMemo(() => {
       const val = Number(formData.usedSeedValue || 0);

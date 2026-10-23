@@ -1,17 +1,20 @@
 import React, { useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAppContext } from "../context/AppContext";
-import { User, UserRole, RoleType, Client } from "../types";
+import { User, UserRole, StructureRole, Client } from "../types";
 import { 
   Plus, Trash2, Edit2, Shield, Wrench, Eye, EyeOff, AlertCircle, Lock, Key, 
   Save, Loader2, Phone, Briefcase, User as UserIcon, CloudOff, Link as LinkIcon, 
   UserCheck, Building, X, Sparkles, PlusCircle, Star, Search, Filter, FilterX,
-  Send, RefreshCw, CheckCircle2, AlertTriangle, ShieldCheck, Users as UsersIcon
+  Send, RefreshCw, CheckCircle2, AlertTriangle, ShieldCheck, Users as UsersIcon,
+  Sprout, MapPin, Globe
 } from "lucide-react";
 import { 
   sendUserProfileWelcomeEmail, 
   sendPasswordResetEmail, 
   EmailDispatchResult 
 } from "../src/services/emailNotificationService";
+import { getUserAccessAudit, STRUCTURE_ROLES } from "../src/utils/structurePermissions";
 
 const PRESET_AVATARS = [
   "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix&backgroundColor=b6e3f4",
@@ -25,11 +28,19 @@ const PRESET_AVATARS = [
 ];
 
 export default function Users() {
-  const { usersList, addUser, updateUser, deleteUser, currentUser, clients, addClient } = useAppContext();
+  const navigate = useNavigate();
+  const {
+    usersList, addUser, updateUser, deleteUser, currentUser,
+    clients, allClients, allLocations, allPlots, addClient,
+    startImpersonation, stopImpersonation, impersonatingAdmin
+  } = useAppContext();
+
+  const effectiveClients = allClients && allClients.length > 0 ? allClients : clients;
 
   // Estados de búsqueda y filtro
   const [searchTerm, setSearchTerm] = useState("");
   const [filterRole, setFilterRole] = useState("all");
+  const [showAuditMatrix, setShowAuditMatrix] = useState(true);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -89,6 +100,15 @@ export default function Users() {
   const techCount = usersList.filter(u => u.role === "technician").length;
   const clientCount = usersList.filter(u => u.role === "client").length;
 
+  // Matriz de Auditoría de Aislamiento por Establecimiento para cada usuario
+  const userAuditMap = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof getUserAccessAudit>>();
+    usersList.forEach(u => {
+      map.set(u.id, getUserAccessAudit(u, allLocations || [], allPlots || [], effectiveClients || []));
+    });
+    return map;
+  }, [usersList, allPlots, allLocations, effectiveClients]);
+
   // Generador de contraseñas de alta seguridad
   const handleGeneratePassword = () => {
     const charsUpper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -147,15 +167,25 @@ export default function Users() {
 
     setIsSaving(true);
     try {
+      const matchedClient = effectiveClients.find(c => c.id === formData.clientId);
       const payload = {
         name: formData.name.trim(),
         email: formData.email.trim(),
         role: formData.role as UserRole,
+        structureRole: formData.structureRole || (
+          formData.role === "super_admin" ? "super_admin" :
+          formData.role === "admin" ? "admin" :
+          formData.role === "client" ? "propietario" :
+          formData.role === "technician" ? "encargado" : "invitado"
+        ),
+        organizationName: matchedClient?.name || formData.organizationName || "Red Cooperativa Nucleus",
         jobTitle: formData.jobTitle || "",
         phone: formData.phone || "",
         avatar: formData.avatar || PRESET_AVATARS[0],
-        clientId: (formData.role === "client" || formData.role === "technician") ? formData.clientId : null,
-        isNetworkMember: formData.isNetworkMember || false
+        clientId: (formData.role === "client" || formData.role === "technician" || formData.role === "viewer")
+          ? (formData.clientId || null)
+          : null,
+        isNetworkMember: formData.isNetworkMember || Boolean(formData.clientId)
       };
 
       let finalPassword = formData.password;
@@ -502,6 +532,136 @@ export default function Users() {
         </div>
       </div>
 
+      {/* MATRIZ DE AUDITORÍA DE ROLES Y AISLAMIENTO POR ESTABLECIMIENTO */}
+      <div className="mb-6 bg-white dark:bg-slate-900 rounded-[28px] border border-emerald-500/30 dark:border-emerald-800/60 shadow-sm overflow-hidden">
+        <div className="p-4 sm:p-5 bg-emerald-950/5 dark:bg-emerald-950/30 border-b border-emerald-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-2xl bg-emerald-600 text-white shadow-sm">
+              <ShieldCheck size={20} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-sm font-black uppercase tracking-tight text-slate-900 dark:text-white">
+                  Matriz de Auditoría de Roles & Aislamiento Multi-Establecimiento
+                </h2>
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-black uppercase bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
+                  Candado Estricto Activo
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Verificación en tiempo real de qué establecimientos, sitios y parcelas puede visualizar u operar cada usuario según su rol y socio vinculado.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {impersonatingAdmin && (
+              <button
+                type="button"
+                onClick={() => stopImpersonation()}
+                className="px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 text-[11px] font-mono font-black uppercase cursor-pointer"
+              >
+                Restaurar Sesión Admin ({impersonatingAdmin.name})
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setShowAuditMatrix(prev => !prev)}
+              className="px-3.5 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-mono font-bold text-slate-700 dark:text-slate-200 hover:border-emerald-500 transition cursor-pointer"
+            >
+              {showAuditMatrix ? "Ocultar Resumen por Establecimiento" : "Ver Resumen por Establecimiento"}
+            </button>
+          </div>
+        </div>
+
+        {showAuditMatrix && (
+          <div className="p-4 sm:p-5 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3.5 bg-slate-50/50 dark:bg-slate-950/40">
+            {effectiveClients.map(client => {
+              const clientLocs = (allLocations || []).filter(l => l.clientId === client.id);
+              const clientLocIds = new Set(clientLocs.map(l => l.id));
+              const clientPlots = (allPlots || []).filter(p => clientLocIds.has(p.locationId));
+              const assignedUsers = usersList.filter(u => String(u.clientId) === String(client.id));
+              return (
+                <div
+                  key={client.id}
+                  className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 flex flex-col justify-between gap-3 shadow-xs"
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <span className="text-[9px] font-mono font-bold uppercase text-emerald-600 dark:text-emerald-400 block">
+                          Establecimiento Socio
+                        </span>
+                        <h3 className="text-xs font-black uppercase text-slate-900 dark:text-white leading-snug">
+                          {client.name}
+                        </h3>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-lg text-[10px] font-mono font-black bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 shrink-0">
+                        {clientPlots.length} Parcelas
+                      </span>
+                    </div>
+
+                    <div className="text-[11px] font-mono text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                      <MapPin size={12} className="text-emerald-500 shrink-0" />
+                      <span className="truncate">
+                        {clientLocs.map(l => `${l.name} (${l.city})`).join(", ") || "Sin sitio"}
+                      </span>
+                    </div>
+
+                    <div className="pt-1 border-t border-slate-100 dark:border-slate-800 space-y-1.5">
+                      <span className="text-[9px] font-mono font-bold uppercase text-slate-400 block">
+                        Usuarios con Acceso Exclusivo ({assignedUsers.length}):
+                      </span>
+                      {assignedUsers.length === 0 ? (
+                        <p className="text-[10px] font-mono text-slate-400 italic">
+                          Gestionado por Dirección Central (Admin)
+                        </p>
+                      ) : (
+                        <div className="space-y-1">
+                          {assignedUsers.map(au => (
+                            <div
+                              key={au.id}
+                              className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200/60 dark:border-slate-700/60"
+                            >
+                              <div className="min-w-0">
+                                <p className="text-[11px] font-black text-slate-800 dark:text-slate-100 truncate">
+                                  {au.name}
+                                </p>
+                                <p className="text-[9px] font-mono text-slate-500 dark:text-slate-400 uppercase">
+                                  {au.role === "client" ? "Titular / Productor" : "Técnico / Encargado"} · {au.jobTitle || au.role}
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  startImpersonation(au.id);
+                                  navigate("/plots");
+                                }}
+                                title={`Auditar vista aislada de ${au.name} (${clientPlots.length} parcelas)`}
+                                className="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[9px] font-mono font-black uppercase shrink-0 cursor-pointer"
+                              >
+                                Simular
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[10px] font-mono text-slate-400">
+                    <span>Aislamiento: Estricto</span>
+                    <span className="font-bold text-slate-600 dark:text-slate-300 truncate max-w-[160px]">
+                      {clientPlots.slice(0, 2).map(p => p.name).join(", ")}
+                      {clientPlots.length > 2 ? ` +${clientPlots.length - 2}` : ""}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       {/* TABLA DE USUARIOS Y ACCESOS */}
       <div className="bg-white dark:bg-slate-900 rounded-[32px] shadow-sm border dark:border-slate-800 overflow-hidden">
         <div className="overflow-x-auto">
@@ -509,25 +669,28 @@ export default function Users() {
             <thead className="bg-gray-50 dark:bg-slate-950/50 text-gray-500 dark:text-slate-400 uppercase text-[10px] font-black tracking-widest border-b dark:border-slate-800">
               <tr>
                 <th className="px-6 py-5">Perfil & Identidad</th>
-                <th className="px-6 py-5">Rol / Jerarquía</th>
-                <th className="px-6 py-5">Entidad Vinculada</th>
-                <th className="px-6 py-5">Seguridad & Credencial</th>
-                <th className="px-6 py-5 text-right">Gestión de Acceso</th>
+                <th className="px-6 py-5">Rol & Jerarquía</th>
+                <th className="px-6 py-5">Establecimiento Vinculado</th>
+                <th className="px-6 py-5">Alcance de Parcelas (Auditoría)</th>
+                <th className="px-6 py-5">Seguridad</th>
+                <th className="px-6 py-5 text-right">Gestión & Simulación</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
               {filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="p-10 text-center text-gray-400 italic font-medium">
+                  <td colSpan={6} className="p-10 text-center text-gray-400 italic font-medium">
                     No se encontraron usuarios en el padrón cooperativo.
                   </td>
                 </tr>
               ) : filteredUsers.map((user) => {
                 const isUserLoading = actionLoadingId === user.id;
                 const hasPassword = Boolean(user.password && user.password.trim().length > 0);
+                const audit = userAuditMap.get(user.id);
+                const isCurrentSimulated = currentUser?.id === user.id && Boolean(impersonatingAdmin);
 
                 return (
-                  <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-white/5 group transition-colors">
+                  <tr key={user.id} className={`hover:bg-gray-50 dark:hover:bg-white/5 group transition-colors ${isCurrentSimulated ? "bg-emerald-50/60 dark:bg-emerald-950/30" : ""}`}>
                     {/* Perfil */}
                     <td className="px-6 py-5">
                       <div className="flex items-center">
@@ -544,14 +707,19 @@ export default function Users() {
                           )}
                         </div>
                         <div>
-                          <div className="font-black text-gray-900 dark:text-white uppercase text-xs tracking-tight">
-                            {user.name}
+                          <div className="font-black text-gray-900 dark:text-white uppercase text-xs tracking-tight flex items-center gap-1.5">
+                            <span>{user.name}</span>
+                            {currentUser?.id === user.id && (
+                              <span className="px-1.5 py-0.5 rounded text-[8px] font-mono bg-emerald-600 text-white uppercase">
+                                Sesión Actual
+                              </span>
+                            )}
                           </div>
                           <div className="text-[10px] text-gray-400 font-bold lowercase tracking-normal">
                             {user.email}
                           </div>
                           {user.jobTitle && (
-                            <span className="text-[9px] text-slate-500 font-medium">
+                            <span className="text-[9px] text-slate-500 font-medium block">
                               {user.jobTitle}
                             </span>
                           )}
@@ -561,35 +729,79 @@ export default function Users() {
 
                     {/* Rol */}
                     <td className="px-6 py-5">
-                      <div className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border inline-block ${
-                        user.role === "super_admin" ? "bg-red-50 text-red-700 border-red-100" :
-                        user.role === "admin" ? "bg-purple-50 text-purple-700 border-purple-100" :
-                        user.role === "client" ? "bg-emerald-50 text-emerald-700 border-emerald-100" : 
-                        "bg-blue-50 text-blue-700 border-blue-100"
-                      }`}>
-                        {user.role === "client" ? "Productor/Socio" : user.role.replace("_", " ")}
+                      <div className="space-y-1">
+                        <div className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border inline-block ${
+                          user.role === "super_admin" ? "bg-red-50 text-red-700 border-red-100 dark:bg-red-950/50 dark:text-red-300 dark:border-red-800" :
+                          user.role === "admin" ? "bg-purple-50 text-purple-700 border-purple-100 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-800" :
+                          user.role === "client" ? "bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800" : 
+                          user.role === "viewer" ? "bg-amber-50 text-amber-700 border-amber-100 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800" :
+                          "bg-blue-50 text-blue-700 border-blue-100 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800"
+                        }`}>
+                          {user.role === "client" ? "Productor / Socio" : user.role === "viewer" ? "Auditor / Visor" : user.role.replace("_", " ")}
+                        </div>
+                        {audit?.structureRoleLabel && (
+                          <p className="text-[10px] font-mono text-slate-500 dark:text-slate-400">
+                            {audit.structureRoleLabel}
+                          </p>
+                        )}
                       </div>
                     </td>
 
                     {/* Entidad */}
                     <td className="px-6 py-5">
-                      {(user.role === "client" || user.role === "technician") && user.clientId ? (
-                        <div className="flex items-center text-gray-600 dark:text-gray-300 font-black text-xs uppercase tracking-tight italic">
-                          <Building size={14} className="mr-2 text-hemp-600 opacity-50"/>
-                          {clients.find(c => c.id === user.clientId)?.name || "Entidad Asignada"}
+                      {user.clientId ? (
+                        <div className="space-y-0.5">
+                          <div className="flex items-center text-gray-800 dark:text-gray-200 font-black text-xs uppercase tracking-tight">
+                            <Building size={14} className="mr-1.5 text-emerald-600 shrink-0"/>
+                            <span>{effectiveClients.find(c => c.id === user.clientId)?.name || user.organizationName || "Establecimiento Asignado"}</span>
+                          </div>
+                          <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800/60">
+                            <Lock size={10} /> Aislado a este Establecimiento
+                          </span>
                         </div>
                       ) : (
-                        <span className="text-gray-400 dark:text-slate-600 italic text-[10px] uppercase font-black tracking-widest">
-                          Sede Central Cooperativa
-                        </span>
+                        <div className="space-y-0.5">
+                          <span className="text-slate-700 dark:text-slate-300 text-xs uppercase font-black tracking-tight flex items-center gap-1.5">
+                            <Globe size={13} className="text-purple-500 shrink-0" />
+                            <span>{user.role === "viewer" ? "Auditoría Externa (Solo Lectura)" : "Dirección Central Cooperativa"}</span>
+                          </span>
+                          <span className="text-[9px] font-mono text-slate-400 block">
+                            Alcance Global (4 Establecimientos)
+                          </span>
+                        </div>
                       )}
+                    </td>
+
+                    {/* Alcance de Parcelas */}
+                    <td className="px-6 py-5">
+                      {audit ? (
+                        <div className="space-y-1 max-w-xs">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-black ${
+                              audit.isolationScope === "ESTABLECIMIENTO_AISLADO"
+                                ? "bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800"
+                                : "bg-purple-100 dark:bg-purple-950/70 text-purple-800 dark:text-purple-300 border border-purple-300 dark:border-purple-800"
+                            }`}>
+                              <Sprout size={10} className="inline mr-1" />
+                              {audit.allowedPlotsCount} Parcelas Habilitadas
+                            </span>
+                            <span className="text-[10px] font-mono text-slate-400">
+                              ({audit.allowedLocationsCount} {audit.allowedLocationsCount === 1 ? "Sitio" : "Sitios"})
+                            </span>
+                          </div>
+                          <p className="text-[10px] font-mono text-slate-500 dark:text-slate-400 truncate" title={audit.allowedPlotNames.join(", ")}>
+                            {audit.allowedPlotNames.slice(0, 3).join(", ")}
+                            {audit.allowedPlotNames.length > 3 ? ` (+${audit.allowedPlotNames.length - 3} más)` : ""}
+                          </p>
+                        </div>
+                      ) : null}
                     </td>
 
                     {/* Estado de Credencial */}
                     <td className="px-6 py-5">
                       {hasPassword ? (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
-                          <Lock size={12} /> Activa & Segura
+                          <Lock size={12} /> Activa
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
@@ -601,6 +813,20 @@ export default function Users() {
                     {/* Acciones de gestión */}
                     <td className="px-6 py-5 text-right">
                       <div className="flex justify-end items-center space-x-1.5">
+                        {/* Botón: Auditar / Simular Vista del Usuario */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            startImpersonation(user.id);
+                            navigate("/plots");
+                          }}
+                          title={`Simular sesión como ${user.name} para auditar sus parcelas y permisos`}
+                          className="px-2.5 py-1.5 text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-600 hover:text-white rounded-xl transition shadow-xs border border-emerald-200 dark:border-emerald-800 flex items-center gap-1 text-[10px] font-mono font-black uppercase cursor-pointer"
+                        >
+                          <Eye size={13} />
+                          <span>Auditar Vista</span>
+                        </button>
+
                         {/* Botón: Despachar Credenciales por Email */}
                         <button
                           type="button"
@@ -614,7 +840,6 @@ export default function Users() {
                           ) : (
                             <Send size={15} className="text-emerald-600" />
                           )}
-                          <span className="hidden xl:inline">Enviar Acceso</span>
                         </button>
 
                         {/* Botón: Restablecer Contraseña y Notificar */}
@@ -626,7 +851,6 @@ export default function Users() {
                           className="p-2 text-slate-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded-xl transition shadow-sm border border-slate-200 dark:border-slate-800 hover:border-amber-300 flex items-center gap-1 text-[11px] font-bold cursor-pointer disabled:opacity-50"
                         >
                           <RefreshCw size={15} className="text-amber-600" />
-                          <span className="hidden xl:inline">Reset Clave</span>
                         </button>
 
                         {/* Botón: Editar */}
@@ -973,21 +1197,37 @@ export default function Users() {
                 </div>
               </div>
 
-              {/* Entidad vinculada si es productor o técnico */}
-              {(formData.role === "client" || formData.role === "technician") && (
-                <div className="bg-blue-50 dark:bg-blue-900/10 p-5 rounded-3xl border border-blue-100 dark:border-blue-900/30">
-                  <label className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest block mb-2">
-                    Entidad u Organización Vinculada
-                  </label>
-                  <select 
-                    required 
-                    className={inputClass} 
-                    value={formData.clientId || ""} 
-                    onChange={e => setFormData({...formData, clientId: e.target.value})}
-                  >
-                    <option value="">Seleccionar entidad asociada...</option>
-                    {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
+              {/* Entidad vinculada si es productor, técnico o visor */}
+              {(formData.role === "client" || formData.role === "technician" || formData.role === "viewer") && (
+                <div className="bg-blue-50 dark:bg-blue-900/10 p-5 rounded-3xl border border-blue-100 dark:border-blue-900/30 space-y-3">
+                  <div>
+                    <label className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest block mb-2">
+                      Establecimiento / Organización Vinculada (Aislamiento de Parcelas) {formData.role !== "viewer" ? "*" : "(Opcional para Auditor)"}
+                    </label>
+                    <select 
+                      required={formData.role === "client" || formData.role === "technician"} 
+                      className={inputClass} 
+                      value={formData.clientId || ""} 
+                      onChange={e => setFormData({...formData, clientId: e.target.value})}
+                    >
+                      <option value="">{formData.role === "viewer" ? "Sin restricción (Auditoría Global Lectura)" : "Seleccionar establecimiento asociado..."}</option>
+                      {effectiveClients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest block mb-2">
+                      Función Operativa en el Establecimiento
+                    </label>
+                    <select
+                      className={inputClass}
+                      value={formData.structureRole || (formData.role === "client" ? "propietario" : formData.role === "technician" ? "encargado" : "monitoreador")}
+                      onChange={e => setFormData({...formData, structureRole: e.target.value as StructureRole})}
+                    >
+                      {STRUCTURE_ROLES.map(sr => (
+                        <option key={sr.value} value={sr.value}>{sr.label} — {sr.description}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               )}
 
