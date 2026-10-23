@@ -1613,16 +1613,24 @@ export default function Agriculture40() {
             </div>
 
             {/* Panel Explicativo de la Arquitectura STAC Activa */}
-            <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl space-y-2">
+            <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl space-y-3">
               <div className="flex items-center space-x-2 text-emerald-700 dark:text-emerald-400 font-black text-xs uppercase tracking-wide">
                 <CheckCircle2 size={16} />
-                <span>Catálogo STAC Conectado en Tiempo Real (Sin Costo de Licencia)</span>
+                <span>Conexión Satelital Nativa Activa (Sin Configuración Requerida)</span>
+              </div>
+              <div className="p-3 bg-emerald-500/15 border border-emerald-500/25 rounded-xl text-xs text-emerald-900 dark:text-emerald-200">
+                <p className="font-bold mb-1">
+                  💡 ¿Necesitas configurar alguna clave o API Key?
+                </p>
+                <p className="text-[11px] leading-relaxed">
+                  <strong>No es necesario configurar nada.</strong> La plataforma consulta de forma abierta y directa el catálogo público <strong>STAC v1 de Copernicus CDSE y Element84 AWS Earth Search</strong>. Los índices NDVI (10m), NDRE Borde Rojo (20m) y Sentinel-1 SAR (Radar Banda C) funcionan de manera automática sin registro ni costo adicional.
+                </p>
               </div>
               <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                El sistema consulta automáticamente el <strong>Catálogo STAC v1 de Copernicus Data Space Ecosystem (CDSE)</strong> y <strong>Element84 Earth Search (AWS Open Data)</strong> intersectando el polígono GeoJSON de cada parcela para extraer:
+                El sistema consulta automáticamente el catálogo intersectando el polígono GeoJSON de cada parcela para extraer:
               </p>
               <ul className="text-[11px] text-slate-600 dark:text-slate-300 space-y-1 list-disc pl-4">
-                <li><strong>Sentinel-2 L2A (Óptico + Borde Rojo):</strong> Bandas <strong>B4 y B8</strong> (NDVI 10m) y Bandas <strong>B5 (705 nm), B6 (740 nm), B7 (783 nm) y B8A (865 nm)</strong> para calcular <strong>NDRE</strong> sin saturación cuando el cáñamo cierra el entresurco.</li>
+                <li><strong>Sentinel-2 L2A (Óptico + Borde Rojo):</strong> Bandas <strong>B4 y B8</strong> (NDVI 10m) y Bandas <strong>B5 (705 nm), B6 (740 nm), B7 (783 nm) y B8A (865 nm)</strong> para calcular <strong>NDRE</strong> sin saturación cuando el cultivo cierra el entresurco.</li>
                 <li><strong>Sentinel-1 GRD (Radar SAR Banda C · 5.405 GHz):</strong> Polarización dual <strong>VV + VH</strong> e índice estructural <strong>RVI</strong> que atraviesa el 100% de las nubes.</li>
               </ul>
             </div>
@@ -2190,8 +2198,22 @@ export default function Agriculture40() {
                         <Globe size={18} className="mr-2 text-emerald-600" />
                         Teledetección del Polígono ({activePass?.date})
                       </h3>
-                      <p className="text-[11px] text-slate-400 font-bold">
-                        Superposición sobre {selectedPlot?.name} ({selectedPlot?.surfaceArea || 1} {selectedPlot?.surfaceUnit || 'ha'}) | Pasada {activePass?.satellite}
+                      <p className="text-[11px] text-slate-400 font-bold flex items-center gap-1.5 flex-wrap">
+                        <span>Superposición sobre {selectedPlot?.name} ({selectedPlot?.surfaceArea || 1} {selectedPlot?.surfaceUnit || 'ha'})</span>
+                        <span className="text-slate-500">•</span>
+                        <span className={`px-2 py-0.5 rounded-md font-mono text-[10px] font-black uppercase border ${
+                          mapLayer === 'sar_layer'
+                            ? 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 border-indigo-500/30'
+                            : mapLayer === 'ndre_layer'
+                            ? 'bg-rose-500/15 text-rose-600 dark:text-rose-300 border-rose-500/30'
+                            : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-500/30'
+                        }`}>
+                          {mapLayer === 'sar_layer'
+                            ? 'Radar Activo: Sentinel-1 SAR (Banda C 5.405 GHz · Todo-Clima)'
+                            : mapLayer === 'ndre_layer'
+                            ? 'Sensor: Sentinel-2 MSI (Borde Rojo B5/B6/B7 · 20m)'
+                            : `Sensor: ${activePass?.satellite || 'Sentinel-2'} (Óptico 10m · B8/B4)`}
+                        </span>
                       </p>
                     </div>
 
@@ -2236,12 +2258,12 @@ export default function Agriculture40() {
                       {/* Botón Estado y Modal de API Satelital */}
                       <button
                         onClick={() => setShowSatelliteApiModal(true)}
-                        title="Configurar y consultar conexión con APIs de Teledetección Satelital (Sentinel Hub / Copernicus / AgroMonitoring)"
+                        title="Conexión nativa activa con catálogo STAC Copernicus & AWS. No requiere configuración."
                         className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/60 hover:bg-emerald-100 transition-all shadow-sm"
                       >
                         <Satellite size={13} className="animate-pulse" />
                         <span>API Satelital</span>
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                        <span className="px-1.5 py-0.2 rounded font-mono text-[9px] bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-black">Activa</span>
                       </button>
                     </div>
                   </div>
@@ -2369,7 +2391,13 @@ export default function Agriculture40() {
                               {selectedPlot?.name} • {activePass.stageName}
                             </p>
                             <p className="text-xs font-black flex items-center gap-1.5 text-white">
-                              <span>{activePass.satellite}</span>
+                              <span className={mapLayer === 'sar_layer' ? 'text-indigo-300 font-black' : mapLayer === 'ndre_layer' ? 'text-rose-300 font-black' : 'text-white'}>
+                                {mapLayer === 'sar_layer'
+                                  ? 'Sentinel-1 (SAR Banda C · Radar)'
+                                  : mapLayer === 'ndre_layer'
+                                  ? 'Sentinel-2 MSI (Borde Rojo NDRE)'
+                                  : activePass.satellite}
+                              </span>
                               <span className="text-slate-400 font-normal">| {activePass.date}</span>
                               <span className="text-[10px] font-mono text-emerald-400">({activePass.mgrsTile || '19GGM'})</span>
                             </p>
@@ -2843,24 +2871,32 @@ export default function Agriculture40() {
 
                     {/* Alerta Inteligente de Continuidad Temporal Sentinel-1 SAR cuando hay nubes o modo radar */}
                     {((activePass?.cloudCoveragePct || 0) >= 20 || activePass?.sensorMode === 'SAR_C_BAND') && (
-                      <div className="p-3 bg-indigo-500/10 border border-indigo-500/30 rounded-2xl flex items-start justify-between gap-2.5">
+                      <div className="p-3 bg-indigo-500/10 border border-indigo-500/30 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                         <div className="text-[11px] text-indigo-900 dark:text-indigo-200 leading-snug">
-                          <span className="font-black uppercase text-indigo-600 dark:text-indigo-400 block">
-                            📡 Continuidad Todo-Clima Sentinel-1 SAR (Banda C · 5.405 GHz)
+                          <span className="font-black uppercase text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5 mb-0.5">
+                            <Radio size={13} className="animate-pulse" />
+                            <span>Continuidad Todo-Clima Sentinel-1 SAR (Banda C · 5.405 GHz)</span>
                           </span>
                           {activePass?.sensorMode === 'SAR_C_BAND'
                             ? `Adquisición activa de radar inmune a nubosidad. Retrodispersión VV ${activePass.sarVvDb} dB / VH ${activePass.sarVhDb} dB.`
-                            : `Nubosidad del ${activePass?.cloudCoveragePct}% detectada. Respaldo radar Sentinel-1 activo (RVI ${(activePass?.sarRviIndex ?? 0.68).toFixed(2)}).`}
+                            : `Nubosidad del ${activePass?.cloudCoveragePct}% detectada en pasada óptica ${activePass?.satellite}. Se recomienda conmutar a Sentinel-1 SAR (RVI ${(activePass?.sarRviIndex ?? 0.68).toFixed(2)}) para lectura sin interferencia.`}
                         </div>
-                        {mapLayer !== 'sar_layer' && (
-                          <button
-                            type="button"
-                            onClick={() => setMapLayer('sar_layer')}
-                            className="shrink-0 px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-black uppercase tracking-wider shadow-sm"
-                          >
-                            Ver SAR
-                          </button>
-                        )}
+                        <div className="shrink-0 flex items-center gap-2">
+                          {mapLayer !== 'sar_layer' ? (
+                            <button
+                              type="button"
+                              onClick={() => setMapLayer('sar_layer')}
+                              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-black uppercase tracking-wider shadow-sm flex items-center gap-1 transition"
+                            >
+                              <Radio size={12} />
+                              <span>Activar Radar S-1 SAR</span>
+                            </button>
+                          ) : (
+                            <span className="px-2.5 py-1 bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 border border-indigo-500/30 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
+                              ✓ Visualizando Radar S-1
+                            </span>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -3007,7 +3043,7 @@ export default function Agriculture40() {
                   </div>
 
                   {/* Diagnóstico Agronómico Satelital */}
-                  <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/40 rounded-2xl border border-emerald-500/20 text-xs">
+                  <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/40 rounded-2xl border border-emerald-500/20 text-xs space-y-2">
                     <div className="flex items-center justify-between mb-1">
                       <p className="font-black text-emerald-800 dark:text-emerald-300 flex items-center gap-1">
                         <Sparkles size={14} /> Dictamen Agronómico Multi-Índice:
@@ -3019,6 +3055,35 @@ export default function Agriculture40() {
                     <p className="text-emerald-700 dark:text-emerald-400/90 leading-relaxed font-medium text-[11px]">
                       {activePass?.notes}
                     </p>
+                    {activePass?.notes?.includes('Sentinel-1 SAR') && mapLayer !== 'sar_layer' && (
+                      <div className="pt-2 border-t border-emerald-500/20 flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-[10px] text-emerald-800 dark:text-emerald-200 font-bold">
+                          ℹ️ El mapa muestra actualmente el sensor óptico ({activePass.satellite}).
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setMapLayer('sar_layer')}
+                          className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm transition"
+                        >
+                          <Radio size={12} />
+                          <span>Conmutar Mapa a Sentinel-1 SAR</span>
+                        </button>
+                      </div>
+                    )}
+                    {activePass?.notes?.includes('NDRE') && mapLayer !== 'ndre_layer' && (
+                      <div className="pt-2 border-t border-emerald-500/20 flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-[10px] text-emerald-800 dark:text-emerald-200 font-bold">
+                          ℹ️ Entresurco cerrado: se aconseja ver Borde Rojo.
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setMapLayer('ndre_layer')}
+                          className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm transition"
+                        >
+                          <span>Conmutar Mapa a NDRE (B5/B6/B7)</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                 </div>
