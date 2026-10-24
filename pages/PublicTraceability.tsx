@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { getPlotAgrochemicalApplications } from '../src/services/agro40Service';
 import { AgrochemicalApplication, Plot, Location, Variety, Supplier, SupplierLotInspection, SeedBatch } from '../types';
+import { BarcodeSVG } from '../components/BarcodeSVG';
 import { DEMO_PLOTS as HISTORICAL_PLOTS, DEMO_LOCATIONS as HISTORICAL_LOCATIONS, DEMO_VARIETIES as HISTORICAL_VARIETIES, DEMO_SEED_BATCHES as HISTORICAL_BATCHES } from '../src/data/historicalCampaignSeed';
 import { 
     DEMO_PLOTS as INITIAL_PLOTS, 
@@ -28,7 +29,7 @@ const QUALITY_BADGE_MAP: Record<string, { label: string; colorClass: string }> =
 
 export default function PublicTraceability() {
     const { id } = useParams();
-    const { plots, locations, varieties, suppliers, trialRecords, seedBatches, storagePoints, seedMovements, appName } = useAppContext();
+    const { plots, locations, varieties, suppliers, trialRecords, seedBatches, storagePoints, seedMovements, tasks, appName } = useAppContext();
 
     const cleanId = decodeURIComponent(id || '').trim();
 
@@ -138,17 +139,21 @@ export default function PublicTraceability() {
         (b.gs1Code && b.gs1Code.toLowerCase() === cleanId.toLowerCase())
     );
 
-    // Intento 2: Parcela (Plot)
+    // Intento 2: Parcela (Plot) — incluye búsqueda por Acta de Cierre o Código de Barras GS1
     let plot = allPlots.find(p => 
         p.id === cleanId || 
         p.id.toLowerCase() === cleanId.toLowerCase() ||
-        p.name?.toLowerCase() === cleanId.toLowerCase()
+        p.name?.toLowerCase() === cleanId.toLowerCase() ||
+        (p.closureActCode && p.closureActCode.toLowerCase() === cleanId.toLowerCase()) ||
+        (p.closureBarcode && p.closureBarcode.toLowerCase() === cleanId.toLowerCase())
     );
 
     if (!plot && !directBatch && !directInspection && !directSupplier && cleanId.length >= 4) {
         plot = allPlots.find(p => 
             p.id.toLowerCase().includes(cleanId.toLowerCase()) || 
-            cleanId.toLowerCase().includes(p.id.toLowerCase())
+            cleanId.toLowerCase().includes(p.id.toLowerCase()) ||
+            (p.closureActCode && p.closureActCode.toLowerCase().includes(cleanId.toLowerCase())) ||
+            (p.closureBarcode && p.closureBarcode.toLowerCase().includes(cleanId.toLowerCase()))
         );
     }
 
@@ -180,6 +185,12 @@ export default function PublicTraceability() {
             samplingResponsibleName: urlParams.get('sampler') || 'Matias QUINTANA',
             sowingResponsibleName: urlParams.get('sower') || 'Joaquin AREZO',
             technicalResponsibleName: urlParams.get('inspector') || 'Ing. Agr. Julian PIZARRO',
+            closureConfirmed: urlParams.get('closed') === '1',
+            closedDate: urlParams.get('closedAt') || undefined,
+            closedTime: urlParams.get('closedTime') || undefined,
+            closureActCode: urlParams.get('actCode') || undefined,
+            closureBarcode: urlParams.get('barcode') || undefined,
+            harvestYieldKg: urlParams.get('yieldKg') ? Number(urlParams.get('yieldKg')) : undefined,
             observations: 'Unidad de producción fiscalizada y certificada en Nucleus Trace · Ley 27.669'
         };
     }
@@ -888,6 +899,102 @@ export default function PublicTraceability() {
                                 </div>
                             </div>
                         )}
+                    </div>
+                )}
+
+                {/* DOCUMENTO DE SIEMBRA HOMOLOGADO, CIERRE DE CICLO Y CÓDIGO DE BARRAS GS1 */}
+                {resolvedPlot && (
+                    <div className="bg-slate-900/95 border-2 border-amber-500/40 p-6 md:p-8 rounded-3xl space-y-5 shadow-xl">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+                            <div>
+                                <span className="text-[10px] font-black uppercase text-amber-400 tracking-widest flex items-center gap-1.5">
+                                    <FileCheck size={14} />
+                                    Documento Oficial de Siembra · Cierre de Ciclo & Labores Agrícolas
+                                </span>
+                                <h3 className="text-xl md:text-2xl font-black uppercase text-white tracking-tight mt-0.5">
+                                    {resolvedPlot.closureConfirmed || resolvedPlot.status === 'Cosechada' || urlParams.get('closed') === '1'
+                                        ? 'CICLO DE SIEMBRA FINALIZADO Y HOMOLOGADO'
+                                        : resolvedPlot.isHarvestScheduled && resolvedPlot.scheduledHarvestDate
+                                        ? `COSECHA PROGRAMADA (${resolvedPlot.scheduledHarvestDate} ${resolvedPlot.scheduledHarvestTime || ''})`
+                                        : 'CICLO DE SIEMBRA ACTIVO CON CUSTODIA QR & BARCODE'}
+                                </h3>
+                                <p className="text-xs text-slate-400 mt-1">
+                                    Acta N°: <strong className="text-amber-300">{resolvedPlot.closureActCode || urlParams.get('actCode') || `ACTA-SIEMBRA-${(resolvedPlot.campaign || '2526').replace('/', '')}-${resolvedPlot.id.slice(-5).toUpperCase()}`}</strong>
+                                </p>
+                            </div>
+
+                            <div className="bg-white p-3 rounded-2xl border-2 border-amber-400 shrink-0 self-start md:self-center">
+                                <BarcodeSVG
+                                    value={resolvedPlot.closureBarcode || urlParams.get('barcode') || `7798394${resolvedPlot.id.replace(/[^0-9A-Za-z]/g, '').toUpperCase().slice(0, 6)}2026`}
+                                    height={42}
+                                    barWidth={1.35}
+                                    fontSize={9.5}
+                                    label="CÓDIGO DE BARRAS GS1-128 HOMOLOGADO"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                            <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
+                                <span className="text-[9px] text-slate-400 uppercase font-black block">1. Fecha de Siembra</span>
+                                <strong className="text-white text-sm block">{resolvedPlot.sowingDate || urlParams.get('sowing') || '2025-11-05'}</strong>
+                                <span className="text-[10px] text-emerald-400 block">Densidad: {resolvedPlot.density || 45} kg/ha</span>
+                            </div>
+
+                            <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
+                                <span className="text-[9px] text-amber-400 uppercase font-black block">2. Fecha y Hora de Cierre / Cosecha</span>
+                                <strong className="text-white text-sm block">
+                                    {resolvedPlot.closedDate || urlParams.get('closedAt') || resolvedPlot.scheduledHarvestDate || urlParams.get('scheduledAt') || 'En curso agronómico'}
+                                    {(resolvedPlot.closedTime || urlParams.get('closedTime') || resolvedPlot.scheduledHarvestTime) ? ` · ${resolvedPlot.closedTime || urlParams.get('closedTime') || resolvedPlot.scheduledHarvestTime} hs` : ''}
+                                </strong>
+                                <span className="text-[10px] text-amber-300 block">
+                                    {resolvedPlot.closureConfirmed || resolvedPlot.status === 'Cosechada' || urlParams.get('closed') === '1'
+                                        ? 'Fecha Confirmada e Inmutable (Bloqueo Admin)'
+                                        : 'Monitoreo Fenológico Activo'}
+                                </span>
+                            </div>
+
+                            <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
+                                <span className="text-[9px] text-sky-400 uppercase font-black block">3. Labor Agrícola Vinculada</span>
+                                {(() => {
+                                    const plotLabors = (tasks || []).filter(t => t.plotId === resolvedPlot.id);
+                                    const harvestLabor = plotLabors.find(t => t.id === resolvedPlot.linkedClosureLaborId || t.laborType === 'COSECHA' || t.category === 'COSECHA') || plotLabors[0];
+                                    const machineryText = typeof harvestLabor?.machinery === 'string'
+                                        ? harvestLabor.machinery
+                                        : harvestLabor?.machinery?.tractor || resolvedPlot.harvestMachinery || 'Cosechadora Axial';
+                                    const laborDateText = harvestLabor?.executionDate || harvestLabor?.dueDate || harvestLabor?.date || resolvedPlot.closedDate || resolvedPlot.closedAt || '';
+                                    return harvestLabor ? (
+                                        <>
+                                            <strong className="text-white text-xs block truncate">{harvestLabor.title}</strong>
+                                            <span className="text-[10px] text-sky-300 block truncate">
+                                                {machineryText} {laborDateText ? `· ${laborDateText}` : ''}
+                                            </span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <strong className="text-white text-xs block truncate">
+                                                {resolvedPlot.harvestMachinery || 'Protocolo de Labores Vinculado'}
+                                            </strong>
+                                            <span className="text-[10px] text-sky-300 block truncate">
+                                                Operador: {resolvedPlot.harvestOperator || harvestResponsible}
+                                            </span>
+                                        </>
+                                    );
+                                })()}
+                            </div>
+
+                            <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
+                                <span className="text-[9px] text-emerald-400 uppercase font-black block">4. Rendimiento & Homologación</span>
+                                <strong className="text-emerald-400 text-sm block">
+                                    {(resolvedPlot.harvestYieldKg || urlParams.get('yieldKg'))
+                                        ? `${Number(resolvedPlot.harvestYieldKg || urlParams.get('yieldKg')).toLocaleString()} kg totales`
+                                        : 'En evaluación de rinde'}
+                                </strong>
+                                <span className="text-[10px] text-slate-400 block truncate">
+                                    Firmante: {resolvedPlot.closedBy || inspectorName}
+                                </span>
+                            </div>
+                        </div>
                     </div>
                 )}
 

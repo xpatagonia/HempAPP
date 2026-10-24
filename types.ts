@@ -373,11 +373,23 @@ export interface Plot {
   sowingResponsibleName?: string;    // Personal responsable de siembra
   technicalResponsibleName?: string; // Ingeniero Agrónomo responsable del seguimiento
   technicalResponsibleMatricula?: string; // Matrícula del Director Técnico
-  // CIERRE DE CICLO AGRONÓMICO Y HUELLA HÍDRICA CONSOLIDADA
-  closedAt?: string;                 // Fecha ISO de cierre de ciclo / cosecha
+  // CIERRE DE CICLO AGRONÓMICO, PROGRAMACIÓN DE COSECHA, LABORES Y DOCUMENTO DE SIEMBRA HOMOLOGADO
+  closedAt?: string;                 // Fecha ISO de cierre de ciclo / cosecha (YYYY-MM-DD)
+  closedDate?: string;               // Alias de fecha ISO de cierre de ciclo / cosecha (YYYY-MM-DD)
+  closedTime?: string;               // Hora exacta de cierre de ciclo / cosecha (HH:mm)
   closedBy?: string;                 // Responsable que certificó el cierre de ciclo
   closureNotes?: string;             // Acta / Observaciones de cierre de ciclo y cosecha
+  closureConfirmed?: boolean;        // Candado: una vez confirmada la fecha, el productor no puede modificar (solo Admin)
+  closureActCode?: string;           // N° de Documento Oficial de Siembra y Cierre Homologado (ej: ACTA-HOM-2026-0041)
+  closureBarcode?: string;           // Código de barras GS1 / Code-128 asignado al lote y cierre de ciclo
+  scheduledHarvestDate?: string;     // Fecha programada con anticipación para cierre / cosecha
+  scheduledHarvestTime?: string;     // Hora programada con anticipación para cierre / cosecha
+  isHarvestScheduled?: boolean;      // Indica si tiene fecha de cierre/cosecha programada con anticipación
+  linkedClosureLaborId?: string;     // ID de la Labor Agrícola (Task) de Cosecha / Cierre vinculada
+  harvestMachinery?: string;         // Maquinaria / Implemento afectado al cierre o cosecha
+  harvestOperator?: string;          // Operario / Responsable ejecutante de la labor de cosecha
   actualHarvestYieldKg?: number;     // Rendimiento real cosechado (kg totales en parcela)
+  harvestYieldKg?: number;           // Alias de rendimiento real cosechado (kg totales en parcela)
   waterFootprintM3Ha?: number;       // Huella hídrica consolidada al cierre (m³/ha)
 }
 
@@ -686,6 +698,8 @@ export interface Task {
   homologatedBy?: string;
   homologatedAt?: string;
   homologationNotes?: string;
+  category?: string;
+  date?: string;
 }
 
 export interface SoilHealthData {

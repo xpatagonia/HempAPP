@@ -11,12 +11,12 @@ import {
   ChevronRight, Info, Eye, Waves, Sprout, Tractor, FlaskConical, Sun, 
   CheckCircle2, AlertCircle, Calendar, Power, Check, SlidersHorizontal, 
   ArrowRight, ShieldCheck, Thermometer, Warehouse, Clock, FileText, Lock, 
-  Scale, FileSignature, CheckSquare, Layers, Award, Satellite
+  Scale, FileSignature, CheckSquare, Layers, Award, Satellite, LayoutGrid, List
 } from 'lucide-react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import WeatherWidget from '../components/WeatherWidget';
 import MapEditor from '../components/MapEditor';
-import { canAccessLocation, isCentralAdminOrSupervisor } from '../src/utils/structurePermissions';
+import { canAccessLocation, canAccessPlot, isCentralAdminOrSupervisor } from '../src/utils/structurePermissions';
 
 const ARG_GEO: Record<string, string[]> = {
     "Buenos Aires": ["La Plata", "Mar del Plata", "Bahía Blanca", "Tandil", "Pergamino", "Junín", "Olavarría", "San Nicolás", "Balcarce", "Castelar", "CABA", "San Pedro", "Trenque Lauquen", "Pehuajó", "9 de Julio", "Bolívar", "Saladillo", "Lobos", "Chascomús", "Necochea", "Tres Arroyos", "General Villegas", "Lincoln", "Chivilcoy", "Chacabuco", "Bragado", "25 de Mayo", "Azul", "Coronel Suárez", "Pigüé", "Carhué", "San Antonio de Areco", "Arrecifes", "Salto", "Rojas", "Mercedes", "Luján", "Cañuelas", "Las Flores"],
@@ -138,7 +138,9 @@ const parseKML = (kmlText: string): { lat: number, lng: number }[] | null => {
 
 export default function Locations() {
   const { locations, addLocation, updateLocation, deleteLocation, updatePlot, currentUser, clients, plots } = useAppContext();
+  const navigate = useNavigate();
   
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [activeModalTab, setActiveModalTab] = useState<'general' | 'regulatory' | 'geodesy'>('general');
@@ -194,14 +196,14 @@ export default function Locations() {
   const isTechnician = currentUser?.role === 'technician';
   const canManage = isAdmin || isClient || isTechnician;
 
+  // Establecimientos accesibles según rol del usuario actual
+  const accessibleLocations = useMemo(() => {
+    return locations.filter(l => canAccessLocation(currentUser, l, clients));
+  }, [locations, currentUser, clients]);
+
   // Filtrado de establecimientos
   const visibleLocations = useMemo(() => {
-    return locations.filter(l => {
-      // 1. Aislamiento de Acceso: Cada estructura solo accede a su campo asociado
-      if (!canAccessLocation(currentUser, l, clients)) {
-        return false;
-      }
-
+    return accessibleLocations.filter(l => {
       let matches = true;
 
       if (searchTerm) {
@@ -230,25 +232,29 @@ export default function Locations() {
 
       return matches;
     });
-  }, [locations, isAdmin, isClient, isTechnician, currentUser, searchTerm, filterProvince, filterSiteType, filterStatus, selectedCampaign]);
+  }, [accessibleLocations, searchTerm, filterProvince, filterSiteType, filterStatus, selectedCampaign]);
 
-  // Estadísticas globales y de campaña
+  // Estadísticas globales y de campaña (respetando aislamiento estricto por rol)
   const stats = useMemo(() => {
-    const totalLocs = locations.length;
-    const activeInSelectedCampaign = locations.filter(l => {
+    const totalLocs = accessibleLocations.length;
+    const activeInSelectedCampaign = accessibleLocations.filter(l => {
       if (selectedCampaign === 'all') return (l.status || 'Activo') === 'Activo';
       const campaigns = l.activeCampaigns || ['2024/2025', '2025/2026'];
       return campaigns.includes(selectedCampaign) && (l.status || 'Activo') === 'Activo';
     }).length;
 
-    const inPreparationCount = locations.filter(l => l.status === 'En Preparación').length;
-    const inFallowCount = locations.filter(l => l.status === 'En Barbecho').length;
+    const inPreparationCount = accessibleLocations.filter(l => l.status === 'En Preparación').length;
+    const inFallowCount = accessibleLocations.filter(l => l.status === 'En Barbecho').length;
 
     const totalHa = visibleLocations.reduce((sum, l) => sum + (l.capacityHa || 0), 0);
     const totalSowingDeclaredHa = visibleLocations.reduce((sum, l) => sum + (l.sowingDeclarationHa || 0), 0);
 
-    const activePlots = plots.filter(p => p.status === 'Activa' && visibleLocations.some(l => l.id === p.locationId));
-    const occupiedHa = activePlots.reduce((sum, p) => {
+    const visiblePlots = plots.filter(
+      p => visibleLocations.some(l => l.id === p.locationId) && canAccessPlot(currentUser, p, locations, clients)
+    );
+    const activePlots = visiblePlots.filter(p => p.status === 'Activa' && !p.closureConfirmed);
+    const closedPlots = visiblePlots.filter(p => p.closureConfirmed || p.status === 'Cosechada');
+    const occupiedHa = visiblePlots.reduce((sum, p) => {
       let area = p.surfaceArea || 0;
       if (p.surfaceUnit === 'm2') area = area / 10000;
       if (p.surfaceUnit === 'ac') area = area * 0.404686;
@@ -264,9 +270,11 @@ export default function Locations() {
       totalSowingDeclaredHa,
       occupiedHa, 
       occupancyRate: totalHa > 0 ? (occupiedHa / totalHa) * 100 : 0, 
-      activePlotsCount: activePlots.length 
+      activePlotsCount: activePlots.length,
+      totalPlotsCount: visiblePlots.length,
+      closedPlotsCount: closedPlots.length
     };
-  }, [locations, visibleLocations, plots, selectedCampaign]);
+  }, [accessibleLocations, visibleLocations, plots, selectedCampaign, currentUser, locations, clients]);
 
   // Alternar rápidamente si un campo está activo para la campaña actual
   const handleToggleCampaign = async (loc: Location, e: React.MouseEvent) => {
@@ -527,12 +535,39 @@ export default function Locations() {
             </p>
           </div>
 
-          {/* Acciones principales */}
+          {/* Acciones principales & Selector de Vista */}
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200/60 dark:border-slate-700 shadow-sm">
+              <button
+                type="button"
+                onClick={() => setViewMode('cards')}
+                className={`px-3 py-2 rounded-lg transition flex items-center gap-1.5 text-xs font-mono font-bold cursor-pointer ${
+                  viewMode === 'cards'
+                    ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <LayoutGrid size={15} />
+                <span>Tarjetas</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('table')}
+                className={`px-3 py-2 rounded-lg transition flex items-center gap-1.5 text-xs font-mono font-bold cursor-pointer ${
+                  viewMode === 'table'
+                    ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <List size={15} />
+                <span>Tabla Técnica</span>
+              </button>
+            </div>
+
             {canManage && (
               <button 
                 onClick={() => { resetForm(); setIsModalOpen(true); }} 
-                className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-md shadow-emerald-600/20 flex items-center gap-2 active:scale-95"
+                className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-md shadow-emerald-600/20 flex items-center gap-2 active:scale-95 cursor-pointer"
               >
                 <Plus size={16} strokeWidth={2.5} />
                 <span>Nuevo Establecimiento</span>
@@ -552,7 +587,7 @@ export default function Locations() {
               <button
                 key={camp}
                 onClick={() => setSelectedCampaign(camp)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all shrink-0 ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all shrink-0 cursor-pointer ${
                   selectedCampaign === camp
                     ? 'bg-emerald-600 text-white shadow-sm'
                     : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
@@ -563,7 +598,7 @@ export default function Locations() {
             ))}
             <button
               onClick={() => setSelectedCampaign('all')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all shrink-0 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all shrink-0 cursor-pointer ${
                 selectedCampaign === 'all'
                   ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-sm'
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
@@ -589,33 +624,33 @@ export default function Locations() {
           </div>
         </div>
 
-        {/* TARJETAS DE MÉTRICAS RÁPIDAS (INCLUYE DDJJ DE SIEMBRA) */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mt-6">
+        {/* TARJETAS DE MÉTRICAS RÁPIDAS (AISLADAS POR ROL) */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mt-6 font-mono tabular-nums">
           <div className="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/60 dark:border-slate-800 space-y-1">
-            <span className="text-[10px] font-mono font-bold uppercase text-slate-400 block tracking-wider">Sitios Registrados</span>
-            <p className="text-2xl font-mono font-black text-slate-900 dark:text-white">
-              {visibleLocations.length} <span className="text-xs font-normal text-slate-400">/ {stats.totalLocs} total</span>
+            <span className="text-[10px] font-bold uppercase text-slate-400 block tracking-wider">Sitios Autorizados</span>
+            <p className="text-2xl font-black text-slate-900 dark:text-white">
+              {visibleLocations.length} <span className="text-xs font-normal text-slate-400">/ {stats.totalLocs} asignados</span>
             </p>
           </div>
 
           <div className="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/60 dark:border-slate-800 space-y-1">
-            <span className="text-[10px] font-mono font-bold uppercase text-slate-400 block tracking-wider">Superficie Total Predios</span>
-            <p className="text-2xl font-mono font-black text-sky-600 dark:text-sky-400">
+            <span className="text-[10px] font-bold uppercase text-slate-400 block tracking-wider">Superficie Total Predios</span>
+            <p className="text-2xl font-black text-sky-600 dark:text-sky-400">
               {stats.totalHa.toFixed(1)} <span className="text-xs font-normal text-slate-400">Ha</span>
             </p>
           </div>
 
           <div className="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/60 dark:border-slate-800 space-y-1">
-            <span className="text-[10px] font-mono font-bold uppercase text-slate-400 block tracking-wider">DDJJ Siembra Declarada</span>
-            <p className="text-2xl font-mono font-black text-emerald-600 dark:text-emerald-400">
+            <span className="text-[10px] font-bold uppercase text-slate-400 block tracking-wider">DDJJ Siembra Declarada</span>
+            <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
               {stats.totalSowingDeclaredHa.toFixed(1)} <span className="text-xs font-normal text-slate-400">Ha geodésicas</span>
             </p>
           </div>
 
           <div className="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/60 dark:border-slate-800 space-y-1">
-            <span className="text-[10px] font-mono font-bold uppercase text-slate-400 block tracking-wider">Lotes Sembrados</span>
-            <p className="text-2xl font-mono font-black text-purple-600 dark:text-purple-400">
-              {stats.activePlotsCount} <span className="text-xs font-normal text-slate-400">Parcelas</span>
+            <span className="text-[10px] font-bold uppercase text-slate-400 block tracking-wider">Unidades Productivas</span>
+            <p className="text-2xl font-black text-purple-600 dark:text-purple-400">
+              {stats.activePlotsCount} <span className="text-xs font-normal text-slate-400">activas / {stats.totalPlotsCount} total ({stats.closedPlotsCount} homol.)</span>
             </p>
           </div>
         </div>
@@ -730,250 +765,388 @@ export default function Locations() {
         </div>
       </div>
 
-      {/* 3. GRILLA DE ESTABLECIMIENTOS CON DDJJ Y LICENCIA */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {visibleLocations.length === 0 ? (
-          <div className="col-span-full py-16 text-center bg-white dark:bg-slate-900/90 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800 p-8 space-y-3">
-            <Tractor size={40} className="mx-auto text-slate-400" />
-            <h3 className="font-mono font-black text-base text-slate-700 dark:text-slate-300 uppercase">
-              No se encontraron establecimientos
-            </h3>
-            <p className="text-xs text-slate-500 max-w-md mx-auto font-medium">
-              Prueba cambiando la campaña seleccionada ({selectedCampaign}), la tipología o el término de búsqueda.
-            </p>
-          </div>
-        ) : (
-          visibleLocations.map(loc => {
-            const currentSiteType = loc.siteType || 'Campo Extensivo';
-            const siteTypeConfig = SITE_TYPES.find(s => s.value === currentSiteType) || SITE_TYPES[0];
-            const SiteIcon = siteTypeConfig.icon;
-            
-            const currentStatus = loc.status || 'Activo';
-            const statusConfig = SITE_STATUSES.find(s => s.value === currentStatus) || SITE_STATUSES[0];
+      {/* 3. VISTA TABLA TÉCNICA O GRILLA DE ESTABLECIMIENTOS CON UNIDADES PRODUCTIVAS */}
+      {viewMode === 'table' ? (
+        <div className="bg-white dark:bg-slate-900/95 rounded-2xl md:rounded-3xl border border-slate-200/80 dark:border-slate-800 overflow-hidden shadow-sm overflow-x-auto">
+          <table className="min-w-full text-xs text-left font-mono tabular-nums">
+            <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 uppercase text-[10px] font-bold tracking-wider border-b border-slate-100 dark:border-slate-800">
+              <tr>
+                <th className="px-5 py-4">Establecimiento / Sitio</th>
+                <th className="px-5 py-4">Titular & Responsable</th>
+                <th className="px-5 py-4">Suelo & Riego (Herencia)</th>
+                <th className="px-5 py-4">Licencia ARICCAME / RENSPA</th>
+                <th className="px-5 py-4 text-center">Unidades Productivas</th>
+                <th className="px-5 py-4 text-right">Superficie / DDJJ</th>
+                <th className="px-5 py-4 text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {visibleLocations.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="p-12 text-center text-slate-400">
+                    No se encontraron establecimientos con los filtros seleccionados.
+                  </td>
+                </tr>
+              ) : (
+                visibleLocations.map(loc => {
+                  const locPlots = plots.filter(
+                    p => p.locationId === loc.id && canAccessPlot(currentUser, p, locations, clients)
+                  );
+                  const activePlotsCount = locPlots.filter(p => p.status === 'Activa' && !p.closureConfirmed).length;
+                  const closedPlotsCount = locPlots.filter(p => p.closureConfirmed || p.status === 'Cosechada').length;
+                  const ownerClient = clients.find(c => c.id === loc.clientId);
 
-            const campaigns = loc.activeCampaigns || ['2024/2025', '2025/2026'];
-            const targetCamp = selectedCampaign === 'all' ? '2025/2026' : selectedCampaign;
-            const isEffectiveActive = campaigns.includes(targetCamp);
-
-            // Parcelas registradas en este campo
-            const locPlots = plots.filter(p => p.locationId === loc.id);
-            const activePlotsCount = locPlots.filter(p => p.status === 'Activa').length;
-
-            return (
-              <div 
-                key={loc.id} 
-                className={`bg-white dark:bg-slate-900/90 rounded-2xl md:rounded-3xl shadow-sm border transition-all flex flex-col h-full overflow-hidden group hover:shadow-md ${
-                  !isEffectiveActive 
-                    ? 'border-slate-200/60 dark:border-slate-800/80 opacity-75 hover:opacity-100' 
-                    : 'border-slate-200/80 dark:border-slate-800 hover:border-emerald-500/40'
-                }`}
-              >
-                {/* Cabecera con Vista Previa Satelital / Mapa */}
-                <div className="h-44 relative bg-slate-950 border-b border-slate-100 dark:border-slate-800 overflow-hidden">
-                  {loc.coordinates ? (
-                    <iframe 
-                      width="100%" 
-                      height="100%" 
-                      frameBorder="0" 
-                      scrolling="no" 
-                      src={`https://maps.google.com/maps?q=${loc.coordinates.lat},${loc.coordinates.lng}&z=14&output=embed`} 
-                      className="opacity-75 group-hover:opacity-95 transition-opacity pointer-events-none"
-                    />
-                  ) : (
-                    <div className="flex items-center justify-center h-full text-slate-600 opacity-40">
-                      <Globe size={48} />
-                    </div>
-                  )}
-
-                  {/* Widget de Clima Flotante en la esquina */}
-                  <div className="absolute top-3 left-3 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md p-2 rounded-xl shadow-lg border border-slate-200/80 dark:border-slate-800">
-                    <WeatherWidget lat={loc.coordinates?.lat || 0} lng={loc.coordinates?.lng || 0} compact={true}/>
-                  </div>
-
-                  {/* Botonera de Edición Rápida */}
-                  <div className="absolute top-3 right-3 flex items-center gap-1.5">
-                    {canManage && (
-                      <button 
-                        onClick={() => handleEdit(loc)} 
-                        className="p-2 bg-white/95 dark:bg-slate-900/95 rounded-lg text-slate-600 dark:text-slate-300 hover:text-emerald-600 shadow-md border border-slate-200/80 dark:border-slate-700 transition"
-                        title="Editar Ficha de Campo, Geodesia y Licencia"
-                      >
-                        <Edit2 size={13} />
-                      </button>
-                    )}
-                    {isSuperAdmin && (
-                      <button 
-                        onClick={() => { if(window.confirm(`¿Eliminar establecimiento "${loc.name}"?`)) deleteLocation(loc.id); }} 
-                        className="p-2 bg-white/95 dark:bg-slate-900/95 text-slate-600 dark:text-slate-300 hover:text-rose-600 shadow-md border border-slate-200/80 dark:border-slate-700 transition"
-                        title="Eliminar Establecimiento"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Badge de Tipología Flotante Inferior */}
-                  <div className="absolute bottom-3 left-3 flex items-center gap-2">
-                    <span className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-sm border ${siteTypeConfig.color}`}>
-                      <SiteIcon size={12} />
-                      <span>{siteTypeConfig.label}</span>
-                    </span>
-                  </div>
-
-                  {/* Badge de Estado Operativo */}
-                  <div className="absolute bottom-3 right-3">
-                    <span className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-sm border ${statusConfig.color}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${statusConfig.dot}`} />
-                      <span>{statusConfig.label}</span>
-                    </span>
-                  </div>
-                </div>
-
-                {/* Contenido de la Tarjeta */}
-                <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
-                  <div>
-                    {/* Alerta de Campaña si no está activo en la campaña filtrada */}
-                    {selectedCampaign !== 'all' && !isEffectiveActive && (
-                      <div className="mb-3 p-2 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl text-[11px] font-medium text-amber-800 dark:text-amber-300 flex items-center justify-between">
-                        <span className="flex items-center gap-1.5">
-                          <AlertCircle size={13} className="text-amber-500 shrink-0" />
-                          <span>Inactivo para Campaña {selectedCampaign}</span>
+                  return (
+                    <tr
+                      key={loc.id}
+                      onClick={() => navigate(`/locations/${loc.id}`)}
+                      className="hover:bg-slate-50 dark:hover:bg-slate-800/40 cursor-pointer transition-colors"
+                    >
+                      <td className="px-5 py-4">
+                        <strong className="text-slate-900 dark:text-white uppercase font-black block">
+                          {loc.name}
+                        </strong>
+                        <span className="text-[10px] text-slate-500 block">
+                          {loc.city}, {loc.province} · {loc.siteType || 'Campo Extensivo'}
                         </span>
-                        {canManage && (
-                          <button
-                            onClick={(e) => handleToggleCampaign(loc, e)}
-                            className="text-[10px] font-bold text-amber-700 dark:text-amber-400 hover:underline uppercase shrink-0 ml-2"
+                      </td>
+                      <td className="px-5 py-4">
+                        <strong className="text-slate-800 dark:text-slate-200 block">
+                          {ownerClient?.name || loc.ownerName || 'Planta Central'}
+                        </strong>
+                        <span className="text-[10px] text-slate-400 block">
+                          Resp: {loc.responsiblePerson || 'Dirección Técnica'}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4">
+                        <span className="text-emerald-600 dark:text-emerald-400 font-bold block">
+                          Suelo: {loc.soilType || 'Franco'}
+                        </span>
+                        <span className="text-sky-600 dark:text-sky-400 text-[10px] block">
+                          Riego: {loc.irrigationSystem || 'Secano'}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4">
+                        <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 block">
+                          {loc.ariccameLicenseNumber || 'En trámite ARICCAME'}
+                        </span>
+                        <span className="text-[10px] text-slate-400 block">
+                          RENSPA: {loc.renspaNumber || 'S/D'}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4 text-center">
+                        <span className="px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-black text-xs border border-emerald-200 dark:border-emerald-800">
+                          {activePlotsCount} Activas / {locPlots.length} Total
+                        </span>
+                        {closedPlotsCount > 0 && (
+                          <span className="text-[9.5px] text-amber-600 dark:text-amber-400 font-bold block mt-1">
+                            ✓ {closedPlotsCount} con Cierre Homologado
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-5 py-4 text-right">
+                        <strong className="text-slate-900 dark:text-white block">{loc.capacityHa || 0} Ha</strong>
+                        <span className="text-[10px] text-emerald-600 block">
+                          DDJJ: {loc.sowingDeclarationHa || 0} Ha
+                        </span>
+                      </td>
+                      <td className="px-5 py-4 text-right" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1.5">
+                          {canManage && (
+                            <button
+                              type="button"
+                              onClick={() => handleEdit(loc)}
+                              className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-emerald-600 cursor-pointer"
+                              title="Editar Establecimiento"
+                            >
+                              <Edit2 size={13} />
+                            </button>
+                          )}
+                          <Link
+                            to={`/locations/${loc.id}`}
+                            className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-emerald-600 text-white text-[10px] font-mono font-bold uppercase flex items-center gap-1"
                           >
-                            Activar
-                          </button>
+                            <span>Ficha Completa</span>
+                            <ChevronRight size={12} />
+                          </Link>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {visibleLocations.length === 0 ? (
+            <div className="col-span-full py-16 text-center bg-white dark:bg-slate-900/90 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800 p-8 space-y-3">
+              <Tractor size={40} className="mx-auto text-slate-400" />
+              <h3 className="font-mono font-black text-base text-slate-700 dark:text-slate-300 uppercase">
+                No se encontraron establecimientos
+              </h3>
+              <p className="text-xs text-slate-500 max-w-md mx-auto font-medium">
+                Prueba cambiando la campaña seleccionada ({selectedCampaign}), la tipología o el término de búsqueda.
+              </p>
+            </div>
+          ) : (
+            visibleLocations.map(loc => {
+              const currentSiteType = loc.siteType || 'Campo Extensivo';
+              const siteTypeConfig = SITE_TYPES.find(s => s.value === currentSiteType) || SITE_TYPES[0];
+              const SiteIcon = siteTypeConfig.icon;
+              
+              const currentStatus = loc.status || 'Activo';
+              const statusConfig = SITE_STATUSES.find(s => s.value === currentStatus) || SITE_STATUSES[0];
+
+              const campaigns = loc.activeCampaigns || ['2024/2025', '2025/2026'];
+              const targetCamp = selectedCampaign === 'all' ? '2025/2026' : selectedCampaign;
+              const isEffectiveActive = campaigns.includes(targetCamp);
+
+              // Unidades Productivas registradas en este campo (aisladas por rol)
+              const locPlots = plots.filter(
+                p => p.locationId === loc.id && canAccessPlot(currentUser, p, locations, clients)
+              );
+              const activePlotsCount = locPlots.filter(p => p.status === 'Activa' && !p.closureConfirmed).length;
+              const scheduledPlotsCount = locPlots.filter(p => p.isHarvestScheduled && !p.closureConfirmed && p.status !== 'Cosechada').length;
+              const closedPlotsCount = locPlots.filter(p => p.closureConfirmed || p.status === 'Cosechada').length;
+              const ownerClient = clients.find(c => c.id === loc.clientId);
+
+              return (
+                <div 
+                  key={loc.id} 
+                  className={`bg-white dark:bg-slate-900/95 rounded-2xl md:rounded-3xl shadow-sm border transition-all flex flex-col h-full overflow-hidden group hover:shadow-md ${
+                    !isEffectiveActive 
+                      ? 'border-slate-200/60 dark:border-slate-800/80 opacity-80 hover:opacity-100' 
+                      : 'border-slate-200/80 dark:border-slate-800 hover:border-emerald-500/40'
+                  }`}
+                >
+                  {/* Cabecera con Vista Previa Satelital / Mapa */}
+                  <div className="h-44 relative bg-slate-950 border-b border-slate-100 dark:border-slate-800 overflow-hidden">
+                    {loc.coordinates ? (
+                      <iframe 
+                        width="100%" 
+                        height="100%" 
+                        frameBorder="0" 
+                        scrolling="no" 
+                        src={`https://maps.google.com/maps?q=${loc.coordinates.lat},${loc.coordinates.lng}&z=14&output=embed`} 
+                        className="opacity-75 group-hover:opacity-95 transition-opacity pointer-events-none"
+                      />
+                    ) : (
+                      <div className="flex items-center justify-center h-full text-slate-600 opacity-40">
+                        <Globe size={48} />
+                      </div>
+                    )}
+
+                    {/* Widget de Clima Flotante en la esquina */}
+                    <div className="absolute top-3 left-3 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md p-2 rounded-xl shadow-lg border border-slate-200/80 dark:border-slate-800">
+                      <WeatherWidget lat={loc.coordinates?.lat || 0} lng={loc.coordinates?.lng || 0} compact={true}/>
+                    </div>
+
+                    {/* Botonera de Edición Rápida */}
+                    <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                      {canManage && (
+                        <button 
+                          onClick={() => handleEdit(loc)} 
+                          className="p-2 bg-white/95 dark:bg-slate-900/95 rounded-lg text-slate-600 dark:text-slate-300 hover:text-emerald-600 shadow-md border border-slate-200/80 dark:border-slate-700 transition cursor-pointer"
+                          title="Editar Ficha de Campo, Geodesia y Licencia"
+                        >
+                          <Edit2 size={13} />
+                        </button>
+                      )}
+                      {isSuperAdmin && (
+                        <button 
+                          onClick={() => { if(window.confirm(`¿Eliminar establecimiento "${loc.name}"?`)) deleteLocation(loc.id); }} 
+                          className="p-2 bg-white/95 dark:bg-slate-900/95 text-slate-600 dark:text-slate-300 hover:text-rose-600 shadow-md border border-slate-200/80 dark:border-slate-700 transition cursor-pointer"
+                          title="Eliminar Establecimiento"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Badge de Tipología Flotante Inferior */}
+                    <div className="absolute bottom-3 left-3 flex items-center gap-2">
+                      <span className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-sm border ${siteTypeConfig.color}`}>
+                        <SiteIcon size={12} />
+                        <span>{siteTypeConfig.label}</span>
+                      </span>
+                    </div>
+
+                    {/* Badge de Estado Operativo */}
+                    <div className="absolute bottom-3 right-3">
+                      <span className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-sm border ${statusConfig.color}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${statusConfig.dot}`} />
+                        <span>{statusConfig.label}</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Contenido de la Tarjeta */}
+                  <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
+                    <div className="space-y-3">
+                      {/* Alerta de Campaña si no está activo en la campaña filtrada */}
+                      {selectedCampaign !== 'all' && !isEffectiveActive && (
+                        <div className="p-2 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl text-[11px] font-medium text-amber-800 dark:text-amber-300 flex items-center justify-between">
+                          <span className="flex items-center gap-1.5">
+                            <AlertCircle size={13} className="text-amber-500 shrink-0" />
+                            <span>Inactivo para Campaña {selectedCampaign}</span>
+                          </span>
+                          {canManage && (
+                            <button
+                              onClick={(e) => handleToggleCampaign(loc, e)}
+                              className="text-[10px] font-bold text-amber-700 dark:text-amber-400 hover:underline uppercase shrink-0 ml-2"
+                            >
+                              Activar
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="flex justify-between items-start gap-2">
+                        <div>
+                          <Link
+                            to={`/locations/${loc.id}`}
+                            className="text-base font-black text-slate-900 dark:text-white uppercase tracking-tight hover:text-emerald-600 transition-colors block"
+                          >
+                            {loc.name}
+                          </Link>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono mt-0.5 flex items-center gap-1">
+                            <MapPin size={11} className="text-emerald-500" />
+                            <span>{loc.city || 'S/D'}, {loc.province}</span>
+                          </p>
+                        </div>
+
+                        <Link 
+                          to={`/locations/${loc.id}`} 
+                          className="p-1.5 bg-slate-50 dark:bg-slate-800 rounded-lg text-slate-400 hover:text-emerald-600 transition-all shrink-0"
+                          title="Abrir Ficha Completa del Establecimiento"
+                        >
+                          <Eye size={16} />
+                        </Link>
+                      </div>
+
+                      {/* Herencia de Suelo, Riego y Titular */}
+                      <div className="grid grid-cols-2 gap-1.5 text-[10px] font-mono bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
+                        <div className="truncate">
+                          <span className="text-[8.5px] text-slate-400 uppercase block">Suelo / Riego</span>
+                          <strong className="text-emerald-600 dark:text-emerald-400">{loc.soilType || 'Franco'}</strong>
+                          <span className="text-slate-400"> · {loc.irrigationSystem || 'Goteo'}</span>
+                        </div>
+                        <div className="truncate">
+                          <span className="text-[8.5px] text-slate-400 uppercase block">Titular / Resp.</span>
+                          <strong className="text-slate-800 dark:text-slate-200">
+                            {ownerClient?.name || loc.ownerName || loc.responsiblePerson || 'Red Nucleus'}
+                          </strong>
+                        </div>
+                      </div>
+
+                      {/* Badge de Licencia ARICCAME y Registro Sanitario RENSPA */}
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {loc.ariccameLicenseNumber ? (
+                          <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold px-2 py-0.5 rounded bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60">
+                            <Award size={10} />
+                            <span>{loc.ariccameLicenseNumber}</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-400">
+                            Licencia ARICCAME Cooperativa
+                          </span>
+                        )}
+
+                        {loc.renspaNumber && (
+                          <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold px-2 py-0.5 rounded bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800/60">
+                            <span>RENSPA: {loc.renspaNumber}</span>
+                          </span>
                         )}
                       </div>
-                    )}
 
-                    <div className="flex justify-between items-start gap-2">
-                      <div>
-                        <h3 className="text-base font-black text-slate-900 dark:text-white uppercase tracking-tight group-hover:text-emerald-600 transition-colors">
-                          {loc.name}
-                        </h3>
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono mt-0.5 flex items-center gap-1">
-                          <MapPin size={11} className="text-emerald-500" />
-                          <span>{loc.city || 'S/D'}, {loc.province}</span>
-                        </p>
+                      {/* GRID DE MÉTRICAS (PREDIO TOTAL vs DDJJ SIEMBRA vs UNIDADES PRODUCTIVAS) */}
+                      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-[10px] font-mono tabular-nums">
+                        <div className="p-2.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-100 dark:border-slate-800 text-center">
+                          <span className="text-[8px] font-bold uppercase text-slate-400 block tracking-wider">Predio Total</span>
+                          <strong className="text-xs font-black text-slate-900 dark:text-white block mt-0.5">
+                            {loc.capacityHa || 0} Ha
+                          </strong>
+                        </div>
+
+                        <div className="p-2.5 bg-emerald-50/70 dark:bg-emerald-950/30 rounded-xl border border-emerald-100 dark:border-emerald-900/40 text-center">
+                          <span className="text-[8px] font-bold uppercase text-emerald-700 dark:text-emerald-400 block tracking-wider">DDJJ Siembra</span>
+                          <strong className="text-xs font-black text-emerald-600 dark:text-emerald-400 block mt-0.5">
+                            {loc.sowingDeclarationHa ? `${loc.sowingDeclarationHa} Ha` : 'S/D'}
+                          </strong>
+                        </div>
+
+                        <div className="p-2.5 bg-purple-50/70 dark:bg-purple-950/30 rounded-xl border border-purple-100 dark:border-purple-900/40 text-center">
+                          <span className="text-[8px] font-bold uppercase text-purple-700 dark:text-purple-400 block tracking-wider">Unidades Prod.</span>
+                          <strong className="text-xs font-black text-purple-600 dark:text-purple-400 block mt-0.5">
+                            {activePlotsCount} Act. / {locPlots.length}
+                          </strong>
+                        </div>
                       </div>
+
+                      {/* Resumen de Estado de Unidades Productivas del Establecimiento */}
+                      <div className="p-2.5 rounded-xl bg-slate-900 text-white font-mono text-[10px] space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[9px] uppercase font-bold text-slate-400">
+                            Estado Unidades Productivas ({locPlots.length})
+                          </span>
+                          <Link
+                            to={`/locations/${loc.id}`}
+                            className="text-[9.5px] text-emerald-400 hover:underline font-bold"
+                          >
+                            Gestionar Cierres →
+                          </Link>
+                        </div>
+                        <div className="grid grid-cols-3 gap-1.5 text-center tabular-nums">
+                          <div className="bg-slate-800/90 px-2 py-1 rounded-lg">
+                            <span className="text-emerald-400 font-black">{activePlotsCount}</span>
+                            <span className="text-[8.5px] text-slate-400 block">Activas</span>
+                          </div>
+                          <div className="bg-slate-800/90 px-2 py-1 rounded-lg">
+                            <span className="text-sky-400 font-black">{scheduledPlotsCount}</span>
+                            <span className="text-[8.5px] text-slate-400 block">Cosecha Prog.</span>
+                          </div>
+                          <div className="bg-slate-800/90 px-2 py-1 rounded-lg">
+                            <span className="text-amber-400 font-black">{closedPlotsCount}</span>
+                            <span className="text-[8.5px] text-slate-400 block">Homologadas</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Acciones Rápidas Inferiores */}
+                    <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                      {canManage && (
+                        <button
+                          onClick={(e) => handleToggleCampaign(loc, e)}
+                          className={`px-3 py-2 rounded-xl text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 transition shadow-sm cursor-pointer ${
+                            isEffectiveActive
+                              ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
+                              : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20'
+                          }`}
+                          title={isEffectiveActive ? `Pausar campo y sus unidades en campaña ${targetCamp}` : `Habilitar campo y sus unidades en campaña ${targetCamp}`}
+                        >
+                          <Power size={11} className={isEffectiveActive ? 'text-amber-600' : 'text-white'} />
+                          <span>{isEffectiveActive ? `Pausar (${targetCamp.slice(2)})` : `Activar (${targetCamp.slice(2)})`}</span>
+                        </button>
+                      )}
 
                       <Link 
                         to={`/locations/${loc.id}`} 
-                        className="p-1.5 bg-slate-50 dark:bg-slate-800 rounded-lg text-slate-400 hover:text-emerald-600 transition-all shrink-0"
-                        title="Ver Ficha Completa"
+                        className="flex-1 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white rounded-xl text-xs font-mono font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition shadow-sm active:scale-95"
                       >
-                        <Eye size={16} />
+                        <span>Ficha Completa & Unidades ({locPlots.length})</span>
+                        <ChevronRight size={13} />
                       </Link>
                     </div>
-
-                    {/* Badge de Licencia ARICCAME y Registro Sanitario RENPSA */}
-                    <div className="mt-3 flex flex-wrap items-center gap-1.5">
-                      {loc.ariccameLicenseNumber ? (
-                        <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold px-2 py-0.5 rounded bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60">
-                          <Award size={10} />
-                          <span>{loc.ariccameLicenseNumber}</span>
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-400">
-                          Sin Licencia ARICCAME
-                        </span>
-                      )}
-
-                      {loc.renspaNumber && (
-                        <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold px-2 py-0.5 rounded bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800/60">
-                          <span>RENSPA: {loc.renspaNumber}</span>
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Chips de Campañas Activas */}
-                    <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                      <span className="text-[9px] font-mono font-bold uppercase text-slate-400 mr-1">
-                        Campañas:
-                      </span>
-                      {campaigns.map(camp => (
-                        <span 
-                          key={camp}
-                          className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                            camp === targetCamp
-                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700'
-                              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                          }`}
-                        >
-                          {camp}
-                        </span>
-                      ))}
-                    </div>
-
-                    {/* GRID DE MÉTRICAS (PREDIO TOTAL vs DDJJ SIEMBRA vs LOTES) */}
-                    <div className="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 text-[10px]">
-                      <div className="p-2.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-100 dark:border-slate-800 text-center">
-                        <span className="text-[8px] font-mono font-bold uppercase text-slate-400 block tracking-wider">Predio Total</span>
-                        <strong className="text-xs font-mono font-black text-slate-900 dark:text-white block mt-0.5">
-                          {loc.capacityHa || 0} Ha
-                        </strong>
-                      </div>
-
-                      <div className="p-2.5 bg-emerald-50/70 dark:bg-emerald-950/30 rounded-xl border border-emerald-100 dark:border-emerald-900/40 text-center">
-                        <span className="text-[8px] font-mono font-bold uppercase text-emerald-700 dark:text-emerald-400 block tracking-wider">DDJJ Siembra</span>
-                        <strong className="text-xs font-mono font-black text-emerald-600 dark:text-emerald-400 block mt-0.5">
-                          {loc.sowingDeclarationHa ? `${loc.sowingDeclarationHa} Ha` : 'S/D'}
-                        </strong>
-                      </div>
-
-                      <div className="p-2.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-100 dark:border-slate-800 text-center">
-                        <span className="text-[8px] font-mono font-bold uppercase text-slate-400 block tracking-wider">Lotes Hijos</span>
-                        <strong className="text-xs font-mono font-bold text-purple-600 dark:text-purple-400 block mt-0.5">
-                          {activePlotsCount} / {locPlots.length}
-                        </strong>
-                      </div>
-                    </div>
-
-                    {/* Responsable técnico */}
-                    {loc.responsiblePerson && (
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-3 font-medium flex items-center gap-1.5">
-                        <User size={12} className="text-slate-400" />
-                        <span>Resp: <strong className="text-slate-700 dark:text-slate-300 font-bold">{loc.responsiblePerson}</strong></span>
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Acciones Rápidas Inferiores */}
-                  <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
-                    {/* Botón para cambiar estado rápido de campaña con sincronización a parcelas */}
-                    {canManage && (
-                      <button
-                        onClick={(e) => handleToggleCampaign(loc, e)}
-                        className={`px-3 py-1.5 rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 transition shadow-sm ${
-                          isEffectiveActive
-                            ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
-                            : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20'
-                        }`}
-                        title={isEffectiveActive ? `Pausar campo y sus unidades en campaña ${targetCamp}` : `Habilitar campo y sus unidades en campaña ${targetCamp}`}
-                      >
-                        <Power size={11} className={isEffectiveActive ? 'text-amber-600' : 'text-white'} />
-                        <span>{isEffectiveActive ? `Pausar (${targetCamp.slice(2)})` : `Activar (${targetCamp.slice(2)})`}</span>
-                      </button>
-                    )}
-
-                    <Link 
-                      to={`/locations/${loc.id}`} 
-                      className="flex-1 py-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition shadow-sm active:scale-95"
-                    >
-                      <span>Ficha Completa</span>
-                      <ChevronRight size={13} />
-                    </Link>
                   </div>
                 </div>
-              </div>
-            );
-          })
-        )}
-      </div>
+              );
+            })
+          )}
+        </div>
+      )}
 
       {/* 4. MODAL INTEGRAL: FICHA AGRONÓMICA, LICENCIA ARICCAME Y GEODESIA DDJJ */}
       {isModalOpen && (

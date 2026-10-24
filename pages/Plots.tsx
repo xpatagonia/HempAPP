@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
 import { PlotIdentificationModal } from '../components/PlotIdentificationModal';
+import { PlotCycleClosureModal } from '../components/PlotCycleClosureModal';
 import SeedingProtocolModal from '../components/SeedingProtocolModal';
 import { canAccessPlot, canAccessLocation } from '../src/utils/structurePermissions';
 
@@ -110,6 +111,7 @@ export default function Plots() {
   const [isSaving, setIsSaving] = useState(false);
   const [editingPlot, setEditingPlot] = useState<Plot | null>(null);
   const [selectedPlotForIdModal, setSelectedPlotForIdModal] = useState<Plot | null>(null);
+  const [selectedPlotForClosureModal, setSelectedPlotForClosureModal] = useState<Plot | null>(null);
   const [isProtocolModalOpen, setIsProtocolModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -330,9 +332,14 @@ export default function Plots() {
       return matchSearch && matchLoc && matchType && matchStatus && matchCampaign && hasAccess;
   }), [plots, searchTerm, filterLoc, filterType, filterStatus, selectedCampaign, currentUser, locations, clients]);
 
-  // Métricas de campaña para la barra de estado
+  // Parcelas visibles según rol y establecimiento del usuario actual
+  const accessiblePlots = useMemo(() => {
+    return plots.filter(p => canAccessPlot(currentUser, p, locations, clients));
+  }, [plots, currentUser, locations, clients]);
+
+  // Métricas de campaña para la barra de estado (respetando aislamiento por rol)
   const campaignStats = useMemo(() => {
-    const currentPlots = plots.filter(p => {
+    const currentPlots = accessiblePlots.filter(p => {
       if (selectedCampaign === 'all') return true;
       const campaigns = p.activeCampaigns || (p.campaign ? [p.campaign] : ['2025/2026']);
       return campaigns.includes(selectedCampaign) || p.campaign === selectedCampaign;
@@ -367,7 +374,7 @@ export default function Plots() {
       trialCount,
       productionCount
     };
-  }, [plots, selectedCampaign]);
+  }, [accessiblePlots, selectedCampaign]);
 
   // Resumen sincronizado de Ciclo Biológico y Fotoperiodo Local (UTC-3) por parcela
   const getPlotSyncSummary = (p: Plot, vari?: Variety, loc?: Location) => {
@@ -806,7 +813,7 @@ export default function Plots() {
           <div className="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/60 dark:border-slate-800 space-y-1">
             <span className="text-[10px] font-mono font-bold uppercase text-slate-400 block tracking-wider">Unidades en Vista</span>
             <p className="text-2xl font-mono font-black text-slate-900 dark:text-white">
-              {filteredPlots.length} <span className="text-xs font-normal text-slate-400">/ {plots.length} total</span>
+              {filteredPlots.length} <span className="text-xs font-normal text-slate-400">/ {accessiblePlots.length} asignadas</span>
             </p>
           </div>
 
@@ -926,7 +933,7 @@ export default function Plots() {
                 {/* Selector rápido de Predio / Sitio Experimental para enfocar el mapa */}
                 <div className="flex flex-wrap items-center gap-1.5">
                   {availableLocations.map(locItem => {
-                    const countInLoc = plots.filter(pl => pl.locationId === locItem.id).length;
+                    const countInLoc = accessiblePlots.filter(pl => pl.locationId === locItem.id).length;
                     const isSelected = activeMapLocation?.id === locItem.id;
                     return (
                       <button
@@ -1142,37 +1149,34 @@ export default function Plots() {
                             <QrCode size={13} />
                           </button>
 
-                          {canManage && p.status === 'Activa' && (
-                            <button
-                              type="button"
-                              onClick={async e => {
-                                e.stopPropagation();
-                                await closePlotCycle(p.id, {
-                                  notes: `Cierre de ciclo certificado desde padrón de parcelas (${targetCamp}).`
-                                });
-                              }}
-                              className="px-2 py-1 rounded-lg text-[10px] font-mono font-bold uppercase flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 transition cursor-pointer"
-                              title="Cerrar ciclo / Cosechar parcela (Desaparece del Dashboard Operativo Activo)"
-                            >
-                              <Archive size={10} />
-                              <span>Cerrar Ciclo</span>
-                            </button>
-                          )}
-
-                          {canManage && p.status === 'Cosechada' && (
-                            <button
-                              type="button"
-                              onClick={async e => {
-                                e.stopPropagation();
-                                await reopenPlotCycle(p.id, targetCamp);
-                              }}
-                              className="px-2 py-1 rounded-lg text-[10px] font-mono font-bold uppercase flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 transition cursor-pointer"
-                              title="Reabrir ciclo en campaña activa"
-                            >
-                              <CheckCircle2 size={10} />
-                              <span>Reabrir</span>
-                            </button>
-                          )}
+                          <button
+                            type="button"
+                            onClick={e => {
+                              e.stopPropagation();
+                              setSelectedPlotForClosureModal(p);
+                            }}
+                            className={`px-2 py-1 rounded-lg text-[10px] font-mono font-bold uppercase flex items-center gap-1 transition cursor-pointer ${
+                              p.closureConfirmed || p.status === 'Cosechada'
+                                ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
+                                : p.isHarvestScheduled
+                                ? 'bg-sky-50 hover:bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300 border border-sky-200 dark:border-sky-800'
+                                : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800'
+                            }`}
+                            title={
+                              p.closureConfirmed || p.status === 'Cosechada'
+                                ? 'Ver Documento de Siembra Homologado / Gestión de Cierre'
+                                : 'Programar o Confirmar Cierre de Ciclo / Cosecha & Labores Agrícolas'
+                            }
+                          >
+                            <Archive size={10} />
+                            <span>
+                              {p.closureConfirmed || p.status === 'Cosechada'
+                                ? 'Doc. Siembra'
+                                : p.isHarvestScheduled
+                                ? 'Prog. Cosecha'
+                                : 'Cierre / Cosecha'}
+                            </span>
+                          </button>
 
                           {canManage && (
                             <button
@@ -1393,10 +1397,35 @@ export default function Plots() {
                         type="button"
                         onClick={e => {
                           e.stopPropagation();
+                          setSelectedPlotForClosureModal(p);
+                        }}
+                        className={`px-2.5 py-2 rounded-xl text-[10px] font-mono font-black uppercase flex items-center gap-1 transition border cursor-pointer ${
+                          p.closureConfirmed || p.status === 'Cosechada'
+                            ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300 dark:border-amber-700'
+                            : p.isHarvestScheduled
+                            ? 'bg-sky-50 hover:bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300 border-sky-200 dark:border-sky-800'
+                            : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800'
+                        }`}
+                        title={
+                          p.closureConfirmed || p.status === 'Cosechada'
+                            ? 'Documento Oficial de Siembra & Acta de Cierre Homologado'
+                            : 'Cierre de Ciclo / Cosecha (Fecha, Hora & Labores Agrícolas)'
+                        }
+                      >
+                        <Archive size={13} />
+                        <span className="hidden sm:inline">
+                          {p.closureConfirmed || p.status === 'Cosechada' ? 'Doc. Siembra' : 'Cierre/Cosecha'}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={e => {
+                          e.stopPropagation();
                           setSelectedPlotForIdModal(p);
                         }}
                         className="p-2 text-slate-600 dark:text-slate-300 hover:text-emerald-600 bg-slate-100 hover:bg-emerald-50 dark:bg-slate-800 rounded-xl transition border border-slate-200 dark:border-slate-700 cursor-pointer"
-                        title="Rótulo QR y Cartel Oficial de Tranquera (Ley 27.669)"
+                        title="Rótulo QR, Código de Barras y Cartel Oficial de Tranquera (Ley 27.669)"
                       >
                         <QrCode size={14} />
                       </button>
@@ -2036,6 +2065,23 @@ export default function Plots() {
           seedBatch={
             seedBatches.find(b => b.id === selectedPlotForIdModal.seedBatchId) ||
             seedBatches.find(b => b.varietyId === selectedPlotForIdModal.varietyId && (!b.materialType || b.materialType === 'seed')) ||
+            seedBatches.find(b => !b.materialType || b.materialType === 'seed') ||
+            seedBatches[0]
+          }
+        />
+      )}
+
+      {selectedPlotForClosureModal && (
+        <PlotCycleClosureModal
+          isOpen={!!selectedPlotForClosureModal}
+          onClose={() => setSelectedPlotForClosureModal(null)}
+          plot={plots.find(pl => pl.id === selectedPlotForClosureModal.id) || selectedPlotForClosureModal}
+          location={locations.find(l => l.id === selectedPlotForClosureModal.locationId)}
+          variety={varieties.find(v => v.id === selectedPlotForClosureModal.varietyId)}
+          client={clients?.find(c => c.id === locations.find(l => l.id === selectedPlotForClosureModal.locationId)?.clientId)}
+          seedBatch={
+            seedBatches.find(b => b.id === selectedPlotForClosureModal.seedBatchId) ||
+            seedBatches.find(b => b.varietyId === selectedPlotForClosureModal.varietyId && (!b.materialType || b.materialType === 'seed')) ||
             seedBatches.find(b => !b.materialType || b.materialType === 'seed') ||
             seedBatches[0]
           }

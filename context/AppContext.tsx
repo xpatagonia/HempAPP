@@ -19,7 +19,8 @@ import {
   canAccessStoragePoint,
   canAccessSeedBatch,
   canAccessTask,
-  hasGlobalReadScope
+  hasGlobalReadScope,
+  isCentralAdminOrSupervisor
 } from '../src/utils/structurePermissions';
 
 interface AppContextType {
@@ -115,7 +116,22 @@ interface AppContextType {
   refreshData: () => Promise<void>;
   activeCampaign: string;
   setActiveCampaign: (camp: string) => void;
-  closePlotCycle: (plotId: string, options?: { harvestYieldKg?: number; notes?: string; closedDate?: string }) => Promise<boolean>;
+  closePlotCycle: (
+    plotId: string,
+    options?: {
+      mode?: 'confirm' | 'schedule';
+      harvestYieldKg?: number;
+      notes?: string;
+      closedDate?: string;
+      closedTime?: string;
+      machinery?: string;
+      implement?: string;
+      operatorName?: string;
+      operatorUserId?: string;
+      directCostUsd?: number;
+      linkedLaborId?: string;
+    }
+  ) => Promise<boolean>;
   reopenPlotCycle: (plotId: string, campaign?: string) => Promise<boolean>;
   syncAllPlotsContinuousRainfall: (forcePersist?: boolean) => Promise<number>;
   isSyncingGlobalRainfall: boolean;
@@ -1764,12 +1780,135 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
     const closePlotCycle = async (
         plotId: string,
-        options?: { harvestYieldKg?: number; notes?: string; closedDate?: string }
+        options?: {
+            mode?: 'confirm' | 'schedule';
+            harvestYieldKg?: number;
+            notes?: string;
+            closedDate?: string;
+            closedTime?: string;
+            machinery?: string;
+            implement?: string;
+            operatorName?: string;
+            operatorUserId?: string;
+            directCostUsd?: number;
+            linkedLaborId?: string;
+        }
     ): Promise<boolean> => {
         const target = plots.find(p => p.id === plotId);
         if (!target) return false;
+
+        // REGLA DE BLOQUEO: Una vez confirmada la fecha de cierre (closureConfirmed o status === 'Cosechada'),
+        // el productor NO puede modificarla; únicamente el Administrador Central puede rectificar.
+        const isAlreadyConfirmed = Boolean(target.closureConfirmed || target.status === 'Cosechada');
+        if (isAlreadyConfirmed && !isCentralAdminOrSupervisor(currentUser)) {
+            console.warn('Candado de seguridad: Solo el Administrador Central puede modificar una fecha de cierre ya confirmada.');
+            return false;
+        }
+
+        const mode = options?.mode || 'confirm';
         const closedDateIso = options?.closedDate || new Date().toISOString().split('T')[0];
+        const closedTimeStr = options?.closedTime || new Date().toTimeString().slice(0, 5);
         const camp = target.campaign || (activeCampaign === 'all' ? '2025/2026' : activeCampaign);
+
+        // Código de barras determinístico GS1 / Code-128 y N° de Acta Homologada
+        let hash = 0;
+        const seedStr = `${target.id}-${camp}`;
+        for (let i = 0; i < seedStr.length; i++) {
+            hash = (hash * 31 + seedStr.charCodeAt(i)) % 1000000;
+        }
+        const numericSuffix = String(Math.abs(hash)).padStart(6, '0');
+        const closureActCode =
+            target.closureActCode ||
+            `ACTA-SIEMBRA-${camp.replace('/', '')}-${target.id.replace(/[^a-zA-Z0-9]/g, '').slice(-4).toUpperCase() || numericSuffix.slice(0, 4)}`;
+        const closureBarcode = target.closureBarcode || `7798421${numericSuffix}`;
+
+        // Vincular o crear automáticamente la Labor Agrícola de Cosecha / Cierre de Ciclo
+        const laborId = options?.linkedLaborId || target.linkedClosureLaborId || `task-close-${target.id}`;
+        const existingLabor = tasks.find(t => t.id === laborId);
+        const operatorDisplay =
+            options?.operatorName ||
+            target.harvestOperator ||
+            target.sowingResponsibleName ||
+            currentUser?.name ||
+            'Jefe Operativo de Cosecha';
+        const machineryDisplay =
+            options?.machinery ||
+            target.harvestMachinery ||
+            existingLabor?.machinery?.tractor ||
+            'Cosechadora Axial / Segadora Acondicionadora';
+
+        const laborPayload: Task = {
+            id: laborId,
+            title:
+                mode === 'schedule'
+                    ? `Cosecha y Cierre de Ciclo Programado — ${target.name} (${closedDateIso} ${closedTimeStr} hs)`
+                    : `Cosecha y Cierre Homologado de Ciclo — ${target.name} (${closureActCode})`,
+            description:
+                options?.notes ||
+                (mode === 'schedule'
+                    ? `Labor agrícola de cosecha y cierre de ciclo programada con anticipación para el ${closedDateIso} a las ${closedTimeStr} hs.`
+                    : `Labor agrícola de cosecha y finalización homologada del ciclo de siembra ejecutada el ${closedDateIso} a las ${closedTimeStr} hs.`),
+            status: mode === 'schedule' ? 'Planificada' : 'Homologada',
+            priority: 'Alta',
+            assignedToIds: options?.operatorUserId
+                ? [options.operatorUserId]
+                : existingLabor?.assignedToIds || (currentUser ? [currentUser.id] : ['1']),
+            dueDate: closedDateIso,
+            executionDate: closedDateIso,
+            plotId: target.id,
+            createdBy: existingLabor?.createdBy || currentUser?.id || '1',
+            laborType: 'COSECHA',
+            targetStage: 'BBCH_89_99',
+            advancesPhenologicalStage: mode === 'confirm',
+            newPhenologicalStage: 'BBCH_89_99',
+            machinery: {
+                tractor: machineryDisplay,
+                implement: options?.implement || existingLabor?.machinery?.implement || 'Cabezal Cosechador / Enfardadora',
+                machineHours: existingLabor?.machinery?.machineHours || 3.5,
+                fuelConsumptionLiters: existingLabor?.machinery?.fuelConsumptionLiters || 28
+            },
+            operator: operatorDisplay,
+            directCostUsd: options?.directCostUsd !== undefined ? options.directCostUsd : existingLabor?.directCostUsd || 120,
+            syncWithExpenses: true,
+            notes: `Fecha: ${closedDateIso} ${closedTimeStr} hs | Acta: ${closureActCode} | Barcode: ${closureBarcode} | ${options?.notes || ''}`.trim(),
+            homologatedBy: mode === 'confirm' ? (currentUser?.name || 'Dirección Técnica') : undefined,
+            homologatedAt: mode === 'confirm' ? closedDateIso : undefined,
+            homologationNotes:
+                mode === 'confirm'
+                    ? `Ciclo de siembra finalizado y homologado (${closureActCode}).`
+                    : undefined
+        };
+
+        await crud('tasks', laborPayload, existingLabor ? 'update' : 'insert');
+
+        // Si es programación anticipada, registramos la fecha/hora programada sin bloquear aún el lote como Cosechado
+        if (mode === 'schedule') {
+            const scheduledPlot: Plot = {
+                ...target,
+                isHarvestScheduled: true,
+                scheduledHarvestDate: closedDateIso,
+                scheduledHarvestTime: closedTimeStr,
+                linkedClosureLaborId: laborId,
+                harvestMachinery: machineryDisplay,
+                harvestOperator: operatorDisplay,
+                closureActCode,
+                closureBarcode,
+                closureNotes: options?.notes || target.closureNotes
+            };
+            const okSched = await crud('plots', scheduledPlot, 'update');
+
+            const schedLog: FieldLog = {
+                id: `log-sched-${plotId}-${Date.now()}`,
+                plotId,
+                date: closedDateIso,
+                time: closedTimeStr,
+                note: `📅 PROGRAMACIÓN DE CIERRE DE CICLO / COSECHA (${camp}): Programada para el ${closedDateIso} a las ${closedTimeStr} hs. Vinculada a Labor Agrícola #${laborId}. Operario: ${operatorDisplay}. Maquinaria: ${machineryDisplay}.`
+            };
+            await crud('field_logs', schedLog, 'insert');
+            return okSched;
+        }
+
+        // Modo CONFIRM: Cierre definitivo y homologación del ciclo de siembra
         const nextCampStatuses: Record<string, 'Activa' | 'Pausada' | 'En Barbecho' | 'Cosechada'> = {
             ...(target.campaignStatuses || {}),
             [camp]: 'Cosechada'
@@ -1785,8 +1924,9 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         const stageEntry = {
             stageId: 'BBCH_89_99' as HempStageId,
             date: closedDateIso,
+            laborId,
             certifiedBy: currentUser?.name || 'Dirección Técnica',
-            notes: options?.notes || 'Cierre de ciclo productivo y cosecha certificada.'
+            notes: options?.notes || `Cierre de ciclo productivo y cosecha homologada (${closureActCode} - ${closedTimeStr} hs).`
         };
 
         const updatedPlot: Plot = {
@@ -1796,9 +1936,21 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             lastStageUpdateDate: closedDateIso,
             campaignStatuses: nextCampStatuses,
             closedAt: closedDateIso,
+            closedDate: closedDateIso,
+            closedTime: closedTimeStr,
             closedBy: currentUser?.name || 'Dirección Técnica',
-            closureNotes: options?.notes || 'Ciclo completado y cerrado operativamente.',
-            actualHarvestYieldKg: options?.harvestYieldKg !== undefined ? Number(options.harvestYieldKg) : target.actualHarvestYieldKg,
+            closureConfirmed: true,
+            closureActCode,
+            closureBarcode,
+            isHarvestScheduled: false,
+            linkedClosureLaborId: laborId,
+            harvestMachinery: machineryDisplay,
+            harvestOperator: operatorDisplay,
+            closureNotes: options?.notes || 'Ciclo de siembra finalizado, cosechado y homologado.',
+            actualHarvestYieldKg:
+                options?.harvestYieldKg !== undefined ? Number(options.harvestYieldKg) : target.actualHarvestYieldKg,
+            harvestYieldKg:
+                options?.harvestYieldKg !== undefined ? Number(options.harvestYieldKg) : (target.harvestYieldKg ?? target.actualHarvestYieldKg),
             waterFootprintM3Ha,
             stageHistory: [...(target.stageHistory || []), stageEntry]
         };
@@ -1806,7 +1958,9 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         const ok = await crud('plots', updatedPlot, 'update');
 
         // Cerrar tareas pendientes asociadas a la parcela cosechada
-        const pendingPlotTasks = tasks.filter(t => t.plotId === plotId && t.status === 'Pendiente');
+        const pendingPlotTasks = tasks.filter(
+            t => t.plotId === plotId && t.id !== laborId && (t.status === 'Pendiente' || t.status === 'Planificada')
+        );
         for (const t of pendingPlotTasks) {
             await crud('tasks', { ...t, status: 'Completada' }, 'update');
         }
@@ -1816,10 +1970,10 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             id: `log-close-${plotId}-${Date.now()}`,
             plotId,
             date: closedDateIso,
-            time: '18:00',
-            note: `🏁 CIERRE DE CICLO / COSECHA (${camp}): Parcela cerrada operativamente por ${currentUser?.name || 'Dirección Técnica'}. ${
+            time: closedTimeStr,
+            note: `🏁 DOCUMENTO DE SIEMBRA Y CIERRE HOMOLOGADO (${closureActCode} | Barcode ${closureBarcode}): Ciclo finalizado el ${closedDateIso} a las ${closedTimeStr} hs por ${currentUser?.name || 'Dirección Técnica'}. ${
                 options?.harvestYieldKg ? `Rinde cosechado: ${options.harvestYieldKg} kg. ` : ''
-            }Huella Hídrica Consolidada: ${waterFootprintM3Ha} m³/ha. ${options?.notes || ''}`.trim()
+            }Labor Agrícola vinculada: ${machineryDisplay} (${operatorDisplay}). Huella Hídrica Consolidada: ${waterFootprintM3Ha} m³/ha. ${options?.notes || ''}`.trim()
         };
         await crud('field_logs', closureLog, 'insert');
 
@@ -1829,6 +1983,11 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     const reopenPlotCycle = async (plotId: string, campaign?: string): Promise<boolean> => {
         const target = plots.find(p => p.id === plotId);
         if (!target) return false;
+        // REGLA DE NEGOCIO: Una vez confirmada la fecha de cierre, el productor no puede modificar ni reabrir; solo el Administrador.
+        if (!isCentralAdminOrSupervisor(currentUser)) {
+            console.warn('Candado de seguridad: Solo el Administrador Central puede reabrir un ciclo ya homologado.');
+            return false;
+        }
         const camp = campaign || target.campaign || (activeCampaign === 'all' ? '2025/2026' : activeCampaign);
         const nextCampStatuses: Record<string, 'Activa' | 'Pausada' | 'En Barbecho' | 'Cosechada'> = {
             ...(target.campaignStatuses || {}),
@@ -1839,6 +1998,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         const updatedPlot: Plot = {
             ...target,
             status: 'Activa',
+            closureConfirmed: false,
             campaign: camp,
             activeCampaigns: activeCampaignsList,
             campaignStatuses: nextCampStatuses

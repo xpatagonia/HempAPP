@@ -7,6 +7,7 @@ import {
   FileCheck2, Compass, Layers, UserCheck, Award
 } from 'lucide-react';
 import { Plot, Location, Variety, Client, SeedBatch } from '../types';
+import { BarcodeSVG } from './BarcodeSVG';
 
 interface PlotIdentificationModalProps {
   isOpen: boolean;
@@ -52,6 +53,9 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
   const seedLotCode = seedBatch?.batchCode || 'FUT-83-25-HEM';
   const seedMotherLot = seedBatch?.certificationNumber || (seedLotCode.includes('-REC-') ? seedLotCode.split('-REC-')[0] : seedLotCode);
   const seedRotuloInase = seedBatch?.labelSerialNumber || 'INASE-SERIE-2025-A0041928';
+  const isCycleClosed = Boolean(plot.closureConfirmed || plot.status === 'Cosechada');
+  const actCode = plot.closureActCode || `ACTA-SIEMBRA-${(plot.campaign || '2526').replace('/', '')}-${plot.id.slice(-5).toUpperCase()}`;
+  const barcodeCode = plot.closureBarcode || `7798394${plot.id.replace(/[^0-9A-Za-z]/g, '').toUpperCase().slice(0, 6)}2026`;
 
   // Construir URL pública con parámetros de respaldo para garantizar trazabilidad instantánea en cualquier celular
   const traceUrl = (() => {
@@ -65,6 +69,7 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
     if (plot.surfaceArea) params.set('ha', String(plot.surfaceArea));
     if (campaignDisplay) params.set('camp', campaignDisplay);
     if (plot.status) params.set('status', plot.status);
+    if (plot.sowingDate) params.set('sowing', plot.sowingDate);
     if (plot.seedBatchId || seedBatch?.id) params.set('batchId', plot.seedBatchId || seedBatch?.id || '');
     params.set('seedLot', seedLotCode);
     params.set('seedCert', seedMotherLot);
@@ -72,6 +77,16 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
     if (plot.samplingResponsibleName || seedBatch?.samplerName) params.set('sampler', plot.samplingResponsibleName || seedBatch?.samplerName || '');
     if (plot.sowingResponsibleName) params.set('sower', plot.sowingResponsibleName);
     if (plot.technicalResponsibleName || seedBatch?.inspectorName) params.set('inspector', plot.technicalResponsibleName || seedBatch?.inspectorName || '');
+    if (isCycleClosed) {
+      params.set('closed', '1');
+      if (plot.closedDate) params.set('closedAt', plot.closedDate);
+      if (plot.closedTime) params.set('closedTime', plot.closedTime);
+      params.set('actCode', actCode);
+      params.set('barcode', barcodeCode);
+      if (plot.harvestYieldKg) params.set('yieldKg', String(plot.harvestYieldKg));
+    } else if (plot.isHarvestScheduled && plot.scheduledHarvestDate) {
+      params.set('scheduledAt', `${plot.scheduledHarvestDate}${plot.scheduledHarvestTime ? ` ${plot.scheduledHarvestTime}` : ''}`);
+    }
 
     const queryStr = params.toString();
     return `${publicBaseUrl}/#/trace/${encodeURIComponent(plot.id)}${queryStr ? `?${queryStr}` : ''}`;
@@ -817,30 +832,40 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                         </div>
                       </div>
 
-                      {/* SECCIÓN 4: AUDITORÍA DIGITAL Y RECUADROS DE FIRMAS (SIEMPRE VISIBLE Y SIN DESBORDE) */}
+                      {/* SECCIÓN 4: AUDITORÍA DIGITAL, CÓDIGO DE BARRAS Y RECUADROS DE FIRMAS */}
                       <div className="p2-sec4-grid grid grid-cols-3 gap-2.5 items-stretch border-t-2 border-slate-300 pt-2.5">
                         <div className="flex items-center gap-2.5 p-2 bg-slate-50 rounded-xl border border-slate-200">
                           <div className="bg-white p-1 rounded-lg border border-slate-200 shrink-0">
-                            <QRCodeSVG value={traceUrl} size={58} level="M" />
+                            <QRCodeSVG value={traceUrl} size={56} level="M" />
                           </div>
                           <div className="text-[9px] font-mono space-y-0.5 min-w-0">
                             <strong className="font-black text-slate-900 block truncate text-[10px]">QR Trazabilidad Lote</strong>
                             <span className="text-emerald-800 font-black block truncate text-[8.5px]">Lote Semilla: {seedMotherLot}</span>
-                            <span className="text-slate-500 block text-[8px] leading-tight">Rótulo: {seedRotuloInase}</span>
+                            <span className="text-slate-600 block text-[8px] leading-tight truncate">
+                              {isCycleClosed ? `Cierre Homologado: ${plot.closedDate || ''}` : `Estado: ${statusDisplay}`}
+                            </span>
                             <span className="text-emerald-700 font-bold block text-[8px]">SENASA · INASE · ARICCAME</span>
                           </div>
                         </div>
 
-                        {/* Caja Firma Responsable Técnico */}
-                        <div className="p-2 border-2 border-dashed border-slate-400 rounded-xl h-20 flex flex-col justify-between text-[9px] font-mono">
-                          <span className="font-bold text-slate-600 uppercase text-[8.5px]">Firma Responsable Técnico / Agrónomo</span>
-                          <div className="border-t border-slate-300 pt-1 text-slate-400 text-center text-[8px]">Firma, Aclaración y Matrícula</div>
+                        {/* Código de Barras Vectorial GS1 / Code-128 & Acta de Siembra */}
+                        <div className="p-2 bg-white border-2 border-slate-300 rounded-xl flex flex-col justify-between items-center text-[8.5px] font-mono">
+                          <div className="w-full flex items-center justify-between text-[8px] font-black uppercase text-slate-700">
+                            <span>Cód. Barras GS1</span>
+                            <span className={isCycleClosed ? 'text-emerald-700' : 'text-amber-700'}>
+                              {isCycleClosed ? 'CICLO HOMOLOGADO' : 'CICLO ACTIVO'}
+                            </span>
+                          </div>
+                          <BarcodeSVG value={barcodeCode} height={30} barWidth={1.15} fontSize={8} />
+                          <span className="text-[7.5px] font-bold text-slate-500 truncate w-full text-center">
+                            {actCode}
+                          </span>
                         </div>
 
-                        {/* Caja Visado Inspección Oficial */}
+                        {/* Caja Firma Responsable Técnico */}
                         <div className="p-2 border-2 border-dashed border-slate-400 rounded-xl h-20 flex flex-col justify-between text-[9px] font-mono">
-                          <span className="font-bold text-slate-600 uppercase text-[8.5px]">Inspección Oficial / Autoridad Rural</span>
-                          <div className="border-t border-slate-300 pt-1 text-slate-400 text-center text-[8px]">Sello, Fecha y Matrícula Inspector</div>
+                          <span className="font-bold text-slate-600 uppercase text-[8.5px]">Firma Dir. Técnico / Inspección</span>
+                          <div className="border-t border-slate-300 pt-1 text-slate-400 text-center text-[8px]">Firma, Sello y Matrícula</div>
                         </div>
                       </div>
 
@@ -1014,29 +1039,51 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                   </div>
                 </div>
 
-                {/* QR Y VERIFICACIÓN CON N° DE LOTE DE SEMILLA EXPLÍCITO */}
-                <div className="flex items-center gap-4 border-t-2 border-slate-200 pt-3.5">
-                  <div className="p-2 bg-white rounded-2xl border-2 border-slate-300 shadow-sm shrink-0">
-                    <QRCodeSVG
-                      value={traceUrl}
-                      size={labelFormat === 'thermal' ? 90 : 110}
-                      level="H"
-                      includeMargin={false}
-                    />
+                {/* QR Y CÓDIGO DE BARRAS VECTORIAL CON TRAZABILIDAD DE CIERRE DE CICLO */}
+                <div className="space-y-3 border-t-2 border-slate-200 pt-3.5">
+                  <div className="flex items-center gap-4">
+                    <div className="p-2 bg-white rounded-2xl border-2 border-slate-300 shadow-sm shrink-0">
+                      <QRCodeSVG
+                        value={traceUrl}
+                        size={labelFormat === 'thermal' ? 88 : 104}
+                        level="H"
+                        includeMargin={false}
+                      />
+                    </div>
+                    <div className="space-y-1 text-xs font-mono">
+                      <p className="font-black text-slate-900 text-sm">
+                        QR & Código de Barras de Trazabilidad Integral
+                      </p>
+                      <p className="text-[10.5px] font-black text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 inline-block">
+                        N° Lote de Semilla: {seedMotherLot} · Rótulo: {seedRotuloInase}
+                      </p>
+                      {isCycleClosed ? (
+                        <p className="text-[10px] font-black text-amber-900 bg-amber-100 px-2 py-0.5 rounded border border-amber-300 block">
+                          ✓ CICLO DE SIEMBRA FINALIZADO Y HOMOLOGADO ({plot.closedDate || ''} {plot.closedTime || ''}) · {actCode}
+                        </p>
+                      ) : plot.isHarvestScheduled && plot.scheduledHarvestDate ? (
+                        <p className="text-[10px] font-bold text-sky-900 bg-sky-50 px-2 py-0.5 rounded border border-sky-200 block">
+                          ⏱ Cosecha Programada: {plot.scheduledHarvestDate} {plot.scheduledHarvestTime || ''} hs
+                        </p>
+                      ) : null}
+                      <p className="text-slate-500 text-[9.5px] leading-tight">
+                        Escanee QR o Código de Barras GS1 para auditar N° de lote de semilla, labores agrícolas, cierre de ciclo homologado y monitoreo Sentinel-2.
+                      </p>
+                    </div>
                   </div>
-                  <div className="space-y-1 text-xs font-mono">
-                    <p className="font-black text-slate-900 text-sm">
-                      QR Trazabilidad Integral del Lote y Parcela
-                    </p>
-                    <p className="text-[10.5px] font-black text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 inline-block">
-                      N° Lote de Semilla: {seedMotherLot} · Rótulo: {seedRotuloInase}
-                    </p>
-                    <p className="text-slate-500 text-[9.5px] leading-tight">
-                      Escanee para auditar N° de lote de semilla, acta de muestreo ISTA, trazabilidad origen-siembra-cosecha y monitoreo Sentinel-2.
-                    </p>
-                    <span className="text-[10px] text-emerald-700 font-bold block pt-0.5">
-                      Fiscalización Oficial: SENASA · ARICCAME · INASE
-                    </span>
+
+                  {/* CÓDIGO DE BARRAS VECTORIAL INCORPORADO A LA GESTIÓN */}
+                  <div className="p-2.5 bg-slate-50 rounded-2xl border border-slate-300 flex flex-col sm:flex-row items-center justify-between gap-2">
+                    <div className="text-[9.5px] font-mono space-y-0.5 text-center sm:text-left">
+                      <span className="text-[8.5px] font-black uppercase text-slate-500 block">Código de Barras Trazabilidad GS1-128</span>
+                      <strong className="text-slate-900 font-black block">{actCode}</strong>
+                      <span className="text-emerald-700 font-bold block">
+                        {isCycleClosed ? `Homologado por: ${plot.closedBy || 'Administración Central'}` : `Siembra: ${plot.sowingDate || 'Declarada'}`}
+                      </span>
+                    </div>
+                    <div className="bg-white px-3 py-1.5 rounded-xl border border-slate-200">
+                      <BarcodeSVG value={barcodeCode} height={36} barWidth={1.35} fontSize={9.5} />
+                    </div>
                   </div>
                 </div>
 

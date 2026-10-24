@@ -17,6 +17,7 @@ import {
 import MapEditor from '../components/MapEditor';
 import HydricBalance from '../components/HydricBalance';
 import { PlotIdentificationModal } from '../components/PlotIdentificationModal';
+import { PlotCycleClosureModal } from '../components/PlotCycleClosureModal';
 import SeedingProtocolModal from '../components/SeedingProtocolModal';
 import { LiveTelemetryPanel } from '../components/LiveTelemetryPanel';
 import { TrialRecord, AgrochemicalApplication, AgrochemicalCategory, HempStageId, FieldLog, Task, AgriculturalLaborType } from '../types';
@@ -209,6 +210,7 @@ export default function PlotDetails() {
   const [activeTab, setActiveTab] = useState<'analytics' | 'map' | 'labors' | 'astro' | 'logs' | 'water' | 'phytosanitary' | 'iot'>('analytics');
   const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
+  const [isClosureModalOpen, setIsClosureModalOpen] = useState(false);
   const [isProtocolModalOpen, setIsProtocolModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isFetchingConditions, setIsFetchingConditions] = useState(false);
@@ -1118,43 +1120,31 @@ export default function PlotDetails() {
               <Printer size={15} />
             </button>
 
-            {canCreate && plot.status === 'Activa' && (
-              <button
-                type="button"
-                onClick={async () => {
-                  const ok = await closePlotCycle(plot.id, {
-                    notes: `Cierre de ciclo y cosecha certificado desde Ficha Técnica (${plot.campaign || '2025/2026'}).`
-                  });
-                  if (ok) {
-                    setEmailAlertToast({
-                      message: `Ciclo cerrado: ${plot.name} archivada como Cosechada`,
-                      via: 'Gestión de Campaña',
-                      sentTo: plot.campaign || '2025/2026'
-                    });
-                    setTimeout(() => setEmailAlertToast(null), 5000);
-                  }
-                }}
-                className="px-3.5 py-2 bg-amber-500/15 hover:bg-amber-600 text-amber-700 dark:text-amber-300 hover:text-white border border-amber-400/40 rounded-xl text-xs font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 transition cursor-pointer"
-                title="Cerrar ciclo productivo / Cosechar (Retira la parcela del Dashboard Operativo Activo)"
-              >
-                <CheckCircle2 size={14} />
-                <span>Cerrar Ciclo / Cosechar</span>
-              </button>
-            )}
-
-            {canCreate && plot.status === 'Cosechada' && (
-              <button
-                type="button"
-                onClick={async () => {
-                  await reopenPlotCycle(plot.id);
-                }}
-                className="px-3.5 py-2 bg-emerald-500/15 hover:bg-emerald-600 text-emerald-700 dark:text-emerald-300 hover:text-white border border-emerald-400/40 rounded-xl text-xs font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 transition cursor-pointer"
-                title="Reabrir ciclo en campaña activa"
-              >
-                <Sprout size={14} />
-                <span>Reabrir Ciclo Activo</span>
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => setIsClosureModalOpen(true)}
+              className={`px-3.5 py-2 rounded-xl text-xs font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 transition cursor-pointer border ${
+                plot.closureConfirmed || plot.status === 'Cosechada'
+                  ? 'bg-amber-500/15 hover:bg-amber-600 text-amber-800 dark:text-amber-300 hover:text-white border-amber-400/50'
+                  : plot.isHarvestScheduled
+                  ? 'bg-sky-500/15 hover:bg-sky-600 text-sky-700 dark:text-sky-300 hover:text-white border-sky-400/50'
+                  : 'bg-indigo-500/15 hover:bg-indigo-600 text-indigo-700 dark:text-indigo-300 hover:text-white border-indigo-400/50'
+              }`}
+              title={
+                plot.closureConfirmed || plot.status === 'Cosechada'
+                  ? 'Ver Documento Oficial de Siembra y Cierre de Ciclo Homologado (QR & Código de Barras)'
+                  : 'Programar o Confirmar Cierre de Ciclo / Cosecha & Labores Agrícolas'
+              }
+            >
+              <CheckCircle2 size={14} />
+              <span>
+                {plot.closureConfirmed || plot.status === 'Cosechada'
+                  ? `Doc. Siembra (${plot.closedDate || 'Homologado'})`
+                  : plot.isHarvestScheduled
+                  ? `Cosecha Prog. (${plot.scheduledHarvestDate})`
+                  : 'Cierre de Ciclo / Cosecha'}
+              </span>
+            </button>
 
             {canCreate && (
               <button
@@ -4015,6 +4005,18 @@ export default function PlotDetails() {
         <PlotIdentificationModal
           isOpen={isQrModalOpen}
           onClose={() => setIsQrModalOpen(false)}
+          plot={plot}
+          location={location}
+          variety={variety}
+          client={clients?.find(c => c.id === location?.clientId)}
+          seedBatch={seedBatch}
+        />
+      )}
+
+      {plot && (
+        <PlotCycleClosureModal
+          isOpen={isClosureModalOpen}
+          onClose={() => setIsClosureModalOpen(false)}
           plot={plot}
           location={location}
           variety={variety}
