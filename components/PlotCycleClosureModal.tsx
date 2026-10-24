@@ -170,18 +170,18 @@ export const PlotCycleClosureModal: React.FC<PlotCycleClosureModalProps> = ({
   );
 
   // Huella hídrica consolidada
-  const waterFootprintM3Ha = useMemo(() => {
+  const waterFootprintM3Ha = (() => {
     if (plot.waterFootprintM3Ha) return plot.waterFootprintM3Ha;
     const recs = hydricRecords.filter(
       h => h.plotId === plot.id || (h.locationId === plot.locationId && !h.plotId)
     );
     const mm = recs.reduce((s, r) => s + Number(r.amountMm || 0), 0);
     return Number((mm * 10).toFixed(1));
-  }, [plot, hydricRecords]);
+  })();
 
   // URL pública de trazabilidad enriquecida con datos de cierre y código de barras
   const publicBaseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://hemp-app-alpha.vercel.app';
-  const traceUrl = useMemo(() => {
+  const traceUrl = (() => {
     const params = new URLSearchParams();
     params.set('name', plot.name);
     if (location?.name) params.set('loc', location.name);
@@ -206,21 +206,7 @@ export const PlotCycleClosureModal: React.FC<PlotCycleClosureModalProps> = ({
     if (plot.sowingResponsibleName) params.set('sower', plot.sowingResponsibleName);
     if (plot.technicalResponsibleName) params.set('inspector', plot.technicalResponsibleName);
     return `${publicBaseUrl}/#/trace/${encodeURIComponent(plot.id)}?${params.toString()}`;
-  }, [
-    plot,
-    location,
-    variety,
-    campaignDisplay,
-    seedLotCode,
-    seedMotherLot,
-    seedRotuloInase,
-    computedCodes.actCode,
-    computedCodes.barcode,
-    closedDate,
-    closedTime,
-    harvestYieldKg,
-    publicBaseUrl
-  ]);
+  })();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
