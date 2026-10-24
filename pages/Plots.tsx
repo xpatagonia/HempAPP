@@ -7,11 +7,12 @@ import {
   Trash2, Edit2, QrCode, X, Save, Search, Filter, 
   MapPin, Calendar, Sprout, Printer, Activity, Plus, Loader2, Info, FolderKanban, FileUp,
   Link as LinkIcon, Scale, Box, Weight, Archive, Globe, LayoutDashboard, Eye, Palette,
-  Power, AlertCircle, CheckCircle2, ShieldCheck, Tractor, Layers, Clock, FileText, Download, UserCheck, Award
+  Power, AlertCircle, CheckCircle2, ShieldCheck, Tractor, Layers, Clock, FileText, Download, UserCheck, Award, Lock
 } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
 import { PlotIdentificationModal } from '../components/PlotIdentificationModal';
 import { PlotCycleClosureModal } from '../components/PlotCycleClosureModal';
+import { BarcodeSVG } from '../components/BarcodeSVG';
 import SeedingProtocolModal from '../components/SeedingProtocolModal';
 import { canAccessPlot, canAccessLocation } from '../src/utils/structurePermissions';
 
@@ -85,7 +86,7 @@ export default function Plots() {
     plots, locations, varieties, projects, currentUser, usersList, clients,
     seedBatches, deletePlot, updatePlot, 
     addPlot, updateLocation, updateSeedBatch, storagePoints, appName,
-    activeCampaign, setActiveCampaign, closePlotCycle, reopenPlotCycle
+    activeCampaign, setActiveCampaign, closePlotCycle, reopenPlotCycle, tasks
   } = useAppContext();
 
   const ROLE_BADGE_LABELS: Record<string, string> = {
@@ -1004,11 +1005,11 @@ export default function Plots() {
           <table className="min-w-full text-xs text-left">
             <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 uppercase text-[10px] font-mono font-bold tracking-wider border-b border-slate-100 dark:border-slate-800">
               <tr>
-                <th className="px-5 py-4">Unidad / Parcela</th>
+                <th className="px-5 py-4">Unidad Productiva</th>
                 <th className="px-5 py-4">Establecimiento & Herencia</th>
-                <th className="px-5 py-4">Genética & Trazabilidad INASE</th>
-                <th className="px-5 py-4">Ciclo Fenológico & Siembra</th>
-                <th className="px-5 py-4 text-center">Fotoperiodo Local (UTC-3)</th>
+                <th className="px-5 py-4">Genética & Semilla INASE</th>
+                <th className="px-5 py-4">Ciclo Fenológico & Fotoperiodo</th>
+                <th className="px-5 py-4">Cierre / Cosecha & Código GS1</th>
                 <th className="px-5 py-4 text-right">Superficie / Marco</th>
                 <th className="px-5 py-4 text-right">Acciones Técnicas</th>
               </tr>
@@ -1033,6 +1034,10 @@ export default function Plots() {
                     seedBatches.find(b => b.id === p.seedBatchId) ||
                     seedBatches.find(b => b.varietyId === p.varietyId && (!b.materialType || b.materialType === 'seed')) ||
                     seedBatches.find(b => !b.materialType || b.materialType === 'seed');
+                  const isClosed = Boolean(p.closureConfirmed || p.status === 'Cosechada');
+                  const actCode = p.closureActCode || `ACTA-SIEMBRA-${(p.campaign || '2526').replace('/', '')}-${p.id.slice(-5).toUpperCase()}`;
+                  const barcodeVal = p.closureBarcode || `7798394${p.id.replace(/[^0-9A-Za-z]/g, '').toUpperCase().slice(0, 6)}2026`;
+                  const plotLabors = (tasks || []).filter(t => t.plotId === p.id);
 
                   return (
                     <tr
@@ -1048,7 +1053,7 @@ export default function Plots() {
                               {p.name}
                             </span>
                             <span className="text-[10px] font-mono text-slate-400 block mt-0.5">
-                              {p.block || p.type} {p.replicate ? `· Rep. ${p.replicate}` : ''} · {p.campaign || targetCamp}
+                              {p.block || p.type} {p.replicate ? `· R${p.replicate}` : ''} · {p.campaign || targetCamp}
                             </span>
                           </div>
                         </div>
@@ -1060,9 +1065,6 @@ export default function Plots() {
                         </div>
                         <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 block mt-0.5">
                           Suelo: <strong className="text-emerald-600 dark:text-emerald-400">{p.soilType || loc?.soilType || 'Franco'}</strong> · Riego: <strong className="text-sky-600 dark:text-sky-400">{p.irrigationType || loc?.irrigationSystem || 'Goteo'}</strong>
-                        </span>
-                        <span className="text-[9.5px] font-mono text-slate-400 block">
-                          GPS: {sync.coords.lat.toFixed(5)}°, {sync.coords.lng.toFixed(5)}° ({p.polygon?.length || 5} vértices)
                         </span>
                         {!isParentCampoActive && (
                           <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 px-1.5 py-0.5 rounded mt-0.5 border border-amber-200 dark:border-amber-800">
@@ -1076,43 +1078,61 @@ export default function Plots() {
                           <span className="px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 rounded-md text-[10px] font-mono font-bold border border-emerald-200 dark:border-emerald-800/60 inline-block">
                             {vari?.name || 'Genética Certificada'}
                           </span>
-                          <div className="text-[10px] font-mono text-slate-600 dark:text-slate-400 flex flex-col">
-                            <span className="font-bold text-slate-800 dark:text-slate-200">
-                              Lote: {linkedBatch?.certificationNumber || linkedBatch?.batchCode || '103'}
-                            </span>
-                            <span className="text-[9px] text-slate-400">
-                              Rótulo INASE: {linkedBatch?.labelSerialNumber || '00000012'}
-                            </span>
+                          <div className="text-[10px] font-mono text-slate-600 dark:text-slate-400">
+                            Lote: <strong className="text-slate-800 dark:text-slate-200">{linkedBatch?.certificationNumber || linkedBatch?.batchCode || '103'}</strong> · Rótulo: {linkedBatch?.labelSerialNumber || '00000012'}
                           </div>
                         </div>
                       </td>
 
                       <td className="px-5 py-4">
-                        <div className="w-36 space-y-1">
+                        <div className="w-40 space-y-1">
                           <div className="flex items-center justify-between text-[10px]">
-                            <span className="font-bold text-emerald-600 dark:text-emerald-400">{sync.stage}</span>
+                            <span className={`font-bold ${isClosed ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                              {sync.stage}
+                            </span>
                             <span className="text-slate-500">{sync.activeDds}/{sync.cycleLimit}d</span>
                           </div>
                           <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                             <div
-                              className="h-full bg-emerald-500 rounded-full"
+                              className={`h-full rounded-full ${isClosed ? 'bg-amber-500' : 'bg-emerald-500'}`}
                               style={{ width: `${sync.progressPct}%` }}
                             />
                           </div>
                           <span className="text-[9.5px] text-slate-400 block">
-                            Siembra: {sync.sowStr}
+                            Siembra: {sync.sowStr} · ☀️ {sync.photoperiodFormatted}
                           </span>
                         </div>
                       </td>
 
-                      <td className="px-5 py-4 text-center">
-                        <div className="inline-flex flex-col items-center px-2.5 py-1 rounded-lg bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/70 dark:border-amber-800/50">
-                          <span className="text-xs font-black text-amber-700 dark:text-amber-300">
-                            {sync.photoperiodFormatted}
-                          </span>
-                          <span className="text-[9px] text-slate-500 dark:text-slate-400">
-                            🌅 {sync.sunriseLocal} · 🌇 {sync.sunsetLocal}
-                          </span>
+                      <td
+                        className="px-5 py-4"
+                        onClick={e => {
+                          e.stopPropagation();
+                          setSelectedPlotForClosureModal(p);
+                        }}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div className="space-y-0.5">
+                            {isClosed ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 text-[10px] font-black uppercase">
+                                <Lock size={10} /> {p.closedDate || p.closedAt} {p.closedTime || ''}
+                              </span>
+                            ) : p.isHarvestScheduled && p.scheduledHarvestDate ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-sky-100 dark:bg-sky-950/70 text-sky-800 dark:text-sky-300 text-[10px] font-bold uppercase">
+                                <Clock size={10} /> Prog: {p.scheduledHarvestDate}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold block">
+                                En curso · {plotLabors.length} Labores
+                              </span>
+                            )}
+                            <span className="text-[9px] text-slate-400 block">
+                              {actCode}
+                            </span>
+                          </div>
+                          <div className="bg-white px-1.5 py-0.5 rounded border border-slate-200 shrink-0 hidden xl:block">
+                            <BarcodeSVG value={barcodeVal} height={18} barWidth={0.85} showText={false} />
+                          </div>
                         </div>
                       </td>
 
@@ -1127,6 +1147,37 @@ export default function Plots() {
 
                       <td className="px-5 py-4 text-right">
                         <div className="flex items-center justify-end gap-1.5" onClick={e => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            onClick={e => {
+                              e.stopPropagation();
+                              setSelectedPlotForClosureModal(p);
+                            }}
+                            className={`px-2 py-1 rounded-lg text-[10px] font-mono font-bold uppercase flex items-center gap-1 transition cursor-pointer ${
+                              isClosed
+                                ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
+                                : p.isHarvestScheduled
+                                ? 'bg-sky-50 hover:bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300 border border-sky-200 dark:border-sky-800'
+                                : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800'
+                            }`}
+                            title="Cierre de Ciclo / Cosecha & Documento Oficial de Siembra"
+                          >
+                            <Archive size={10} />
+                            <span>{isClosed ? 'Doc. Siembra' : 'Cierre/Cosecha'}</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={e => {
+                              e.stopPropagation();
+                              setSelectedPlotForIdModal(p);
+                            }}
+                            className="p-1.5 text-slate-500 hover:text-emerald-600 bg-slate-100 hover:bg-emerald-50 dark:bg-slate-800 rounded-lg transition cursor-pointer"
+                            title="Rótulo QR, Código de Barras y Cartel Oficial de Tranquera (Ley 27.669)"
+                          >
+                            <QrCode size={13} />
+                          </button>
+
                           {canManage && (
                             <button
                               onClick={e => handleEditPlot(p, e)}
@@ -1136,47 +1187,6 @@ export default function Plots() {
                               <Edit2 size={13} />
                             </button>
                           )}
-
-                          <button
-                            type="button"
-                            onClick={e => {
-                              e.stopPropagation();
-                              setSelectedPlotForIdModal(p);
-                            }}
-                            className="p-1.5 text-slate-500 hover:text-emerald-600 bg-slate-100 hover:bg-emerald-50 dark:bg-slate-800 rounded-lg transition cursor-pointer"
-                            title="Rótulo QR y Cartel Oficial de Tranquera (Ley 27.669)"
-                          >
-                            <QrCode size={13} />
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={e => {
-                              e.stopPropagation();
-                              setSelectedPlotForClosureModal(p);
-                            }}
-                            className={`px-2 py-1 rounded-lg text-[10px] font-mono font-bold uppercase flex items-center gap-1 transition cursor-pointer ${
-                              p.closureConfirmed || p.status === 'Cosechada'
-                                ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
-                                : p.isHarvestScheduled
-                                ? 'bg-sky-50 hover:bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300 border border-sky-200 dark:border-sky-800'
-                                : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800'
-                            }`}
-                            title={
-                              p.closureConfirmed || p.status === 'Cosechada'
-                                ? 'Ver Documento de Siembra Homologado / Gestión de Cierre'
-                                : 'Programar o Confirmar Cierre de Ciclo / Cosecha & Labores Agrícolas'
-                            }
-                          >
-                            <Archive size={10} />
-                            <span>
-                              {p.closureConfirmed || p.status === 'Cosechada'
-                                ? 'Doc. Siembra'
-                                : p.isHarvestScheduled
-                                ? 'Prog. Cosecha'
-                                : 'Cierre / Cosecha'}
-                            </span>
-                          </button>
 
                           {canManage && (
                             <button
@@ -1237,19 +1247,25 @@ export default function Plots() {
                 seedBatches.find(b => b.id === p.seedBatchId) ||
                 seedBatches.find(b => b.varietyId === p.varietyId && (!b.materialType || b.materialType === 'seed')) ||
                 seedBatches.find(b => !b.materialType || b.materialType === 'seed');
+              const isClosed = Boolean(p.closureConfirmed || p.status === 'Cosechada');
+              const actCode = p.closureActCode || `ACTA-SIEMBRA-${(p.campaign || '2526').replace('/', '')}-${p.id.slice(-5).toUpperCase()}`;
+              const barcodeVal = p.closureBarcode || `7798394${p.id.replace(/[^0-9A-Za-z]/g, '').toUpperCase().slice(0, 6)}2026`;
+              const plotLabors = (tasks || []).filter(t => t.plotId === p.id);
 
               return (
                 <div
                   key={p.id}
                   className={`bg-white dark:bg-slate-900/95 rounded-2xl border transition-all flex flex-col h-full overflow-hidden group hover:shadow-md ${
-                    !isPlotActiveInCampaign || !isParentCampoActive
+                    isClosed
+                      ? 'border-amber-300/80 dark:border-amber-800/70'
+                      : !isPlotActiveInCampaign || !isParentCampoActive
                       ? 'border-slate-200/60 dark:border-slate-800/80 opacity-85 hover:opacity-100'
                       : 'border-slate-200/80 dark:border-slate-800 hover:border-emerald-500/40'
                   }`}
                 >
                   <div className="p-5 sm:p-6 flex-1 flex flex-col justify-between space-y-4">
                     <div className="space-y-3.5">
-                      {/* Cabecera de la Tarjeta */}
+                      {/* 1. Cabecera de la Unidad Productiva */}
                       <div className="flex justify-between items-start gap-2">
                         <div className="flex items-center gap-2.5">
                           <div
@@ -1272,36 +1288,43 @@ export default function Plots() {
                         </div>
 
                         <span
-                          className={`px-2 py-0.5 rounded-md text-[9.5px] font-mono font-black uppercase shrink-0 border ${
-                            p.status === 'Activa'
+                          className={`px-2 py-0.5 rounded-md text-[9.5px] font-mono font-black uppercase shrink-0 border flex items-center gap-1 ${
+                            isClosed
+                              ? 'bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300 dark:border-amber-700'
+                              : p.isHarvestScheduled
+                              ? 'bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300 border-sky-200 dark:border-sky-800'
+                              : p.status === 'Activa'
                               ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60'
                               : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border-slate-200 dark:border-slate-700'
                           }`}
                         >
-                          ● {p.status}
+                          {isClosed ? <Lock size={10} /> : null}
+                          <span>
+                            {isClosed ? 'Ciclo Homologado' : p.isHarvestScheduled ? 'Cosecha Prog.' : `● ${p.status}`}
+                          </span>
                         </span>
                       </div>
 
-                      {/* Campo Padre y Geodesia */}
+                      {/* Establecimiento Padre (contexto en vista global de Parcelas) */}
                       <div className="flex items-center justify-between text-[11px] font-mono text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/40 px-3 py-2 rounded-xl border border-slate-100 dark:border-slate-800">
                         <span className="flex items-center gap-1.5 truncate">
                           <MapPin size={12} className="text-emerald-500 shrink-0" />
                           <Link
-                            to={`/locations?search=${encodeURIComponent(loc?.name || '')}`}
+                            to={`/locations/${loc?.id || ''}`}
                             className="hover:text-emerald-600 dark:hover:text-emerald-400 font-bold text-slate-700 dark:text-slate-200 truncate"
                           >
                             {loc?.name || 'S/D'} ({loc?.city || loc?.province})
                           </Link>
                         </span>
                         <span className="text-[10px] text-slate-400 shrink-0 tabular-nums">
-                          {p.polygon?.length || 4} vértices
+                          {p.polygon?.length || 4} vértices GPS
                         </span>
                       </div>
 
-                      {/* Barra de Sincronización de Ciclo Fenológico y Fotoperiodo Local */}
+                      {/* 2. Barra de Evolución Fenológica y Fotoperiodo Local */}
                       <div className="p-3 rounded-xl bg-slate-900 text-white font-mono tabular-nums space-y-2">
                         <div className="flex items-center justify-between text-[10px]">
-                          <span className="text-emerald-400 font-bold uppercase">
+                          <span className={isClosed ? 'text-amber-400 font-bold uppercase' : 'text-emerald-400 font-bold uppercase'}>
                             {sync.stage} (Siembra {sync.sowStr})
                           </span>
                           <span className="text-slate-300 font-bold">
@@ -1310,7 +1333,11 @@ export default function Plots() {
                         </div>
                         <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
                           <div
-                            className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full"
+                            className={`h-full rounded-full ${
+                              isClosed
+                                ? 'bg-gradient-to-r from-amber-500 to-emerald-400'
+                                : 'bg-gradient-to-r from-emerald-500 to-teal-400'
+                            }`}
                             style={{ width: `${sync.progressPct}%` }}
                           />
                         </div>
@@ -1324,58 +1351,79 @@ export default function Plots() {
                         </div>
                       </div>
 
-                      {/* Grid de Métricas: Superficie & Cultivar */}
-                      <div className="grid grid-cols-2 gap-2 text-[10px] font-mono tabular-nums">
-                        <div className="p-2.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/60 dark:border-slate-800">
-                          <span className="text-[8.5px] font-bold uppercase text-slate-400 block">Superficie & Perímetro</span>
-                          <strong className="text-xs font-black text-slate-900 dark:text-slate-100 block mt-0.5">
-                            {p.surfaceArea} {p.surfaceUnit} <span className="text-[10px] font-normal text-slate-400">({p.perimeter || 12}m)</span>
-                          </strong>
-                        </div>
-
-                        <div className="p-2.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/60 dark:border-slate-800">
-                          <span className="text-[8.5px] font-bold uppercase text-slate-400 block">Cultivar Homologado</span>
-                          <strong className="text-xs font-bold text-emerald-600 dark:text-emerald-400 truncate block mt-0.5" title={vari?.name}>
-                            {vari?.name || 'Certificada'}
-                          </strong>
-                        </div>
-                      </div>
-
-                      {/* Bloque de Herencia Agronómica del Sitio Padre & Diseño Experimental DBCA */}
+                      {/* 3. Grilla Técnica Consolidada (100% simétrica con Unidades Productivas del Establecimiento) */}
                       <div className="grid grid-cols-3 gap-1.5 text-[9.5px] font-mono tabular-nums">
-                        <div className="px-2 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800 truncate">
-                          <span className="text-[8px] text-slate-400 uppercase block">Diseño DBCA</span>
-                          <strong className="text-indigo-600 dark:text-indigo-400">{p.block || 'Bloque 1'} · R{p.replicate || 1}</strong>
+                        <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-800 truncate">
+                          <span className="text-[8px] font-bold uppercase text-slate-400 block">Superficie & Marco</span>
+                          <strong className="text-slate-900 dark:text-slate-100 text-[10.5px] block truncate">
+                            {p.surfaceArea} {p.surfaceUnit} · {p.density || 48}pl/m²
+                          </strong>
                         </div>
-                        <div className="px-2 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800 truncate">
-                          <span className="text-[8px] text-slate-400 uppercase block">Suelo (Heredado)</span>
-                          <strong className="text-emerald-600 dark:text-emerald-400">{p.soilType || loc?.soilType || 'Franco'}</strong>
+                        <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-800 truncate">
+                          <span className="text-[8px] font-bold uppercase text-slate-400 block">Cultivar & DBCA</span>
+                          <strong className="text-emerald-600 dark:text-emerald-400 text-[10.5px] block truncate" title={vari?.name}>
+                            {vari?.name || 'Certificada'} ({p.block || 'B1'}·R{p.replicate || 1})
+                          </strong>
                         </div>
-                        <div className="px-2 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800 truncate">
-                          <span className="text-[8px] text-slate-400 uppercase block">Riego / Marco</span>
-                          <strong className="text-sky-600 dark:text-sky-400">{p.irrigationType || loc?.irrigationSystem || 'Goteo'} · {p.density || 48}pl</strong>
+                        <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-800 truncate">
+                          <span className="text-[8px] font-bold uppercase text-slate-400 block">Suelo & Riego</span>
+                          <strong className="text-sky-600 dark:text-sky-400 text-[10.5px] block truncate">
+                            {p.soilType || loc?.soilType || 'Franco'} · {p.irrigationType || loc?.irrigationSystem || 'Goteo'}
+                          </strong>
                         </div>
                       </div>
 
-                      {/* Bloque de Lote de Semilla INASE */}
-                      <div className="p-2.5 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-900/40 text-[10px] font-mono tabular-nums space-y-1">
-                        <div className="flex items-center justify-between gap-1">
+                      {/* 4. Bloque Unificado: Lote Semilla INASE + Labores + Cierre de Ciclo & Código de Barras GS1 */}
+                      <div
+                        onClick={e => {
+                          e.stopPropagation();
+                          setSelectedPlotForClosureModal(p);
+                        }}
+                        className={`p-3 rounded-xl border text-[10px] font-mono cursor-pointer transition space-y-2 ${
+                          isClosed
+                            ? 'bg-amber-50/70 dark:bg-amber-950/25 border-amber-300 dark:border-amber-800 hover:border-amber-400'
+                            : p.isHarvestScheduled
+                            ? 'bg-sky-50/70 dark:bg-sky-950/25 border-sky-200 dark:border-sky-800 hover:border-sky-400'
+                            : 'bg-emerald-50/40 dark:bg-emerald-950/20 border-emerald-200/70 dark:border-emerald-900/50 hover:border-indigo-400'
+                        }`}
+                        title="Haga clic para gestionar Fecha/Hora de Cierre de Ciclo, Labores Agrícolas y Documento Oficial de Siembra"
+                      >
+                        <div className="flex items-center justify-between gap-1 pb-1.5 border-b border-slate-200/70 dark:border-slate-800">
                           <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1 truncate">
                             <Award size={11} className="text-emerald-600 shrink-0" />
-                            N° Lote Semilla: {linkedBatch?.certificationNumber || linkedBatch?.batchCode || '103'}
+                            Semilla INASE: {linkedBatch?.certificationNumber || linkedBatch?.batchCode || '103'} (Rótulo {linkedBatch?.labelSerialNumber || '00000012'})
                           </span>
-                          <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold text-[8.5px] border border-emerald-500/20 shrink-0">
-                            Rótulo {linkedBatch?.labelSerialNumber || '00000012'}
+                          <span className="text-[9px] text-indigo-600 dark:text-indigo-400 font-bold shrink-0 flex items-center gap-1">
+                            <Tractor size={10} />
+                            {plotLabors.length} Labores
                           </span>
                         </div>
-                        <div className="flex items-center justify-between text-[9px] text-slate-500 dark:text-slate-400">
-                          <span className="truncate">Código: {linkedBatch?.batchCode || 'FUT-83-25-HEM'}</span>
-                          <span className="shrink-0 font-bold">Resp: {p.samplingResponsibleName || linkedBatch?.samplerName || 'M. Quintana'}</span>
+
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0 space-y-0.5">
+                            <span className="text-[8.5px] font-black uppercase block text-slate-500 dark:text-slate-400">
+                              {isClosed
+                                ? '✓ Ciclo Homologado · Ver Documento de Siembra'
+                                : p.isHarvestScheduled
+                                ? '⏱ Cosecha Programada · Clic para Confirmar'
+                                : '🏁 Cierre de Ciclo / Cosecha · Clic para Gestionar'}
+                            </span>
+                            <strong className="text-slate-900 dark:text-white block truncate text-[10.5px]">
+                              {isClosed
+                                ? `${p.closedDate || p.closedAt || ''} ${p.closedTime ? `${p.closedTime} hs` : ''} · ${actCode}`
+                                : p.isHarvestScheduled
+                                ? `Prog: ${p.scheduledHarvestDate} ${p.scheduledHarvestTime || ''} hs · ${actCode}`
+                                : `${actCode} · Resp: ${p.sowingResponsibleName || p.samplingResponsibleName || linkedBatch?.samplerName || 'M. Quintana'}`}
+                            </strong>
+                          </div>
+                          <div className="bg-white px-2 py-1 rounded-lg border border-slate-200 shrink-0">
+                            <BarcodeSVG value={barcodeVal} height={22} barWidth={0.95} showText={false} />
+                          </div>
                         </div>
                       </div>
                     </div>
 
-                    {/* Acciones Inferiores */}
+                    {/* 5. Acciones Inferiores (Sin botón redundante de Cierre) */}
                     <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-1.5">
                       <Link
                         to={`/plots/${p.id}`}
@@ -1392,31 +1440,6 @@ export default function Plots() {
                       >
                         <Layers size={14} />
                       </Link>
-
-                      <button
-                        type="button"
-                        onClick={e => {
-                          e.stopPropagation();
-                          setSelectedPlotForClosureModal(p);
-                        }}
-                        className={`px-2.5 py-2 rounded-xl text-[10px] font-mono font-black uppercase flex items-center gap-1 transition border cursor-pointer ${
-                          p.closureConfirmed || p.status === 'Cosechada'
-                            ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300 dark:border-amber-700'
-                            : p.isHarvestScheduled
-                            ? 'bg-sky-50 hover:bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300 border-sky-200 dark:border-sky-800'
-                            : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800'
-                        }`}
-                        title={
-                          p.closureConfirmed || p.status === 'Cosechada'
-                            ? 'Documento Oficial de Siembra & Acta de Cierre Homologado'
-                            : 'Cierre de Ciclo / Cosecha (Fecha, Hora & Labores Agrícolas)'
-                        }
-                      >
-                        <Archive size={13} />
-                        <span className="hidden sm:inline">
-                          {p.closureConfirmed || p.status === 'Cosechada' ? 'Doc. Siembra' : 'Cierre/Cosecha'}
-                        </span>
-                      </button>
 
                       <button
                         type="button"
