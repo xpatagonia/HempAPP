@@ -1812,8 +1812,8 @@ export default function PlotDetails() {
                 key={`plot-details-map-${plot.id}`}
                 activePlotId={plot.id}
                 initialCenter={activeCoords}
-                initialPolygon={plot.polygon || []}
-                referencePolygon={location?.polygon || []}
+                initialPolygon={plot.polygon}
+                referencePolygon={location?.polygon}
                 extraPolygons={siblingPlotLayers}
                 polygonLabel={`Parcela ${plot.name} (${plot.surfaceArea} ${plot.surfaceUnit})`}
                 polygonShortLabel={plot.name}

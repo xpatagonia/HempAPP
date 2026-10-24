@@ -316,21 +316,37 @@ const MapRecenter = ({
     return null;
 };
 
+const EMPTY_COORDS: { lat: number; lng: number }[] = [];
+const EMPTY_EXTRA_POLYGONS: ExtraPolygonItem[] = [];
+
+const areCoordsEqual = (
+    a?: { lat: number; lng: number }[],
+    b?: { lat: number; lng: number }[]
+): boolean => {
+    if (a === b) return true;
+    if (!a || !b) return false;
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+        if (a[i].lat !== b[i].lat || a[i].lng !== b[i].lng) return false;
+    }
+    return true;
+};
+
 export default function MapEditor({
     activePlotId = 'active-main',
-    initialPolygon = [],
+    initialPolygon = EMPTY_COORDS,
     initialCenter,
-    referencePolygon = [],
+    referencePolygon = EMPTY_COORDS,
     referenceLabel = 'Perímetro Campo Padre',
     polygonLabel = 'Perímetro Parcela',
     polygonShortLabel,
     polygonSubLabel,
-    extraPolygons = [],
+    extraPolygons = EMPTY_EXTRA_POLYGONS,
     onExtraPolygonClick,
     selectedPolygonIds,
     onSelectedPolygonIdsChange,
     onPolygonChange,
-    sowingPolygon = [],
+    sowingPolygon = EMPTY_COORDS,
     onSowingPolygonChange,
     enableSowingLayer = false,
     initialFitMode,
@@ -388,16 +404,24 @@ export default function MapEditor({
 
     useEffect(() => {
         if (initialCenter && !isNaN(initialCenter.lat) && !isNaN(initialCenter.lng) && initialCenter.lat !== 0) {
-            setCenter(initialCenter);
+            setCenter(prev =>
+                prev.lat === initialCenter.lat && prev.lng === initialCenter.lng
+                    ? prev
+                    : { lat: initialCenter.lat, lng: initialCenter.lng }
+            );
         }
-    }, [initialCenter]);
+    }, [initialCenter?.lat, initialCenter?.lng]);
 
     useEffect(() => {
-        if (initialPolygon) setPolygon(initialPolygon);
+        if (initialPolygon) {
+            setPolygon(prev => (areCoordsEqual(prev, initialPolygon) ? prev : initialPolygon));
+        }
     }, [initialPolygon]);
 
     useEffect(() => {
-        if (sowingPolygon) setSowingPoly(sowingPolygon);
+        if (sowingPolygon) {
+            setSowingPoly(prev => (areCoordsEqual(prev, sowingPolygon) ? prev : sowingPolygon));
+        }
     }, [sowingPolygon]);
 
     const toRad = (value: number) => (value * Math.PI) / 180;
