@@ -256,7 +256,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
                   {appName}
                 </span>
                 <span className="text-[9px] font-mono font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">
-                  Red Nucleus v7.17.0
+                  Red Nucleus v7.17.1
                 </span>
               </div>
             )}

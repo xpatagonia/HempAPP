@@ -433,6 +433,119 @@ export default function Settings() {
                   </div>
               </div>
 
+              {/* CARD 1B: ARQUITECTURA HÍBRIDA (VERCEL + RESEND.COM + SUPABASE | RENDER PYTHON PARA IOT/IA) */}
+              <div className="bg-white dark:bg-slate-900 p-8 rounded-[40px] border border-slate-200 dark:border-slate-800 shadow-sm">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-6 border-b border-slate-100 dark:border-slate-800">
+                      <div>
+                          <h3 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-tighter flex items-center gap-2">
+                              <Cpu className="text-cyan-600" size={24} /> Arquitectura Híbrida: Vercel + Resend.com + Supabase &amp; Render Python (IoT/IA)
+                          </h3>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-1">
+                              Despacho instantáneo de correos desde <strong>Vercel Serverless (/api/notifications/email) + Resend.com</strong> y persistencia en <strong>Supabase</strong>, dejando <strong>Render Python</strong> dedicado exclusivamente a IoT, sensores LoRaWAN y cálculo ecofisiológico/IA.
+                          </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                          <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider ${
+                              hybridStatus?.resendConfigured || resendKey.trim()
+                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
+                                : 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
+                          }`}>
+                              <Mail size={12} />
+                              {hybridStatus?.resendConfigured || resendKey.trim() ? 'Vercel + Resend.com Activo' : 'Configurar RESEND_API_KEY en Vercel'}
+                          </span>
+                          <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider ${
+                              hybridStatus?.engineOnline
+                                ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-950/60 dark:text-cyan-300 border border-cyan-300 dark:border-cyan-800'
+                                : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-300 dark:border-slate-700'
+                          }`}>
+                              <span className={`w-2 h-2 rounded-full ${hybridStatus?.engineOnline ? 'bg-cyan-500 animate-pulse' : 'bg-amber-500'}`}></span>
+                              {hybridStatus?.engineOnline ? 'Render Python IoT/IA Online' : 'Render IoT Standby'}
+                          </span>
+                      </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                      <div>
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Resend API Key (Opcional si ya está en Vercel)</label>
+                          <input
+                              type="password"
+                              placeholder="Configurada en Vercel (o pegue re_...)"
+                              className="w-full bg-slate-50 dark:bg-slate-950 border dark:border-slate-800 p-3.5 rounded-xl text-xs font-mono font-bold dark:text-white outline-none focus:ring-2 focus:ring-cyan-500"
+                              value={resendKey}
+                              onChange={e => setResendKey(e.target.value)}
+                          />
+                      </div>
+                      <div>
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Remitente Oficial Verificado</label>
+                          <input
+                              type="text"
+                              placeholder="HempC Nucleus <notificaciones@hempc.com.ar>"
+                              className="w-full bg-slate-50 dark:bg-slate-950 border dark:border-slate-800 p-3.5 rounded-xl text-xs font-mono font-bold dark:text-white outline-none focus:ring-2 focus:ring-cyan-500"
+                              value={resendFrom}
+                              onChange={e => setResendFrom(e.target.value)}
+                          />
+                      </div>
+                      <div>
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Destinatario de Prueba</label>
+                          <input
+                              type="email"
+                              placeholder="correo@ejemplo.com"
+                              className="w-full bg-slate-50 dark:bg-slate-950 border dark:border-slate-800 p-3.5 rounded-xl text-xs font-mono font-bold dark:text-white outline-none focus:ring-2 focus:ring-cyan-500"
+                              value={testEmailTarget}
+                              onChange={e => setTestEmailTarget(e.target.value)}
+                          />
+                      </div>
+                  </div>
+
+                  {hybridMsg && (
+                      <div className={`p-4 rounded-2xl text-xs font-bold mb-6 flex items-center gap-2 ${
+                          hybridMsg.type === 'success'
+                              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                              : 'bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
+                      }`}>
+                          {hybridMsg.type === 'success' ? <CheckCircle size={16} /> : <Info size={16} />}
+                          <span>{hybridMsg.text}</span>
+                      </div>
+                  )}
+
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                          Endpoint activo en Vercel: <code className="font-mono font-bold text-emerald-600 dark:text-emerald-400">/api/notifications/email</code> (usa <code className="font-mono">RESEND_API_KEY</code> de Vercel) • Motor IoT/IA: <code className="font-mono">hempapp.onrender.com</code>
+                      </p>
+                      <button
+                          onClick={async () => {
+                              setIsTestingHybrid(true);
+                              setHybridMsg(null);
+                              try {
+                                  saveStoredResendConfig(resendKey, resendFrom);
+                                  const res = await sendTestNotificationEmail(testEmailTarget || 'xpatagonia.com@gmail.com', currentUser?.name || 'Master Admin');
+                                  const st = await checkEmailServiceStatus();
+                                  setHybridStatus({
+                                      engineOnline: st.engineOnline,
+                                      resendConfigured: st.resendConfigured,
+                                      provider: st.provider,
+                                      host: st.host,
+                                      engineUrl: st.engineUrl
+                                  });
+                                  setHybridMsg({
+                                      type: res.deliveredVia === 'vercel_resend' || res.deliveredVia === 'resend_https' || res.deliveredVia === 'smtp' ? 'success' : 'info',
+                                      text: `${res.message} (Vía: ${res.deliveredVia.toUpperCase()})`
+                                  });
+                              } catch (err: any) {
+                                  setHybridMsg({ type: 'error', text: err.message || 'Error al probar el despacho en Vercel + Resend' });
+                              } finally {
+                                  setIsTestingHybrid(false);
+                              }
+                          }}
+                          disabled={isTestingHybrid}
+                          className="bg-cyan-600 hover:bg-cyan-700 text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition flex items-center gap-2 shadow-md disabled:opacity-50 cursor-pointer"
+                      >
+                          {isTestingHybrid ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                          Probar Envío Vercel + Resend.com
+                      </button>
+                  </div>
+              </div>
+
               {/* CARD 2: POBLAR Y SINCRONIZAR ENSAYOS DE CAMPAÑA ANTERIOR Y ACTUAL */}
               <div className="bg-white dark:bg-slate-900 p-8 rounded-[40px] border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden">
                   <div className="mb-6">

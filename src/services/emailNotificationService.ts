@@ -87,7 +87,7 @@ export function saveStoredResendConfig(apiKey: string, fromEmail?: string) {
 }
 
 const isRealDelivery = (via?: string): boolean => {
-  return via === 'resend_https' || via === 'smtp';
+  return via === 'vercel_resend' || via === 'resend_https' || via === 'smtp';
 };
 
 export function getEmailAuditLog(): EmailAuditLogEntry[] {
@@ -113,14 +113,57 @@ function saveEmailAuditEntry(entry: EmailAuditLogEntry) {
 }
 
 /**
- * Despacha un correo electrónico de invitación a un operario utilizando el motor híbrido en Render (Resend HTTPS / SMTP)
+ * Envía el payload de correo prioritariamente a la función Serverless de Vercel (/api/notifications/email)
+ * conectada directo a Resend.com, dejando Render dedicado al motor Python de IoT / IA.
+ */
+async function postEmailViaVercelResend(payload: Record<string, any>): Promise<any> {
+  // 1. Canal Primario: Vercel Serverless Function + Resend.com (/api/notifications/email)
+  try {
+    const vercelRes = await fetch('/api/notifications/email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+    const contentType = vercelRes.headers.get('content-type') || '';
+    if (vercelRes.ok && contentType.includes('application/json')) {
+      const data = await vercelRes.json();
+      if (data && data.delivered_via !== 'pending_resend_key') {
+        return data;
+      }
+      // Si en Vercel aún no estaba seteada la key pero hay fallback, intentar o devolver aviso claro
+      return data;
+    }
+  } catch (e) {
+    // En desarrollo local puro sin vercel dev, respaldar con el endpoint de respaldo
+  }
+
+  // 2. Respaldo secundario si se ejecuta fuera de Vercel (ej. entorno preview local)
+  const engineUrl = getTelemetryEngineUrl();
+  const backupRes = await fetch(`${engineUrl}/api/v1/notifications/email`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    },
+    body: JSON.stringify(payload)
+  });
+  if (backupRes.ok) {
+    return await backupRes.json();
+  }
+  const err = await backupRes.json().catch(() => ({}));
+  throw new Error(err.detail || `Error HTTP ${backupRes.status}`);
+}
+
+/**
+ * Despacha un correo electrónico de invitación a un operario vía Vercel + Resend.com
  * con remitente oficial notificaciones@hempc.com.ar
  */
 export async function sendOperatorInvitationEmail(
   params: SendOperatorInvitationParams
 ): Promise<EmailDispatchResult> {
-  const engineUrl = getTelemetryEngineUrl();
-  const endpoint = `${engineUrl}/api/v1/notifications/email`;
   const timestamp = new Date().toISOString();
   const resendCfg = getStoredResendConfig();
 
@@ -139,46 +182,32 @@ export async function sendOperatorInvitationEmail(
   };
 
   try {
-    const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify(payload)
+    const data = await postEmailViaVercelResend(payload);
+    const result: EmailDispatchResult = {
+      success: Boolean(data.success !== false),
+      message: data.message || `Invitación enviada con éxito desde notificaciones@hempc.com.ar a ${params.toEmail}`,
+      sentFrom: data.sent_from || 'notificaciones@hempc.com.ar',
+      sentTo: data.sent_to || params.toEmail,
+      deliveredVia: data.delivered_via || 'vercel_resend',
+      timestamp
+    };
+
+    saveEmailAuditEntry({
+      id: `email-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      timestamp,
+      toEmail: params.toEmail,
+      toName: params.toName,
+      type: 'operator_invitation',
+      subject: `Bienvenida y acceso al equipo • ${params.structureName}`,
+      structureName: params.structureName,
+      fieldName: params.fieldName,
+      roleName: params.roleName,
+      sentFrom: result.sentFrom,
+      status: isRealDelivery(result.deliveredVia) ? 'enviado' : 'simulado',
+      deliveredVia: result.deliveredVia
     });
 
-    if (res.ok) {
-      const data = await res.json();
-      const result: EmailDispatchResult = {
-        success: true,
-        message: data.message || `Invitación enviada con éxito desde notificaciones@hempc.com.ar a ${params.toEmail}`,
-        sentFrom: data.sent_from || 'notificaciones@hempc.com.ar',
-        sentTo: data.sent_to || params.toEmail,
-        deliveredVia: data.delivered_via || 'resend_https',
-        timestamp
-      };
-
-      saveEmailAuditEntry({
-        id: `email-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-        timestamp,
-        toEmail: params.toEmail,
-        toName: params.toName,
-        type: 'operator_invitation',
-        subject: `Bienvenida y acceso al equipo • ${params.structureName}`,
-        structureName: params.structureName,
-        fieldName: params.fieldName,
-        roleName: params.roleName,
-        sentFrom: result.sentFrom,
-        status: isRealDelivery(result.deliveredVia) ? 'enviado' : 'simulado',
-        deliveredVia: result.deliveredVia
-      });
-
-      return result;
-    } else {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || `Error en servidor HTTP ${res.status}`);
-    }
+    return result;
   } catch (err: any) {
     console.warn('Fallo en despacho remoto de email, registrando en log de auditoría local:', err);
     const result: EmailDispatchResult = {
@@ -210,13 +239,11 @@ export async function sendOperatorInvitationEmail(
 }
 
 /**
- * Despacha una alerta agronómica crítica por correo electrónico (Arquitectura Híbrida Render Python + Resend HTTPS)
+ * Despacha una alerta agronómica crítica por correo electrónico vía Vercel + Resend.com
  */
 export async function sendAgronomicAlertEmail(
   params: SendAgronomicAlertParams
 ): Promise<EmailDispatchResult> {
-  const engineUrl = getTelemetryEngineUrl();
-  const endpoint = `${engineUrl}/api/v1/notifications/email`;
   const timestamp = new Date().toISOString();
   const resendCfg = getStoredResendConfig();
 
@@ -236,39 +263,31 @@ export async function sendAgronomicAlertEmail(
   };
 
   try {
-    const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+    const data = await postEmailViaVercelResend(payload);
+    const result: EmailDispatchResult = {
+      success: Boolean(data.success !== false),
+      message: data.message || `Alerta despachada a ${params.toEmail}`,
+      sentFrom: data.sent_from || 'notificaciones@hempc.com.ar',
+      sentTo: data.sent_to || params.toEmail,
+      deliveredVia: data.delivered_via || 'vercel_resend',
+      timestamp
+    };
+
+    saveEmailAuditEntry({
+      id: `email-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      timestamp,
+      toEmail: params.toEmail,
+      toName: params.toName,
+      type: 'agronomic_alert',
+      subject: `⚠️ ALERTA CRÍTICA: ${params.alertTitle}`,
+      structureName: params.plotName,
+      fieldName: params.plotName,
+      sentFrom: result.sentFrom,
+      status: isRealDelivery(result.deliveredVia) ? 'enviado' : 'simulado',
+      deliveredVia: result.deliveredVia
     });
 
-    if (res.ok) {
-      const data = await res.json();
-      const result: EmailDispatchResult = {
-        success: true,
-        message: data.message || `Alerta despachada a ${params.toEmail}`,
-        sentFrom: data.sent_from || 'notificaciones@hempc.com.ar',
-        sentTo: data.sent_to || params.toEmail,
-        deliveredVia: data.delivered_via || 'resend_https',
-        timestamp
-      };
-
-      saveEmailAuditEntry({
-        id: `email-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-        timestamp,
-        toEmail: params.toEmail,
-        toName: params.toName,
-        type: 'agronomic_alert',
-        subject: `⚠️ ALERTA CRÍTICA: ${params.alertTitle}`,
-        structureName: params.plotName,
-        fieldName: params.plotName,
-        sentFrom: result.sentFrom,
-        status: isRealDelivery(result.deliveredVia) ? 'enviado' : 'simulado',
-        deliveredVia: result.deliveredVia
-      });
-
-      return result;
-    }
+    return result;
   } catch (e) {
     console.warn('Error enviando alerta agronómica por correo:', e);
   }
@@ -298,7 +317,7 @@ export async function sendAgronomicAlertEmail(
 }
 
 /**
- * Envía un correo de prueba de conectividad desde notificaciones@hempc.com.ar
+ * Envía un correo de prueba de conectividad desde notificaciones@hempc.com.ar vía Vercel + Resend.com
  */
 export async function sendTestNotificationEmail(
   targetEmail: string,
@@ -307,15 +326,15 @@ export async function sendTestNotificationEmail(
   return sendOperatorInvitationEmail({
     toEmail: targetEmail,
     toName: targetName,
-    structureName: 'Red Cooperativa Nucleus • Verificación Híbrida (Render + Resend HTTPS)',
+    structureName: 'Red Cooperativa Nucleus • Verificación Vercel + Resend.com',
     fieldName: 'Establecimiento Demostrativo Central',
-    roleName: 'Auditor de Comunicaciones & IoT',
+    roleName: 'Auditor de Comunicaciones (Vercel + Resend)',
     tempPassword: 'demo-' + Math.random().toString(36).substring(2, 8).toUpperCase()
   });
 }
 
 /**
- * Consulta el estado y configuración del despachador híbrido en el backend Python (Render)
+ * Consulta el estado del despachador Serverless en Vercel (/api/notifications/status) y del motor IoT en Render
  */
 export async function checkEmailServiceStatus(): Promise<{
   configured: boolean;
@@ -331,51 +350,53 @@ export async function checkEmailServiceStatus(): Promise<{
 }> {
   const engineUrl = getTelemetryEngineUrl();
   const localResend = getStoredResendConfig();
+
+  let vercelResendReady = Boolean(localResend.apiKey);
+  let vercelSender = 'notificaciones@hempc.com.ar';
+
+  // 1. Verificar estado de Vercel Serverless + Resend (/api/notifications/status)
   try {
-    const res = await fetch(`${engineUrl}/api/v1/notifications/status`, { signal: AbortSignal.timeout(8000) });
-    if (res.ok) {
-      const data = await res.json();
-      const hasResend = Boolean(data.resend_configured || localResend.apiKey);
-      return {
-        configured: Boolean(hasResend || data.smtp_configured),
-        resendConfigured: hasResend,
-        provider: hasResend ? 'resend_https' : (data.provider || 'simulated'),
-        architecture: data.architecture || 'hybrid_render_iot_resend_https',
-        iotAiEngine: data.iot_ai_engine || 'active',
-        engineOnline: true,
-        sender: data.sender || 'notificaciones@hempc.com.ar',
-        host: hasResend ? 'api.resend.com (HTTPS:443)' : (data.host || 'mail.hempc.com.ar'),
-        port: hasResend ? 443 : (data.port || 2525),
-        engineUrl
-      };
+    const vRes = await fetch('/api/notifications/status', { signal: AbortSignal.timeout(5000) });
+    const ct = vRes.headers.get('content-type') || '';
+    if (vRes.ok && ct.includes('application/json')) {
+      const vData = await vRes.json();
+      vercelResendReady = Boolean(vData.resend_configured || localResend.apiKey);
+      if (vData.sender) vercelSender = vData.sender;
     }
-  } catch (e) {
-    // backend waking up or local fallback
+  } catch {
+    // Si corre en local sin vercel serverless
   }
-  const hasLocalResend = Boolean(localResend.apiKey);
+
+  // 2. Verificar estado del motor Python IoT / IA en Render (/healthz)
+  let renderIotOnline = false;
+  try {
+    const rRes = await fetch(`${engineUrl}/healthz`, { signal: AbortSignal.timeout(6000) });
+    renderIotOnline = rRes.ok;
+  } catch {
+    renderIotOnline = false;
+  }
+
   return {
-    configured: hasLocalResend,
-    resendConfigured: hasLocalResend,
-    provider: hasLocalResend ? 'resend_https' : 'waking_up',
-    architecture: 'hybrid_render_iot_resend_https',
-    iotAiEngine: 'standby',
-    engineOnline: false,
-    sender: 'notificaciones@hempc.com.ar',
-    host: hasLocalResend ? 'api.resend.com (HTTPS:443)' : 'hempapp.onrender.com',
+    configured: vercelResendReady,
+    resendConfigured: vercelResendReady,
+    provider: vercelResendReady ? 'vercel_resend' : 'pending_resend_key',
+    architecture: 'vercel_resend_supabase + render_python_iot',
+    iotAiEngine: renderIotOnline ? 'active' : 'standby',
+    engineOnline: renderIotOnline,
+    sender: vercelSender,
+    host: 'api.resend.com (Vercel Serverless HTTPS:443)',
     port: 443,
     engineUrl
   };
 }
 
 /**
- * Envía un correo de recuperación de contraseña con clave provisoria
+ * Envía un correo de recuperación de contraseña con clave provisoria vía Vercel + Resend.com
  */
 export async function sendPasswordResetEmail(
   params: SendPasswordResetParams
 ): Promise<EmailDispatchResult> {
   const timestamp = new Date().toISOString();
-  const engineUrl = getTelemetryEngineUrl();
-  const endpoint = `${engineUrl}/api/v1/notifications/email`;
   const resendCfg = getStoredResendConfig();
 
   const payload = {
@@ -390,43 +411,29 @@ export async function sendPasswordResetEmail(
   };
 
   try {
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json"
-      },
-      body: JSON.stringify(payload)
+    const data = await postEmailViaVercelResend(payload);
+    const result: EmailDispatchResult = {
+      success: Boolean(data.success !== false),
+      message: data.message || `Instrucciones de recuperación enviadas a ${params.toEmail}`,
+      sentFrom: data.sent_from || "notificaciones@hempc.com.ar",
+      sentTo: data.sent_to || params.toEmail,
+      deliveredVia: data.delivered_via || "vercel_resend",
+      timestamp
+    };
+
+    saveEmailAuditEntry({
+      id: `email-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      timestamp,
+      toEmail: params.toEmail,
+      toName: params.toName,
+      type: "test",
+      subject: "🔐 Restablecimiento de Contraseña • HempC Nucleus",
+      sentFrom: result.sentFrom,
+      status: isRealDelivery(result.deliveredVia) ? "enviado" : "simulado",
+      deliveredVia: result.deliveredVia
     });
 
-    if (res.ok) {
-      const data = await res.json();
-      const result: EmailDispatchResult = {
-        success: true,
-        message: data.message || `Instrucciones de recuperación enviadas a ${params.toEmail}`,
-        sentFrom: data.sent_from || "notificaciones@hempc.com.ar",
-        sentTo: data.sent_to || params.toEmail,
-        deliveredVia: data.delivered_via || "resend_https",
-        timestamp
-      };
-
-      saveEmailAuditEntry({
-        id: `email-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-        timestamp,
-        toEmail: params.toEmail,
-        toName: params.toName,
-        type: "test",
-        subject: "🔐 Restablecimiento de Contraseña • HempC Nucleus",
-        sentFrom: result.sentFrom,
-        status: isRealDelivery(result.deliveredVia) ? "enviado" : "simulado",
-        deliveredVia: result.deliveredVia
-      });
-
-      return result;
-    } else {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || `Error en servidor HTTP ${res.status}`);
-    }
+    return result;
   } catch (err: any) {
     console.warn("Fallo en despacho remoto de email de recuperación, guardando en auditoría local:", err);
     const result: EmailDispatchResult = {
@@ -455,14 +462,12 @@ export async function sendPasswordResetEmail(
 }
 
 /**
- * Envía correo de bienvenida y credenciales al crear un nuevo perfil de equipo
+ * Envía correo de bienvenida y credenciales al crear un nuevo perfil de equipo vía Vercel + Resend.com
  */
 export async function sendUserProfileWelcomeEmail(
   params: SendUserProfileWelcomeParams
 ): Promise<EmailDispatchResult> {
   const timestamp = new Date().toISOString();
-  const engineUrl = getTelemetryEngineUrl();
-  const endpoint = `${engineUrl}/api/v1/notifications/email`;
   const resendCfg = getStoredResendConfig();
 
   const payload = {
@@ -479,45 +484,31 @@ export async function sendUserProfileWelcomeEmail(
   };
 
   try {
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json"
-      },
-      body: JSON.stringify(payload)
+    const data = await postEmailViaVercelResend(payload);
+    const result: EmailDispatchResult = {
+      success: Boolean(data.success !== false),
+      message: data.message || `Credenciales de acceso enviadas a ${params.toEmail}`,
+      sentFrom: data.sent_from || "notificaciones@hempc.com.ar",
+      sentTo: data.sent_to || params.toEmail,
+      deliveredVia: data.delivered_via || "vercel_resend",
+      timestamp
+    };
+
+    saveEmailAuditEntry({
+      id: `email-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      timestamp,
+      toEmail: params.toEmail,
+      toName: params.toName,
+      type: "operator_invitation",
+      subject: `🌿 Alta de Perfil y Credenciales • ${params.organizationName || "HempC Nucleus"}`,
+      roleName: params.roleName,
+      structureName: params.organizationName,
+      sentFrom: result.sentFrom,
+      status: isRealDelivery(result.deliveredVia) ? "enviado" : "simulado",
+      deliveredVia: result.deliveredVia
     });
 
-    if (res.ok) {
-      const data = await res.json();
-      const result: EmailDispatchResult = {
-        success: true,
-        message: data.message || `Credenciales de acceso enviadas a ${params.toEmail}`,
-        sentFrom: data.sent_from || "notificaciones@hempc.com.ar",
-        sentTo: data.sent_to || params.toEmail,
-        deliveredVia: data.delivered_via || "resend_https",
-        timestamp
-      };
-
-      saveEmailAuditEntry({
-        id: `email-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-        timestamp,
-        toEmail: params.toEmail,
-        toName: params.toName,
-        type: "operator_invitation",
-        subject: `🌿 Alta de Perfil y Credenciales • ${params.organizationName || "HempC Nucleus"}`,
-        roleName: params.roleName,
-        structureName: params.organizationName,
-        sentFrom: result.sentFrom,
-        status: isRealDelivery(result.deliveredVia) ? "enviado" : "simulado",
-        deliveredVia: result.deliveredVia
-      });
-
-      return result;
-    } else {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || `Error en servidor HTTP ${res.status}`);
-    }
+    return result;
   } catch (err: any) {
     console.warn("Fallo en despacho de bienvenida de usuario:", err);
     const result: EmailDispatchResult = {
