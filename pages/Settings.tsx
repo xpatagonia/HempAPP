@@ -1,13 +1,19 @@
-
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { 
   Save, Database, RefreshCw, Lock, Settings as SettingsIcon, 
   Trash2, RotateCcw, Shield, Image as ImageIcon,
   AlertTriangle, CheckCircle, XCircle, Info, FileCode, Server, DownloadCloud, Archive, Upload, Palette, Loader2,
-  Cloud, CloudRain, Copy, Check, ExternalLink, ArrowRight, Layers, Sprout, Tractor, Users, BookOpen
+  Cloud, CloudRain, Copy, Check, ExternalLink, ArrowRight, Layers, Sprout, Tractor, Users, BookOpen, Mail, Cpu, Send
 } from 'lucide-react';
 import { supabase, getStoredCredentials, saveSupabaseCredentials, checkConnection } from '../supabaseClient';
+import {
+  checkEmailServiceStatus,
+  getStoredResendConfig,
+  saveStoredResendConfig,
+  sendTestNotificationEmail
+} from '../src/services/emailNotificationService';
+import { wakeUpRenderEngine } from '../src/services/telemetryStreamService';
 import {
   DEMO_USERS_LIST as HISTORICAL_USERS,
   DEMO_CLIENTS as HISTORICAL_CLIENTS,
@@ -42,6 +48,34 @@ export default function Settings() {
   const [isTestingSb, setIsTestingSb] = useState(false);
   const [sbStatusMsg, setSbStatusMsg] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
+  // Hybrid Architecture (Render Python IoT/AI + Resend HTTPS) State
+  const initialResend = getStoredResendConfig();
+  const [resendKey, setResendKey] = useState(initialResend.apiKey);
+  const [resendFrom, setResendFrom] = useState(initialResend.fromEmail);
+  const [testEmailTarget, setTestEmailTarget] = useState(currentUser?.email || 'gaston.barea.moreno@gmail.com');
+  const [hybridStatus, setHybridStatus] = useState<{
+    engineOnline: boolean;
+    resendConfigured: boolean;
+    provider: string;
+    host: string;
+    engineUrl: string;
+  } | null>(null);
+  const [isTestingHybrid, setIsTestingHybrid] = useState(false);
+  const [hybridMsg, setHybridMsg] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+
+  useEffect(() => {
+    wakeUpRenderEngine();
+    checkEmailServiceStatus().then(st => {
+      setHybridStatus({
+        engineOnline: st.engineOnline,
+        resendConfigured: st.resendConfigured,
+        provider: st.provider,
+        host: st.host,
+        engineUrl: st.engineUrl
+      });
+    });
+  }, []);
+
   // Historical Sync State
   const [isSyncingHistorical, setIsSyncingHistorical] = useState(false);
   const [syncReport, setSyncReport] = useState<{ success: boolean; message: string; details?: string[] } | null>(null);
@@ -50,7 +84,7 @@ export default function Settings() {
   // @ts-ignore
   const buildTime = typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : 'Local Dev';
   // @ts-ignore
-  const appVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'V7.14.0';
+  const appVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'V7.17.0-STABLE';
 
   if (currentUser?.role !== 'super_admin') {
       return (

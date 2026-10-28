@@ -14,7 +14,12 @@ class Settings(BaseSettings):
     SUPABASE_URL: str = os.getenv("SUPABASE_URL", os.getenv("VITE_SUPABASE_URL", ""))
     SUPABASE_KEY: str = os.getenv("SUPABASE_KEY", os.getenv("VITE_SUPABASE_ANON_KEY", ""))
     
-    # Email Notification Settings (notificaciones@hempc.com.ar)
+    # Email Notification Settings (Arquitectura Híbrida: Resend HTTPS API + SMTP Fallback)
+    RESEND_API_KEY: str = os.getenv("RESEND_API_KEY", "")
+    RESEND_FROM_EMAIL: str = os.getenv("RESEND_FROM_EMAIL", "HempC Nucleus <notificaciones@hempc.com.ar>")
+    ALERT_RECIPIENT_EMAIL: str = os.getenv("ALERT_RECIPIENT_EMAIL", "")
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", os.getenv("VITE_GEMINI_API_KEY", ""))
+
     SMTP_FROM: str = os.getenv("SMTP_FROM", "notificaciones@hempc.com.ar")
     SMTP_HOST: str = os.getenv("SMTP_HOST", "mail.hempc.com.ar")
     SMTP_PORT: int = int(os.getenv("SMTP_PORT", 2525))

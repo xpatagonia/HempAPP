@@ -13,8 +13,57 @@ from app.models.telemetry import (
 from app.services.agronomy import AgronomyCalculator
 from app.services.stream_manager import stream_manager
 from app.services.supabase_sync import supabase_sync
+from app.services.email_service import email_service
+from app.models.notifications import EmailNotificationRequest
 
 router = APIRouter(prefix="/telemetry", tags=["Telemetry & IoT Ingestion"])
+
+async def _dispatch_automated_iot_alert(record: ProcessedTelemetryRecord):
+    """
+    Automatización IoT + IA Agronómica en Python (Render):
+    Si los sensores reportan riesgo de helada agronómica o déficit hídrico severo,
+    despacha automáticamente el parte técnico por HTTPS (Resend.com).
+    """
+    recipient = settings.ALERT_RECIPIENT_EMAIL
+    if not recipient:
+        return
+
+    is_frost = record.assessment.frost_risk
+    is_drought = record.metrics.soil_moisture_pct < 18.0
+    if not (is_frost or is_drought):
+        return
+
+    if is_frost:
+        title = f"❄️ Alerta IoT Automática: Riesgo de Helada ({record.metrics.air_temp_c}°C)"
+        details = (
+            f"El nodo IoT {record.device_id} detectó temperatura de aire de {record.metrics.air_temp_c}°C "
+            f"con punto de rocío {record.assessment.dew_point_c}°C y VPD de {record.assessment.vapor_pressure_deficit_kpa} kPa."
+        )
+        action = "Activar protocolo de defensa anti-helada y riego por aspersión preventivo en el lote."
+    else:
+        title = f"💧 Alerta IoT Automática: Estrés Hídrico Severo ({record.metrics.soil_moisture_pct}%)"
+        details = (
+            f"El sensor edáfico del nodo {record.device_id} reporta humedad volumétrica de {record.metrics.soil_moisture_pct}% "
+            f"(estado: {record.assessment.water_stress_status}) con ET0 FAO-56 de {record.assessment.et0_fao56_mm_day} mm/día."
+        )
+        action = f"Programar lámina de riego suplementario inmediata ({max(8.0, round(record.assessment.et0_fao56_mm_day * 2.5, 1))} mm recomendados)."
+
+    req = EmailNotificationRequest(
+        to_email=recipient,
+        to_name="Dirección Técnica Agronómica • HempC",
+        notification_type="agronomic_alert",
+        plot_name=record.plot_id,
+        alert_title=title,
+        alert_details=details,
+        action_url="https://hemp-net.vercel.app/#/agro40",
+        extra_data={
+            "severity": "Crítica",
+            "temperature_c": record.metrics.air_temp_c,
+            "humidity_pct": record.metrics.air_humidity_pct,
+            "suggested_action": action
+        }
+    )
+    await asyncio.to_thread(email_service.send_notification, req)
 
 def verify_device_key(x_device_api_key: str = Header(None)):
     """Verifica la API Key configurada para los dispositivos IoT."""
@@ -39,7 +88,7 @@ async def ingest_device_telemetry(
     """
     verify_device_key(x_device_api_key)
 
-    # 1. Evaluación agronómica científica
+    # 1. Evaluación agronómica científica (Motor Python FAO-56 / VPD / Delta-T)
     assessment = AgronomyCalculator.evaluate(payload.metrics)
 
     # 2. Generar registro procesado
@@ -56,8 +105,10 @@ async def ingest_device_telemetry(
     # 3. Distribución en tiempo real (WebSockets + SSE)
     await stream_manager.broadcast_telemetry(record)
 
-    # 4. Persistencia en base de datos (Supabase)
+    # 4. Persistencia en base de datos (Supabase) y disparo automático de alertas IoT vía Resend HTTPS
     asyncio.create_task(supabase_sync.save_record(record))
+    if assessment.frost_risk or payload.metrics.soil_moisture_pct < 18.0:
+        asyncio.create_task(_dispatch_automated_iot_alert(record))
 
     return record
 

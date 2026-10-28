@@ -374,7 +374,7 @@ export default function Login() {
             </div>
 
             <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">
-              &copy; 2026 HempC Nucleus v7.16.2 | Red de Cáñamo Industrial Argentina
+              &copy; 2026 HempC Nucleus v7.17.0 | Red de Cáñamo Industrial Argentina
             </p>
           </div>
         </div>

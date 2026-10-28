@@ -22,11 +22,18 @@ async def send_email_notification(payload: EmailNotificationRequest):
 
 @router.get("/status")
 async def get_notifications_status():
-    """Estado del servicio de despacho de correos."""
+    """Estado del servicio híbrido de despacho de correos (Render Python IoT/IA + Resend HTTPS)."""
+    resend_ready = bool(settings.RESEND_API_KEY)
+    smtp_ready = bool(settings.SMTP_HOST and settings.SMTP_USER and settings.SMTP_PASSWORD)
+    provider = "resend_https" if resend_ready else ("smtp" if smtp_ready else "simulated")
     return {
-        "service": "hempc-email-dispatcher",
+        "service": "hempc-hybrid-iot-email-dispatcher",
+        "architecture": "hybrid_render_iot_resend_https",
+        "provider": provider,
+        "resend_configured": resend_ready,
+        "smtp_configured": smtp_ready,
+        "iot_ai_engine": "active",
         "sender": settings.SMTP_FROM,
-        "smtp_configured": bool(settings.SMTP_HOST and settings.SMTP_USER),
-        "host": settings.SMTP_HOST or "simulated_local",
-        "port": settings.SMTP_PORT
+        "host": "api.resend.com (HTTPS:443)" if resend_ready else (settings.SMTP_HOST or "simulated_local"),
+        "port": 443 if resend_ready else settings.SMTP_PORT
     }

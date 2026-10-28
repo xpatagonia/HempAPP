@@ -29,6 +29,30 @@ export const getTelemetryEngineUrl = (): string => {
   return getApiBaseUrl();
 };
 
+let lastWakeUpAttempt = 0;
+
+/**
+ * Envía un pulso ligero no bloqueante a /healthz en Render al iniciar la sesión
+ * para despertar el contenedor Python (IoT / IA / Resend Dispatcher) antes de que el usuario envíe alertas.
+ */
+export const wakeUpRenderEngine = async (): Promise<boolean> => {
+  const now = Date.now();
+  if (now - lastWakeUpAttempt < 60000) return true;
+  lastWakeUpAttempt = now;
+
+  const baseUrl = getApiBaseUrl();
+  try {
+    const res = await fetch(`${baseUrl}/healthz`, {
+      method: 'GET',
+      mode: 'cors',
+      cache: 'no-store'
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+};
+
 /**
  * Suscribe la vista a telemetría en tiempo real de una parcela específica.
  * Utiliza Server-Sent Events (SSE) con reconexión automática.

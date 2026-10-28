@@ -63,6 +63,32 @@ export interface EmailAuditLogEntry {
 }
 
 const AUDIT_STORAGE_KEY = 'ht_email_notifications_log';
+const RESEND_KEY_STORAGE = 'ht_resend_api_key';
+const RESEND_FROM_STORAGE = 'ht_resend_from_email';
+
+export function getStoredResendConfig(): { apiKey: string; fromEmail: string } {
+  if (typeof window === 'undefined') return { apiKey: '', fromEmail: 'HempC Nucleus <notificaciones@hempc.com.ar>' };
+  return {
+    apiKey: localStorage.getItem(RESEND_KEY_STORAGE) || (import.meta.env.VITE_RESEND_API_KEY as string) || '',
+    fromEmail: localStorage.getItem(RESEND_FROM_STORAGE) || 'HempC Nucleus <notificaciones@hempc.com.ar>'
+  };
+}
+
+export function saveStoredResendConfig(apiKey: string, fromEmail?: string) {
+  if (typeof window === 'undefined') return;
+  if (apiKey.trim()) {
+    localStorage.setItem(RESEND_KEY_STORAGE, apiKey.trim());
+  } else {
+    localStorage.removeItem(RESEND_KEY_STORAGE);
+  }
+  if (fromEmail && fromEmail.trim()) {
+    localStorage.setItem(RESEND_FROM_STORAGE, fromEmail.trim());
+  }
+}
+
+const isRealDelivery = (via?: string): boolean => {
+  return via === 'resend_https' || via === 'smtp';
+};
 
 export function getEmailAuditLog(): EmailAuditLogEntry[] {
   if (typeof window === 'undefined') return [];
@@ -87,7 +113,7 @@ function saveEmailAuditEntry(entry: EmailAuditLogEntry) {
 }
 
 /**
- * Despacha un correo electrónico de invitación a un operario utilizando el motor en Render
+ * Despacha un correo electrónico de invitación a un operario utilizando el motor híbrido en Render (Resend HTTPS / SMTP)
  * con remitente oficial notificaciones@hempc.com.ar
  */
 export async function sendOperatorInvitationEmail(
@@ -96,6 +122,7 @@ export async function sendOperatorInvitationEmail(
   const engineUrl = getTelemetryEngineUrl();
   const endpoint = `${engineUrl}/api/v1/notifications/email`;
   const timestamp = new Date().toISOString();
+  const resendCfg = getStoredResendConfig();
 
   const payload = {
     to_email: params.toEmail.trim(),
@@ -105,7 +132,10 @@ export async function sendOperatorInvitationEmail(
     field_name: params.fieldName || 'Establecimiento Principal',
     role_name: params.roleName,
     temp_password: params.tempPassword,
-    action_url: params.actionUrl || window.location.origin
+    action_url: params.actionUrl || window.location.origin,
+    extra_data: resendCfg.apiKey
+      ? { resend_api_key: resendCfg.apiKey, resend_from: resendCfg.fromEmail }
+      : undefined
   };
 
   try {
@@ -125,7 +155,7 @@ export async function sendOperatorInvitationEmail(
         message: data.message || `Invitación enviada con éxito desde notificaciones@hempc.com.ar a ${params.toEmail}`,
         sentFrom: data.sent_from || 'notificaciones@hempc.com.ar',
         sentTo: data.sent_to || params.toEmail,
-        deliveredVia: data.delivered_via || 'smtp',
+        deliveredVia: data.delivered_via || 'resend_https',
         timestamp
       };
 
@@ -140,7 +170,7 @@ export async function sendOperatorInvitationEmail(
         fieldName: params.fieldName,
         roleName: params.roleName,
         sentFrom: result.sentFrom,
-        status: result.deliveredVia === 'smtp' ? 'enviado' : 'simulado',
+        status: isRealDelivery(result.deliveredVia) ? 'enviado' : 'simulado',
         deliveredVia: result.deliveredVia
       });
 
@@ -180,7 +210,7 @@ export async function sendOperatorInvitationEmail(
 }
 
 /**
- * Despacha una alerta agronómica crítica por correo electrónico
+ * Despacha una alerta agronómica crítica por correo electrónico (Arquitectura Híbrida Render Python + Resend HTTPS)
  */
 export async function sendAgronomicAlertEmail(
   params: SendAgronomicAlertParams
@@ -188,6 +218,7 @@ export async function sendAgronomicAlertEmail(
   const engineUrl = getTelemetryEngineUrl();
   const endpoint = `${engineUrl}/api/v1/notifications/email`;
   const timestamp = new Date().toISOString();
+  const resendCfg = getStoredResendConfig();
 
   const payload = {
     to_email: params.toEmail.trim(),
@@ -199,7 +230,8 @@ export async function sendAgronomicAlertEmail(
     action_url: params.actionUrl || `${window.location.origin}/#/agro40`,
     extra_data: {
       severity: params.severity || 'Crítica',
-      ...(params.extraData || {})
+      ...(params.extraData || {}),
+      ...(resendCfg.apiKey ? { resend_api_key: resendCfg.apiKey, resend_from: resendCfg.fromEmail } : {})
     }
   };
 
@@ -217,7 +249,7 @@ export async function sendAgronomicAlertEmail(
         message: data.message || `Alerta despachada a ${params.toEmail}`,
         sentFrom: data.sent_from || 'notificaciones@hempc.com.ar',
         sentTo: data.sent_to || params.toEmail,
-        deliveredVia: data.delivered_via || 'smtp',
+        deliveredVia: data.delivered_via || 'resend_https',
         timestamp
       };
 
@@ -231,7 +263,7 @@ export async function sendAgronomicAlertEmail(
         structureName: params.plotName,
         fieldName: params.plotName,
         sentFrom: result.sentFrom,
-        status: result.deliveredVia === 'smtp' ? 'enviado' : 'simulado',
+        status: isRealDelivery(result.deliveredVia) ? 'enviado' : 'simulado',
         deliveredVia: result.deliveredVia
       });
 
@@ -275,48 +307,65 @@ export async function sendTestNotificationEmail(
   return sendOperatorInvitationEmail({
     toEmail: targetEmail,
     toName: targetName,
-    structureName: 'Red Cooperativa Nucleus • Verificación',
+    structureName: 'Red Cooperativa Nucleus • Verificación Híbrida (Render + Resend HTTPS)',
     fieldName: 'Establecimiento Demostrativo Central',
-    roleName: 'Auditor de Comunicaciones',
+    roleName: 'Auditor de Comunicaciones & IoT',
     tempPassword: 'demo-' + Math.random().toString(36).substring(2, 8).toUpperCase()
   });
 }
 
 /**
- * Consulta el estado y configuración del despachador de emails en el backend
+ * Consulta el estado y configuración del despachador híbrido en el backend Python (Render)
  */
 export async function checkEmailServiceStatus(): Promise<{
   configured: boolean;
+  resendConfigured: boolean;
+  provider: string;
+  architecture: string;
+  iotAiEngine: string;
+  engineOnline: boolean;
   sender: string;
   host: string;
   port: number;
   engineUrl: string;
 }> {
   const engineUrl = getTelemetryEngineUrl();
+  const localResend = getStoredResendConfig();
   try {
-    const res = await fetch(`${engineUrl}/api/v1/notifications/status`, { signal: AbortSignal.timeout(4000) });
+    const res = await fetch(`${engineUrl}/api/v1/notifications/status`, { signal: AbortSignal.timeout(8000) });
     if (res.ok) {
       const data = await res.json();
+      const hasResend = Boolean(data.resend_configured || localResend.apiKey);
       return {
-        configured: Boolean(data.smtp_configured),
+        configured: Boolean(hasResend || data.smtp_configured),
+        resendConfigured: hasResend,
+        provider: hasResend ? 'resend_https' : (data.provider || 'simulated'),
+        architecture: data.architecture || 'hybrid_render_iot_resend_https',
+        iotAiEngine: data.iot_ai_engine || 'active',
+        engineOnline: true,
         sender: data.sender || 'notificaciones@hempc.com.ar',
-        host: data.host || 'hempc.com.ar',
-        port: data.port || 587,
+        host: hasResend ? 'api.resend.com (HTTPS:443)' : (data.host || 'mail.hempc.com.ar'),
+        port: hasResend ? 443 : (data.port || 2525),
         engineUrl
       };
     }
   } catch (e) {
-    // backend sleeping or local fallback
+    // backend waking up or local fallback
   }
+  const hasLocalResend = Boolean(localResend.apiKey);
   return {
-    configured: false,
+    configured: hasLocalResend,
+    resendConfigured: hasLocalResend,
+    provider: hasLocalResend ? 'resend_https' : 'waking_up',
+    architecture: 'hybrid_render_iot_resend_https',
+    iotAiEngine: 'standby',
+    engineOnline: false,
     sender: 'notificaciones@hempc.com.ar',
-    host: 'hempc.com.ar',
-    port: 587,
+    host: hasLocalResend ? 'api.resend.com (HTTPS:443)' : 'hempapp.onrender.com',
+    port: 443,
     engineUrl
   };
 }
-
 
 /**
  * Envía un correo de recuperación de contraseña con clave provisoria
@@ -327,13 +376,17 @@ export async function sendPasswordResetEmail(
   const timestamp = new Date().toISOString();
   const engineUrl = getTelemetryEngineUrl();
   const endpoint = `${engineUrl}/api/v1/notifications/email`;
+  const resendCfg = getStoredResendConfig();
 
   const payload = {
     to_email: params.toEmail.trim(),
     to_name: params.toName.trim(),
     notification_type: "password_reset",
     temp_password: params.tempPassword,
-    action_url: params.actionUrl || window.location.origin
+    action_url: params.actionUrl || window.location.origin,
+    extra_data: resendCfg.apiKey
+      ? { resend_api_key: resendCfg.apiKey, resend_from: resendCfg.fromEmail }
+      : undefined
   };
 
   try {
@@ -353,7 +406,7 @@ export async function sendPasswordResetEmail(
         message: data.message || `Instrucciones de recuperación enviadas a ${params.toEmail}`,
         sentFrom: data.sent_from || "notificaciones@hempc.com.ar",
         sentTo: data.sent_to || params.toEmail,
-        deliveredVia: data.delivered_via || "smtp",
+        deliveredVia: data.delivered_via || "resend_https",
         timestamp
       };
 
@@ -365,7 +418,7 @@ export async function sendPasswordResetEmail(
         type: "test",
         subject: "🔐 Restablecimiento de Contraseña • HempC Nucleus",
         sentFrom: result.sentFrom,
-        status: result.deliveredVia === "smtp" ? "enviado" : "simulado",
+        status: isRealDelivery(result.deliveredVia) ? "enviado" : "simulado",
         deliveredVia: result.deliveredVia
       });
 
@@ -410,6 +463,7 @@ export async function sendUserProfileWelcomeEmail(
   const timestamp = new Date().toISOString();
   const engineUrl = getTelemetryEngineUrl();
   const endpoint = `${engineUrl}/api/v1/notifications/email`;
+  const resendCfg = getStoredResendConfig();
 
   const payload = {
     to_email: params.toEmail.trim(),
@@ -418,7 +472,10 @@ export async function sendUserProfileWelcomeEmail(
     role_name: params.roleName,
     structure_name: params.organizationName || "Red Cooperativa Nucleus",
     temp_password: params.tempPassword,
-    action_url: params.actionUrl || window.location.origin
+    action_url: params.actionUrl || window.location.origin,
+    extra_data: resendCfg.apiKey
+      ? { resend_api_key: resendCfg.apiKey, resend_from: resendCfg.fromEmail }
+      : undefined
   };
 
   try {
@@ -438,7 +495,7 @@ export async function sendUserProfileWelcomeEmail(
         message: data.message || `Credenciales de acceso enviadas a ${params.toEmail}`,
         sentFrom: data.sent_from || "notificaciones@hempc.com.ar",
         sentTo: data.sent_to || params.toEmail,
-        deliveredVia: data.delivered_via || "smtp",
+        deliveredVia: data.delivered_via || "resend_https",
         timestamp
       };
 
@@ -452,7 +509,7 @@ export async function sendUserProfileWelcomeEmail(
         roleName: params.roleName,
         structureName: params.organizationName,
         sentFrom: result.sentFrom,
-        status: result.deliveredVia === "smtp" ? "enviado" : "simulado",
+        status: isRealDelivery(result.deliveredVia) ? "enviado" : "simulado",
         deliveredVia: result.deliveredVia
       });
 

@@ -21,6 +21,7 @@ import {
   evaluateCriticalPlotAlerts,
   evaluateUpcomingTasksReminders
 } from '../src/services/pushNotificationService';
+import { wakeUpRenderEngine } from '../src/services/telemetryStreamService';
 
 const NavItem = ({ to, icon: Icon, label, badge, special, isCollapsed, onClickMobile }: any) => {
   const location = useLocation();
@@ -104,6 +105,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
   const [pushStatus, setPushStatus] = useState<'granted' | 'denied' | 'default' | 'unsupported'>('default');
 
   useEffect(() => {
+    wakeUpRenderEngine();
     registerServiceWorker().then(() => {
       setPushStatus(getNotificationPermissionStatus());
     });
@@ -254,7 +256,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
                   {appName}
                 </span>
                 <span className="text-[9px] font-mono font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">
-                  Red Nucleus v7.16.2
+                  Red Nucleus v7.17.0
                 </span>
               </div>
             )}
