@@ -18,21 +18,11 @@ services:
         sync: false
       - key: CORS_ORIGINS
         value: "https://*.vercel.app,https://hemp-net.vercel.app,http://localhost:3000,http://127.0.0.1:3000"
-      - key: RESEND_API_KEY
-        sync: false
+      - key: VERCEL_EMAIL_WEBHOOK_URL
+        value: "https://hemp-net.vercel.app/api/notifications/email"
       - key: RESEND_FROM_EMAIL
         value: "HempC Nucleus <notificaciones@hempc.com.ar>"
       - key: ALERT_RECIPIENT_EMAIL
         sync: false
       - key: GEMINI_API_KEY
-        sync: false
-      - key: SMTP_HOST
-        value: "mail.hempc.com.ar"
-      - key: SMTP_PORT
-        value: "2525"
-      - key: SMTP_USER
-        value: "notificaciones@hempc.com.ar"
-      - key: SMTP_FROM
-        value: "notificaciones@hempc.com.ar"
-      - key: SMTP_PASSWORD
         sync: false

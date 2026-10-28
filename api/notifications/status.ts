@@ -17,12 +17,11 @@ export default async function handler(req: any, res: any) {
   const supabaseUrl = (
     process.env.SUPABASE_URL ||
     process.env.VITE_SUPABASE_URL ||
-    ''
+    'https://vkfgxbsomxzirdezwrxz.supabase.co'
   ).trim();
 
   const senderEmail = (
     process.env.RESEND_FROM_EMAIL ||
-    process.env.SMTP_FROM ||
     'notificaciones@hempc.com.ar'
   ).trim();
 
@@ -35,6 +34,7 @@ export default async function handler(req: any, res: any) {
     provider: resendConfigured ? 'vercel_resend' : 'pending_resend_key',
     resend_configured: resendConfigured,
     supabase_configured: Boolean(supabaseUrl),
+    supabase_project: 'vkfgxbsomxzirdezwrxz',
     iot_ai_engine: 'https://hempapp.onrender.com',
     sender: senderEmail,
     host: 'api.resend.com (Vercel Serverless HTTPS:443)',

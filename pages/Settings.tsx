@@ -9,8 +9,6 @@ import {
 import { supabase, getStoredCredentials, saveSupabaseCredentials, checkConnection } from '../supabaseClient';
 import {
   checkEmailServiceStatus,
-  getStoredResendConfig,
-  saveStoredResendConfig,
   sendTestNotificationEmail
 } from '../src/services/emailNotificationService';
 import { wakeUpRenderEngine } from '../src/services/telemetryStreamService';
@@ -28,8 +26,7 @@ import {
   DEMO_SUPPLIERS as HISTORICAL_SUPPLIERS,
   DEMO_SEED_BATCHES as HISTORICAL_SEED_BATCHES,
   DEMO_SEED_MOVEMENTS as HISTORICAL_SEED_MOVEMENTS,
-  DEMO_RESOURCES as HISTORICAL_RESOURCES,
-  DEMO_OPERATIONAL_EXPENSES as HISTORICAL_OPERATIONAL_EXPENSES
+  DEMO_RESOURCES as HISTORICAL_RESOURCES
 } from '../src/data/historicalCampaignSeed';
 
 export default function Settings() {
@@ -48,14 +45,12 @@ export default function Settings() {
   const [isTestingSb, setIsTestingSb] = useState(false);
   const [sbStatusMsg, setSbStatusMsg] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
-  // Hybrid Architecture (Render Python IoT/AI + Resend HTTPS) State
-  const initialResend = getStoredResendConfig();
-  const [resendKey, setResendKey] = useState(initialResend.apiKey);
-  const [resendFrom, setResendFrom] = useState(initialResend.fromEmail);
-  const [testEmailTarget, setTestEmailTarget] = useState(currentUser?.email || 'gaston.barea.moreno@gmail.com');
+  // Hybrid Architecture (Vercel + Resend.com + Supabase & Render Python IoT/AI) State
+  const [testEmailTarget, setTestEmailTarget] = useState(currentUser?.email || 'xpatagonia.com@gmail.com');
   const [hybridStatus, setHybridStatus] = useState<{
     engineOnline: boolean;
     resendConfigured: boolean;
+    supabaseConfigured: boolean;
     provider: string;
     host: string;
     engineUrl: string;
@@ -69,6 +64,7 @@ export default function Settings() {
       setHybridStatus({
         engineOnline: st.engineOnline,
         resendConfigured: st.resendConfigured,
+        supabaseConfigured: st.supabaseConfigured,
         provider: st.provider,
         host: st.host,
         engineUrl: st.engineUrl
@@ -84,7 +80,7 @@ export default function Settings() {
   // @ts-ignore
   const buildTime = typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : 'Local Dev';
   // @ts-ignore
-  const appVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'V7.17.0-STABLE';
+  const appVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'V7.18.0-STABLE';
 
   if (currentUser?.role !== 'super_admin') {
       return (
@@ -184,8 +180,7 @@ export default function Settings() {
         { name: 'suppliers', label: 'Proveedores Homologados', data: HISTORICAL_SUPPLIERS },
         { name: 'seed_batches', label: 'Lotes de Semilla y Cosecha', data: HISTORICAL_SEED_BATCHES },
         { name: 'seed_movements', label: 'Movimientos y Remitos de Lotes', data: HISTORICAL_SEED_MOVEMENTS },
-        { name: 'resources', label: 'Insumos y Recursos de Campo', data: HISTORICAL_RESOURCES },
-        { name: 'operational_expenses', label: 'Costos Operativos y Auditoría Económica', data: HISTORICAL_OPERATIONAL_EXPENSES }
+        { name: 'resources', label: 'Insumos y Recursos de Campo', data: HISTORICAL_RESOURCES }
       ];
 
       let totalRecords = 0;
@@ -441,17 +436,17 @@ export default function Settings() {
                               <Cpu className="text-cyan-600" size={24} /> Arquitectura Híbrida: Vercel + Resend.com + Supabase &amp; Render Python (IoT/IA)
                           </h3>
                           <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-1">
-                              Despacho instantáneo de correos desde <strong>Vercel Serverless (/api/notifications/email) + Resend.com</strong> y persistencia en <strong>Supabase</strong>, dejando <strong>Render Python</strong> dedicado exclusivamente a IoT, sensores LoRaWAN y cálculo ecofisiológico/IA.
+                              Despacho oficial en <strong>Vercel Serverless (/api/notifications/email) + Resend.com</strong> y persistencia relacional en <strong>Supabase</strong>, con <strong>Render Python</strong> dedicado exclusivamente a IoT, sensores LoRaWAN y cálculo ecofisiológico/IA.
                           </p>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                           <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider ${
-                              hybridStatus?.resendConfigured || resendKey.trim()
+                              hybridStatus?.resendConfigured
                                 ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
                                 : 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
                           }`}>
                               <Mail size={12} />
-                              {hybridStatus?.resendConfigured || resendKey.trim() ? 'Vercel + Resend.com Activo' : 'Configurar RESEND_API_KEY en Vercel'}
+                              {hybridStatus?.resendConfigured ? 'Vercel + Resend.com Activo' : 'Verificar RESEND_API_KEY en Vercel'}
                           </span>
                           <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider ${
                               hybridStatus?.engineOnline
@@ -465,28 +460,18 @@ export default function Settings() {
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                      <div>
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Resend API Key (Opcional si ya está en Vercel)</label>
-                          <input
-                              type="password"
-                              placeholder="Configurada en Vercel (o pegue re_...)"
-                              className="w-full bg-slate-50 dark:bg-slate-950 border dark:border-slate-800 p-3.5 rounded-xl text-xs font-mono font-bold dark:text-white outline-none focus:ring-2 focus:ring-cyan-500"
-                              value={resendKey}
-                              onChange={e => setResendKey(e.target.value)}
-                          />
+                      <div className="bg-slate-50 dark:bg-slate-950 border dark:border-slate-800 p-4 rounded-2xl">
+                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">1. Vercel + Resend.com</span>
+                          <p className="text-xs font-black text-emerald-600 dark:text-emerald-400 font-mono">notificaciones@hempc.com.ar</p>
+                          <p className="text-[10px] text-slate-500 mt-1">Serverless HTTPS:443 • Clave protegida en Vercel</p>
+                      </div>
+                      <div className="bg-slate-50 dark:bg-slate-950 border dark:border-slate-800 p-4 rounded-2xl">
+                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">2. Supabase Cloud DB</span>
+                          <p className="text-xs font-black text-blue-600 dark:text-blue-400 font-mono">vkfgxbsomxzirdezwrxz</p>
+                          <p className="text-[10px] text-slate-500 mt-1">15 Tablas Relacionales • CRUD en Tiempo Real</p>
                       </div>
                       <div>
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Remitente Oficial Verificado</label>
-                          <input
-                              type="text"
-                              placeholder="HempC Nucleus <notificaciones@hempc.com.ar>"
-                              className="w-full bg-slate-50 dark:bg-slate-950 border dark:border-slate-800 p-3.5 rounded-xl text-xs font-mono font-bold dark:text-white outline-none focus:ring-2 focus:ring-cyan-500"
-                              value={resendFrom}
-                              onChange={e => setResendFrom(e.target.value)}
-                          />
-                      </div>
-                      <div>
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Destinatario de Prueba</label>
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Destinatario de Prueba Oficial</label>
                           <input
                               type="email"
                               placeholder="correo@ejemplo.com"
@@ -510,25 +495,25 @@ export default function Settings() {
 
                   <div className="flex flex-wrap items-center justify-between gap-4">
                       <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                          Endpoint activo en Vercel: <code className="font-mono font-bold text-emerald-600 dark:text-emerald-400">/api/notifications/email</code> (usa <code className="font-mono">RESEND_API_KEY</code> de Vercel) • Motor IoT/IA: <code className="font-mono">hempapp.onrender.com</code>
+                          Endpoint activo en Vercel: <code className="font-mono font-bold text-emerald-600 dark:text-emerald-400">/api/notifications/email</code> • Motor IoT/IA: <code className="font-mono">hempapp.onrender.com</code>
                       </p>
                       <button
                           onClick={async () => {
                               setIsTestingHybrid(true);
                               setHybridMsg(null);
                               try {
-                                  saveStoredResendConfig(resendKey, resendFrom);
                                   const res = await sendTestNotificationEmail(testEmailTarget || 'xpatagonia.com@gmail.com', currentUser?.name || 'Master Admin');
                                   const st = await checkEmailServiceStatus();
                                   setHybridStatus({
                                       engineOnline: st.engineOnline,
                                       resendConfigured: st.resendConfigured,
+                                      supabaseConfigured: st.supabaseConfigured,
                                       provider: st.provider,
                                       host: st.host,
                                       engineUrl: st.engineUrl
                                   });
                                   setHybridMsg({
-                                      type: res.deliveredVia === 'vercel_resend' || res.deliveredVia === 'resend_https' || res.deliveredVia === 'smtp' ? 'success' : 'info',
+                                      type: res.deliveredVia === 'vercel_resend' || res.deliveredVia === 'resend_https' ? 'success' : 'info',
                                       text: `${res.message} (Vía: ${res.deliveredVia.toUpperCase()})`
                                   });
                               } catch (err: any) {
@@ -541,7 +526,7 @@ export default function Settings() {
                           className="bg-cyan-600 hover:bg-cyan-700 text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition flex items-center gap-2 shadow-md disabled:opacity-50 cursor-pointer"
                       >
                           {isTestingHybrid ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                          Probar Envío Vercel + Resend.com
+                          Probar Envío Oficial (Vercel + Resend.com)
                       </button>
                   </div>
               </div>

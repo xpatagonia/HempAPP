@@ -76,6 +76,61 @@ function buildOperatorInvitationHtml(req: EmailNotificationPayload): string {
   </html>`;
 }
 
+function buildUserWelcomeHtml(req: EmailNotificationPayload): string {
+  const roleLabel = req.role_name || 'Miembro del Equipo';
+  const structure = req.structure_name || 'Red Cooperativa Central';
+  const tempPwd = req.temp_password || 'Configurada por el administrador';
+  const actionUrl = req.action_url || 'https://hemp-net.vercel.app';
+  return `
+  <!DOCTYPE html>
+  <html>
+  <head>
+    <meta charset="utf-8">
+    <style>
+      body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 24px; }
+      .container { max-width: 580px; margin: 0 auto; background: #ffffff; border-radius: 24px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.04); }
+      .header { background: #064e3b; padding: 28px 32px; color: #ffffff; text-align: left; }
+      .content { padding: 32px; color: #334155; line-height: 1.6; }
+      .badge { display: inline-block; background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: bold; text-transform: uppercase; }
+      .creds-box { background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px; padding: 18px; margin: 20px 0; }
+      .pwd-box { background: #f0fdf4; border: 2px dashed #059669; border-radius: 16px; padding: 18px; text-align: center; margin: 20px 0; }
+      .pwd-code { font-family: monospace; font-size: 20px; font-weight: 900; letter-spacing: 1.5px; color: #047857; }
+      .btn { display: inline-block; background: #10b981; color: #ffffff !important; padding: 14px 30px; border-radius: 14px; font-weight: 800; text-decoration: none; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 10px; }
+      .footer { background: #f8fafc; padding: 20px 32px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #94a3b8; text-align: center; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <div style="font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: #a7f3d0; font-weight: 800; margin-bottom: 2px;">PatagonianC LTDA Cooperativa de Trabajo</div>
+        <div style="font-size: 12px; font-weight: 900; color: #ffffff; margin-bottom: 6px;">CUIT: 30-71816113-0 · HempC (Unidad de Negocios)</div>
+        <h1 style="margin: 6px 0 0 0; font-size: 22px; font-weight: 800;">Bienvenido a HempC Nucleus</h1>
+      </div>
+      <div class="content">
+        <p style="font-size: 15px; color: #0f172a;">Hola <strong>${req.to_name}</strong>,</p>
+        <p>La administración cooperativa ha creado tu perfil de acceso para la gestión de equipos, trazabilidad y labores en <strong>HempC Nucleus</strong>.</p>
+        <div class="creds-box">
+          <p style="margin: 0 0 8px 0; font-size: 13px;"><strong>Rol / Jerarquía:</strong> <span class="badge">${roleLabel}</span></p>
+          <p style="margin: 0 0 8px 0; font-size: 13px;"><strong>Entidad Asignada:</strong> ${structure}</p>
+          <p style="margin: 0; font-size: 13px;"><strong>Usuario de Acceso:</strong> <code style="font-family: monospace; color: #0f172a;">${req.to_email}</code></p>
+        </div>
+        <div class="pwd-box">
+          <span style="font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; color: #065f46; display: block; margin-bottom: 6px;">Contraseña Inicial Asignada</span>
+          <span class="pwd-code">${tempPwd}</span>
+        </div>
+        <div style="text-align: center; margin: 26px 0 10px 0;">
+          <a href="${actionUrl}" class="btn">Acceder al Sistema</a>
+        </div>
+      </div>
+      <div class="footer">
+        <div style="margin-bottom: 6px; font-weight: 800; color: #334155; font-size: 12px;">PatagonianC LTDA Cooperativa de Trabajo · CUIT: 30-71816113-0 · HempC (Unidad de Negocios)</div>
+        <div style="font-size: 11px; color: #64748b; margin-bottom: 4px;">Enviado por <strong>notificaciones@hempc.com.ar</strong> (Vercel + Resend HTTPS)</div>
+      </div>
+    </div>
+  </body>
+  </html>`;
+}
+
 function buildAgronomicAlertHtml(req: EmailNotificationPayload): string {
   const title = req.alert_title || 'Alerta Agronómica Crítica';
   const plot = req.plot_name || 'Parcela en Seguimiento';
@@ -222,9 +277,7 @@ export default async function handler(req: any, res: any) {
     return res.status(400).json({ detail: 'Dirección de correo electrónico inválida' });
   }
 
-  const extraCfg = body.extra_data || {};
   const resendKey = (
-    extraCfg.resend_api_key ||
     process.env.RESEND_API_KEY ||
     process.env.VITE_RESEND_API_KEY ||
     process.env.RESEND_KEY ||
@@ -232,9 +285,7 @@ export default async function handler(req: any, res: any) {
   ).trim();
 
   const rawFrom = (
-    extraCfg.resend_from ||
     process.env.RESEND_FROM_EMAIL ||
-    process.env.SMTP_FROM ||
     'HempC Nucleus <notificaciones@hempc.com.ar>'
   ).trim();
 
@@ -258,6 +309,8 @@ export default async function handler(req: any, res: any) {
   let htmlBody = '';
   if (body.notification_type === 'password_reset') {
     htmlBody = buildPasswordResetHtml(body);
+  } else if (body.notification_type === 'user_welcome') {
+    htmlBody = buildUserWelcomeHtml(body);
   } else if (body.notification_type === 'agronomic_alert') {
     htmlBody = buildAgronomicAlertHtml(body);
   } else {
@@ -316,7 +369,7 @@ export default async function handler(req: any, res: any) {
 
   return res.status(200).json({
     success: true,
-    message: `Falta variable RESEND_API_KEY en Vercel Settings -> Environment Variables (o en Ajustes -> Sistema).`,
+    message: `Falta variable RESEND_API_KEY en Vercel Settings -> Environment Variables.`,
     sent_from: 'notificaciones@hempc.com.ar',
     sent_to: body.to_email,
     delivered_via: 'pending_resend_key',

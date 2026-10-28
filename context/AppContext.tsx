@@ -950,7 +950,6 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                         setHydricRecords(healed);
                         try { localStorage.setItem('ht_hydric_records', JSON.stringify(healed)); } catch (e) {}
                     }, DEMO_HYDRIC),
-                    fetchTable('operational_expenses', setOperationalExpenses, DEMO_OPERATIONAL_EXPENSES),
                     fetchTable('field_logs', setLogs),
                 ]);
             } else {
@@ -1494,62 +1493,106 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         return ok;
     };
 
+    // Mapa exacto de columnas existentes en el esquema PostgreSQL de Supabase para evitar reintentos HTTP 400
+    const SUPABASE_TABLE_COLUMNS: Record<string, string[]> = {
+        users: ['id', 'name', 'email', 'role', 'password', 'job_title', 'phone', 'avatar', 'client_id', 'is_network_member'],
+        clients: ['id', 'name', 'type', 'contact_name', 'contact_phone', 'email', 'is_network_member', 'membership_level', 'contract_date', 'cuit', 'notes', 'related_user_id', 'coordinates', 'address', 'total_hectares'],
+        locations: ['id', 'name', 'province', 'city', 'address', 'coordinates', 'polygon', 'client_id', 'capacity_ha', 'soil_type', 'climate', 'responsible_person', 'owner_name', 'owner_legal_name', 'owner_cuit', 'owner_contact', 'owner_type', 'irrigation_system', 'responsible_ids'],
+        plots: ['id', 'location_id', 'project_id', 'variety_id', 'seed_batch_id', 'name', 'type', 'status', 'sowing_date', 'block', 'replicate', 'surface_area', 'surface_unit', 'density', 'owner_name', 'responsible_ids', 'row_distance', 'perimeter', 'coordinates', 'polygon', 'irrigation_type', 'observations', 'used_seed_value', 'used_seed_unit', 'color'],
+        trial_records: ['id', 'plot_id', 'date', 'time', 'stage', 'temperature', 'humidity', 'plant_height', 'plants_per_meter', 'uniformity', 'vigor', 'lodging', 'bird_damage', 'stem_weight', 'leaf_weight', 'fresh_weight', 'yield', 'replicate', 'emergence_date', 'flowering_date', 'harvest_date', 'diseases', 'pests', 'created_by', 'created_by_name', 'light_hours', 'lunar_phase', 'diseases_score', 'pests_score', 'harvest_plant_count', 'seed_yield', 'seed_quality_germination', 'seed_quality_non_conformity'],
+        tasks: ['id', 'title', 'description', 'status', 'priority', 'assigned_to_ids', 'due_date', 'plot_id', 'created_by'],
+        projects: ['id', 'name', 'description', 'start_date', 'status', 'director_id', 'responsible_ids'],
+        varieties: ['id', 'supplier_id', 'name', 'usage', 'cycle_days', 'expected_thc', 'knowledge_base', 'notes'],
+        suppliers: ['id', 'name', 'category', 'cuit', 'country', 'province', 'city', 'address', 'email', 'coordinates', 'legal_name', 'postal_code', 'whatsapp', 'commercial_contact', 'website', 'is_official_partner', 'logistics_contact', 'notes'],
+        seed_batches: ['id', 'variety_id', 'supplier_id', 'batch_code', 'label_serial_number', 'category', 'analysis_date', 'purity', 'germination', 'gs1_code', 'certification_number', 'purchase_order', 'purchase_date', 'price_per_kg', 'initial_quantity', 'remaining_quantity', 'storage_conditions', 'storage_point_id', 'logistics_responsible', 'notes', 'is_active', 'created_at'],
+        seed_movements: ['id', 'batch_id', 'client_id', 'target_location_id', 'quantity', 'date', 'dispatch_time', 'transport_guide_number', 'transport_type', 'driver_name', 'vehicle_plate', 'vehicle_model', 'transport_company', 'route_itinerary', 'status', 'origin_storage_id', 'route_google_link', 'estimated_distance_km', 'driver_dni', 'recipient_name', 'recipient_dni'],
+        resources: ['id', 'name', 'category', 'unit', 'stock', 'min_stock', 'cost_per_unit'],
+        storage_points: ['id', 'name', 'node_code', 'type', 'address', 'city', 'province', 'coordinates', 'responsible_user_id', 'client_id', 'surface_m2', 'conditions', 'notes'],
+        hydric_records: ['id', 'location_id', 'plot_id', 'date', 'time', 'type', 'amount_mm', 'notes', 'created_by', 'end_time'],
+        field_logs: ['id', 'plot_id', 'date', 'time', 'note', 'photo_url']
+    };
+
+    // Convierte cualquier identificador de texto a un UUID v4 determinístico cuando la tabla requiere columna UUID (ej. field_logs)
+    const ensureUuid = (rawId: string): string => {
+        const str = String(rawId || '').trim();
+        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str)) {
+            return str.toLowerCase();
+        }
+        let h1 = 0xdeadbeef ^ str.length;
+        let h2 = 0x41c6ce57 ^ str.length;
+        let h3 = 0x9e3779b9 ^ str.length;
+        let h4 = 0x85ebca6b ^ str.length;
+        for (let i = 0; i < str.length; i++) {
+            const ch = str.charCodeAt(i);
+            h1 = Math.imul(h1 ^ ch, 2654435761);
+            h2 = Math.imul(h2 ^ ch, 1597334677);
+            h3 = Math.imul(h3 ^ ch, 2246822507);
+            h4 = Math.imul(h4 ^ ch, 3266489909);
+        }
+        const hex = (n: number) => (n >>> 0).toString(16).padStart(8, '0');
+        const full = `${hex(h1)}${hex(h2)}${hex(h3)}${hex(h4)}`;
+        return `${full.slice(0, 8)}-${full.slice(8, 12)}-4${full.slice(13, 16)}-8${full.slice(17, 20)}-${full.slice(20, 32)}`;
+    };
+
     const crud = async (table: string, item: any, action: 'insert' | 'update' | 'delete', idField = 'id') => {
+        // Si es field_logs, normalizar id a UUID válido para que coincida con el tipo UUID de Supabase
+        const normalizedItem =
+            table === 'field_logs' && item && typeof item === 'object' && item[idField]
+                ? { ...item, [idField]: ensureUuid(String(item[idField])) }
+                : item;
+
         // 1. Registrar tombstone en caso de eliminación o limpiar en caso de alta/edición
         if (action === 'delete') {
-            const targetId = typeof item === 'object' && item !== null ? item[idField] : item;
-            markIdDeleted(table, String(targetId));
-        } else if (item && item[idField]) {
-            unmarkIdDeleted(table, String(item[idField]));
+            const rawTarget = typeof normalizedItem === 'object' && normalizedItem !== null ? normalizedItem[idField] : normalizedItem;
+            const targetId = table === 'field_logs' ? ensureUuid(String(rawTarget)) : String(rawTarget);
+            markIdDeleted(table, String(rawTarget));
+            markIdDeleted(table, targetId);
+        } else if (normalizedItem && normalizedItem[idField]) {
+            unmarkIdDeleted(table, String(normalizedItem[idField]));
         }
 
         // 2. Inmediatamente actualizar estado React y persistencia local
-        const enrichedItem = action !== 'delete' && typeof item === 'object' && item !== null
-            ? { ...item, _localUpdatedAt: Date.now() }
-            : item;
+        const enrichedItem = action !== 'delete' && typeof normalizedItem === 'object' && normalizedItem !== null
+            ? { ...normalizedItem, _localUpdatedAt: Date.now() }
+            : normalizedItem;
         updateLocalState(table, enrichedItem, action, idField);
 
-        // 3. Si la base de datos Supabase está conectada o configurada, sincronizar con auto-resiliencia de columnas
+        // operational_expenses se gestiona en colección de auditoría sin tabla SQL dedicada
+        if (table === 'operational_expenses') {
+            return true;
+        }
+
+        // 3. Si la base de datos Supabase está conectada o configurada, sincronizar con validación exacta de esquema
         const creds = getStoredCredentials();
         if (isDbConnected || creds.isConfigured) {
             try {
                 if (action === 'delete') {
-                    const targetId = typeof item === 'object' && item !== null ? item[idField] : item;
+                    const rawTarget = typeof normalizedItem === 'object' && normalizedItem !== null ? normalizedItem[idField] : normalizedItem;
+                    const targetId = table === 'field_logs' ? ensureUuid(String(rawTarget)) : rawTarget;
                     const res = await supabase.from(table).delete().eq(idField, targetId);
                     if (res.error) {
                         console.warn(`Sync warning deleting from ${table}:`, res.error.message);
                     }
                 } else {
-                    const cleanItem = { ...item };
+                    const cleanItem = { ...normalizedItem };
                     delete cleanItem._localUpdatedAt;
-                    let payload = toSnakeCase(cleanItem);
+                    const rawPayload = toSnakeCase(cleanItem);
 
-                    // Bucle resiliente ante columnas enriquecidas del frontend que aún no existan en el esquema SQL
-                    for (let attempt = 0; attempt < 18; attempt++) {
-                        const res = action === 'insert'
-                            ? await supabase.from(table).upsert([payload], { onConflict: idField })
-                            : await supabase.from(table).upsert([payload], { onConflict: idField });
-
-                        if (!res.error) {
-                            break;
-                        }
-
-                        const errMsg = res.error.message || '';
-                        const colMatch =
-                            errMsg.match(/Could not find the '([^']+)' column/i) ||
-                            errMsg.match(/column "([^"]+)" of relation/i) ||
-                            errMsg.match(/column ([^ ]+) does not exist/i);
-
-                        if (colMatch && colMatch[1]) {
-                            const offendingCol = colMatch[1].replace(/^["']|["']$/g, '');
-                            if (offendingCol in payload && offendingCol !== idField) {
-                                delete payload[offendingCol];
-                                continue;
+                    const allowedCols = SUPABASE_TABLE_COLUMNS[table];
+                    let payload: Record<string, any> = {};
+                    if (allowedCols) {
+                        for (const col of allowedCols) {
+                            if (rawPayload[col] !== undefined) {
+                                payload[col] = rawPayload[col];
                             }
                         }
+                    } else {
+                        payload = { ...rawPayload };
+                    }
 
+                    const res = await supabase.from(table).upsert([payload], { onConflict: idField });
+                    if (res.error) {
                         console.warn(`Sync warning for ${table} (${action}):`, res.error.message);
-                        break;
                     }
                 }
             } catch (e) {
