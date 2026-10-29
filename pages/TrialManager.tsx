@@ -11,6 +11,7 @@ import {
   AgriculturalLaborType,
   HempStageId
 } from '../types';
+import { PlotCycleClosureModal } from '../components/PlotCycleClosureModal';
 import {
   FlaskConical,
   Save,
@@ -58,7 +59,10 @@ import {
   Minus,
   ChevronDown,
   ChevronUp,
-  Smartphone
+  Smartphone,
+  Scale,
+  Award,
+  Timer
 } from 'lucide-react';
 
 const fastUUID = () => {
@@ -80,6 +84,13 @@ const calculateLunarPhase = (dateStr: string) => {
   if (pos < 0.56) return 'Llena';
   return 'Menguante';
 };
+
+function addDaysToIsoDate(isoDateStr: string, daysToAdd: number): string {
+  const base = new Date((isoDateStr || new Date().toISOString().split('T')[0]) + 'T12:00:00Z');
+  if (isNaN(base.getTime())) return new Date().toISOString().split('T')[0];
+  base.setUTCDate(base.getUTCDate() + Math.round(daysToAdd));
+  return base.toISOString().split('T')[0];
+}
 
 // Compresión cliente para fotografías de bitácora tomadas desde cámara móvil o escritorio
 async function compressImageFileToDataUrl(file: File, maxDimension = 1280, quality = 0.82): Promise<string> {
@@ -193,6 +204,7 @@ export default function TrialManager() {
     addTask,
     deleteTask,
     updatePlotPhenology,
+    closePlotCycle,
     syncAllPlotsContinuousRainfall,
     isSyncingGlobalRainfall
   } = useAppContext();
@@ -217,11 +229,17 @@ export default function TrialManager() {
   const [locationFilter, setLocationFilter] = useState<string>('all');
   const [varietyFilter, setVarietyFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<'all' | 'Ensayo' | 'Producción'>('all');
-  const [urgencyFilter, setUrgencyFilter] = useState<'all' | 'urgent' | 'uptodate'>('all');
+  const [urgencyFilter, setUrgencyFilter] = useState<'all' | 'urgent' | 'uptodate' | 'harvest_window'>('all');
 
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
   const [confirmDeleteRecordId, setConfirmDeleteRecordId] = useState<string | null>(null);
   const [previewPhotoUrl, setPreviewPhotoUrl] = useState<string | null>(null);
+
+  // Estados de Programación de Cosecha y Modal Oficial de Cierre de Ciclo
+  const [isClosureModalOpen, setIsClosureModalOpen] = useState(false);
+  const [scheduleHarvestDateInput, setScheduleHarvestDateInput] = useState<string>('');
+  const [grainMoistureFieldPct, setGrainMoistureFieldPct] = useState<number>(13.5);
+  const [isSchedulingHarvest, setIsSchedulingHarvest] = useState(false);
 
   // ============================================================================
   // ESTADOS DE LOS 3 ATAJOS OPERATIVOS DE CAMPO (SINCRONIZADOS CON PLOTDETAILS)
@@ -259,7 +277,7 @@ export default function TrialManager() {
   const [quickLaborApplyBlock, setQuickLaborApplyBlock] = useState<boolean>(false);
   const [isSavingQuickLabor, setIsSavingQuickLabor] = useState(false);
 
-  // Valores predeterminados oficiales idénticos a la ficha técnica "Informe periódico Nucleus Trace"
+  // Valores predeterminados oficiales sincronizados con Nucleus Trace
   const [formData, setFormData] = useState<Partial<TrialRecord>>({
     date: new Date().toISOString().split('T')[0],
     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
@@ -284,7 +302,7 @@ export default function TrialManager() {
   });
 
   // ============================================================================
-  // 1. PARCELAS ACTIVAS ENRIQUECIDAS + FILTROS EN CASCADA (CAMPO -> GENÉTICA)
+  // 1. PARCELAS ACTIVAS ENRIQUECIDAS CON RELOJ DE COSECHA Y PROYECCIÓN COMERCIAL
   // ============================================================================
   const allEnrichedActivePlots = useMemo(() => {
     const active = plots.filter(p => p.status === 'Activa');
@@ -300,14 +318,54 @@ export default function TrialManager() {
         const loc = locations.find(l => l.id === p.locationId);
         const varObj = varieties.find(v => v.id === p.varietyId);
 
-        // Superficie convertida a hectáreas para totales de tablero
+        // Superficie convertida a hectáreas para totales de tablero y proyección comercial
         const rawSurface = Number(p.surfaceArea || 0);
         const areaM2 =
           p.surfaceUnit === 'm2' ? rawSurface : p.surfaceUnit === 'ac' ? rawSurface * 4046.86 : rawSurface * 10000;
         const areaHa = Number((areaM2 / 10000).toFixed(4));
 
+        // Reloj Biológico de Cosecha basado en Fecha de Siembra + Germoplasma (cycleDays)
+        const sowDateIso = p.sowingDate || '2025-10-15';
+        const sowTime = new Date(sowDateIso + 'T12:00:00Z').getTime();
+        const dds = Math.max(0, Math.floor((Date.now() - sowTime) / 86400000));
+        const cycleDays = Number(varObj?.cycleDays || 120);
+        const usage = varObj?.usage || 'Dual';
+
+        // Si el germoplasma es exclusivamente para Fibra, la ventana óptima de corte es en fin de floración (~15d antes de madurez de grano)
+        const optimalBiologicalHarvestDate = addDaysToIsoDate(sowDateIso, cycleDays);
+        const optimalFiberCutDate = addDaysToIsoDate(sowDateIso, Math.max(65, cycleDays - 18));
+        const targetHarvestDate =
+          p.scheduledHarvestDate ||
+          (usage === 'Fibra' ? optimalFiberCutDate : optimalBiologicalHarvestDate);
+
+        const targetHarvestTime = new Date(targetHarvestDate + 'T12:00:00Z').getTime();
+        const daysToHarvest = Math.ceil((targetHarvestTime - Date.now()) / 86400000);
+        const cycleProgressPct = Math.min(100, Math.round((dds / Math.max(1, cycleDays)) * 100));
+
+        // Proyección comercial de cosecha (Grano en kg y Fibra/Tallo en Tn)
+        const vigorScore = lastRecord?.vigor || 8;
+        const vigorFactor = 0.72 + (vigorScore / 9) * 0.28; // Entre 0.75 y 1.00 según vigor real del lote
+        const baseGrainKgHa =
+          varObj?.expectedGrainYieldKgHa ||
+          (usage === 'Grano' ? 1250 : usage === 'Dual' ? 980 : usage === 'Medicinal' ? 650 : 450);
+        const baseFiberTnHa =
+          varObj?.expectedFiberYieldTnHa ||
+          (usage === 'Fibra' ? 8.8 : usage === 'Dual' ? 6.5 : usage === 'Grano' ? 4.2 : 2.8);
+
+        // Si ya hay muestreo de campo (g/m²), 1 g/m² = 10 kg/ha; si no, usamos potencial genético ajustado por vigor
+        const projectedGrainKgHa =
+          lastRecord?.seedYield && lastRecord.seedYield > 0
+            ? Math.round(lastRecord.seedYield * 10)
+            : Math.round(baseGrainKgHa * vigorFactor);
+        const projectedFiberTnHa =
+          lastRecord?.stemWeight && lastRecord.stemWeight > 0
+            ? Number(((lastRecord.stemWeight * 10) / 1000).toFixed(2))
+            : Number((baseFiberTnHa * vigorFactor).toFixed(2));
+
+        const projectedPlotGrainKg = Math.round(projectedGrainKgHa * areaHa);
+        const projectedPlotFiberTn = Number((projectedFiberTnHa * areaHa).toFixed(2));
+
         // Cotejo Hídrico de la parcela (desde fecha de siembra)
-        const sowDateIso = p.sowingDate || '2025-09-01';
         const pHydric = hydricRecords.filter(
           r => (r.plotId === p.id || (r.locationId === p.locationId && !r.plotId)) && r.date >= sowDateIso
         );
@@ -338,9 +396,21 @@ export default function TrialManager() {
           daysSince,
           locationName: loc?.name || 'S/D',
           varietyName: varObj?.name || 'S/D',
+          varietyUsage: usage,
           location: loc,
           areaM2,
           areaHa,
+          dds,
+          cycleDays,
+          optimalBiologicalHarvestDate,
+          optimalFiberCutDate,
+          targetHarvestDate,
+          daysToHarvest,
+          cycleProgressPct,
+          projectedGrainKgHa,
+          projectedFiberTnHa,
+          projectedPlotGrainKg,
+          projectedPlotFiberTn,
           rainMm,
           irrigMm,
           totalWaterMm,
@@ -434,17 +504,25 @@ export default function TrialManager() {
     });
   }, [allEnrichedActivePlots, locationFilter, varietyFilter, searchQuery]);
 
-  // Métricas de Tablero (Ensayos vs Producción, Urgentes vs Al Día, Superficie) sobre el alcance seleccionado
+  // Métricas de Tablero (Ensayos vs Producción, Urgentes, Ventana de Cosecha y Volumen Pre-Venta)
   const boardStats = useMemo(() => {
     const total = baseScopedPlots.length;
     const ensayos = baseScopedPlots.filter(i => i.plot.type === 'Ensayo');
     const produccion = baseScopedPlots.filter(i => i.plot.type === 'Producción');
     const urgent = baseScopedPlots.filter(i => i.daysSince > 7);
     const upToDate = baseScopedPlots.filter(i => i.daysSince <= 7);
+    const harvestWindow = baseScopedPlots.filter(
+      i => i.daysToHarvest <= 30 || Boolean(i.plot.isHarvestScheduled) || i.cycleProgressPct >= 75
+    );
 
     const ensayosHa = Number(ensayos.reduce((s, i) => s + i.areaHa, 0).toFixed(2));
     const produccionHa = Number(produccion.reduce((s, i) => s + i.areaHa, 0).toFixed(2));
     const totalHa = Number((ensayosHa + produccionHa).toFixed(2));
+
+    const totalProjectedGrainKg = baseScopedPlots.reduce((s, i) => s + i.projectedPlotGrainKg, 0);
+    const totalProjectedFiberTn = Number(
+      baseScopedPlots.reduce((s, i) => s + i.projectedPlotFiberTn, 0).toFixed(1)
+    );
 
     return {
       total,
@@ -454,16 +532,27 @@ export default function TrialManager() {
       produccionCount: produccion.length,
       produccionHa,
       urgentCount: urgent.length,
-      upToDateCount: upToDate.length
+      upToDateCount: upToDate.length,
+      harvestWindowCount: harvestWindow.length,
+      totalProjectedGrainKg,
+      totalProjectedFiberTn
     };
   }, [baseScopedPlots]);
 
-  // Cola final aplicando también el filtro de Tipo ('Ensayo' | 'Producción') y Urgencia
+  // Cola final aplicando también el filtro de Tipo ('Ensayo' | 'Producción') y Urgencia / Ventana de Cosecha
   const plotQueue = useMemo(() => {
     return baseScopedPlots.filter(item => {
       if (typeFilter !== 'all' && item.plot.type !== typeFilter) return false;
       if (urgencyFilter === 'urgent' && item.daysSince <= 7) return false;
       if (urgencyFilter === 'uptodate' && item.daysSince > 7) return false;
+      if (
+        urgencyFilter === 'harvest_window' &&
+        item.daysToHarvest > 30 &&
+        !item.plot.isHarvestScheduled &&
+        item.cycleProgressPct < 75
+      ) {
+        return false;
+      }
       return true;
     });
   }, [baseScopedPlots, typeFilter, urgencyFilter]);
@@ -521,26 +610,87 @@ export default function TrialManager() {
       .sort((a, b) => (b.executionDate || b.dueDate || '').localeCompare(a.executionDate || a.dueDate || ''));
   }, [tasks, currentPlotData]);
 
-  // Cálculos agronómicos de superficie y días desde siembra (DDS)
+  // Cálculos agronómicos de ciclo, cosecha óptima y proyección comercial en tiempo real
   const currentPlotMetrics = useMemo(() => {
     if (!currentPlotData) {
-      return { dds: 0, areaM2: 0, areaHa: 0, waterNeedMm: 480, waterPct: 0, totalVolumeM3: 0, totalLiters: 0 };
+      return {
+        dds: 0,
+        cycleDays: 120,
+        cycleProgressPct: 0,
+        optimalBiologicalHarvestDate: '',
+        optimalFiberCutDate: '',
+        targetHarvestDate: '',
+        daysToHarvest: 120,
+        areaM2: 0,
+        areaHa: 0,
+        waterNeedMm: 480,
+        waterPct: 0,
+        totalVolumeM3: 0,
+        totalLiters: 0,
+        liveProjectedGrainKgHa: 0,
+        liveProjectedGrainTotalKg: 0,
+        liveProjectedFiberTnHa: 0,
+        liveProjectedFiberTotalTn: 0,
+        usingFieldSampleForGrain: false,
+        usingFieldSampleForFiber: false
+      };
     }
-    const p = currentPlotData.plot;
-    const sowTime = p.sowingDate ? new Date(p.sowingDate + 'T12:00:00').getTime() : Date.now();
-    const dds = Math.max(0, Math.floor((Date.now() - sowTime) / (1000 * 60 * 60 * 24)));
 
-    const rawSurface = Number(p.surfaceArea || 1);
-    const areaM2 =
-      p.surfaceUnit === 'm2' ? rawSurface : p.surfaceUnit === 'ac' ? rawSurface * 4046.86 : rawSurface * 10000;
-    const areaHa = Number((areaM2 / 10000).toFixed(4));
     const waterNeedMm = variety?.waterNeedMm || 480;
     const waterPct = Math.min(100, Math.round((currentPlotData.totalWaterMm / Math.max(1, waterNeedMm)) * 100));
-    const totalLiters = Math.round(currentPlotData.totalWaterMm * areaM2);
-    const totalVolumeM3 = Number(((currentPlotData.totalWaterMm * areaM2) / 1000).toFixed(2));
+    const totalLiters = Math.round(currentPlotData.totalWaterMm * currentPlotData.areaM2);
+    const totalVolumeM3 = Number(((currentPlotData.totalWaterMm * currentPlotData.areaM2) / 1000).toFixed(2));
 
-    return { dds, areaM2, areaHa, waterNeedMm, waterPct, totalVolumeM3, totalLiters };
-  }, [currentPlotData, variety]);
+    // Proyección Comercial en Vivo (reacciona inmediatamente al editar Vigor o Muestreo g/m² en el formulario)
+    const vigorScore = Number(formData.vigor || 8);
+    const vigorFactor = 0.72 + (vigorScore / 9) * 0.28;
+    const usage = variety?.usage || 'Dual';
+    const baseGrainKgHa =
+      variety?.expectedGrainYieldKgHa ||
+      (usage === 'Grano' ? 1250 : usage === 'Dual' ? 980 : usage === 'Medicinal' ? 650 : 450);
+    const baseFiberTnHa =
+      variety?.expectedFiberYieldTnHa ||
+      (usage === 'Fibra' ? 8.8 : usage === 'Dual' ? 6.5 : usage === 'Grano' ? 4.2 : 2.8);
+
+    const sampledSeedGrM2 = Number(formData.seedYield || 0);
+    const sampledStemGrM2 = Number(formData.stemWeight || 0);
+
+    const usingFieldSampleForGrain = sampledSeedGrM2 > 0;
+    const usingFieldSampleForFiber = sampledStemGrM2 > 0;
+
+    // 1 g/m² = 10 kg/ha
+    const liveProjectedGrainKgHa = usingFieldSampleForGrain
+      ? Math.round(sampledSeedGrM2 * 10)
+      : Math.round(baseGrainKgHa * vigorFactor);
+    const liveProjectedGrainTotalKg = Math.round(liveProjectedGrainKgHa * currentPlotData.areaHa);
+
+    const liveProjectedFiberTnHa = usingFieldSampleForFiber
+      ? Number(((sampledStemGrM2 * 10) / 1000).toFixed(2))
+      : Number((baseFiberTnHa * vigorFactor).toFixed(2));
+    const liveProjectedFiberTotalTn = Number((liveProjectedFiberTnHa * currentPlotData.areaHa).toFixed(2));
+
+    return {
+      dds: currentPlotData.dds,
+      cycleDays: currentPlotData.cycleDays,
+      cycleProgressPct: currentPlotData.cycleProgressPct,
+      optimalBiologicalHarvestDate: currentPlotData.optimalBiologicalHarvestDate,
+      optimalFiberCutDate: currentPlotData.optimalFiberCutDate,
+      targetHarvestDate: currentPlotData.targetHarvestDate,
+      daysToHarvest: currentPlotData.daysToHarvest,
+      areaM2: currentPlotData.areaM2,
+      areaHa: currentPlotData.areaHa,
+      waterNeedMm,
+      waterPct,
+      totalVolumeM3,
+      totalLiters,
+      liveProjectedGrainKgHa,
+      liveProjectedGrainTotalKg,
+      liveProjectedFiberTnHa,
+      liveProjectedFiberTotalTn,
+      usingFieldSampleForGrain,
+      usingFieldSampleForFiber
+    };
+  }, [currentPlotData, variety, formData.vigor, formData.seedYield, formData.stemWeight]);
 
   // Auto-seleccionar el primero si la selección actual no está en la cola filtrada
   useEffect(() => {
@@ -639,6 +789,10 @@ export default function TrialManager() {
         seedQualityNonConformity: last?.seedQualityNonConformity ?? 0
       }));
 
+      setScheduleHarvestDateInput(
+        currentPlotData.plot.scheduledHarvestDate || currentPlotData.targetHarvestDate || todayStr
+      );
+
       syncEnvironmentalData(todayStr, currentPlotData.location);
     }
   }, [currentPlotData?.plot.id, editingRecordId]);
@@ -685,6 +839,29 @@ export default function TrialManager() {
     setActiveTab('form');
   };
 
+  // Programar fecha de cosecha directamente desde Monitoreo Rápido en la ficha de Parcela
+  const handleQuickScheduleHarvest = async () => {
+    if (!currentPlotData?.plot.id || !scheduleHarvestDateInput) return;
+    setIsSchedulingHarvest(true);
+    try {
+      const ok = await closePlotCycle(currentPlotData.plot.id, {
+        mode: 'schedule',
+        closedDate: scheduleHarvestDateInput,
+        closedTime: '08:00',
+        harvestYieldKg: currentPlotMetrics.liveProjectedGrainTotalKg,
+        notes: `Ventana de cosecha programada desde Monitoreo Agronómico (${currentPlotData.dds} DDS · Humedad campo ${grainMoistureFieldPct}% · Proyección: ${currentPlotMetrics.liveProjectedGrainTotalKg} kg grano / ${currentPlotMetrics.liveProjectedFiberTotalTn} Tn fibra).`
+      });
+      if (ok) {
+        setSaveSummaryBanner(
+          `✓ Cosecha programada para el ${scheduleHarvestDateInput} en ${currentPlotData.plot.name} (Proyección: ${currentPlotMetrics.liveProjectedGrainTotalKg.toLocaleString('es-AR')} kg grano · ${currentPlotMetrics.liveProjectedFiberTotalTn} Tn fibra)`
+        );
+        setTimeout(() => setSaveSummaryBanner(null), 4500);
+      }
+    } finally {
+      setIsSchedulingHarvest(false);
+    }
+  };
+
   // ============================================================================
   // FUNCIONES DE CÁMARA Y BITÁCORA MULTIMEDIA
   // ============================================================================
@@ -717,7 +894,7 @@ export default function TrialManager() {
       }
     } catch {
       setCameraError(
-        'No se pudo acceder a la cámara en vivo del navegador. Utilizá el botón "Cámara Nativa / Subir Foto".'
+        'No se pudo acceder a la cámara en vivo del navegador. Utilizá el botón "Cámara Celular / Galería".'
       );
     }
   };
@@ -877,6 +1054,7 @@ export default function TrialManager() {
         ...formData,
         id: recordId,
         plotId: currentPlotData.plot.id,
+        harvestDate: scheduleHarvestDateInput || currentPlotData.targetHarvestDate,
         createdBy: formData.createdBy || currentUser?.id,
         createdByName: formData.createdByName || currentUser?.name
       } as TrialRecord;
@@ -1021,12 +1199,10 @@ export default function TrialManager() {
         return 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700';
       }
       if (!invertColor) {
-        // Vigor / Homogeneidad: 7-9 excelente (esmeralda), 4-6 medio (ámbar), 1-3 bajo (rojo)
         if (n >= 7) return 'bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-500/40';
         if (n >= 4) return 'bg-amber-500 text-white shadow-sm ring-2 ring-amber-500/40';
         return 'bg-rose-600 text-white shadow-sm ring-2 ring-rose-500/40';
       } else {
-        // Enfermedades / Plagas / Encamado / Daño Aves: 1-2 sano (esmeralda), 3-5 alerta (ámbar), 6-9 severo (rojo)
         if (n <= 2) return 'bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-500/40';
         if (n <= 5) return 'bg-amber-500 text-white shadow-sm ring-2 ring-amber-500/40';
         return 'bg-rose-600 text-white shadow-sm ring-2 ring-rose-500/40';
@@ -1071,7 +1247,7 @@ export default function TrialManager() {
   return (
     <div className="animate-in fade-in duration-500 min-h-[calc(100vh-140px)] flex flex-col space-y-4 pb-20 lg:pb-12">
       {/* ====================================================================== */}
-      {/* 1. CABECERA + TABLERO EJECUTIVO DE PARCELAS (ENSAYOS vs PRODUCCIÓN)    */}
+      {/* 1. CABECERA + TABLERO EJECUTIVO (ENSAYOS, PRODUCCIÓN Y PRE-VENTA)      */}
       {/* ====================================================================== */}
       <div className="bg-white dark:bg-slate-900 rounded-[28px] border border-slate-200 dark:border-slate-800 p-4 md:p-6 shadow-sm space-y-4">
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
@@ -1089,7 +1265,7 @@ export default function TrialManager() {
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Terminal de relevamiento rápido para campo, tablet y celular • Sincronizada en tiempo real con Parcelas de Cultivo
+                Terminal de relevamiento rápido, proyección de cosecha y preventa • Sincronizada en vivo con Parcelas y Germoplasma
               </p>
             </div>
           </div>
@@ -1118,8 +1294,8 @@ export default function TrialManager() {
           </div>
         </div>
 
-        {/* TABLERO INTERACTIVO DE TOTALES: ENSAYOS vs PRODUCCIÓN + URGENCIA */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+        {/* TABLERO INTERACTIVO DE TOTALES: ENSAYOS vs PRODUCCIÓN + URGENCIA + PROYECCIÓN PRE-VENTA */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
           {/* KPI 1: Total Parcelas en el alcance actual */}
           <button
             type="button"
@@ -1141,11 +1317,11 @@ export default function TrialManager() {
                     : 'text-slate-500 dark:text-slate-400'
                 }`}
               >
-                Total Parcelas Activas
+                Total Parcelas
               </span>
               <Layers size={14} className="text-emerald-500" />
             </div>
-            <div className="flex items-baseline gap-2 mt-1">
+            <div className="flex items-baseline gap-1.5 mt-1">
               <span
                 className={`text-2xl font-black font-mono ${
                   typeFilter === 'all' && urgencyFilter === 'all'
@@ -1169,7 +1345,6 @@ export default function TrialManager() {
               }`}
             >
               {selectedLocationObj ? selectedLocationObj.name : `${locationFilterOptions.length} establecimientos`}
-              {selectedVarietyObj ? ` · ${selectedVarietyObj.name}` : ''}
             </p>
           </button>
 
@@ -1189,11 +1364,11 @@ export default function TrialManager() {
                   typeFilter === 'Ensayo' ? 'text-indigo-100' : 'text-indigo-600 dark:text-indigo-400'
                 }`}
               >
-                Lotes de Ensayo (I+D)
+                Ensayos (I+D)
               </span>
               <FlaskConical size={14} className={typeFilter === 'Ensayo' ? 'text-white' : 'text-indigo-500'} />
             </div>
-            <div className="flex items-baseline gap-2 mt-1">
+            <div className="flex items-baseline gap-1.5 mt-1">
               <span
                 className={`text-2xl font-black font-mono ${
                   typeFilter === 'Ensayo' ? 'text-white' : 'text-slate-900 dark:text-white'
@@ -1210,7 +1385,7 @@ export default function TrialManager() {
               </span>
             </div>
             <p className={`text-[10px] mt-0.5 ${typeFilter === 'Ensayo' ? 'text-indigo-100' : 'text-slate-400'}`}>
-              {typeFilter === 'Ensayo' ? '✓ Filtrando solo Ensayos' : 'Clic para filtrar Ensayos'}
+              {typeFilter === 'Ensayo' ? '✓ Solo Ensayos' : 'Filtrar Ensayos'}
             </p>
           </button>
 
@@ -1230,11 +1405,11 @@ export default function TrialManager() {
                   typeFilter === 'Producción' ? 'text-emerald-100' : 'text-emerald-600 dark:text-emerald-400'
                 }`}
               >
-                En Producción (Extensivo)
+                En Producción
               </span>
               <Sprout size={14} className={typeFilter === 'Producción' ? 'text-white' : 'text-emerald-500'} />
             </div>
-            <div className="flex items-baseline gap-2 mt-1">
+            <div className="flex items-baseline gap-1.5 mt-1">
               <span
                 className={`text-2xl font-black font-mono ${
                   typeFilter === 'Producción' ? 'text-white' : 'text-slate-900 dark:text-white'
@@ -1251,7 +1426,7 @@ export default function TrialManager() {
               </span>
             </div>
             <p className={`text-[10px] mt-0.5 ${typeFilter === 'Producción' ? 'text-emerald-100' : 'text-slate-400'}`}>
-              {typeFilter === 'Producción' ? '✓ Filtrando Producción' : 'Clic para filtrar Producción'}
+              {typeFilter === 'Producción' ? '✓ Solo Producción' : 'Filtrar Producción'}
             </p>
           </button>
 
@@ -1271,11 +1446,11 @@ export default function TrialManager() {
                   urgencyFilter === 'urgent' ? 'text-rose-100' : 'text-rose-600 dark:text-rose-400'
                 }`}
               >
-                Urgentes (+7 días)
+                Urgentes (+7d)
               </span>
               <AlertTriangle size={14} className={urgencyFilter === 'urgent' ? 'text-white' : 'text-rose-500'} />
             </div>
-            <div className="flex items-baseline gap-2 mt-1">
+            <div className="flex items-baseline gap-1.5 mt-1">
               <span
                 className={`text-2xl font-black font-mono ${
                   urgencyFilter === 'urgent' ? 'text-white' : 'text-rose-600 dark:text-rose-400'
@@ -1288,7 +1463,7 @@ export default function TrialManager() {
               </span>
             </div>
             <p className={`text-[10px] mt-0.5 ${urgencyFilter === 'urgent' ? 'text-rose-100' : 'text-slate-400'}`}>
-              {urgencyFilter === 'urgent' ? '✓ Mostrando solo urgentes' : 'Prioridad de recorrida'}
+              {urgencyFilter === 'urgent' ? '✓ Solo urgentes' : 'Prioridad visita'}
             </p>
           </button>
 
@@ -1296,7 +1471,7 @@ export default function TrialManager() {
           <button
             type="button"
             onClick={() => setUrgencyFilter(urgencyFilter === 'uptodate' ? 'all' : 'uptodate')}
-            className={`col-span-2 sm:col-span-1 p-3 rounded-2xl text-left border transition cursor-pointer ${
+            className={`p-3 rounded-2xl text-left border transition cursor-pointer ${
               urgencyFilter === 'uptodate'
                 ? 'bg-teal-600 border-teal-500 text-white shadow-sm'
                 : 'bg-slate-50 dark:bg-slate-950/50 border-slate-200/80 dark:border-slate-800 hover:border-teal-400'
@@ -1308,11 +1483,11 @@ export default function TrialManager() {
                   urgencyFilter === 'uptodate' ? 'text-teal-100' : 'text-teal-600 dark:text-teal-400'
                 }`}
               >
-                Monitoreo Al Día (≤7d)
+                Al Día (≤7d)
               </span>
               <CheckCircle2 size={14} className={urgencyFilter === 'uptodate' ? 'text-white' : 'text-teal-500'} />
             </div>
-            <div className="flex items-baseline gap-2 mt-1">
+            <div className="flex items-baseline gap-1.5 mt-1">
               <span
                 className={`text-2xl font-black font-mono ${
                   urgencyFilter === 'uptodate' ? 'text-white' : 'text-slate-900 dark:text-white'
@@ -1326,8 +1501,54 @@ export default function TrialManager() {
             </div>
             <p className={`text-[10px] mt-0.5 ${urgencyFilter === 'uptodate' ? 'text-teal-100' : 'text-slate-400'}`}>
               {boardStats.total > 0
-                ? `${Math.round((boardStats.upToDateCount / boardStats.total) * 100)}% de cobertura semanal`
-                : 'Sin lotes activos'}
+                ? `${Math.round((boardStats.upToDateCount / boardStats.total) * 100)}% cobertura`
+                : 'Sin lotes'}
+            </p>
+          </button>
+
+          {/* KPI 6: Ventana de Cosecha & Proyección Pre-Venta */}
+          <button
+            type="button"
+            onClick={() => setUrgencyFilter(urgencyFilter === 'harvest_window' ? 'all' : 'harvest_window')}
+            className={`p-3 rounded-2xl text-left border transition cursor-pointer ${
+              urgencyFilter === 'harvest_window'
+                ? 'bg-amber-600 border-amber-500 text-white shadow-sm'
+                : 'bg-slate-50 dark:bg-slate-950/50 border-slate-200/80 dark:border-slate-800 hover:border-amber-400'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span
+                className={`text-[10px] font-black uppercase tracking-wider ${
+                  urgencyFilter === 'harvest_window' ? 'text-amber-100' : 'text-amber-600 dark:text-amber-400'
+                }`}
+              >
+                Cosecha / Pre-Venta
+              </span>
+              <Timer size={14} className={urgencyFilter === 'harvest_window' ? 'text-white' : 'text-amber-500'} />
+            </div>
+            <div className="flex items-baseline gap-1.5 mt-1">
+              <span
+                className={`text-2xl font-black font-mono ${
+                  urgencyFilter === 'harvest_window' ? 'text-white' : 'text-slate-900 dark:text-white'
+                }`}
+              >
+                {boardStats.harvestWindowCount}
+              </span>
+              <span
+                className={`text-[10px] font-mono ${
+                  urgencyFilter === 'harvest_window' ? 'text-amber-100' : 'text-slate-400'
+                }`}
+              >
+                lotes (≤30d)
+              </span>
+            </div>
+            <p
+              className={`text-[9.5px] font-mono truncate mt-0.5 ${
+                urgencyFilter === 'harvest_window' ? 'text-amber-100' : 'text-slate-500 dark:text-slate-400'
+              }`}
+              title="Proyección acumulada de Grano y Fibra en el alcance actual"
+            >
+              Est: {(boardStats.totalProjectedGrainKg / 1000).toFixed(1)}t grano · {boardStats.totalProjectedFiberTn}t fibra
             </p>
           </button>
         </div>
@@ -1368,7 +1589,7 @@ export default function TrialManager() {
             >
               {plotQueue.map((item, idx) => (
                 <option key={item.plot.id} value={item.plot.id}>
-                  [{idx + 1}/{plotQueue.length}] {item.plot.name} · {item.varietyName} ({item.plot.type})
+                  [{idx + 1}/{plotQueue.length}] {item.plot.name} · {item.varietyName} ({item.dds}/{item.cycleDays}d)
                 </option>
               ))}
             </select>
@@ -1424,7 +1645,7 @@ export default function TrialManager() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 items-start">
         {/* SIDEBAR: COLA DE TRABAJO Y FILTRADO EN CASCADA (CAMPO -> GENÉTICAS ASIGNADAS) */}
         <div
-          className={`lg:col-span-4 flex-col bg-white dark:bg-slate-900 rounded-[28px] border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden lg:h-[880px] ${
+          className={`lg:col-span-4 flex-col bg-white dark:bg-slate-900 rounded-[28px] border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden lg:h-[920px] ${
             isMobileQueueOpen ? 'flex max-h-[640px]' : 'hidden lg:flex'
           }`}
         >
@@ -1477,7 +1698,9 @@ export default function TrialManager() {
                 className="w-full px-3 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500 dark:text-white"
               >
                 <option value="all">
-                  Todos los Establecimientos ({allEnrichedActivePlots.length} parcelas: {allEnrichedActivePlots.filter(p => p.plot.type === 'Ensayo').length} Ens. / {allEnrichedActivePlots.filter(p => p.plot.type === 'Producción').length} Prod.)
+                  Todos los Establecimientos ({allEnrichedActivePlots.length} parcelas:{' '}
+                  {allEnrichedActivePlots.filter(p => p.plot.type === 'Ensayo').length} Ens. /{' '}
+                  {allEnrichedActivePlots.filter(p => p.plot.type === 'Producción').length} Prod.)
                 </option>
                 {locationFilterOptions.map(loc => (
                   <option key={loc.id} value={loc.id}>
@@ -1506,7 +1729,8 @@ export default function TrialManager() {
                 className="w-full px-3 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500 dark:text-white"
               >
                 <option value="all">
-                  Todas las Genéticas del Campo ({availableVarietiesForSelectedLocation.reduce((s, v) => s + v.totalPlots, 0)} parcelas)
+                  Todas las Genéticas del Campo (
+                  {availableVarietiesForSelectedLocation.reduce((s, v) => s + v.totalPlots, 0)} parcelas)
                 </option>
                 {availableVarietiesForSelectedLocation.map(v => (
                   <option key={v.id} value={v.id}>
@@ -1518,7 +1742,7 @@ export default function TrialManager() {
                 ))}
               </select>
 
-              {/* Chips rápidos de genéticas del campo seleccionado para tocar con un dedo en tablet/celular */}
+              {/* Chips rápidos de genéticas del campo seleccionado */}
               {locationFilter !== 'all' && availableVarietiesForSelectedLocation.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mt-2">
                   <button
@@ -1562,47 +1786,45 @@ export default function TrialManager() {
               />
             </div>
 
-            {/* Filtro de Tipo real ('Ensayo' | 'Producción') con conteos en vivo y Urgencia */}
-            <div className="grid grid-cols-1 gap-2">
-              <div className="flex gap-1 bg-slate-200/70 dark:bg-slate-800 p-1 rounded-xl">
-                <button
-                  type="button"
-                  onClick={() => setTypeFilter('all')}
-                  className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition cursor-pointer ${
-                    typeFilter === 'all'
-                      ? 'bg-slate-900 dark:bg-emerald-600 text-white shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                  }`}
-                >
-                  Todos ({boardStats.total})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTypeFilter('Ensayo')}
-                  className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition cursor-pointer ${
-                    typeFilter === 'Ensayo'
-                      ? 'bg-indigo-600 text-white shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                  }`}
-                >
-                  Ensayos ({boardStats.ensayosCount})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTypeFilter('Producción')}
-                  className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition cursor-pointer ${
-                    typeFilter === 'Producción'
-                      ? 'bg-emerald-600 text-white shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                  }`}
-                >
-                  Producción ({boardStats.produccionCount})
-                </button>
-              </div>
+            {/* Filtro de Tipo real ('Ensayo' | 'Producción') con conteos en vivo */}
+            <div className="flex gap-1 bg-slate-200/70 dark:bg-slate-800 p-1 rounded-xl">
+              <button
+                type="button"
+                onClick={() => setTypeFilter('all')}
+                className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition cursor-pointer ${
+                  typeFilter === 'all'
+                    ? 'bg-slate-900 dark:bg-emerald-600 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                Todos ({boardStats.total})
+              </button>
+              <button
+                type="button"
+                onClick={() => setTypeFilter('Ensayo')}
+                className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition cursor-pointer ${
+                  typeFilter === 'Ensayo'
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                Ensayos ({boardStats.ensayosCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setTypeFilter('Producción')}
+                className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition cursor-pointer ${
+                  typeFilter === 'Producción'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                Producción ({boardStats.produccionCount})
+              </button>
             </div>
           </div>
 
-          {/* LISTA DE PARCELAS EN LA COLA CON INDICADORES COTEJADOS */}
+          {/* LISTA DE PARCELAS EN LA COLA CON RELOJ DE COSECHA E INDICADORES COTEJADOS */}
           <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
             {plotQueue.length === 0 ? (
               <div className="p-8 text-center text-slate-400 text-xs font-bold italic">
@@ -1645,7 +1867,7 @@ export default function TrialManager() {
                               isSelected ? 'text-emerald-100' : 'text-slate-500 dark:text-slate-400'
                             }`}
                           >
-                            {item.varietyName}
+                            {item.varietyName} ({item.varietyUsage})
                           </span>
                         </div>
                       </div>
@@ -1670,15 +1892,30 @@ export default function TrialManager() {
                       )}
                     </div>
 
-                    <p
-                      className={`text-[10px] font-medium truncate mt-0.5 ${
+                    <div
+                      className={`flex items-center justify-between text-[10px] font-mono mt-1 ${
                         isSelected ? 'text-emerald-100' : 'text-slate-400'
                       }`}
                     >
-                      {item.locationName} · {item.plot.surfaceArea} {item.plot.surfaceUnit}
-                    </p>
+                      <span className="truncate">
+                        {item.locationName} · {item.plot.surfaceArea} {item.plot.surfaceUnit}
+                      </span>
+                      <span
+                        className={`font-bold shrink-0 ${
+                          isSelected
+                            ? 'text-white'
+                            : item.daysToHarvest <= 20
+                            ? 'text-amber-600 dark:text-amber-400'
+                            : 'text-slate-500 dark:text-slate-400'
+                        }`}
+                      >
+                        {item.daysToHarvest > 0
+                          ? `Cosecha: T-${item.daysToHarvest}d`
+                          : `En Ventana (${item.dds}/${item.cycleDays}d)`}
+                      </span>
+                    </div>
 
-                    {/* Indicadores de Cotejo Rápido (Texto limpio con separador tipográfico) */}
+                    {/* Indicadores de Cotejo Rápido (Hídrico + Fotos + Labores) */}
                     <div
                       className={`mt-2 pt-1.5 border-t flex flex-wrap items-center gap-2 text-[10px] font-mono ${
                         isSelected
@@ -1686,13 +1923,15 @@ export default function TrialManager() {
                           : 'border-slate-100 dark:border-slate-700/70 text-slate-500 dark:text-slate-400'
                       }`}
                     >
-                      <span title="Lámina hídrica acumulada (Lluvia + Riego)">💧 {item.totalWaterMm}mm</span>
-                      <span aria-hidden="true">·</span>
-                      <span title="Registros en Bitácora Multimedia">
-                        📷 {item.logsCount} ({item.photosCount} fotos)
+                      <span title="Días desde siembra vs Ciclo del Germoplasma">
+                        🌱 {item.dds}/{item.cycleDays} DDS ({item.cycleProgressPct}%)
                       </span>
                       <span aria-hidden="true">·</span>
-                      <span title="Labores culturales y de preparación de suelo">🚜 {item.tasksCount} lab.</span>
+                      <span title="Lámina hídrica acumulada">💧 {item.totalWaterMm}mm</span>
+                      <span aria-hidden="true">·</span>
+                      <span title="Bitácora Multimedia">📷 {item.photosCount}</span>
+                      <span aria-hidden="true">·</span>
+                      <span title="Labores de suelo y cultivo">🚜 {item.tasksCount}</span>
                     </div>
                   </button>
                 );
@@ -1701,14 +1940,14 @@ export default function TrialManager() {
           </div>
         </div>
 
-        {/* PANEL PRINCIPAL: FICHA TÉCNICA + CINTA DE COTEJO + ATAJOS INTEGRADOS */}
+        {/* PANEL PRINCIPAL: FICHA TÉCNICA + CINTA DE COTEJO + ATAJOS + RELOJ DE COSECHA */}
         <div
           ref={formContainerRef}
           className="lg:col-span-8 flex flex-col bg-white dark:bg-slate-900 rounded-[28px] shadow-xl border border-slate-200 dark:border-slate-800 overflow-hidden relative min-h-[820px]"
         >
           {currentPlotData ? (
             <>
-              {/* ENCABEZADO DE LA PARCELA SELECCIONADA + NAVEGADOR DE LOTES + CINTA DE COTEJO 360° */}
+              {/* ENCABEZADO DE LA PARCELA SELECCIONADA + CINTA DE COTEJO 360° */}
               <div className="bg-slate-50 dark:bg-slate-950/70 p-4 md:p-6 border-b dark:border-slate-800 space-y-4 flex-shrink-0">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                   <div>
@@ -1726,25 +1965,27 @@ export default function TrialManager() {
                         ·
                       </span>
                       <span className="font-bold text-slate-700 dark:text-slate-200">
-                        Genética: {variety?.name || 'S/D'}
+                        Genética: {variety?.name || 'S/D'} ({variety?.usage || 'Dual'} · Ciclo {currentPlotMetrics.cycleDays}d)
                       </span>
                       <span aria-hidden="true" className="text-slate-300 dark:text-slate-600">
                         ·
                       </span>
                       <span className="text-slate-500">{currentPlotData.locationName}</span>
-                      <span aria-hidden="true" className="text-slate-300 dark:text-slate-600">
-                        ·
-                      </span>
-                      <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">
-                        Siembra: {currentPlotData.plot.sowingDate} ({currentPlotMetrics.dds} DDS)
-                      </span>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
                       <h2 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tight leading-none">
                         {currentPlotData.plot.name}
                       </h2>
-                      <span className="text-xs font-mono text-slate-400">
-                        ({currentPlotIndex + 1} de {plotQueue.length})
+                      <span className="text-xs font-mono text-emerald-600 dark:text-emerald-400 font-bold">
+                        Siembra: {currentPlotData.plot.sowingDate} · {currentPlotMetrics.dds}/{currentPlotMetrics.cycleDays} DDS (
+                        {currentPlotMetrics.cycleProgressPct}%)
+                      </span>
+                      <span className="text-xs font-mono text-amber-600 dark:text-amber-400 font-bold">
+                        · Cosecha Óptima: {currentPlotMetrics.targetHarvestDate} (
+                        {currentPlotMetrics.daysToHarvest > 0
+                          ? `Faltan ${currentPlotMetrics.daysToHarvest} días`
+                          : `Ventana activa +${Math.abs(currentPlotMetrics.daysToHarvest)}d`}
+                        )
                       </span>
                     </div>
                   </div>
@@ -1853,24 +2094,26 @@ export default function TrialManager() {
                     </span>
                   </button>
 
-                  {/* 4. Bitácora Multimedia */}
+                  {/* 4. Reloj de Cosecha & Pre-Venta Comercial */}
                   <button
                     type="button"
                     onClick={() => {
                       setActiveTab('form');
-                      setFieldViewSection('shortcuts');
-                      setActiveShortcutTab('photo_log');
+                      setFieldViewSection('harvest');
                     }}
-                    className="p-2.5 rounded-2xl text-left bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 hover:border-purple-500 transition cursor-pointer"
+                    className="p-2.5 rounded-2xl text-left bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 hover:border-emerald-500 transition cursor-pointer"
                   >
-                    <span className="text-[9px] uppercase font-bold text-purple-600 dark:text-purple-400 block">
-                      📷 Bitácora Multimedia ({currentPlotLogs.length})
+                    <span className="text-[9px] uppercase font-bold text-emerald-600 dark:text-emerald-400 block">
+                      🌾 Cosecha & Pre-Venta ({currentPlotMetrics.cycleProgressPct}%)
                     </span>
                     <div className="font-black text-slate-900 dark:text-white text-xs mt-0.5 truncate">
-                      {currentPlotLogs[0]?.note || 'Sin notas en bitácora'}
+                      {currentPlotMetrics.daysToHarvest > 0
+                        ? `Faltan ${currentPlotMetrics.daysToHarvest}d (${currentPlotMetrics.targetHarvestDate})`
+                        : `Ventana Óptima Activa`}
                     </div>
-                    <span className="text-[9.5px] text-slate-400 block">
-                      {currentPlotData.photosCount} fotografías georreferenciadas
+                    <span className="text-[9.5px] text-slate-400 block truncate">
+                      Est: {currentPlotMetrics.liveProjectedGrainTotalKg.toLocaleString('es-AR')} kg ·{' '}
+                      {currentPlotMetrics.liveProjectedFiberTotalTn} Tn fibra
                     </span>
                   </button>
                 </div>
@@ -1884,7 +2127,7 @@ export default function TrialManager() {
                           { id: 'all', label: 'Vista Completa' },
                           { id: 'biometrics', label: '1. Biometría & Sanidad' },
                           { id: 'shortcuts', label: '2. Foto / Riego / Labor' },
-                          { id: 'harvest', label: '3. Cosecha & Semilla' }
+                          { id: 'harvest', label: '3. Cosecha & Pre-Venta' }
                         ] as const
                       ).map(sec => (
                         <button
@@ -1925,16 +2168,14 @@ export default function TrialManager() {
                 )}
               </div>
 
-              {/* VISTA 1: FORMULARIO OFICIAL NUCLEUS TRACE + PANEL DE ATAJOS DE CAMPO */}
+              {/* VISTA 1: FORMULARIO OFICIAL NUCLEUS TRACE + RELOJ DE COSECHA + ATAJOS DE CAMPO */}
               {activeTab === 'form' && (
                 <div className="flex-1 flex flex-col justify-between">
                   <form onSubmit={handleSave} className="p-4 md:p-6 space-y-6 overflow-y-auto custom-scrollbar">
                     {/* ==================================================================== */}
                     {/* SECCIÓN 1: BIOMETRÍA, AMBIENTE Y SANIDAD (ESCALAS TÁCTILES 1-9)      */}
                     {/* ==================================================================== */}
-                    {(fieldViewSection === 'all' ||
-                      fieldViewSection === 'biometrics' ||
-                      fieldViewSection === 'harvest') && (
+                    {(fieldViewSection === 'all' || fieldViewSection === 'biometrics') && (
                       <div className="space-y-5">
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-2 border-b dark:border-slate-800">
                           <div className="flex items-center gap-2.5">
@@ -1943,7 +2184,7 @@ export default function TrialManager() {
                             </div>
                             <div>
                               <h3 className="text-base md:text-lg font-black dark:text-white uppercase tracking-tight">
-                                Relevamiento Biométrico & Sanitario Nucleus Trace
+                                1. Relevamiento Biométrico & Sanitario Nucleus Trace
                               </h3>
                               <p className="text-[10px] text-slate-400">
                                 Controles táctiles optimizados para carga con una mano en celular o tablet
@@ -1959,340 +2200,261 @@ export default function TrialManager() {
 
                         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
                           {/* COLUMNA AMBIENTE & TIEMPO */}
-                          {(fieldViewSection === 'all' || fieldViewSection === 'biometrics') && (
-                            <div className="lg:col-span-4 bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-3.5">
-                              <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest border-b dark:border-slate-800 pb-2 flex items-center">
-                                <Sun size={14} className="mr-1.5 text-amber-500" /> Ambiente & Fenología
-                              </h4>
-                              <div className="grid grid-cols-2 gap-2.5">
-                                <div>
-                                  <label className={labelClass}>Fecha</label>
-                                  <input
-                                    type="date"
-                                    required
-                                    className={inputStyle}
-                                    value={formData.date}
-                                    onChange={e => {
-                                      const newDate = e.target.value;
-                                      setFormData(p => ({ ...p, date: newDate }));
-                                      syncEnvironmentalData(newDate, currentPlotData.location);
-                                    }}
-                                  />
-                                </div>
-                                <div>
-                                  <label className={labelClass}>Hora</label>
-                                  <input
-                                    type="time"
-                                    required
-                                    className={inputStyle}
-                                    value={formData.time}
-                                    onChange={e => setFormData({ ...formData, time: e.target.value })}
-                                  />
-                                </div>
-                              </div>
-
-                              <div>
-                                <label className={labelClass}>Fase Fisiológica</label>
-                                <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-3 gap-1.5">
-                                  {(['Emergencia', 'Vegetativo', 'Floración', 'Maduración', 'Cosecha'] as const).map(
-                                    st => (
-                                      <button
-                                        key={st}
-                                        type="button"
-                                        onClick={() => setFormData({ ...formData, stage: st })}
-                                        className={`py-2 px-2 rounded-xl text-[10px] font-black uppercase transition cursor-pointer border ${
-                                          formData.stage === st
-                                            ? 'bg-emerald-600 border-emerald-500 text-white shadow-xs'
-                                            : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300'
-                                        }`}
-                                      >
-                                        {st}
-                                      </button>
-                                    )
-                                  )}
-                                </div>
-                              </div>
-
-                              <div className="grid grid-cols-3 gap-2 pt-1 font-mono">
-                                <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-center">
-                                  <p className="text-[9px] font-bold uppercase text-slate-400">Temp.</p>
-                                  <p className="text-sm font-black text-amber-600 dark:text-amber-400">
-                                    {formData.temperature}°C
-                                  </p>
-                                </div>
-                                <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-center">
-                                  <p className="text-[9px] font-bold uppercase text-slate-400">Humedad</p>
-                                  <p className="text-sm font-black text-sky-600 dark:text-sky-400">
-                                    {formData.humidity}%
-                                  </p>
-                                </div>
-                                <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-center">
-                                  <p className="text-[9px] font-bold uppercase text-slate-400">Fotoperiodo</p>
-                                  <p className="text-sm font-black text-slate-800 dark:text-white">
-                                    {formData.lightHours}h
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* COLUMNA CENTRAL: ALTURA, DENSIDAD Y ESCALAS TÁCTILES 1-9 */}
-                          {(fieldViewSection === 'all' || fieldViewSection === 'biometrics') && (
-                            <div className="lg:col-span-8 space-y-4">
-                              {/* Controles táctiles rápidos para Altura Media (cm) y Población (Pl/m²) */}
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                                {/* ALTURA MEDIA (CM) CON BOTONES DE INCREMENTO RÁPIDO */}
-                                <div className="bg-slate-50/70 dark:bg-slate-950/60 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-2">
-                                  <div className="flex justify-between items-center">
-                                    <label className="text-[10px] font-black uppercase text-slate-600 dark:text-slate-300 tracking-wider flex items-center gap-1">
-                                      <Ruler size={13} className="text-emerald-600" /> Altura Media (cm)
-                                    </label>
-                                    <GrowthIndicator
-                                      current={formData.plantHeight || 0}
-                                      previous={currentPlotData.lastRecord?.plantHeight || 0}
-                                    />
-                                  </div>
-                                  <div className="flex items-center gap-1.5">
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        setFormData(p => ({
-                                          ...p,
-                                          plantHeight: Math.max(0, Number(((p.plantHeight || 0) - 5).toFixed(1)))
-                                        }))
-                                      }
-                                      className="h-11 px-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-xs font-black text-slate-700 dark:text-slate-200 hover:bg-slate-100 cursor-pointer"
-                                    >
-                                      -5
-                                    </button>
-                                    <input
-                                      type="number"
-                                      inputMode="decimal"
-                                      step="0.5"
-                                      className="flex-1 h-11 text-center border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 font-mono text-lg font-black dark:text-white outline-none focus:ring-2 focus:ring-emerald-500"
-                                      value={formData.plantHeight}
-                                      onChange={e => setFormData({ ...formData, plantHeight: Number(e.target.value) })}
-                                    />
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        setFormData(p => ({
-                                          ...p,
-                                          plantHeight: Number(((p.plantHeight || 0) + 5).toFixed(1))
-                                        }))
-                                      }
-                                      className="h-11 px-3 rounded-xl bg-emerald-600 text-white font-mono text-xs font-black hover:bg-emerald-500 cursor-pointer"
-                                    >
-                                      +5
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        setFormData(p => ({
-                                          ...p,
-                                          plantHeight: Number(((p.plantHeight || 0) + 10).toFixed(1))
-                                        }))
-                                      }
-                                      className="h-11 px-3 rounded-xl bg-emerald-700 text-white font-mono text-xs font-black hover:bg-emerald-600 cursor-pointer"
-                                    >
-                                      +10
-                                    </button>
-                                  </div>
-                                </div>
-
-                                {/* POBLACIÓN (PL/M²) CON BOTONES DE INCREMENTO RÁPIDO */}
-                                <div className="bg-slate-50/70 dark:bg-slate-950/60 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-2">
-                                  <div className="flex justify-between items-center">
-                                    <label className="text-[10px] font-black uppercase text-slate-600 dark:text-slate-300 tracking-wider flex items-center gap-1">
-                                      <Sprout size={13} className="text-emerald-600" /> Densidad / Población (Pl/m²)
-                                    </label>
-                                    <span className="text-[10px] font-mono text-slate-400">
-                                      Ant: {currentPlotData.lastRecord?.plantsPerMeter || 0} pl/m²
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-1.5">
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        setFormData(p => ({
-                                          ...p,
-                                          plantsPerMeter: Math.max(0, Number(((p.plantsPerMeter || 0) - 5).toFixed(1)))
-                                        }))
-                                      }
-                                      className="h-11 px-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-xs font-black text-slate-700 dark:text-slate-200 hover:bg-slate-100 cursor-pointer"
-                                    >
-                                      -5
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        setFormData(p => ({
-                                          ...p,
-                                          plantsPerMeter: Math.max(0, Number(((p.plantsPerMeter || 0) - 1).toFixed(1)))
-                                        }))
-                                      }
-                                      className="h-11 px-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-xs font-black text-slate-700 dark:text-slate-200 hover:bg-slate-100 cursor-pointer"
-                                    >
-                                      -1
-                                    </button>
-                                    <input
-                                      type="number"
-                                      inputMode="decimal"
-                                      step="0.5"
-                                      className="flex-1 h-11 text-center border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 font-mono text-lg font-black dark:text-white outline-none focus:ring-2 focus:ring-emerald-500"
-                                      value={formData.plantsPerMeter}
-                                      onChange={e =>
-                                        setFormData({ ...formData, plantsPerMeter: Number(e.target.value) })
-                                      }
-                                    />
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        setFormData(p => ({
-                                          ...p,
-                                          plantsPerMeter: Number(((p.plantsPerMeter || 0) + 1).toFixed(1))
-                                        }))
-                                      }
-                                      className="h-11 px-2.5 rounded-xl bg-emerald-600 text-white font-mono text-xs font-black hover:bg-emerald-500 cursor-pointer"
-                                    >
-                                      +1
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        setFormData(p => ({
-                                          ...p,
-                                          plantsPerMeter: Number(((p.plantsPerMeter || 0) + 5).toFixed(1))
-                                        }))
-                                      }
-                                      className="h-11 px-3 rounded-xl bg-emerald-700 text-white font-mono text-xs font-black hover:bg-emerald-600 cursor-pointer"
-                                    >
-                                      +5
-                                    </button>
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Escalas Táctiles 1-9 (Vigor, Homogeneidad, Sanidad, Encamado, Daño Aves) */}
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                <TouchScaleControl
-                                  label="Vigor Vegetativo (1-9)"
-                                  helperText="9 = Máximo vigor foliar y elongación"
-                                  value={formData.vigor}
-                                  onChange={v => setFormData({ ...formData, vigor: v })}
-                                />
-                                <TouchScaleControl
-                                  label="Homogeneidad de Lote (1-9)"
-                                  helperText="9 = Canopia totalmente uniforme"
-                                  value={formData.uniformity}
-                                  onChange={v => setFormData({ ...formData, uniformity: v })}
-                                />
-                                <TouchScaleControl
-                                  label="Sanidad: Enfermedades (1-9)"
-                                  helperText="1 = Sano sin síntomas · 9 = Afectación severa"
-                                  invertColor
-                                  value={formData.diseasesScore}
-                                  onChange={v => setFormData({ ...formData, diseasesScore: v })}
-                                />
-                                <TouchScaleControl
-                                  label="Sanidad: Plagas / Insectos (1-9)"
-                                  helperText="1 = Sin plagas · 9 = Presión crítica"
-                                  invertColor
-                                  value={formData.pestsScore}
-                                  onChange={v => setFormData({ ...formData, pestsScore: v })}
-                                />
-                                <TouchScaleControl
-                                  label="Encamado / Vuelco (1-9)"
-                                  helperText="1 = Tallo erecto · 9 = Vuelco generalizado"
-                                  invertColor
-                                  value={formData.lodging}
-                                  onChange={v => setFormData({ ...formData, lodging: v })}
-                                />
-                                <TouchScaleControl
-                                  label="Daño por Aves (1-9)"
-                                  helperText="1 = Sin daño · 9 = Pérdida severa de grano"
-                                  invertColor
-                                  value={formData.birdDamage}
-                                  onChange={v => setFormData({ ...formData, birdDamage: v })}
-                                />
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* BLOQUE DE COSECHA Y CALIDAD DE SEMILLA */}
-                        {(fieldViewSection === 'all' || fieldViewSection === 'harvest') && (
-                          <div className="bg-slate-900 p-4 md:p-5 rounded-2xl text-white space-y-3">
-                            <h4 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest border-b border-white/10 pb-2 flex items-center">
-                              <FlaskConical size={14} className="mr-2" /> Datos de Floración, Cosecha & Calidad de Semilla
+                          <div className="lg:col-span-4 bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-3.5">
+                            <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest border-b dark:border-slate-800 pb-2 flex items-center">
+                              <Sun size={14} className="mr-1.5 text-amber-500" /> Ambiente & Fenología
                             </h4>
-                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                            <div className="grid grid-cols-2 gap-2.5">
                               <div>
-                                <label className="text-[9px] uppercase font-black text-slate-400 block mb-1">
-                                  Plena Floración (50%)
-                                </label>
+                                <label className={labelClass}>Fecha</label>
                                 <input
                                   type="date"
-                                  className="w-full bg-white/5 border border-white/10 p-2.5 rounded-xl text-xs outline-none focus:ring-1 focus:ring-emerald-500"
-                                  value={formData.floweringDate}
-                                  onChange={e => setFormData({ ...formData, floweringDate: e.target.value })}
+                                  required
+                                  className={inputStyle}
+                                  value={formData.date}
+                                  onChange={e => {
+                                    const newDate = e.target.value;
+                                    setFormData(p => ({ ...p, date: newDate }));
+                                    syncEnvironmentalData(newDate, currentPlotData.location);
+                                  }}
                                 />
                               </div>
                               <div>
-                                <label className="text-[9px] uppercase font-black text-slate-400 block mb-1">
-                                  Rend. Semillas (g/m²)
-                                </label>
+                                <label className={labelClass}>Hora</label>
                                 <input
-                                  type="number"
-                                  inputMode="decimal"
-                                  className="w-full bg-white/5 border border-white/10 p-2.5 rounded-xl text-xs font-mono outline-none focus:ring-1 focus:ring-emerald-500"
-                                  value={formData.seedYield}
-                                  onChange={e => setFormData({ ...formData, seedYield: Number(e.target.value) })}
+                                  type="time"
+                                  required
+                                  className={inputStyle}
+                                  value={formData.time}
+                                  onChange={e => setFormData({ ...formData, time: e.target.value })}
                                 />
                               </div>
-                              <div>
-                                <label className="text-[9px] uppercase font-black text-slate-400 block mb-1">
-                                  Peso Tallo / Biomasa (g)
-                                </label>
-                                <input
-                                  type="number"
-                                  inputMode="decimal"
-                                  className="w-full bg-white/5 border border-white/10 p-2.5 rounded-xl text-xs font-mono outline-none focus:ring-1 focus:ring-emerald-500"
-                                  value={formData.stemWeight}
-                                  onChange={e => setFormData({ ...formData, stemWeight: Number(e.target.value) })}
-                                />
+                            </div>
+
+                            <div>
+                              <label className={labelClass}>Fase Fisiológica</label>
+                              <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-3 gap-1.5">
+                                {(['Emergencia', 'Vegetativo', 'Floración', 'Maduración', 'Cosecha'] as const).map(
+                                  st => (
+                                    <button
+                                      key={st}
+                                      type="button"
+                                      onClick={() => setFormData({ ...formData, stage: st })}
+                                      className={`py-2 px-2 rounded-xl text-[10px] font-black uppercase transition cursor-pointer border ${
+                                        formData.stage === st
+                                          ? 'bg-emerald-600 border-emerald-500 text-white shadow-xs'
+                                          : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300'
+                                      }`}
+                                    >
+                                      {st}
+                                    </button>
+                                  )
+                                )}
                               </div>
-                              <div>
-                                <label className="text-[9px] uppercase font-black text-emerald-400 block mb-1">
-                                  Poder Germinativo %
-                                </label>
-                                <input
-                                  type="number"
-                                  inputMode="decimal"
-                                  className="w-full bg-white/10 border border-white/10 p-2.5 rounded-xl text-xs font-mono font-bold text-center"
-                                  value={formData.seedQualityGermination}
-                                  onChange={e =>
-                                    setFormData({ ...formData, seedQualityGermination: Number(e.target.value) })
-                                  }
-                                />
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-2 pt-1 font-mono">
+                              <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-center">
+                                <p className="text-[9px] font-bold uppercase text-slate-400">Temp.</p>
+                                <p className="text-sm font-black text-amber-600 dark:text-amber-400">
+                                  {formData.temperature}°C
+                                </p>
                               </div>
-                              <div>
-                                <label className="text-[9px] uppercase font-black text-slate-400 block mb-1">
-                                  No Conformidad %
-                                </label>
-                                <input
-                                  type="number"
-                                  inputMode="decimal"
-                                  className="w-full bg-white/10 border border-white/10 p-2.5 rounded-xl text-xs font-mono font-bold text-center"
-                                  value={formData.seedQualityNonConformity}
-                                  onChange={e =>
-                                    setFormData({ ...formData, seedQualityNonConformity: Number(e.target.value) })
-                                  }
-                                />
+                              <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-center">
+                                <p className="text-[9px] font-bold uppercase text-slate-400">Humedad</p>
+                                <p className="text-sm font-black text-sky-600 dark:text-sky-400">
+                                  {formData.humidity}%
+                                </p>
+                              </div>
+                              <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-center">
+                                <p className="text-[9px] font-bold uppercase text-slate-400">Fotoperiodo</p>
+                                <p className="text-sm font-black text-slate-800 dark:text-white">
+                                  {formData.lightHours}h
+                                </p>
                               </div>
                             </div>
                           </div>
-                        )}
+
+                          {/* COLUMNA CENTRAL: ALTURA, DENSIDAD Y ESCALAS TÁCTILES 1-9 */}
+                          <div className="lg:col-span-8 space-y-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                              {/* ALTURA MEDIA (CM) CON BOTONES DE INCREMENTO RÁPIDO */}
+                              <div className="bg-slate-50/70 dark:bg-slate-950/60 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-2">
+                                <div className="flex justify-between items-center">
+                                  <label className="text-[10px] font-black uppercase text-slate-600 dark:text-slate-300 tracking-wider flex items-center gap-1">
+                                    <Ruler size={13} className="text-emerald-600" /> Altura Media (cm)
+                                  </label>
+                                  <GrowthIndicator
+                                    current={formData.plantHeight || 0}
+                                    previous={currentPlotData.lastRecord?.plantHeight || 0}
+                                  />
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setFormData(p => ({
+                                        ...p,
+                                        plantHeight: Math.max(0, Number(((p.plantHeight || 0) - 5).toFixed(1)))
+                                      }))
+                                    }
+                                    className="h-11 px-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-xs font-black text-slate-700 dark:text-slate-200 hover:bg-slate-100 cursor-pointer"
+                                  >
+                                    -5
+                                  </button>
+                                  <input
+                                    type="number"
+                                    inputMode="decimal"
+                                    step="0.5"
+                                    className="flex-1 h-11 text-center border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 font-mono text-lg font-black dark:text-white outline-none focus:ring-2 focus:ring-emerald-500"
+                                    value={formData.plantHeight}
+                                    onChange={e => setFormData({ ...formData, plantHeight: Number(e.target.value) })}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setFormData(p => ({
+                                        ...p,
+                                        plantHeight: Number(((p.plantHeight || 0) + 5).toFixed(1))
+                                      }))
+                                    }
+                                    className="h-11 px-3 rounded-xl bg-emerald-600 text-white font-mono text-xs font-black hover:bg-emerald-500 cursor-pointer"
+                                  >
+                                    +5
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setFormData(p => ({
+                                        ...p,
+                                        plantHeight: Number(((p.plantHeight || 0) + 10).toFixed(1))
+                                      }))
+                                    }
+                                    className="h-11 px-3 rounded-xl bg-emerald-700 text-white font-mono text-xs font-black hover:bg-emerald-600 cursor-pointer"
+                                  >
+                                    +10
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* POBLACIÓN (PL/M²) CON BOTONES DE INCREMENTO RÁPIDO */}
+                              <div className="bg-slate-50/70 dark:bg-slate-950/60 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-2">
+                                <div className="flex justify-between items-center">
+                                  <label className="text-[10px] font-black uppercase text-slate-600 dark:text-slate-300 tracking-wider flex items-center gap-1">
+                                    <Sprout size={13} className="text-emerald-600" /> Densidad / Población (Pl/m²)
+                                  </label>
+                                  <span className="text-[10px] font-mono text-slate-400">
+                                    Ant: {currentPlotData.lastRecord?.plantsPerMeter || 0} pl/m²
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setFormData(p => ({
+                                        ...p,
+                                        plantsPerMeter: Math.max(0, Number(((p.plantsPerMeter || 0) - 5).toFixed(1)))
+                                      }))
+                                    }
+                                    className="h-11 px-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-xs font-black text-slate-700 dark:text-slate-200 hover:bg-slate-100 cursor-pointer"
+                                  >
+                                    -5
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setFormData(p => ({
+                                        ...p,
+                                        plantsPerMeter: Math.max(0, Number(((p.plantsPerMeter || 0) - 1).toFixed(1)))
+                                      }))
+                                    }
+                                    className="h-11 px-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-xs font-black text-slate-700 dark:text-slate-200 hover:bg-slate-100 cursor-pointer"
+                                  >
+                                    -1
+                                  </button>
+                                  <input
+                                    type="number"
+                                    inputMode="decimal"
+                                    step="0.5"
+                                    className="flex-1 h-11 text-center border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 font-mono text-lg font-black dark:text-white outline-none focus:ring-2 focus:ring-emerald-500"
+                                    value={formData.plantsPerMeter}
+                                    onChange={e =>
+                                      setFormData({ ...formData, plantsPerMeter: Number(e.target.value) })
+                                    }
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setFormData(p => ({
+                                        ...p,
+                                        plantsPerMeter: Number(((p.plantsPerMeter || 0) + 1).toFixed(1))
+                                      }))
+                                    }
+                                    className="h-11 px-2.5 rounded-xl bg-emerald-600 text-white font-mono text-xs font-black hover:bg-emerald-500 cursor-pointer"
+                                  >
+                                    +1
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setFormData(p => ({
+                                        ...p,
+                                        plantsPerMeter: Number(((p.plantsPerMeter || 0) + 5).toFixed(1))
+                                      }))
+                                    }
+                                    className="h-11 px-3 rounded-xl bg-emerald-700 text-white font-mono text-xs font-black hover:bg-emerald-600 cursor-pointer"
+                                  >
+                                    +5
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Escalas Táctiles 1-9 (Vigor, Homogeneidad, Sanidad, Encamado, Daño Aves) */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              <TouchScaleControl
+                                label="Vigor Vegetativo (1-9)"
+                                helperText="9 = Máximo vigor foliar y elongación"
+                                value={formData.vigor}
+                                onChange={v => setFormData({ ...formData, vigor: v })}
+                              />
+                              <TouchScaleControl
+                                label="Homogeneidad de Lote (1-9)"
+                                helperText="9 = Canopia totalmente uniforme"
+                                value={formData.uniformity}
+                                onChange={v => setFormData({ ...formData, uniformity: v })}
+                              />
+                              <TouchScaleControl
+                                label="Sanidad: Enfermedades (1-9)"
+                                helperText="1 = Sano sin síntomas · 9 = Afectación severa"
+                                invertColor
+                                value={formData.diseasesScore}
+                                onChange={v => setFormData({ ...formData, diseasesScore: v })}
+                              />
+                              <TouchScaleControl
+                                label="Sanidad: Plagas / Insectos (1-9)"
+                                helperText="1 = Sin plagas · 9 = Presión crítica"
+                                invertColor
+                                value={formData.pestsScore}
+                                onChange={v => setFormData({ ...formData, pestsScore: v })}
+                              />
+                              <TouchScaleControl
+                                label="Encamado / Vuelco (1-9)"
+                                helperText="1 = Tallo erecto · 9 = Vuelco generalizado"
+                                invertColor
+                                value={formData.lodging}
+                                onChange={v => setFormData({ ...formData, lodging: v })}
+                              />
+                              <TouchScaleControl
+                                label="Daño por Aves (1-9)"
+                                helperText="1 = Sin daño · 9 = Pérdida severa de grano"
+                                invertColor
+                                value={formData.birdDamage}
+                                onChange={v => setFormData({ ...formData, birdDamage: v })}
+                              />
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     )}
 
@@ -2307,7 +2469,7 @@ export default function TrialManager() {
                               Atajos Directos de Carga en Campo • Fuente Única de Verdad con Parcelas
                             </span>
                             <h4 className="text-sm font-black uppercase text-slate-900 dark:text-white">
-                              Bitácora Fotográfica, Pluviómetro/Riego & Labores de Suelo ({currentPlotData.plot.name})
+                              2. Bitácora Fotográfica, Pluviómetro/Riego & Labores de Suelo ({currentPlotData.plot.name})
                             </h4>
                           </div>
 
@@ -2692,6 +2854,7 @@ export default function TrialManager() {
                                     <option value="MANEJO_HIDRICO">💧 Manejo Hídrico</option>
                                     <option value="FITOSANITARIO">🛡️ Aplicación Fitosanitaria</option>
                                     <option value="MONITOREO">🔍 Depuración / Roguing</option>
+                                    <option value="COSECHA">🌾 Corte / Hilerado / Cosecha</option>
                                   </select>
                                 </div>
 
@@ -2802,7 +2965,276 @@ export default function TrialManager() {
                       </div>
                     )}
 
-                    {/* FOOTER DE ACCIONES Y SELLADO INTEGRAL (FIJO O ACCESIBLE EN CAMPO) */}
+                    {/* ==================================================================== */}
+                    {/* SECCIÓN 3: CRONOGRAMA DE COSECHA, PROYECCIÓN PRE-VENTA Y CIERRE      */}
+                    {/* ==================================================================== */}
+                    {(fieldViewSection === 'all' || fieldViewSection === 'harvest') && (
+                      <div className="bg-slate-900 text-white rounded-2xl p-5 md:p-6 space-y-5 border border-slate-800 shadow-lg">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-white/10 pb-4">
+                          <div>
+                            <span className="text-[9px] font-black uppercase tracking-widest text-emerald-400 block">
+                              Reloj Biológico del Germoplasma · Proyección Comercial de Pre-Venta & Transición de Ciclo
+                            </span>
+                            <h4 className="text-base md:text-lg font-black uppercase tracking-tight mt-0.5">
+                              3. Cronograma Óptimo de Cosecha & Disponibilidad Comercial ({currentPlotData.plot.name})
+                            </h4>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setIsClosureModalOpen(true)}
+                              className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm cursor-pointer"
+                            >
+                              <Award size={14} />
+                              <span>Acta Oficial de Cierre / Cosecha GS1</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* PARTE A: LÍNEA DE TIEMPO DESDE SIEMBRA Y VENTANAS ÓPTIMAS POR GERMOPLASMA */}
+                        <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
+                            <div>
+                              <span className="text-slate-400">Germoplasma Declarado:</span>{' '}
+                              <strong className="text-white">{variety?.name || 'S/D'}</strong>{' '}
+                              <span className="text-emerald-400">
+                                ({variety?.usage || 'Dual'} · Ciclo Oficial: {currentPlotMetrics.cycleDays} días ·{' '}
+                                {variety?.gddRequirement || 1850} GDD)
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-amber-400 font-bold">
+                                {currentPlotMetrics.daysToHarvest > 0
+                                  ? `⏳ Faltan ${currentPlotMetrics.daysToHarvest} días para Cosecha Óptima`
+                                  : `✅ En Ventana Óptima de Cosecha (+${Math.abs(currentPlotMetrics.daysToHarvest)} días)`}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Barra de progreso biológico del ciclo */}
+                          <div className="w-full h-3 bg-slate-800 rounded-full overflow-hidden p-0.5 border border-white/10">
+                            <div
+                              className={`h-full rounded-full transition-all ${
+                                currentPlotMetrics.cycleProgressPct >= 90
+                                  ? 'bg-amber-500'
+                                  : 'bg-emerald-500'
+                              }`}
+                              style={{ width: `${Math.max(4, currentPlotMetrics.cycleProgressPct)}%` }}
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1 font-mono text-xs">
+                            <div className="bg-slate-950/70 p-3 rounded-xl border border-white/10">
+                              <span className="text-[9px] uppercase text-slate-400 block">Fecha de Siembra</span>
+                              <strong className="text-sm text-white block mt-0.5">
+                                {currentPlotData.plot.sowingDate}
+                              </strong>
+                              <span className="text-[10px] text-emerald-400">
+                                {currentPlotMetrics.dds} Días Desde Siembra (DDS)
+                              </span>
+                            </div>
+
+                            <div className="bg-slate-950/70 p-3 rounded-xl border border-white/10">
+                              <span className="text-[9px] uppercase text-slate-400 block">
+                                Ventana Óptima Corte Fibra
+                              </span>
+                              <strong className="text-sm text-indigo-300 block mt-0.5">
+                                {currentPlotMetrics.optimalFiberCutDate}
+                              </strong>
+                              <span className="text-[10px] text-slate-400">
+                                Fin Floración (~{Math.max(65, currentPlotMetrics.cycleDays - 18)} DDS)
+                              </span>
+                            </div>
+
+                            <div className="bg-slate-950/70 p-3 rounded-xl border border-white/10">
+                              <span className="text-[9px] uppercase text-slate-400 block">
+                                Fecha Óptima Grano / Ciclo
+                              </span>
+                              <strong className="text-sm text-amber-400 block mt-0.5">
+                                {currentPlotMetrics.optimalBiologicalHarvestDate}
+                              </strong>
+                              <span className="text-[10px] text-slate-400">
+                                Ciclo Germoplasma ({currentPlotMetrics.cycleDays} DDS)
+                              </span>
+                            </div>
+
+                            <div className="bg-emerald-950/40 p-3 rounded-xl border border-emerald-500/30">
+                              <span className="text-[9px] uppercase text-emerald-300 block">
+                                Disponibilidad Comercial Pre-Venta
+                              </span>
+                              <strong className="text-sm text-white block mt-0.5">
+                                {currentPlotData.plot.isHarvestScheduled
+                                  ? `${currentPlotData.plot.scheduledHarvestDate} (Prog.)`
+                                  : currentPlotMetrics.targetHarvestDate}
+                              </strong>
+                              <span className="text-[10px] text-emerald-400">
+                                {currentPlotMetrics.daysToHarvest > 0
+                                  ? `Entrega en T-${currentPlotMetrics.daysToHarvest} días`
+                                  : 'Disponible para trilla inmediata'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* PARTE B: PROYECCIÓN COMERCIAL DE VOLUMEN VENDIBLE + MUESTREO DE PRE-COSECHA */}
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+                          {/* Tarjetas de Volumen Proyectado para Pre-Venta */}
+                          <div className="lg:col-span-5 space-y-3">
+                            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
+                              Volumen Estimado en Lote para Pre-Venta ({currentPlotMetrics.areaHa} ha)
+                            </span>
+
+                            <div className="p-3.5 rounded-2xl bg-emerald-950/40 border border-emerald-500/30 flex items-center justify-between font-mono">
+                              <div>
+                                <span className="text-[10px] uppercase font-bold text-emerald-400 block">
+                                  🌾 Grano Seco Comercializable
+                                </span>
+                                <strong className="text-xl font-black text-white">
+                                  {currentPlotMetrics.liveProjectedGrainTotalKg.toLocaleString('es-AR')} kg
+                                </strong>
+                                <span className="text-[10px] text-slate-300 block">
+                                  Rinde proyectado: {currentPlotMetrics.liveProjectedGrainKgHa.toLocaleString('es-AR')} kg/ha (
+                                  {currentPlotMetrics.usingFieldSampleForGrain
+                                    ? 'Por muestreo 1m²'
+                                    : `Germoplasma × Vigor ${formData.vigor || 8}/9`}
+                                  )
+                                </span>
+                              </div>
+                              <div className="text-right">
+                                <span className="text-xs font-bold text-emerald-300 block">
+                                  {(currentPlotMetrics.liveProjectedGrainTotalKg / 1000).toFixed(2)} Tn
+                                </span>
+                                <span className="text-[9px] text-slate-400">Lote completo</span>
+                              </div>
+                            </div>
+
+                            <div className="p-3.5 rounded-2xl bg-indigo-950/40 border border-indigo-500/30 flex items-center justify-between font-mono">
+                              <div>
+                                <span className="text-[10px] uppercase font-bold text-indigo-300 block">
+                                  🌿 Fibra / Tallo Seco Industrial
+                                </span>
+                                <strong className="text-xl font-black text-white">
+                                  {currentPlotMetrics.liveProjectedFiberTotalTn} Tn
+                                </strong>
+                                <span className="text-[10px] text-slate-300 block">
+                                  Rinde proyectado: {currentPlotMetrics.liveProjectedFiberTnHa} Tn/ha (
+                                  {currentPlotMetrics.usingFieldSampleForFiber
+                                    ? 'Por muestreo 1m²'
+                                    : `Germoplasma × Vigor ${formData.vigor || 8}/9`}
+                                  )
+                                </span>
+                              </div>
+                              <div className="text-right">
+                                <span className="text-xs font-bold text-indigo-300 block">
+                                  {Math.round(currentPlotMetrics.liveProjectedFiberTotalTn * 1000).toLocaleString(
+                                    'es-AR'
+                                  )}{' '}
+                                  kg
+                                </span>
+                                <span className="text-[9px] text-slate-400">Biomasa tallo</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Muestreo de Campo (Marco 1 m²) + Programación Rápida de Cosecha */}
+                          <div className="lg:col-span-7 bg-white/5 border border-white/10 rounded-2xl p-4 space-y-3.5">
+                            <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400 block">
+                              Muestreo Pre-Cosecha en Lote (Marco 1 m²) & Programación de Trilla
+                            </span>
+
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                              <div>
+                                <label className="text-[9px] uppercase font-black text-slate-400 block mb-1">
+                                  Plena Floración (50%)
+                                </label>
+                                <input
+                                  type="date"
+                                  className="w-full bg-slate-900 border border-white/15 p-2.5 rounded-xl text-xs font-mono outline-none focus:border-emerald-500"
+                                  value={formData.floweringDate}
+                                  onChange={e => setFormData({ ...formData, floweringDate: e.target.value })}
+                                />
+                              </div>
+
+                              <div>
+                                <label className="text-[9px] uppercase font-black text-slate-400 block mb-1">
+                                  Muestra Grano (g/m²)
+                                </label>
+                                <input
+                                  type="number"
+                                  inputMode="decimal"
+                                  step="1"
+                                  placeholder="0 = Usar genética"
+                                  className="w-full bg-slate-900 border border-white/15 p-2.5 rounded-xl text-xs font-mono font-bold outline-none focus:border-emerald-500"
+                                  value={formData.seedYield || ''}
+                                  onChange={e => setFormData({ ...formData, seedYield: Number(e.target.value) })}
+                                />
+                              </div>
+
+                              <div>
+                                <label className="text-[9px] uppercase font-black text-slate-400 block mb-1">
+                                  Muestra Tallo (g/m²)
+                                </label>
+                                <input
+                                  type="number"
+                                  inputMode="decimal"
+                                  step="10"
+                                  placeholder="0 = Usar genética"
+                                  className="w-full bg-slate-900 border border-white/15 p-2.5 rounded-xl text-xs font-mono font-bold outline-none focus:border-emerald-500"
+                                  value={formData.stemWeight || ''}
+                                  onChange={e => setFormData({ ...formData, stemWeight: Number(e.target.value) })}
+                                />
+                              </div>
+
+                              <div>
+                                <label className="text-[9px] uppercase font-black text-amber-400 block mb-1">
+                                  Humedad Grano Lote %
+                                </label>
+                                <input
+                                  type="number"
+                                  inputMode="decimal"
+                                  step="0.5"
+                                  className="w-full bg-slate-900 border border-amber-500/30 p-2.5 rounded-xl text-xs font-mono font-bold text-amber-300 outline-none focus:border-amber-400"
+                                  value={grainMoistureFieldPct}
+                                  onChange={e => setGrainMoistureFieldPct(Number(e.target.value))}
+                                />
+                              </div>
+                            </div>
+
+                            {/* Programación de Fecha de Cosecha sincronizada con la Parcela */}
+                            <div className="pt-2 border-t border-white/10 flex flex-col sm:flex-row items-stretch sm:items-end justify-between gap-2.5">
+                              <div className="flex-1">
+                                <label className="text-[9px] uppercase font-black text-emerald-400 block mb-1">
+                                  Fecha Programada de Cosecha / Compromiso Comercial
+                                </label>
+                                <input
+                                  type="date"
+                                  value={scheduleHarvestDateInput}
+                                  onChange={e => setScheduleHarvestDateInput(e.target.value)}
+                                  className="w-full bg-slate-900 border border-emerald-500/40 p-2.5 rounded-xl text-xs font-mono font-bold text-white outline-none focus:border-emerald-400"
+                                />
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={handleQuickScheduleHarvest}
+                                disabled={isSchedulingHarvest || !scheduleHarvestDateInput}
+                                className="px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-40 shrink-0"
+                              >
+                                {isSchedulingHarvest ? (
+                                  <Loader2 size={14} className="animate-spin" />
+                                ) : (
+                                  <Calendar size={14} />
+                                )}
+                                <span>Fijar Fecha de Cosecha en Parcela</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* FOOTER DE ACCIONES Y SELLADO INTEGRAL */}
                     <div className="pt-4 border-t dark:border-slate-800 flex flex-col sm:flex-row justify-between items-center gap-4">
                       <label className="flex items-center gap-2 text-xs font-bold text-slate-500 cursor-pointer">
                         <input
@@ -3006,9 +3438,9 @@ export default function TrialManager() {
                                 </p>
                               </div>
                               <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border dark:border-slate-800">
-                                <p className="text-[8px] font-black text-slate-400 uppercase">Calidad Semilla</p>
+                                <p className="text-[8px] font-black text-slate-400 uppercase">Muestreo Grano/Tallo</p>
                                 <p className="font-black text-slate-700 dark:text-slate-200 text-sm">
-                                  {record.seedQualityGermination || 90}% Germ.
+                                  {record.seedYield || 0}g · {record.stemWeight || 0}g/m²
                                 </p>
                               </div>
                             </div>
@@ -3170,6 +3602,17 @@ export default function TrialManager() {
           )}
         </div>
       </div>
+
+      {/* MODAL OFICIAL DE ACTA DE CIERRE DE CICLO Y COSECHA HOMOLOGADA (GS1 / QR) */}
+      {currentPlotData && (
+        <PlotCycleClosureModal
+          isOpen={isClosureModalOpen}
+          onClose={() => setIsClosureModalOpen(false)}
+          plot={currentPlotData.plot}
+          location={currentPlotData.location}
+          variety={variety}
+        />
+      )}
 
       {/* MODAL DE CÁMARA WEBRTC EN VIVO */}
       {isCameraOpen && (
