@@ -515,3 +515,178 @@ export function getUserAccessAudit(
     blockedPlotsCount
   };
 }
+
+/**
+ * Resuelve de forma determinística la Estructura Productiva (Socio de la Red) y el Recurso Humano activo
+ * registrado en el sistema (`usersList`) para un Establecimiento / Sitio (`Location`) o ID de cliente.
+ * Garantiza que tanto el Propietario / Responsable del Campo como el Responsable Técnico Agronómico
+ * provengan siempre de los usuarios activos registrados en el sistema.
+ */
+export function resolveLocationStructureRoster(
+  location: Partial<Location> | null | undefined,
+  clients: Client[],
+  usersList: User[]
+) {
+  const safeUsers = (usersList || []).filter(Boolean);
+  const safeClients = (clients || []).filter(Boolean);
+
+  // 1. Identificar la Estructura Productiva (Socio de la Red) vinculada al campo
+  const linkedClient = location
+    ? safeClients.find(
+        c =>
+          (location.clientId && String(c.id) === String(location.clientId)) ||
+          (location.id && c.locationId && String(c.locationId) === String(location.id))
+      )
+    : undefined;
+
+  const effectiveClientId = linkedClient?.id || location?.clientId || '';
+
+  // 2. Usuarios activos pertenecientes a la Estructura Productiva de este campo
+  const teamIdsSet = new Set<string>([
+    ...(linkedClient?.teamUserIds || []).map(String),
+    ...(linkedClient?.relatedUserId ? [String(linkedClient.relatedUserId)] : []),
+    ...((location?.responsibleIds || []).map(String))
+  ]);
+
+  const structureUsers = safeUsers.filter(u => {
+    if (isSupplierRestrictedUser(u)) return false;
+    if (effectiveClientId && u.clientId && String(u.clientId) === String(effectiveClientId)) {
+      return true;
+    }
+    if (teamIdsSet.has(String(u.id))) {
+      return true;
+    }
+    return false;
+  });
+
+  // 3. Directores / Administradores / Agrónomos de la Cooperativa Central (soporte transversal)
+  const centralUsers = safeUsers.filter(
+    u =>
+      !isSupplierRestrictedUser(u) &&
+      (isCentralAdminOrSupervisor(u) || (!u.clientId && (u.role === 'technician' || u.structureRole === 'agronomo')))
+  );
+
+  // Pool combinado sin duplicados (primero los usuarios propios de la Estructura Productiva del campo)
+  const allSelectableUsers: User[] = [];
+  const seenIds = new Set<string>();
+  [...structureUsers, ...centralUsers, ...safeUsers.filter(u => !isSupplierRestrictedUser(u))].forEach(u => {
+    if (!seenIds.has(String(u.id))) {
+      seenIds.add(String(u.id));
+      allSelectableUsers.push(u);
+    }
+  });
+
+  const normalizeName = (str?: string | null) =>
+    String(str || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  const findUserByNameHint = (hint?: string | null, pool: User[] = allSelectableUsers): User | undefined => {
+    const cleanHint = normalizeName(hint);
+    if (!cleanHint) return undefined;
+    // Coincidencia exacta primero
+    const exact = pool.find(u => normalizeName(u.name) === cleanHint);
+    if (exact) return exact;
+    // Coincidencia parcial (ej. "Salvador MERELE" o "Matías QUINTANA / Ing. Agr. Julián PIZARRO")
+    return pool.find(u => {
+      const uname = normalizeName(u.name);
+      if (!uname) return false;
+      const parts = uname.split(' ').filter(p => p.length > 2);
+      return cleanHint.includes(uname) || (parts.length >= 2 && parts.every(p => cleanHint.includes(p)));
+    });
+  };
+
+  // 4. Identificar al Propietario / Titular / Responsable del Campo dentro de la Estructura Productiva
+  let ownerUser: User | undefined = undefined;
+  if (location?.ownerName) {
+    ownerUser = findUserByNameHint(location.ownerName, structureUsers) || findUserByNameHint(location.ownerName, allSelectableUsers);
+  }
+  if (!ownerUser && linkedClient?.relatedUserId) {
+    ownerUser = safeUsers.find(u => String(u.id) === String(linkedClient.relatedUserId));
+  }
+  if (!ownerUser && linkedClient?.contactName) {
+    ownerUser = findUserByNameHint(linkedClient.contactName, structureUsers) || findUserByNameHint(linkedClient.contactName, allSelectableUsers);
+  }
+  if (!ownerUser) {
+    ownerUser =
+      structureUsers.find(u => u.structureRole === 'propietario') ||
+      structureUsers.find(u => u.role === 'client') ||
+      structureUsers.find(u => u.structureRole === 'encargado') ||
+      structureUsers[0] ||
+      centralUsers[0];
+  }
+
+  // 5. Identificar al Responsable Técnico Agronómico dentro de la Estructura Productiva o Cooperativa Central
+  let technicalUser: User | undefined = undefined;
+  if (location?.responsiblePerson) {
+    // Si el texto contiene una barra (ej. "Matías QUINTANA / Ing. Agr. Julián PIZARRO"), priorizar al agrónomo de la estructura
+    const segments = String(location.responsiblePerson)
+      .split('/')
+      .map(s => s.trim())
+      .filter(Boolean);
+    if (segments.length > 1) {
+      // Buscar primero si alguno de los segmentos corresponde a un agrónomo registrado
+      for (const seg of [...segments].reverse()) {
+        const match = findUserByNameHint(seg, structureUsers) || findUserByNameHint(seg, allSelectableUsers);
+        if (match) {
+          technicalUser = match;
+          break;
+        }
+      }
+    } else {
+      technicalUser =
+        findUserByNameHint(location.responsiblePerson, structureUsers) ||
+        findUserByNameHint(location.responsiblePerson, allSelectableUsers);
+    }
+  }
+  if (!technicalUser) {
+    technicalUser =
+      structureUsers.find(u => u.structureRole === 'agronomo') ||
+      structureUsers.find(u => u.role === 'technician' && (!ownerUser || u.id !== ownerUser.id)) ||
+      structureUsers.find(u => u.structureRole === 'encargado') ||
+      centralUsers.find(u => u.structureRole === 'agronomo' || u.role === 'admin' || u.role === 'super_admin') ||
+      ownerUser;
+  }
+
+  // Candidatos ordenados para selector de Propietario / Responsable del Campo
+  const candidateOwners: User[] = [
+    ...structureUsers.filter(u => u.structureRole === 'propietario' || u.role === 'client' || u.structureRole === 'encargado'),
+    ...structureUsers.filter(u => u.structureRole !== 'propietario' && u.role !== 'client' && u.structureRole !== 'encargado'),
+    ...centralUsers.filter(u => !structureUsers.some(su => su.id === u.id))
+  ];
+
+  // Candidatos ordenados para selector de Responsable Técnico Agronómico
+  const candidateTechnicians: User[] = [
+    ...structureUsers.filter(u => u.structureRole === 'agronomo' || u.role === 'technician' || u.structureRole === 'encargado'),
+    ...structureUsers.filter(u => u.structureRole !== 'agronomo' && u.role !== 'technician' && u.structureRole !== 'encargado'),
+    ...centralUsers.filter(u => !structureUsers.some(su => su.id === u.id))
+  ];
+
+  const resolvedResponsibleIds = Array.from(
+    new Set([
+      ...structureUsers.map(u => String(u.id)),
+      ...(ownerUser ? [String(ownerUser.id)] : []),
+      ...(technicalUser ? [String(technicalUser.id)] : []),
+      ...((location?.responsibleIds || []).map(String))
+    ])
+  );
+
+  return {
+    linkedClient,
+    structureUsers,
+    centralUsers,
+    allSelectableUsers,
+    ownerUser,
+    ownerDisplayName: ownerUser?.name || location?.ownerName || linkedClient?.contactName || 'Sin Asignar',
+    technicalUser,
+    technicalDisplayName: technicalUser?.name || location?.responsiblePerson || ownerUser?.name || 'Sin Asignar',
+    candidateOwners,
+    candidateTechnicians,
+    resolvedResponsibleIds
+  };
+}
+

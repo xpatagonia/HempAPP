@@ -204,7 +204,7 @@ export const DEMO_CLIENTS: Client[] = [
     "id": "94f8da54-90dc-44e7-b9df-e9b6c2be5266",
     "name": "INTA Estacion Experimental",
     "type": "Empresa Privada",
-    "contactName": "Matias Quintana",
+    "contactName": "Matias QUINTANA",
     "contactPhone": "",
     "email": "matias@hempc.com.ar",
     "isNetworkMember": true,
@@ -226,7 +226,7 @@ export const DEMO_CLIENTS: Client[] = [
     "id": "06585f64-6d04-4567-a23f-a7f046ee06b4",
     "name": "CAP Centro Ambiental Patagonico",
     "type": "Empresa Privada",
-    "contactName": "Salvador Merelle",
+    "contactName": "Salvador MERELLE",
     "contactPhone": "",
     "email": "centroambientalpatagonico@gmail.com",
     "isNetworkMember": true,
@@ -248,7 +248,7 @@ export const DEMO_CLIENTS: Client[] = [
     "id": "7503c132-5d7d-48f0-9c0f-7692b1bdf348",
     "name": "HempC  de PatagonianC LTDA",
     "type": "Empresa Privada",
-    "contactName": "Gastón Barea",
+    "contactName": "Gastón BAREA M.",
     "contactPhone": "+542804697193",
     "email": "gaston@hempc.com.ar",
     "isNetworkMember": true,
@@ -429,7 +429,7 @@ export const DEMO_LOCATIONS: Location[] = [
     "name": "CAP CENTRO AMBIENTAL PATAGONICO",
     "province": "Chubut",
     "city": "Puerto Madryn",
-    "address": "",
+    "address": "Ruta 1 Km 10",
     "coordinates": {
       "lat": -42.747417,
       "lng": -65.279755
@@ -460,11 +460,11 @@ export const DEMO_LOCATIONS: Location[] = [
     "capacityHa": 0.17,
     "soilType": "Arenoso",
     "climate": "Árido Marítimo Patagónico (Golfo Nuevo)",
-    "responsiblePerson": "Salvador MERELLE / Joaquín AREZO",
-    "ownerName": "Salvador MERELE",
-    "ownerLegalName": "",
+    "responsiblePerson": "Joaquin AREZO",
+    "ownerName": "Salvador MERELLE",
+    "ownerLegalName": "CAP Centro Ambiental Patagónico",
     "ownerCuit": "",
-    "ownerContact": "",
+    "ownerContact": "centroambientalpatagonico@gmail.com",
     "ownerType": "Empresa Privada",
     "irrigationSystem": "Gravedad / Surcos",
     "responsibleIds": ["1767102643518", "1766471712087"]
@@ -474,7 +474,7 @@ export const DEMO_LOCATIONS: Location[] = [
     "name": "BIOC PARQUE INDUSTRIAL TW",
     "province": "Chubut",
     "city": "Trelew",
-    "address": "",
+    "address": "Puerto Argentino S/N Parque Industrial",
     "coordinates": {
       "lat": -43.25581,
       "lng": -65.376921
@@ -513,11 +513,11 @@ export const DEMO_LOCATIONS: Location[] = [
     "capacityHa": 1.92,
     "soilType": "Franco Arcilloso",
     "climate": "Templado Árido Patagónico (Parque Industrial)",
-    "responsiblePerson": "Ing. Gastón BAREA",
-    "ownerName": "PatagonianC LTDA",
-    "ownerLegalName": "",
-    "ownerCuit": "",
-    "ownerContact": "",
+    "responsiblePerson": "Gastón BAREA M.",
+    "ownerName": "Gastón BAREA M.",
+    "ownerLegalName": "HempC de PatagonianC LTDA",
+    "ownerCuit": "30718161130",
+    "ownerContact": "gaston@hempc.com.ar",
     "ownerType": "Empresa Privada",
     "irrigationSystem": "Gravedad / Surcos",
     "responsibleIds": ["1766442369713", "1792513420994"]
@@ -527,7 +527,7 @@ export const DEMO_LOCATIONS: Location[] = [
     "name": "INTA ENSAYO EXPERIMENTAL",
     "province": "Buenos Aires",
     "city": "Hilario Ascasubi",
-    "address": "",
+    "address": "Ruta Nacional 3 Km 794, Hilario Ascasubi",
     "coordinates": {
       "lat": -39.393075,
       "lng": -62.621037
@@ -574,11 +574,11 @@ export const DEMO_LOCATIONS: Location[] = [
     "capacityHa": 0.82,
     "soilType": "Franco",
     "climate": "Semiárido Templado (Valle Bonaerense del Río Colorado)",
-    "responsiblePerson": "Matías QUINTANA / Ing. Agr. Julián PIZARRO",
-    "ownerName": "Matías QUINTANA",
-    "ownerLegalName": "",
+    "responsiblePerson": "Julian PIZARRO",
+    "ownerName": "Matias QUINTANA",
+    "ownerLegalName": "INTA Estación Experimental",
     "ownerCuit": "",
-    "ownerContact": "",
+    "ownerContact": "matias@hempc.com.ar",
     "ownerType": "Empresa Privada",
     "irrigationSystem": "Goteo",
     "responsibleIds": ["1766450364369", "1766683825719"]
@@ -619,14 +619,14 @@ export const DEMO_LOCATIONS: Location[] = [
     "capacityHa": 0.18,
     "soilType": "Arcilloso",
     "climate": "Templado Árido Patagónico (VIRCh)",
-    "responsiblePerson": "Ricardo LA REGINA / Ing. Agr. Gastón BAREA",
+    "responsiblePerson": "Gastón BAREA M.",
     "ownerName": "Ricardo La Regina",
-    "ownerLegalName": "",
+    "ownerLegalName": "Establecimiento La Regina",
     "ownerCuit": "",
-    "ownerContact": "",
+    "ownerContact": "ricardo@hempc.com.ar",
     "ownerType": "Empresa Privada",
     "irrigationSystem": "Gravedad / Surcos",
-    "responsibleIds": ["1766443862879"]
+    "responsibleIds": ["1766443862879", "1766442369713"]
   }
 ];
 

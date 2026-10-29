@@ -25,7 +25,8 @@ import {
   STRUCTURE_ROLES_INFO, 
   isCentralAdminOrSupervisor, 
   canManageStructure,
-  getAllowedLocationIds
+  getAllowedLocationIds,
+  resolveLocationStructureRoster
 } from '../src/utils/structurePermissions';
 
 const PRESET_AVATARS = [
@@ -985,23 +986,40 @@ export default function Clients() {
                     </span>
                   </div>
 
-                  {associatedLocation ? (
-                    <div>
-                      <p className="text-sm font-black text-slate-900 dark:text-white leading-tight">
-                        {associatedLocation.name}
-                      </p>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex items-center">
-                        <MapPin size={12} className="mr-1 text-slate-400 shrink-0" />
-                        {associatedLocation.city || associatedLocation.province}, {associatedLocation.province} • {associatedLocation.capacityHa || client.totalHectares || 0} Hectáreas
-                      </p>
-                      <div className="mt-2.5 pt-2 border-t border-emerald-100 dark:border-emerald-900/30 flex items-center justify-between text-[10px] text-emerald-700 dark:text-emerald-400 font-bold">
-                        <span>🔒 Acceso restringido al personal de esta estructura</span>
-                        <Link to={`/locations/${associatedLocation.id}`} className="hover:underline flex items-center font-black">
-                          Ver Campo <ArrowUpRight size={12} className="ml-0.5" />
-                        </Link>
+                  {associatedLocation ? (() => {
+                    const locRoster = resolveLocationStructureRoster(associatedLocation, clients, usersList);
+                    return (
+                      <div>
+                        <p className="text-sm font-black text-slate-900 dark:text-white leading-tight">
+                          {associatedLocation.name}
+                        </p>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex items-center">
+                          <MapPin size={12} className="mr-1 text-slate-400 shrink-0" />
+                          {associatedLocation.city || associatedLocation.province}, {associatedLocation.province} • {associatedLocation.capacityHa || client.totalHectares || 0} Hectáreas
+                        </p>
+                        <div className="mt-2 grid grid-cols-2 gap-2 pt-2 border-t border-emerald-100 dark:border-emerald-900/30 text-[10px] font-mono">
+                          <div className="truncate">
+                            <span className="text-[8.5px] uppercase text-slate-400 block">Propietario / Resp. Campo</span>
+                            <strong className="text-emerald-700 dark:text-emerald-300 truncate block">
+                              {locRoster.ownerDisplayName}
+                            </strong>
+                          </div>
+                          <div className="truncate">
+                            <span className="text-[8.5px] uppercase text-slate-400 block">Resp. Técnico Agronómico</span>
+                            <strong className="text-purple-700 dark:text-purple-300 truncate block">
+                              {locRoster.technicalDisplayName}
+                            </strong>
+                          </div>
+                        </div>
+                        <div className="mt-2 pt-2 border-t border-emerald-100 dark:border-emerald-900/30 flex items-center justify-between text-[10px] text-emerald-700 dark:text-emerald-400 font-bold">
+                          <span>🔒 Acceso restringido al personal de esta estructura</span>
+                          <Link to={`/locations/${associatedLocation.id}`} className="hover:underline flex items-center font-black">
+                            Ver Campo <ArrowUpRight size={12} className="ml-0.5" />
+                          </Link>
+                        </div>
                       </div>
-                    </div>
-                  ) : (
+                    );
+                  })() : (
                     <div className="py-2 text-center">
                       <p className="text-xs text-amber-700 dark:text-amber-400 font-bold flex items-center justify-center">
                         <AlertTriangle size={14} className="mr-1.5 text-amber-500" /> Sin campo vinculado aún
@@ -1418,39 +1436,107 @@ export default function Clients() {
                         </select>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="text-[10px] font-black uppercase text-slate-400 ml-1 block mb-1">Titular / Contacto Responsable</label>
-                          <input 
-                            type="text" 
-                            className={inputClass} 
-                            value={formData.contactName} 
-                            onChange={e => setFormData({...formData, contactName: e.target.value})} 
-                            placeholder="Nombre y Apellido"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[10px] font-black uppercase text-slate-400 ml-1 block mb-1">Teléfono / WhatsApp</label>
-                          <input 
-                            type="text" 
-                            className={inputClass} 
-                            value={formData.contactPhone} 
-                            onChange={e => setFormData({...formData, contactPhone: e.target.value})} 
-                            placeholder="+54 9 2477 ..."
-                          />
-                        </div>
-                      </div>
+                      {(() => {
+                        const structRoster = resolveLocationStructureRoster(
+                          {
+                            id: formData.locationId,
+                            clientId: editingId || formData.id,
+                            ownerName: formData.contactName
+                          },
+                          clients,
+                          usersList
+                        );
+                        return (
+                          <div className="space-y-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <div>
+                                <label className="text-[10px] font-black uppercase text-slate-400 ml-1 block mb-1">
+                                  Propietario / Responsable del Campo (Usuario Activo) *
+                                </label>
+                                <select
+                                  className={`${inputClass} font-bold`}
+                                  value={formData.relatedUserId || structRoster.ownerUser?.id || ''}
+                                  onChange={e => {
+                                    const uid = e.target.value;
+                                    const uObj = usersList.find(u => String(u.id) === String(uid));
+                                    if (uObj) {
+                                      setFormData(prev => ({
+                                        ...prev,
+                                        relatedUserId: uObj.id,
+                                        contactName: uObj.name,
+                                        email: prev.email || uObj.email,
+                                        contactPhone: prev.contactPhone || uObj.phone || '',
+                                        teamUserIds: Array.from(new Set([...(prev.teamUserIds || []), uObj.id]))
+                                      }));
+                                    } else {
+                                      setFormData(prev => ({ ...prev, relatedUserId: null }));
+                                    }
+                                  }}
+                                >
+                                  <option value="">-- Seleccionar Usuario de la Estructura --</option>
+                                  {structRoster.structureUsers.length > 0 && (
+                                    <optgroup label="Usuarios Activos en esta Estructura Productiva">
+                                      {structRoster.structureUsers.map(u => {
+                                        const rInfo = u.structureRole ? STRUCTURE_ROLES_INFO[u.structureRole] : null;
+                                        return (
+                                          <option key={`cli-own-s-${u.id}`} value={u.id}>
+                                            {u.name} ({rInfo ? rInfo.shortLabel : u.jobTitle || u.role})
+                                          </option>
+                                        );
+                                      })}
+                                    </optgroup>
+                                  )}
+                                  <optgroup label="Otros Usuarios Registrados en el Sistema">
+                                    {structRoster.allSelectableUsers
+                                      .filter(u => !structRoster.structureUsers.some(su => su.id === u.id))
+                                      .map(u => (
+                                        <option key={`cli-own-a-${u.id}`} value={u.id}>
+                                          {u.name} ({u.jobTitle || u.role})
+                                        </option>
+                                      ))}
+                                  </optgroup>
+                                </select>
+                              </div>
 
-                      <div>
-                        <label className="text-[10px] font-black uppercase text-slate-400 ml-1 block mb-1">Correo Electrónico de la Estructura</label>
-                        <input 
-                          type="email" 
-                          className={inputClass} 
-                          value={formData.email} 
-                          onChange={e => setFormData({...formData, email: e.target.value})} 
-                          placeholder="contacto@organizacion.com"
-                        />
-                      </div>
+                              <div>
+                                <label className="text-[10px] font-black uppercase text-slate-400 ml-1 block mb-1">
+                                  Nombre Visible del Titular / Responsable
+                                </label>
+                                <input 
+                                  type="text" 
+                                  className={inputClass} 
+                                  value={formData.contactName} 
+                                  onChange={e => setFormData({...formData, contactName: e.target.value})} 
+                                  placeholder="Nombre y Apellido"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <div>
+                                <label className="text-[10px] font-black uppercase text-slate-400 ml-1 block mb-1">Teléfono / WhatsApp</label>
+                                <input 
+                                  type="text" 
+                                  className={inputClass} 
+                                  value={formData.contactPhone} 
+                                  onChange={e => setFormData({...formData, contactPhone: e.target.value})} 
+                                  placeholder="+54 9 2477 ..."
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[10px] font-black uppercase text-slate-400 ml-1 block mb-1">Correo Electrónico de la Estructura</label>
+                                <input 
+                                  type="email" 
+                                  className={inputClass} 
+                                  value={formData.email} 
+                                  onChange={e => setFormData({...formData, email: e.target.value})} 
+                                  placeholder="contacto@organizacion.com"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
 

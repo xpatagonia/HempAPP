@@ -12,7 +12,11 @@ import {
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { BarcodeRenderer } from '../components/BarcodeRenderer';
-import { canAccessPlot } from '../src/utils/structurePermissions';
+import {
+  canAccessPlot,
+  resolveLocationStructureRoster,
+  STRUCTURE_ROLES_INFO
+} from '../src/utils/structurePermissions';
 
 // Insumos homologados y lotes recepcionados preconfigurados para vinculación rápida
 const RECEIVEABLE_INPUT_PRESETS = [
@@ -131,6 +135,7 @@ export default function PhytosanitaryBook() {
     varieties,
     clients,
     resources,
+    usersList,
     agrochemicalApplications: applications,
     addAgrochemicalApplication,
     updateAgrochemicalApplication,
@@ -156,9 +161,13 @@ export default function PhytosanitaryBook() {
     return plots.filter(p => canAccessPlot(currentUser, p, locations, clients));
   }, [plots, currentUser, locations, clients]);
 
+  const defaultPlotObj = availablePlots[0] || plots[0];
+  const defaultPlotLoc = locations.find(l => l.id === defaultPlotObj?.locationId);
+  const defaultPlotRoster = resolveLocationStructureRoster(defaultPlotLoc, clients, usersList);
+
   // Formulario de Nueva Aplicación
   const [formData, setFormData] = useState<Partial<AgrochemicalApplication>>({
-    plotId: availablePlots[0]?.id || plots[0]?.id || '',
+    plotId: defaultPlotObj?.id || '',
     date: new Date().toISOString().split('T')[0],
     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
     category: 'Bioestimulante',
@@ -173,8 +182,12 @@ export default function PhytosanitaryBook() {
     applicationMethod: 'Pulverización Terrestre',
     batchNumber: '',
     safetyPeriodDays: 0,
-    responsibleAgronomist: currentUser?.name || 'Ing. Agr. Lucas Berardi',
-    agronomistLicense: 'MP-AGRO-3321 MZA',
+    responsibleAgronomist:
+      defaultPlotObj?.technicalResponsibleName ||
+      defaultPlotRoster.technicalDisplayName ||
+      currentUser?.name ||
+      'Gastón BAREA M.',
+    agronomistLicense: 'MP-AGRO-3321 CIAF',
     weatherCondition: {
       temperatureC: 22.0,
       windSpeedKmH: 8.5,
@@ -1130,29 +1143,61 @@ export default function PhytosanitaryBook() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Ingeniero Agrónomo Responsable *</label>
-                  <input
-                    required
-                    type="text"
-                    className="w-full border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white p-2.5 rounded-xl font-mono text-xs focus:ring-2 focus:ring-emerald-500 outline-none"
-                    value={formData.responsibleAgronomist}
-                    onChange={e => setFormData({ ...formData, responsibleAgronomist: e.target.value })}
-                  />
-                </div>
+              {(() => {
+                const selectedPlotObj = plots.find(p => p.id === formData.plotId);
+                const selectedPlotLoc = locations.find(l => l.id === selectedPlotObj?.locationId);
+                const plotRoster = resolveLocationStructureRoster(selectedPlotLoc, clients, usersList);
 
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Matrícula Profesional (MP) *</label>
-                  <input
-                    required
-                    type="text"
-                    className="w-full border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white p-2.5 rounded-xl font-mono text-xs focus:ring-2 focus:ring-emerald-500 outline-none"
-                    value={formData.agronomistLicense}
-                    onChange={e => setFormData({ ...formData, agronomistLicense: e.target.value })}
-                  />
-                </div>
-              </div>
+                return (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
+                        Responsable Técnico Agronómico (Usuario Activo de Estructura) *
+                      </label>
+                      <select
+                        required
+                        className="w-full border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white p-2.5 rounded-xl font-mono text-xs font-bold focus:ring-2 focus:ring-emerald-500 outline-none"
+                        value={formData.responsibleAgronomist || plotRoster.technicalDisplayName || ''}
+                        onChange={e => setFormData({ ...formData, responsibleAgronomist: e.target.value })}
+                      >
+                        <option value="">-- Seleccionar Responsable Registrado --</option>
+                        {plotRoster.structureUsers.length > 0 && (
+                          <optgroup label={`Usuarios Activos en ${plotRoster.linkedClient?.name || 'Estructura del Campo'}`}>
+                            {plotRoster.structureUsers.map(u => {
+                              const rInfo = u.structureRole ? STRUCTURE_ROLES_INFO[u.structureRole] : null;
+                              return (
+                                <option key={`phyto-str-${u.id}`} value={u.name}>
+                                  {u.name} — {rInfo ? rInfo.shortLabel : u.jobTitle || u.role} ({u.email})
+                                </option>
+                              );
+                            })}
+                          </optgroup>
+                        )}
+                        <optgroup label="Dirección Técnica & Usuarios Registrados en el Sistema">
+                          {plotRoster.allSelectableUsers
+                            .filter(u => !plotRoster.structureUsers.some(su => su.id === u.id))
+                            .map(u => (
+                              <option key={`phyto-all-${u.id}`} value={u.name}>
+                                {u.name} — {u.jobTitle || u.role} ({u.email})
+                              </option>
+                            ))}
+                        </optgroup>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Matrícula Profesional (MP) *</label>
+                      <input
+                        required
+                        type="text"
+                        className="w-full border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white p-2.5 rounded-xl font-mono text-xs focus:ring-2 focus:ring-emerald-500 outline-none"
+                        value={formData.agronomistLicense}
+                        onChange={e => setFormData({ ...formData, agronomistLicense: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div>
                 <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Notas de Aplicación & Calibración</label>

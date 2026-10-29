@@ -21,7 +21,8 @@ import {
   canAccessTask,
   hasGlobalReadScope,
   isCentralAdminOrSupervisor,
-  isSupplierRestrictedUser
+  isSupplierRestrictedUser,
+  resolveLocationStructureRoster
 } from '../src/utils/structurePermissions';
 
 interface AppContextType {
@@ -540,32 +541,61 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             .filter((pt): pt is { lat: number; lng: number } => pt !== null && pt.lat !== 0 && pt.lng !== 0);
     };
 
-    const healLocationsWithPolygons = (locList: Location[]): Location[] => {
+    const healLocationsWithPolygons = (
+        locList: Location[],
+        clientsPool: Client[] = DEMO_CLIENTS,
+        usersPool: User[] = DEMO_USERS_LIST
+    ): Location[] => {
         const deletedMap = getDeletedIdsMap();
         const deletedSet = new Set(deletedMap['locations'] || []);
         const demoById = new Map(DEMO_LOCATIONS.map(l => [String(l.id), l]));
         const demoByName = new Map(DEMO_LOCATIONS.map(l => [l.name.trim().toLowerCase(), l]));
+        let savedLocMeta: Record<string, Partial<Location>> = {};
+        if (typeof window !== 'undefined') {
+            try {
+                const rawMeta = localStorage.getItem('ht_locations_meta_v1');
+                if (rawMeta) savedLocMeta = JSON.parse(rawMeta) || {};
+            } catch {}
+        }
+
+        const effectiveClients = clientsPool && clientsPool.length > 0 ? clientsPool : DEMO_CLIENTS;
+        const effectiveUsers = usersPool && usersPool.length > 0 ? usersPool : DEMO_USERS_LIST;
+
         return (locList || [])
             .filter(loc => !deletedSet.has(String(loc.id)) && !isPurgedDemoItem(loc))
             .map((loc: Location) => {
                 const demoMatch = demoById.get(String(loc.id)) || (loc.name ? demoByName.get(loc.name.trim().toLowerCase()) : undefined);
-                const normPoly = normalizePolygonPoints((loc as any).polygon);
+                const metaMatch = savedLocMeta[String(loc.id)] || {};
+                const baseLoc: Location = {
+                    ...(demoMatch || {}),
+                    ...loc,
+                    ...metaMatch
+                };
+
+                const normPoly = normalizePolygonPoints((baseLoc as any).polygon);
                 const finalPoly = normPoly.length >= 3 ? normPoly : (demoMatch?.polygon || []);
-                const rawCoords = (loc as any).coordinates;
+                const rawCoords = (baseLoc as any).coordinates;
                 const validCoords = rawCoords && !isNaN(Number(rawCoords.lat)) && !isNaN(Number(rawCoords.lng)) && Number(rawCoords.lat) !== 0
                     ? { lat: Number(rawCoords.lat), lng: Number(rawCoords.lng) }
                     : (demoMatch?.coordinates || (finalPoly.length > 0 ? finalPoly[0] : { lat: -43.308362, lng: -65.289033 }));
+
+                // Resolver desde los usuarios activos registrados en la Estructura Productiva
+                const roster = resolveLocationStructureRoster(baseLoc, effectiveClients, effectiveUsers);
+
                 return {
-                    ...(demoMatch || {}),
-                    ...loc,
-                    clientId: loc.clientId || demoMatch?.clientId,
-                    responsibleIds: (loc.responsibleIds && loc.responsibleIds.length > 0)
-                        ? loc.responsibleIds
+                    ...baseLoc,
+                    clientId: roster.linkedClient?.id || baseLoc.clientId || demoMatch?.clientId,
+                    ownerName: roster.ownerUser?.name || baseLoc.ownerName || demoMatch?.ownerName || roster.linkedClient?.contactName || 'Sin Asignar',
+                    ownerLegalName: baseLoc.ownerLegalName || roster.linkedClient?.name || demoMatch?.ownerLegalName || '',
+                    ownerCuit: baseLoc.ownerCuit || roster.linkedClient?.cuit || demoMatch?.ownerCuit || '',
+                    ownerContact: baseLoc.ownerContact || roster.ownerUser?.email || roster.linkedClient?.email || demoMatch?.ownerContact || '',
+                    responsiblePerson: roster.technicalUser?.name || baseLoc.responsiblePerson || demoMatch?.responsiblePerson || roster.ownerUser?.name || 'Dirección Técnica',
+                    responsibleIds: roster.resolvedResponsibleIds.length > 0
+                        ? roster.resolvedResponsibleIds
                         : (demoMatch?.responsibleIds || []),
-                    climate: loc.climate || demoMatch?.climate || 'Templado Semiárido',
-                    responsiblePerson: loc.responsiblePerson || demoMatch?.responsiblePerson || loc.ownerName || 'Dirección Técnica',
-                    soilType: loc.soilType || demoMatch?.soilType || 'Franco',
-                    irrigationSystem: loc.irrigationSystem || demoMatch?.irrigationSystem || 'Goteo / Surcos',
+                    climate: baseLoc.climate || demoMatch?.climate || 'Templado Semiárido',
+                    soilType: baseLoc.soilType || demoMatch?.soilType || 'Franco',
+                    irrigationSystem: baseLoc.irrigationSystem || demoMatch?.irrigationSystem || 'Goteo / Surcos',
                     coordinates: validCoords,
                     polygon: finalPoly
                 };
@@ -1045,7 +1075,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
     useEffect(() => {
         try {
-            if (localStorage.getItem('ht_supplier_users_schema_v7_20_0') !== 'true') {
+            if (localStorage.getItem('ht_structure_hr_sync_v7_21_0') !== 'true') {
                 const healedRes = healResources(getStoredCollection('ht_resources', DEMO_RESOURCES));
                 setResources(healedRes);
                 localStorage.setItem('ht_resources', JSON.stringify(healedRes));
@@ -1058,8 +1088,21 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 setUsersList(healedUsrs);
                 localStorage.setItem('ht_users', JSON.stringify(healedUsrs));
 
+                const healedClis = healClients(getStoredCollection('ht_clients', DEMO_CLIENTS));
+                setClients(healedClis);
+                localStorage.setItem('ht_clients', JSON.stringify(healedClis));
+
+                const healedLocs = healLocationsWithPolygons(
+                    getStoredCollection('ht_locations', DEMO_LOCATIONS),
+                    healedClis,
+                    healedUsrs
+                );
+                setLocations(healedLocs);
+                localStorage.setItem('ht_locations', JSON.stringify(healedLocs));
+
                 localStorage.setItem('ht_resources_schema_v7_19_0', 'true');
                 localStorage.setItem('ht_supplier_users_schema_v7_20_0', 'true');
+                localStorage.setItem('ht_structure_hr_sync_v7_21_0', 'true');
             }
         } catch {}
         refreshData();
@@ -1464,11 +1507,65 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         };
 
         if (table === 'locations') {
+            if (action !== 'delete' && item && typeof item === 'object' && item.id) {
+                try {
+                    const rawMeta = localStorage.getItem('ht_locations_meta_v1');
+                    const metaMap = rawMeta ? JSON.parse(rawMeta) : {};
+                    metaMap[String(item.id)] = {
+                        clientId: item.clientId,
+                        ownerName: item.ownerName,
+                        ownerLegalName: item.ownerLegalName,
+                        ownerCuit: item.ownerCuit,
+                        ownerContact: item.ownerContact,
+                        ownerType: item.ownerType,
+                        responsiblePerson: item.responsiblePerson,
+                        responsibleIds: item.responsibleIds,
+                        ariccameLicenseNumber: item.ariccameLicenseNumber,
+                        ariccameLicenseCategory: item.ariccameLicenseCategory,
+                        ariccameLicenseStatus: item.ariccameLicenseStatus,
+                        renspaNumber: item.renspaNumber,
+                        cadastralId: item.cadastralId,
+                        landTenureType: item.landTenureType,
+                        securityMeasures: item.securityMeasures,
+                        sowingDeclarationPolygon: item.sowingDeclarationPolygon,
+                        sowingDeclarationHa: item.sowingDeclarationHa,
+                        sowingDeclarationId: item.sowingDeclarationId,
+                        sowingDeclarationDate: item.sowingDeclarationDate,
+                        siteType: item.siteType,
+                        status: item.status,
+                        activeCampaigns: item.activeCampaigns
+                    };
+                    localStorage.setItem('ht_locations_meta_v1', JSON.stringify(metaMap));
+                } catch {}
+            }
             setLocations(prev => {
-                const next = updateList(prev);
+                const next = healLocationsWithPolygons(updateList(prev), clients, usersList);
                 try { localStorage.setItem('ht_locations', JSON.stringify(next)); } catch (e) {}
                 return next;
             });
+            // Si el establecimiento fue vinculado a un Socio de la Red (clientId), sincronizar el Client
+            if (action !== 'delete' && item && typeof item === 'object' && item.clientId && item.id) {
+                setClients(prev => {
+                    const matchedOwnerUser = usersList.find(
+                        u => u.name.trim().toLowerCase() === String(item.ownerName || '').trim().toLowerCase()
+                    );
+                    const next = prev.map(c => {
+                        if (String(c.id) !== String(item.clientId)) return c;
+                        const updatedTeam = Array.from(
+                            new Set([...(c.teamUserIds || []), ...((item.responsibleIds || []).map(String))])
+                        );
+                        return {
+                            ...c,
+                            locationId: String(item.id),
+                            contactName: item.ownerName || c.contactName,
+                            relatedUserId: matchedOwnerUser ? matchedOwnerUser.id : c.relatedUserId,
+                            teamUserIds: updatedTeam
+                        };
+                    });
+                    try { localStorage.setItem('ht_clients', JSON.stringify(next)); } catch (e) {}
+                    return next;
+                });
+            }
         } else if (table === 'plots') {
             setPlots(prev => {
                 const next = updateList(prev);
@@ -1925,16 +2022,31 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     const addClientWithRelations = async (c: Client, teamIds?: string[]) => {
         const ok = await crud('clients', c, 'insert');
         if (ok) {
+            let nextUsers = usersList;
             if (teamIds && teamIds.length > 0) {
-                setUsersList(prev => {
-                    const next = prev.map(u => teamIds.includes(u.id) ? { ...u, clientId: c.id, isNetworkMember: true } : u);
-                    try { localStorage.setItem('ht_users', JSON.stringify(next)); } catch (e) {}
-                    return next;
-                });
+                nextUsers = usersList.map(u => teamIds.includes(u.id) ? { ...u, clientId: c.id, isNetworkMember: true } : u);
+                setUsersList(nextUsers);
+                try { localStorage.setItem('ht_users', JSON.stringify(nextUsers)); } catch (e) {}
             }
             if (c.locationId) {
                 setLocations(prev => {
-                    const next = prev.map(l => l.id === c.locationId ? { ...l, clientId: c.id } : l);
+                    const next = prev.map(l => {
+                        if (String(l.id) !== String(c.locationId)) return l;
+                        const updatedLoc: Location = {
+                            ...l,
+                            clientId: c.id,
+                            ownerLegalName: c.name || l.ownerLegalName,
+                            ownerCuit: c.cuit || l.ownerCuit,
+                            ownerContact: c.email || l.ownerContact
+                        };
+                        const roster = resolveLocationStructureRoster(updatedLoc, [c, ...clients.filter(x => x.id !== c.id)], nextUsers);
+                        return {
+                            ...updatedLoc,
+                            ownerName: c.contactName || roster.ownerUser?.name || l.ownerName,
+                            responsiblePerson: roster.technicalUser?.name || l.responsiblePerson,
+                            responsibleIds: roster.resolvedResponsibleIds
+                        };
+                    });
                     try { localStorage.setItem('ht_locations', JSON.stringify(next)); } catch (e) {}
                     return next;
                 });
@@ -1946,23 +2058,38 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     const updateClientWithRelations = async (c: Client, teamIds?: string[]) => {
         const ok = await crud('clients', c, 'update');
         if (ok) {
+            let nextUsers = usersList;
             if (teamIds !== undefined) {
-                setUsersList(prev => {
-                    const next = prev.map(u => {
-                        if (teamIds.includes(u.id)) {
-                            return { ...u, clientId: c.id, isNetworkMember: true };
-                        } else if (u.clientId === c.id) {
-                            return { ...u, clientId: undefined };
-                        }
-                        return u;
-                    });
-                    try { localStorage.setItem('ht_users', JSON.stringify(next)); } catch (e) {}
-                    return next;
+                nextUsers = usersList.map(u => {
+                    if (teamIds.includes(u.id)) {
+                        return { ...u, clientId: c.id, isNetworkMember: true };
+                    } else if (u.clientId === c.id) {
+                        return { ...u, clientId: undefined };
+                    }
+                    return u;
                 });
+                setUsersList(nextUsers);
+                try { localStorage.setItem('ht_users', JSON.stringify(nextUsers)); } catch (e) {}
             }
             if (c.locationId) {
                 setLocations(prev => {
-                    const next = prev.map(l => l.id === c.locationId ? { ...l, clientId: c.id } : l);
+                    const next = prev.map(l => {
+                        if (String(l.id) !== String(c.locationId)) return l;
+                        const updatedLoc: Location = {
+                            ...l,
+                            clientId: c.id,
+                            ownerLegalName: c.name || l.ownerLegalName,
+                            ownerCuit: c.cuit || l.ownerCuit,
+                            ownerContact: c.email || l.ownerContact
+                        };
+                        const roster = resolveLocationStructureRoster(updatedLoc, [c, ...clients.filter(x => x.id !== c.id)], nextUsers);
+                        return {
+                            ...updatedLoc,
+                            ownerName: c.contactName || roster.ownerUser?.name || l.ownerName,
+                            responsiblePerson: roster.technicalUser?.name || l.responsiblePerson,
+                            responsibleIds: roster.resolvedResponsibleIds
+                        };
+                    });
                     try { localStorage.setItem('ht_locations', JSON.stringify(next)); } catch (e) {}
                     return next;
                 });

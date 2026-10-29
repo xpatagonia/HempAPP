@@ -15,7 +15,13 @@ import HydricBalance from '../components/HydricBalance';
 import { PlotIdentificationModal } from '../components/PlotIdentificationModal';
 import { PlotCycleClosureModal } from '../components/PlotCycleClosureModal';
 import { BarcodeSVG } from '../components/BarcodeSVG';
-import { canAccessLocation, canAccessPlot, isCentralAdminOrSupervisor } from '../src/utils/structurePermissions';
+import {
+  canAccessLocation,
+  canAccessPlot,
+  isCentralAdminOrSupervisor,
+  resolveLocationStructureRoster,
+  STRUCTURE_ROLES_INFO
+} from '../src/utils/structurePermissions';
 import { Plot, Variety, Location, CAMPAIGNS } from '../types';
 
 const stringToColor = (str: string) => {
@@ -33,7 +39,7 @@ export default function LocationDetails() {
   const {
     locations, plots, varieties, clients, seedMovements,
     seedBatches, currentUser, storagePoints, tasks,
-    activeCampaign, setActiveCampaign
+    activeCampaign, setActiveCampaign, usersList
   } = useAppContext();
 
   const [activeTab, setActiveTab] = useState<'info' | 'water' | 'stock'>('info');
@@ -265,8 +271,12 @@ export default function LocationDetails() {
       });
   }, [locationPlots, varieties]);
 
-  const client = clients.find(c => c.id === location?.clientId);
-  const ownerLabel = client ? client.name : location?.ownerName || 'Planta Central (Propio)';
+  const roster = useMemo(
+    () => resolveLocationStructureRoster(location, clients, usersList),
+    [location, clients, usersList]
+  );
+  const client = roster.linkedClient || clients.find(c => c.id === location?.clientId);
+  const ownerLabel = client ? client.name : location?.ownerLegalName || location?.ownerName || 'Planta Central (Propio)';
 
   if (!location) {
     return (
@@ -460,6 +470,60 @@ export default function LocationDetails() {
             <span className="text-[10px] text-amber-800 dark:text-amber-400 font-bold block mt-0.5">
               Con Acta de Siembra + QR/Barcode
             </span>
+          </div>
+        </div>
+
+        {/* PANEL SINCRONIZADO: ESTRUCTURA PRODUCTIVA (SOCIO DE LA RED) & RECURSO HUMANO ACTIVO DEL CAMPO */}
+        <div className="mt-6 pt-5 border-t border-slate-100 dark:border-slate-800 grid grid-cols-1 lg:grid-cols-3 gap-4 font-mono">
+          <div className="p-4 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200/80 dark:border-emerald-800/60 space-y-1">
+            <span className="text-[10px] font-bold uppercase text-emerald-700 dark:text-emerald-400 block">
+              Propietario / Responsable del Campo
+            </span>
+            <p className="text-sm font-black text-slate-900 dark:text-white">
+              {roster.ownerDisplayName}
+            </p>
+            <span className="text-[10px] text-slate-500 block">
+              {roster.ownerUser?.email || client?.email || 'Estructura: ' + ownerLabel}
+            </span>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-purple-50/60 dark:bg-purple-950/20 border border-purple-200/80 dark:border-purple-800/60 space-y-1">
+            <span className="text-[10px] font-bold uppercase text-purple-700 dark:text-purple-400 block">
+              Responsable Técnico Agronómico
+            </span>
+            <p className="text-sm font-black text-slate-900 dark:text-white">
+              {roster.technicalDisplayName}
+            </p>
+            <span className="text-[10px] text-slate-500 block">
+              {roster.technicalUser?.email || roster.technicalUser?.jobTitle || 'Dirección Técnica Registrada'}
+            </span>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-800 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase text-slate-500">
+                Usuarios Activos en Estructura ({roster.structureUsers.length})
+              </span>
+              <Link to="/clients" className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline">
+                Socios de la Red →
+              </Link>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {roster.structureUsers.map(u => {
+                const rInfo = u.structureRole ? STRUCTURE_ROLES_INFO[u.structureRole] : undefined;
+                return (
+                  <span
+                    key={u.id}
+                    className={`px-2 py-0.5 rounded-lg text-[9.5px] font-bold border ${
+                      rInfo ? rInfo.badgeClass : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                    }`}
+                    title={`${u.name} (${u.email})`}
+                  >
+                    {u.name} · {rInfo ? rInfo.shortLabel : u.jobTitle || u.role}
+                  </span>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>

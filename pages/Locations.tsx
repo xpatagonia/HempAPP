@@ -16,7 +16,13 @@ import {
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import WeatherWidget from '../components/WeatherWidget';
 import MapEditor from '../components/MapEditor';
-import { canAccessLocation, canAccessPlot, isCentralAdminOrSupervisor } from '../src/utils/structurePermissions';
+import {
+  canAccessLocation,
+  canAccessPlot,
+  isCentralAdminOrSupervisor,
+  resolveLocationStructureRoster,
+  STRUCTURE_ROLES_INFO
+} from '../src/utils/structurePermissions';
 
 const ARG_GEO: Record<string, string[]> = {
     "Buenos Aires": ["La Plata", "Mar del Plata", "Bahía Blanca", "Tandil", "Pergamino", "Junín", "Olavarría", "San Nicolás", "Balcarce", "Castelar", "CABA", "San Pedro", "Trenque Lauquen", "Pehuajó", "9 de Julio", "Bolívar", "Saladillo", "Lobos", "Chascomús", "Necochea", "Tres Arroyos", "General Villegas", "Lincoln", "Chivilcoy", "Chacabuco", "Bragado", "25 de Mayo", "Azul", "Coronel Suárez", "Pigüé", "Carhué", "San Antonio de Areco", "Arrecifes", "Salto", "Rojas", "Mercedes", "Luján", "Cañuelas", "Las Flores"],
@@ -137,7 +143,7 @@ const parseKML = (kmlText: string): { lat: number, lng: number }[] | null => {
 };
 
 export default function Locations() {
-  const { locations, addLocation, updateLocation, deleteLocation, updatePlot, currentUser, clients, plots } = useAppContext();
+  const { locations, addLocation, updateLocation, deleteLocation, updatePlot, currentUser, clients, plots, usersList } = useAppContext();
   const navigate = useNavigate();
   
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
@@ -473,12 +479,19 @@ export default function Locations() {
   };
 
   const handleEdit = (loc: Location) => {
+      const roster = resolveLocationStructureRoster(loc, clients, usersList);
       setFormData({ 
           ...loc, 
+          clientId: roster.linkedClient?.id || loc.clientId || '',
+          ownerName: roster.ownerUser?.name || loc.ownerName || roster.linkedClient?.contactName || '',
+          ownerLegalName: loc.ownerLegalName || roster.linkedClient?.name || '',
+          ownerCuit: loc.ownerCuit || roster.linkedClient?.cuit || '',
+          ownerContact: loc.ownerContact || roster.ownerUser?.email || roster.linkedClient?.email || '',
+          responsiblePerson: roster.technicalUser?.name || loc.responsiblePerson || roster.ownerUser?.name || '',
           lat: loc.coordinates?.lat.toString() || '', 
           lng: loc.coordinates?.lng.toString() || '', 
           polygon: loc.polygon || [], 
-          responsibleIds: Array.isArray(loc.responsibleIds) ? loc.responsibleIds : [],
+          responsibleIds: roster.resolvedResponsibleIds,
           siteType: loc.siteType || 'Campo Extensivo',
           status: loc.status || 'Activo',
           activeCampaigns: loc.activeCampaigns || ['2025/2026', '2026/2027'],
@@ -794,7 +807,8 @@ export default function Locations() {
                   );
                   const activePlotsCount = locPlots.filter(p => p.status === 'Activa' && !p.closureConfirmed).length;
                   const closedPlotsCount = locPlots.filter(p => p.closureConfirmed || p.status === 'Cosechada').length;
-                  const ownerClient = clients.find(c => c.id === loc.clientId);
+                  const roster = resolveLocationStructureRoster(loc, clients, usersList);
+                  const ownerClient = roster.linkedClient;
 
                   return (
                     <tr
@@ -812,10 +826,13 @@ export default function Locations() {
                       </td>
                       <td className="px-5 py-4">
                         <strong className="text-slate-800 dark:text-slate-200 block">
-                          {ownerClient?.name || loc.ownerName || 'Planta Central'}
+                          {ownerClient?.name || loc.ownerLegalName || 'Planta Central'}
                         </strong>
-                        <span className="text-[10px] text-slate-400 block">
-                          Resp: {loc.responsiblePerson || 'Dirección Técnica'}
+                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold block">
+                          Prop./Resp. Campo: {roster.ownerDisplayName}
+                        </span>
+                        <span className="text-[10px] text-purple-600 dark:text-purple-400 font-bold block">
+                          Resp. Técnico Agr.: {roster.technicalDisplayName}
                         </span>
                       </td>
                       <td className="px-5 py-4">
@@ -1026,20 +1043,49 @@ export default function Locations() {
                         </Link>
                       </div>
 
-                      {/* Herencia de Suelo, Riego y Titular */}
-                      <div className="grid grid-cols-2 gap-1.5 text-[10px] font-mono bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
-                        <div className="truncate">
-                          <span className="text-[8.5px] text-slate-400 uppercase block">Suelo / Riego</span>
-                          <strong className="text-emerald-600 dark:text-emerald-400">{loc.soilType || 'Franco'}</strong>
-                          <span className="text-slate-400"> · {loc.irrigationSystem || 'Goteo'}</span>
-                        </div>
-                        <div className="truncate">
-                          <span className="text-[8.5px] text-slate-400 uppercase block">Titular / Resp.</span>
-                          <strong className="text-slate-800 dark:text-slate-200">
-                            {ownerClient?.name || loc.ownerName || loc.responsiblePerson || 'Red Nucleus'}
-                          </strong>
-                        </div>
-                      </div>
+                      {/* Herencia de Suelo, Riego, Estructura Productiva, Propietario y Resp. Técnico */}
+                      {(() => {
+                        const roster = resolveLocationStructureRoster(loc, clients, usersList);
+                        return (
+                          <div className="space-y-1.5 text-[10px] font-mono bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
+                            <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-slate-200/70 dark:border-slate-700/60">
+                              <div className="truncate">
+                                <span className="text-[8.5px] text-slate-400 uppercase block">Estructura Productiva (Socio Red)</span>
+                                <strong className="text-slate-900 dark:text-white truncate block">
+                                  {roster.linkedClient?.name || loc.ownerLegalName || 'Cooperativa Central Nucleus'}
+                                </strong>
+                              </div>
+                              <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 text-[9px] font-bold shrink-0">
+                                {roster.structureUsers.length} RR.HH. Activos
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2 pt-0.5">
+                              <div className="truncate" title={`Propietario / Responsable del Campo: ${roster.ownerDisplayName}`}>
+                                <span className="text-[8.5px] text-slate-400 uppercase block">Propietario / Resp. Campo</span>
+                                <strong className="text-emerald-700 dark:text-emerald-400 truncate block">
+                                  {roster.ownerDisplayName}
+                                </strong>
+                              </div>
+                              <div className="truncate" title={`Responsable Técnico Agronómico: ${roster.technicalDisplayName}`}>
+                                <span className="text-[8.5px] text-slate-400 uppercase block">Resp. Técnico Agronómico</span>
+                                <strong className="text-purple-700 dark:text-purple-300 truncate block">
+                                  {roster.technicalDisplayName}
+                                </strong>
+                              </div>
+                            </div>
+
+                            <div className="pt-1 border-t border-slate-200/50 dark:border-slate-700/50 flex items-center justify-between text-[9.5px]">
+                              <span className="text-slate-500">
+                                Suelo: <strong className="text-slate-700 dark:text-slate-200">{loc.soilType || 'Franco'}</strong>
+                              </span>
+                              <span className="text-sky-600 dark:text-sky-400 font-bold">
+                                Riego: {loc.irrigationSystem || 'Goteo'}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })()}
 
                       {/* Badge de Licencia ARICCAME y Registro Sanitario RENSPA */}
                       <div className="flex flex-wrap items-center gap-1.5">
@@ -1407,19 +1453,310 @@ export default function Locations() {
                         </select>
                       </div>
                     </div>
-
-                    <div>
-                      <label className="text-[10px] font-mono font-bold uppercase text-slate-500 block mb-1">
-                        Responsable Técnico Agronómico
-                      </label>
-                      <input 
-                        placeholder="Ej: Ing. Agr. Gastón Barea" 
-                        className={inputClass} 
-                        value={formData.responsiblePerson} 
-                        onChange={e => setFormData({ ...formData, responsiblePerson: e.target.value })} 
-                      />
-                    </div>
                   </div>
+
+                  {/* SECCIÓN INTEGRAL: ESTRUCTURA PRODUCTIVA (SOCIOS DE LA RED) & RECURSO HUMANO REGISTRADO */}
+                  {(() => {
+                    const modalRoster = resolveLocationStructureRoster(
+                      {
+                        ...formData,
+                        id: editingId || undefined
+                      },
+                      clients,
+                      usersList
+                    );
+                    const selectedOwnerUser =
+                      modalRoster.allSelectableUsers.find(u => u.name === formData.ownerName) || modalRoster.ownerUser;
+                    const selectedTechUser =
+                      modalRoster.allSelectableUsers.find(u => u.name === formData.responsiblePerson) || modalRoster.technicalUser;
+
+                    const getRoleBadgeText = (u: typeof usersList[0]) => {
+                      if (u.structureRole && STRUCTURE_ROLES_INFO[u.structureRole]) {
+                        return STRUCTURE_ROLES_INFO[u.structureRole].label;
+                      }
+                      if (u.role === 'super_admin' || u.role === 'admin') return 'Dirección / Cooperativa Central';
+                      if (u.role === 'client') return 'Propietario / Titular de Campo';
+                      if (u.role === 'technician') return u.jobTitle || 'Responsable Técnico';
+                      return u.jobTitle || 'Usuario Registrado';
+                    };
+
+                    return (
+                      <div className="lg:col-span-2 p-5 bg-emerald-50/50 dark:bg-emerald-950/20 rounded-2xl border border-emerald-200/80 dark:border-emerald-800/60 space-y-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-emerald-200/70 dark:border-emerald-800/60">
+                          <div>
+                            <h3 className="text-xs font-mono font-black uppercase tracking-wider text-emerald-900 dark:text-emerald-300 flex items-center gap-2">
+                              <Users size={16} className="text-emerald-600 dark:text-emerald-400" />
+                              <span>Estructura Productiva (Socio de la Red) & Recurso Humano Activo del Campo</span>
+                            </h3>
+                            <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
+                              El Propietario / Responsable del Campo y el Responsable Técnico Agronómico se vinculan directamente con los usuarios activos registrados en la Estructura Productiva.
+                            </p>
+                          </div>
+                          <Link
+                            to="/clients"
+                            onClick={() => setIsModalOpen(false)}
+                            className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300 text-[10px] font-mono font-bold uppercase tracking-wider hover:bg-emerald-50 transition flex items-center gap-1.5 shrink-0"
+                          >
+                            <Building size={12} />
+                            <span>Gestionar RR.HH. en Socios de la Red</span>
+                            <ExternalLink size={11} />
+                          </Link>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          {/* 1. Selector de Estructura Productiva (Socio de la Red) */}
+                          <div>
+                            <label className="text-[10px] font-mono font-bold uppercase text-emerald-900 dark:text-emerald-300 block mb-1">
+                              1. Estructura Productiva / Socio de la Red *
+                            </label>
+                            <select
+                              className={`${inputClass} border-emerald-300 dark:border-emerald-700 font-bold`}
+                              value={formData.clientId || modalRoster.linkedClient?.id || ''}
+                              disabled={!isAdmin && Boolean(currentUser?.clientId)}
+                              onChange={e => {
+                                const newClientId = e.target.value;
+                                const targetClient = clients.find(c => String(c.id) === String(newClientId));
+                                const nextRoster = resolveLocationStructureRoster(
+                                  {
+                                    ...formData,
+                                    id: editingId || undefined,
+                                    clientId: newClientId,
+                                    ownerName: '',
+                                    responsiblePerson: ''
+                                  },
+                                  clients,
+                                  usersList
+                                );
+                                setFormData(prev => ({
+                                  ...prev,
+                                  clientId: newClientId,
+                                  ownerLegalName: targetClient?.name || prev.ownerLegalName || '',
+                                  ownerCuit: targetClient?.cuit || prev.ownerCuit || '',
+                                  ownerContact: nextRoster.ownerUser?.email || targetClient?.email || prev.ownerContact || '',
+                                  ownerName: nextRoster.ownerUser?.name || targetClient?.contactName || prev.ownerName || '',
+                                  responsiblePerson: nextRoster.technicalUser?.name || prev.responsiblePerson || '',
+                                  responsibleIds: nextRoster.resolvedResponsibleIds
+                                }));
+                              }}
+                            >
+                              <option value="">-- Seleccionar Estructura Productiva --</option>
+                              {clients.map(c => (
+                                <option key={c.id} value={c.id}>
+                                  {c.name} {c.contactName ? `(Titular: ${c.contactName})` : ''}
+                                </option>
+                              ))}
+                            </select>
+                            <span className="text-[10px] font-mono text-slate-500 mt-1 block">
+                              Define la estructura y habilita su dotación de usuarios registrados.
+                            </span>
+                          </div>
+
+                          {/* 2. Selector Relacional: Propietario / Responsable del Campo */}
+                          <div>
+                            <label className="text-[10px] font-mono font-bold uppercase text-emerald-900 dark:text-emerald-300 block mb-1">
+                              2. Propietario / Responsable del Campo (Usuario Activo) *
+                            </label>
+                            <select
+                              className={`${inputClass} border-emerald-300 dark:border-emerald-700 font-bold`}
+                              value={selectedOwnerUser?.name || formData.ownerName || ''}
+                              onChange={e => {
+                                const chosenName = e.target.value;
+                                const chosenUser = modalRoster.allSelectableUsers.find(u => u.name === chosenName);
+                                const nextIds = Array.from(
+                                  new Set([
+                                    ...(formData.responsibleIds || []),
+                                    ...(chosenUser ? [String(chosenUser.id)] : [])
+                                  ])
+                                );
+                                setFormData(prev => ({
+                                  ...prev,
+                                  ownerName: chosenName,
+                                  ownerContact: chosenUser?.email || prev.ownerContact || '',
+                                  responsibleIds: nextIds
+                                }));
+                              }}
+                            >
+                              <option value="">-- Seleccionar Usuario Registrado --</option>
+                              {modalRoster.structureUsers.length > 0 && (
+                                <optgroup label={`Usuarios Activos en ${modalRoster.linkedClient?.name || 'la Estructura Productiva'}`}>
+                                  {modalRoster.structureUsers.map(u => (
+                                    <option key={`owner-struct-${u.id}`} value={u.name}>
+                                      {u.name} — {getRoleBadgeText(u)} ({u.email})
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              )}
+                              <optgroup label="Otros Usuarios Registrados en el Sistema / Red Nucleus">
+                                {modalRoster.allSelectableUsers
+                                  .filter(u => !modalRoster.structureUsers.some(su => su.id === u.id))
+                                  .map(u => (
+                                    <option key={`owner-all-${u.id}`} value={u.name}>
+                                      {u.name} — {getRoleBadgeText(u)} ({u.email})
+                                    </option>
+                                  ))}
+                              </optgroup>
+                            </select>
+
+                            {selectedOwnerUser && (
+                              <div className="mt-2 p-2 rounded-xl bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-between gap-2 text-[10px] font-mono">
+                                <div className="truncate">
+                                  <strong className="text-slate-900 dark:text-white block truncate">
+                                    {selectedOwnerUser.name}
+                                  </strong>
+                                  <span className="text-slate-500 block truncate">{selectedOwnerUser.email}</span>
+                                </div>
+                                <span className="px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-bold shrink-0">
+                                  {selectedOwnerUser.structureRole && STRUCTURE_ROLES_INFO[selectedOwnerUser.structureRole]
+                                    ? STRUCTURE_ROLES_INFO[selectedOwnerUser.structureRole].shortLabel
+                                    : 'Titular'}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* 3. Selector Relacional: Responsable Técnico Agronómico */}
+                          <div>
+                            <label className="text-[10px] font-mono font-bold uppercase text-purple-900 dark:text-purple-300 block mb-1">
+                              3. Responsable Técnico Agronómico (Usuario Activo) *
+                            </label>
+                            <select
+                              className={`${inputClass} border-purple-300 dark:border-purple-700 font-bold`}
+                              value={selectedTechUser?.name || formData.responsiblePerson || ''}
+                              onChange={e => {
+                                const chosenName = e.target.value;
+                                const chosenUser = modalRoster.allSelectableUsers.find(u => u.name === chosenName);
+                                const nextIds = Array.from(
+                                  new Set([
+                                    ...(formData.responsibleIds || []),
+                                    ...(chosenUser ? [String(chosenUser.id)] : [])
+                                  ])
+                                );
+                                setFormData(prev => ({
+                                  ...prev,
+                                  responsiblePerson: chosenName,
+                                  responsibleIds: nextIds
+                                }));
+                              }}
+                            >
+                              <option value="">-- Seleccionar Responsable Técnico Registrado --</option>
+                              {modalRoster.structureUsers.length > 0 && (
+                                <optgroup label={`Equipo Técnico de ${modalRoster.linkedClient?.name || 'la Estructura Productiva'}`}>
+                                  {modalRoster.structureUsers.map(u => (
+                                    <option key={`tech-struct-${u.id}`} value={u.name}>
+                                      {u.name} — {getRoleBadgeText(u)} ({u.email})
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              )}
+                              <optgroup label="Dirección Técnica & Agrónomos Registrados en el Sistema">
+                                {modalRoster.allSelectableUsers
+                                  .filter(u => !modalRoster.structureUsers.some(su => su.id === u.id))
+                                  .map(u => (
+                                    <option key={`tech-all-${u.id}`} value={u.name}>
+                                      {u.name} — {getRoleBadgeText(u)} ({u.email})
+                                    </option>
+                                  ))}
+                              </optgroup>
+                            </select>
+
+                            {selectedTechUser && (
+                              <div className="mt-2 p-2 rounded-xl bg-white dark:bg-slate-900 border border-purple-200 dark:border-purple-800/60 flex items-center justify-between gap-2 text-[10px] font-mono">
+                                <div className="truncate">
+                                  <strong className="text-slate-900 dark:text-white block truncate">
+                                    {selectedTechUser.name}
+                                  </strong>
+                                  <span className="text-slate-500 block truncate">{selectedTechUser.email}</span>
+                                </div>
+                                <span className="px-2 py-0.5 rounded bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 font-bold shrink-0">
+                                  {selectedTechUser.structureRole && STRUCTURE_ROLES_INFO[selectedTechUser.structureRole]
+                                    ? STRUCTURE_ROLES_INFO[selectedTechUser.structureRole].shortLabel
+                                    : selectedTechUser.jobTitle || 'Dirección Técnica'}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* 4. Listado de Recurso Humano Activo perteneciente a esta Estructura Productiva */}
+                        <div className="pt-3 border-t border-emerald-200/60 dark:border-emerald-800/50">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-[10px] font-mono font-bold uppercase text-slate-600 dark:text-slate-300">
+                              Dotación de Usuarios Activos en la Estructura Productiva ({modalRoster.structureUsers.length} registrados)
+                            </span>
+                            <span className="text-[10px] font-mono text-emerald-700 dark:text-emerald-400 font-bold">
+                              Sincronizado con Socios de la Red & Equipos
+                            </span>
+                          </div>
+
+                          {modalRoster.structureUsers.length === 0 ? (
+                            <div className="p-3 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-dashed border-slate-300 dark:border-slate-700 text-xs text-slate-500 font-mono">
+                              Seleccione una Estructura Productiva arriba o asigne usuarios desde el panel de Socios de la Red.
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                              {modalRoster.structureUsers.map(u => {
+                                const rInfo = u.structureRole ? STRUCTURE_ROLES_INFO[u.structureRole] : undefined;
+                                const isAssigned = (formData.responsibleIds || []).includes(String(u.id));
+                                const isOwner = selectedOwnerUser?.id === u.id;
+                                const isTech = selectedTechUser?.id === u.id;
+
+                                return (
+                                  <div
+                                    key={u.id}
+                                    className={`p-2.5 rounded-xl border transition flex items-center justify-between gap-2 ${
+                                      isAssigned
+                                        ? 'bg-white dark:bg-slate-900 border-emerald-400 dark:border-emerald-700 shadow-xs'
+                                        : 'bg-white/60 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800'
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2.5 min-w-0">
+                                      <input
+                                        type="checkbox"
+                                        checked={isAssigned}
+                                        onChange={e => {
+                                          const currentIds = formData.responsibleIds || [];
+                                          const nextIds = e.target.checked
+                                            ? Array.from(new Set([...currentIds, String(u.id)]))
+                                            : currentIds.filter(id => String(id) !== String(u.id));
+                                          setFormData({ ...formData, responsibleIds: nextIds });
+                                        }}
+                                        className="rounded text-emerald-600 focus:ring-emerald-500 shrink-0"
+                                      />
+                                      <div className="min-w-0 font-mono">
+                                        <p className="text-xs font-black text-slate-900 dark:text-white truncate">
+                                          {u.name}
+                                        </p>
+                                        <p className="text-[10px] text-slate-400 truncate">{u.email}</p>
+                                        <div className="flex flex-wrap items-center gap-1 mt-1">
+                                          <span
+                                            className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase border ${
+                                              rInfo ? rInfo.badgeClass : 'bg-slate-100 text-slate-700 border-slate-300'
+                                            }`}
+                                          >
+                                            {rInfo ? rInfo.shortLabel : u.jobTitle || u.role}
+                                          </span>
+                                          {isOwner && (
+                                            <span className="px-1.5 py-0.5 rounded text-[8.5px] font-bold uppercase bg-emerald-600 text-white">
+                                              Resp. Campo
+                                            </span>
+                                          )}
+                                          {isTech && (
+                                            <span className="px-1.5 py-0.5 rounded text-[8.5px] font-bold uppercase bg-purple-600 text-white">
+                                              Resp. Técnico
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                 </div>
 

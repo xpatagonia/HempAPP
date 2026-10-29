@@ -15,6 +15,7 @@ import {
   Resource
 } from '../types';
 import { PlotCycleClosureModal } from '../components/PlotCycleClosureModal';
+import { resolveLocationStructureRoster } from '../src/utils/structurePermissions';
 import {
   FlaskConical,
   Save,
@@ -405,6 +406,8 @@ export default function TrialManager() {
     updateTrialRecord,
     deleteTrialRecord,
     currentUser,
+    clients,
+    usersList,
     locations,
     varieties,
     logs,
@@ -869,6 +872,10 @@ export default function TrialManager() {
     [plotQueue, currentPlotData]
   );
   const variety = varieties.find(v => v.id === currentPlotData?.plot.varietyId);
+  const currentPlotRoster = useMemo(
+    () => resolveLocationStructureRoster(currentPlotData?.location, clients, usersList),
+    [currentPlotData?.location, clients, usersList]
+  );
 
   // Datos cotejados completos de la parcela actualmente seleccionada
   const plotHistory = useMemo(() => {
@@ -1421,7 +1428,11 @@ export default function TrialManager() {
         senasaComplianceStatus: 'Conforme SENASA (Normativa VIGENTE)',
         safetyPeriodDays: safetyDays,
         harvestSafetyDate,
-        responsibleAgronomist: currentUser?.name || 'Ing. Agr. Gastón Barea',
+        responsibleAgronomist:
+          currentPlotRoster.technicalDisplayName ||
+          currentPlotData.location?.responsiblePerson ||
+          currentUser?.name ||
+          'Gastón BAREA M.',
         agronomistLicense: 'MP-4821-CIAFBA',
         weatherCondition: {
           temperatureC: Number(formData.temperature || 20),
@@ -1591,7 +1602,11 @@ export default function TrialManager() {
           senasaComplianceStatus: 'Conforme SENASA (Normativa VIGENTE)',
           safetyPeriodDays: safetyDays,
           harvestSafetyDate,
-          responsibleAgronomist: currentUser?.name || 'Ing. Agr. Gastón Barea',
+          responsibleAgronomist:
+            currentPlotRoster.technicalDisplayName ||
+            currentPlotData.location?.responsiblePerson ||
+            currentUser?.name ||
+            'Gastón BAREA M.',
           agronomistLicense: 'MP-4821-CIAFBA',
           weatherCondition: {
             temperatureC: Number(formData.temperature || 20),
