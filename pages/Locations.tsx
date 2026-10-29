@@ -11,7 +11,7 @@ import {
   ChevronRight, Info, Eye, Waves, Sprout, Tractor, FlaskConical, Sun, 
   CheckCircle2, AlertCircle, Calendar, Power, Check, SlidersHorizontal, 
   ArrowRight, ShieldCheck, Thermometer, Warehouse, Clock, FileText, Lock, 
-  Scale, FileSignature, CheckSquare, Layers, Award, Satellite, LayoutGrid, List
+  Scale, FileSignature, CheckSquare, Layers, Award, Satellite, LayoutGrid, List, Rows3
 } from 'lucide-react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import WeatherWidget from '../components/WeatherWidget';
@@ -146,7 +146,8 @@ export default function Locations() {
   const { locations, addLocation, updateLocation, deleteLocation, updatePlot, currentUser, clients, plots, usersList } = useAppContext();
   const navigate = useNavigate();
   
-  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
+  const [viewMode, setViewMode] = useState<'cards' | 'compact' | 'table' | 'map'>('cards');
+  const [selectedMapLocId, setSelectedMapLocId] = useState<string>('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [activeModalTab, setActiveModalTab] = useState<'general' | 'regulatory' | 'geodesy'>('general');
@@ -550,18 +551,30 @@ export default function Locations() {
 
           {/* Acciones principales & Selector de Vista */}
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200/60 dark:border-slate-700 shadow-sm">
+            <div className="flex flex-wrap bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200/60 dark:border-slate-700 shadow-sm">
               <button
                 type="button"
                 onClick={() => setViewMode('cards')}
                 className={`px-3 py-2 rounded-lg transition flex items-center gap-1.5 text-xs font-mono font-bold cursor-pointer ${
                   viewMode === 'cards'
                     ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-800'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
                 }`}
               >
-                <LayoutGrid size={15} />
+                <LayoutGrid size={14} />
                 <span>Tarjetas</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('compact')}
+                className={`px-3 py-2 rounded-lg transition flex items-center gap-1.5 text-xs font-mono font-bold cursor-pointer ${
+                  viewMode === 'compact'
+                    ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                <Rows3 size={14} />
+                <span>Compacta</span>
               </button>
               <button
                 type="button"
@@ -569,11 +582,28 @@ export default function Locations() {
                 className={`px-3 py-2 rounded-lg transition flex items-center gap-1.5 text-xs font-mono font-bold cursor-pointer ${
                   viewMode === 'table'
                     ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-800'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
                 }`}
               >
-                <List size={15} />
+                <List size={14} />
                 <span>Tabla Técnica</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setViewMode('map');
+                  if (!selectedMapLocId && visibleLocations.length > 0) {
+                    setSelectedMapLocId(visibleLocations[0].id);
+                  }
+                }}
+                className={`px-3 py-2 rounded-lg transition flex items-center gap-1.5 text-xs font-mono font-bold cursor-pointer ${
+                  viewMode === 'map'
+                    ? 'bg-white dark:bg-slate-900 text-teal-600 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                <Satellite size={14} />
+                <span>Mapa Geodésico</span>
               </button>
             </div>
 
@@ -895,8 +925,321 @@ export default function Locations() {
             </tbody>
           </table>
         </div>
+      ) : viewMode === 'map' ? (
+        /* MODO 4: MAPA GEODÉSICO INTERACTIVO + DIRECTORIO DE ESTABLECIMIENTOS (SPLIT VIEW) */
+        (() => {
+          const activeMapLoc =
+            visibleLocations.find(l => l.id === selectedMapLocId) || visibleLocations[0] || null;
+          const activeLocPlots = activeMapLoc
+            ? plots.filter(
+                p => p.locationId === activeMapLoc.id && canAccessPlot(currentUser, p, locations, clients)
+              )
+            : [];
+          const activeLocRoster = resolveLocationStructureRoster(activeMapLoc, clients, usersList);
+          const activeLocLayers = activeLocPlots
+            .filter(p => p.polygon && p.polygon.length > 2)
+            .map(p => ({
+              id: p.id,
+              polygon: p.polygon!,
+              label: `${p.name} (${p.surfaceArea} ${p.surfaceUnit})`,
+              shortLabel: p.name,
+              subLabel: `${p.surfaceArea} ${p.surfaceUnit}`,
+              color: p.color || '#10b981'
+            }));
+
+          return (
+            <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+              {/* Listado lateral de sitios para conmutar en el mapa */}
+              <div className="xl:col-span-4 bg-white dark:bg-slate-900 rounded-2xl md:rounded-3xl border border-slate-200/80 dark:border-slate-800 p-4 space-y-3 max-h-[680px] overflow-y-auto font-mono">
+                <div className="flex items-center justify-between px-1 pb-2 border-b border-slate-100 dark:border-slate-800">
+                  <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">
+                    Establecimientos ({visibleLocations.length})
+                  </span>
+                  <span className="text-[10px] text-teal-600 dark:text-teal-400 font-bold">
+                    Clic para enfocar satélite
+                  </span>
+                </div>
+
+                {visibleLocations.map(loc => {
+                  const isSelected = activeMapLoc?.id === loc.id;
+                  const r = resolveLocationStructureRoster(loc, clients, usersList);
+                  const lPlots = plots.filter(
+                    p => p.locationId === loc.id && canAccessPlot(currentUser, p, locations, clients)
+                  );
+                  return (
+                    <div
+                      key={loc.id}
+                      onClick={() => setSelectedMapLocId(loc.id)}
+                      className={`p-3.5 rounded-2xl border transition cursor-pointer space-y-2 ${
+                        isSelected
+                          ? 'bg-teal-50/70 dark:bg-teal-950/30 border-teal-500 shadow-xs'
+                          : 'bg-slate-50/60 dark:bg-slate-800/40 border-slate-200/70 dark:border-slate-800 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <strong className="text-xs font-black uppercase text-slate-900 dark:text-white block">
+                            {loc.name}
+                          </strong>
+                          <span className="text-[10px] text-slate-500 block">
+                            {loc.city}, {loc.province} · {loc.capacityHa || 0} Ha
+                          </span>
+                        </div>
+                        <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 shrink-0">
+                          {lPlots.length} Lotes
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-1.5 text-[9.5px] pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
+                        <div className="truncate">
+                          <span className="text-[8px] uppercase text-slate-400 block">Propietario</span>
+                          <strong className="text-emerald-700 dark:text-emerald-400 truncate block">
+                            {r.ownerDisplayName}
+                          </strong>
+                        </div>
+                        <div className="truncate">
+                          <span className="text-[8px] uppercase text-slate-400 block">Resp. Técnico</span>
+                          <strong className="text-purple-700 dark:text-purple-300 truncate block">
+                            {r.technicalDisplayName}
+                          </strong>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-1">
+                        {canManage && (
+                          <button
+                            type="button"
+                            onClick={e => {
+                              e.stopPropagation();
+                              handleEdit(loc);
+                            }}
+                            className="text-[10px] font-bold text-slate-500 hover:text-emerald-600 flex items-center gap-1 cursor-pointer"
+                          >
+                            <Edit2 size={11} /> Editar
+                          </button>
+                        )}
+                        <Link
+                          to={`/locations/${loc.id}`}
+                          onClick={e => e.stopPropagation()}
+                          className="text-[10px] font-bold text-teal-600 dark:text-teal-400 hover:underline flex items-center gap-0.5 ml-auto"
+                        >
+                          <span>Abrir Ficha Completa</span>
+                          <ChevronRight size={12} />
+                        </Link>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Visor Geodésico y Clima del Establecimiento Seleccionado */}
+              <div className="xl:col-span-8 space-y-5">
+                {activeMapLoc ? (
+                  <div className="bg-white dark:bg-slate-900 rounded-2xl md:rounded-3xl border border-slate-200/80 dark:border-slate-800 overflow-hidden shadow-sm">
+                    <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4 font-mono">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 rounded bg-teal-500/10 text-teal-700 dark:text-teal-300 text-[10px] font-bold uppercase">
+                            {activeMapLoc.siteType || 'Campo Extensivo'}
+                          </span>
+                          <span className="text-[10px] text-slate-400">
+                            RENSPA: {activeMapLoc.renspaNumber || 'Oficial'}
+                          </span>
+                        </div>
+                        <h3 className="text-lg font-black uppercase text-slate-900 dark:text-white mt-1">
+                          {activeMapLoc.name} — {activeMapLoc.city}, {activeMapLoc.province}
+                        </h3>
+                        <p className="text-[11px] text-slate-500">
+                          Estructura: <strong>{activeLocRoster.linkedClient?.name || 'Cooperativa Central'}</strong> · Prop.:{' '}
+                          <strong className="text-emerald-600">{activeLocRoster.ownerDisplayName}</strong> · Resp. Téc.:{' '}
+                          <strong className="text-purple-600">{activeLocRoster.technicalDisplayName}</strong>
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <WeatherWidget
+                          lat={activeMapLoc.coordinates?.lat || 0}
+                          lng={activeMapLoc.coordinates?.lng || 0}
+                          compact={true}
+                        />
+                        <Link
+                          to={`/locations/${activeMapLoc.id}`}
+                          className="px-3.5 py-2 rounded-xl bg-slate-900 dark:bg-emerald-600 text-white text-xs font-mono font-bold uppercase flex items-center gap-1"
+                        >
+                          <span>Ficha</span>
+                          <ChevronRight size={13} />
+                        </Link>
+                      </div>
+                    </div>
+
+                    <div className="h-[460px] w-full bg-slate-950">
+                      <MapEditor
+                        key={activeMapLoc.id}
+                        initialCenter={activeMapLoc.coordinates}
+                        initialPolygon={activeMapLoc.polygon || []}
+                        polygonShortLabel={activeMapLoc.name}
+                        polygonSubLabel={`${activeLocPlots.length} Unidades Productivas`}
+                        extraPolygons={activeLocLayers}
+                        onExtraPolygonClick={plotId => navigate(`/plots/${plotId}`)}
+                        readOnly={true}
+                        height="100%"
+                      />
+                    </div>
+
+                    <div className="p-4 bg-slate-50 dark:bg-slate-950 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2 font-mono text-xs">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[10px] font-black uppercase text-slate-400">
+                          Unidades Productivas ({activeLocPlots.length}):
+                        </span>
+                        {activeLocPlots.map(p => (
+                          <Link
+                            key={p.id}
+                            to={`/plots/${p.id}`}
+                            className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[10px] font-bold text-slate-800 dark:text-slate-200 hover:border-emerald-500 flex items-center gap-1.5"
+                          >
+                            <span
+                              className="w-2 h-2 rounded-full"
+                              style={{ backgroundColor: p.color || '#10b981' }}
+                            />
+                            <span>{p.name}</span>
+                            <span className="text-slate-400">
+                              ({p.surfaceArea} {p.surfaceUnit})
+                            </span>
+                          </Link>
+                        ))}
+                      </div>
+                      {canManage && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleEdit(activeMapLoc);
+                            setTimeout(() => switchTab('geodesy'), 50);
+                          }}
+                          className="text-[10.5px] font-bold text-teal-600 dark:text-teal-400 hover:underline cursor-pointer"
+                        >
+                          Editar Polígono Geodésico →
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          );
+        })()
+      ) : viewMode === 'compact' ? (
+        /* MODO 2: TARJETAS COMPACTAS DE ALTA DENSIDAD */
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {visibleLocations.map(loc => {
+            const roster = resolveLocationStructureRoster(loc, clients, usersList);
+            const locPlots = plots.filter(
+              p => p.locationId === loc.id && canAccessPlot(currentUser, p, locations, clients)
+            );
+            const activePlotsCount = locPlots.filter(p => p.status === 'Activa' && !p.closureConfirmed).length;
+            const closedPlotsCount = locPlots.filter(p => p.closureConfirmed || p.status === 'Cosechada').length;
+            const currentStatus = loc.status || 'Activo';
+            const statusConfig = SITE_STATUSES.find(s => s.value === currentStatus) || SITE_STATUSES[0];
+
+            return (
+              <div
+                key={loc.id}
+                className="bg-white dark:bg-slate-900/95 rounded-2xl border border-slate-200/80 dark:border-slate-800 hover:border-emerald-500/40 p-4 shadow-xs transition flex flex-col justify-between gap-3.5 font-mono"
+              >
+                <div className="space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <span className="text-[9px] font-bold uppercase text-slate-400 block truncate">
+                        {loc.siteType || 'Campo Extensivo'} · {loc.city}, {loc.province}
+                      </span>
+                      <Link
+                        to={`/locations/${loc.id}`}
+                        className="text-sm font-black uppercase text-slate-900 dark:text-white hover:text-emerald-600 truncate block mt-0.5"
+                      >
+                        {loc.name}
+                      </Link>
+                    </div>
+                    <span
+                      className={`px-2 py-0.5 rounded-md text-[9px] font-bold uppercase shrink-0 border flex items-center gap-1 ${statusConfig.color}`}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${statusConfig.dot}`} />
+                      <span>{loc.status || 'Activo'}</span>
+                    </span>
+                  </div>
+
+                  {/* Gobernanza compacta */}
+                  <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 space-y-1.5 text-[10px]">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-[8.5px] uppercase text-slate-400">Estructura:</span>
+                      <strong className="text-slate-800 dark:text-slate-200 truncate max-w-[150px]">
+                        {roster.linkedClient?.name || 'Planta Central'}
+                      </strong>
+                    </div>
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-[8.5px] uppercase text-slate-400">Propietario:</span>
+                      <strong className="text-emerald-700 dark:text-emerald-400 truncate max-w-[150px]">
+                        {roster.ownerDisplayName}
+                      </strong>
+                    </div>
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-[8.5px] uppercase text-slate-400">Resp. Técnico:</span>
+                      <strong className="text-purple-700 dark:text-purple-300 truncate max-w-[150px]">
+                        {roster.technicalDisplayName}
+                      </strong>
+                    </div>
+                  </div>
+
+                  {/* Superficie y Lotes */}
+                  <div className="grid grid-cols-3 gap-1.5 text-center text-[10px] tabular-nums">
+                    <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
+                      <span className="text-[8px] uppercase text-slate-400 block">Predio</span>
+                      <strong className="text-slate-900 dark:text-white">{loc.capacityHa || 0} Ha</strong>
+                    </div>
+                    <div className="p-2 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/40">
+                      <span className="text-[8px] uppercase text-emerald-700 dark:text-emerald-400 block">DDJJ</span>
+                      <strong className="text-emerald-600 dark:text-emerald-400">
+                        {loc.sowingDeclarationHa || 0} Ha
+                      </strong>
+                    </div>
+                    <div className="p-2 rounded-xl bg-purple-50/50 dark:bg-purple-950/20 border border-purple-100 dark:border-purple-900/40">
+                      <span className="text-[8px] uppercase text-purple-700 dark:text-purple-400 block">Lotes</span>
+                      <strong className="text-purple-600 dark:text-purple-400">
+                        {activePlotsCount}/{locPlots.length}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1">
+                    {canManage && (
+                      <button
+                        type="button"
+                        onClick={() => handleEdit(loc)}
+                        className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-emerald-600 transition cursor-pointer"
+                        title="Editar Establecimiento"
+                      >
+                        <Edit2 size={12} />
+                      </button>
+                    )}
+                    <span className="text-[9.5px] text-slate-400">
+                      {closedPlotsCount > 0 ? `✓ ${closedPlotsCount} homol.` : `${loc.soilType || 'Franco'}`}
+                    </span>
+                  </div>
+                  <Link
+                    to={`/locations/${loc.id}`}
+                    className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-emerald-600 text-white text-[10px] font-bold uppercase flex items-center gap-1"
+                  >
+                    <span>Ficha & Mapa</span>
+                    <ChevronRight size={11} />
+                  </Link>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        /* MODO 1: TARJETAS EJECUTIVAS REDISEÑADAS (SIN SUPERPOSICIONES Y CON ACCESO DIRECTO A UNIDADES) */
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {visibleLocations.length === 0 ? (
             <div className="col-span-full py-16 text-center bg-white dark:bg-slate-900/90 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800 p-8 space-y-3">
               <Tractor size={40} className="mx-auto text-slate-400" />
@@ -912,7 +1255,7 @@ export default function Locations() {
               const currentSiteType = loc.siteType || 'Campo Extensivo';
               const siteTypeConfig = SITE_TYPES.find(s => s.value === currentSiteType) || SITE_TYPES[0];
               const SiteIcon = siteTypeConfig.icon;
-              
+
               const currentStatus = loc.status || 'Activo';
               const statusConfig = SITE_STATUSES.find(s => s.value === currentStatus) || SITE_STATUSES[0];
 
@@ -920,269 +1263,287 @@ export default function Locations() {
               const targetCamp = selectedCampaign === 'all' ? '2025/2026' : selectedCampaign;
               const isEffectiveActive = campaigns.includes(targetCamp);
 
-              // Unidades Productivas registradas en este campo (aisladas por rol)
               const locPlots = plots.filter(
                 p => p.locationId === loc.id && canAccessPlot(currentUser, p, locations, clients)
               );
               const activePlotsCount = locPlots.filter(p => p.status === 'Activa' && !p.closureConfirmed).length;
-              const scheduledPlotsCount = locPlots.filter(p => p.isHarvestScheduled && !p.closureConfirmed && p.status !== 'Cosechada').length;
+              const scheduledPlotsCount = locPlots.filter(
+                p => p.isHarvestScheduled && !p.closureConfirmed && p.status !== 'Cosechada'
+              ).length;
               const closedPlotsCount = locPlots.filter(p => p.closureConfirmed || p.status === 'Cosechada').length;
-              const ownerClient = clients.find(c => c.id === loc.clientId);
+              const occupiedLocHa = locPlots.reduce((sum, p) => {
+                let area = p.surfaceArea || 0;
+                if (p.surfaceUnit === 'm2') area = area / 10000;
+                if (p.surfaceUnit === 'ac') area = area * 0.404686;
+                return sum + area;
+              }, 0);
+              const roster = resolveLocationStructureRoster(loc, clients, usersList);
 
               return (
-                <div 
-                  key={loc.id} 
-                  className={`bg-white dark:bg-slate-900/95 rounded-2xl md:rounded-3xl shadow-sm border transition-all flex flex-col h-full overflow-hidden group hover:shadow-md ${
-                    !isEffectiveActive 
-                      ? 'border-slate-200/60 dark:border-slate-800/80 opacity-80 hover:opacity-100' 
+                <div
+                  key={loc.id}
+                  className={`bg-white dark:bg-slate-900/95 rounded-2xl md:rounded-3xl shadow-xs border transition-all flex flex-col h-full overflow-hidden group hover:shadow-md ${
+                    !isEffectiveActive
+                      ? 'border-slate-200/60 dark:border-slate-800/80 opacity-85 hover:opacity-100'
                       : 'border-slate-200/80 dark:border-slate-800 hover:border-emerald-500/40'
                   }`}
                 >
-                  {/* Cabecera con Vista Previa Satelital / Mapa */}
-                  <div className="h-44 relative bg-slate-950 border-b border-slate-100 dark:border-slate-800 overflow-hidden">
-                    {loc.coordinates ? (
-                      <iframe 
-                        width="100%" 
-                        height="100%" 
-                        frameBorder="0" 
-                        scrolling="no" 
-                        src={`https://maps.google.com/maps?q=${loc.coordinates.lat},${loc.coordinates.lng}&z=14&output=embed`} 
-                        className="opacity-75 group-hover:opacity-95 transition-opacity pointer-events-none"
-                      />
-                    ) : (
-                      <div className="flex items-center justify-center h-full text-slate-600 opacity-40">
-                        <Globe size={48} />
-                      </div>
-                    )}
-
-                    {/* Widget de Clima Flotante en la esquina */}
-                    <div className="absolute top-3 left-3 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md p-2 rounded-xl shadow-lg border border-slate-200/80 dark:border-slate-800">
-                      <WeatherWidget lat={loc.coordinates?.lat || 0} lng={loc.coordinates?.lng || 0} compact={true}/>
+                  {/* 1. Barra Superior de Clasificación, Estado y Edición (Limpia, sin tapar mapa) */}
+                  <div className="px-5 py-3.5 bg-slate-50/80 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 font-mono">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span
+                        className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 border shrink-0 ${siteTypeConfig.color}`}
+                      >
+                        <SiteIcon size={12} />
+                        <span>{siteTypeConfig.label}</span>
+                      </span>
+                      <span
+                        className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase flex items-center gap-1.5 border shrink-0 ${statusConfig.color}`}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full ${statusConfig.dot}`} />
+                        <span>{statusConfig.label}</span>
+                      </span>
                     </div>
 
-                    {/* Botonera de Edición Rápida */}
-                    <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                    <div className="flex items-center gap-1 shrink-0">
                       {canManage && (
-                        <button 
-                          onClick={() => handleEdit(loc)} 
-                          className="p-2 bg-white/95 dark:bg-slate-900/95 rounded-lg text-slate-600 dark:text-slate-300 hover:text-emerald-600 shadow-md border border-slate-200/80 dark:border-slate-700 transition cursor-pointer"
-                          title="Editar Ficha de Campo, Geodesia y Licencia"
+                        <button
+                          type="button"
+                          onClick={() => handleEdit(loc)}
+                          className="p-1.5 rounded-lg bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:text-emerald-600 border border-slate-200/80 dark:border-slate-700 transition cursor-pointer"
+                          title="Editar Ficha de Campo, RR.HH. y Geodesia"
                         >
                           <Edit2 size={13} />
                         </button>
                       )}
                       {isSuperAdmin && (
-                        <button 
-                          onClick={() => { if(window.confirm(`¿Eliminar establecimiento "${loc.name}"?`)) deleteLocation(loc.id); }} 
-                          className="p-2 bg-white/95 dark:bg-slate-900/95 text-slate-600 dark:text-slate-300 hover:text-rose-600 shadow-md border border-slate-200/80 dark:border-slate-700 transition cursor-pointer"
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (window.confirm(`¿Eliminar establecimiento "${loc.name}"?`)) deleteLocation(loc.id);
+                          }}
+                          className="p-1.5 rounded-lg bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:text-rose-600 border border-slate-200/80 dark:border-slate-700 transition cursor-pointer"
                           title="Eliminar Establecimiento"
                         >
                           <Trash2 size={13} />
                         </button>
                       )}
                     </div>
-
-                    {/* Badge de Tipología Flotante Inferior */}
-                    <div className="absolute bottom-3 left-3 flex items-center gap-2">
-                      <span className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-sm border ${siteTypeConfig.color}`}>
-                        <SiteIcon size={12} />
-                        <span>{siteTypeConfig.label}</span>
-                      </span>
-                    </div>
-
-                    {/* Badge de Estado Operativo */}
-                    <div className="absolute bottom-3 right-3">
-                      <span className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-sm border ${statusConfig.color}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${statusConfig.dot}`} />
-                        <span>{statusConfig.label}</span>
-                      </span>
-                    </div>
                   </div>
 
-                  {/* Contenido de la Tarjeta */}
+                  {/* 2. Cuerpo Principal de la Tarjeta */}
                   <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                       {/* Alerta de Campaña si no está activo en la campaña filtrada */}
                       {selectedCampaign !== 'all' && !isEffectiveActive && (
-                        <div className="p-2 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl text-[11px] font-medium text-amber-800 dark:text-amber-300 flex items-center justify-between">
+                        <div className="p-2.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl text-[11px] font-mono text-amber-800 dark:text-amber-300 flex items-center justify-between">
                           <span className="flex items-center gap-1.5">
                             <AlertCircle size={13} className="text-amber-500 shrink-0" />
-                            <span>Inactivo para Campaña {selectedCampaign}</span>
+                            <span>Pausado en Campaña {selectedCampaign}</span>
                           </span>
                           {canManage && (
                             <button
-                              onClick={(e) => handleToggleCampaign(loc, e)}
-                              className="text-[10px] font-bold text-amber-700 dark:text-amber-400 hover:underline uppercase shrink-0 ml-2"
+                              type="button"
+                              onClick={e => handleToggleCampaign(loc, e)}
+                              className="text-[10px] font-bold text-amber-700 dark:text-amber-400 hover:underline uppercase shrink-0 ml-2 cursor-pointer"
                             >
-                              Activar
+                              Habilitar
                             </button>
                           )}
                         </div>
                       )}
 
-                      <div className="flex justify-between items-start gap-2">
-                        <div>
+                      {/* Denominación, Ubicación y Clima en Vivo */}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
                           <Link
                             to={`/locations/${loc.id}`}
-                            className="text-base font-black text-slate-900 dark:text-white uppercase tracking-tight hover:text-emerald-600 transition-colors block"
+                            className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight hover:text-emerald-600 transition-colors block truncate"
+                            title={loc.name}
                           >
                             {loc.name}
                           </Link>
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono mt-0.5 flex items-center gap-1">
-                            <MapPin size={11} className="text-emerald-500" />
-                            <span>{loc.city || 'S/D'}, {loc.province}</span>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 font-mono mt-0.5 flex items-center gap-1.5">
+                            <MapPin size={12} className="text-emerald-500 shrink-0" />
+                            <span className="truncate">
+                              {loc.city || 'Zona Rural'}, {loc.province}
+                            </span>
                           </p>
                         </div>
 
-                        <Link 
-                          to={`/locations/${loc.id}`} 
-                          className="p-1.5 bg-slate-50 dark:bg-slate-800 rounded-lg text-slate-400 hover:text-emerald-600 transition-all shrink-0"
-                          title="Abrir Ficha Completa del Establecimiento"
-                        >
-                          <Eye size={16} />
-                        </Link>
+                        <div className="shrink-0">
+                          <WeatherWidget
+                            lat={loc.coordinates?.lat || 0}
+                            lng={loc.coordinates?.lng || 0}
+                            compact={true}
+                          />
+                        </div>
                       </div>
 
-                      {/* Herencia de Suelo, Riego, Estructura Productiva, Propietario y Resp. Técnico */}
-                      {(() => {
-                        const roster = resolveLocationStructureRoster(loc, clients, usersList);
-                        return (
-                          <div className="space-y-1.5 text-[10px] font-mono bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
-                            <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-slate-200/70 dark:border-slate-700/60">
-                              <div className="truncate">
-                                <span className="text-[8.5px] text-slate-400 uppercase block">Estructura Productiva (Socio Red)</span>
-                                <strong className="text-slate-900 dark:text-white truncate block">
-                                  {roster.linkedClient?.name || loc.ownerLegalName || 'Cooperativa Central Nucleus'}
-                                </strong>
-                              </div>
-                              <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 text-[9px] font-bold shrink-0">
-                                {roster.structureUsers.length} RR.HH. Activos
-                              </span>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-2 pt-0.5">
-                              <div className="truncate" title={`Propietario / Responsable del Campo: ${roster.ownerDisplayName}`}>
-                                <span className="text-[8.5px] text-slate-400 uppercase block">Propietario / Resp. Campo</span>
-                                <strong className="text-emerald-700 dark:text-emerald-400 truncate block">
-                                  {roster.ownerDisplayName}
-                                </strong>
-                              </div>
-                              <div className="truncate" title={`Responsable Técnico Agronómico: ${roster.technicalDisplayName}`}>
-                                <span className="text-[8.5px] text-slate-400 uppercase block">Resp. Técnico Agronómico</span>
-                                <strong className="text-purple-700 dark:text-purple-300 truncate block">
-                                  {roster.technicalDisplayName}
-                                </strong>
-                              </div>
-                            </div>
-
-                            <div className="pt-1 border-t border-slate-200/50 dark:border-slate-700/50 flex items-center justify-between text-[9.5px]">
-                              <span className="text-slate-500">
-                                Suelo: <strong className="text-slate-700 dark:text-slate-200">{loc.soilType || 'Franco'}</strong>
-                              </span>
-                              <span className="text-sky-600 dark:text-sky-400 font-bold">
-                                Riego: {loc.irrigationSystem || 'Goteo'}
-                              </span>
-                            </div>
+                      {/* Bloque Relacional: Estructura Productiva (Socio de la Red) & RR.HH. Activo */}
+                      <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-800 space-y-2.5 font-mono">
+                        <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-200/70 dark:border-slate-700/60">
+                          <div className="min-w-0">
+                            <span className="text-[8.5px] font-bold text-slate-400 uppercase block">
+                              Estructura Productiva (Socio de la Red)
+                            </span>
+                            <strong className="text-xs font-black text-slate-900 dark:text-white truncate block">
+                              {roster.linkedClient?.name || loc.ownerLegalName || 'Cooperativa Central Nucleus'}
+                            </strong>
                           </div>
-                        );
-                      })()}
+                          <span className="px-2 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 text-[9.5px] font-bold shrink-0">
+                            {roster.structureUsers.length} Usuarios Activos
+                          </span>
+                        </div>
 
-                      {/* Badge de Licencia ARICCAME y Registro Sanitario RENSPA */}
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        {loc.ariccameLicenseNumber ? (
-                          <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold px-2 py-0.5 rounded bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60">
-                            <Award size={10} />
-                            <span>{loc.ariccameLicenseNumber}</span>
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-400">
-                            Licencia ARICCAME Cooperativa
-                          </span>
-                        )}
+                        <div className="grid grid-cols-2 gap-2.5">
+                          <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 min-w-0">
+                            <span className="text-[8px] font-bold text-emerald-700 dark:text-emerald-400 uppercase block">
+                              Propietario / Resp. Campo
+                            </span>
+                            <strong
+                              className="text-[11px] font-black text-slate-900 dark:text-white truncate block mt-0.5"
+                              title={roster.ownerDisplayName}
+                            >
+                              {roster.ownerDisplayName}
+                            </strong>
+                            <span className="text-[9px] text-slate-400 truncate block">
+                              {roster.ownerUser?.email || 'Titular Registrado'}
+                            </span>
+                          </div>
 
-                        {loc.renspaNumber && (
-                          <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold px-2 py-0.5 rounded bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800/60">
-                            <span>RENSPA: {loc.renspaNumber}</span>
+                          <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 min-w-0">
+                            <span className="text-[8px] font-bold text-purple-700 dark:text-purple-400 uppercase block">
+                              Resp. Técnico Agronómico
+                            </span>
+                            <strong
+                              className="text-[11px] font-black text-slate-900 dark:text-white truncate block mt-0.5"
+                              title={roster.technicalDisplayName}
+                            >
+                              {roster.technicalDisplayName}
+                            </strong>
+                            <span className="text-[9px] text-slate-400 truncate block">
+                              {roster.technicalUser?.email || 'Dirección Técnica'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center justify-between gap-1.5 pt-1 text-[9.5px]">
+                          <span className="text-slate-500">
+                            Suelo: <strong className="text-slate-800 dark:text-slate-200">{loc.soilType || 'Franco'}</strong> ·{' '}
+                            <strong className="text-sky-600 dark:text-sky-400">{loc.irrigationSystem || 'Goteo'}</strong>
                           </span>
-                        )}
+                          <span className="text-purple-600 dark:text-purple-400 font-bold truncate">
+                            {loc.ariccameLicenseNumber || 'ARICCAME Vigente'}
+                          </span>
+                        </div>
                       </div>
 
-                      {/* GRID DE MÉTRICAS (PREDIO TOTAL vs DDJJ SIEMBRA vs UNIDADES PRODUCTIVAS) */}
-                      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-[10px] font-mono tabular-nums">
-                        <div className="p-2.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-100 dark:border-slate-800 text-center">
-                          <span className="text-[8px] font-bold uppercase text-slate-400 block tracking-wider">Predio Total</span>
+                      {/* KPIs de Superficie, Geodesia DDJJ y Estado de Unidades Productivas */}
+                      <div className="grid grid-cols-3 gap-2 font-mono tabular-nums text-center">
+                        <div className="p-2.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/60 dark:border-slate-800">
+                          <span className="text-[8px] font-bold uppercase text-slate-400 block">Predio Total</span>
                           <strong className="text-xs font-black text-slate-900 dark:text-white block mt-0.5">
                             {loc.capacityHa || 0} Ha
                           </strong>
                         </div>
 
-                        <div className="p-2.5 bg-emerald-50/70 dark:bg-emerald-950/30 rounded-xl border border-emerald-100 dark:border-emerald-900/40 text-center">
-                          <span className="text-[8px] font-bold uppercase text-emerald-700 dark:text-emerald-400 block tracking-wider">DDJJ Siembra</span>
+                        <div className="p-2.5 bg-emerald-50/60 dark:bg-emerald-950/25 rounded-xl border border-emerald-200/60 dark:border-emerald-800/50">
+                          <span className="text-[8px] font-bold uppercase text-emerald-700 dark:text-emerald-400 block">
+                            DDJJ Siembra
+                          </span>
                           <strong className="text-xs font-black text-emerald-600 dark:text-emerald-400 block mt-0.5">
-                            {loc.sowingDeclarationHa ? `${loc.sowingDeclarationHa} Ha` : 'S/D'}
+                            {loc.sowingDeclarationHa ? `${loc.sowingDeclarationHa} Ha` : `${occupiedLocHa.toFixed(1)} Ha`}
                           </strong>
                         </div>
 
-                        <div className="p-2.5 bg-purple-50/70 dark:bg-purple-950/30 rounded-xl border border-purple-100 dark:border-purple-900/40 text-center">
-                          <span className="text-[8px] font-bold uppercase text-purple-700 dark:text-purple-400 block tracking-wider">Unidades Prod.</span>
+                        <div className="p-2.5 bg-purple-50/60 dark:bg-purple-950/25 rounded-xl border border-purple-200/60 dark:border-purple-800/50">
+                          <span className="text-[8px] font-bold uppercase text-purple-700 dark:text-purple-400 block">
+                            Implantada
+                          </span>
                           <strong className="text-xs font-black text-purple-600 dark:text-purple-400 block mt-0.5">
-                            {activePlotsCount} Act. / {locPlots.length}
+                            {occupiedLocHa.toFixed(1)} Ha ({locPlots.length})
                           </strong>
                         </div>
                       </div>
 
-                      {/* Resumen de Estado de Unidades Productivas del Establecimiento */}
-                      <div className="p-2.5 rounded-xl bg-slate-900 text-white font-mono text-[10px] space-y-1.5">
+                      {/* Bloque Interactivo de Unidades Productivas del Establecimiento */}
+                      <div className="p-3 rounded-2xl bg-slate-900 text-white font-mono text-[10px] space-y-2">
                         <div className="flex items-center justify-between">
                           <span className="text-[9px] uppercase font-bold text-slate-400">
-                            Estado Unidades Productivas ({locPlots.length})
+                            Unidades Productivas ({locPlots.length})
                           </span>
-                          <Link
-                            to={`/locations/${loc.id}`}
-                            className="text-[9.5px] text-emerald-400 hover:underline font-bold"
-                          >
-                            Gestionar Cierres →
-                          </Link>
-                        </div>
-                        <div className="grid grid-cols-3 gap-1.5 text-center tabular-nums">
-                          <div className="bg-slate-800/90 px-2 py-1 rounded-lg">
-                            <span className="text-emerald-400 font-black">{activePlotsCount}</span>
-                            <span className="text-[8.5px] text-slate-400 block">Activas</span>
-                          </div>
-                          <div className="bg-slate-800/90 px-2 py-1 rounded-lg">
-                            <span className="text-sky-400 font-black">{scheduledPlotsCount}</span>
-                            <span className="text-[8.5px] text-slate-400 block">Cosecha Prog.</span>
-                          </div>
-                          <div className="bg-slate-800/90 px-2 py-1 rounded-lg">
-                            <span className="text-amber-400 font-black">{closedPlotsCount}</span>
-                            <span className="text-[8.5px] text-slate-400 block">Homologadas</span>
+                          <div className="flex items-center gap-2 text-[9.5px] tabular-nums">
+                            <span className="text-emerald-400 font-bold">{activePlotsCount} Activas</span>
+                            {scheduledPlotsCount > 0 && (
+                              <span className="text-sky-400 font-bold">· {scheduledPlotsCount} Prog.</span>
+                            )}
+                            {closedPlotsCount > 0 && (
+                              <span className="text-amber-400 font-bold">· {closedPlotsCount} Homol.</span>
+                            )}
                           </div>
                         </div>
+
+                        {locPlots.length > 0 ? (
+                          <div className="flex flex-wrap gap-1.5 pt-1 border-t border-slate-800">
+                            {locPlots.slice(0, 3).map(p => (
+                              <Link
+                                key={p.id}
+                                to={`/plots/${p.id}`}
+                                className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[9.5px] font-bold flex items-center gap-1.5 transition truncate max-w-[145px]"
+                                title={`Abrir parcela ${p.name} (${p.surfaceArea} ${p.surfaceUnit})`}
+                              >
+                                <span
+                                  className="w-2 h-2 rounded-full shrink-0"
+                                  style={{ backgroundColor: p.color || '#10b981' }}
+                                />
+                                <span className="truncate">{p.name}</span>
+                              </Link>
+                            ))}
+                            {locPlots.length > 3 && (
+                              <Link
+                                to={`/locations/${loc.id}`}
+                                className="px-2 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 text-[9.5px] font-bold"
+                              >
+                                +{locPlots.length - 3} más
+                              </Link>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-[9.5px] text-slate-400 italic">Sin lotes asignados en esta campaña.</p>
+                        )}
                       </div>
                     </div>
 
-                    {/* Acciones Rápidas Inferiores */}
+                    {/* 3. Pie de Acciones Rápidas */}
                     <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
                       {canManage && (
                         <button
-                          onClick={(e) => handleToggleCampaign(loc, e)}
-                          className={`px-3 py-2 rounded-xl text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 transition shadow-sm cursor-pointer ${
+                          type="button"
+                          onClick={e => handleToggleCampaign(loc, e)}
+                          className={`px-3 py-2 rounded-xl text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 transition cursor-pointer ${
                             isEffectiveActive
                               ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
-                              : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20'
+                              : 'bg-emerald-600 hover:bg-emerald-500 text-white'
                           }`}
-                          title={isEffectiveActive ? `Pausar campo y sus unidades en campaña ${targetCamp}` : `Habilitar campo y sus unidades en campaña ${targetCamp}`}
+                          title={
+                            isEffectiveActive
+                              ? `Pausar campo en campaña ${targetCamp}`
+                              : `Activar campo en campaña ${targetCamp}`
+                          }
                         >
-                          <Power size={11} className={isEffectiveActive ? 'text-amber-600' : 'text-white'} />
-                          <span>{isEffectiveActive ? `Pausar (${targetCamp.slice(2)})` : `Activar (${targetCamp.slice(2)})`}</span>
+                          <Power size={11} />
+                          <span>
+                            {isEffectiveActive ? `Pausar (${targetCamp.slice(2)})` : `Activar (${targetCamp.slice(2)})`}
+                          </span>
                         </button>
                       )}
 
-                      <Link 
-                        to={`/locations/${loc.id}`} 
-                        className="flex-1 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white rounded-xl text-xs font-mono font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition shadow-sm active:scale-95"
+                      <Link
+                        to={`/locations/${loc.id}`}
+                        className="flex-1 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white rounded-xl text-xs font-mono font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition shadow-xs"
                       >
-                        <span>Ficha Completa & Unidades ({locPlots.length})</span>
+                        <span>Ficha, Unidades & Mapa ({locPlots.length})</span>
                         <ChevronRight size={13} />
                       </Link>
                     </div>

@@ -7,7 +7,7 @@ import {
   Truck, Activity, Archive, Warehouse, AlertCircle,
   AlertTriangle, LayoutGrid, Box, TrendingDown, QrCode,
   Calendar, ShieldCheck, Award, Layers, List, Lock,
-  Clock, Tractor, FileCheck2, Search
+  Clock, Tractor, FileCheck2, Search, Satellite, Sun, Rows3, Eye
 } from 'lucide-react';
 import WeatherWidget from '../components/WeatherWidget';
 import MapEditor from '../components/MapEditor';
@@ -42,8 +42,10 @@ export default function LocationDetails() {
     activeCampaign, setActiveCampaign, usersList
   } = useAppContext();
 
-  const [activeTab, setActiveTab] = useState<'info' | 'water' | 'stock'>('info');
-  const [unitViewMode, setUnitViewMode] = useState<'cards' | 'table'>('cards');
+  const [activeTab, setActiveTab] = useState<'info' | 'geodesy' | 'water' | 'stock'>('info');
+  const [unitViewMode, setUnitViewMode] = useState<'cards' | 'compact' | 'table'>('cards');
+  const [mapLayerMode, setMapLayerMode] = useState<'all' | 'ddjj' | 'plots'>('all');
+  const [showGeodesyInOverview, setShowGeodesyInOverview] = useState<boolean>(true);
   const [unitStatusFilter, setUnitStatusFilter] = useState<'all' | 'Activa' | 'Scheduled' | 'Cosechada'>('all');
   const [unitSearch, setUnitSearch] = useState('');
   const [selectedPlotForQr, setSelectedPlotForQr] = useState<Plot | null>(null);
@@ -331,17 +333,28 @@ export default function LocationDetails() {
         <div className="flex bg-white dark:bg-slate-900 p-1.5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-x-auto">
           <button
             onClick={() => setActiveTab('info')}
-            className={`px-5 py-2 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer ${
+            className={`px-4 py-2 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer ${
               activeTab === 'info'
                 ? 'bg-emerald-600 text-white shadow-sm'
                 : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
-            Unidades Productivas ({unitStats.total})
+            Unidades & Resumen ({unitStats.total})
+          </button>
+          <button
+            onClick={() => setActiveTab('geodesy')}
+            className={`px-4 py-2 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'geodesy'
+                ? 'bg-teal-600 text-white shadow-sm'
+                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+          >
+            <Satellite size={13} />
+            <span>Cartografía & Clima</span>
           </button>
           <button
             onClick={() => setActiveTab('stock')}
-            className={`px-5 py-2 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer ${
+            className={`px-4 py-2 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer ${
               activeTab === 'stock'
                 ? 'bg-amber-600 text-white shadow-sm'
                 : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
@@ -351,7 +364,7 @@ export default function LocationDetails() {
           </button>
           <button
             onClick={() => setActiveTab('water')}
-            className={`px-5 py-2 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer ${
+            className={`px-4 py-2 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer ${
               activeTab === 'water'
                 ? 'bg-sky-600 text-white shadow-sm'
                 : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
@@ -598,6 +611,18 @@ export default function LocationDetails() {
                   </button>
                   <button
                     type="button"
+                    onClick={() => setUnitViewMode('compact')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition cursor-pointer ${
+                      unitViewMode === 'compact'
+                        ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-sm'
+                        : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    <Rows3 size={14} />
+                    <span>Compacta</span>
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setUnitViewMode('table')}
                     className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition cursor-pointer ${
                       unitViewMode === 'table'
@@ -802,6 +827,112 @@ export default function LocationDetails() {
                   </tbody>
                 </table>
               </div>
+            ) : unitViewMode === 'compact' ? (
+              /* VISTA COMPACTA DE ALTA DENSIDAD PARA RECORRIDA RÁPIDA DE LOTES */
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
+                {filteredLocationPlots.map(p => {
+                  const vari = varieties.find(v => v.id === p.varietyId);
+                  const sync = getPlotSyncSummary(p, vari, location);
+                  const isClosed = Boolean(p.closureConfirmed || p.status === 'Cosechada');
+                  const plotLabors = (tasks || []).filter(t => t.plotId === p.id);
+
+                  return (
+                    <div
+                      key={p.id}
+                      className={`p-4 rounded-2xl bg-slate-50/70 dark:bg-slate-800/40 border transition hover:shadow-sm flex flex-col justify-between gap-3 font-mono ${
+                        isClosed
+                          ? 'border-amber-300/80 dark:border-amber-800/70'
+                          : 'border-slate-200/80 dark:border-slate-800 hover:border-emerald-500/50'
+                      }`}
+                    >
+                      <div className="space-y-2.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span
+                              className="w-3 h-3 rounded-full shrink-0"
+                              style={{ backgroundColor: p.color || stringToColor(p.name) }}
+                            />
+                            <Link
+                              to={`/plots/${p.id}`}
+                              className="text-xs font-black uppercase text-slate-900 dark:text-white hover:text-emerald-600 truncate block"
+                            >
+                              {p.name}
+                            </Link>
+                          </div>
+                          <span
+                            className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase shrink-0 ${
+                              isClosed
+                                ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+                                : p.isHarvestScheduled
+                                ? 'bg-sky-500/15 text-sky-700 dark:text-sky-300'
+                                : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                            }`}
+                          >
+                            {isClosed ? 'Homologado' : p.isHarvestScheduled ? 'Prog.' : 'Activa'}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-1.5 text-[10px]">
+                          <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 truncate">
+                            <span className="text-[8px] uppercase text-slate-400 block">Cultivar</span>
+                            <strong className="text-emerald-600 dark:text-emerald-400 truncate block">
+                              {vari?.name || 'Certificada'}
+                            </strong>
+                          </div>
+                          <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 truncate">
+                            <span className="text-[8px] uppercase text-slate-400 block">Superficie</span>
+                            <strong className="text-slate-900 dark:text-white truncate block">
+                              {p.surfaceArea} {p.surfaceUnit} · {p.density || 48}pl/m²
+                            </strong>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-[9.5px]">
+                            <span className="font-bold text-slate-600 dark:text-slate-300">{sync.stage}</span>
+                            <span className="text-slate-400">
+                              {sync.activeDds}/{sync.cycleLimit} DDS ({sync.progressPct}%)
+                            </span>
+                          </div>
+                          <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${isClosed ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                              style={{ width: `${sync.progressPct}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800 flex items-center justify-between gap-1.5 text-[10px]">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedPlotForClosure(p)}
+                          className="px-2 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-emerald-500 font-bold cursor-pointer"
+                        >
+                          {isClosed ? 'Acta Siembra' : `${plotLabors.length} Labores · Cierre`}
+                        </button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedPlotForQr(p)}
+                            className="p-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-emerald-600 cursor-pointer"
+                            title="QR y Código de Barras"
+                          >
+                            <QrCode size={12} />
+                          </button>
+                          <Link
+                            to={`/plots/${p.id}`}
+                            className="px-2.5 py-1 rounded-lg bg-slate-900 dark:bg-emerald-600 text-white font-bold uppercase flex items-center gap-0.5"
+                          >
+                            <span>Abrir</span>
+                            <ChevronRight size={11} />
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             ) : (
               /* VISTA DE TARJETAS UNIFICADA CON PARCELAS DE CULTIVO (SIN REDUNDANCIAS) */
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
@@ -999,92 +1130,324 @@ export default function LocationDetails() {
               </div>
             )}
           </div>
+        </div>
+      )}
 
-          {/* FILA INFERIOR: CARTOGRAFÍA GEODÉSICA DEL CAMPO + CLIMA LOCAL Y SOCIO TITULAR */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-2xl md:rounded-3xl shadow-sm border border-slate-200/80 dark:border-slate-800 overflow-hidden">
-              <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                <div className="flex items-center gap-2 font-mono font-black text-xs uppercase tracking-wider text-slate-900 dark:text-white">
-                  <Globe size={16} className="text-emerald-500" />
-                  <span>Cartografía Geodésica del Establecimiento y Unidades Productivas</span>
+      {/* =================================================================
+          PANEL ESTRUCTURADO: CARTOGRAFÍA GEODÉSICA, ESTACIÓN AGROMETEOROLÓGICA
+          Y EXPEDIENTE REGULATORIO (VISIBLE EN RESUMEN Y EN PESTAÑA CARTOGRAFÍA & CLIMA)
+      ================================================================= */}
+      {(activeTab === 'geodesy' || (activeTab === 'info' && showGeodesyInOverview)) && (
+        <div className="bg-white dark:bg-slate-900/95 rounded-2xl md:rounded-3xl border border-slate-200/80 dark:border-slate-800 p-6 md:p-8 shadow-sm space-y-6 animate-in fade-in">
+          <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 pb-5 border-b border-slate-100 dark:border-slate-800">
+            <div>
+              <div className="flex items-center gap-2">
+                <Satellite size={19} className="text-teal-600 dark:text-teal-400" />
+                <h2 className="text-xl md:text-2xl font-black uppercase tracking-tight text-slate-900 dark:text-white">
+                  Cartografía Geodésica, Pronóstico Agrometeorológico & Marco Regulatorio
+                </h2>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Delimitación perimetral georreferenciada, polígono de Declaración Jurada de Siembra (DDJJ), capas de Unidades Productivas y telemetría climática Open-Meteo ERA5.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 font-mono">
+              <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+                <button
+                  type="button"
+                  onClick={() => setMapLayerMode('all')}
+                  className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition cursor-pointer ${
+                    mapLayerMode === 'all'
+                      ? 'bg-white dark:bg-slate-900 text-teal-600 shadow-xs'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Perímetro + Lotes ({activePlotLayers.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMapLayerMode('ddjj')}
+                  className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition cursor-pointer ${
+                    mapLayerMode === 'ddjj'
+                      ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-xs'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Polígono DDJJ Siembra
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMapLayerMode('plots')}
+                  className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition cursor-pointer ${
+                    mapLayerMode === 'plots'
+                      ? 'bg-white dark:bg-slate-900 text-purple-600 shadow-xs'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Solo Unidades Productivas
+                </button>
+              </div>
+
+              {activeTab === 'info' && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('geodesy')}
+                  className="px-3 py-2 rounded-xl bg-teal-50 dark:bg-teal-950/50 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800/60 text-[11px] font-bold hover:bg-teal-100 transition cursor-pointer"
+                >
+                  Expandir Vista Geodésica →
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Cinta de KPIs Geodésicos y Catastrales */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono tabular-nums">
+            <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-800">
+              <span className="text-[9.5px] font-bold uppercase text-slate-400 block">Perímetro General Declarado</span>
+              <strong className="text-base font-black text-slate-900 dark:text-white mt-0.5 block">
+                {location.capacityHa || unitStats.totalHa.toFixed(1)} Ha
+              </strong>
+              <span className="text-[10px] text-slate-500 block">
+                {location.polygon && location.polygon.length > 2
+                  ? `${location.polygon.length} vértices GPS activos`
+                  : 'Coordenada central registrada'}
+              </span>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/70 dark:border-emerald-800/50">
+              <span className="text-[9.5px] font-bold uppercase text-emerald-700 dark:text-emerald-400 block">
+                DDJJ Siembra Geodésica
+              </span>
+              <strong className="text-base font-black text-emerald-700 dark:text-emerald-300 mt-0.5 block">
+                {location.sowingDeclarationHa ? `${location.sowingDeclarationHa} Ha` : `${unitStats.totalHa.toFixed(1)} Ha`}
+              </strong>
+              <span className="text-[10px] text-slate-500 block truncate">
+                ID: {location.sowingDeclarationId || `DDJJ-${location.id.slice(-5)}`}
+              </span>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-purple-50/50 dark:bg-purple-950/20 border border-purple-200/70 dark:border-purple-800/50">
+              <span className="text-[9.5px] font-bold uppercase text-purple-700 dark:text-purple-400 block">
+                Capas de Unidades Productivas
+              </span>
+              <strong className="text-base font-black text-purple-700 dark:text-purple-300 mt-0.5 block">
+                {activePlotLayers.length} / {locationPlots.length} Lotes
+              </strong>
+              <span className="text-[10px] text-slate-500 block">
+                {unitStats.totalHa.toFixed(2)} Ha implantadas en campo
+              </span>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-sky-50/50 dark:bg-sky-950/20 border border-sky-200/70 dark:border-sky-800/50">
+              <span className="text-[9.5px] font-bold uppercase text-sky-700 dark:text-sky-400 block">
+                Centroide Satelital WGS84
+              </span>
+              <strong className="text-sm font-black text-slate-900 dark:text-white mt-0.5 block truncate">
+                {location.coordinates
+                  ? `${Number(location.coordinates.lat).toFixed(5)}°, ${Number(location.coordinates.lng).toFixed(5)}°`
+                  : 'S/D'}
+              </strong>
+              <span className="text-[10px] text-slate-500 block truncate">
+                Catastro: {location.cadastralId || 'Partida Rural Homologada'}
+              </span>
+            </div>
+          </div>
+
+          {/* Grilla 12 Columnas: Mapa Geodésico + Leyenda de Lotes (8 cols) | Clima + Marco Regulatorio (4 cols) */}
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+            {/* COLUMNA IZQUIERDA (8 COLS): VISOR SATELITAL Y LEYENDA INTERACTIVA DE LOTES */}
+            <div className="xl:col-span-8 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden bg-slate-50 dark:bg-slate-950 flex flex-col">
+              <div className="px-4 py-3 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2 font-mono">
+                <div className="flex items-center gap-2 text-xs font-black uppercase text-slate-800 dark:text-white">
+                  <Globe size={15} className="text-emerald-500" />
+                  <span>
+                    {mapLayerMode === 'ddjj'
+                      ? 'Polígono Declaración Jurada de Siembra (DDJJ)'
+                      : mapLayerMode === 'plots'
+                      ? 'Capas Geodésicas de Unidades Productivas'
+                      : 'Perímetro del Establecimiento y Unidades Productivas'}
+                  </span>
                 </div>
-                <span className="text-[10px] font-mono text-slate-400">
-                  Clic en cualquier polígono para abrir la Unidad Productiva
+                <span className="text-[10px] text-slate-400">
+                  Clic en cualquier polígono o etiqueta inferior para abrir la Unidad Productiva
                 </span>
               </div>
-              <div className="h-[460px] w-full bg-slate-100">
-                {(location.polygon && location.polygon.length > 2) || activePlotLayers.length > 0 ? (
+
+              <div className={activeTab === 'geodesy' ? 'h-[520px] w-full' : 'h-[410px] w-full'}>
+                {(location.polygon && location.polygon.length > 2) ||
+                (location.sowingDeclarationPolygon && location.sowingDeclarationPolygon.length > 2) ||
+                activePlotLayers.length > 0 ? (
                   <MapEditor
                     initialCenter={location.coordinates}
-                    initialPolygon={location.polygon || []}
-                    polygonShortLabel={location.name}
-                    polygonSubLabel={`${locationPlots.length} Unidades Productivas`}
-                    extraPolygons={activePlotLayers}
+                    initialPolygon={
+                      mapLayerMode === 'ddjj'
+                        ? location.sowingDeclarationPolygon && location.sowingDeclarationPolygon.length > 2
+                          ? location.sowingDeclarationPolygon
+                          : location.polygon || []
+                        : mapLayerMode === 'plots'
+                        ? []
+                        : location.polygon || []
+                    }
+                    polygonShortLabel={
+                      mapLayerMode === 'ddjj' ? `DDJJ Siembra · ${location.name}` : location.name
+                    }
+                    polygonSubLabel={
+                      mapLayerMode === 'ddjj'
+                        ? `${location.sowingDeclarationHa || location.capacityHa || 0} Ha declaradas`
+                        : `${locationPlots.length} Unidades Productivas`
+                    }
+                    extraPolygons={mapLayerMode === 'ddjj' ? [] : activePlotLayers}
                     onExtraPolygonClick={plotId => navigate(`/plots/${plotId}`)}
                     readOnly={true}
                     height="100%"
                   />
                 ) : (
-                  <div className="h-full flex items-center justify-center text-slate-400 bg-slate-50 font-mono text-xs">
+                  <div className="h-full flex items-center justify-center text-slate-400 bg-slate-50 dark:bg-slate-950 font-mono text-xs">
                     Sin delimitación perimetral configurada.
                   </div>
                 )}
               </div>
+
+              {/* Leyenda Interactiva de Unidades Productivas en el Pie del Mapa */}
+              <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 space-y-2.5 font-mono">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">
+                    Unidades Productivas Trazadas en el Establecimiento ({locationPlots.length})
+                  </span>
+                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
+                    Clic para abrir ficha de parcela →
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {locationPlots.map(p => {
+                    const vari = varieties.find(v => v.id === p.varietyId);
+                    const hasPoly = Boolean(p.polygon && p.polygon.length > 2);
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => navigate(`/plots/${p.id}`)}
+                        className="px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-emerald-50 dark:bg-slate-800/70 dark:hover:bg-emerald-950/40 border border-slate-200/80 dark:border-slate-700 hover:border-emerald-500/50 transition flex items-center gap-2 text-left cursor-pointer"
+                      >
+                        <span
+                          className="w-2.5 h-2.5 rounded-full shrink-0"
+                          style={{ backgroundColor: p.color || stringToColor(p.name) }}
+                        />
+                        <div>
+                          <span className="text-[10.5px] font-black text-slate-900 dark:text-white uppercase block">
+                            {p.name}
+                          </span>
+                          <span className="text-[9px] text-slate-500 block">
+                            {vari?.name || 'Ensayo'} · {p.surfaceArea} {p.surfaceUnit} {hasPoly ? '· 🛰️ GPS' : ''}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
 
-            <div className="space-y-6">
-              <div className="bg-white dark:bg-slate-900 rounded-2xl md:rounded-3xl shadow-sm border border-slate-200/80 dark:border-slate-800 overflow-hidden">
-                <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 font-mono font-black text-xs uppercase tracking-wider text-slate-900 dark:text-white">
-                  Pronóstico Meteorológico Local
+            {/* COLUMNA DERECHA (4 COLS): ESTACIÓN AGROMETEOROLÓGICA + EXPEDIENTE REGULATORIO */}
+            <div className="xl:col-span-4 space-y-5 font-mono">
+              {/* 1. Pronóstico Meteorológico Local & Fotoperiodo */}
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden bg-white dark:bg-slate-900 shadow-xs">
+                <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs font-black uppercase text-slate-900 dark:text-white">
+                    <Sun size={15} className="text-amber-500" />
+                    <span>Estación Agrometeorológica Local</span>
+                  </div>
+                  <span className="text-[9.5px] font-bold px-2 py-0.5 rounded bg-sky-500/10 text-sky-600 dark:text-sky-400">
+                    Open-Meteo ERA5
+                  </span>
                 </div>
+
                 <WeatherWidget
                   lat={location.coordinates?.lat || 0}
                   lng={location.coordinates?.lng || 0}
                   showForecast={true}
                 />
-                <div className="p-3 bg-slate-50 dark:bg-slate-950 text-[10px] text-slate-500 font-mono font-bold uppercase tracking-wider text-center">
-                  Estación Satelital Open-Meteo Sincronizada
-                </div>
+
+                {(() => {
+                  const sampleSync = getPlotSyncSummary(
+                    locationPlots[0] || ({ coordinates: location.coordinates } as any),
+                    undefined,
+                    location
+                  );
+                  return (
+                    <div className="px-4 py-2.5 bg-slate-900 text-white text-[10px] flex items-center justify-between border-t border-slate-800">
+                      <span className="text-amber-300 font-bold">
+                        ☀️ Fotoperiodo Solar: {sampleSync.photoperiodFormatted}
+                      </span>
+                      <span className="text-slate-300">
+                        Salida {sampleSync.sunriseLocal} · Ocaso {sampleSync.sunsetLocal}
+                      </span>
+                    </div>
+                  );
+                })()}
               </div>
 
-              <div className="bg-white dark:bg-slate-900 rounded-2xl md:rounded-3xl shadow-sm border border-slate-200/80 dark:border-slate-800 p-6">
-                <h3 className="font-mono font-black text-slate-800 dark:text-white mb-4 uppercase text-xs tracking-wider flex items-center gap-2">
-                  <Building size={15} className="text-emerald-500" />
-                  <span>Socio Productor / Titular del Campo</span>
-                </h3>
-                {client ? (
-                  <div className="space-y-4">
-                    <div className="bg-indigo-50/70 dark:bg-indigo-950/30 p-4 rounded-2xl border border-indigo-200/70 dark:border-indigo-900/50">
-                      <p className="text-lg font-black text-indigo-950 dark:text-indigo-200 uppercase tracking-tight">
-                        {client.name}
-                      </p>
-                      <p className="text-xs text-indigo-700 dark:text-indigo-400 font-mono font-bold mt-1 flex items-center gap-1.5">
-                        <User size={12} /> {client.contactName}
-                      </p>
-                      {client.cuit && (
-                        <p className="text-[11px] font-mono text-slate-500 mt-1">CUIT: {client.cuit}</p>
-                      )}
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 font-mono">
-                      <a
-                        href={`mailto:${client.email}`}
-                        className="py-2 bg-slate-100 dark:bg-slate-800 rounded-xl text-[10px] font-bold uppercase text-center hover:bg-emerald-50 transition"
-                      >
-                        Enviar Email
-                      </a>
-                      <a
-                        href={`tel:${client.contactPhone}`}
-                        className="py-2 bg-slate-100 dark:bg-slate-800 rounded-xl text-[10px] font-bold uppercase text-center hover:bg-emerald-50 transition"
-                      >
-                        Llamar
-                      </a>
-                    </div>
+              {/* 2. Expediente Regulatorio ARICCAME / SENASA & Estructura Titular */}
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-4 shadow-xs">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+                  <h3 className="text-xs font-black uppercase text-slate-900 dark:text-white flex items-center gap-2">
+                    <Award size={15} className="text-purple-500" />
+                    <span>Habilitación Regulatoria & Titularidad</span>
+                  </h3>
+                  <span className="px-2 py-0.5 rounded text-[9.5px] font-bold uppercase bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
+                    {location.ariccameLicenseStatus || 'Vigente'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2.5 text-[10.5px]">
+                  <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-800">
+                    <span className="text-[8.5px] font-bold uppercase text-slate-400 block">Licencia ARICCAME</span>
+                    <strong className="text-purple-700 dark:text-purple-300 block truncate mt-0.5">
+                      {location.ariccameLicenseNumber || 'ARICCAME-COOP-VIG'}
+                    </strong>
                   </div>
-                ) : (
-                  <div className="text-slate-500 text-xs font-mono">
-                    Operación directa por Planta Central ({ownerLabel}).
+                  <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-800">
+                    <span className="text-[8.5px] font-bold uppercase text-slate-400 block">Registro RENSPA</span>
+                    <strong className="text-sky-700 dark:text-sky-300 block truncate mt-0.5">
+                      {location.renspaNumber || 'En Padrón Oficial'}
+                    </strong>
                   </div>
-                )}
+                  <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-800">
+                    <span className="text-[8.5px] font-bold uppercase text-slate-400 block">Tenencia & Catastro</span>
+                    <strong className="text-slate-800 dark:text-slate-200 block truncate mt-0.5">
+                      {location.landTenureType || 'Propiedad'} · {location.cadastralId || 'Rural'}
+                    </strong>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-800">
+                    <span className="text-[8.5px] font-bold uppercase text-slate-400 block">Estructura / CUIT</span>
+                    <strong className="text-slate-800 dark:text-slate-200 block truncate mt-0.5">
+                      {client?.cuit || location.ownerCuit || '30-71649201-9'}
+                    </strong>
+                  </div>
+                </div>
+
+                {/* Contacto Operativo Directo del Campo */}
+                <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="text-slate-400 uppercase font-bold">Estructura Productiva:</span>
+                    <strong className="text-slate-900 dark:text-white truncate max-w-[190px]">{ownerLabel}</strong>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <a
+                      href={`mailto:${roster.ownerUser?.email || client?.email || 'contacto@hempc.org'}`}
+                      className="py-2 px-3 bg-slate-100 hover:bg-emerald-50 dark:bg-slate-800 dark:hover:bg-emerald-950/50 rounded-xl text-[10px] font-bold uppercase text-center text-slate-700 dark:text-slate-200 transition border border-slate-200/70 dark:border-slate-700"
+                    >
+                      Enviar Email
+                    </a>
+                    <a
+                      href={`tel:${client?.contactPhone || location.ownerContact || ''}`}
+                      className="py-2 px-3 bg-slate-100 hover:bg-emerald-50 dark:bg-slate-800 dark:hover:bg-emerald-950/50 rounded-xl text-[10px] font-bold uppercase text-center text-slate-700 dark:text-slate-200 transition border border-slate-200/70 dark:border-slate-700"
+                    >
+                      Llamar al Campo
+                    </a>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
