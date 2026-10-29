@@ -204,7 +204,8 @@ export default function PlotDetails() {
     addTrialRecord, updateTrialRecord, deleteTrialRecord,
     currentUser, hydricRecords, logs, addLog, updateLog, deleteLog, seedBatches, clients,
     updatePlotPhenology, closePlotCycle, reopenPlotCycle,
-    tasks, addTask, updateTask, deleteTask, homologateLabor, usersList
+    tasks, addTask, updateTask, deleteTask, homologateLabor, usersList,
+    agrochemicalApplications: agroApps, addAgrochemicalApplication, updateAgrochemicalApplication, deleteAgrochemicalApplication
   } = useAppContext();
 
   const [activeTab, setActiveTab] = useState<'analytics' | 'map' | 'labors' | 'astro' | 'logs' | 'water' | 'phytosanitary' | 'iot'>('analytics');
@@ -250,21 +251,7 @@ export default function PlotDetails() {
   const [alertDetails, setAlertDetails] = useState('');
   const [emailAlertToast, setEmailAlertToast] = useState<{ message: string; via: string; sentTo: string } | null>(null);
 
-  // Estado para Cuaderno Fitosanitario SENASA (unificado con ht_agrochemical_apps y sin datos demo)
-  const [agroApps, setAgroApps] = useState<AgrochemicalApplication[]>(() => {
-    try {
-      const saved = localStorage.getItem('ht_agrochemical_apps') || localStorage.getItem('nucleus_agro_apps_v1');
-      if (saved) {
-        const parsed: AgrochemicalApplication[] = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          return parsed.filter(
-            a => !a.id?.startsWith('app-bio-') && !a.id?.startsWith('app-foliar-') && !a.id?.startsWith('app-insect-')
-          );
-        }
-      }
-    } catch {}
-    return [];
-  });
+  // Estado para formulario del Cuaderno Fitosanitario SENASA (conectado al estado centralizado agroApps de AppContext)
   const [isAgroModalOpen, setIsAgroModalOpen] = useState(false);
   const [editingAgroId, setEditingAgroId] = useState<string | null>(null);
   const [agroForm, setAgroForm] = useState({
@@ -286,14 +273,10 @@ export default function PlotDetails() {
     notes: ''
   });
 
-  useEffect(() => {
-    try {
-      localStorage.setItem('ht_agrochemical_apps', JSON.stringify(agroApps));
-      localStorage.removeItem('nucleus_agro_apps_v1');
-    } catch {}
-  }, [agroApps]);
-
-  const plotAgroApps = useMemo(() => agroApps.filter(a => a.plotId === id), [agroApps, id]);
+  const plotAgroApps = useMemo(
+    () => agroApps.filter(a => a.plotId === id).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+    [agroApps, id]
+  );
 
   // Estado para selección múltiple de parcelas en Mapa de Geodesia
   const [selectedMapPlotIds, setSelectedMapPlotIds] = useState<string[]>(() => (id ? [id] : []));
@@ -2848,44 +2831,144 @@ export default function PlotDetails() {
                   </div>
                   <div>
                     <h3 className="text-base font-black text-slate-900 dark:text-white uppercase tracking-tight">
-                      Cuaderno Fitosanitario & Bioinsumos ({plot.name})
+                      Cuaderno Fitosanitario, Fertilizantes, Mejoradores de Suelo & MIP ({plot.name})
                     </h3>
                     <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                      Registro auditable de aplicaciones, marbete SENASA, dosis por hectárea y período de carencia.
+                      Sincronizado en vivo con Monitoreo Rápido 360° y Libro Foliado Oficial SENASA (Res. 369/2013 · GACP).
                     </p>
                   </div>
                 </div>
 
-                {canCreate && (
+                <div className="flex flex-wrap items-center gap-2">
                   <button
-                    onClick={() => {
-                      setEditingAgroId(null);
-                      setAgroForm({
-                        date: localClockData.dateIso,
-                        productName: '',
-                        activeIngredient: '',
-                        senasaRegisterNumber: '',
-                        category: 'Bioestimulante',
-                        batchNumber: '',
-                        dosagePerHa: 2.5,
-                        dosageUnit: 'L/ha',
-                        totalAppliedAmount: 5,
-                        safetyPeriodDays: 0,
-                        applicationMethod: 'Pulverización Terrestre',
-                        targetPestOrPurpose: '',
-                        responsibleAgronomist: currentUser?.name || 'Ing. Agr. Gastón Barea',
-                        agronomistLicense: 'MP-4821-CIAFBA',
-                        weatherConditionsAtApp: `${stats.liveTemp}°C | Hum: ${stats.liveHum}% | Viento: ${stats.liveWind} km/h`,
-                        notes: ''
-                      });
-                      setIsAgroModalOpen(true);
-                    }}
-                    className="px-4 py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-mono font-bold text-xs uppercase tracking-wider flex items-center gap-2 shadow-sm cursor-pointer"
+                    type="button"
+                    onClick={() => navigate(`/trials-lite?plotId=${plot.id}`)}
+                    className="px-3.5 py-2.5 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-600 text-emerald-700 dark:text-emerald-300 hover:text-white border border-emerald-200 dark:border-emerald-800 rounded-xl font-mono font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition cursor-pointer"
                   >
-                    <Plus size={15} />
-                    <span>Registrar Aplicación</span>
+                    <Activity size={14} />
+                    <span>Ir a Monitoreo Rápido MIP</span>
                   </button>
-                )}
+                  {canCreate && (
+                    <button
+                      onClick={() => {
+                        setEditingAgroId(null);
+                        setAgroForm({
+                          date: localClockData.dateIso,
+                          productName: '',
+                          activeIngredient: '',
+                          senasaRegisterNumber: '',
+                          category: 'Bioestimulante',
+                          batchNumber: '',
+                          dosagePerHa: 2.5,
+                          dosageUnit: 'L/ha',
+                          totalAppliedAmount: 5,
+                          safetyPeriodDays: 0,
+                          applicationMethod: 'Pulverización Terrestre',
+                          targetPestOrPurpose: '',
+                          responsibleAgronomist: currentUser?.name || 'Ing. Agr. Gastón Barea',
+                          agronomistLicense: 'MP-4821-CIAFBA',
+                          weatherConditionsAtApp: `${stats.liveTemp}°C | Hum: ${stats.liveHum}% | Viento: ${stats.liveWind} km/h`,
+                          notes: ''
+                        });
+                        setIsAgroModalOpen(true);
+                      }}
+                      className="px-4 py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-mono font-bold text-xs uppercase tracking-wider flex items-center gap-2 shadow-sm cursor-pointer"
+                    >
+                      <Plus size={15} />
+                      <span>Registrar Aplicación / Insumo</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Tablero Diagnóstico MIP, Nutrición, Suelo & Estado de Carencia Pre-Cosecha */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 mt-5 font-mono">
+                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-800">
+                  <span className="text-[10px] font-bold uppercase text-slate-400 block mb-1">
+                    Estado Plagas & Patógenos (MIP)
+                  </span>
+                  <p className="text-sm font-black text-slate-900 dark:text-white">
+                    {latestRecord?.pestThresholdStatus || (Number(latestRecord?.pestsScore || 1) >= 4 ? 'Umbral de Intervención' : 'Bajo Umbral Económico')}
+                  </p>
+                  <div className="flex flex-wrap gap-1 mt-1.5">
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-300 font-bold">
+                      Plagas: {latestRecord?.pestsScore || 1}/9
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-rose-500/10 text-rose-700 dark:text-rose-300 font-bold">
+                      Enf: {latestRecord?.diseasesScore || 1}/9
+                    </span>
+                  </div>
+                  {(latestRecord?.detectedPests?.length || latestRecord?.detectedDiseases?.length) ? (
+                    <p className="text-[10px] text-amber-600 dark:text-amber-400 font-bold mt-1.5 truncate">
+                      Detectado: {[...(latestRecord?.detectedPests || []), ...(latestRecord?.detectedDiseases || [])].join(', ')}
+                    </p>
+                  ) : (
+                    <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold mt-1.5">
+                      ✓ Sin focos activos reportados
+                    </p>
+                  )}
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-800">
+                  <span className="text-[10px] font-bold uppercase text-slate-400 block mb-1">
+                    Control Biológico & Fauna Benéfica
+                  </span>
+                  <p className="text-sm font-black text-emerald-600 dark:text-emerald-400">
+                    {latestRecord?.beneficialFauna && latestRecord.beneficialFauna.length > 0
+                      ? `${latestRecord.beneficialFauna.length} Especies Activas`
+                      : 'Equilibrio Natural GACP'}
+                  </p>
+                  <p className="text-[10px] text-slate-500 mt-1.5">
+                    {latestRecord?.beneficialFauna && latestRecord.beneficialFauna.length > 0
+                      ? latestRecord.beneficialFauna.join(' · ')
+                      : 'Coccinélidos · Crisopas · Orius'}
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-800">
+                  <span className="text-[10px] font-bold uppercase text-slate-400 block mb-1">
+                    Nutrición & Condición Edáfica
+                  </span>
+                  <p className="text-sm font-black text-slate-900 dark:text-white">
+                    {latestRecord?.nutritionalStatus || 'Óptimo / Balanceado'}
+                  </p>
+                  <p className="text-[10px] text-slate-500 mt-1.5">
+                    {latestRecord?.soilConditionNotes || `Suelo ${plot.soilType || location?.soilType || 'Franco'} · Fertilidad Activa`}
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-800">
+                  <span className="text-[10px] font-bold uppercase text-slate-400 block mb-1">
+                    Estado Carencia SENASA Pre-Cosecha
+                  </span>
+                  {(() => {
+                    const today = new Date();
+                    const activeSafetyApp = plotAgroApps.find(a => new Date(a.harvestSafetyDate) > today);
+                    if (activeSafetyApp) {
+                      const daysLeft = Math.max(1, Math.ceil((new Date(activeSafetyApp.harvestSafetyDate).getTime() - today.getTime()) / 86400000));
+                      return (
+                        <>
+                          <p className="text-sm font-black text-amber-600 dark:text-amber-400">
+                            ⚠️ En Carencia ({daysLeft} días)
+                          </p>
+                          <p className="text-[10px] text-slate-500 mt-1.5">
+                            Libera cosecha: <strong>{activeSafetyApp.harvestSafetyDate}</strong> ({activeSafetyApp.productName})
+                          </p>
+                        </>
+                      );
+                    }
+                    return (
+                      <>
+                        <p className="text-sm font-black text-emerald-600 dark:text-emerald-400">
+                          ✓ Lote Apto Cosecha (0d)
+                        </p>
+                        <p className="text-[10px] text-slate-500 mt-1.5">
+                          {plotAgroApps.length} intervenciones registradas en ciclo
+                        </p>
+                      </>
+                    );
+                  })()}
+                </div>
               </div>
 
               {plotAgroApps.length === 0 ? (
@@ -2895,7 +2978,7 @@ export default function PlotDetails() {
                     Lote Libre de Aplicaciones Fitosanitarias (0 Registros)
                   </p>
                   <p className="text-xs text-slate-400 max-w-md mx-auto">
-                    El cultivo en {plot.name} se desarrolla bajo manejo agroecológico sin aplicaciones químicas registradas.
+                    El cultivo en {plot.name} se desarrolla bajo manejo agroecológico sin aplicaciones químicas registradas. Puedes cargar fertilizantes, mejoradores de suelo o bioinsumos aquí o desde Monitoreo Rápido.
                   </p>
                 </div>
               ) : (
@@ -2920,6 +3003,11 @@ export default function PlotDetails() {
                               {app.productName}
                             </h4>
                             <p className="text-[11px] text-slate-500">{app.activeIngredient}</p>
+                            {app.targetPestOrDisease && (
+                              <span className="inline-block mt-1 px-2 py-0.5 rounded bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 text-[9px] font-mono font-bold">
+                                Objetivo MIP / Nutrición: {app.targetPestOrDisease}
+                              </span>
+                            )}
                           </div>
 
                           <div className="flex items-center gap-1.5">
@@ -2950,7 +3038,7 @@ export default function PlotDetails() {
                                       totalAppliedAmount: app.totalAppliedAmount,
                                       safetyPeriodDays: app.safetyPeriodDays,
                                       applicationMethod: app.applicationMethod,
-                                      targetPestOrPurpose: app.notes || '',
+                                      targetPestOrPurpose: app.targetPestOrDisease || app.notes || '',
                                       responsibleAgronomist: app.responsibleAgronomist,
                                       agronomistLicense: app.agronomistLicense,
                                       weatherConditionsAtApp: `${app.weatherCondition?.temperatureC || 21}°C`,
@@ -2965,7 +3053,7 @@ export default function PlotDetails() {
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => setAgroApps(prev => prev.filter(x => x.id !== app.id))}
+                                  onClick={() => deleteAgrochemicalApplication(app.id)}
                                   className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
                                   title="Eliminar aplicación"
                                 >
@@ -2985,6 +3073,11 @@ export default function PlotDetails() {
                             <span>Dosis: <strong className="text-emerald-600">{app.dosagePerHa} {app.dosageUnit}</strong></span>
                             <span>Fecha: <strong>{app.date}</strong></span>
                           </div>
+                          {app.notes && (
+                            <p className="text-[10px] text-slate-500 pt-1 border-t border-slate-100 dark:border-slate-800">
+                              {app.notes}
+                            </p>
+                          )}
                         </div>
                       </div>
                     );
@@ -3885,18 +3978,48 @@ export default function PlotDetails() {
                     windSpeedKmH: stats.liveWind,
                     relativeHumidityPct: stats.liveHum
                   },
+                  targetPestOrDisease: agroForm.targetPestOrPurpose.trim() || undefined,
+                  phenologicalStage: cycleSync.currentStage as any,
                   notes: agroForm.notes,
                   status: new Date() < new Date(harvestSafetyDate) ? 'En Carencia' : 'Apto Cosecha'
                 };
-                setAgroApps(prev =>
-                  editingAgroId ? prev.map(x => (x.id === editingAgroId ? newApp : x)) : [newApp, ...prev]
-                );
+                if (editingAgroId) {
+                  updateAgrochemicalApplication(newApp);
+                } else {
+                  addAgrochemicalApplication(newApp);
+                }
                 setIsAgroModalOpen(false);
                 setEditingAgroId(null);
               }}
               className="space-y-3"
             >
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className={labelClass}>Categoría de Insumo *</label>
+                  <select
+                    value={agroForm.category}
+                    onChange={e => setAgroForm({ ...agroForm, category: e.target.value as AgrochemicalCategory })}
+                    className={inputStyle}
+                  >
+                    <option value="Mejorador de Suelo">Mejorador de Suelo</option>
+                    <option value="Fertilizante Edáfico">Fertilizante Edáfico</option>
+                    <option value="Fertilizante Foliar">Fertilizante Foliar</option>
+                    <option value="Bioestimulante">Bioestimulante</option>
+                    <option value="Insecticida">Insecticida / Biocontrol</option>
+                    <option value="Fungicida">Fungicida</option>
+                    <option value="Enmienda Orgánica">Enmienda Orgánica</option>
+                  </select>
+                </div>
+                <div>
+                  <label className={labelClass}>Blanco MIP / Objetivo Nutricional</label>
+                  <input
+                    type="text"
+                    value={agroForm.targetPestOrPurpose}
+                    onChange={e => setAgroForm({ ...agroForm, targetPestOrPurpose: e.target.value })}
+                    className={inputStyle}
+                    placeholder="Ej: Oruga cogollera / Deficiencia N / Estructura suelo"
+                  />
+                </div>
                 <div>
                   <label className={labelClass}>Producto / Bioinsumo *</label>
                   <input

@@ -105,37 +105,36 @@ const RECEIVEABLE_INPUT_PRESETS = [
     safetyPeriodDays: 7,
     applicationMethod: 'Pulverización Terrestre' as const,
     notes: 'Corrector micronutricional pre-floración.'
+  },
+  {
+    lotNumber: 'HUMI-SOIL-26A',
+    productName: 'HumiFulvic Complex + Glomus intraradices',
+    category: 'Mejorador de Suelo' as const,
+    activeIngredient: 'Ácidos Húmicos 15% + Ácidos Fúlvicos 8% + Micorrizas Arbusculares',
+    manufacturer: 'Edafología Regenerativa S.A.',
+    supplierName: 'BioSuelos Patagonia S.R.L.',
+    senasaRegisterNumber: 'SENASA-ENM-9042-AR',
+    toxicologicalClass: 'Biológico / Orgánico Certificado' as ToxicologicalBand,
+    dosagePerHa: 5.0,
+    dosageUnit: 'L/ha' as const,
+    safetyPeriodDays: 0,
+    applicationMethod: 'Fertirriego' as const,
+    notes: 'Mejorador físico-biológico de estructura edáfica, CIC y floculación radicular.'
   }
 ];
 
 export default function PhytosanitaryBook() {
-  const { plots, currentUser, locations, varieties, clients } = useAppContext();
-
-  // Carga reactiva de aplicaciones sincronizada con localStorage (purgando demos sintéticos previos)
-  const [applications, setApplications] = useState<AgrochemicalApplication[]>(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('ht_agrochemical_apps');
-      if (stored) {
-        try {
-          const parsed: AgrochemicalApplication[] = JSON.parse(stored);
-          const cleaned = parsed.filter(
-            a => !a.id?.startsWith('app-bio-') && !a.id?.startsWith('app-foliar-') && !a.id?.startsWith('app-insect-')
-          );
-          if (cleaned.length !== parsed.length) {
-            localStorage.setItem('ht_agrochemical_apps', JSON.stringify(cleaned));
-          }
-          return cleaned;
-        } catch (e) {}
-      }
-    }
-    return getPlotAgrochemicalApplications(plots);
-  });
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('ht_agrochemical_apps', JSON.stringify(applications));
-    }
-  }, [applications]);
+  const {
+    plots,
+    currentUser,
+    locations,
+    varieties,
+    clients,
+    agrochemicalApplications: applications,
+    addAgrochemicalApplication,
+    updateAgrochemicalApplication,
+    deleteAgrochemicalApplication
+  } = useAppContext();
 
   // Filtros y Búsqueda
   const [searchTerm, setSearchTerm] = useState('');
@@ -347,21 +346,25 @@ export default function PhytosanitaryBook() {
         windSpeedKmH: 8,
         relativeHumidityPct: 60
       },
+      targetPestOrDisease: formData.targetPestOrDisease?.trim() || undefined,
+      pestIncidenceScore: formData.pestIncidenceScore,
+      phenologicalStage: formData.phenologicalStage || undefined,
+      linkedTrialRecordId: formData.linkedTrialRecordId || undefined,
       notes: formData.notes?.trim() || undefined,
       status: new Date() >= safetyDateObj ? 'Apto Cosecha' : 'En Carencia'
     };
 
     if (editingAppId) {
-      setApplications(prev => prev.map(a => (a.id === editingAppId ? newApp : a)));
+      updateAgrochemicalApplication(newApp);
     } else {
-      setApplications(prev => [newApp, ...prev]);
+      addAgrochemicalApplication(newApp);
     }
     setIsAddModalOpen(false);
     resetForm();
   };
 
   const handleDeleteApplication = (id: string) => {
-    setApplications(prev => prev.filter(a => a.id !== id));
+    deleteAgrochemicalApplication(id);
     setConfirmDeleteId(null);
   };
 
@@ -501,6 +504,7 @@ export default function PhytosanitaryBook() {
             <option value="Bioestimulante">Bioestimulantes</option>
             <option value="Fertilizante Foliar">Fertilizantes Foliares</option>
             <option value="Fertilizante Edáfico">Fertilizantes Edáficos</option>
+            <option value="Mejorador de Suelo">Mejoradores de Suelo</option>
             <option value="Insecticida">Insecticidas / Biocontrol</option>
             <option value="Fungicida">Fungicidas</option>
             <option value="Enmienda Orgánica">Enmiendas Orgánicas</option>
@@ -579,6 +583,20 @@ export default function PhytosanitaryBook() {
                       <span className="text-[9px] text-purple-600 block">
                         {app.category} · {app.manufacturer}
                       </span>
+                      {(app.targetPestOrDisease || app.phenologicalStage) && (
+                        <div className="flex flex-wrap items-center gap-1 mt-1">
+                          {app.targetPestOrDisease && (
+                            <span className="px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 text-[9px] font-bold">
+                              Blanco MIP: {app.targetPestOrDisease}
+                            </span>
+                          )}
+                          {app.phenologicalStage && (
+                            <span className="px-1.5 py-0.5 rounded bg-sky-50 dark:bg-sky-950/50 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800 text-[9px] font-bold">
+                              Estadio: {app.phenologicalStage}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </td>
 
                     <td className="py-3.5 px-4">

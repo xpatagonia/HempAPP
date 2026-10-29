@@ -4,7 +4,7 @@ import {
   User, Location, Plot, TrialRecord, Task, Project, Variety, 
   Client, ClientContractDocument, Supplier, SeedBatch, SeedMovement, Resource, 
   StoragePoint, HydricRecord, FieldLog, OperationalExpense, ExpenseAuditStatus,
-  HempStageId
+  HempStageId, AgrochemicalApplication
 } from '../types';
 import { 
   ADMIN_USER, DEMO_USER, DEMO_USERS_LIST, DEMO_CLIENTS, DEMO_VARIETIES, DEMO_LOCATIONS, DEMO_PLOTS, 
@@ -112,6 +112,10 @@ interface AppContextType {
   addLog: (l: FieldLog) => Promise<boolean>;
   updateLog: (l: FieldLog) => Promise<boolean>;
   deleteLog: (id: string) => Promise<boolean>;
+  agrochemicalApplications: AgrochemicalApplication[];
+  addAgrochemicalApplication: (app: AgrochemicalApplication) => Promise<boolean>;
+  updateAgrochemicalApplication: (app: AgrochemicalApplication) => Promise<boolean>;
+  deleteAgrochemicalApplication: (id: string) => Promise<boolean>;
   isRefreshing: boolean;
   refreshData: () => Promise<void>;
   activeCampaign: string;
@@ -842,6 +846,9 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     const [logs, setLogs] = useState<FieldLog[]>(() => 
         getStoredCollection('ht_field_logs', [])
     );
+    const [agrochemicalApplications, setAgrochemicalApplications] = useState<AgrochemicalApplication[]>(() =>
+        getStoredCollection('ht_agrochemical_apps', [])
+    );
 
     useEffect(() => {
         refreshData();
@@ -1325,6 +1332,12 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             setLogs(prev => {
                 const next = updateList(prev);
                 try { localStorage.setItem('ht_field_logs', JSON.stringify(next)); } catch (e) {}
+                return next;
+            });
+        } else if (table === 'agrochemical_apps') {
+            setAgrochemicalApplications(prev => {
+                const next = updateList(prev);
+                try { localStorage.setItem('ht_agrochemical_apps', JSON.stringify(next)); } catch (e) {}
                 return next;
             });
         }
@@ -2378,6 +2391,11 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         return logs.filter(l => scopedPlotIds.has(String(l.plotId)));
     }, [logs, scopedPlotIds, currentUser]);
 
+    const scopedAgrochemicalApplications = useMemo(() => {
+        if (hasGlobalReadScope(currentUser)) return agrochemicalApplications;
+        return agrochemicalApplications.filter(a => scopedPlotIds.has(String(a.plotId)));
+    }, [agrochemicalApplications, scopedPlotIds, currentUser]);
+
     const scopedStoragePoints = useMemo(
         () => storagePoints.filter(sp => canAccessStoragePoint(currentUser, sp, locations, clients)),
         [storagePoints, locations, clients, currentUser]
@@ -2441,6 +2459,10 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             storagePoints: scopedStoragePoints, allStoragePoints: storagePoints, addStoragePoint: (s) => crud('storage_points', s, 'insert'), updateStoragePoint: (s) => crud('storage_points', s, 'update'), deleteStoragePoint: deleteStoragePointSafe,
             hydricRecords: scopedHydricRecords, addHydricRecord: (r) => crud('hydric_records', r, 'insert'), updateHydricRecord: (r) => crud('hydric_records', r, 'update'), deleteHydricRecord: (id) => crud('hydric_records', id, 'delete'),
             logs: scopedLogs, addLog: (l) => crud('field_logs', l, 'insert'), updateLog: (l) => crud('field_logs', l, 'update'), deleteLog: (id) => crud('field_logs', id, 'delete'),
+            agrochemicalApplications: scopedAgrochemicalApplications,
+            addAgrochemicalApplication: (app) => crud('agrochemical_apps', app, 'insert'),
+            updateAgrochemicalApplication: (app) => crud('agrochemical_apps', app, 'update'),
+            deleteAgrochemicalApplication: (id) => crud('agrochemical_apps', id, 'delete'),
             isRefreshing, refreshData,
             activeCampaign, setActiveCampaign,
             closePlotCycle, reopenPlotCycle,

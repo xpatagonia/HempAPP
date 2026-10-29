@@ -550,6 +550,13 @@ export interface TrialRecord {
   harvestDate?: string;
   diseases?: string; 
   pests?: string; 
+  detectedPests?: string[]; // Plagas / insectos identificados en el monitoreo MIP
+  detectedDiseases?: string[]; // Patógenos / enfermedades identificadas en el monitoreo MIP
+  beneficialFauna?: string[]; // Fauna benéfica / control biológico natural detectado
+  pestThresholdStatus?: 'Sin Presión' | 'Monitoreo Preventivo' | 'Umbral de Intervención' | 'Intervención Urgente' | 'Bajo Umbral (Observación)' | 'Umbral Preventivo (Biológico)' | 'Umbral Crítico (Acción Inmediata)';
+  nutritionalStatus?: string; // Estado nutricional foliar/edáfico observado en monitoreo
+  soilConditionNotes?: string; // Condición física/química de suelo observada
+  linkedAgroAppId?: string; // Aplicación fitosanitaria/nutricional vinculada en el relevamiento
   createdBy?: string;
   createdByName?: string;
   lightHours?: number;
@@ -945,7 +952,7 @@ export interface PlotNDVIAlert {
 
 export type ToxicologicalBand = 'Banda Verde (Banda IV - Poco Peligroso)' | 'Banda Azul (Banda III - Cuidado)' | 'Banda Amarilla (Banda II - Nocivo)' | 'Banda Roja (Banda I - Muy Tóxico)' | 'Biológico / Orgánico Certificado';
 
-export type AgrochemicalCategory = 'Fertilizante Edáfico' | 'Fertilizante Foliar' | 'Insecticida' | 'Fungicida' | 'Bioestimulante' | 'Enmienda Orgánica' | 'Herbicida' | 'Bioinsumo / Orgánico';
+export type AgrochemicalCategory = 'Fertilizante Edáfico' | 'Fertilizante Foliar' | 'Mejorador de Suelo' | 'Enmienda Orgánica' | 'Bioestimulante' | 'Insecticida' | 'Fungicida' | 'Bioinsumo / Orgánico' | 'Herbicida';
 
 export interface AgrochemicalApplication {
   id: string;
@@ -962,9 +969,9 @@ export interface AgrochemicalApplication {
   senasaRegisterNumber: string; // Registro Oficial SENASA / INASE
   toxicologicalClass: ToxicologicalBand;
   dosagePerHa: number; // Dosis numérica
-  dosageUnit: 'L/ha' | 'kg/ha' | 'ml/ha' | 'g/ha' | 't/ha';
+  dosageUnit: 'L/ha' | 'kg/ha' | 'ml/ha' | 'cc/ha' | 'g/ha' | 't/ha';
   totalAppliedAmount: number; // Cantidad total aplicada en el lote
-  applicationMethod: 'Fertirriego' | 'Pulverización Terrestre' | 'Pulverización Aérea' | 'Incorporación Edáfica' | 'Manual / Follaje';
+  applicationMethod: 'Fertirriego' | 'Pulverización Terrestre' | 'Pulverización Aérea' | 'Incorporación Edáfica' | 'Manual / Follaje' | 'Mochila Manual' | 'Dron Agrícola';
   batchNumber: string; // Lote de fabricación
   expirationDate?: string; // Fecha de vencimiento
   senasaComplianceStatus?: 'Conforme SENASA (Normativa VIGENTE)' | 'Certificación Orgánica Acreditada' | 'En Revisión Documental'; // Cumplimiento normativo
@@ -977,6 +984,10 @@ export interface AgrochemicalApplication {
     windSpeedKmH: number;
     relativeHumidityPct: number;
   };
+  targetPestOrDisease?: string; // Plaga, patógeno o deficiencia edáfica/nutricional objetivo
+  pestIncidenceScore?: number; // Escala 1-9 de incidencia al momento del tratamiento
+  phenologicalStage?: string; // Fase fenológica del cultivo al momento de aplicación
+  linkedTrialRecordId?: string; // Informe de Monitoreo Rápido que originó la aplicación
   notes?: string;
   status: 'Aplicado' | 'En Carencia' | 'Apto Cosecha';
 }
