@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import {
   TrialRecord,
-  Plot,
   Location,
   FieldLog,
   HydricRecord,
@@ -18,26 +17,18 @@ import {
   Calendar,
   Activity,
   Ruler,
-  Thermometer,
   Droplets,
-  ArrowRight,
   ClipboardList,
   CheckCircle2,
-  Clock,
   AlertTriangle,
   ChevronRight,
-  Leaf,
   History,
   TrendingUp,
   Sun,
-  Moon,
-  Target,
-  AlertCircle,
   Loader2,
   ExternalLink,
   Filter,
   Search,
-  Check,
   Sprout,
   ChevronLeft,
   Edit2,
@@ -45,22 +36,15 @@ import {
   X,
   Camera,
   Upload,
-  Image as ImageIcon,
   CloudRain,
   Tractor,
-  Wrench,
   RefreshCw,
   Layers,
-  Eye,
   MapPin,
   Dna,
-  SlidersHorizontal,
-  Plus,
-  Minus,
   ChevronDown,
   ChevronUp,
   Smartphone,
-  Scale,
   Award,
   Timer
 } from 'lucide-react';
@@ -78,7 +62,7 @@ const calculateLunarPhase = (dateStr: string) => {
   const cycle = 29.53058867;
   const knownNewMoon = new Date('2024-01-11T11:57:00Z').getTime();
   const diff = (date.getTime() - knownNewMoon) / (1000 * 60 * 60 * 24);
-  const pos = ((diff % cycle) + cycle) % cycle / cycle;
+  const pos = (((diff % cycle) + cycle) % cycle) / cycle;
   if (pos < 0.06 || pos >= 0.94) return 'Nueva';
   if (pos < 0.44) return 'Creciente';
   if (pos < 0.56) return 'Llena';
@@ -90,6 +74,104 @@ function addDaysToIsoDate(isoDateStr: string, daysToAdd: number): string {
   if (isNaN(base.getTime())) return new Date().toISOString().split('T')[0];
   base.setUTCDate(base.getUTCDate() + Math.round(daysToAdd));
   return base.toISOString().split('T')[0];
+}
+
+// Paleta agronómica oficial por Fase Fenológica (Fisiológica y BBCH)
+export type PhenologicalStageKey = 'Emergencia' | 'Vegetativo' | 'Floración' | 'Maduración' | 'Cosecha';
+
+const PHENOLOGICAL_STAGE_META: Record<
+  PhenologicalStageKey,
+  {
+    label: PhenologicalStageKey;
+    bbchHint: string;
+    defaultBbch: HempStageId;
+    dotClass: string;
+    activeBtnClass: string;
+    inactiveBtnClass: string;
+    badgeClass: string;
+  }
+> = {
+  Emergencia: {
+    label: 'Emergencia',
+    bbchHint: 'BBCH 00-09',
+    defaultBbch: 'BBCH_00_09',
+    dotClass: 'bg-sky-400',
+    activeBtnClass:
+      'bg-sky-600 border-sky-500 text-white shadow-md shadow-sky-600/25 ring-2 ring-sky-500/30',
+    inactiveBtnClass:
+      'bg-sky-500/10 hover:bg-sky-500/20 border-sky-500/30 text-sky-700 dark:text-sky-300',
+    badgeClass: 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-500/30'
+  },
+  Vegetativo: {
+    label: 'Vegetativo',
+    bbchHint: 'BBCH 10-39',
+    defaultBbch: 'BBCH_20_39',
+    dotClass: 'bg-emerald-400',
+    activeBtnClass:
+      'bg-emerald-600 border-emerald-500 text-white shadow-md shadow-emerald-600/25 ring-2 ring-emerald-500/30',
+    inactiveBtnClass:
+      'bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/30 text-emerald-700 dark:text-emerald-300',
+    badgeClass: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
+  },
+  Floración: {
+    label: 'Floración',
+    bbchHint: 'BBCH 50-69',
+    defaultBbch: 'BBCH_60_69',
+    dotClass: 'bg-purple-400',
+    activeBtnClass:
+      'bg-purple-600 border-purple-500 text-white shadow-md shadow-purple-600/25 ring-2 ring-purple-500/30',
+    inactiveBtnClass:
+      'bg-purple-500/10 hover:bg-purple-500/20 border-purple-500/30 text-purple-700 dark:text-purple-300',
+    badgeClass: 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30'
+  },
+  Maduración: {
+    label: 'Maduración',
+    bbchHint: 'BBCH 70-85',
+    defaultBbch: 'BBCH_70_85',
+    dotClass: 'bg-amber-400',
+    activeBtnClass:
+      'bg-amber-500 border-amber-400 text-white shadow-md shadow-amber-500/25 ring-2 ring-amber-500/30',
+    inactiveBtnClass:
+      'bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/30 text-amber-700 dark:text-amber-300',
+    badgeClass: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30'
+  },
+  Cosecha: {
+    label: 'Cosecha',
+    bbchHint: 'BBCH 89-99',
+    defaultBbch: 'BBCH_89_99',
+    dotClass: 'bg-rose-400',
+    activeBtnClass:
+      'bg-rose-600 border-rose-500 text-white shadow-md shadow-rose-600/25 ring-2 ring-rose-500/30',
+    inactiveBtnClass:
+      'bg-rose-500/10 hover:bg-rose-500/20 border-rose-500/30 text-rose-700 dark:text-rose-300',
+    badgeClass: 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/30'
+  }
+};
+
+function getStageMeta(stage?: string) {
+  if (stage && stage in PHENOLOGICAL_STAGE_META) {
+    return PHENOLOGICAL_STAGE_META[stage as PhenologicalStageKey];
+  }
+  return PHENOLOGICAL_STAGE_META.Vegetativo;
+}
+
+function getBbchSelectColorClass(bbch?: HempStageId): string {
+  switch (bbch) {
+    case 'BBCH_00_09':
+      return 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30';
+    case 'BBCH_10_19':
+    case 'BBCH_20_39':
+      return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30';
+    case 'BBCH_50_59':
+    case 'BBCH_60_69':
+      return 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30';
+    case 'BBCH_70_85':
+      return 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30';
+    case 'BBCH_89_99':
+      return 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30';
+    default:
+      return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30';
+  }
 }
 
 // Compresión cliente para fotografías de bitácora tomadas desde cámara móvil o escritorio
@@ -199,7 +281,6 @@ export default function TrialManager() {
     deleteLog,
     hydricRecords,
     addHydricRecord,
-    deleteHydricRecord,
     tasks,
     addTask,
     deleteTask,
@@ -219,7 +300,6 @@ export default function TrialManager() {
   const [autoAdvance, setAutoAdvance] = useState(true);
 
   // Modo ergonómico para Celular / Tablet: permite contraer la cola de lotes tras elegir parcela
-  // y navegar por secciones sin scroll excesivo
   const [isMobileQueueOpen, setIsMobileQueueOpen] = useState<boolean>(false);
   const [fieldViewSection, setFieldViewSection] = useState<'all' | 'biometrics' | 'shortcuts' | 'harvest'>('all');
   const formContainerRef = useRef<HTMLDivElement | null>(null);
@@ -264,7 +344,9 @@ export default function TrialManager() {
   const [quickHydricMm, setQuickHydricMm] = useState<string>('');
   const [quickHydricStartTime, setQuickHydricStartTime] = useState<string>('08:00');
   const [quickHydricEndTime, setQuickHydricEndTime] = useState<string>('10:00');
-  const [quickHydricNotes, setQuickHydricNotes] = useState<string>('Riego por goteo suplementario verificado en recorrida');
+  const [quickHydricNotes, setQuickHydricNotes] = useState<string>(
+    'Riego por goteo suplementario verificado en recorrida'
+  );
   const [isSavingQuickHydric, setIsSavingQuickHydric] = useState(false);
 
   // Atajo 3: Labores Culturales & Preparación de Suelo
@@ -282,8 +364,8 @@ export default function TrialManager() {
     date: new Date().toISOString().split('T')[0],
     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
     stage: 'Vegetativo',
-    temperature: 11,
-    humidity: 85,
+    temperature: 18,
+    humidity: 65,
     lightHours: 13.17,
     lunarPhase: 'Nueva',
     plantsPerMeter: 0,
@@ -331,12 +413,11 @@ export default function TrialManager() {
         const cycleDays = Number(varObj?.cycleDays || 120);
         const usage = varObj?.usage || 'Dual';
 
-        // Si el germoplasma es exclusivamente para Fibra, la ventana óptima de corte es en fin de floración (~15d antes de madurez de grano)
+        // Si el germoplasma es exclusivamente para Fibra, la ventana óptima de corte es en fin de floración (~18d antes de madurez de grano)
         const optimalBiologicalHarvestDate = addDaysToIsoDate(sowDateIso, cycleDays);
         const optimalFiberCutDate = addDaysToIsoDate(sowDateIso, Math.max(65, cycleDays - 18));
         const targetHarvestDate =
-          p.scheduledHarvestDate ||
-          (usage === 'Fibra' ? optimalFiberCutDate : optimalBiologicalHarvestDate);
+          p.scheduledHarvestDate || (usage === 'Fibra' ? optimalFiberCutDate : optimalBiologicalHarvestDate);
 
         const targetHarvestTime = new Date(targetHarvestDate + 'T12:00:00Z').getTime();
         const daysToHarvest = Math.ceil((targetHarvestTime - Date.now()) / 86400000);
@@ -344,7 +425,7 @@ export default function TrialManager() {
 
         // Proyección comercial de cosecha (Grano en kg y Fibra/Tallo en Tn)
         const vigorScore = lastRecord?.vigor || 8;
-        const vigorFactor = 0.72 + (vigorScore / 9) * 0.28; // Entre 0.75 y 1.00 según vigor real del lote
+        const vigorFactor = 0.72 + (vigorScore / 9) * 0.28;
         const baseGrainKgHa =
           varObj?.expectedGrainYieldKgHa ||
           (usage === 'Grano' ? 1250 : usage === 'Dual' ? 980 : usage === 'Medicinal' ? 650 : 450);
@@ -478,10 +559,7 @@ export default function TrialManager() {
 
   // Si al cambiar de Establecimiento la genética antes elegida no existe en ese campo, resetear a 'all'
   useEffect(() => {
-    if (
-      varietyFilter !== 'all' &&
-      !availableVarietiesForSelectedLocation.some(v => v.id === varietyFilter)
-    ) {
+    if (varietyFilter !== 'all' && !availableVarietiesForSelectedLocation.some(v => v.id === varietyFilter)) {
       setVarietyFilter('all');
     }
   }, [locationFilter, varietyFilter, availableVarietiesForSelectedLocation]);
@@ -718,7 +796,9 @@ export default function TrialManager() {
 
     setIsFetchingConditions(true);
     try {
-      const sunRes = await fetch(`https://api.sunrise-sunset.org/json?lat=${lat}&lng=${lng}&date=${dateStr}&formatted=0`);
+      const sunRes = await fetch(
+        `https://api.sunrise-sunset.org/json?lat=${lat}&lng=${lng}&date=${dateStr}&formatted=0`
+      );
       const sunData = await sunRes.json();
       let lightH = 12.5;
       if (sunData.status === 'OK') {
@@ -1175,11 +1255,9 @@ export default function TrialManager() {
     return <span className="text-slate-400 text-[10px] font-bold">Sin variación</span>;
   };
 
-  const inputStyle =
-    'w-full border border-slate-200 dark:border-slate-700 p-3 rounded-xl bg-slate-50 dark:bg-slate-800 font-bold outline-none focus:ring-2 focus:ring-emerald-500 transition-all text-sm dark:text-white';
-  const labelClass = 'text-[10px] font-black uppercase mb-1.5 block text-slate-400 tracking-widest';
+  const labelClass = 'text-[10px] font-black uppercase mb-1 block text-slate-400 tracking-widest';
 
-  // Selector táctil 1-9 optimizado para celular, tablet y escritorio (botones amplios + atajo directo)
+  // Selector táctil 1-9 optimizado para celular, tablet y escritorio (encuadrado sin desborde)
   const TouchScaleControl = ({
     label,
     value,
@@ -1210,25 +1288,25 @@ export default function TrialManager() {
     };
 
     return (
-      <div className="bg-slate-50/70 dark:bg-slate-950/60 p-3 rounded-2xl border border-slate-200/70 dark:border-slate-800">
-        <div className="flex items-center justify-between mb-2">
-          <div>
-            <span className="text-[10px] font-black uppercase text-slate-600 dark:text-slate-300 tracking-wider block">
+      <div className="min-w-0 overflow-hidden bg-slate-50/80 dark:bg-slate-950/60 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800">
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <div className="min-w-0">
+            <span className="text-[10px] font-black uppercase text-slate-700 dark:text-slate-200 tracking-wider block truncate">
               {label}
             </span>
-            {helperText && <span className="text-[9px] text-slate-400 block">{helperText}</span>}
+            {helperText && <span className="text-[9px] text-slate-400 block truncate">{helperText}</span>}
           </div>
-          <span className="font-mono text-sm font-black text-slate-900 dark:text-white bg-white dark:bg-slate-900 px-2.5 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
+          <span className="font-mono text-xs font-black text-slate-900 dark:text-white bg-white dark:bg-slate-900 px-2.5 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700 shrink-0">
             {current}/9
           </span>
         </div>
-        <div className="grid grid-cols-9 gap-1">
+        <div className="grid grid-cols-9 gap-1 w-full">
           {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => (
             <button
               key={n}
               type="button"
               onClick={() => onChange(n)}
-              className={`h-9 rounded-lg font-mono text-xs font-black transition-all cursor-pointer flex items-center justify-center ${getBadgeStyle(
+              className={`h-9 min-w-0 rounded-lg font-mono text-xs font-black transition-all cursor-pointer flex items-center justify-center ${getBadgeStyle(
                 n,
                 current === n
               )}`}
@@ -1242,7 +1320,6 @@ export default function TrialManager() {
   };
 
   const selectedLocationObj = locations.find(l => l.id === locationFilter);
-  const selectedVarietyObj = varieties.find(v => v.id === varietyFilter);
 
   return (
     <div className="animate-in fade-in duration-500 min-h-[calc(100vh-140px)] flex flex-col space-y-4 pb-20 lg:pb-12">
@@ -1260,9 +1337,7 @@ export default function TrialManager() {
                 <h1 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
                   Monitoreo Agronómico <span className="text-emerald-600">360°</span>
                 </h1>
-                <span className="text-xs text-slate-400 font-mono">
-                  · Protocolo Oficial Nucleus Trace
-                </span>
+                <span className="text-xs text-slate-400 font-mono">· Protocolo Oficial Nucleus Trace</span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 Terminal de relevamiento rápido, proyección de cosecha y preventa • Sincronizada en vivo con Parcelas y Germoplasma
@@ -1303,7 +1378,7 @@ export default function TrialManager() {
               setTypeFilter('all');
               setUrgencyFilter('all');
             }}
-            className={`p-3 rounded-2xl text-left border transition cursor-pointer ${
+            className={`p-3 rounded-2xl text-left border transition cursor-pointer min-w-0 ${
               typeFilter === 'all' && urgencyFilter === 'all'
                 ? 'bg-slate-900 dark:bg-emerald-950/60 border-slate-900 dark:border-emerald-500/50 text-white'
                 : 'bg-slate-50 dark:bg-slate-950/50 border-slate-200/80 dark:border-slate-800 hover:border-slate-400'
@@ -1319,7 +1394,7 @@ export default function TrialManager() {
               >
                 Total Parcelas
               </span>
-              <Layers size={14} className="text-emerald-500" />
+              <Layers size={14} className="text-emerald-500 shrink-0" />
             </div>
             <div className="flex items-baseline gap-1.5 mt-1">
               <span
@@ -1352,7 +1427,7 @@ export default function TrialManager() {
           <button
             type="button"
             onClick={() => setTypeFilter(typeFilter === 'Ensayo' ? 'all' : 'Ensayo')}
-            className={`p-3 rounded-2xl text-left border transition cursor-pointer ${
+            className={`p-3 rounded-2xl text-left border transition cursor-pointer min-w-0 ${
               typeFilter === 'Ensayo'
                 ? 'bg-indigo-600 border-indigo-500 text-white shadow-sm'
                 : 'bg-slate-50 dark:bg-slate-950/50 border-slate-200/80 dark:border-slate-800 hover:border-indigo-400'
@@ -1366,7 +1441,10 @@ export default function TrialManager() {
               >
                 Ensayos (I+D)
               </span>
-              <FlaskConical size={14} className={typeFilter === 'Ensayo' ? 'text-white' : 'text-indigo-500'} />
+              <FlaskConical
+                size={14}
+                className={typeFilter === 'Ensayo' ? 'text-white shrink-0' : 'text-indigo-500 shrink-0'}
+              />
             </div>
             <div className="flex items-baseline gap-1.5 mt-1">
               <span
@@ -1393,7 +1471,7 @@ export default function TrialManager() {
           <button
             type="button"
             onClick={() => setTypeFilter(typeFilter === 'Producción' ? 'all' : 'Producción')}
-            className={`p-3 rounded-2xl text-left border transition cursor-pointer ${
+            className={`p-3 rounded-2xl text-left border transition cursor-pointer min-w-0 ${
               typeFilter === 'Producción'
                 ? 'bg-emerald-600 border-emerald-500 text-white shadow-sm'
                 : 'bg-slate-50 dark:bg-slate-950/50 border-slate-200/80 dark:border-slate-800 hover:border-emerald-400'
@@ -1407,7 +1485,10 @@ export default function TrialManager() {
               >
                 En Producción
               </span>
-              <Sprout size={14} className={typeFilter === 'Producción' ? 'text-white' : 'text-emerald-500'} />
+              <Sprout
+                size={14}
+                className={typeFilter === 'Producción' ? 'text-white shrink-0' : 'text-emerald-500 shrink-0'}
+              />
             </div>
             <div className="flex items-baseline gap-1.5 mt-1">
               <span
@@ -1434,7 +1515,7 @@ export default function TrialManager() {
           <button
             type="button"
             onClick={() => setUrgencyFilter(urgencyFilter === 'urgent' ? 'all' : 'urgent')}
-            className={`p-3 rounded-2xl text-left border transition cursor-pointer ${
+            className={`p-3 rounded-2xl text-left border transition cursor-pointer min-w-0 ${
               urgencyFilter === 'urgent'
                 ? 'bg-rose-600 border-rose-500 text-white shadow-sm'
                 : 'bg-slate-50 dark:bg-slate-950/50 border-slate-200/80 dark:border-slate-800 hover:border-rose-400'
@@ -1448,7 +1529,10 @@ export default function TrialManager() {
               >
                 Urgentes (+7d)
               </span>
-              <AlertTriangle size={14} className={urgencyFilter === 'urgent' ? 'text-white' : 'text-rose-500'} />
+              <AlertTriangle
+                size={14}
+                className={urgencyFilter === 'urgent' ? 'text-white shrink-0' : 'text-rose-500 shrink-0'}
+              />
             </div>
             <div className="flex items-baseline gap-1.5 mt-1">
               <span
@@ -1471,7 +1555,7 @@ export default function TrialManager() {
           <button
             type="button"
             onClick={() => setUrgencyFilter(urgencyFilter === 'uptodate' ? 'all' : 'uptodate')}
-            className={`p-3 rounded-2xl text-left border transition cursor-pointer ${
+            className={`p-3 rounded-2xl text-left border transition cursor-pointer min-w-0 ${
               urgencyFilter === 'uptodate'
                 ? 'bg-teal-600 border-teal-500 text-white shadow-sm'
                 : 'bg-slate-50 dark:bg-slate-950/50 border-slate-200/80 dark:border-slate-800 hover:border-teal-400'
@@ -1485,7 +1569,10 @@ export default function TrialManager() {
               >
                 Al Día (≤7d)
               </span>
-              <CheckCircle2 size={14} className={urgencyFilter === 'uptodate' ? 'text-white' : 'text-teal-500'} />
+              <CheckCircle2
+                size={14}
+                className={urgencyFilter === 'uptodate' ? 'text-white shrink-0' : 'text-teal-500 shrink-0'}
+              />
             </div>
             <div className="flex items-baseline gap-1.5 mt-1">
               <span
@@ -1510,7 +1597,7 @@ export default function TrialManager() {
           <button
             type="button"
             onClick={() => setUrgencyFilter(urgencyFilter === 'harvest_window' ? 'all' : 'harvest_window')}
-            className={`p-3 rounded-2xl text-left border transition cursor-pointer ${
+            className={`p-3 rounded-2xl text-left border transition cursor-pointer min-w-0 ${
               urgencyFilter === 'harvest_window'
                 ? 'bg-amber-600 border-amber-500 text-white shadow-sm'
                 : 'bg-slate-50 dark:bg-slate-950/50 border-slate-200/80 dark:border-slate-800 hover:border-amber-400'
@@ -1524,7 +1611,10 @@ export default function TrialManager() {
               >
                 Cosecha / Pre-Venta
               </span>
-              <Timer size={14} className={urgencyFilter === 'harvest_window' ? 'text-white' : 'text-amber-500'} />
+              <Timer
+                size={14}
+                className={urgencyFilter === 'harvest_window' ? 'text-white shrink-0' : 'text-amber-500 shrink-0'}
+              />
             </div>
             <div className="flex items-baseline gap-1.5 mt-1">
               <span
@@ -1576,7 +1666,7 @@ export default function TrialManager() {
             type="button"
             onClick={() => handleStepPlot('prev')}
             disabled={plotQueue.length <= 1}
-            className="h-10 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 flex items-center gap-1 text-xs font-bold cursor-pointer"
+            className="h-10 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 flex items-center gap-1 text-xs font-bold cursor-pointer shrink-0"
           >
             <ChevronLeft size={16} /> Ant.
           </button>
@@ -1599,7 +1689,7 @@ export default function TrialManager() {
             type="button"
             onClick={() => handleStepPlot('next')}
             disabled={plotQueue.length <= 1}
-            className="h-10 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 flex items-center gap-1 text-xs font-bold cursor-pointer"
+            className="h-10 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 flex items-center gap-1 text-xs font-bold cursor-pointer shrink-0"
           >
             Sig. <ChevronRight size={16} />
           </button>
@@ -1645,7 +1735,7 @@ export default function TrialManager() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 items-start">
         {/* SIDEBAR: COLA DE TRABAJO Y FILTRADO EN CASCADA (CAMPO -> GENÉTICAS ASIGNADAS) */}
         <div
-          className={`lg:col-span-4 flex-col bg-white dark:bg-slate-900 rounded-[28px] border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden lg:h-[920px] ${
+          className={`lg:col-span-4 flex-col bg-white dark:bg-slate-900 rounded-[28px] border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden lg:h-[920px] min-w-0 ${
             isMobileQueueOpen ? 'flex max-h-[640px]' : 'hidden lg:flex'
           }`}
         >
@@ -1824,7 +1914,7 @@ export default function TrialManager() {
             </div>
           </div>
 
-          {/* LISTA DE PARCELAS EN LA COLA CON RELOJ DE COSECHA E INDICADORES COTEJADOS */}
+          {/* LISTA DE PARCELAS EN LA COLA CON RELOJ DE COSECHA, FASE FENOLÓGICA E INDICADORES COTEJADOS */}
           <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
             {plotQueue.length === 0 ? (
               <div className="p-8 text-center text-slate-400 text-xs font-bold italic">
@@ -1833,6 +1923,7 @@ export default function TrialManager() {
             ) : (
               plotQueue.map(item => {
                 const isSelected = currentPlotData?.plot.id === item.plot.id;
+                const itemStageMeta = getStageMeta(item.lastRecord?.stage);
                 return (
                   <button
                     key={item.plot.id}
@@ -1871,25 +1962,35 @@ export default function TrialManager() {
                           </span>
                         </div>
                       </div>
-                      {item.daysSince > 7 ? (
+                      <div className="flex items-center gap-1 shrink-0">
                         <span
-                          className={`px-2 py-0.5 rounded-md text-[9px] font-mono font-bold uppercase flex items-center flex-shrink-0 ${
-                            isSelected ? 'bg-white/20 text-white' : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
+                          className={`px-2 py-0.5 rounded-md text-[9px] font-mono font-bold uppercase flex items-center gap-1 ${
+                            isSelected ? 'bg-white/20 text-white' : itemStageMeta.badgeClass
                           }`}
                         >
-                          <AlertTriangle size={10} className="mr-1" /> +{item.daysSince}d
+                          <span className={`w-1.5 h-1.5 rounded-full ${itemStageMeta.dotClass}`} />
+                          {itemStageMeta.label}
                         </span>
-                      ) : (
-                        <span
-                          className={`px-2 py-0.5 rounded-md text-[9px] font-mono font-bold uppercase flex-shrink-0 ${
-                            isSelected
-                              ? 'bg-white/20 text-white'
-                              : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-                          }`}
-                        >
-                          {item.daysSince === 999 ? 'S/D' : `${item.daysSince}d`}
-                        </span>
-                      )}
+                        {item.daysSince > 7 ? (
+                          <span
+                            className={`px-1.5 py-0.5 rounded-md text-[9px] font-mono font-bold uppercase flex items-center ${
+                              isSelected ? 'bg-white/20 text-white' : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
+                            }`}
+                          >
+                            +{item.daysSince}d
+                          </span>
+                        ) : (
+                          <span
+                            className={`px-1.5 py-0.5 rounded-md text-[9px] font-mono font-bold uppercase ${
+                              isSelected
+                                ? 'bg-white/20 text-white'
+                                : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                            }`}
+                          >
+                            {item.daysSince === 999 ? 'S/D' : `${item.daysSince}d`}
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     <div
@@ -1943,14 +2044,14 @@ export default function TrialManager() {
         {/* PANEL PRINCIPAL: FICHA TÉCNICA + CINTA DE COTEJO + ATAJOS + RELOJ DE COSECHA */}
         <div
           ref={formContainerRef}
-          className="lg:col-span-8 flex flex-col bg-white dark:bg-slate-900 rounded-[28px] shadow-xl border border-slate-200 dark:border-slate-800 overflow-hidden relative min-h-[820px]"
+          className="lg:col-span-8 flex flex-col bg-white dark:bg-slate-900 rounded-[28px] shadow-xl border border-slate-200 dark:border-slate-800 overflow-hidden relative min-h-[820px] min-w-0"
         >
           {currentPlotData ? (
             <>
               {/* ENCABEZADO DE LA PARCELA SELECCIONADA + CINTA DE COTEJO 360° */}
               <div className="bg-slate-50 dark:bg-slate-950/70 p-4 md:p-6 border-b dark:border-slate-800 space-y-4 flex-shrink-0">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                  <div>
+                  <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2 text-xs mb-1">
                       <span
                         className={`font-black uppercase tracking-wider ${
@@ -1965,20 +2066,29 @@ export default function TrialManager() {
                         ·
                       </span>
                       <span className="font-bold text-slate-700 dark:text-slate-200">
-                        Genética: {variety?.name || 'S/D'} ({variety?.usage || 'Dual'} · Ciclo {currentPlotMetrics.cycleDays}d)
+                        Genética: {variety?.name || 'S/D'} ({variety?.usage || 'Dual'} · Ciclo{' '}
+                        {currentPlotMetrics.cycleDays}d)
                       </span>
                       <span aria-hidden="true" className="text-slate-300 dark:text-slate-600">
                         ·
                       </span>
                       <span className="text-slate-500">{currentPlotData.locationName}</span>
                     </div>
-                    <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-2.5">
                       <h2 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tight leading-none">
                         {currentPlotData.plot.name}
                       </h2>
+                      <span
+                        className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold uppercase inline-flex items-center gap-1.5 ${
+                          getStageMeta(formData.stage).badgeClass
+                        }`}
+                      >
+                        <span className={`w-2 h-2 rounded-full ${getStageMeta(formData.stage).dotClass}`} />
+                        Fase: {formData.stage || 'Vegetativo'}
+                      </span>
                       <span className="text-xs font-mono text-emerald-600 dark:text-emerald-400 font-bold">
-                        Siembra: {currentPlotData.plot.sowingDate} · {currentPlotMetrics.dds}/{currentPlotMetrics.cycleDays} DDS (
-                        {currentPlotMetrics.cycleProgressPct}%)
+                        Siembra: {currentPlotData.plot.sowingDate} · {currentPlotMetrics.dds}/
+                        {currentPlotMetrics.cycleDays} DDS ({currentPlotMetrics.cycleProgressPct}%)
                       </span>
                       <span className="text-xs font-mono text-amber-600 dark:text-amber-400 font-bold">
                         · Cosecha Óptima: {currentPlotMetrics.targetHarvestDate} (
@@ -1991,7 +2101,7 @@ export default function TrialManager() {
                   </div>
 
                   {/* SELECTOR DE PESTAÑAS: RELEVAMIENTO + ATAJOS vs HISTORIAL COTEJADO 360° */}
-                  <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 p-1 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs self-stretch sm:self-auto">
+                  <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 p-1 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs self-stretch sm:self-auto shrink-0">
                     <button
                       type="button"
                       onClick={() => setActiveTab('form')}
@@ -2019,14 +2129,15 @@ export default function TrialManager() {
                 </div>
 
                 {/* CINTA DE COTEJO INSTANTÁNEO CON PARCELAS DE CULTIVO (4 TARJETAS INTERACTIVAS) */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 font-mono text-xs">
-                  {/* 1. Superficie y Estadio BBCH */}
-                  <div className="p-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
-                    <span className="text-[9px] uppercase font-bold text-slate-400 block">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5 font-mono text-xs">
+                  {/* 1. Superficie y Estadio BBCH con color según fase */}
+                  <div className="p-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 min-w-0">
+                    <span className="text-[9px] uppercase font-bold text-slate-400 block truncate">
                       Superficie & Fenología BBCH
                     </span>
-                    <div className="font-black text-slate-900 dark:text-white text-xs mt-0.5">
-                      {currentPlotData.plot.surfaceArea} {currentPlotData.plot.surfaceUnit} ({currentPlotMetrics.areaHa} ha)
+                    <div className="font-black text-slate-900 dark:text-white text-xs mt-0.5 truncate">
+                      {currentPlotData.plot.surfaceArea} {currentPlotData.plot.surfaceUnit} ({currentPlotMetrics.areaHa}{' '}
+                      ha)
                     </div>
                     <select
                       value={currentPlotData.plot.currentPhenologicalStage || 'BBCH_20_39'}
@@ -2039,16 +2150,18 @@ export default function TrialManager() {
                           currentUser?.name
                         )
                       }
-                      className="mt-1 w-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 rounded-lg px-1.5 py-1 text-[10px] font-bold outline-none cursor-pointer"
+                      className={`mt-1 w-full min-w-0 border rounded-lg px-2 py-1 text-[10px] font-bold outline-none cursor-pointer transition ${getBbchSelectColorClass(
+                        currentPlotData.plot.currentPhenologicalStage || 'BBCH_20_39'
+                      )}`}
                       title="Actualizar estadio fenológico BBCH de la parcela"
                     >
-                      <option value="BBCH_00_09">BBCH 00-09 Germinación</option>
-                      <option value="BBCH_10_19">BBCH 10-19 Vegetativo Temprano</option>
-                      <option value="BBCH_20_39">BBCH 20-39 Elongación Vegetativa</option>
-                      <option value="BBCH_50_59">BBCH 50-59 Prefloración / Sexado</option>
-                      <option value="BBCH_60_69">BBCH 60-69 Floración Plena</option>
-                      <option value="BBCH_70_85">BBCH 70-85 Llenado de Grano</option>
-                      <option value="BBCH_89_99">BBCH 89-99 Maduración / Cosecha</option>
+                      <option value="BBCH_00_09">🔵 BBCH 00-09 Germinación</option>
+                      <option value="BBCH_10_19">🟢 BBCH 10-19 Vegetativo Temprano</option>
+                      <option value="BBCH_20_39">🟢 BBCH 20-39 Elongación Vegetativa</option>
+                      <option value="BBCH_50_59">🟣 BBCH 50-59 Prefloración / Sexado</option>
+                      <option value="BBCH_60_69">🟣 BBCH 60-69 Floración Plena</option>
+                      <option value="BBCH_70_85">🟠 BBCH 70-85 Llenado de Grano</option>
+                      <option value="BBCH_89_99">🔴 BBCH 89-99 Maduración / Cosecha</option>
                     </select>
                   </div>
 
@@ -2060,12 +2173,12 @@ export default function TrialManager() {
                       setFieldViewSection('shortcuts');
                       setActiveShortcutTab('hydric');
                     }}
-                    className="p-2.5 rounded-2xl text-left bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 hover:border-sky-500 transition cursor-pointer"
+                    className="p-2.5 rounded-2xl text-left bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 hover:border-sky-500 transition cursor-pointer min-w-0"
                   >
-                    <span className="text-[9px] uppercase font-bold text-sky-600 dark:text-sky-400 block">
+                    <span className="text-[9px] uppercase font-bold text-sky-600 dark:text-sky-400 block truncate">
                       🌧️ Pluviómetro & Riego ({currentPlotMetrics.waterPct}%)
                     </span>
-                    <div className="font-black text-slate-900 dark:text-white text-xs mt-0.5">
+                    <div className="font-black text-slate-900 dark:text-white text-xs mt-0.5 truncate">
                       {currentPlotData.totalWaterMm} mm ({(currentPlotData.totalWaterMm * 10).toFixed(0)} m³/ha)
                     </div>
                     <span className="text-[9.5px] text-slate-400 block truncate">
@@ -2081,15 +2194,15 @@ export default function TrialManager() {
                       setFieldViewSection('shortcuts');
                       setActiveShortcutTab('labor');
                     }}
-                    className="p-2.5 rounded-2xl text-left bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 hover:border-amber-500 transition cursor-pointer"
+                    className="p-2.5 rounded-2xl text-left bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 hover:border-amber-500 transition cursor-pointer min-w-0"
                   >
-                    <span className="text-[9px] uppercase font-bold text-amber-600 dark:text-amber-400 block">
+                    <span className="text-[9px] uppercase font-bold text-amber-600 dark:text-amber-400 block truncate">
                       🚜 Suelo & Labores ({currentPlotTasks.length})
                     </span>
                     <div className="font-black text-slate-900 dark:text-white text-xs mt-0.5 truncate">
                       {currentPlotTasks[0]?.title || 'Sin labores registradas'}
                     </div>
-                    <span className="text-[9.5px] text-slate-400 block">
+                    <span className="text-[9.5px] text-slate-400 block truncate">
                       {currentPlotData.soilPrepCount} prep. suelo / siembra
                     </span>
                   </button>
@@ -2101,9 +2214,9 @@ export default function TrialManager() {
                       setActiveTab('form');
                       setFieldViewSection('harvest');
                     }}
-                    className="p-2.5 rounded-2xl text-left bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 hover:border-emerald-500 transition cursor-pointer"
+                    className="p-2.5 rounded-2xl text-left bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 hover:border-emerald-500 transition cursor-pointer min-w-0"
                   >
-                    <span className="text-[9px] uppercase font-bold text-emerald-600 dark:text-emerald-400 block">
+                    <span className="text-[9px] uppercase font-bold text-emerald-600 dark:text-emerald-400 block truncate">
                       🌾 Cosecha & Pre-Venta ({currentPlotMetrics.cycleProgressPct}%)
                     </span>
                     <div className="font-black text-slate-900 dark:text-white text-xs mt-0.5 truncate">
@@ -2118,7 +2231,7 @@ export default function TrialManager() {
                   </button>
                 </div>
 
-                {/* SELECTOR DE MODO DE VISTA EN CAMPO (FACILITA CARGA EN CELULAR/TABLET SIN SCROLL EXCESIVO) */}
+                {/* SELECTOR DE MODO DE VISTA EN CAMPO */}
                 {activeTab === 'form' && (
                   <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
                     <div className="flex flex-wrap gap-1 bg-slate-200/70 dark:bg-slate-900 p-1 rounded-xl w-full sm:w-auto">
@@ -2170,16 +2283,16 @@ export default function TrialManager() {
 
               {/* VISTA 1: FORMULARIO OFICIAL NUCLEUS TRACE + RELOJ DE COSECHA + ATAJOS DE CAMPO */}
               {activeTab === 'form' && (
-                <div className="flex-1 flex flex-col justify-between">
-                  <form onSubmit={handleSave} className="p-4 md:p-6 space-y-6 overflow-y-auto custom-scrollbar">
+                <div className="flex-1 flex flex-col justify-between min-w-0">
+                  <form onSubmit={handleSave} className="p-4 md:p-6 space-y-6 overflow-y-auto custom-scrollbar min-w-0">
                     {/* ==================================================================== */}
-                    {/* SECCIÓN 1: BIOMETRÍA, AMBIENTE Y SANIDAD (ESCALAS TÁCTILES 1-9)      */}
+                    {/* SECCIÓN 1: BIOMETRÍA, AMBIENTE Y SANIDAD (ENCUADRE PERFECTO)         */}
                     {/* ==================================================================== */}
                     {(fieldViewSection === 'all' || fieldViewSection === 'biometrics') && (
-                      <div className="space-y-5">
+                      <div className="space-y-4 min-w-0">
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-2 border-b dark:border-slate-800">
                           <div className="flex items-center gap-2.5">
-                            <div className="bg-emerald-600 p-2 rounded-xl text-white">
+                            <div className="bg-emerald-600 p-2 rounded-xl text-white shrink-0">
                               <Activity size={18} />
                             </div>
                             <div>
@@ -2187,7 +2300,7 @@ export default function TrialManager() {
                                 1. Relevamiento Biométrico & Sanitario Nucleus Trace
                               </h3>
                               <p className="text-[10px] text-slate-400">
-                                Controles táctiles optimizados para carga con una mano en celular o tablet
+                                Controles táctiles encuadrados y selector cromático de estadio fenológico
                               </p>
                             </div>
                           </div>
@@ -2198,262 +2311,333 @@ export default function TrialManager() {
                           )}
                         </div>
 
-                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-                          {/* COLUMNA AMBIENTE & TIEMPO */}
-                          <div className="lg:col-span-4 bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-3.5">
-                            <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest border-b dark:border-slate-800 pb-2 flex items-center">
-                              <Sun size={14} className="mr-1.5 text-amber-500" /> Ambiente & Fenología
+                        {/* BLOQUE 1A: AMBIENTE, FECHA/HORA Y SELECTOR CROMÁTICO DE FASE FENOLÓGICA */}
+                        <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-4 min-w-0 overflow-hidden">
+                          <div className="flex flex-wrap items-center justify-between gap-2 border-b dark:border-slate-800 pb-2">
+                            <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center">
+                              <Sun size={14} className="mr-1.5 text-amber-500" /> Condiciones Ambientales & Fase Fenológica
                             </h4>
-                            <div className="grid grid-cols-2 gap-2.5">
-                              <div>
-                                <label className={labelClass}>Fecha</label>
-                                <input
-                                  type="date"
-                                  required
-                                  className={inputStyle}
-                                  value={formData.date}
-                                  onChange={e => {
-                                    const newDate = e.target.value;
-                                    setFormData(p => ({ ...p, date: newDate }));
-                                    syncEnvironmentalData(newDate, currentPlotData.location);
-                                  }}
-                                />
-                              </div>
-                              <div>
-                                <label className={labelClass}>Hora</label>
-                                <input
-                                  type="time"
-                                  required
-                                  className={inputStyle}
-                                  value={formData.time}
-                                  onChange={e => setFormData({ ...formData, time: e.target.value })}
-                                />
-                              </div>
+                            <span className="text-[10px] font-mono text-slate-400">
+                              Luna: <strong className="text-slate-600 dark:text-slate-300">{formData.lunarPhase}</strong>
+                            </span>
+                          </div>
+
+                          {/* Fila de Fecha, Hora y Clima (sin desbordes en ninguna resolución) */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 min-w-0">
+                            <div className="min-w-0">
+                              <label className={labelClass}>Fecha de Visita</label>
+                              <input
+                                type="date"
+                                required
+                                className="w-full min-w-0 h-10 px-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 font-mono font-bold text-xs dark:text-white outline-none focus:ring-2 focus:ring-emerald-500"
+                                value={formData.date}
+                                onChange={e => {
+                                  const newDate = e.target.value;
+                                  setFormData(p => ({ ...p, date: newDate }));
+                                  syncEnvironmentalData(newDate, currentPlotData.location);
+                                }}
+                              />
                             </div>
 
-                            <div>
-                              <label className={labelClass}>Fase Fisiológica</label>
-                              <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-3 gap-1.5">
-                                {(['Emergencia', 'Vegetativo', 'Floración', 'Maduración', 'Cosecha'] as const).map(
-                                  st => (
-                                    <button
-                                      key={st}
-                                      type="button"
-                                      onClick={() => setFormData({ ...formData, stage: st })}
-                                      className={`py-2 px-2 rounded-xl text-[10px] font-black uppercase transition cursor-pointer border ${
-                                        formData.stage === st
-                                          ? 'bg-emerald-600 border-emerald-500 text-white shadow-xs'
-                                          : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300'
+                            <div className="min-w-0">
+                              <label className={labelClass}>Hora</label>
+                              <input
+                                type="time"
+                                required
+                                className="w-full min-w-0 h-10 px-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 font-mono font-bold text-xs dark:text-white outline-none focus:ring-2 focus:ring-emerald-500"
+                                value={formData.time}
+                                onChange={e => setFormData({ ...formData, time: e.target.value })}
+                              />
+                            </div>
+
+                            <div className="min-w-0 bg-white dark:bg-slate-900 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between font-mono">
+                              <div>
+                                <span className="text-[9px] font-bold uppercase text-slate-400 block">Temperatura</span>
+                                <span className="text-sm font-black text-amber-600 dark:text-amber-400">
+                                  {formData.temperature}°C
+                                </span>
+                              </div>
+                              <span className="text-[10px] text-amber-500/70 font-bold">GFS</span>
+                            </div>
+
+                            <div className="min-w-0 bg-white dark:bg-slate-900 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between font-mono">
+                              <div>
+                                <span className="text-[9px] font-bold uppercase text-slate-400 block">Humedad Rel.</span>
+                                <span className="text-sm font-black text-sky-600 dark:text-sky-400">
+                                  {formData.humidity}%
+                                </span>
+                              </div>
+                              <span className="text-[10px] text-sky-500/70 font-bold">HR</span>
+                            </div>
+
+                            <div className="min-w-0 bg-white dark:bg-slate-900 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between font-mono sm:col-span-2 lg:col-span-1">
+                              <div>
+                                <span className="text-[9px] font-bold uppercase text-slate-400 block">Fotoperiodo</span>
+                                <span className="text-sm font-black text-slate-800 dark:text-white">
+                                  {formData.lightHours} h
+                                </span>
+                              </div>
+                              <span className="text-[10px] text-emerald-500 font-bold">Luz</span>
+                            </div>
+                          </div>
+
+                          {/* Selector Cromático de Fase Fenológica (5 estadios con color propio) */}
+                          <div className="min-w-0">
+                            <div className="flex items-center justify-between mb-1.5">
+                              <label className={labelClass}>
+                                Fase Fenológica / Estadio Fisiológico (Código de Color Oficial)
+                              </label>
+                              <span className="text-[10px] font-mono font-bold text-slate-400">
+                                Seleccionado: {getStageMeta(formData.stage).label} ({getStageMeta(formData.stage).bbchHint})
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 w-full">
+                              {(Object.keys(PHENOLOGICAL_STAGE_META) as PhenologicalStageKey[]).map(st => {
+                                const meta = PHENOLOGICAL_STAGE_META[st];
+                                const isSelected = formData.stage === st;
+                                return (
+                                  <button
+                                    key={st}
+                                    type="button"
+                                    onClick={() => setFormData({ ...formData, stage: st })}
+                                    className={`min-w-0 py-2.5 px-2.5 rounded-xl text-left transition-all cursor-pointer border flex flex-col justify-between ${
+                                      isSelected ? meta.activeBtnClass : meta.inactiveBtnClass
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between gap-1 w-full">
+                                      <span className="text-[10px] font-black uppercase tracking-wider truncate">
+                                        {meta.label}
+                                      </span>
+                                      <span
+                                        className={`w-2 h-2 rounded-full shrink-0 ${
+                                          isSelected ? 'bg-white' : meta.dotClass
+                                        }`}
+                                      />
+                                    </div>
+                                    <span
+                                      className={`text-[9px] font-mono mt-0.5 block truncate ${
+                                        isSelected ? 'text-white/90 font-bold' : 'opacity-75'
                                       }`}
                                     >
-                                      {st}
-                                    </button>
-                                  )
-                                )}
-                              </div>
+                                      {meta.bbchHint}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* BLOQUE 1B: ALTURA MEDIA (CM) Y DENSIDAD / POBLACIÓN (PL/M²) ENCUADRADOS */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0">
+                          {/* TARJETA 1: ALTURA MEDIA (CM) */}
+                          <div className="min-w-0 overflow-hidden bg-slate-50/80 dark:bg-slate-950/60 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-2.5">
+                            <div className="flex justify-between items-center gap-2">
+                              <label className="text-[10px] font-black uppercase text-slate-700 dark:text-slate-200 tracking-wider flex items-center gap-1.5 truncate">
+                                <Ruler size={14} className="text-emerald-600 shrink-0" />
+                                <span className="truncate">Altura Media de Planta (cm)</span>
+                              </label>
+                              <GrowthIndicator
+                                current={formData.plantHeight || 0}
+                                previous={currentPlotData.lastRecord?.plantHeight || 0}
+                              />
                             </div>
 
-                            <div className="grid grid-cols-3 gap-2 pt-1 font-mono">
-                              <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-center">
-                                <p className="text-[9px] font-bold uppercase text-slate-400">Temp.</p>
-                                <p className="text-sm font-black text-amber-600 dark:text-amber-400">
-                                  {formData.temperature}°C
-                                </p>
-                              </div>
-                              <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-center">
-                                <p className="text-[9px] font-bold uppercase text-slate-400">Humedad</p>
-                                <p className="text-sm font-black text-sky-600 dark:text-sky-400">
-                                  {formData.humidity}%
-                                </p>
-                              </div>
-                              <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-center">
-                                <p className="text-[9px] font-bold uppercase text-slate-400">Fotoperiodo</p>
-                                <p className="text-sm font-black text-slate-800 dark:text-white">
-                                  {formData.lightHours}h
-                                </p>
-                              </div>
+                            {/* Campo numérico de ancho completo (nunca desborda) */}
+                            <div className="relative flex items-center w-full min-w-0">
+                              <input
+                                type="number"
+                                inputMode="decimal"
+                                step="0.5"
+                                min="0"
+                                className="w-full min-w-0 h-11 pl-3.5 pr-12 text-center border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 font-mono text-lg font-black text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500"
+                                value={formData.plantHeight}
+                                onChange={e => setFormData({ ...formData, plantHeight: Number(e.target.value) })}
+                              />
+                              <span className="absolute right-3.5 text-[10px] font-mono font-bold text-slate-400 pointer-events-none">
+                                cm
+                              </span>
+                            </div>
+
+                            {/* Grilla de 4 botones de ajuste rápido perfectamente contenida */}
+                            <div className="grid grid-cols-4 gap-1.5 w-full">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setFormData(p => ({
+                                    ...p,
+                                    plantHeight: Math.max(0, Number(((p.plantHeight || 0) - 10).toFixed(1)))
+                                  }))
+                                }
+                                className="h-9 min-w-0 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-xs font-black text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer"
+                              >
+                                -10
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setFormData(p => ({
+                                    ...p,
+                                    plantHeight: Math.max(0, Number(((p.plantHeight || 0) - 5).toFixed(1)))
+                                  }))
+                                }
+                                className="h-9 min-w-0 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-xs font-black text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer"
+                              >
+                                -5
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setFormData(p => ({
+                                    ...p,
+                                    plantHeight: Number(((p.plantHeight || 0) + 5).toFixed(1))
+                                  }))
+                                }
+                                className="h-9 min-w-0 rounded-xl bg-emerald-600 text-white font-mono text-xs font-black hover:bg-emerald-500 cursor-pointer shadow-xs"
+                              >
+                                +5 cm
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setFormData(p => ({
+                                    ...p,
+                                    plantHeight: Number(((p.plantHeight || 0) + 10).toFixed(1))
+                                  }))
+                                }
+                                className="h-9 min-w-0 rounded-xl bg-emerald-700 text-white font-mono text-xs font-black hover:bg-emerald-600 cursor-pointer shadow-xs"
+                              >
+                                +10 cm
+                              </button>
                             </div>
                           </div>
 
-                          {/* COLUMNA CENTRAL: ALTURA, DENSIDAD Y ESCALAS TÁCTILES 1-9 */}
-                          <div className="lg:col-span-8 space-y-4">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                              {/* ALTURA MEDIA (CM) CON BOTONES DE INCREMENTO RÁPIDO */}
-                              <div className="bg-slate-50/70 dark:bg-slate-950/60 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-2">
-                                <div className="flex justify-between items-center">
-                                  <label className="text-[10px] font-black uppercase text-slate-600 dark:text-slate-300 tracking-wider flex items-center gap-1">
-                                    <Ruler size={13} className="text-emerald-600" /> Altura Media (cm)
-                                  </label>
-                                  <GrowthIndicator
-                                    current={formData.plantHeight || 0}
-                                    previous={currentPlotData.lastRecord?.plantHeight || 0}
-                                  />
-                                </div>
-                                <div className="flex items-center gap-1.5">
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setFormData(p => ({
-                                        ...p,
-                                        plantHeight: Math.max(0, Number(((p.plantHeight || 0) - 5).toFixed(1)))
-                                      }))
-                                    }
-                                    className="h-11 px-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-xs font-black text-slate-700 dark:text-slate-200 hover:bg-slate-100 cursor-pointer"
-                                  >
-                                    -5
-                                  </button>
-                                  <input
-                                    type="number"
-                                    inputMode="decimal"
-                                    step="0.5"
-                                    className="flex-1 h-11 text-center border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 font-mono text-lg font-black dark:text-white outline-none focus:ring-2 focus:ring-emerald-500"
-                                    value={formData.plantHeight}
-                                    onChange={e => setFormData({ ...formData, plantHeight: Number(e.target.value) })}
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setFormData(p => ({
-                                        ...p,
-                                        plantHeight: Number(((p.plantHeight || 0) + 5).toFixed(1))
-                                      }))
-                                    }
-                                    className="h-11 px-3 rounded-xl bg-emerald-600 text-white font-mono text-xs font-black hover:bg-emerald-500 cursor-pointer"
-                                  >
-                                    +5
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setFormData(p => ({
-                                        ...p,
-                                        plantHeight: Number(((p.plantHeight || 0) + 10).toFixed(1))
-                                      }))
-                                    }
-                                    className="h-11 px-3 rounded-xl bg-emerald-700 text-white font-mono text-xs font-black hover:bg-emerald-600 cursor-pointer"
-                                  >
-                                    +10
-                                  </button>
-                                </div>
-                              </div>
-
-                              {/* POBLACIÓN (PL/M²) CON BOTONES DE INCREMENTO RÁPIDO */}
-                              <div className="bg-slate-50/70 dark:bg-slate-950/60 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-2">
-                                <div className="flex justify-between items-center">
-                                  <label className="text-[10px] font-black uppercase text-slate-600 dark:text-slate-300 tracking-wider flex items-center gap-1">
-                                    <Sprout size={13} className="text-emerald-600" /> Densidad / Población (Pl/m²)
-                                  </label>
-                                  <span className="text-[10px] font-mono text-slate-400">
-                                    Ant: {currentPlotData.lastRecord?.plantsPerMeter || 0} pl/m²
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-1.5">
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setFormData(p => ({
-                                        ...p,
-                                        plantsPerMeter: Math.max(0, Number(((p.plantsPerMeter || 0) - 5).toFixed(1)))
-                                      }))
-                                    }
-                                    className="h-11 px-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-xs font-black text-slate-700 dark:text-slate-200 hover:bg-slate-100 cursor-pointer"
-                                  >
-                                    -5
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setFormData(p => ({
-                                        ...p,
-                                        plantsPerMeter: Math.max(0, Number(((p.plantsPerMeter || 0) - 1).toFixed(1)))
-                                      }))
-                                    }
-                                    className="h-11 px-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-xs font-black text-slate-700 dark:text-slate-200 hover:bg-slate-100 cursor-pointer"
-                                  >
-                                    -1
-                                  </button>
-                                  <input
-                                    type="number"
-                                    inputMode="decimal"
-                                    step="0.5"
-                                    className="flex-1 h-11 text-center border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 font-mono text-lg font-black dark:text-white outline-none focus:ring-2 focus:ring-emerald-500"
-                                    value={formData.plantsPerMeter}
-                                    onChange={e =>
-                                      setFormData({ ...formData, plantsPerMeter: Number(e.target.value) })
-                                    }
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setFormData(p => ({
-                                        ...p,
-                                        plantsPerMeter: Number(((p.plantsPerMeter || 0) + 1).toFixed(1))
-                                      }))
-                                    }
-                                    className="h-11 px-2.5 rounded-xl bg-emerald-600 text-white font-mono text-xs font-black hover:bg-emerald-500 cursor-pointer"
-                                  >
-                                    +1
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setFormData(p => ({
-                                        ...p,
-                                        plantsPerMeter: Number(((p.plantsPerMeter || 0) + 5).toFixed(1))
-                                      }))
-                                    }
-                                    className="h-11 px-3 rounded-xl bg-emerald-700 text-white font-mono text-xs font-black hover:bg-emerald-600 cursor-pointer"
-                                  >
-                                    +5
-                                  </button>
-                                </div>
-                              </div>
+                          {/* TARJETA 2: DENSIDAD / POBLACIÓN (PL/M²) */}
+                          <div className="min-w-0 overflow-hidden bg-slate-50/80 dark:bg-slate-950/60 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-2.5">
+                            <div className="flex justify-between items-center gap-2">
+                              <label className="text-[10px] font-black uppercase text-slate-700 dark:text-slate-200 tracking-wider flex items-center gap-1.5 truncate">
+                                <Sprout size={14} className="text-emerald-600 shrink-0" />
+                                <span className="truncate">Densidad / Población (Pl/m²)</span>
+                              </label>
+                              <span className="text-[10px] font-mono text-slate-400 shrink-0">
+                                Ant: {currentPlotData.lastRecord?.plantsPerMeter || 0} pl/m²
+                              </span>
                             </div>
 
-                            {/* Escalas Táctiles 1-9 (Vigor, Homogeneidad, Sanidad, Encamado, Daño Aves) */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                              <TouchScaleControl
-                                label="Vigor Vegetativo (1-9)"
-                                helperText="9 = Máximo vigor foliar y elongación"
-                                value={formData.vigor}
-                                onChange={v => setFormData({ ...formData, vigor: v })}
+                            {/* Campo numérico de ancho completo (nunca desborda) */}
+                            <div className="relative flex items-center w-full min-w-0">
+                              <input
+                                type="number"
+                                inputMode="decimal"
+                                step="0.5"
+                                min="0"
+                                className="w-full min-w-0 h-11 pl-3.5 pr-14 text-center border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 font-mono text-lg font-black text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500"
+                                value={formData.plantsPerMeter}
+                                onChange={e =>
+                                  setFormData({ ...formData, plantsPerMeter: Number(e.target.value) })
+                                }
                               />
-                              <TouchScaleControl
-                                label="Homogeneidad de Lote (1-9)"
-                                helperText="9 = Canopia totalmente uniforme"
-                                value={formData.uniformity}
-                                onChange={v => setFormData({ ...formData, uniformity: v })}
-                              />
-                              <TouchScaleControl
-                                label="Sanidad: Enfermedades (1-9)"
-                                helperText="1 = Sano sin síntomas · 9 = Afectación severa"
-                                invertColor
-                                value={formData.diseasesScore}
-                                onChange={v => setFormData({ ...formData, diseasesScore: v })}
-                              />
-                              <TouchScaleControl
-                                label="Sanidad: Plagas / Insectos (1-9)"
-                                helperText="1 = Sin plagas · 9 = Presión crítica"
-                                invertColor
-                                value={formData.pestsScore}
-                                onChange={v => setFormData({ ...formData, pestsScore: v })}
-                              />
-                              <TouchScaleControl
-                                label="Encamado / Vuelco (1-9)"
-                                helperText="1 = Tallo erecto · 9 = Vuelco generalizado"
-                                invertColor
-                                value={formData.lodging}
-                                onChange={v => setFormData({ ...formData, lodging: v })}
-                              />
-                              <TouchScaleControl
-                                label="Daño por Aves (1-9)"
-                                helperText="1 = Sin daño · 9 = Pérdida severa de grano"
-                                invertColor
-                                value={formData.birdDamage}
-                                onChange={v => setFormData({ ...formData, birdDamage: v })}
-                              />
+                              <span className="absolute right-3.5 text-[10px] font-mono font-bold text-slate-400 pointer-events-none">
+                                pl/m²
+                              </span>
+                            </div>
+
+                            {/* Grilla de 4 botones de ajuste rápido perfectamente contenida */}
+                            <div className="grid grid-cols-4 gap-1.5 w-full">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setFormData(p => ({
+                                    ...p,
+                                    plantsPerMeter: Math.max(0, Number(((p.plantsPerMeter || 0) - 5).toFixed(1)))
+                                  }))
+                                }
+                                className="h-9 min-w-0 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-xs font-black text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer"
+                              >
+                                -5
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setFormData(p => ({
+                                    ...p,
+                                    plantsPerMeter: Math.max(0, Number(((p.plantsPerMeter || 0) - 1).toFixed(1)))
+                                  }))
+                                }
+                                className="h-9 min-w-0 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-xs font-black text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer"
+                              >
+                                -1
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setFormData(p => ({
+                                    ...p,
+                                    plantsPerMeter: Number(((p.plantsPerMeter || 0) + 1).toFixed(1))
+                                  }))
+                                }
+                                className="h-9 min-w-0 rounded-xl bg-emerald-600 text-white font-mono text-xs font-black hover:bg-emerald-500 cursor-pointer shadow-xs"
+                              >
+                                +1 pl
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setFormData(p => ({
+                                    ...p,
+                                    plantsPerMeter: Number(((p.plantsPerMeter || 0) + 5).toFixed(1))
+                                  }))
+                                }
+                                className="h-9 min-w-0 rounded-xl bg-emerald-700 text-white font-mono text-xs font-black hover:bg-emerald-600 cursor-pointer shadow-xs"
+                              >
+                                +5 pl
+                              </button>
                             </div>
                           </div>
+                        </div>
+
+                        {/* BLOQUE 1C: ESCALAS TÁCTILES 1-9 (VIGOR, HOMOGENEIDAD, SANIDAD, ENCAMADO, AVES) */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 min-w-0">
+                          <TouchScaleControl
+                            label="Vigor Vegetativo (1-9)"
+                            helperText="9 = Máximo vigor foliar y elongación"
+                            value={formData.vigor}
+                            onChange={v => setFormData({ ...formData, vigor: v })}
+                          />
+                          <TouchScaleControl
+                            label="Homogeneidad de Lote (1-9)"
+                            helperText="9 = Canopia totalmente uniforme"
+                            value={formData.uniformity}
+                            onChange={v => setFormData({ ...formData, uniformity: v })}
+                          />
+                          <TouchScaleControl
+                            label="Sanidad: Enfermedades (1-9)"
+                            helperText="1 = Sano sin síntomas · 9 = Afectación severa"
+                            invertColor
+                            value={formData.diseasesScore}
+                            onChange={v => setFormData({ ...formData, diseasesScore: v })}
+                          />
+                          <TouchScaleControl
+                            label="Sanidad: Plagas / Insectos (1-9)"
+                            helperText="1 = Sin plagas · 9 = Presión crítica"
+                            invertColor
+                            value={formData.pestsScore}
+                            onChange={v => setFormData({ ...formData, pestsScore: v })}
+                          />
+                          <TouchScaleControl
+                            label="Encamado / Vuelco (1-9)"
+                            helperText="1 = Tallo erecto · 9 = Vuelco generalizado"
+                            invertColor
+                            value={formData.lodging}
+                            onChange={v => setFormData({ ...formData, lodging: v })}
+                          />
+                          <TouchScaleControl
+                            label="Daño por Aves (1-9)"
+                            helperText="1 = Sin daño · 9 = Pérdida severa de grano"
+                            invertColor
+                            value={formData.birdDamage}
+                            onChange={v => setFormData({ ...formData, birdDamage: v })}
+                          />
                         </div>
                       </div>
                     )}
@@ -2462,7 +2646,7 @@ export default function TrialManager() {
                     {/* SECCIÓN 2: ATAJOS OPERATIVOS COTEJADOS CON LA PARCELA (3 MÓDULOS)    */}
                     {/* ==================================================================== */}
                     {(fieldViewSection === 'all' || fieldViewSection === 'shortcuts') && (
-                      <div className="bg-slate-50 dark:bg-slate-950/90 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 md:p-5 space-y-4">
+                      <div className="bg-slate-50 dark:bg-slate-950/90 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 md:p-5 space-y-4 min-w-0 overflow-hidden">
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">
                           <div>
                             <span className="text-[9px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 block">
@@ -2484,8 +2668,8 @@ export default function TrialManager() {
                                   : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
                               }`}
                             >
-                              <Camera size={13} />
-                              <span>Foto & Bitácora ({currentPlotLogs.length})</span>
+                              <Camera size={13} className="shrink-0" />
+                              <span className="truncate">Foto & Bitácora ({currentPlotLogs.length})</span>
                             </button>
                             <button
                               type="button"
@@ -2496,8 +2680,8 @@ export default function TrialManager() {
                                   : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
                               }`}
                             >
-                              <CloudRain size={13} />
-                              <span>Pluviómetro ({currentPlotHydric.length})</span>
+                              <CloudRain size={13} className="shrink-0" />
+                              <span className="truncate">Pluviómetro ({currentPlotHydric.length})</span>
                             </button>
                             <button
                               type="button"
@@ -2508,16 +2692,16 @@ export default function TrialManager() {
                                   : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
                               }`}
                             >
-                              <Tractor size={13} />
-                              <span>Labores ({currentPlotTasks.length})</span>
+                              <Tractor size={13} className="shrink-0" />
+                              <span className="truncate">Labores ({currentPlotTasks.length})</span>
                             </button>
                           </div>
                         </div>
 
                         {/* ATAJO A: BITÁCORA MULTIMEDIA & TOMA FOTOGRÁFICA */}
                         {activeShortcutTab === 'photo_log' && (
-                          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-                            <div className="lg:col-span-7 space-y-3">
+                          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start min-w-0">
+                            <div className="lg:col-span-7 space-y-3 min-w-0">
                               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                 <button
                                   type="button"
@@ -2586,7 +2770,7 @@ export default function TrialManager() {
                                 value={quickLogNote}
                                 onChange={e => setQuickLogNote(e.target.value)}
                                 placeholder={`Observación de Bitácora para ${currentPlotData.plot.name} (ej. estado foliar, humedad en línea de siembra, presencia de benéficos)...`}
-                                className="w-full p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-medium outline-none focus:border-purple-500 dark:text-white"
+                                className="w-full min-w-0 p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-medium outline-none focus:border-purple-500 dark:text-white"
                               />
 
                               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -2617,7 +2801,7 @@ export default function TrialManager() {
                             </div>
 
                             {/* Cotejo de últimas fotos y notas de la parcela */}
-                            <div className="lg:col-span-5 bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2 max-h-56 overflow-y-auto">
+                            <div className="lg:col-span-5 bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2 max-h-56 overflow-y-auto min-w-0">
                               <span className="text-[10px] font-black uppercase text-slate-400 block">
                                 Últimos Registros en Bitácora ({currentPlotLogs.length})
                               </span>
@@ -2656,24 +2840,24 @@ export default function TrialManager() {
 
                         {/* ATAJO B: PLUVIÓMETRO & RIEGO SUPLEMENTARIO */}
                         {activeShortcutTab === 'hydric' && (
-                          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-                            <div className="lg:col-span-7 space-y-3">
-                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                                <div>
+                          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start min-w-0">
+                            <div className="lg:col-span-7 space-y-3 min-w-0">
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 min-w-0">
+                                <div className="min-w-0">
                                   <label className="text-[9px] font-black uppercase text-slate-400 block mb-1">
                                     Tipo de Aporte
                                   </label>
                                   <select
                                     value={quickHydricType}
                                     onChange={e => setQuickHydricType(e.target.value as 'Riego' | 'Lluvia')}
-                                    className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold dark:text-white"
+                                    className="w-full min-w-0 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold dark:text-white"
                                   >
                                     <option value="Riego">💧 Riego (Agua Azul)</option>
                                     <option value="Lluvia">🌧️ Pluviómetro (Lluvia)</option>
                                   </select>
                                 </div>
 
-                                <div>
+                                <div className="min-w-0">
                                   <label className="text-[9px] font-black uppercase text-slate-400 block mb-1">
                                     Lámina (mm) *
                                   </label>
@@ -2685,11 +2869,11 @@ export default function TrialManager() {
                                     value={quickHydricMm}
                                     onChange={e => setQuickHydricMm(e.target.value)}
                                     placeholder="Ej: 15"
-                                    className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-mono font-bold dark:text-white"
+                                    className="w-full min-w-0 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-mono font-bold dark:text-white"
                                   />
                                 </div>
 
-                                <div>
+                                <div className="min-w-0">
                                   <label className="text-[9px] font-black uppercase text-slate-400 block mb-1">
                                     Hora Inicio
                                   </label>
@@ -2697,11 +2881,11 @@ export default function TrialManager() {
                                     type="time"
                                     value={quickHydricStartTime}
                                     onChange={e => setQuickHydricStartTime(e.target.value)}
-                                    className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-mono dark:text-white"
+                                    className="w-full min-w-0 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-mono dark:text-white"
                                   />
                                 </div>
 
-                                <div>
+                                <div className="min-w-0">
                                   <label className="text-[9px] font-black uppercase text-slate-400 block mb-1">
                                     Hora Fin
                                   </label>
@@ -2710,7 +2894,7 @@ export default function TrialManager() {
                                     value={quickHydricEndTime}
                                     onChange={e => setQuickHydricEndTime(e.target.value)}
                                     disabled={quickHydricType === 'Lluvia'}
-                                    className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-mono dark:text-white disabled:opacity-40"
+                                    className="w-full min-w-0 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-mono dark:text-white disabled:opacity-40"
                                   />
                                 </div>
                               </div>
@@ -2734,13 +2918,13 @@ export default function TrialManager() {
                                 ))}
                               </div>
 
-                              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+                              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 min-w-0">
                                 <input
                                   type="text"
                                   value={quickHydricNotes}
                                   onChange={e => setQuickHydricNotes(e.target.value)}
                                   placeholder="Observaciones del turno de riego o lectura de pluviómetro físico..."
-                                  className="flex-1 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs dark:text-white"
+                                  className="flex-1 min-w-0 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs dark:text-white"
                                 />
                                 <button
                                   type="button"
@@ -2773,7 +2957,7 @@ export default function TrialManager() {
                             </div>
 
                             {/* Cotejo con registros hídricos de la parcela */}
-                            <div className="lg:col-span-5 bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2 max-h-56 overflow-y-auto font-mono">
+                            <div className="lg:col-span-5 bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2 max-h-56 overflow-y-auto font-mono min-w-0">
                               <div className="flex items-center justify-between">
                                 <span className="text-[10px] font-black uppercase text-slate-400">
                                   Historial Pluviómetro & Riego ({currentPlotHydric.length})
@@ -2784,7 +2968,8 @@ export default function TrialManager() {
                               </div>
                               {currentPlotHydric.slice(0, 5).map(hr => {
                                 const isSat =
-                                  String(hr.id).startsWith('auto-rain-') || String(hr.notes || '').includes('Open-Meteo');
+                                  String(hr.id).startsWith('auto-rain-') ||
+                                  String(hr.notes || '').includes('Open-Meteo');
                                 return (
                                   <div
                                     key={hr.id}
@@ -2815,8 +3000,8 @@ export default function TrialManager() {
 
                         {/* ATAJO C: LABORES CULTURALES & PREPARACIÓN DE SUELO */}
                         {activeShortcutTab === 'labor' && (
-                          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-                            <div className="lg:col-span-7 space-y-3">
+                          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start min-w-0">
+                            <div className="lg:col-span-7 space-y-3 min-w-0">
                               {/* Plantillas rápidas de preparación de suelo y labores */}
                               <div className="flex flex-wrap gap-1.5">
                                 {QUICK_LABOR_PRESETS.map((preset, idx) => (
@@ -2837,15 +3022,15 @@ export default function TrialManager() {
                                 ))}
                               </div>
 
-                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                                <div>
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 min-w-0">
+                                <div className="min-w-0">
                                   <label className="text-[9px] font-black uppercase text-slate-400 block mb-1">
                                     Categoría de Labor
                                   </label>
                                   <select
                                     value={quickLaborType}
                                     onChange={e => setQuickLaborType(e.target.value as AgriculturalLaborType)}
-                                    className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold dark:text-white"
+                                    className="w-full min-w-0 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold dark:text-white"
                                   >
                                     <option value="PREPARACION_SUELO">🚜 Preparación de Suelo</option>
                                     <option value="SIEMBRA">🌱 Siembra / Implantación</option>
@@ -2858,7 +3043,7 @@ export default function TrialManager() {
                                   </select>
                                 </div>
 
-                                <div className="sm:col-span-2">
+                                <div className="sm:col-span-2 min-w-0">
                                   <label className="text-[9px] font-black uppercase text-slate-400 block mb-1">
                                     Título de la Labor Ejecutada / Verificada *
                                   </label>
@@ -2867,30 +3052,30 @@ export default function TrialManager() {
                                     value={quickLaborTitle}
                                     onChange={e => setQuickLaborTitle(e.target.value)}
                                     placeholder="Ej: Cincelado profundo + Rastra de disco (Cama de siembra)"
-                                    className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold dark:text-white"
+                                    className="w-full min-w-0 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold dark:text-white"
                                   />
                                 </div>
                               </div>
 
-                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 min-w-0">
                                 <input
                                   type="text"
                                   value={quickLaborTractor}
                                   onChange={e => setQuickLaborTractor(e.target.value)}
                                   placeholder="Tractor / Unidad Motriz"
-                                  className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs dark:text-white"
+                                  className="min-w-0 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs dark:text-white"
                                 />
                                 <input
                                   type="text"
                                   value={quickLaborImplement}
                                   onChange={e => setQuickLaborImplement(e.target.value)}
                                   placeholder="Implemento / Herramienta"
-                                  className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs dark:text-white"
+                                  className="min-w-0 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs dark:text-white"
                                 />
                                 <select
                                   value={quickLaborStatus}
                                   onChange={e => setQuickLaborStatus(e.target.value as Task['status'])}
-                                  className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold dark:text-white"
+                                  className="min-w-0 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold dark:text-white"
                                 >
                                   <option value="Completada">✓ Ejecutada / Completada</option>
                                   <option value="En_Curso">⏳ En Curso</option>
@@ -2928,7 +3113,7 @@ export default function TrialManager() {
                             </div>
 
                             {/* Cotejo con labores registradas en la parcela */}
-                            <div className="lg:col-span-5 bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2 max-h-56 overflow-y-auto">
+                            <div className="lg:col-span-5 bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2 max-h-56 overflow-y-auto min-w-0">
                               <span className="text-[10px] font-black uppercase text-slate-400 block">
                                 Labores & Preparación de Suelo en Lote ({currentPlotTasks.length})
                               </span>
@@ -2950,7 +3135,9 @@ export default function TrialManager() {
                                         {tk.status}
                                       </span>
                                     </div>
-                                    <p className="font-bold text-slate-800 dark:text-white mt-0.5 truncate">{tk.title}</p>
+                                    <p className="font-bold text-slate-800 dark:text-white mt-0.5 truncate">
+                                      {tk.title}
+                                    </p>
                                     {tk.machinery?.implement && (
                                       <span className="text-[10px] text-slate-400 block truncate">
                                         {tk.machinery.tractor} · {tk.machinery.implement}
@@ -2969,7 +3156,7 @@ export default function TrialManager() {
                     {/* SECCIÓN 3: CRONOGRAMA DE COSECHA, PROYECCIÓN PRE-VENTA Y CIERRE      */}
                     {/* ==================================================================== */}
                     {(fieldViewSection === 'all' || fieldViewSection === 'harvest') && (
-                      <div className="bg-slate-900 text-white rounded-2xl p-5 md:p-6 space-y-5 border border-slate-800 shadow-lg">
+                      <div className="bg-slate-900 text-white rounded-2xl p-5 md:p-6 space-y-5 border border-slate-800 shadow-lg min-w-0 overflow-hidden">
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-white/10 pb-4">
                           <div>
                             <span className="text-[9px] font-black uppercase tracking-widest text-emerald-400 block">
@@ -2993,7 +3180,7 @@ export default function TrialManager() {
                         </div>
 
                         {/* PARTE A: LÍNEA DE TIEMPO DESDE SIEMBRA Y VENTANAS ÓPTIMAS POR GERMOPLASMA */}
-                        <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-3">
+                        <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-3 min-w-0">
                           <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
                             <div>
                               <span className="text-slate-400">Germoplasma Declarado:</span>{' '}
@@ -3016,16 +3203,14 @@ export default function TrialManager() {
                           <div className="w-full h-3 bg-slate-800 rounded-full overflow-hidden p-0.5 border border-white/10">
                             <div
                               className={`h-full rounded-full transition-all ${
-                                currentPlotMetrics.cycleProgressPct >= 90
-                                  ? 'bg-amber-500'
-                                  : 'bg-emerald-500'
+                                currentPlotMetrics.cycleProgressPct >= 90 ? 'bg-amber-500' : 'bg-emerald-500'
                               }`}
                               style={{ width: `${Math.max(4, currentPlotMetrics.cycleProgressPct)}%` }}
                             />
                           </div>
 
                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1 font-mono text-xs">
-                            <div className="bg-slate-950/70 p-3 rounded-xl border border-white/10">
+                            <div className="bg-slate-950/70 p-3 rounded-xl border border-white/10 min-w-0">
                               <span className="text-[9px] uppercase text-slate-400 block">Fecha de Siembra</span>
                               <strong className="text-sm text-white block mt-0.5">
                                 {currentPlotData.plot.sowingDate}
@@ -3035,7 +3220,7 @@ export default function TrialManager() {
                               </span>
                             </div>
 
-                            <div className="bg-slate-950/70 p-3 rounded-xl border border-white/10">
+                            <div className="bg-slate-950/70 p-3 rounded-xl border border-white/10 min-w-0">
                               <span className="text-[9px] uppercase text-slate-400 block">
                                 Ventana Óptima Corte Fibra
                               </span>
@@ -3047,7 +3232,7 @@ export default function TrialManager() {
                               </span>
                             </div>
 
-                            <div className="bg-slate-950/70 p-3 rounded-xl border border-white/10">
+                            <div className="bg-slate-950/70 p-3 rounded-xl border border-white/10 min-w-0">
                               <span className="text-[9px] uppercase text-slate-400 block">
                                 Fecha Óptima Grano / Ciclo
                               </span>
@@ -3059,7 +3244,7 @@ export default function TrialManager() {
                               </span>
                             </div>
 
-                            <div className="bg-emerald-950/40 p-3 rounded-xl border border-emerald-500/30">
+                            <div className="bg-emerald-950/40 p-3 rounded-xl border border-emerald-500/30 min-w-0">
                               <span className="text-[9px] uppercase text-emerald-300 block">
                                 Disponibilidad Comercial Pre-Venta
                               </span>
@@ -3078,30 +3263,31 @@ export default function TrialManager() {
                         </div>
 
                         {/* PARTE B: PROYECCIÓN COMERCIAL DE VOLUMEN VENDIBLE + MUESTREO DE PRE-COSECHA */}
-                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start min-w-0">
                           {/* Tarjetas de Volumen Proyectado para Pre-Venta */}
-                          <div className="lg:col-span-5 space-y-3">
+                          <div className="lg:col-span-5 space-y-3 min-w-0">
                             <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
                               Volumen Estimado en Lote para Pre-Venta ({currentPlotMetrics.areaHa} ha)
                             </span>
 
-                            <div className="p-3.5 rounded-2xl bg-emerald-950/40 border border-emerald-500/30 flex items-center justify-between font-mono">
-                              <div>
+                            <div className="p-3.5 rounded-2xl bg-emerald-950/40 border border-emerald-500/30 flex items-center justify-between font-mono min-w-0">
+                              <div className="min-w-0">
                                 <span className="text-[10px] uppercase font-bold text-emerald-400 block">
                                   🌾 Grano Seco Comercializable
                                 </span>
                                 <strong className="text-xl font-black text-white">
                                   {currentPlotMetrics.liveProjectedGrainTotalKg.toLocaleString('es-AR')} kg
                                 </strong>
-                                <span className="text-[10px] text-slate-300 block">
-                                  Rinde proyectado: {currentPlotMetrics.liveProjectedGrainKgHa.toLocaleString('es-AR')} kg/ha (
+                                <span className="text-[10px] text-slate-300 block truncate">
+                                  Rinde proyectado: {currentPlotMetrics.liveProjectedGrainKgHa.toLocaleString('es-AR')}{' '}
+                                  kg/ha (
                                   {currentPlotMetrics.usingFieldSampleForGrain
                                     ? 'Por muestreo 1m²'
                                     : `Germoplasma × Vigor ${formData.vigor || 8}/9`}
                                   )
                                 </span>
                               </div>
-                              <div className="text-right">
+                              <div className="text-right shrink-0 ml-2">
                                 <span className="text-xs font-bold text-emerald-300 block">
                                   {(currentPlotMetrics.liveProjectedGrainTotalKg / 1000).toFixed(2)} Tn
                                 </span>
@@ -3109,15 +3295,15 @@ export default function TrialManager() {
                               </div>
                             </div>
 
-                            <div className="p-3.5 rounded-2xl bg-indigo-950/40 border border-indigo-500/30 flex items-center justify-between font-mono">
-                              <div>
+                            <div className="p-3.5 rounded-2xl bg-indigo-950/40 border border-indigo-500/30 flex items-center justify-between font-mono min-w-0">
+                              <div className="min-w-0">
                                 <span className="text-[10px] uppercase font-bold text-indigo-300 block">
                                   🌿 Fibra / Tallo Seco Industrial
                                 </span>
                                 <strong className="text-xl font-black text-white">
                                   {currentPlotMetrics.liveProjectedFiberTotalTn} Tn
                                 </strong>
-                                <span className="text-[10px] text-slate-300 block">
+                                <span className="text-[10px] text-slate-300 block truncate">
                                   Rinde proyectado: {currentPlotMetrics.liveProjectedFiberTnHa} Tn/ha (
                                   {currentPlotMetrics.usingFieldSampleForFiber
                                     ? 'Por muestreo 1m²'
@@ -3125,7 +3311,7 @@ export default function TrialManager() {
                                   )
                                 </span>
                               </div>
-                              <div className="text-right">
+                              <div className="text-right shrink-0 ml-2">
                                 <span className="text-xs font-bold text-indigo-300 block">
                                   {Math.round(currentPlotMetrics.liveProjectedFiberTotalTn * 1000).toLocaleString(
                                     'es-AR'
@@ -3138,26 +3324,26 @@ export default function TrialManager() {
                           </div>
 
                           {/* Muestreo de Campo (Marco 1 m²) + Programación Rápida de Cosecha */}
-                          <div className="lg:col-span-7 bg-white/5 border border-white/10 rounded-2xl p-4 space-y-3.5">
+                          <div className="lg:col-span-7 bg-white/5 border border-white/10 rounded-2xl p-4 space-y-3.5 min-w-0">
                             <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400 block">
                               Muestreo Pre-Cosecha en Lote (Marco 1 m²) & Programación de Trilla
                             </span>
 
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                              <div>
-                                <label className="text-[9px] uppercase font-black text-slate-400 block mb-1">
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 min-w-0">
+                              <div className="min-w-0">
+                                <label className="text-[9px] uppercase font-black text-slate-400 block mb-1 truncate">
                                   Plena Floración (50%)
                                 </label>
                                 <input
                                   type="date"
-                                  className="w-full bg-slate-900 border border-white/15 p-2.5 rounded-xl text-xs font-mono outline-none focus:border-emerald-500"
+                                  className="w-full min-w-0 bg-slate-900 border border-white/15 p-2.5 rounded-xl text-xs font-mono outline-none focus:border-emerald-500"
                                   value={formData.floweringDate}
                                   onChange={e => setFormData({ ...formData, floweringDate: e.target.value })}
                                 />
                               </div>
 
-                              <div>
-                                <label className="text-[9px] uppercase font-black text-slate-400 block mb-1">
+                              <div className="min-w-0">
+                                <label className="text-[9px] uppercase font-black text-slate-400 block mb-1 truncate">
                                   Muestra Grano (g/m²)
                                 </label>
                                 <input
@@ -3165,14 +3351,14 @@ export default function TrialManager() {
                                   inputMode="decimal"
                                   step="1"
                                   placeholder="0 = Usar genética"
-                                  className="w-full bg-slate-900 border border-white/15 p-2.5 rounded-xl text-xs font-mono font-bold outline-none focus:border-emerald-500"
+                                  className="w-full min-w-0 bg-slate-900 border border-white/15 p-2.5 rounded-xl text-xs font-mono font-bold outline-none focus:border-emerald-500"
                                   value={formData.seedYield || ''}
                                   onChange={e => setFormData({ ...formData, seedYield: Number(e.target.value) })}
                                 />
                               </div>
 
-                              <div>
-                                <label className="text-[9px] uppercase font-black text-slate-400 block mb-1">
+                              <div className="min-w-0">
+                                <label className="text-[9px] uppercase font-black text-slate-400 block mb-1 truncate">
                                   Muestra Tallo (g/m²)
                                 </label>
                                 <input
@@ -3180,21 +3366,21 @@ export default function TrialManager() {
                                   inputMode="decimal"
                                   step="10"
                                   placeholder="0 = Usar genética"
-                                  className="w-full bg-slate-900 border border-white/15 p-2.5 rounded-xl text-xs font-mono font-bold outline-none focus:border-emerald-500"
+                                  className="w-full min-w-0 bg-slate-900 border border-white/15 p-2.5 rounded-xl text-xs font-mono font-bold outline-none focus:border-emerald-500"
                                   value={formData.stemWeight || ''}
                                   onChange={e => setFormData({ ...formData, stemWeight: Number(e.target.value) })}
                                 />
                               </div>
 
-                              <div>
-                                <label className="text-[9px] uppercase font-black text-amber-400 block mb-1">
+                              <div className="min-w-0">
+                                <label className="text-[9px] uppercase font-black text-amber-400 block mb-1 truncate">
                                   Humedad Grano Lote %
                                 </label>
                                 <input
                                   type="number"
                                   inputMode="decimal"
                                   step="0.5"
-                                  className="w-full bg-slate-900 border border-amber-500/30 p-2.5 rounded-xl text-xs font-mono font-bold text-amber-300 outline-none focus:border-amber-400"
+                                  className="w-full min-w-0 bg-slate-900 border border-amber-500/30 p-2.5 rounded-xl text-xs font-mono font-bold text-amber-300 outline-none focus:border-amber-400"
                                   value={grainMoistureFieldPct}
                                   onChange={e => setGrainMoistureFieldPct(Number(e.target.value))}
                                 />
@@ -3202,8 +3388,8 @@ export default function TrialManager() {
                             </div>
 
                             {/* Programación de Fecha de Cosecha sincronizada con la Parcela */}
-                            <div className="pt-2 border-t border-white/10 flex flex-col sm:flex-row items-stretch sm:items-end justify-between gap-2.5">
-                              <div className="flex-1">
+                            <div className="pt-2 border-t border-white/10 flex flex-col sm:flex-row items-stretch sm:items-end justify-between gap-2.5 min-w-0">
+                              <div className="flex-1 min-w-0">
                                 <label className="text-[9px] uppercase font-black text-emerald-400 block mb-1">
                                   Fecha Programada de Cosecha / Compromiso Comercial
                                 </label>
@@ -3211,7 +3397,7 @@ export default function TrialManager() {
                                   type="date"
                                   value={scheduleHarvestDateInput}
                                   onChange={e => setScheduleHarvestDateInput(e.target.value)}
-                                  className="w-full bg-slate-900 border border-emerald-500/40 p-2.5 rounded-xl text-xs font-mono font-bold text-white outline-none focus:border-emerald-400"
+                                  className="w-full min-w-0 bg-slate-900 border border-emerald-500/40 p-2.5 rounded-xl text-xs font-mono font-bold text-white outline-none focus:border-emerald-400"
                                 />
                               </div>
 
@@ -3348,104 +3534,110 @@ export default function TrialManager() {
                           No hay informes biométricos registrados para este lote.
                         </div>
                       ) : (
-                        plotHistory.map(record => (
-                          <div
-                            key={record.id}
-                            className="p-4 rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 space-y-3"
-                          >
-                            <div className="flex flex-wrap justify-between items-center gap-2 border-b dark:border-slate-800 pb-2">
-                              <div className="flex items-center gap-3">
-                                <span className="font-black text-slate-800 dark:text-white text-sm">
-                                  {record.date}{' '}
-                                  <span className="text-xs font-normal text-slate-400">{record.time || ''} HS</span>
-                                </span>
-                                <span className="text-[10px] font-mono font-bold uppercase text-emerald-600 dark:text-emerald-400">
-                                  · {record.stage}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-[10px] text-slate-400 font-bold uppercase mr-2">
-                                  Auditado por: {record.createdByName || 'Técnico Nucleus'}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => handleEditRecord(record)}
-                                  className="p-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-emerald-600 transition cursor-pointer"
-                                  title="Editar Informe"
-                                >
-                                  <Edit2 size={13} />
-                                </button>
-                                {confirmDeleteRecordId === record.id ? (
-                                  <div className="inline-flex items-center gap-1.5 bg-red-50 dark:bg-red-950/60 px-2.5 py-1 rounded-lg border border-red-200 dark:border-red-800">
-                                    <button
-                                      type="button"
-                                      onClick={async () => {
-                                        await deleteTrialRecord(record.id);
-                                        setConfirmDeleteRecordId(null);
-                                      }}
-                                      className="text-[9px] font-black uppercase text-red-600 hover:underline cursor-pointer"
-                                    >
-                                      Confirmar
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => setConfirmDeleteRecordId(null)}
-                                      className="text-[9px] font-bold text-slate-400 hover:text-slate-600 cursor-pointer"
-                                    >
-                                      No
-                                    </button>
-                                  </div>
-                                ) : (
+                        plotHistory.map(record => {
+                          const stageMeta = getStageMeta(record.stage);
+                          return (
+                            <div
+                              key={record.id}
+                              className="p-4 rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 space-y-3"
+                            >
+                              <div className="flex flex-wrap justify-between items-center gap-2 border-b dark:border-slate-800 pb-2">
+                                <div className="flex items-center gap-2.5">
+                                  <span className="font-black text-slate-800 dark:text-white text-sm">
+                                    {record.date}{' '}
+                                    <span className="text-xs font-normal text-slate-400">{record.time || ''} HS</span>
+                                  </span>
+                                  <span
+                                    className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold uppercase inline-flex items-center gap-1.5 ${stageMeta.badgeClass}`}
+                                  >
+                                    <span className={`w-1.5 h-1.5 rounded-full ${stageMeta.dotClass}`} />
+                                    {record.stage}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] text-slate-400 font-bold uppercase mr-2">
+                                    Auditado por: {record.createdByName || 'Técnico Nucleus'}
+                                  </span>
                                   <button
                                     type="button"
-                                    onClick={() => setConfirmDeleteRecordId(record.id)}
-                                    className="p-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-red-600 transition cursor-pointer"
-                                    title="Eliminar Informe"
+                                    onClick={() => handleEditRecord(record)}
+                                    className="p-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-emerald-600 transition cursor-pointer"
+                                    title="Editar Informe"
                                   >
-                                    <Trash2 size={13} />
+                                    <Edit2 size={13} />
                                   </button>
-                                )}
+                                  {confirmDeleteRecordId === record.id ? (
+                                    <div className="inline-flex items-center gap-1.5 bg-red-50 dark:bg-red-950/60 px-2.5 py-1 rounded-lg border border-red-200 dark:border-red-800">
+                                      <button
+                                        type="button"
+                                        onClick={async () => {
+                                          await deleteTrialRecord(record.id);
+                                          setConfirmDeleteRecordId(null);
+                                        }}
+                                        className="text-[9px] font-black uppercase text-red-600 hover:underline cursor-pointer"
+                                      >
+                                        Confirmar
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setConfirmDeleteRecordId(null)}
+                                        className="text-[9px] font-bold text-slate-400 hover:text-slate-600 cursor-pointer"
+                                      >
+                                        No
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => setConfirmDeleteRecordId(record.id)}
+                                      className="p-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-red-600 transition cursor-pointer"
+                                      title="Eliminar Informe"
+                                    >
+                                      <Trash2 size={13} />
+                                    </button>
+                                  )}
+                                </div>
                               </div>
-                            </div>
 
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5 text-xs">
-                              <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border dark:border-slate-800">
-                                <p className="text-[8px] font-black text-slate-400 uppercase">Altura Media</p>
-                                <p className="font-black text-emerald-600 text-sm">{record.plantHeight || 0} cm</p>
-                              </div>
-                              <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border dark:border-slate-800">
-                                <p className="text-[8px] font-black text-slate-400 uppercase">Población</p>
-                                <p className="font-black text-slate-700 dark:text-slate-200 text-sm">
-                                  {record.plantsPerMeter || 0} pl/m²
-                                </p>
-                              </div>
-                              <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border dark:border-slate-800">
-                                <p className="text-[8px] font-black text-slate-400 uppercase">Vigor / Homog.</p>
-                                <p className="font-black text-emerald-600 text-sm">
-                                  {record.vigor || '-'}/9 · {record.uniformity || '-'}/9
-                                </p>
-                              </div>
-                              <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border dark:border-slate-800">
-                                <p className="text-[8px] font-black text-slate-400 uppercase">Sanidad (Enf/Plag)</p>
-                                <p className="font-black text-amber-600 text-sm">
-                                  {record.diseasesScore || 1}/9 · {record.pestsScore || 1}/9
-                                </p>
-                              </div>
-                              <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border dark:border-slate-800">
-                                <p className="text-[8px] font-black text-slate-400 uppercase">Clima / Fotoperiodo</p>
-                                <p className="font-black text-slate-600 dark:text-slate-300 text-sm">
-                                  {record.temperature}°C · {record.lightHours || 12}h
-                                </p>
-                              </div>
-                              <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border dark:border-slate-800">
-                                <p className="text-[8px] font-black text-slate-400 uppercase">Muestreo Grano/Tallo</p>
-                                <p className="font-black text-slate-700 dark:text-slate-200 text-sm">
-                                  {record.seedYield || 0}g · {record.stemWeight || 0}g/m²
-                                </p>
+                              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5 text-xs">
+                                <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border dark:border-slate-800">
+                                  <p className="text-[8px] font-black text-slate-400 uppercase">Altura Media</p>
+                                  <p className="font-black text-emerald-600 text-sm">{record.plantHeight || 0} cm</p>
+                                </div>
+                                <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border dark:border-slate-800">
+                                  <p className="text-[8px] font-black text-slate-400 uppercase">Población</p>
+                                  <p className="font-black text-slate-700 dark:text-slate-200 text-sm">
+                                    {record.plantsPerMeter || 0} pl/m²
+                                  </p>
+                                </div>
+                                <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border dark:border-slate-800">
+                                  <p className="text-[8px] font-black text-slate-400 uppercase">Vigor / Homog.</p>
+                                  <p className="font-black text-emerald-600 text-sm">
+                                    {record.vigor || '-'}/9 · {record.uniformity || '-'}/9
+                                  </p>
+                                </div>
+                                <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border dark:border-slate-800">
+                                  <p className="text-[8px] font-black text-slate-400 uppercase">Sanidad (Enf/Plag)</p>
+                                  <p className="font-black text-amber-600 text-sm">
+                                    {record.diseasesScore || 1}/9 · {record.pestsScore || 1}/9
+                                  </p>
+                                </div>
+                                <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border dark:border-slate-800">
+                                  <p className="text-[8px] font-black text-slate-400 uppercase">Clima / Fotoperiodo</p>
+                                  <p className="font-black text-slate-600 dark:text-slate-300 text-sm">
+                                    {record.temperature}°C · {record.lightHours || 12}h
+                                  </p>
+                                </div>
+                                <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border dark:border-slate-800">
+                                  <p className="text-[8px] font-black text-slate-400 uppercase">Muestreo Grano/Tallo</p>
+                                  <p className="font-black text-slate-700 dark:text-slate-200 text-sm">
+                                    {record.seedYield || 0}g · {record.stemWeight || 0}g/m²
+                                  </p>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        ))
+                          );
+                        })
                       )}
                     </div>
                   )}
