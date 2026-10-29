@@ -94,4 +94,4 @@ export default function App() {
     </AppProvider>
   );
 }
-/* deploy-trigger: v7.20.0 */
+/* deploy-trigger: v7.20.0-stable */
