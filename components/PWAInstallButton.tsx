@@ -103,26 +103,35 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
             >
               <X size={18} />
             </button>
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-white/15 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-inner">
-                {activeModalTab === 'android' ? (
-                  <AndroidLogo size={28} className="text-[#3DDC84]" />
-                ) : activeModalTab === 'windows' ? (
-                  <WindowsLogo size={24} className="text-sky-400" />
-                ) : (
-                  <Smartphone size={26} className="text-emerald-300" />
-                )}
+            <div className="flex items-center gap-3.5">
+              <div className="h-12 px-2.5 rounded-2xl bg-[#DDDB00] flex items-center justify-center border-2 border-white/40 shadow-md shrink-0">
+                <img
+                  src="/hempc-logo-cropped.png?v=7.18.2"
+                  alt="HempC"
+                  className="h-7 w-auto object-contain"
+                />
               </div>
               <div>
                 <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-emerald-300 font-black block">
                   Centro Oficial de Descarga • HempC Nucleus
                 </span>
-                <h3 className="text-xl font-black tracking-tight uppercase italic">
-                  {activeModalTab === 'android'
-                    ? 'Instalar App en Android'
-                    : activeModalTab === 'windows'
-                    ? 'App para Windows Escritorio'
-                    : 'Instalar en iPhone / iPad'}
+                <h3 className="text-xl font-black tracking-tight uppercase italic flex items-center gap-2">
+                  {activeModalTab === 'android' ? (
+                    <>
+                      <AndroidLogo size={20} className="text-[#3DDC84]" />
+                      <span>Instalar App en Android</span>
+                    </>
+                  ) : activeModalTab === 'windows' ? (
+                    <>
+                      <WindowsLogo size={18} className="text-sky-400" />
+                      <span>App para Windows Escritorio</span>
+                    </>
+                  ) : (
+                    <>
+                      <Smartphone size={18} className="text-emerald-300" />
+                      <span>Instalar en iPhone / iPad</span>
+                    </>
+                  )}
                 </h3>
               </div>
             </div>

@@ -309,6 +309,34 @@ export interface Variety {
   thcLabName?: string; // Laboratorio acreditado de cromatografía
 }
 
+export type ContractDocumentType =
+  | 'Contrato Productivo Marco'
+  | 'Anexo de Parcelas Habilitadas'
+  | 'Acta de Habilitación de Siembra'
+  | 'Convenio de Semilla Fiscalizada INASE'
+  | 'Adenda de Campaña';
+
+export interface ClientContractDocument {
+  id: string;
+  clientId: string;
+  title: string;
+  documentNumber?: string;
+  docType: ContractDocumentType;
+  campaign: string; // Ej: '2025/2026' — Válido únicamente para la campaña presente
+  plotIds: string[]; // IDs de las parcelas correspondientes y habilitadas para siembra
+  plotNames?: string[];
+  locationId?: string;
+  locationName?: string;
+  fileName: string;
+  fileSize: number;
+  fileDataUrl: string;
+  uploadedAt: string;
+  uploadedBy: string;
+  signedDate?: string;
+  expirationDate?: string;
+  notes?: string;
+}
+
 export interface Client {
   id: string;
   name: string;
@@ -327,6 +355,7 @@ export interface Client {
   coordinates?: { lat: number; lng: number }; 
   locationId?: string; // Campo / Establecimiento asociado a la estructura
   teamUserIds?: string[]; // IDs de operarios vinculados a esta estructura
+  contractDocuments?: ClientContractDocument[]; // Contratos productivos en PDF por campaña y parcelas habilitadas
 }
 
 export interface Plot {

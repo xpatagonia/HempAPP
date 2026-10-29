@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom';
 import React, { useState, useMemo } from 'react';
+import { jsPDF } from 'jspdf';
 import { useAppContext } from '../context/AppContext';
-import { Client, RoleType, User, MembershipLevel, UserRole, StructureRole, Location } from '../types';
+import { Client, RoleType, User, MembershipLevel, UserRole, StructureRole, Location, ClientContractDocument, ContractDocumentType, Plot, CAMPAIGNS } from '../types';
 import { 
   Plus, Edit2, Trash2, Briefcase, MapPin, Phone, Mail, Globe, 
   Users, Building, Eye, X, Link as LinkIcon, UserCheck, 
@@ -9,7 +10,7 @@ import {
   Archive, Sprout, BookOpen, Clock, ClipboardCheck, ArrowUpRight,
   Info, Navigation, CheckCircle2, Key, LayoutGrid, Activity, Smartphone, Sparkles,
   Send, AlertTriangle, RefreshCw, Check, Search, Filter, ShieldAlert, Tractor,
-  Lock, ExternalLink, HelpCircle
+  Lock, ExternalLink, HelpCircle, FileText, Upload, Download, Calendar, FileCheck2
 } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
 import { 
@@ -56,16 +57,29 @@ const generatePassword = () => {
 export default function Clients() {
   const { 
     clients, addClient, updateClient, deleteClient, currentUser, 
-    usersList, addUser, updateUser, locations, plots, switchUserRole
+    usersList, addUser, updateUser, locations, plots, switchUserRole,
+    activeCampaign
   } = useAppContext();
+
+  // Campaña Agrícola Presente (la documentación contractual sólo es válida para la campaña presente)
+  const presentCampaign = activeCampaign && activeCampaign !== 'all' ? activeCampaign : '2025/2026';
 
   // Estados de interfaz y filtrado
   const [searchTerm, setSearchTerm] = useState('');
   const [filterMembership, setFilterMembership] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [activeModalTab, setActiveModalTab] = useState<'info' | 'operators' | 'audit'>('info');
+  const [activeModalTab, setActiveModalTab] = useState<'info' | 'contracts' | 'operators' | 'audit'>('info');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Estados para Contratos Productivos PDF por Parcela Habilitada y Campaña Presente
+  const [newContractTitle, setNewContractTitle] = useState('');
+  const [newContractType, setNewContractType] = useState<ContractDocumentType>('Contrato Productivo Marco');
+  const [newContractCampaign, setNewContractCampaign] = useState<string>(presentCampaign);
+  const [newContractPlotIds, setNewContractPlotIds] = useState<string[]>([]);
+  const [newContractNotes, setNewContractNotes] = useState('');
+  const [isUploadingContract, setIsUploadingContract] = useState(false);
+  const [previewContractDoc, setPreviewContractDoc] = useState<{ doc: ClientContractDocument; clientName: string } | null>(null);
   
   // Feedback de notificación por email
   const [emailFeedback, setEmailFeedback] = useState<{
@@ -109,7 +123,7 @@ export default function Clients() {
     address: '', totalHectares: 0,
     isNetworkMember: true, cuit: '', notes: '', relatedUserId: '', 
     membershipLevel: 'Activo', contractDate: new Date().toISOString().split('T')[0],
-    locationId: '', lat: '', lng: '', teamUserIds: []
+    locationId: '', lat: '', lng: '', teamUserIds: [], contractDocuments: []
   });
 
   // Estado del formulario de Nuevo Operario dentro de la Estructura
@@ -161,23 +175,40 @@ export default function Clients() {
     return locations.find(l => l.clientId === client.id);
   };
 
+  // Obtener las parcelas del establecimiento habilitadas para siembra en la campaña
+  const getStructureEnabledPlots = (locId?: string, clientId?: string): Plot[] => {
+    const targetLoc = locId
+      ? locations.find(l => l.id === locId)
+      : clientId
+      ? locations.find(l => l.clientId === clientId)
+      : undefined;
+    if (!targetLoc) return [];
+    return plots.filter(p => p.locationId === targetLoc.id && p.status === 'Activa');
+  };
+
   // Apertura de modal para editar o crear
-  const handleOpenStructureModal = (client?: Client) => {
+  const handleOpenStructureModal = (client?: Client, initialTab: 'info' | 'contracts' | 'operators' | 'audit' = 'info') => {
     if (client) {
       const team = usersList.filter(u => u.clientId === client.id);
       const loc = getStructureLocation(client);
+      const enabledPlots = getStructureEnabledPlots(client.locationId || loc?.id, client.id);
       setFormData({
         ...client,
         locationId: client.locationId || loc?.id || '',
         lat: client.coordinates?.lat?.toString() || loc?.coordinates?.lat?.toString() || '',
         lng: client.coordinates?.lng?.toString() || loc?.coordinates?.lng?.toString() || '',
-        teamUserIds: team.map(u => u.id)
+        teamUserIds: team.map(u => u.id),
+        contractDocuments: client.contractDocuments || []
       });
       setEditingId(client.id);
+      setNewContractCampaign(presentCampaign);
+      setNewContractPlotIds(enabledPlots.map(p => p.id));
+      setNewContractTitle(`Contrato Productivo Campaña ${presentCampaign} - ${client.name}`);
+      setNewContractNotes(`Habilitación oficial de siembra válida exclusivamente para la Campaña Presente ${presentCampaign}.`);
     } else {
       resetForm();
     }
-    setActiveModalTab('info');
+    setActiveModalTab(initialTab);
     setIsModalOpen(true);
   };
 
@@ -187,9 +218,13 @@ export default function Clients() {
       address: '', totalHectares: 0,
       isNetworkMember: true, cuit: '', notes: '', relatedUserId: '', 
       membershipLevel: 'Activo', contractDate: new Date().toISOString().split('T')[0],
-      locationId: '', lat: '', lng: '', teamUserIds: []
+      locationId: '', lat: '', lng: '', teamUserIds: [], contractDocuments: []
     });
     setEditingId(null);
+    setNewContractTitle('');
+    setNewContractCampaign(presentCampaign);
+    setNewContractPlotIds([]);
+    setNewContractNotes('');
     setNewOperatorData({
       name: '',
       email: '',
@@ -200,6 +235,293 @@ export default function Clients() {
       avatar: PRESET_AVATARS[0],
       sendEmailNotification: true
     });
+  };
+
+  // Construir objeto Client actualizado para persistir contratos en Supabase
+  const persistStructureContracts = async (nextDocs: ClientContractDocument[]) => {
+    setFormData(prev => ({ ...prev, contractDocuments: nextDocs }));
+    if (!editingId) return;
+    const existingClient = clients.find(c => c.id === editingId);
+    if (!existingClient) return;
+    const updatedPayload: Client = {
+      ...existingClient,
+      ...formData,
+      id: editingId,
+      name: (formData.name || existingClient.name).trim(),
+      type: formData.type || existingClient.type || 'Empresa Privada',
+      contactName: formData.contactName || existingClient.contactName || '',
+      totalHectares: Number(formData.totalHectares ?? existingClient.totalHectares ?? 0),
+      isNetworkMember: formData.isNetworkMember !== false,
+      contractDocuments: nextDocs
+    };
+    await updateClient(updatedPayload, formData.teamUserIds);
+  };
+
+  // Subir uno o múltiples archivos PDF reales desde el dispositivo del Administrador
+  const handleUploadContractFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fileList = e.target.files;
+    if (!fileList || fileList.length === 0) return;
+    if (!isAdmin) return;
+
+    const enabledPlots = getStructureEnabledPlots(formData.locationId, editingId || undefined);
+    const selectedPlots = newContractPlotIds.length > 0 ? newContractPlotIds : enabledPlots.map(p => p.id);
+
+    if (selectedPlots.length === 0) {
+      alert('Seleccione al menos una parcela habilitada para siembra antes de vincular el contrato PDF.');
+      e.target.value = '';
+      return;
+    }
+
+    setIsUploadingContract(true);
+    try {
+      const filesArray: File[] = Array.from(fileList);
+      const uploadedDocs: ClientContractDocument[] = [];
+
+      for (let i = 0; i < filesArray.length; i++) {
+        const file = filesArray[i];
+        if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
+          alert(`El archivo "${file.name}" no es un documento PDF válido.`);
+          continue;
+        }
+        if (file.size > 4.5 * 1024 * 1024) {
+          alert(`El archivo "${file.name}" supera los 4.5 MB recomendados para sincronización directa en base de datos.`);
+          continue;
+        }
+
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result || ''));
+          reader.onerror = () => reject(new Error('No se pudo leer el archivo PDF.'));
+          reader.readAsDataURL(file);
+        });
+
+        const baseTitle = newContractTitle.trim()
+          ? filesArray.length > 1
+            ? `${newContractTitle.trim()} (Doc ${i + 1})`
+            : newContractTitle.trim()
+          : file.name.replace(/\.pdf$/i, '');
+
+        uploadedDocs.push({
+          id: `contract-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 7)}`,
+          clientId: editingId || formData.id || '',
+          title: baseTitle,
+          fileName: file.name,
+          docType: newContractType,
+          campaign: newContractCampaign || presentCampaign,
+          plotIds: selectedPlots,
+          uploadedAt: new Date().toISOString(),
+          uploadedBy: currentUser?.name || 'Administrador Red HempC',
+          fileSize: Math.max(1, Math.round(file.size / 1024)),
+          fileDataUrl: dataUrl,
+          notes:
+            newContractNotes.trim() ||
+            `Válido exclusivamente para siembra en Campaña ${newContractCampaign || presentCampaign} (${selectedPlots.length} parcelas habilitadas).`
+        });
+      }
+
+      if (uploadedDocs.length > 0) {
+        const nextDocs = [...uploadedDocs, ...(formData.contractDocuments || [])];
+        await persistStructureContracts(nextDocs);
+      }
+    } catch (err: any) {
+      alert('Error al cargar el contrato PDF: ' + (err.message || err));
+    } finally {
+      setIsUploadingContract(false);
+      e.target.value = '';
+    }
+  };
+
+  // Generar un Contrato Productivo Oficial en PDF (con tabla de parcelas habilitadas y cláusula de campaña presente)
+  const handleGenerateOfficialContractPdf = async () => {
+    if (!isAdmin) return;
+    const enabledPlots = getStructureEnabledPlots(formData.locationId, editingId || undefined);
+    const selectedPlotIds = newContractPlotIds.length > 0 ? newContractPlotIds : enabledPlots.map(p => p.id);
+    const coveredPlots = enabledPlots.filter(p => selectedPlotIds.includes(p.id));
+
+    if (coveredPlots.length === 0) {
+      alert('Debe seleccionar al menos una parcela habilitada para siembra para emitir el contrato productivo PDF.');
+      return;
+    }
+
+    setIsUploadingContract(true);
+    try {
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const campaignLabel = newContractCampaign || presentCampaign;
+      const docTitle = newContractTitle.trim() || `${newContractType} - Campaña ${campaignLabel}`;
+      const locObj = locations.find(l => l.id === formData.locationId);
+
+      // Cabecera institucional HempC
+      pdf.setFillColor(16, 42, 31);
+      pdf.rect(0, 0, 210, 34, 'F');
+      pdf.setFillColor(221, 219, 0); // #DDDB00 marca HempC
+      pdf.rect(14, 7, 36, 18, 'F');
+      pdf.setTextColor(6, 104, 57);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(15);
+      pdf.text('HempC', 21, 18.5);
+
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFontSize(13);
+      pdf.text('RED COOPERATIVA HEMPC NUCLEUS', 56, 14);
+      pdf.setFontSize(9);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(`DOCUMENTO OFICIAL: ${newContractType.toUpperCase()}`, 56, 20);
+      pdf.text(`VALIDEZ ESTRICTA: CAMPAÑA AGRÍCOLA PRESENTE ${campaignLabel}`, 56, 25.5);
+
+      // Datos de la estructura productiva
+      pdf.setTextColor(20, 30, 40);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(11);
+      pdf.text('1. IDENTIFICACIÓN DE LA ESTRUCTURA SOCIA Y ESTABLECIMIENTO', 14, 45);
+
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(9.5);
+      pdf.text(`Estructura Productiva / Razón Social: ${formData.name || 'Socio Productor'}`, 14, 53);
+      pdf.text(`CUIT / Identificación Fiscal: ${formData.cuit || 'S/D'}`, 14, 59);
+      pdf.text(`Titular / Responsable Técnico: ${formData.contactName || 'Responsable Designado'} (${formData.email || 'sin-email'})`, 14, 65);
+      pdf.text(`Establecimiento Habilitado: ${locObj?.name || 'Campo Asociado'} (${locObj?.city || ''}, ${locObj?.province || ''})`, 14, 71);
+      pdf.text(`Campaña Agrícola Habilitada: ${campaignLabel} (Vigente sólo para la campaña presente)`, 14, 77);
+
+      // Cláusula de validez por campaña
+      pdf.setFillColor(240, 253, 244);
+      pdf.setDrawColor(22, 163, 74);
+      pdf.roundedRect(14, 83, 182, 22, 2, 2, 'FD');
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(8.5);
+      pdf.setTextColor(21, 128, 61);
+      pdf.text('CLÁUSULA DE VIGENCIA POR CAMPAÑA PRESENTE E INTRANSFERIBILIDAD DE LOTES:', 18, 90);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(30, 41, 59);
+      pdf.text(
+        `El presente instrumento legal y técnico habilita la implantación y trazabilidad de cáñamo industrial exclusivamente durante la`,
+        18,
+        95.5
+      );
+      pdf.text(
+        `Campaña ${campaignLabel} y únicamente sobre las ${coveredPlots.length} parcelas detalladas a continuación. Carece de validez para campañas futuras.`,
+        18,
+        100.5
+      );
+
+      // Tabla de parcelas habilitadas para siembra
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(10.5);
+      pdf.setTextColor(20, 30, 40);
+      pdf.text(`2. NÓMINA DE PARCELAS HABILITADAS PARA SIEMBRA (${coveredPlots.length} LOTES)`, 14, 115);
+
+      let y = 122;
+      pdf.setFillColor(241, 245, 249);
+      pdf.rect(14, y - 4.5, 182, 7, 'F');
+      pdf.setFontSize(8);
+      pdf.text('CÓDIGO PARCELA', 16, y);
+      pdf.text('ESTADO SIEMBRA', 76, y);
+      pdf.text('FECHA SIEMBRA', 114, y);
+      pdf.text('SUPERFICIE', 150, y);
+      pdf.text('CAMPAÑA', 176, y);
+
+      y += 6;
+      pdf.setFont('helvetica', 'normal');
+      coveredPlots.slice(0, 22).forEach((pl, idx) => {
+        if (y > 262) {
+          pdf.addPage();
+          y = 20;
+        }
+        if (idx % 2 === 1) {
+          pdf.setFillColor(248, 250, 252);
+          pdf.rect(14, y - 4, 182, 6, 'F');
+        }
+        pdf.text(`${pl.name}`, 16, y);
+        pdf.text(`HABILITADA (${pl.status})`, 76, y);
+        pdf.text(`${pl.sowingDate || '-'}`, 114, y);
+        pdf.text(`${pl.surfaceArea || 0} ${pl.surfaceUnit || 'm2'}`, 150, y);
+        pdf.text(`${campaignLabel}`, 176, y);
+        y += 6;
+      });
+
+      if (coveredPlots.length > 22) {
+        pdf.setFont('helvetica', 'italic');
+        pdf.text(`... y ${coveredPlots.length - 22} parcelas habilitadas adicionales registradas en el sistema.`, 16, y + 2);
+        y += 8;
+      }
+
+      // Pie de firmas y sello digital
+      const footerY = Math.min(272, Math.max(y + 16, 245));
+      pdf.setDrawColor(180, 190, 200);
+      pdf.line(14, footerY, 85, footerY);
+      pdf.line(120, footerY, 194, footerY);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(8);
+      pdf.text('DIRECCIÓN CENTRAL RED HEMPC NUCLEUS', 14, footerY + 5);
+      pdf.text(`CONFORMIDAD PRODUCTOR: ${(formData.contactName || formData.name || '').toUpperCase()}`, 120, footerY + 5);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(7.5);
+      pdf.text(`Emitido el ${new Date().toLocaleDateString('es-AR')} • Vigencia exclusiva Campaña ${campaignLabel}`, 14, footerY + 11);
+
+      const dataUrl = pdf.output('datauristring');
+      const safeSlug = (formData.name || 'socio').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      const fileName = `Contrato_${safeSlug}_${campaignLabel.replace('/', '-')}.pdf`;
+
+      const newDoc: ClientContractDocument = {
+        id: `contract-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        clientId: editingId || formData.id || '',
+        title: docTitle,
+        fileName,
+        docType: newContractType,
+        campaign: campaignLabel,
+        plotIds: coveredPlots.map(p => p.id),
+        uploadedAt: new Date().toISOString(),
+        uploadedBy: currentUser?.name || 'Administración Central HempC',
+        fileSize: Math.max(12, Math.round((dataUrl.length * 0.75) / 1024)),
+        fileDataUrl: dataUrl,
+        notes:
+          newContractNotes.trim() ||
+          `Documento oficial generado y certificado para las ${coveredPlots.length} parcelas habilitadas en la Campaña ${campaignLabel}.`
+      };
+
+      const nextDocs = [newDoc, ...(formData.contractDocuments || [])];
+      await persistStructureContracts(nextDocs);
+    } catch (err: any) {
+      alert('Error al generar el PDF oficial: ' + (err.message || err));
+    } finally {
+      setIsUploadingContract(false);
+    }
+  };
+
+  // Descargar cualquier Contrato Productivo PDF (tanto para Productores como Administradores)
+  const handleDownloadContractPdf = (doc: ClientContractDocument, clientObj?: Client) => {
+    try {
+      if (doc.fileDataUrl && doc.fileDataUrl.startsWith('data:')) {
+        const link = document.createElement('a');
+        link.href = doc.fileDataUrl;
+        link.download = doc.fileName.endsWith('.pdf') ? doc.fileName : `${doc.fileName}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        return;
+      }
+      // Si el documento no tenía binario adjunto, regenerar PDF oficial al vuelo para descarga inmediata
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(14);
+      pdf.text(`CONTRATO PRODUCTIVO RED HEMPC - CAMPAÑA ${doc.campaign}`, 14, 22);
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(`Documento: ${doc.title} (${doc.docType})`, 14, 32);
+      pdf.text(`Estructura Productiva: ${clientObj?.name || formData.name || 'Socio de la Red'}`, 14, 39);
+      pdf.text(`Parcelas Habilitadas Cubiertas: ${doc.plotIds.length} lotes`, 14, 46);
+      pdf.text(`Validez: Exclusiva para la Campaña ${doc.campaign}`, 14, 53);
+      pdf.save(doc.fileName.endsWith('.pdf') ? doc.fileName : `${doc.fileName}.pdf`);
+    } catch (err: any) {
+      alert('No se pudo descargar el PDF: ' + (err.message || err));
+    }
+  };
+
+  // Eliminar un contrato PDF (Sólo Administradores)
+  const handleDeleteContractPdf = async (docId: string) => {
+    if (!isAdmin) return;
+    if (!window.confirm('¿Eliminar este documento contractual PDF de la estructura?')) return;
+    const nextDocs = (formData.contractDocuments || []).filter(d => d.id !== docId);
+    await persistStructureContracts(nextDocs);
   };
 
   // Guardar estructura maestra
@@ -230,7 +552,8 @@ export default function Clients() {
         relatedUserId: formData.relatedUserId || null,
         locationId: formData.locationId || undefined,
         teamUserIds: formData.teamUserIds || [],
-        coordinates: coordinates || undefined
+        coordinates: coordinates || undefined,
+        contractDocuments: formData.contractDocuments || []
       };
 
       let success = false;
@@ -693,6 +1016,122 @@ export default function Clients() {
                   )}
                 </div>
 
+                {/* CONTRATOS PRODUCTIVOS PDF & PARCELAS HABILITADAS (VÁLIDOS SÓLO CAMPAÑA PRESENTE) */}
+                {(() => {
+                  const allDocs = client.contractDocuments || [];
+                  const validCampaignDocs = allDocs.filter(d => d.campaign === presentCampaign);
+                  const expiredDocs = allDocs.filter(d => d.campaign !== presentCampaign);
+                  const enabledSowingPlots = structurePlots.filter(p => p.status === 'Activa');
+                  const coveredPlotIds = new Set<string>();
+                  validCampaignDocs.forEach(d => (d.plotIds || []).forEach(pid => coveredPlotIds.add(pid)));
+                  const coveredCount = enabledSowingPlots.filter(p => coveredPlotIds.has(p.id)).length;
+
+                  return (
+                    <div className="bg-slate-50/90 dark:bg-slate-950/70 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 space-y-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] font-black uppercase text-slate-700 dark:text-slate-200 tracking-wider flex items-center">
+                          <FileText size={14} className="mr-1.5 text-hemp-600 dark:text-hemp-400 shrink-0" />
+                          Contratos PDF • Campaña {presentCampaign}
+                        </span>
+                        {validCampaignDocs.length > 0 ? (
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+                            ✓ {validCampaignDocs.length} Vigente{validCampaignDocs.length > 1 ? 's' : ''}
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                            Sin PDF {presentCampaign}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-between text-[10px] font-mono text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-100 dark:border-slate-800">
+                        <span>Parcelas Habilitadas Cubiertas:</span>
+                        <strong className={coveredCount > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600'}>
+                          {coveredCount} / {enabledSowingPlots.length} lotes activos
+                        </strong>
+                      </div>
+
+                      {allDocs.length === 0 ? (
+                        <div className="text-[11px] text-slate-400 text-center py-1.5 italic">
+                          Sin contratos productivos cargados para la campaña presente ({presentCampaign}).
+                        </div>
+                      ) : (
+                        <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                          {allDocs.slice(0, 3).map(doc => {
+                            const isValidNow = doc.campaign === presentCampaign;
+                            return (
+                              <div
+                                key={doc.id}
+                                className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 flex items-center justify-between gap-2"
+                              >
+                                <div className="min-w-0">
+                                  <p className="text-[11px] font-black text-slate-800 dark:text-slate-100 truncate" title={doc.title}>
+                                    {doc.title}
+                                  </p>
+                                  <div className="flex flex-wrap items-center gap-1.5 text-[9.5px] font-mono">
+                                    <span className={isValidNow ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-rose-500 font-bold'}>
+                                      {isValidNow ? `Vigente ${doc.campaign}` : `Vencido (${doc.campaign})`}
+                                    </span>
+                                    <span className="text-slate-400">• {(doc.plotIds || []).length} parcelas</span>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {doc.fileDataUrl && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setPreviewContractDoc({ doc, clientName: client.name })}
+                                      className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-hemp-600 transition cursor-pointer"
+                                      title="Ver documento PDF"
+                                    >
+                                      <Eye size={13} />
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDownloadContractPdf(doc, client)}
+                                    className="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[9.5px] font-mono font-bold uppercase flex items-center gap-1 transition cursor-pointer"
+                                    title="Descargar Contrato Productivo en PDF"
+                                  >
+                                    <Download size={11} />
+                                    <span>PDF</span>
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {expiredDocs.length > 0 && (
+                        <p className="text-[9.5px] font-mono text-amber-600 dark:text-amber-400">
+                          ⚠ {expiredDocs.length} documento(s) de campañas anteriores sin validez para siembra actual.
+                        </p>
+                      )}
+
+                      <div className="pt-1 flex items-center justify-between gap-2">
+                        <span className="text-[9.5px] text-slate-400 font-mono">
+                          Sólo válido Campaña {presentCampaign}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenStructureModal(client, 'contracts')}
+                          className="text-[10px] font-black uppercase tracking-wider text-hemp-600 dark:text-hemp-400 hover:underline flex items-center cursor-pointer"
+                        >
+                          {isAdmin ? (
+                            <>
+                              <Upload size={11} className="mr-1" /> Subir / Gestionar PDFs ({allDocs.length})
+                            </>
+                          ) : (
+                            <>
+                              <Download size={11} className="mr-1" /> Ver & Descargar Contratos ({allDocs.length})
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* OPERARIOS Y ROLES EN LA ESTRUCTURA */}
                 <div className="space-y-3 flex-1">
                   <div className="flex items-center justify-between">
@@ -700,10 +1139,7 @@ export default function Clients() {
                       <Users size={14} className="mr-1.5 text-slate-400" /> Operarios de la Estructura ({team.length})
                     </span>
                     <button 
-                      onClick={() => {
-                        handleOpenStructureModal(client);
-                        setActiveModalTab('operators');
-                      }}
+                      onClick={() => handleOpenStructureModal(client, 'operators')}
                       className="text-[10px] font-black uppercase text-hemp-600 dark:text-hemp-400 hover:underline flex items-center"
                     >
                       <UserPlus size={12} className="mr-1" /> + Incluir
@@ -763,12 +1199,18 @@ export default function Clients() {
                 </div>
 
                 {/* BOTÓN INFERIOR DE GESTIÓN */}
-                <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+                <div className="pt-2 border-t border-slate-100 dark:border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <button 
-                    onClick={() => handleOpenStructureModal(client)}
-                    className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 dark:bg-hemp-600 dark:hover:bg-hemp-500 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest flex items-center justify-center transition shadow-md hover:scale-[1.01]"
+                    onClick={() => handleOpenStructureModal(client, 'contracts')}
+                    className="py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl text-[10.5px] font-black uppercase tracking-wider flex items-center justify-center transition shadow-sm cursor-pointer"
                   >
-                    <Users size={15} className="mr-2"/> Administrar Estructura & Operarios
+                    <FileText size={14} className="mr-1.5"/> Contratos PDF ({(client.contractDocuments || []).length})
+                  </button>
+                  <button 
+                    onClick={() => handleOpenStructureModal(client, 'info')}
+                    className="py-3 bg-slate-900 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 text-white rounded-2xl text-[10.5px] font-black uppercase tracking-wider flex items-center justify-center transition shadow-sm cursor-pointer"
+                  >
+                    <Users size={14} className="mr-1.5"/> Estructura & Equipo
                   </button>
                 </div>
 
@@ -779,7 +1221,7 @@ export default function Clients() {
       </div>
 
       {/* =================================================================== */}
-      {/* MODAL MAESTRO: ADMINISTRAR ESTRUCTURA, CAMPO Y OPERARIOS           */}
+      {/* MODAL MAESTRO: ADMINISTRAR ESTRUCTURA, CONTRATOS PDF Y OPERARIOS    */}
       {/* =================================================================== */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4 overflow-y-auto">
@@ -793,10 +1235,10 @@ export default function Clients() {
                 </div>
                 <div>
                   <h2 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tight italic">
-                    {editingId ? 'Administrar Estructura:' : 'Alta de Estructura:'} <span className="text-hemp-600">{formData.name || 'Nueva'}</span>
+                    {editingId ? 'Estructura Productiva:' : 'Alta de Estructura:'} <span className="text-hemp-600">{formData.name || 'Nueva'}</span>
                   </h2>
                   <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">
-                    Asignación de campo asociado y dotación de operarios con roles diferenciados
+                    Campo asociado, Contratos Productivos PDF por Parcela Habilitada (Campaña {presentCampaign}) y Operarios
                   </p>
                 </div>
               </div>
@@ -809,33 +1251,44 @@ export default function Clients() {
             </div>
 
             {/* PESTAÑAS DEL MODAL */}
-            <div className="flex space-x-2 my-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
+            <div className="flex flex-wrap gap-2 my-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
               <button
                 type="button"
                 onClick={() => setActiveModalTab('info')}
-                className={`px-5 py-2.5 text-xs font-black uppercase tracking-wider rounded-t-2xl transition border-b-2 flex items-center ${
+                className={`px-4 py-2.5 text-xs font-black uppercase tracking-wider rounded-t-2xl transition border-b-2 flex items-center cursor-pointer ${
                   activeModalTab === 'info'
                     ? 'border-hemp-600 text-hemp-600 dark:text-hemp-400 bg-slate-50 dark:bg-slate-800/40'
                     : 'border-transparent text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
                 }`}
               >
-                <Building size={14} className="mr-2" /> Ficha de la Estructura & Campo
+                <Building size={14} className="mr-2" /> Ficha & Campo
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveModalTab('contracts')}
+                className={`px-4 py-2.5 text-xs font-black uppercase tracking-wider rounded-t-2xl transition border-b-2 flex items-center cursor-pointer ${
+                  activeModalTab === 'contracts'
+                    ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/30'
+                    : 'border-transparent text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                }`}
+              >
+                <FileText size={14} className="mr-2" /> Contratos Productivos PDF ({(formData.contractDocuments || []).length})
               </button>
               <button
                 type="button"
                 onClick={() => setActiveModalTab('operators')}
-                className={`px-5 py-2.5 text-xs font-black uppercase tracking-wider rounded-t-2xl transition border-b-2 flex items-center ${
+                className={`px-4 py-2.5 text-xs font-black uppercase tracking-wider rounded-t-2xl transition border-b-2 flex items-center cursor-pointer ${
                   activeModalTab === 'operators'
                     ? 'border-hemp-600 text-hemp-600 dark:text-hemp-400 bg-slate-50 dark:bg-slate-800/40'
                     : 'border-transparent text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
                 }`}
               >
-                <Users size={14} className="mr-2" /> Inclusión de Operarios & Roles ({formData.teamUserIds?.length || 0})
+                <Users size={14} className="mr-2" /> Operarios & Roles ({formData.teamUserIds?.length || 0})
               </button>
               <button
                 type="button"
                 onClick={() => setActiveModalTab('audit')}
-                className={`px-5 py-2.5 text-xs font-black uppercase tracking-wider rounded-t-2xl transition border-b-2 flex items-center ${
+                className={`px-4 py-2.5 text-xs font-black uppercase tracking-wider rounded-t-2xl transition border-b-2 flex items-center cursor-pointer ${
                   activeModalTab === 'audit'
                     ? 'border-hemp-600 text-hemp-600 dark:text-hemp-400 bg-slate-50 dark:bg-slate-800/40'
                     : 'border-transparent text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
@@ -946,6 +1399,8 @@ export default function Clients() {
                           onChange={e => {
                             const selectedLocId = e.target.value;
                             const loc = locations.find(l => l.id === selectedLocId);
+                            const nextEnabledPlots = getStructureEnabledPlots(selectedLocId, editingId || undefined);
+                            setNewContractPlotIds(nextEnabledPlots.map(p => p.id));
                             setFormData({
                               ...formData, 
                               locationId: selectedLocId,
@@ -1011,6 +1466,346 @@ export default function Clients() {
                   </div>
                 </form>
               )}
+
+              {/* TAB 2: CONTRATOS PRODUCTIVOS PDF POR PARCELA HABILITADA Y CAMPAÑA PRESENTE */}
+              {activeModalTab === 'contracts' && (() => {
+                const enabledPlots = getStructureEnabledPlots(formData.locationId, editingId || undefined);
+                const structureDocs = formData.contractDocuments || [];
+                const campaignOptions = Array.from(new Set([presentCampaign, ...CAMPAIGNS]));
+
+                return (
+                  <div className="space-y-6">
+                    {/* AVISO LEGAL Y OPERATIVO DE VIGENCIA POR CAMPAÑA PRESENTE */}
+                    <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300 text-xs font-black uppercase tracking-wider">
+                          <FileCheck2 size={16} />
+                          <span>Normativa de Validez por Campaña Presente ({presentCampaign})</span>
+                        </div>
+                        <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                          Cada estructura productiva puede contar con <strong>múltiples documentos en PDF</strong> (Contrato Marco, Anexo de Parcelas, Acta de Siembra, Convenio INASE). Toda documentación debe estar vinculada a las <strong>parcelas correspondientes y habilitadas para siembra</strong> y <strong>sólo es válida para la campaña presente ({presentCampaign})</strong>.
+                        </p>
+                      </div>
+                      <div className="shrink-0 font-mono text-right">
+                        <span className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white text-[11px] font-bold uppercase block">
+                          Campaña Presente: {presentCampaign}
+                        </span>
+                        <span className="text-[10px] text-slate-500 mt-1 block">
+                          {enabledPlots.length} parcelas habilitadas para siembra
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* PANEL DE CARGA MÚLTIPLE DE PDFS (EXCLUSIVO ADMINISTRADORES) */}
+                    {isAdmin && (
+                      <div className="bg-slate-50 dark:bg-slate-950 p-5 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-200 dark:border-slate-800">
+                          <div>
+                            <h4 className="text-sm font-black uppercase text-slate-900 dark:text-white flex items-center gap-2">
+                              <Upload size={16} className="text-emerald-600" />
+                              Subir o Emitir Contratos Productivos en PDF (Administración)
+                            </h4>
+                            <p className="text-[11px] text-slate-500">
+                              Puede subir uno o varios archivos PDF simultáneamente y asociarlos a los lotes habilitados de la campaña.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div>
+                            <label className="text-[10px] font-black uppercase text-slate-400 ml-1 block mb-1">
+                              Título / Identificador del Documento *
+                            </label>
+                            <input
+                              type="text"
+                              className={inputClass}
+                              value={newContractTitle}
+                              onChange={e => setNewContractTitle(e.target.value)}
+                              placeholder={`Ej: Contrato Productivo ${presentCampaign}`}
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] font-black uppercase text-slate-400 ml-1 block mb-1">
+                              Tipo de Instrumento Contractual *
+                            </label>
+                            <select
+                              className={inputClass}
+                              value={newContractType}
+                              onChange={e => setNewContractType(e.target.value as ContractDocumentType)}
+                            >
+                              <option value="Contrato Productivo Marco">Contrato Productivo Marco</option>
+                              <option value="Anexo de Parcelas Habilitadas">Anexo de Parcelas Habilitadas</option>
+                              <option value="Acta de Habilitación de Siembra">Acta de Habilitación de Siembra</option>
+                              <option value="Convenio de Semilla Fiscalizada INASE">Convenio de Semilla Fiscalizada INASE</option>
+                              <option value="Adenda de Campaña">Adenda de Campaña</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] font-black uppercase text-slate-400 ml-1 block mb-1">
+                              Campaña de Vigencia (Sólo Válido Campaña Presente) *
+                            </label>
+                            <select
+                              className={`${inputClass} font-mono font-bold`}
+                              value={newContractCampaign}
+                              onChange={e => setNewContractCampaign(e.target.value)}
+                            >
+                              {campaignOptions.map(cOpt => (
+                                <option key={cOpt} value={cOpt}>
+                                  Campaña {cOpt} {cOpt === presentCampaign ? '(CAMPAÑA PRESENTE - VIGENTE)' : '(CAMPAÑA ANTERIOR / HISTÓRICA)'}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* SELECTOR DE PARCELAS HABILITADAS PARA SIEMBRA */}
+                        <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div>
+                              <span className="text-[11px] font-black uppercase text-slate-800 dark:text-slate-100 block">
+                                Parcelas Correspondientes y Habilitadas para Siembra ({newContractPlotIds.length} de {enabledPlots.length} seleccionadas)
+                              </span>
+                              <span className="text-[10px] text-slate-400">
+                                Establecimiento: {locations.find(l => l.id === formData.locationId)?.name || 'Seleccione un campo en la pestaña Ficha'}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setNewContractPlotIds(enabledPlots.map(p => p.id))}
+                                className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-[10px] font-mono font-bold uppercase cursor-pointer hover:bg-emerald-500/20"
+                              >
+                                Seleccionar Todas ({enabledPlots.length})
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setNewContractPlotIds([])}
+                                className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[10px] font-mono font-bold uppercase cursor-pointer"
+                              >
+                                Ninguna
+                              </button>
+                            </div>
+                          </div>
+
+                          {enabledPlots.length === 0 ? (
+                            <p className="text-xs text-amber-600 dark:text-amber-400 font-mono py-2">
+                              ⚠ Este establecimiento no posee parcelas con estado &ldquo;Activa&rdquo; (habilitadas para siembra) o aún no tiene un campo vinculado.
+                            </p>
+                          ) : (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-40 overflow-y-auto p-1">
+                              {enabledPlots.map(pl => {
+                                const isChecked = newContractPlotIds.includes(pl.id);
+                                return (
+                                  <label
+                                    key={pl.id}
+                                    className={`p-2 rounded-xl border text-[11px] font-mono flex items-center gap-2 cursor-pointer transition ${
+                                      isChecked
+                                        ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-900 dark:text-emerald-200 font-bold'
+                                        : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-500'
+                                    }`}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      onChange={() => {
+                                        setNewContractPlotIds(prev =>
+                                          prev.includes(pl.id) ? prev.filter(id => id !== pl.id) : [...prev, pl.id]
+                                        );
+                                      }}
+                                      className="rounded text-emerald-600 focus:ring-emerald-500"
+                                    />
+                                    <div className="min-w-0">
+                                      <span className="truncate block">{pl.name}</span>
+                                      <span className="text-[9px] text-slate-400 block">
+                                        {pl.surfaceArea} {pl.surfaceUnit} • {pl.sowingDate || 'Activa'}
+                                      </span>
+                                    </div>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* OBSERVACIONES Y BOTONES DE SUBIDA / EMISIÓN PDF */}
+                        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 pt-2">
+                          <input
+                            type="text"
+                            value={newContractNotes}
+                            onChange={e => setNewContractNotes(e.target.value)}
+                            placeholder="Observaciones de vigencia, expediente INASE/SENASA o condiciones de siembra..."
+                            className="flex-1 px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-800 dark:text-slate-100 outline-none"
+                          />
+
+                          <div className="flex flex-wrap items-center gap-2 shrink-0">
+                            <label className="px-4 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-md transition cursor-pointer">
+                              {isUploadingContract ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
+                              <span>Subir PDF(s) desde Equipo</span>
+                              <input
+                                type="file"
+                                accept=".pdf,application/pdf"
+                                multiple
+                                onChange={handleUploadContractFiles}
+                                disabled={isUploadingContract}
+                                className="hidden"
+                              />
+                            </label>
+
+                            <button
+                              type="button"
+                              onClick={handleGenerateOfficialContractPdf}
+                              disabled={isUploadingContract}
+                              className="px-4 py-2.5 rounded-2xl bg-slate-900 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 text-white text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-md transition cursor-pointer disabled:opacity-50"
+                              title="Genera y adjunta automáticamente un PDF oficial con la nómina de parcelas habilitadas y cláusula de campaña presente"
+                            >
+                              <FileText size={15} />
+                              <span>Emitir PDF Oficial {newContractCampaign}</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* LISTADO DE DOCUMENTOS CONTRACTUALES DE LA ESTRUCTURA (DESCARGA PARA PRODUCTORES Y ADMINS) */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider">
+                          Documentación Contractual Registrada en la Estructura ({structureDocs.length} archivos PDF)
+                        </h4>
+                        <span className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">
+                          {structureDocs.filter(d => d.campaign === presentCampaign).length} vigentes en Campaña {presentCampaign}
+                        </span>
+                      </div>
+
+                      {structureDocs.length === 0 ? (
+                        <div className="p-8 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800 text-center space-y-2">
+                          <FileText size={36} className="mx-auto text-slate-300 dark:text-slate-700" />
+                          <p className="text-sm font-black text-slate-700 dark:text-slate-300 uppercase">
+                            No hay contratos productivos PDF cargados en esta estructura
+                          </p>
+                          <p className="text-xs text-slate-400 max-w-md mx-auto">
+                            {isAdmin
+                              ? 'Utilice el panel superior para subir los contratos productivos en PDF o emitir el Anexo Oficial vinculado a las parcelas habilitadas de la campaña presente.'
+                              : 'La administración de la cooperativa aún no ha publicado contratos PDF para la campaña presente.'}
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {structureDocs.map(doc => {
+                            const isPresentCampaign = doc.campaign === presentCampaign;
+                            const docPlots = plots.filter(p => (doc.plotIds || []).includes(p.id));
+
+                            return (
+                              <div
+                                key={doc.id}
+                                className={`p-4 rounded-2xl border transition ${
+                                  isPresentCampaign
+                                    ? 'bg-white dark:bg-slate-950 border-emerald-500/30 shadow-xs'
+                                    : 'bg-amber-50/40 dark:bg-amber-950/10 border-amber-500/30 opacity-85'
+                                }`}
+                              >
+                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                                  <div className="space-y-1 min-w-0">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <span
+                                        className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase border ${
+                                          isPresentCampaign
+                                            ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
+                                            : 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30'
+                                        }`}
+                                      >
+                                        {isPresentCampaign
+                                          ? `✓ VIGENTE • CAMPAÑA PRESENTE ${doc.campaign}`
+                                          : `⚠ VENCIDO • SOLO VÁLIDO CAMPAÑA ${doc.campaign}`}
+                                      </span>
+                                      <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px] font-mono font-bold">
+                                        {doc.docType}
+                                      </span>
+                                    </div>
+
+                                    <h5 className="text-sm font-black text-slate-900 dark:text-white">
+                                      {doc.title}
+                                    </h5>
+
+                                    <p className="text-[11px] font-mono text-slate-500">
+                                      Archivo: <strong>{doc.fileName}</strong> ({doc.fileSize || 24} KB) • Subido el{' '}
+                                      {new Date(doc.uploadedAt).toLocaleDateString('es-AR')} por {doc.uploadedBy}
+                                    </p>
+
+                                    {doc.notes && (
+                                      <p className="text-xs text-slate-600 dark:text-slate-400 italic">
+                                        &ldquo;{doc.notes}&rdquo;
+                                      </p>
+                                    )}
+                                  </div>
+
+                                  <div className="flex flex-wrap items-center gap-2 shrink-0">
+                                    {doc.fileDataUrl && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setPreviewContractDoc({ doc, clientName: formData.name || 'Socio' })}
+                                        className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-mono font-bold uppercase flex items-center gap-1.5 cursor-pointer"
+                                      >
+                                        <Eye size={14} />
+                                        <span>Ver PDF</span>
+                                      </button>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDownloadContractPdf(doc, formData as Client)}
+                                      className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-mono font-bold uppercase flex items-center gap-1.5 shadow-sm cursor-pointer"
+                                    >
+                                      <Download size={14} />
+                                      <span>Descargar PDF</span>
+                                    </button>
+                                    {isAdmin && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteContractPdf(doc.id)}
+                                        className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 cursor-pointer"
+                                        title="Eliminar documento contractual"
+                                      >
+                                        <Trash2 size={15} />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* NÓMINA DE PARCELAS HABILITADAS VINCULADAS AL CONTRATO */}
+                                <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800/80">
+                                  <span className="text-[10px] font-mono font-bold uppercase text-slate-400 block mb-1.5">
+                                    Parcelas Habilitadas para Siembra Vinculadas a este Documento ({docPlots.length || (doc.plotIds || []).length} lotes):
+                                  </span>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {docPlots.length > 0 ? (
+                                      docPlots.map(pl => (
+                                        <Link
+                                          key={pl.id}
+                                          to={`/plots/${pl.id}`}
+                                          onClick={() => setIsModalOpen(false)}
+                                          className="px-2 py-0.5 rounded-md bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 text-[10px] font-mono font-bold"
+                                        >
+                                          🌱 {pl.name} ({pl.surfaceArea} {pl.surfaceUnit})
+                                        </Link>
+                                      ))
+                                    ) : (
+                                      <span className="text-[10px] font-mono text-slate-400">
+                                        {(doc.plotIds || []).length} parcelas vinculadas
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* TAB 2: INCLUSIÓN DE OPERARIOS & ROLES */}
               {activeModalTab === 'operators' && (
@@ -1389,6 +2184,75 @@ export default function Clients() {
         </div>
       )}
 
+      {/* =================================================================== */}
+      {/* MODAL DE VISTA PREVIA DEL DOCUMENTO PDF DE CONTRATO PRODUCTIVO      */}
+      {/* =================================================================== */}
+      {previewContractDoc && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-[28px] max-w-4xl w-full h-[88vh] p-6 shadow-2xl border border-white/10 flex flex-col">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase ${
+                      previewContractDoc.doc.campaign === presentCampaign
+                        ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                        : 'bg-rose-500/15 text-rose-600 dark:text-rose-400'
+                    }`}
+                  >
+                    {previewContractDoc.doc.campaign === presentCampaign
+                      ? `✓ Vigente Campaña Presente ${previewContractDoc.doc.campaign}`
+                      : `⚠ Vencido • Campaña ${previewContractDoc.doc.campaign}`}
+                  </span>
+                  <span className="text-[10px] font-mono text-slate-400">
+                    {previewContractDoc.doc.docType} • {(previewContractDoc.doc.plotIds || []).length} parcelas habilitadas
+                  </span>
+                </div>
+                <h3 className="text-base font-black text-slate-900 dark:text-white uppercase mt-1">
+                  {previewContractDoc.doc.title} — {previewContractDoc.clientName}
+                </h3>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleDownloadContractPdf(previewContractDoc.doc)}
+                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-mono font-bold uppercase flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Download size={14} />
+                  <span>Descargar PDF</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewContractDoc(null)}
+                  className="p-2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white cursor-pointer"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 bg-slate-100 dark:bg-slate-950 rounded-2xl overflow-hidden my-3 border border-slate-200 dark:border-slate-800">
+              {previewContractDoc.doc.fileDataUrl ? (
+                <iframe
+                  src={previewContractDoc.doc.fileDataUrl}
+                  title={previewContractDoc.doc.title}
+                  className="w-full h-full border-0"
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+                  <FileText size={42} className="text-slate-400 mb-2" />
+                  <p className="text-sm font-bold text-slate-700 dark:text-slate-200">
+                    Vista previa lista para descarga directa
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
+

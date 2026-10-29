@@ -1,10 +1,11 @@
 // Service Worker para HempC • Red Cooperativa Nucleus
 // Soporte de Notificaciones Push & Alertas Agronómicas en Segundo Plano
 
-const CACHE_NAME = 'hempc-nucleus-v7.18.1';
+const CACHE_NAME = 'hempc-nucleus-v7.18.2';
 const ASSETS_TO_CACHE = [
-  '/manifest.json',
-  '/icon.svg'
+  '/manifest.json?v=7.18.2',
+  '/pwa-192x192.png?v=7.18.2',
+  '/icon.svg?v=7.18.2'
 ];
 
 // Ciclo de vida: Instalación inmediata
@@ -50,8 +51,8 @@ self.addEventListener('push', (event) => {
   const title = data.title || 'HempC • Alerta Agro';
   const options = {
     body: data.body || 'Alerta técnica de parcela o labor pendiente',
-    icon: data.icon || '/icon.svg',
-    badge: data.badge || '/icon.svg',
+    icon: data.icon || '/pwa-192x192.png?v=7.18.2',
+    badge: data.badge || '/favicon-32x32.png?v=7.18.2',
     tag: data.tag || `hempc-${Date.now()}`,
     data: data.data || { url: '/' },
     vibrate: data.vibrate || [300, 100, 300, 100, 300],

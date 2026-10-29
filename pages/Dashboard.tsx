@@ -201,35 +201,88 @@ export default function Dashboard() {
   const [activeSection, setActiveSection] = useState<'overview' | 'water' | 'satellite' | 'senasa' | 'yield' | 'finances' | 'licenses'>('overview');
   const [rightFeedTab, setRightFeedTab] = useState<'risk' | 'activity'>('risk');
 
-  // Cálculo continuo de Huella Hídrica por Parcela (Verde + Azul en m³/ha y m³ totales)
+  // Filtros, vista y paginación para Registro Continuo de Lluvias & Huella Hídrica (evita scroll excesivo)
+  const [waterSearch, setWaterSearch] = useState('');
+  const [waterLocFilter, setWaterLocFilter] = useState<string>('all');
+  const [waterVarietyFilter, setWaterVarietyFilter] = useState<string>('all');
+  const [waterSourceFilter, setWaterSourceFilter] = useState<'all' | 'with_irrigation' | 'rain_only'>('all');
+  const [waterStatusFilter, setWaterStatusFilter] = useState<'all' | 'optimo' | 'desarrollo' | 'deficit'>('all');
+  const [waterViewMode, setWaterViewMode] = useState<'plots' | 'locations' | 'events'>('plots');
+  const [waterPageSize, setWaterPageSize] = useState<number>(10);
+  const [waterPage, setWaterPage] = useState<number>(1);
+  const [showWaterVeracityAudit, setShowWaterVeracityAudit] = useState<boolean>(false);
+
+  // Cálculo continuo y auditado de Huella Hídrica por Parcela (Verde + Azul en m³/ha, L totales y m³ reales sin distorsión de escala)
   const plotWaterFootprintList = useMemo(() => {
     const targetList = cycleViewMode === 'active' ? relevantPlots : closedCampaignPlots;
+    const todayIso = new Date().toISOString().split('T')[0];
+
     return targetList.map(plot => {
       const loc = locations.find(l => l.id === plot.locationId);
       const socio = clients.find(c => c.id === loc?.clientId);
       const vari = varieties.find(v => v.id === plot.varietyId);
       const waterNeedMm = vari?.waterNeedMm || 480;
+      const cycleDays = vari?.cycleDays || 120;
 
-      let areaHa = plot.surfaceArea || 1;
-      if (plot.surfaceUnit === 'm2') areaHa = areaHa / 10000;
-      else if (plot.surfaceUnit === 'ac') areaHa = areaHa * 0.404686;
-      areaHa = Math.max(0.01, Number(areaHa.toFixed(2)));
+      // Superficie real exacta sin inflar micro-parcelas experimentales (1 ha = 10.000 m²)
+      const rawSurface = Number(plot.surfaceArea || 1);
+      const areaM2 =
+        plot.surfaceUnit === 'm2'
+          ? rawSurface
+          : plot.surfaceUnit === 'ac'
+          ? rawSurface * 4046.86
+          : rawSurface * 10000;
+      const areaHa = Number((areaM2 / 10000).toFixed(4));
+      const surfaceLabel =
+        plot.surfaceUnit === 'm2'
+          ? `${rawSurface.toLocaleString('es-AR', { maximumFractionDigits: 1 })} m² (${areaHa.toFixed(4)} ha)`
+          : `${Number(areaHa.toFixed(2))} ha (${Math.round(areaM2).toLocaleString('es-AR')} m²)`;
 
-      const records = hydricRecords.filter(
-        r => r.plotId === plot.id || (r.locationId === plot.locationId && !r.plotId)
-      );
+      // Ventana temporal estricta del ciclo biológico de la parcela (Desde fecha de siembra hasta cierre o fin de ciclo)
+      const sowDateIso = plot.sowingDate || '2025-09-01';
+      let cycleEndIso = todayIso;
+      if (plot.closedAt) {
+        cycleEndIso = plot.closedAt.split('T')[0];
+      } else if (plot.sowingDate) {
+        const dEnd = new Date(`${plot.sowingDate}T12:00:00`);
+        if (!isNaN(dEnd.getTime())) {
+          dEnd.setDate(dEnd.getDate() + cycleDays);
+          const computedEnd = dEnd.toISOString().split('T')[0];
+          cycleEndIso = computedEnd < todayIso ? computedEnd : todayIso;
+        }
+      }
+
+      const records = hydricRecords.filter(r => {
+        const matchesTarget = r.plotId === plot.id || (r.locationId === plot.locationId && !r.plotId);
+        if (!matchesTarget) return false;
+        return r.date >= sowDateIso && r.date <= cycleEndIso;
+      });
+
       const rainRecords = records.filter(r => r.type === 'Lluvia');
       const irrigRecords = records.filter(r => r.type === 'Riego');
+
+      const satelliteRainCount = rainRecords.filter(
+        r => String(r.id).startsWith('auto-rain-') || String(r.notes || '').includes('Open-Meteo')
+      ).length;
+      const fieldGaugeRainCount = rainRecords.length - satelliteRainCount;
 
       const rainMm = Number(rainRecords.reduce((s, r) => s + Number(r.amountMm || 0), 0).toFixed(1));
       const irrigMm = Number(irrigRecords.reduce((s, r) => s + Number(r.amountMm || 0), 0).toFixed(1));
       const totalMm = Number((rainMm + irrigMm).toFixed(1));
 
+      // Conversión agronómica estándar: 1 mm = 10 m³/ha = 1 Litro/m²
       const greenWaterM3Ha = Number((rainMm * 10).toFixed(1));
       const blueWaterM3Ha = Number((irrigMm * 10).toFixed(1));
       const totalWaterM3Ha = Number((totalMm * 10).toFixed(1));
-      const totalVolumeM3 = Number((totalWaterM3Ha * areaHa).toFixed(1));
+
+      // Volumen físico real en el lote: 1 mm sobre 1 m² = 1 Litro = 0.001 m³
+      const totalLiters = Math.round(totalMm * areaM2);
+      const totalVolumeM3 = Number(((totalMm * areaM2) / 1000).toFixed(2));
+
       const completionPct = Math.min(100, Math.round((totalMm / Math.max(1, waterNeedMm)) * 100));
+      const hydricStatus: 'optimo' | 'desarrollo' | 'deficit' =
+        completionPct >= 60 ? 'optimo' : completionPct >= 25 ? 'desarrollo' : 'deficit';
+
       const lastRainDate = rainRecords.length > 0
         ? [...rainRecords].sort((a, b) => b.date.localeCompare(a.date))[0].date
         : null;
@@ -239,37 +292,194 @@ export default function Dashboard() {
         loc,
         socio,
         vari,
+        areaM2,
         areaHa,
+        surfaceLabel,
+        sowDateIso,
+        cycleEndIso,
         rainMm,
         irrigMm,
         totalMm,
         greenWaterM3Ha,
         blueWaterM3Ha,
         totalWaterM3Ha,
+        totalLiters,
         totalVolumeM3,
         waterNeedMm,
         completionPct,
+        hydricStatus,
         rainEventsCount: rainRecords.length,
-        lastRainDate
+        irrigEventsCount: irrigRecords.length,
+        satelliteRainCount,
+        fieldGaugeRainCount,
+        lastRainDate,
+        matchedRecordIds: records.map(r => r.id)
       };
     });
   }, [cycleViewMode, relevantPlots, closedCampaignPlots, locations, clients, varieties, hydricRecords]);
 
+  // Resumen Hídrico Global sin duplicar eventos meteorológicos compartidos por parcelas del mismo campo
   const globalWaterSummary = useMemo(() => {
     if (plotWaterFootprintList.length === 0) {
-      return { avgM3Ha: 0, totalVolumeM3: 0, totalRainEvents: 0, avgRainMm: 0 };
+      return {
+        avgM3Ha: 0,
+        totalVolumeM3: 0,
+        totalLiters: 0,
+        totalRainEvents: 0,
+        totalIrrigEvents: 0,
+        satelliteEvents: 0,
+        manualEvents: 0,
+        avgRainMm: 0
+      };
     }
     const totalVolumeM3 = plotWaterFootprintList.reduce((s, item) => s + item.totalVolumeM3, 0);
+    const totalLiters = plotWaterFootprintList.reduce((s, item) => s + item.totalLiters, 0);
     const avgM3Ha = plotWaterFootprintList.reduce((s, item) => s + item.totalWaterM3Ha, 0) / plotWaterFootprintList.length;
     const avgRainMm = plotWaterFootprintList.reduce((s, item) => s + item.rainMm, 0) / plotWaterFootprintList.length;
-    const totalRainEvents = plotWaterFootprintList.reduce((s, item) => s + item.rainEventsCount, 0);
+
+    const allowedLocIds = new Set(plotWaterFootprintList.map(i => i.plot.locationId));
+    const allowedPlotIds = new Set(plotWaterFootprintList.map(i => i.plot.id));
+    const uniqueRecords = hydricRecords.filter(
+      r => (r.plotId && allowedPlotIds.has(r.plotId)) || (r.locationId && allowedLocIds.has(r.locationId))
+    );
+    const uniqueRain = uniqueRecords.filter(r => r.type === 'Lluvia');
+    const uniqueIrrig = uniqueRecords.filter(r => r.type === 'Riego');
+    const satelliteEvents = uniqueRain.filter(
+      r => String(r.id).startsWith('auto-rain-') || String(r.notes || '').includes('Open-Meteo')
+    ).length;
+    const manualEvents = uniqueRecords.length - satelliteEvents;
+
     return {
       avgM3Ha: Number(avgM3Ha.toFixed(1)),
-      totalVolumeM3: Number(totalVolumeM3.toFixed(1)),
-      totalRainEvents,
+      totalVolumeM3: Number(totalVolumeM3.toFixed(2)),
+      totalLiters,
+      totalRainEvents: uniqueRain.length,
+      totalIrrigEvents: uniqueIrrig.length,
+      satelliteEvents,
+      manualEvents,
       avgRainMm: Number(avgRainMm.toFixed(1))
     };
-  }, [plotWaterFootprintList]);
+  }, [plotWaterFootprintList, hydricRecords]);
+
+  // Lista de parcelas filtrada por criterios del usuario
+  const filteredPlotWaterList = useMemo(() => {
+    const q = waterSearch.trim().toLowerCase();
+    return plotWaterFootprintList.filter(item => {
+      if (waterLocFilter !== 'all' && item.plot.locationId !== waterLocFilter) return false;
+      if (waterVarietyFilter !== 'all' && item.plot.varietyId !== waterVarietyFilter) return false;
+      if (waterSourceFilter === 'with_irrigation' && item.irrigMm <= 0) return false;
+      if (waterSourceFilter === 'rain_only' && item.irrigMm > 0) return false;
+      if (waterStatusFilter !== 'all' && item.hydricStatus !== waterStatusFilter) return false;
+      if (q) {
+        const hay = `${item.plot.name} ${item.loc?.name || ''} ${item.socio?.name || ''} ${item.vari?.name || ''} ${item.plot.sowingDate || ''}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [plotWaterFootprintList, waterSearch, waterLocFilter, waterVarietyFilter, waterSourceFilter, waterStatusFilter]);
+
+  const totalWaterPages = Math.max(1, Math.ceil(filteredPlotWaterList.length / Math.max(1, waterPageSize)));
+  const safeWaterPage = Math.min(waterPage, totalWaterPages);
+
+  const paginatedPlotWaterList = useMemo(() => {
+    const start = (safeWaterPage - 1) * waterPageSize;
+    return filteredPlotWaterList.slice(start, start + waterPageSize);
+  }, [filteredPlotWaterList, safeWaterPage, waterPageSize]);
+
+  // Consolidado por Establecimiento / Estación Pluviométrica Satelital
+  const locationWaterConsolidation = useMemo(() => {
+    const map = new Map<string, {
+      locId: string;
+      locName: string;
+      city: string;
+      coords: string;
+      socioName: string;
+      plotsCount: number;
+      totalAreaM2: number;
+      totalAreaHa: number;
+      rainMm: number;
+      irrigMm: number;
+      greenM3Ha: number;
+      blueM3Ha: number;
+      totalM3Ha: number;
+      totalVolumeM3: number;
+      totalLiters: number;
+      rainEvents: number;
+      irrigEvents: number;
+      lastRainDate: string | null;
+    }>();
+
+    filteredPlotWaterList.forEach(item => {
+      const key = item.plot.locationId || 'sin-loc';
+      const existing = map.get(key);
+      const locRecords = hydricRecords.filter(r => r.locationId === key);
+      const locRain = locRecords.filter(r => r.type === 'Lluvia');
+      const locIrrig = locRecords.filter(r => r.type === 'Riego');
+      const rainMm = Number(locRain.reduce((s, r) => s + Number(r.amountMm || 0), 0).toFixed(1));
+      const irrigMm = Number(locIrrig.reduce((s, r) => s + Number(r.amountMm || 0), 0).toFixed(1));
+
+      if (!existing) {
+        map.set(key, {
+          locId: key,
+          locName: item.loc?.name || 'Establecimiento',
+          city: `${item.loc?.city || ''}, ${item.loc?.province || ''}`.replace(/^,\s*/, ''),
+          coords: item.loc?.coordinates
+            ? `${item.loc.coordinates.lat.toFixed(4)}, ${item.loc.coordinates.lng.toFixed(4)}`
+            : 'Sin GPS',
+          socioName: item.socio?.name || item.plot.ownerName || 'Red HempC',
+          plotsCount: 1,
+          totalAreaM2: item.areaM2,
+          totalAreaHa: item.areaHa,
+          rainMm,
+          irrigMm,
+          greenM3Ha: Number((rainMm * 10).toFixed(1)),
+          blueM3Ha: Number((irrigMm * 10).toFixed(1)),
+          totalM3Ha: Number(((rainMm + irrigMm) * 10).toFixed(1)),
+          totalVolumeM3: item.totalVolumeM3,
+          totalLiters: item.totalLiters,
+          rainEvents: locRain.length,
+          irrigEvents: locIrrig.length,
+          lastRainDate: item.lastRainDate
+        });
+      } else {
+        existing.plotsCount += 1;
+        existing.totalAreaM2 = Number((existing.totalAreaM2 + item.areaM2).toFixed(2));
+        existing.totalAreaHa = Number((existing.totalAreaHa + item.areaHa).toFixed(4));
+        existing.totalVolumeM3 = Number((existing.totalVolumeM3 + item.totalVolumeM3).toFixed(2));
+        existing.totalLiters += item.totalLiters;
+        if (item.lastRainDate && (!existing.lastRainDate || item.lastRainDate > existing.lastRainDate)) {
+          existing.lastRainDate = item.lastRainDate;
+        }
+      }
+    });
+
+    return Array.from(map.values());
+  }, [filteredPlotWaterList, hydricRecords]);
+
+  // Bitácora cronológica de eventos (Lluvias satelitales + Riegos manuales) filtrada
+  const filteredChronologicalEvents = useMemo(() => {
+    const allowedLocIds = new Set(filteredPlotWaterList.map(i => i.plot.locationId));
+    const allowedPlotIds = new Set(filteredPlotWaterList.map(i => i.plot.id));
+    const q = waterSearch.trim().toLowerCase();
+
+    return hydricRecords
+      .filter(r => {
+        const matchesScope = (r.plotId && allowedPlotIds.has(r.plotId)) || (r.locationId && allowedLocIds.has(r.locationId));
+        if (!matchesScope) return false;
+        if (waterLocFilter !== 'all' && r.locationId !== waterLocFilter) return false;
+        if (waterSourceFilter === 'with_irrigation' && r.type !== 'Riego') return false;
+        if (waterSourceFilter === 'rain_only' && r.type !== 'Lluvia') return false;
+        if (q) {
+          const loc = locations.find(l => l.id === r.locationId);
+          const pl = plots.find(p => p.id === r.plotId);
+          const hay = `${r.date} ${r.type} ${r.notes || ''} ${loc?.name || ''} ${pl?.name || ''}`.toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }, [hydricRecords, filteredPlotWaterList, waterLocFilter, waterSourceFilter, waterSearch, locations, plots]);
+
 
   const handleConfirmCloseCycle = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1272,22 +1482,40 @@ export default function Dashboard() {
       {/* PESTAÑA: HUELLA HÍDRICA CONTINUA & GESTIÓN DE CICLOS POR PARCELA */}
       {activeSection === 'water' && (
         <div className="bg-white dark:bg-slate-900/95 rounded-2xl p-5 md:p-6 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-5">
+          {/* CABECERA + BOTONES DE AUDITORÍA Y SINCRONIZACIÓN */}
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
             <div className="flex items-center gap-3">
               <div className="p-2.5 bg-sky-500/10 text-sky-600 dark:text-sky-400 rounded-xl border border-sky-500/20">
                 <CloudRain size={22} />
               </div>
               <div>
-                <h2 className="text-base md:text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">
-                  Registro Continuo de Lluvias & Huella Hídrica por Parcela (Campaña {activeCampaign})
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Pluviómetro satelital automatizado (Open-Meteo ERA5/GFS) + Riego suplementario y cierre operativo de ciclo por socio.
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-base md:text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">
+                    Registro Continuo de Lluvias & Huella Hídrica por Parcela (Campaña {activeCampaign})
+                  </h2>
+                  <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[10px] font-mono font-bold uppercase">
+                    ✓ Fuente Auditada ERA5-Land + Campo
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Reanálisis satelital <strong className="text-slate-700 dark:text-slate-300">Open-Meteo ECMWF ERA5-Land (~9 km)</strong> + Pronóstico NOAA GFS + Riegos suplementarios verificados en Supabase.
                 </p>
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowWaterVeracityAudit(prev => !prev)}
+                className={`px-3.5 py-2 rounded-xl text-xs font-mono font-bold uppercase flex items-center gap-1.5 transition cursor-pointer border ${
+                  showWaterVeracityAudit
+                    ? 'bg-emerald-600 text-white border-emerald-600'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-emerald-500/50'
+                }`}
+              >
+                <ShieldCheck size={14} />
+                <span>{showWaterVeracityAudit ? 'Ocultar Auditoría de Fuente' : 'Auditar Fuente & Veracidad'}</span>
+              </button>
               <button
                 type="button"
                 onClick={handleSyncNetworkRainfall}
@@ -1300,101 +1528,556 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left font-mono tabular-nums">
-              <thead className="bg-slate-50 dark:bg-slate-800/60 text-[10px] font-bold uppercase text-slate-500 border-b border-slate-100 dark:border-slate-800">
-                <tr>
-                  <th className="px-4 py-3.5">Parcela & Socio</th>
-                  <th className="px-4 py-3.5">Siembra & Estado</th>
-                  <th className="px-4 py-3.5 text-right">Agua Verde (Lluvia)</th>
-                  <th className="px-4 py-3.5 text-right">Agua Azul (Riego)</th>
-                  <th className="px-4 py-3.5 text-right">Huella Hídrica (m³/ha)</th>
-                  <th className="px-4 py-3.5 text-right">Volumen Lote (m³)</th>
-                  <th className="px-4 py-3.5 text-right">Acciones de Ciclo</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {plotWaterFootprintList.length === 0 ? (
+          {/* PANEL DESPLEGABLE: AUDITORÍA DE VERACIDAD Y FUENTE DE DATOS HIDROMETEOROLÓGICOS */}
+          {showWaterVeracityAudit && (
+            <div className="rounded-2xl bg-slate-50 dark:bg-slate-950/90 border border-emerald-500/30 p-4 md:p-5 space-y-4 font-mono text-xs">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400 block">
+                    Dictamen Técnico de Trazabilidad & Veracidad Hídrica
+                  </span>
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase">
+                    Origen de los Registros, Coordenadas Satelitales y Fórmulas Agronómicas
+                  </h3>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-[10px]">
+                  <span className="px-2.5 py-1 rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 font-bold">
+                    {globalWaterSummary.satelliteEvents} Eventos Satelitales (Open-Meteo ERA5)
+                  </span>
+                  <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-bold">
+                    {globalWaterSummary.manualEvents} Riegos / Pluviómetros de Campo
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 space-y-1.5">
+                  <div className="text-[10px] font-bold uppercase text-sky-600 dark:text-sky-400">
+                    1. Fuente Primaria (Agua Verde - Lluvias)
+                  </div>
+                  <p className="text-[11px] text-slate-700 dark:text-slate-300 leading-relaxed font-sans">
+                    Datos reales descargados vía HTTPS desde <strong>Open-Meteo Historical Archive API (ECMWF ERA5-Land, resolución espacial ~9 km)</strong> y <strong>NOAA GFS</strong> para los últimos 5 días, georreferenciados en las coordenadas exactas de cada campo.
+                  </p>
+                  <div className="text-[10px] text-slate-400 pt-1">
+                    ID Trazable en Supabase: <code className="text-sky-500">auto-rain-[locId]-[YYYY-MM-DD]</code>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 space-y-1.5">
+                  <div className="text-[10px] font-bold uppercase text-emerald-600 dark:text-emerald-400">
+                    2. Fuente Secundaria (Agua Azul - Riegos)
+                  </div>
+                  <p className="text-[11px] text-slate-700 dark:text-slate-300 leading-relaxed font-sans">
+                    Registros operativos cargados por los responsables técnicos de cada establecimiento en la tabla <strong>Supabase PostgreSQL <code>hydric_records</code></strong> (caudalímetros de goteo/aspersión y lectura de pluviómetro físico in situ).
+                  </p>
+                  <div className="text-[10px] text-slate-400 pt-1">
+                    Ventana auditada: <code className="text-emerald-500">[Fecha Siembra → Fin Ciclo / Hoy]</code>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 space-y-1.5">
+                  <div className="text-[10px] font-bold uppercase text-indigo-600 dark:text-indigo-400">
+                    3. Exactitud Matemática & Escala de Lote
+                  </div>
+                  <p className="text-[11px] text-slate-700 dark:text-slate-300 leading-relaxed font-sans">
+                    <strong>1 mm de precipitación = 1 Litro/m² = 10 m³/ha</strong>. El volumen físico del lote se calcula sobre la superficie exacta en <code>m²</code> o <code>ha</code> sin redondeos artificiales (ej. 100 mm en micro-parcela de 9 m² = <strong>900 L = 0,90 m³</strong>).
+                  </p>
+                  <div className="text-[10px] text-slate-400 pt-1">
+                    Total Red Activa: <strong>{globalWaterSummary.totalVolumeM3} m³ ({globalWaterSummary.totalLiters.toLocaleString('es-AR')} L)</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TARJETAS KPI COMPACTAS DEL FILTRO ACTUAL */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 font-mono">
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-800">
+              <span className="text-[10px] uppercase font-bold text-slate-400 block">Parcelas Filtradas</span>
+              <div className="text-lg font-black text-slate-900 dark:text-white mt-0.5">
+                {filteredPlotWaterList.length} <span className="text-xs font-normal text-slate-400">/ {plotWaterFootprintList.length} lotes</span>
+              </div>
+              <span className="text-[10px] text-sky-600 dark:text-sky-400">
+                {locationWaterConsolidation.length} estaciones satelitales activas
+              </span>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-800">
+              <span className="text-[10px] uppercase font-bold text-slate-400 block">Huella Específica Promedio</span>
+              <div className="text-lg font-black text-indigo-600 dark:text-indigo-400 mt-0.5">
+                {globalWaterSummary.avgM3Ha} <span className="text-xs font-normal">m³/ha</span>
+              </div>
+              <span className="text-[10px] text-slate-500">
+                Promedio lluvia: {globalWaterSummary.avgRainMm} mm en ciclo
+              </span>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-800">
+              <span className="text-[10px] uppercase font-bold text-slate-400 block">Volumen Físico Real Acumulado</span>
+              <div className="text-lg font-black text-emerald-600 dark:text-emerald-400 mt-0.5">
+                {globalWaterSummary.totalVolumeM3.toLocaleString('es-AR')} <span className="text-xs font-normal">m³</span>
+              </div>
+              <span className="text-[10px] text-slate-500">
+                Equivalente a {globalWaterSummary.totalLiters.toLocaleString('es-AR')} Litros reales
+              </span>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-800">
+              <span className="text-[10px] uppercase font-bold text-slate-400 block">Eventos Únicos en Base de Datos</span>
+              <div className="text-lg font-black text-sky-600 dark:text-sky-400 mt-0.5">
+                {globalWaterSummary.totalRainEvents} <span className="text-xs font-normal">lluvias</span>
+                {globalWaterSummary.totalIrrigEvents > 0 && (
+                  <span className="text-xs text-emerald-500 ml-1.5">+ {globalWaterSummary.totalIrrigEvents} riegos</span>
+                )}
+              </div>
+              <span className="text-[10px] text-slate-500">
+                Sin duplicación por micro-parcela
+              </span>
+            </div>
+          </div>
+
+          {/* BARRA DE FILTROS AVANZADOS Y SELECTOR DE VISTA (EVITA SCROLL EXCESIVO) */}
+          <div className="bg-slate-50 dark:bg-slate-950/60 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-3">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+              {/* Selector de Modo de Visualización */}
+              <div className="flex flex-wrap items-center gap-1.5 bg-white dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setWaterViewMode('plots')}
+                  className={`px-3 py-1.5 rounded-lg text-[11px] font-mono font-bold uppercase transition cursor-pointer ${
+                    waterViewMode === 'plots'
+                      ? 'bg-sky-600 text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  Por Parcela ({filteredPlotWaterList.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setWaterViewMode('locations')}
+                  className={`px-3 py-1.5 rounded-lg text-[11px] font-mono font-bold uppercase transition cursor-pointer ${
+                    waterViewMode === 'locations'
+                      ? 'bg-sky-600 text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  Consolidado por Campo ({locationWaterConsolidation.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setWaterViewMode('events')}
+                  className={`px-3 py-1.5 rounded-lg text-[11px] font-mono font-bold uppercase transition cursor-pointer ${
+                    waterViewMode === 'events'
+                      ? 'bg-sky-600 text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  Bitácora de Eventos ({filteredChronologicalEvents.length})
+                </button>
+              </div>
+
+              {/* Paginación y cantidad de filas visibles */}
+              {waterViewMode === 'plots' && (
+                <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
+                  <span className="text-[11px] text-slate-500">Mostrar:</span>
+                  {[8, 10, 20, 50].map(sz => (
+                    <button
+                      key={sz}
+                      type="button"
+                      onClick={() => {
+                        setWaterPageSize(sz);
+                        setWaterPage(1);
+                      }}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold cursor-pointer border ${
+                        waterPageSize === sz
+                          ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 border-slate-900 dark:border-white'
+                          : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800'
+                      }`}
+                    >
+                      {sz === 50 ? 'Todas' : `${sz} filas`}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Controles de Filtrado Multi-Criterio */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 font-mono text-xs">
+              <div className="relative">
+                <input
+                  type="text"
+                  value={waterSearch}
+                  onChange={e => {
+                    setWaterSearch(e.target.value);
+                    setWaterPage(1);
+                  }}
+                  placeholder="Buscar parcela, socio o fecha..."
+                  className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 text-xs outline-none focus:border-sky-500"
+                />
+              </div>
+
+              <select
+                value={waterLocFilter}
+                onChange={e => {
+                  setWaterLocFilter(e.target.value);
+                  setWaterPage(1);
+                }}
+                className="px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 text-xs outline-none focus:border-sky-500"
+              >
+                <option value="all">Todos los Establecimientos ({locations.length})</option>
+                {locations.map(l => (
+                  <option key={l.id} value={l.id}>
+                    {l.name} ({l.city || l.province})
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={waterVarietyFilter}
+                onChange={e => {
+                  setWaterVarietyFilter(e.target.value);
+                  setWaterPage(1);
+                }}
+                className="px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 text-xs outline-none focus:border-sky-500"
+              >
+                <option value="all">Todas las Genéticas ({varieties.length})</option>
+                {varieties.map(v => (
+                  <option key={v.id} value={v.id}>
+                    {v.name} ({v.waterNeedMm || 480} mm)
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={waterSourceFilter}
+                onChange={e => {
+                  setWaterSourceFilter(e.target.value as 'all' | 'with_irrigation' | 'rain_only');
+                  setWaterPage(1);
+                }}
+                className="px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 text-xs outline-none focus:border-sky-500"
+              >
+                <option value="all">Fuente: Lluvia + Riego (Todas)</option>
+                <option value="with_irrigation">Con Riego Suplementario (Agua Azul)</option>
+                <option value="rain_only">Secano / Solo Lluvia Satelital</option>
+              </select>
+
+              <div className="flex items-center gap-1.5">
+                <select
+                  value={waterStatusFilter}
+                  onChange={e => {
+                    setWaterStatusFilter(e.target.value as 'all' | 'optimo' | 'desarrollo' | 'deficit');
+                    setWaterPage(1);
+                  }}
+                  className="flex-1 px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 text-xs outline-none focus:border-sky-500"
+                >
+                  <option value="all">Estado Hídrico: Todos</option>
+                  <option value="optimo">Óptimo (≥ 60% del ciclo)</option>
+                  <option value="desarrollo">En Desarrollo (25% - 59%)</option>
+                  <option value="deficit">Atención / Déficit (&lt; 25%)</option>
+                </select>
+                {(waterSearch || waterLocFilter !== 'all' || waterVarietyFilter !== 'all' || waterSourceFilter !== 'all' || waterStatusFilter !== 'all') && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWaterSearch('');
+                      setWaterLocFilter('all');
+                      setWaterVarietyFilter('all');
+                      setWaterSourceFilter('all');
+                      setWaterStatusFilter('all');
+                      setWaterPage(1);
+                    }}
+                    className="px-2.5 py-2 rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-500/20 text-[10px] font-bold uppercase shrink-0 cursor-pointer"
+                    title="Limpiar todos los filtros"
+                  >
+                    Limpiar
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* VISTA 1: TABLA PAGINADA POR PARCELA */}
+          {waterViewMode === 'plots' && (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-left font-mono tabular-nums">
+                  <thead className="bg-slate-50 dark:bg-slate-800/60 text-[10px] font-bold uppercase text-slate-500 border-b border-slate-100 dark:border-slate-800">
+                    <tr>
+                      <th className="px-4 py-3.5">Parcela, Superficie & Socio</th>
+                      <th className="px-4 py-3.5">Ventana de Ciclo & Fuente</th>
+                      <th className="px-4 py-3.5 text-right">Agua Verde (Lluvia)</th>
+                      <th className="px-4 py-3.5 text-right">Agua Azul (Riego)</th>
+                      <th className="px-4 py-3.5 text-right">Huella Hídrica (m³/ha)</th>
+                      <th className="px-4 py-3.5 text-right">Volumen Real Lote</th>
+                      <th className="px-4 py-3.5 text-right">Acciones de Ciclo</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {paginatedPlotWaterList.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="px-4 py-10 text-center text-slate-400">
+                          No hay parcelas que coincidan con los filtros seleccionados.
+                        </td>
+                      </tr>
+                    ) : (
+                      paginatedPlotWaterList.map(item => (
+                        <tr key={item.plot.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
+                          <td className="px-4 py-3.5">
+                            <Link
+                              to={`/plots/${item.plot.id}`}
+                              className="font-black text-slate-900 dark:text-white hover:text-sky-600 uppercase block"
+                            >
+                              {item.plot.name}
+                            </Link>
+                            <span className="text-[10px] text-slate-500 block">
+                              {item.loc?.name || 'Campo'} • {item.vari?.name || 'Genética'}
+                            </span>
+                            <span className="text-[10px] text-slate-400 block">
+                              Sup. Real: <strong className="text-slate-700 dark:text-slate-300">{item.surfaceLabel}</strong>
+                            </span>
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <span className="text-slate-700 dark:text-slate-300 font-bold block">
+                              {item.sowDateIso} → {item.cycleEndIso}
+                            </span>
+                            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 block">
+                              ● {item.plot.status} {item.lastRainDate ? `• Últ. lluvia: ${item.lastRainDate}` : ''}
+                            </span>
+                            <span className="text-[9.5px] text-slate-400 block">
+                              🛰️ {item.satelliteRainCount} sat. Open-Meteo {item.irrigEventsCount > 0 ? `+ 💧 ${item.irrigEventsCount} riegos campo` : ''}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3.5 text-right">
+                            <strong className="text-sky-600 dark:text-sky-400">{item.greenWaterM3Ha} m³/ha</strong>
+                            <span className="text-[10px] text-slate-400 block">
+                              {item.rainMm} mm ({item.rainEventsCount} lluvias)
+                            </span>
+                          </td>
+                          <td className="px-4 py-3.5 text-right">
+                            <strong className="text-emerald-600 dark:text-emerald-400">{item.blueWaterM3Ha} m³/ha</strong>
+                            <span className="text-[10px] text-slate-400 block">
+                              {item.irrigMm} mm ({item.irrigEventsCount} riegos)
+                            </span>
+                          </td>
+                          <td className="px-4 py-3.5 text-right">
+                            <strong className="text-indigo-600 dark:text-indigo-400 text-sm">{item.totalWaterM3Ha} m³/ha</strong>
+                            <span className="text-[10px] text-slate-400 block">
+                              {item.completionPct}% de {item.waterNeedMm} mm req.
+                            </span>
+                          </td>
+                          <td className="px-4 py-3.5 text-right">
+                            <strong className="font-black text-slate-900 dark:text-white block">
+                              {item.totalVolumeM3.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m³
+                            </strong>
+                            <span className="text-[10px] text-slate-400 block">
+                              {item.totalLiters.toLocaleString('es-AR')} Litros
+                            </span>
+                          </td>
+                          <td className="px-4 py-3.5 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <Link
+                                to={`/plots/${item.plot.id}`}
+                                className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-[10px] font-bold uppercase"
+                              >
+                                Pluviómetro
+                              </Link>
+                              {item.plot.status === 'Activa' ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setClosingPlot(item.plot);
+                                    setClosureDate(new Date().toISOString().split('T')[0]);
+                                  }}
+                                  className="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-[10px] font-bold uppercase cursor-pointer"
+                                >
+                                  Cerrar Ciclo
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => reopenPlotCycle(item.plot.id)}
+                                  className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold uppercase cursor-pointer"
+                                >
+                                  Reabrir
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* CONTROLES DE PAGINACIÓN INFERIOR */}
+              {filteredPlotWaterList.length > waterPageSize && (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-slate-100 dark:border-slate-800 font-mono text-xs">
+                  <span className="text-slate-500">
+                    Mostrando <strong>{(safeWaterPage - 1) * waterPageSize + 1}</strong> a{' '}
+                    <strong>{Math.min(safeWaterPage * waterPageSize, filteredPlotWaterList.length)}</strong> de{' '}
+                    <strong>{filteredPlotWaterList.length}</strong> parcelas
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      disabled={safeWaterPage <= 1}
+                      onClick={() => setWaterPage(p => Math.max(1, p - 1))}
+                      className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold disabled:opacity-40 cursor-pointer"
+                    >
+                      ← Anterior
+                    </button>
+                    {Array.from({ length: totalWaterPages }, (_, idx) => idx + 1).map(pNum => (
+                      <button
+                        key={pNum}
+                        type="button"
+                        onClick={() => setWaterPage(pNum)}
+                        className={`w-8 h-8 rounded-xl font-bold cursor-pointer ${
+                          pNum === safeWaterPage
+                            ? 'bg-sky-600 text-white'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                        }`}
+                      >
+                        {pNum}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      disabled={safeWaterPage >= totalWaterPages}
+                      onClick={() => setWaterPage(p => Math.min(totalWaterPages, p + 1))}
+                      className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold disabled:opacity-40 cursor-pointer"
+                    >
+                      Siguiente →
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* VISTA 2: CONSOLIDADO POR ESTABLECIMIENTO / ESTACIÓN SATELITAL */}
+          {waterViewMode === 'locations' && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left font-mono tabular-nums">
+                <thead className="bg-slate-50 dark:bg-slate-800/60 text-[10px] font-bold uppercase text-slate-500 border-b border-slate-100 dark:border-slate-800">
                   <tr>
-                    <td colSpan={7} className="px-4 py-10 text-center text-slate-400">
-                      No hay parcelas registradas para el filtro actual.
-                    </td>
+                    <th className="px-4 py-3.5">Establecimiento & Coordenadas ERA5</th>
+                    <th className="px-4 py-3.5 text-right">Parcelas & Sup. Total</th>
+                    <th className="px-4 py-3.5 text-right">Lluvia Acumulada</th>
+                    <th className="px-4 py-3.5 text-right">Riego Acumulado</th>
+                    <th className="px-4 py-3.5 text-right">Huella Específica</th>
+                    <th className="px-4 py-3.5 text-right">Volumen Físico Real</th>
+                    <th className="px-4 py-3.5 text-right">Acción</th>
                   </tr>
-                ) : (
-                  plotWaterFootprintList.map(item => (
-                    <tr key={item.plot.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {locationWaterConsolidation.map(locItem => (
+                    <tr key={locItem.locId} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
                       <td className="px-4 py-3.5">
-                        <Link
-                          to={`/plots/${item.plot.id}`}
-                          className="font-black text-slate-900 dark:text-white hover:text-sky-600 uppercase block"
+                        <strong className="font-black text-slate-900 dark:text-white uppercase block">
+                          {locItem.locName}
+                        </strong>
+                        <span className="text-[10px] text-slate-500 block">
+                          {locItem.city} • GPS: {locItem.coords}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 text-right">
+                        <strong className="text-slate-900 dark:text-white">{locItem.plotsCount} parcelas</strong>
+                        <span className="text-[10px] text-slate-400 block">
+                          {locItem.totalAreaM2.toLocaleString('es-AR')} m² ({locItem.totalAreaHa.toFixed(4)} ha)
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 text-right">
+                        <strong className="text-sky-600 dark:text-sky-400">{locItem.rainMm} mm</strong>
+                        <span className="text-[10px] text-slate-400 block">{locItem.rainEvents} eventos sat.</span>
+                      </td>
+                      <td className="px-4 py-3.5 text-right">
+                        <strong className="text-emerald-600 dark:text-emerald-400">{locItem.irrigMm} mm</strong>
+                        <span className="text-[10px] text-slate-400 block">{locItem.irrigEvents} riegos</span>
+                      </td>
+                      <td className="px-4 py-3.5 text-right">
+                        <strong className="text-indigo-600 dark:text-indigo-400">{locItem.totalM3Ha} m³/ha</strong>
+                      </td>
+                      <td className="px-4 py-3.5 text-right">
+                        <strong className="font-black text-slate-900 dark:text-white block">
+                          {locItem.totalVolumeM3.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m³
+                        </strong>
+                        <span className="text-[10px] text-slate-400 block">
+                          {locItem.totalLiters.toLocaleString('es-AR')} Litros
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 text-right">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setWaterLocFilter(locItem.locId);
+                            setWaterViewMode('plots');
+                            setWaterPage(1);
+                          }}
+                          className="px-3 py-1.5 rounded-xl bg-sky-500/10 hover:bg-sky-600 text-sky-600 dark:text-sky-400 hover:text-white text-[10px] font-bold uppercase transition cursor-pointer"
                         >
-                          {item.plot.name}
-                        </Link>
-                        <span className="text-[10px] text-slate-400 block">
-                          {item.loc?.name || 'Campo'} • Socio: {item.socio?.name || item.plot.ownerName || 'Red HempC'} ({item.areaHa} ha)
-                        </span>
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <span className="text-slate-700 dark:text-slate-300 font-bold block">
-                          Siembra: {item.plot.sowingDate}
-                        </span>
-                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400">
-                          ● {item.plot.status} {item.lastRainDate ? `• Últ. lluvia: ${item.lastRainDate}` : ''}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3.5 text-right">
-                        <strong className="text-sky-600 dark:text-sky-400">{item.greenWaterM3Ha} m³/ha</strong>
-                        <span className="text-[10px] text-slate-400 block">
-                          {item.rainMm} mm ({item.rainEventsCount} lluvias)
-                        </span>
-                      </td>
-                      <td className="px-4 py-3.5 text-right">
-                        <strong className="text-emerald-600 dark:text-emerald-400">{item.blueWaterM3Ha} m³/ha</strong>
-                        <span className="text-[10px] text-slate-400 block">{item.irrigMm} mm</span>
-                      </td>
-                      <td className="px-4 py-3.5 text-right">
-                        <strong className="text-indigo-600 dark:text-indigo-400 text-sm">{item.totalWaterM3Ha} m³/ha</strong>
-                        <span className="text-[10px] text-slate-400 block">{item.completionPct}% del ciclo</span>
-                      </td>
-                      <td className="px-4 py-3.5 text-right font-black text-slate-900 dark:text-white">
-                        {item.totalVolumeM3.toLocaleString()} m³
-                      </td>
-                      <td className="px-4 py-3.5 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <Link
-                            to={`/plots/${item.plot.id}`}
-                            className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-[10px] font-bold uppercase"
-                          >
-                            Pluviómetro
-                          </Link>
-                          {item.plot.status === 'Activa' ? (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setClosingPlot(item.plot);
-                                setClosureDate(new Date().toISOString().split('T')[0]);
-                              }}
-                              className="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-[10px] font-bold uppercase cursor-pointer"
-                            >
-                              Cerrar Ciclo
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => reopenPlotCycle(item.plot.id)}
-                              className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold uppercase cursor-pointer"
-                            >
-                              Reabrir
-                            </button>
-                          )}
-                        </div>
+                          Filtrar Parcelas →
+                        </button>
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* VISTA 3: BITÁCORA CRONOLÓGICA DE EVENTOS DE LLUVIA Y RIEGO */}
+          {waterViewMode === 'events' && (
+            <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
+              <table className="w-full text-xs text-left font-mono tabular-nums">
+                <thead className="bg-slate-50 dark:bg-slate-800/60 text-[10px] font-bold uppercase text-slate-500 border-b border-slate-100 dark:border-slate-800 sticky top-0">
+                  <tr>
+                    <th className="px-4 py-3">Fecha</th>
+                    <th className="px-4 py-3">Tipo</th>
+                    <th className="px-4 py-3">Establecimiento / Nodo</th>
+                    <th className="px-4 py-3 text-right">Lámina (mm)</th>
+                    <th className="px-4 py-3 text-right">Equiv. (m³/ha)</th>
+                    <th className="px-4 py-3">Trazabilidad & Fuente Verificada</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {filteredChronologicalEvents.slice(0, 60).map(ev => {
+                    const loc = locations.find(l => l.id === ev.locationId);
+                    const isSat = String(ev.id).startsWith('auto-rain-') || String(ev.notes || '').includes('Open-Meteo');
+                    return (
+                      <tr key={ev.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                        <td className="px-4 py-2.5 font-bold text-slate-900 dark:text-white">{ev.date}</td>
+                        <td className="px-4 py-2.5">
+                          <span
+                            className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${
+                              ev.type === 'Lluvia'
+                                ? 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20'
+                                : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                            }`}
+                          >
+                            {ev.type === 'Lluvia' ? '🌧️ Lluvia' : '💧 Riego'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5 text-slate-700 dark:text-slate-300">
+                          {loc?.name || 'Establecimiento'}
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-black text-slate-900 dark:text-white">
+                          {Number(ev.amountMm).toFixed(1)} mm
+                        </td>
+                        <td className="px-4 py-2.5 text-right text-indigo-600 dark:text-indigo-400 font-bold">
+                          {(Number(ev.amountMm) * 10).toFixed(1)} m³/ha
+                        </td>
+                        <td className="px-4 py-2.5 text-[10px] text-slate-500">
+                          {isSat ? '🛰️ Satélite Open-Meteo Archive ERA5-Land / GFS' : '🧑‍🌾 Registro Manual de Campo'} •{' '}
+                          <span className="text-slate-400">{ev.notes || ev.id}</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 

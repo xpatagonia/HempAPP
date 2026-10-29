@@ -245,19 +245,27 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
 
       {/* SIDEBAR COMPACTO Y ORGANIZADO */}
       <aside className={`fixed lg:static inset-y-0 left-0 z-50 ${isCollapsed ? 'lg:w-20' : 'lg:w-64'} w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col transition-all duration-200 lg:translate-x-0 ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className={`h-16 flex items-center ${isCollapsed ? 'justify-center px-2' : 'justify-between px-4'} border-b border-slate-100 dark:border-slate-800 shrink-0`}>
-          <Link to="/" className={`flex items-center ${isCollapsed ? 'justify-center' : 'space-x-2.5'} min-w-0`}>
-            <div className="bg-white dark:bg-slate-800 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xs flex items-center justify-center w-9 h-9 shrink-0">
-              {appLogo ? <img src={appLogo} alt="Logo" className="w-full h-full object-contain" /> : <Leaf size={20} className="text-emerald-600" />}
+        <div className={`h-16 flex items-center ${isCollapsed ? 'justify-center px-2' : 'justify-between px-3.5'} border-b border-slate-100 dark:border-slate-800 shrink-0`}>
+          <Link to="/" className={`flex items-center ${isCollapsed ? 'justify-center' : 'space-x-2.5'} min-w-0 group`}>
+            <div
+              className={`bg-[#DDDB00] rounded-xl border border-[#b8b600]/80 dark:border-yellow-400/50 shadow-sm group-hover:shadow-md transition-all flex items-center justify-center shrink-0 overflow-hidden ${
+                isCollapsed ? 'w-12 h-11 p-1' : 'h-11 w-[106px] px-2 py-1'
+              }`}
+            >
+              <img
+                src={appLogo || '/hempc-logo-cropped.png?v=7.18.2'}
+                alt="HempC"
+                className="w-full h-full object-contain"
+              />
             </div>
             {!isCollapsed && (
               <div className="min-w-0">
-                <span className="text-base font-black tracking-tighter text-slate-900 dark:text-white truncate uppercase italic block leading-none">
-                  {appName}
+                <span className="text-sm font-black tracking-tight text-slate-900 dark:text-white truncate uppercase italic block leading-tight">
+                  {appName && appName.toUpperCase() !== 'HEMPC' ? `Red ${appName}` : 'Red Cooperativa'}
                 </span>
-                <span className="text-[9px] font-mono font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">
+                <span className="text-[9px] font-mono font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider block mt-0.5 truncate">
                   {/* @ts-ignore */}
-                  Red Nucleus {typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'V7.18.1-STABLE'}
+                  {typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'V7.18.2-STABLE'}
                 </span>
               </div>
             )}

@@ -166,23 +166,15 @@ export default function Login() {
       <div className="hidden lg:flex lg:w-3/5 bg-[#DDDB00] relative p-20 flex-col justify-between overflow-hidden border-r border-yellow-500/20 shadow-inner">
         <div className="relative z-10 flex flex-col h-full justify-center">
           
-          {/* LOGO DINÁMICO */}
-          <div className="mb-12">
-            {appLogo ? (
+          {/* LOGO OFICIAL DE MARCA HEMPC */}
+          <div className="mb-10">
+            <div className="inline-flex items-center bg-[#DDDB00] py-2 pr-4 rounded-3xl mb-4">
               <img 
-                src={appLogo} 
-                alt={appName} 
-                className="h-32 w-auto object-contain mb-8 drop-shadow-sm" 
+                src={appLogo || "/hempc-logo-cropped.png?v=7.18.2"} 
+                alt="HempC" 
+                className="h-28 xl:h-32 w-auto object-contain drop-shadow-sm" 
               />
-            ) : (
-              <div className="bg-[#006633] p-6 rounded-[28px] w-fit mb-8 shadow-xl shadow-green-900/30">
-                <Leaf size={48} className="text-white" />
-              </div>
-            )}
-            
-            <h1 className="text-9xl font-black text-[#006633] tracking-tighter italic uppercase leading-none drop-shadow-sm">
-              {appName}
-            </h1>
+            </div>
           </div>
 
           <div className="space-y-8">
@@ -235,14 +227,16 @@ export default function Login() {
           
           {/* Header en Pantalla Móvil */}
           <div className="lg:hidden text-center mb-8">
-            <div className="inline-block bg-[#DDDB00] p-6 rounded-3xl mb-4 shadow-xl border border-yellow-400/30">
-              {appLogo ? (
-                <img src={appLogo} alt={appName} className="h-16 object-contain" />
-              ) : (
-                <h1 className="text-4xl font-black text-[#006633] italic uppercase tracking-tighter leading-none">{appName}</h1>
-              )}
+            <div className="inline-flex items-center justify-center bg-[#DDDB00] px-6 py-4 rounded-3xl mb-3 shadow-xl border border-[#b8b600]/60">
+              <img
+                src={appLogo || "/hempc-logo-cropped.png?v=7.18.2"}
+                alt="HempC"
+                className="h-14 w-auto object-contain"
+              />
             </div>
-            <p className="text-[#006633] font-black text-xs uppercase tracking-[0.3em]">Red Cooperativa Argentina</p>
+            <p className="text-[#006633] dark:text-emerald-400 font-black text-xs uppercase tracking-[0.25em]">
+              Red Cooperativa Argentina
+            </p>
           </div>
 
           {/* Encabezado del Formulario */}

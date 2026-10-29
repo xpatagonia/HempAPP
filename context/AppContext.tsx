@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useMemo, ReactNo
 import { supabase, checkConnection, getStoredCredentials } from '../supabaseClient';
 import { 
   User, Location, Plot, TrialRecord, Task, Project, Variety, 
-  Client, Supplier, SeedBatch, SeedMovement, Resource, 
+  Client, ClientContractDocument, Supplier, SeedBatch, SeedMovement, Resource, 
   StoragePoint, HydricRecord, FieldLog, OperationalExpense, ExpenseAuditStatus,
   HempStageId
 } from '../types';
@@ -277,6 +277,41 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         return cleaned;
     };
 
+    const CONTRACTS_MARKER_START = '<!--HEMPC_CONTRACTS_JSON:';
+    const CONTRACTS_MARKER_END = ':END_HEMPC_CONTRACTS-->';
+
+    const unpackClientContractsFromNotes = (
+        rawNotes?: string,
+        existingDocs?: ClientContractDocument[]
+    ): { cleanNotes: string; contractDocuments: ClientContractDocument[] } => {
+        const str = String(rawNotes || '');
+        const startIdx = str.indexOf(CONTRACTS_MARKER_START);
+        const endIdx = str.indexOf(CONTRACTS_MARKER_END);
+        if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+            const cleanNotes = str.slice(0, startIdx).trim();
+            const jsonPart = str.slice(startIdx + CONTRACTS_MARKER_START.length, endIdx);
+            try {
+                const parsed = JSON.parse(jsonPart);
+                if (Array.isArray(parsed)) {
+                    return {
+                        cleanNotes,
+                        contractDocuments: existingDocs && existingDocs.length > 0 ? existingDocs : parsed
+                    };
+                }
+            } catch {}
+            return { cleanNotes, contractDocuments: existingDocs || [] };
+        }
+        return { cleanNotes: str, contractDocuments: existingDocs || [] };
+    };
+
+    const packClientContractsIntoNotes = (cleanNotes?: string, docs?: ClientContractDocument[]): string => {
+        const base = String(cleanNotes || '')
+            .replace(/<!--HEMPC_CONTRACTS_JSON:[\s\S]*?:END_HEMPC_CONTRACTS-->/g, '')
+            .trim();
+        if (!docs || docs.length === 0) return base;
+        return `${base}\n${CONTRACTS_MARKER_START}${JSON.stringify(docs)}${CONTRACTS_MARKER_END}`;
+    };
+
     const healClients = (clientList: Client[]): Client[] => {
         const deletedMap = getDeletedIdsMap();
         const deletedSet = new Set(deletedMap['clients'] || []);
@@ -285,9 +320,15 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             .filter(c => !deletedSet.has(String(c.id)) && !isPurgedDemoItem(c))
             .map((c: Client) => {
                 const demoMatch = demoById.get(String(c.id));
+                const { cleanNotes, contractDocuments } = unpackClientContractsFromNotes(
+                    c.notes ?? demoMatch?.notes,
+                    c.contractDocuments ?? demoMatch?.contractDocuments
+                );
                 return {
                     ...(demoMatch || {}),
                     ...c,
+                    notes: cleanNotes,
+                    contractDocuments,
                     relatedUserId: c.relatedUserId || demoMatch?.relatedUserId || undefined,
                     teamUserIds: (c.teamUserIds && c.teamUserIds.length > 0) ? c.teamUserIds : (demoMatch?.teamUserIds || []),
                     locationId: c.locationId || demoMatch?.locationId,
@@ -296,7 +337,8 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             });
         DEMO_CLIENTS.forEach(dc => {
             if (!deletedSet.has(String(dc.id)) && !healed.some(c => String(c.id) === String(dc.id))) {
-                healed.push(dc);
+                const { cleanNotes, contractDocuments } = unpackClientContractsFromNotes(dc.notes, dc.contractDocuments);
+                healed.push({ ...dc, notes: cleanNotes, contractDocuments });
             }
         });
         return healed;
@@ -340,7 +382,13 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
     const [theme, setTheme] = useState<'light'|'dark'>('light');
     const [appName, setAppName] = useState(localStorage.getItem('ht_app_name') || 'HempC');
-    const [appLogo, setAppLogo] = useState(localStorage.getItem('ht_app_logo') || '');
+    const [appLogo, setAppLogo] = useState(() => {
+        const stored = localStorage.getItem('ht_app_logo');
+        if (!stored || stored.includes('AAAEuUAAAEt')) {
+            return '/hempc-logo-cropped.png?v=7.18.2';
+        }
+        return stored;
+    });
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isDbConnected, setIsDbConnected] = useState(false);
     const [isSyncingGlobalRainfall, setIsSyncingGlobalRainfall] = useState(false);
@@ -883,8 +931,11 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                                 localStorage.setItem('ht_app_name', data.app_name);
                             }
                             if (data.app_logo) {
-                                setAppLogo(data.app_logo);
-                                localStorage.setItem('ht_app_logo', data.app_logo);
+                                const resolvedLogo = String(data.app_logo).includes('AAAEuUAAAEt')
+                                    ? '/hempc-logo-cropped.png?v=7.18.2'
+                                    : data.app_logo;
+                                setAppLogo(resolvedLogo);
+                                localStorage.setItem('ht_app_logo', resolvedLogo);
                             }
                         }
                     } catch(err) { console.error('Error fetching settings', err); }
@@ -1576,6 +1627,9 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 } else {
                     const cleanItem = { ...normalizedItem };
                     delete cleanItem._localUpdatedAt;
+                    if (table === 'clients') {
+                        cleanItem.notes = packClientContractsIntoNotes(cleanItem.notes, cleanItem.contractDocuments);
+                    }
                     const rawPayload = toSnakeCase(cleanItem);
 
                     const allowedCols = SUPABASE_TABLE_COLUMNS[table];

@@ -117,7 +117,7 @@ export function usePWAInstall() {
     const urlContent = [
       '[InternetShortcut]',
       `URL=${appUrl}`,
-      `IconFile=${appUrl}/pwa-192x192.png`,
+      `IconFile=${appUrl}/favicon.ico`,
       'IconIndex=0',
       'HotKey=0',
       'IDList=',
