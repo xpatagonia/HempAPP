@@ -50,7 +50,15 @@ import {
   Wrench,
   RefreshCw,
   Layers,
-  Eye
+  Eye,
+  MapPin,
+  Dna,
+  SlidersHorizontal,
+  Plus,
+  Minus,
+  ChevronDown,
+  ChevronUp,
+  Smartphone
 } from 'lucide-react';
 
 const fastUUID = () => {
@@ -198,7 +206,13 @@ export default function TrialManager() {
   const [historyFilter, setHistoryFilter] = useState<'all' | 'trials' | 'logs' | 'hydric' | 'labors'>('all');
   const [autoAdvance, setAutoAdvance] = useState(true);
 
-  // Filtros avanzados de la Cola de Recorrida
+  // Modo ergonómico para Celular / Tablet: permite contraer la cola de lotes tras elegir parcela
+  // y navegar por secciones sin scroll excesivo
+  const [isMobileQueueOpen, setIsMobileQueueOpen] = useState<boolean>(false);
+  const [fieldViewSection, setFieldViewSection] = useState<'all' | 'biometrics' | 'shortcuts' | 'harvest'>('all');
+  const formContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Filtros en cascada de la Cola de Recorrida
   const [searchQuery, setSearchQuery] = useState('');
   const [locationFilter, setLocationFilter] = useState<string>('all');
   const [varietyFilter, setVarietyFilter] = useState<string>('all');
@@ -269,11 +283,13 @@ export default function TrialManager() {
     seedQualityNonConformity: 0
   });
 
-  // 1. COLA DE TRABAJO INTELIGENTE CON DATOS COTEJADOS DE CADA PARCELA
-  const plotQueue = useMemo(() => {
+  // ============================================================================
+  // 1. PARCELAS ACTIVAS ENRIQUECIDAS + FILTROS EN CASCADA (CAMPO -> GENÉTICA)
+  // ============================================================================
+  const allEnrichedActivePlots = useMemo(() => {
     const active = plots.filter(p => p.status === 'Activa');
 
-    const mapped = active
+    return active
       .map(p => {
         const pRecords = trialRecords.filter(r => r.plotId === p.id);
         pRecords.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -283,6 +299,12 @@ export default function TrialManager() {
         const daysSince = lastRecord ? Math.floor((Date.now() - lastDate) / (1000 * 60 * 60 * 24)) : 999;
         const loc = locations.find(l => l.id === p.locationId);
         const varObj = varieties.find(v => v.id === p.varietyId);
+
+        // Superficie convertida a hectáreas para totales de tablero
+        const rawSurface = Number(p.surfaceArea || 0);
+        const areaM2 =
+          p.surfaceUnit === 'm2' ? rawSurface : p.surfaceUnit === 'ac' ? rawSurface * 4046.86 : rawSurface * 10000;
+        const areaHa = Number((areaM2 / 10000).toFixed(4));
 
         // Cotejo Hídrico de la parcela (desde fecha de siembra)
         const sowDateIso = p.sowingDate || '2025-09-01';
@@ -317,6 +339,8 @@ export default function TrialManager() {
           locationName: loc?.name || 'S/D',
           varietyName: varObj?.name || 'S/D',
           location: loc,
+          areaM2,
+          areaHa,
           rainMm,
           irrigMm,
           totalWaterMm,
@@ -327,43 +351,130 @@ export default function TrialManager() {
         };
       })
       .sort((a, b) => b.daysSince - a.daysSince);
+  }, [plots, trialRecords, locations, varieties, hydricRecords, logs, tasks]);
 
-    return mapped.filter(item => {
+  // Opciones del Filtro 1: Establecimientos con conteo real de Ensayos y Producción
+  const locationFilterOptions = useMemo(() => {
+    return locations
+      .map(loc => {
+        const locPlots = allEnrichedActivePlots.filter(item => item.plot.locationId === loc.id);
+        const ensayosCount = locPlots.filter(item => item.plot.type === 'Ensayo').length;
+        const produccionCount = locPlots.filter(item => item.plot.type === 'Producción').length;
+        return {
+          id: loc.id,
+          name: loc.name,
+          province: loc.province,
+          totalPlots: locPlots.length,
+          ensayosCount,
+          produccionCount
+        };
+      })
+      .filter(opt => opt.totalPlots > 0);
+  }, [locations, allEnrichedActivePlots]);
+
+  // Opciones del Filtro 2 (EN CASCADA): Únicamente las genéticas asignadas al Establecimiento seleccionado
+  const availableVarietiesForSelectedLocation = useMemo(() => {
+    const plotsInLocation =
+      locationFilter === 'all'
+        ? allEnrichedActivePlots
+        : allEnrichedActivePlots.filter(item => item.plot.locationId === locationFilter);
+
+    const byVariety = new Map<
+      string,
+      { id: string; name: string; totalPlots: number; ensayosCount: number; produccionCount: number }
+    >();
+
+    plotsInLocation.forEach(item => {
+      const vId = item.plot.varietyId;
+      if (!vId) return;
+      const existing = byVariety.get(vId);
+      if (existing) {
+        existing.totalPlots += 1;
+        if (item.plot.type === 'Ensayo') existing.ensayosCount += 1;
+        if (item.plot.type === 'Producción') existing.produccionCount += 1;
+      } else {
+        byVariety.set(vId, {
+          id: vId,
+          name: item.varietyName,
+          totalPlots: 1,
+          ensayosCount: item.plot.type === 'Ensayo' ? 1 : 0,
+          produccionCount: item.plot.type === 'Producción' ? 1 : 0
+        });
+      }
+    });
+
+    return Array.from(byVariety.values()).sort((a, b) => b.totalPlots - a.totalPlots || a.name.localeCompare(b.name));
+  }, [allEnrichedActivePlots, locationFilter]);
+
+  // Si al cambiar de Establecimiento la genética antes elegida no existe en ese campo, resetear a 'all'
+  useEffect(() => {
+    if (
+      varietyFilter !== 'all' &&
+      !availableVarietiesForSelectedLocation.some(v => v.id === varietyFilter)
+    ) {
+      setVarietyFilter('all');
+    }
+  }, [locationFilter, varietyFilter, availableVarietiesForSelectedLocation]);
+
+  // Subconjunto filtrado por Establecimiento + Genética + Búsqueda (base para los contadores de Ensayo vs Producción)
+  const baseScopedPlots = useMemo(() => {
+    return allEnrichedActivePlots.filter(item => {
       if (locationFilter !== 'all' && item.plot.locationId !== locationFilter) return false;
       if (varietyFilter !== 'all' && item.plot.varietyId !== varietyFilter) return false;
-      if (typeFilter !== 'all' && item.plot.type !== typeFilter) return false;
-      if (urgencyFilter === 'urgent' && item.daysSince <= 7) return false;
-      if (urgencyFilter === 'uptodate' && item.daysSince > 7) return false;
-
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
-        return (
+        const matches =
           item.plot.name.toLowerCase().includes(q) ||
           item.locationName.toLowerCase().includes(q) ||
           item.varietyName.toLowerCase().includes(q) ||
-          (item.plot.block || '').toLowerCase().includes(q)
-        );
+          (item.plot.block || '').toLowerCase().includes(q);
+        if (!matches) return false;
       }
       return true;
     });
-  }, [
-    plots,
-    trialRecords,
-    locations,
-    varieties,
-    hydricRecords,
-    logs,
-    tasks,
-    locationFilter,
-    varietyFilter,
-    typeFilter,
-    urgencyFilter,
-    searchQuery
-  ]);
+  }, [allEnrichedActivePlots, locationFilter, varietyFilter, searchQuery]);
+
+  // Métricas de Tablero (Ensayos vs Producción, Urgentes vs Al Día, Superficie) sobre el alcance seleccionado
+  const boardStats = useMemo(() => {
+    const total = baseScopedPlots.length;
+    const ensayos = baseScopedPlots.filter(i => i.plot.type === 'Ensayo');
+    const produccion = baseScopedPlots.filter(i => i.plot.type === 'Producción');
+    const urgent = baseScopedPlots.filter(i => i.daysSince > 7);
+    const upToDate = baseScopedPlots.filter(i => i.daysSince <= 7);
+
+    const ensayosHa = Number(ensayos.reduce((s, i) => s + i.areaHa, 0).toFixed(2));
+    const produccionHa = Number(produccion.reduce((s, i) => s + i.areaHa, 0).toFixed(2));
+    const totalHa = Number((ensayosHa + produccionHa).toFixed(2));
+
+    return {
+      total,
+      totalHa,
+      ensayosCount: ensayos.length,
+      ensayosHa,
+      produccionCount: produccion.length,
+      produccionHa,
+      urgentCount: urgent.length,
+      upToDateCount: upToDate.length
+    };
+  }, [baseScopedPlots]);
+
+  // Cola final aplicando también el filtro de Tipo ('Ensayo' | 'Producción') y Urgencia
+  const plotQueue = useMemo(() => {
+    return baseScopedPlots.filter(item => {
+      if (typeFilter !== 'all' && item.plot.type !== typeFilter) return false;
+      if (urgencyFilter === 'urgent' && item.daysSince <= 7) return false;
+      if (urgencyFilter === 'uptodate' && item.daysSince > 7) return false;
+      return true;
+    });
+  }, [baseScopedPlots, typeFilter, urgencyFilter]);
 
   const currentPlotData = useMemo(
     () => plotQueue.find(item => item.plot.id === selectedPlotId) || plotQueue[0],
     [plotQueue, selectedPlotId]
+  );
+  const currentPlotIndex = useMemo(
+    () => (currentPlotData ? plotQueue.findIndex(item => item.plot.id === currentPlotData.plot.id) : -1),
+    [plotQueue, currentPlotData]
   );
   const variety = varieties.find(v => v.id === currentPlotData?.plot.varietyId);
 
@@ -431,12 +542,12 @@ export default function TrialManager() {
     return { dds, areaM2, areaHa, waterNeedMm, waterPct, totalVolumeM3, totalLiters };
   }, [currentPlotData, variety]);
 
-  // Auto-seleccionar el primero si no hay selección
+  // Auto-seleccionar el primero si la selección actual no está en la cola filtrada
   useEffect(() => {
-    if (!selectedPlotId && plotQueue.length > 0) {
+    if (plotQueue.length > 0 && !plotQueue.some(item => item.plot.id === selectedPlotId)) {
       setSelectedPlotId(plotQueue[0].plot.id);
     }
-  }, [plotQueue.length, selectedPlotId]);
+  }, [plotQueue, selectedPlotId]);
 
   // Limpiar cámara al desmontar
   useEffect(() => {
@@ -448,14 +559,25 @@ export default function TrialManager() {
   }, []);
 
   // Sincronización ambiental con Open-Meteo y Sunrise-Sunset (Red GFS)
-  const syncEnvironmentalData = async (targetDate: string, plotLocation?: Location) => {
+  const syncEnvironmentalData = async (dateStr: string, loc?: Location) => {
+    const lunar = calculateLunarPhase(dateStr);
+    setFormData(prev => ({ ...prev, lunarPhase: lunar }));
+
+    const lat = loc?.coordinates?.lat || currentPlotData?.plot.coordinates?.lat || -34.6037;
+    const lng = loc?.coordinates?.lng || currentPlotData?.plot.coordinates?.lng || -58.3816;
+
     setIsFetchingConditions(true);
     try {
-      const lat = plotLocation?.coordinates?.lat || -38.95;
-      const lng = plotLocation?.coordinates?.lng || -68.05;
-      const isToday = targetDate === new Date().toISOString().split('T')[0];
-      let temp = 11;
-      let hum = 85;
+      const sunRes = await fetch(`https://api.sunrise-sunset.org/json?lat=${lat}&lng=${lng}&date=${dateStr}&formatted=0`);
+      const sunData = await sunRes.json();
+      let lightH = 12.5;
+      if (sunData.status === 'OK') {
+        lightH = Number((sunData.results.day_length / 3600).toFixed(2));
+      }
+
+      const isToday = dateStr === new Date().toISOString().split('T')[0];
+      let temp = 18;
+      let hum = 65;
 
       if (isToday) {
         const wRes = await fetch(
@@ -463,87 +585,108 @@ export default function TrialManager() {
         );
         const wData = await wRes.json();
         if (wData.current) {
-          temp = Math.round(wData.current.temperature_2m ?? 11);
-          hum = Math.round(wData.current.relative_humidity_2m ?? 85);
+          temp = Math.round(wData.current.temperature_2m);
+          hum = Math.round(wData.current.relative_humidity_2m);
         }
       } else {
         const wRes = await fetch(
-          `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lng}&start_date=${targetDate}&end_date=${targetDate}&hourly=temperature_2m,relative_humidity_2m&timezone=auto`
+          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&daily=temperature_2m_max,temperature_2m_min&timezone=auto`
         );
         const wData = await wRes.json();
-        if (wData.hourly && wData.hourly.temperature_2m?.length) {
-          temp = Math.round(
-            wData.hourly.temperature_2m.reduce((a: number, b: number) => a + b, 0) /
-              wData.hourly.temperature_2m.length
-          );
-          hum = Math.round(
-            wData.hourly.relative_humidity_2m.reduce((a: number, b: number) => a + b, 0) /
-              wData.hourly.relative_humidity_2m.length
-          );
+        if (wData.daily && wData.daily.temperature_2m_max?.[0] !== undefined) {
+          temp = Math.round((wData.daily.temperature_2m_max[0] + wData.daily.temperature_2m_min[0]) / 2);
         }
       }
-      const aRes = await fetch(`https://api.sunrise-sunset.org/json?lat=${lat}&lng=${lng}&date=${targetDate}&formatted=0`);
-      const aData = await aRes.json();
-      const lunar = calculateLunarPhase(targetDate);
-      const hours = aData.results ? parseFloat((aData.results.day_length / 3600).toFixed(2)) : 13.17;
 
-      setFormData(p => ({
-        ...p,
+      setFormData(prev => ({
+        ...prev,
+        lightHours: lightH,
         temperature: temp,
         humidity: hum,
-        lightHours: hours,
         lunarPhase: lunar
       }));
-    } catch (err) {
-      console.error('Sync Error:', err);
-      const lunar = calculateLunarPhase(targetDate);
-      setFormData(p => ({
-        ...p,
-        lunarPhase: lunar,
-        lightHours: p.lightHours || 13.17
-      }));
+    } catch {
+      // Mantiene valores manuales si no hay señal en el lote
     } finally {
       setIsFetchingConditions(false);
     }
   };
 
-  // Pre-cargar datos lógicos al cambiar de parcela seleccionada
+  // Pre-cargar datos base cuando cambia la parcela seleccionada
   useEffect(() => {
-    if (currentPlotData) {
-      const today = new Date().toISOString().split('T')[0];
-      const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+    if (currentPlotData && !editingRecordId) {
       const last = currentPlotData.lastRecord;
+      const todayStr = new Date().toISOString().split('T')[0];
+      const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
 
-      setFormData({
-        date: today,
+      setFormData(prev => ({
+        ...prev,
+        date: todayStr,
         time: nowTime,
         stage: last?.stage || 'Vegetativo',
-        plantHeight: last?.plantHeight || 0,
         plantsPerMeter: last?.plantsPerMeter || 0,
-        temperature: 11,
-        humidity: 85,
-        lightHours: 13.17,
-        lunarPhase: calculateLunarPhase(today),
-        vigor: 9,
-        uniformity: 9,
-        lodging: 1,
-        birdDamage: 1,
-        diseasesScore: 1,
-        pestsScore: 1,
+        plantHeight: last?.plantHeight || 0,
+        vigor: last?.vigor || 9,
+        uniformity: last?.uniformity || 9,
+        lodging: last?.lodging || 1,
+        birdDamage: last?.birdDamage || 1,
+        diseasesScore: last?.diseasesScore || 1,
+        pestsScore: last?.pestsScore || 1,
         floweringDate: last?.floweringDate || '',
         seedYield: last?.seedYield || 0,
         stemWeight: last?.stemWeight || 0,
-        seedQualityGermination: 90,
-        seedQualityNonConformity: 0
-      });
+        seedQualityGermination: last?.seedQualityGermination ?? 90,
+        seedQualityNonConformity: last?.seedQualityNonConformity ?? 0
+      }));
 
-      setEditingRecordId(null);
-      syncEnvironmentalData(today, currentPlotData.location);
+      syncEnvironmentalData(todayStr, currentPlotData.location);
     }
-  }, [currentPlotData?.plot.id]);
+  }, [currentPlotData?.plot.id, editingRecordId]);
+
+  const handleSelectPlotFromQueue = (plotId: string) => {
+    setSelectedPlotId(plotId);
+    setIsMobileQueueOpen(false);
+  };
+
+  const handleStepPlot = (direction: 'prev' | 'next') => {
+    if (plotQueue.length <= 1 || currentPlotIndex === -1) return;
+    const nextIdx =
+      direction === 'next'
+        ? (currentPlotIndex + 1) % plotQueue.length
+        : (currentPlotIndex - 1 + plotQueue.length) % plotQueue.length;
+    setSelectedPlotId(plotQueue[nextIdx].plot.id);
+  };
+
+  const handleEditRecord = (record: TrialRecord) => {
+    setEditingRecordId(record.id);
+    setFormData({
+      ...record,
+      date: record.date || new Date().toISOString().split('T')[0],
+      time: record.time || '12:00',
+      stage: record.stage || 'Vegetativo',
+      temperature: record.temperature ?? 18,
+      humidity: record.humidity ?? 60,
+      lightHours: record.lightHours ?? 12.5,
+      lunarPhase: record.lunarPhase || calculateLunarPhase(record.date),
+      plantsPerMeter: record.plantsPerMeter ?? 0,
+      plantHeight: record.plantHeight ?? 0,
+      vigor: record.vigor ?? 9,
+      uniformity: record.uniformity ?? 9,
+      lodging: record.lodging ?? 1,
+      birdDamage: record.birdDamage ?? 1,
+      diseasesScore: record.diseasesScore ?? 1,
+      pestsScore: record.pestsScore ?? 1,
+      floweringDate: record.floweringDate || '',
+      seedYield: record.seedYield ?? 0,
+      stemWeight: record.stemWeight ?? 0,
+      seedQualityGermination: record.seedQualityGermination ?? 90,
+      seedQualityNonConformity: record.seedQualityNonConformity ?? 0
+    });
+    setActiveTab('form');
+  };
 
   // ============================================================================
-  // MANEJADORES DE CÁMARA Y BITÁCORA MULTIMEDIA IN-SITU
+  // FUNCIONES DE CÁMARA Y BITÁCORA MULTIMEDIA
   // ============================================================================
   const handleSelectPhotoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -553,7 +696,7 @@ export default function TrialManager() {
       const compressed = await compressImageFileToDataUrl(file);
       setQuickLogPhoto(compressed);
     } catch (err: any) {
-      alert('No se pudo procesar la fotografía: ' + (err.message || err));
+      setCameraError(err?.message || 'Error al procesar la imagen.');
     } finally {
       setIsProcessingImage(false);
       e.target.value = '';
@@ -571,11 +714,10 @@ export default function TrialManager() {
       cameraStreamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        await videoRef.current.play();
       }
-    } catch (err: any) {
+    } catch {
       setCameraError(
-        'No se pudo acceder a la cámara directa del navegador. Utilice el botón "Cámara Móvil / Archivo" para capturar la foto.'
+        'No se pudo acceder a la cámara en vivo del navegador. Utilizá el botón "Cámara Nativa / Subir Foto".'
       );
     }
   };
@@ -603,51 +745,45 @@ export default function TrialManager() {
     stopWebCamera();
   };
 
-  // Guardar entrada directa en Bitácora Multimedia (`field_logs`)
+  // Guardado directo independiente de Bitácora Multimedia
   const handleQuickSaveLogOnly = async () => {
     if (!currentPlotData?.plot.id) return;
-    if (!quickLogNote.trim() && !quickLogPhoto) {
-      alert('Ingrese una observación técnica o tome una fotografía para registrar en la Bitácora.');
-      return;
-    }
+    if (!quickLogNote.trim() && !quickLogPhoto) return;
+
     setIsSavingQuickLog(true);
     try {
       const biometricPrefix = autoAttachBiometricsToLog
         ? `[Monitoreo ${formData.stage || 'Vegetativo'} | Alt: ${formData.plantHeight || 0}cm | Pob: ${formData.plantsPerMeter || 0} pl/m² | Vigor: ${formData.vigor || 9}/9] `
         : '';
-      const finalNote = `${biometricPrefix}${quickLogNote.trim() || 'Evidencia fotográfica de relevamiento en lote.'}`.trim();
+      const finalNote = `${biometricPrefix}${quickLogNote.trim() || 'Registro fotográfico de recorrida técnica.'}`.trim();
 
-      const ok = await addLog({
+      const newLog: FieldLog = {
         id: fastUUID(),
         plotId: currentPlotData.plot.id,
         date: formData.date || new Date().toISOString().split('T')[0],
         time: formData.time || new Date().toTimeString().slice(0, 5),
         note: finalNote,
         photoUrl: quickLogPhoto || undefined
-      });
-
-      if (ok) {
-        setQuickLogNote('');
-        setQuickLogPhoto('');
-        setSaveSummaryBanner('✓ Evidencia guardada en la Bitácora Multimedia de la parcela.');
-        setTimeout(() => setSaveSummaryBanner(null), 3500);
-      }
+      };
+      await addLog(newLog);
+      setQuickLogNote('');
+      setQuickLogPhoto('');
+      setSaveSummaryBanner(`✓ Bitácora Multimedia sincronizada en ${currentPlotData.plot.name}`);
+      setTimeout(() => setSaveSummaryBanner(null), 3500);
     } finally {
       setIsSavingQuickLog(false);
     }
   };
 
-  // Guardar registro directo de Pluviómetro / Riego (`hydric_records`)
+  // Guardado directo independiente de Pluviómetro / Riego
   const handleQuickSaveHydricOnly = async () => {
     if (!currentPlotData?.plot.id) return;
     const mm = parseFloat(quickHydricMm);
-    if (isNaN(mm) || mm <= 0) {
-      alert('Ingrese una lámina válida en milímetros (mm > 0).');
-      return;
-    }
+    if (isNaN(mm) || mm <= 0) return;
+
     setIsSavingQuickHydric(true);
     try {
-      const ok = await addHydricRecord({
+      const newHydric: HydricRecord = {
         id: fastUUID(),
         locationId: currentPlotData.plot.locationId,
         plotId: currentPlotData.plot.id,
@@ -658,29 +794,24 @@ export default function TrialManager() {
         amountMm: Number(mm.toFixed(1)),
         notes:
           quickHydricNotes.trim() ||
-          `${quickHydricType} registrado desde Monitoreo Rápido en parcela ${currentPlotData.plot.name}`,
+          `${quickHydricType} registrado desde Monitoreo Rápido (${currentPlotData.plot.name})`,
         createdBy: currentUser?.name || 'Técnico Nucleus'
-      });
-
-      if (ok) {
-        setQuickHydricMm('');
-        setSaveSummaryBanner(
-          `✓ ${quickHydricType} de ${mm.toFixed(1)} mm (${(mm * 10).toFixed(1)} m³/ha) registrado en el Balance Hídrico de ${currentPlotData.plot.name}.`
-        );
-        setTimeout(() => setSaveSummaryBanner(null), 3500);
-      }
+      };
+      await addHydricRecord(newHydric);
+      setQuickHydricMm('');
+      setSaveSummaryBanner(
+        `✓ ${quickHydricType} (${mm.toFixed(1)} mm = ${(mm * 10).toFixed(0)} m³/ha) asentado en ${currentPlotData.plot.name}`
+      );
+      setTimeout(() => setSaveSummaryBanner(null), 3500);
     } finally {
       setIsSavingQuickHydric(false);
     }
   };
 
-  // Guardar registro directo de Labor Cultural / Preparación de Suelo (`tasks`)
+  // Guardado directo independiente de Labor Cultural / Preparación de Suelo
   const handleQuickSaveLaborOnly = async () => {
-    if (!currentPlotData?.plot.id) return;
-    if (!quickLaborTitle.trim()) {
-      alert('Ingrese o seleccione una plantilla para el título de la labor agrícola.');
-      return;
-    }
+    if (!currentPlotData?.plot.id || !quickLaborTitle.trim()) return;
+
     setIsSavingQuickLabor(true);
     try {
       const targetPlots = quickLaborApplyBlock
@@ -688,38 +819,41 @@ export default function TrialManager() {
             p =>
               p.status === 'Activa' &&
               p.locationId === currentPlotData.plot.locationId &&
-              (!currentPlotData.plot.block || p.block === currentPlotData.plot.block)
+              (currentPlotData.plot.block ? p.block === currentPlotData.plot.block : true)
           )
         : [currentPlotData.plot];
 
-      for (const pl of targetPlots) {
-        await addTask({
+      for (const targetPlot of targetPlots) {
+        const newTask: Task = {
           id: fastUUID(),
           title: quickLaborTitle.trim(),
           description:
             quickLaborDescription.trim() ||
-            `Labor registrada durante relevamiento agronómico en ${pl.name}.`,
+            `Labor registrada durante relevamiento agronómico en ${targetPlot.name}.`,
           status: quickLaborStatus,
           priority: 'Alta',
           assignedToIds: currentUser?.id ? [currentUser.id] : ['1'],
           dueDate: formData.date || new Date().toISOString().split('T')[0],
           executionDate: formData.date || new Date().toISOString().split('T')[0],
-          plotId: pl.id,
+          plotId: targetPlot.id,
           createdBy: currentUser?.id || '1',
           laborType: quickLaborType,
-          targetStage: pl.currentPhenologicalStage || 'BBCH_10_19',
+          targetStage: targetPlot.currentPhenologicalStage || 'BBCH_10_19',
           operator: currentUser?.name || 'Equipo Técnico',
           machinery: {
             tractor: quickLaborTractor,
             implement: quickLaborImplement
           }
-        });
+        };
+        await addTask(newTask);
       }
 
       setQuickLaborTitle('');
       setQuickLaborDescription('');
       setSaveSummaryBanner(
-        `✓ Labor "${quickLaborType}" asentada en ${targetPlots.length} parcela(s) (${targetPlots.map(p => p.name).slice(0, 3).join(', ')}).`
+        `✓ Labor "${quickLaborType}" registrada en ${
+          targetPlots.length > 1 ? `${targetPlots.length} parcelas del establecimiento` : currentPlotData.plot.name
+        }`
       );
       setTimeout(() => setSaveSummaryBanner(null), 3500);
     } finally {
@@ -727,16 +861,8 @@ export default function TrialManager() {
     }
   };
 
-  const handleEditRecord = (record: TrialRecord) => {
-    setEditingRecordId(record.id);
-    setFormData({
-      ...record
-    });
-    setActiveTab('form');
-  };
-
   // ============================================================================
-  // SELLADO INTEGRAL: GUARDA INFORME BIOMÉTRICO + ATAJOS PENDIENTES EN 1 CLIC
+  // GUARDADO INTEGRAL UNIFICADO (BIOMETRÍA + ATAJOS PENDIENTES EN UN SOLO CLIC)
   // ============================================================================
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -854,11 +980,11 @@ export default function TrialManager() {
   };
 
   const GrowthIndicator = ({ current, previous }: { current: number; previous: number }) => {
-    if (!previous) return <span className="text-gray-400 text-[10px]">Sin dato previo</span>;
+    if (!previous) return <span className="text-slate-400 text-[10px]">Sin dato previo</span>;
     const diff = Number((current - previous).toFixed(1));
     if (diff > 0)
       return (
-        <span className="text-emerald-500 text-[10px] font-bold flex items-center">
+        <span className="text-emerald-600 dark:text-emerald-400 text-[10px] font-bold flex items-center">
           +{diff} cm <TrendingUp size={12} className="ml-1" />
         </span>
       );
@@ -868,99 +994,342 @@ export default function TrialManager() {
           {diff} cm <AlertTriangle size={12} className="ml-1" />
         </span>
       );
-    return <span className="text-gray-400 text-[10px] font-bold">Sin variación</span>;
+    return <span className="text-slate-400 text-[10px] font-bold">Sin variación</span>;
   };
 
   const inputStyle =
-    'w-full border border-gray-200 dark:border-slate-700 p-3 rounded-xl bg-gray-50 dark:bg-slate-800 font-bold outline-none focus:ring-2 focus:ring-emerald-500 transition-all text-sm dark:text-white';
-  const labelClass = 'text-[10px] font-black uppercase mb-1.5 block text-gray-400 tracking-widest';
+    'w-full border border-slate-200 dark:border-slate-700 p-3 rounded-xl bg-slate-50 dark:bg-slate-800 font-bold outline-none focus:ring-2 focus:ring-emerald-500 transition-all text-sm dark:text-white';
+  const labelClass = 'text-[10px] font-black uppercase mb-1.5 block text-slate-400 tracking-widest';
 
-  const ScaleSelect = ({
+  // Selector táctil 1-9 optimizado para celular, tablet y escritorio (botones amplios + atajo directo)
+  const TouchScaleControl = ({
     label,
     value,
     onChange,
-    disabled
+    invertColor = false,
+    helperText
   }: {
     label: string;
     value?: number;
     onChange: (v: number) => void;
-    disabled?: boolean;
-  }) => (
-    <div>
-      <label className={labelClass}>{label}</label>
-      <select
-        disabled={disabled}
-        className={inputStyle}
-        value={value ?? 1}
-        onChange={e => onChange(Number(e.target.value))}
-      >
-        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => (
-          <option key={n} value={n}>
-            {n}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
+    invertColor?: boolean;
+    helperText?: string;
+  }) => {
+    const current = value ?? 1;
+    const getBadgeStyle = (n: number, isSelected: boolean) => {
+      if (!isSelected) {
+        return 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700';
+      }
+      if (!invertColor) {
+        // Vigor / Homogeneidad: 7-9 excelente (esmeralda), 4-6 medio (ámbar), 1-3 bajo (rojo)
+        if (n >= 7) return 'bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-500/40';
+        if (n >= 4) return 'bg-amber-500 text-white shadow-sm ring-2 ring-amber-500/40';
+        return 'bg-rose-600 text-white shadow-sm ring-2 ring-rose-500/40';
+      } else {
+        // Enfermedades / Plagas / Encamado / Daño Aves: 1-2 sano (esmeralda), 3-5 alerta (ámbar), 6-9 severo (rojo)
+        if (n <= 2) return 'bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-500/40';
+        if (n <= 5) return 'bg-amber-500 text-white shadow-sm ring-2 ring-amber-500/40';
+        return 'bg-rose-600 text-white shadow-sm ring-2 ring-rose-500/40';
+      }
+    };
+
+    return (
+      <div className="bg-slate-50/70 dark:bg-slate-950/60 p-3 rounded-2xl border border-slate-200/70 dark:border-slate-800">
+        <div className="flex items-center justify-between mb-2">
+          <div>
+            <span className="text-[10px] font-black uppercase text-slate-600 dark:text-slate-300 tracking-wider block">
+              {label}
+            </span>
+            {helperText && <span className="text-[9px] text-slate-400 block">{helperText}</span>}
+          </div>
+          <span className="font-mono text-sm font-black text-slate-900 dark:text-white bg-white dark:bg-slate-900 px-2.5 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
+            {current}/9
+          </span>
+        </div>
+        <div className="grid grid-cols-9 gap-1">
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => (
+            <button
+              key={n}
+              type="button"
+              onClick={() => onChange(n)}
+              className={`h-9 rounded-lg font-mono text-xs font-black transition-all cursor-pointer flex items-center justify-center ${getBadgeStyle(
+                n,
+                current === n
+              )}`}
+            >
+              {n}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const selectedLocationObj = locations.find(l => l.id === locationFilter);
+  const selectedVarietyObj = varieties.find(v => v.id === varietyFilter);
 
   return (
-    <div className="animate-in fade-in duration-500 min-h-[calc(100vh-140px)] flex flex-col space-y-5 pb-12">
-      {/* HEADER DE LA SECCIÓN */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 flex-shrink-0">
-        <div className="flex items-center gap-4">
-          <div className="bg-emerald-600 p-3.5 rounded-2xl text-white shadow-lg shadow-emerald-600/20">
-            <ClipboardList size={28} />
-          </div>
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl md:text-3xl font-black text-gray-800 dark:text-white uppercase tracking-tighter italic">
-                Monitoreo <span className="text-emerald-600">Agronómico 360°</span>
-              </h1>
-              <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[10px] font-mono font-bold uppercase">
-                Atajo Unificado de Recorrida
-              </span>
+    <div className="animate-in fade-in duration-500 min-h-[calc(100vh-140px)] flex flex-col space-y-4 pb-20 lg:pb-12">
+      {/* ====================================================================== */}
+      {/* 1. CABECERA + TABLERO EJECUTIVO DE PARCELAS (ENSAYOS vs PRODUCCIÓN)    */}
+      {/* ====================================================================== */}
+      <div className="bg-white dark:bg-slate-900 rounded-[28px] border border-slate-200 dark:border-slate-800 p-4 md:p-6 shadow-sm space-y-4">
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="bg-emerald-600 p-3 rounded-2xl text-white shadow-lg shadow-emerald-600/20 shrink-0">
+              <ClipboardList size={26} />
             </div>
-            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-0.5">
-              Relevamiento biométrico + Bitácora Fotográfica + Pluviómetro/Riego + Labores de Suelo • Sincronizado en vivo con Parcelas
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2.5">
-          <div className="flex items-center space-x-4 bg-white dark:bg-slate-900 px-4 py-2.5 rounded-2xl border dark:border-slate-800 shadow-sm">
-            <div className="text-right">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">En Cola</p>
-              <p className="text-lg font-black text-slate-800 dark:text-white leading-none">{plotQueue.length}</p>
-            </div>
-            <div className="h-7 w-px bg-slate-200 dark:bg-slate-700"></div>
-            <div className="text-right">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Urgentes (+7d)</p>
-              <p className="text-lg font-black text-red-500 leading-none">
-                {plotQueue.filter(p => p.daysSince > 7).length}
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
+                  Monitoreo Agronómico <span className="text-emerald-600">360°</span>
+                </h1>
+                <span className="text-xs text-slate-400 font-mono">
+                  · Protocolo Oficial Nucleus Trace
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Terminal de relevamiento rápido para campo, tablet y celular • Sincronizada en tiempo real con Parcelas de Cultivo
               </p>
             </div>
           </div>
 
+          <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+            <button
+              type="button"
+              onClick={() => syncAllPlotsContinuousRainfall(true)}
+              disabled={isSyncingGlobalRainfall}
+              className="flex-1 sm:flex-initial bg-sky-600 hover:bg-sky-500 text-white px-3.5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition flex items-center justify-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50"
+              title="Sincronizar lluvias satelitales Open-Meteo ERA5 en todos los establecimientos"
+            >
+              <RefreshCw size={14} className={isSyncingGlobalRainfall ? 'animate-spin' : ''} />
+              <span>{isSyncingGlobalRainfall ? 'Sincronizando ERA5...' : 'Sincronizar Lluvias'}</span>
+            </button>
+
+            {currentPlotData && (
+              <Link
+                to={`/plots/${currentPlotData.plot.id}`}
+                className="flex-1 sm:flex-initial bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-3.5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition flex items-center justify-center gap-1.5 border border-slate-200 dark:border-slate-700"
+                title="Abrir Ficha Técnica completa de la parcela seleccionada"
+              >
+                <ExternalLink size={14} /> Ficha de Parcela
+              </Link>
+            )}
+          </div>
+        </div>
+
+        {/* TABLERO INTERACTIVO DE TOTALES: ENSAYOS vs PRODUCCIÓN + URGENCIA */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+          {/* KPI 1: Total Parcelas en el alcance actual */}
           <button
             type="button"
-            onClick={() => syncAllPlotsContinuousRainfall(true)}
-            disabled={isSyncingGlobalRainfall}
-            className="bg-sky-600 hover:bg-sky-500 text-white px-3.5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition flex items-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50"
-            title="Sincronizar lluvias satelitales Open-Meteo ERA5 en todos los establecimientos"
+            onClick={() => {
+              setTypeFilter('all');
+              setUrgencyFilter('all');
+            }}
+            className={`p-3 rounded-2xl text-left border transition cursor-pointer ${
+              typeFilter === 'all' && urgencyFilter === 'all'
+                ? 'bg-slate-900 dark:bg-emerald-950/60 border-slate-900 dark:border-emerald-500/50 text-white'
+                : 'bg-slate-50 dark:bg-slate-950/50 border-slate-200/80 dark:border-slate-800 hover:border-slate-400'
+            }`}
           >
-            <RefreshCw size={13} className={isSyncingGlobalRainfall ? 'animate-spin' : ''} />
-            <span>{isSyncingGlobalRainfall ? 'Sincronizando...' : 'Sincronizar Lluvias'}</span>
+            <div className="flex items-center justify-between">
+              <span
+                className={`text-[10px] font-black uppercase tracking-wider ${
+                  typeFilter === 'all' && urgencyFilter === 'all'
+                    ? 'text-emerald-400'
+                    : 'text-slate-500 dark:text-slate-400'
+                }`}
+              >
+                Total Parcelas Activas
+              </span>
+              <Layers size={14} className="text-emerald-500" />
+            </div>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span
+                className={`text-2xl font-black font-mono ${
+                  typeFilter === 'all' && urgencyFilter === 'all'
+                    ? 'text-white'
+                    : 'text-slate-900 dark:text-white'
+                }`}
+              >
+                {boardStats.total}
+              </span>
+              <span
+                className={`text-[11px] font-mono ${
+                  typeFilter === 'all' && urgencyFilter === 'all' ? 'text-slate-300' : 'text-slate-400'
+                }`}
+              >
+                ({boardStats.totalHa} ha)
+              </span>
+            </div>
+            <p
+              className={`text-[10px] truncate mt-0.5 ${
+                typeFilter === 'all' && urgencyFilter === 'all' ? 'text-slate-300' : 'text-slate-400'
+              }`}
+            >
+              {selectedLocationObj ? selectedLocationObj.name : `${locationFilterOptions.length} establecimientos`}
+              {selectedVarietyObj ? ` · ${selectedVarietyObj.name}` : ''}
+            </p>
           </button>
 
-          {currentPlotData && (
-            <Link
-              to={`/plots/${currentPlotData.plot.id}`}
-              className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2 border dark:border-slate-700 shadow-sm"
-              title="Abrir Ficha Técnica completa de la parcela seleccionada"
-            >
-              <ExternalLink size={14} /> Ficha Completa de Parcela
-            </Link>
-          )}
+          {/* KPI 2: Lotes de Ensayo I+D */}
+          <button
+            type="button"
+            onClick={() => setTypeFilter(typeFilter === 'Ensayo' ? 'all' : 'Ensayo')}
+            className={`p-3 rounded-2xl text-left border transition cursor-pointer ${
+              typeFilter === 'Ensayo'
+                ? 'bg-indigo-600 border-indigo-500 text-white shadow-sm'
+                : 'bg-slate-50 dark:bg-slate-950/50 border-slate-200/80 dark:border-slate-800 hover:border-indigo-400'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span
+                className={`text-[10px] font-black uppercase tracking-wider ${
+                  typeFilter === 'Ensayo' ? 'text-indigo-100' : 'text-indigo-600 dark:text-indigo-400'
+                }`}
+              >
+                Lotes de Ensayo (I+D)
+              </span>
+              <FlaskConical size={14} className={typeFilter === 'Ensayo' ? 'text-white' : 'text-indigo-500'} />
+            </div>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span
+                className={`text-2xl font-black font-mono ${
+                  typeFilter === 'Ensayo' ? 'text-white' : 'text-slate-900 dark:text-white'
+                }`}
+              >
+                {boardStats.ensayosCount}
+              </span>
+              <span
+                className={`text-[11px] font-mono ${
+                  typeFilter === 'Ensayo' ? 'text-indigo-100' : 'text-slate-400'
+                }`}
+              >
+                ({boardStats.ensayosHa} ha)
+              </span>
+            </div>
+            <p className={`text-[10px] mt-0.5 ${typeFilter === 'Ensayo' ? 'text-indigo-100' : 'text-slate-400'}`}>
+              {typeFilter === 'Ensayo' ? '✓ Filtrando solo Ensayos' : 'Clic para filtrar Ensayos'}
+            </p>
+          </button>
+
+          {/* KPI 3: Parcelas en Producción */}
+          <button
+            type="button"
+            onClick={() => setTypeFilter(typeFilter === 'Producción' ? 'all' : 'Producción')}
+            className={`p-3 rounded-2xl text-left border transition cursor-pointer ${
+              typeFilter === 'Producción'
+                ? 'bg-emerald-600 border-emerald-500 text-white shadow-sm'
+                : 'bg-slate-50 dark:bg-slate-950/50 border-slate-200/80 dark:border-slate-800 hover:border-emerald-400'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span
+                className={`text-[10px] font-black uppercase tracking-wider ${
+                  typeFilter === 'Producción' ? 'text-emerald-100' : 'text-emerald-600 dark:text-emerald-400'
+                }`}
+              >
+                En Producción (Extensivo)
+              </span>
+              <Sprout size={14} className={typeFilter === 'Producción' ? 'text-white' : 'text-emerald-500'} />
+            </div>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span
+                className={`text-2xl font-black font-mono ${
+                  typeFilter === 'Producción' ? 'text-white' : 'text-slate-900 dark:text-white'
+                }`}
+              >
+                {boardStats.produccionCount}
+              </span>
+              <span
+                className={`text-[11px] font-mono ${
+                  typeFilter === 'Producción' ? 'text-emerald-100' : 'text-slate-400'
+                }`}
+              >
+                ({boardStats.produccionHa} ha)
+              </span>
+            </div>
+            <p className={`text-[10px] mt-0.5 ${typeFilter === 'Producción' ? 'text-emerald-100' : 'text-slate-400'}`}>
+              {typeFilter === 'Producción' ? '✓ Filtrando Producción' : 'Clic para filtrar Producción'}
+            </p>
+          </button>
+
+          {/* KPI 4: Urgentes (+7 días sin visita) */}
+          <button
+            type="button"
+            onClick={() => setUrgencyFilter(urgencyFilter === 'urgent' ? 'all' : 'urgent')}
+            className={`p-3 rounded-2xl text-left border transition cursor-pointer ${
+              urgencyFilter === 'urgent'
+                ? 'bg-rose-600 border-rose-500 text-white shadow-sm'
+                : 'bg-slate-50 dark:bg-slate-950/50 border-slate-200/80 dark:border-slate-800 hover:border-rose-400'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span
+                className={`text-[10px] font-black uppercase tracking-wider ${
+                  urgencyFilter === 'urgent' ? 'text-rose-100' : 'text-rose-600 dark:text-rose-400'
+                }`}
+              >
+                Urgentes (+7 días)
+              </span>
+              <AlertTriangle size={14} className={urgencyFilter === 'urgent' ? 'text-white' : 'text-rose-500'} />
+            </div>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span
+                className={`text-2xl font-black font-mono ${
+                  urgencyFilter === 'urgent' ? 'text-white' : 'text-rose-600 dark:text-rose-400'
+                }`}
+              >
+                {boardStats.urgentCount}
+              </span>
+              <span className={`text-[11px] ${urgencyFilter === 'urgent' ? 'text-rose-100' : 'text-slate-400'}`}>
+                pendientes
+              </span>
+            </div>
+            <p className={`text-[10px] mt-0.5 ${urgencyFilter === 'urgent' ? 'text-rose-100' : 'text-slate-400'}`}>
+              {urgencyFilter === 'urgent' ? '✓ Mostrando solo urgentes' : 'Prioridad de recorrida'}
+            </p>
+          </button>
+
+          {/* KPI 5: Al Día (≤7 días) */}
+          <button
+            type="button"
+            onClick={() => setUrgencyFilter(urgencyFilter === 'uptodate' ? 'all' : 'uptodate')}
+            className={`col-span-2 sm:col-span-1 p-3 rounded-2xl text-left border transition cursor-pointer ${
+              urgencyFilter === 'uptodate'
+                ? 'bg-teal-600 border-teal-500 text-white shadow-sm'
+                : 'bg-slate-50 dark:bg-slate-950/50 border-slate-200/80 dark:border-slate-800 hover:border-teal-400'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span
+                className={`text-[10px] font-black uppercase tracking-wider ${
+                  urgencyFilter === 'uptodate' ? 'text-teal-100' : 'text-teal-600 dark:text-teal-400'
+                }`}
+              >
+                Monitoreo Al Día (≤7d)
+              </span>
+              <CheckCircle2 size={14} className={urgencyFilter === 'uptodate' ? 'text-white' : 'text-teal-500'} />
+            </div>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span
+                className={`text-2xl font-black font-mono ${
+                  urgencyFilter === 'uptodate' ? 'text-white' : 'text-slate-900 dark:text-white'
+                }`}
+              >
+                {boardStats.upToDateCount}
+              </span>
+              <span className={`text-[11px] ${urgencyFilter === 'uptodate' ? 'text-teal-100' : 'text-slate-400'}`}>
+                relevadas
+              </span>
+            </div>
+            <p className={`text-[10px] mt-0.5 ${urgencyFilter === 'uptodate' ? 'text-teal-100' : 'text-slate-400'}`}>
+              {boardStats.total > 0
+                ? `${Math.round((boardStats.upToDateCount / boardStats.total) * 100)}% de cobertura semanal`
+                : 'Sin lotes activos'}
+            </p>
+          </button>
         </div>
       </div>
 
@@ -977,14 +1346,92 @@ export default function TrialManager() {
         </div>
       )}
 
-      {/* GRID PRINCIPAL: COLA FILTRABLE DE LOTES + CONSOLA DE RELEVAMIENTO 360° */}
+      {/* ====================================================================== */}
+      {/* 2. BARRA MÓVIL / TABLET DE CAMBIO RÁPIDO DE LOTE (SIN SCROLL LARGO)   */}
+      {/* ====================================================================== */}
+      <div className="lg:hidden sticky top-2 z-30 bg-slate-900/95 dark:bg-slate-900/95 backdrop-blur-md text-white p-3 rounded-2xl border border-slate-700 shadow-xl space-y-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={() => handleStepPlot('prev')}
+            disabled={plotQueue.length <= 1}
+            className="h-10 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 flex items-center gap-1 text-xs font-bold cursor-pointer"
+          >
+            <ChevronLeft size={16} /> Ant.
+          </button>
+
+          <div className="flex-1 min-w-0">
+            <select
+              value={currentPlotData?.plot.id || ''}
+              onChange={e => handleSelectPlotFromQueue(e.target.value)}
+              className="w-full h-10 px-3 rounded-xl bg-slate-800 border border-slate-700 text-xs font-black uppercase text-white outline-none truncate"
+            >
+              {plotQueue.map((item, idx) => (
+                <option key={item.plot.id} value={item.plot.id}>
+                  [{idx + 1}/{plotQueue.length}] {item.plot.name} · {item.varietyName} ({item.plot.type})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => handleStepPlot('next')}
+            disabled={plotQueue.length <= 1}
+            className="h-10 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 flex items-center gap-1 text-xs font-bold cursor-pointer"
+          >
+            Sig. <ChevronRight size={16} />
+          </button>
+        </div>
+
+        <div className="flex items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={() => setIsMobileQueueOpen(prev => !prev)}
+            className={`flex-1 py-2 px-3 rounded-xl text-[11px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 border transition cursor-pointer ${
+              isMobileQueueOpen
+                ? 'bg-emerald-600 border-emerald-500 text-white'
+                : 'bg-slate-800 border-slate-700 text-slate-200'
+            }`}
+          >
+            <Filter size={13} />
+            <span>
+              {isMobileQueueOpen
+                ? 'Ocultar Filtros y Lista de Lotes'
+                : `Filtrar Campo / Genética (${plotQueue.length} lotes)`}
+            </span>
+            {isMobileQueueOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('form');
+              setFieldViewSection('shortcuts');
+              setActiveShortcutTab('photo_log');
+              startWebCamera();
+            }}
+            className="py-2 px-3.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm cursor-pointer shrink-0"
+          >
+            <Camera size={14} /> Foto Rápida
+          </button>
+        </div>
+      </div>
+
+      {/* ====================================================================== */}
+      {/* 3. GRID PRINCIPAL: COLA EN CASCADA + CONSOLA DE RELEVAMIENTO 360°      */}
+      {/* ====================================================================== */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 items-start">
-        {/* SIDEBAR: COLA DE TRABAJO Y FILTRADO MULTI-CRITERIO */}
-        <div className="lg:col-span-4 flex flex-col bg-white dark:bg-slate-900 rounded-[32px] border border-gray-200 dark:border-slate-800 shadow-sm overflow-hidden h-[820px]">
-          <div className="p-4 border-b dark:border-slate-800 bg-gray-50/50 dark:bg-slate-950/50 space-y-2.5">
+        {/* SIDEBAR: COLA DE TRABAJO Y FILTRADO EN CASCADA (CAMPO -> GENÉTICAS ASIGNADAS) */}
+        <div
+          className={`lg:col-span-4 flex-col bg-white dark:bg-slate-900 rounded-[28px] border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden lg:h-[880px] ${
+            isMobileQueueOpen ? 'flex max-h-[640px]' : 'hidden lg:flex'
+          }`}
+        >
+          <div className="p-4 border-b dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/60 space-y-3">
             <div className="flex justify-between items-center">
-              <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 flex items-center">
-                <Filter size={13} className="mr-1.5 text-emerald-600" /> Filtros de Recorrida
+              <h3 className="text-[11px] font-black uppercase tracking-wider text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                <Filter size={14} className="text-emerald-600" /> Filtros en Cascada de Lotes
               </h3>
               {(searchQuery ||
                 locationFilter !== 'all' ||
@@ -1000,100 +1447,157 @@ export default function TrialManager() {
                     setTypeFilter('all');
                     setUrgencyFilter('all');
                   }}
-                  className="text-[9px] font-black uppercase text-rose-500 hover:underline cursor-pointer"
+                  className="text-[10px] font-black uppercase text-rose-500 hover:underline cursor-pointer"
                 >
-                  Limpiar Filtros
+                  Restablecer ({allEnrichedActivePlots.length})
                 </button>
               )}
             </div>
 
-            {/* Búsqueda rápida */}
-            <div className="relative">
-              <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Buscar parcela, bloque, campo o variedad..."
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none focus:ring-1 focus:ring-emerald-500 dark:text-white"
-              />
-            </div>
-
-            {/* Selectores de Establecimiento y Variedad */}
-            <div className="grid grid-cols-2 gap-2">
+            {/* PASO 1: Selector de Establecimiento / Campo con totales reales */}
+            <div>
+              <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 flex items-center justify-between mb-1">
+                <span className="flex items-center gap-1">
+                  <MapPin size={11} className="text-emerald-600" /> 1. Establecimiento / Campo
+                </span>
+                <span className="font-mono text-emerald-600 dark:text-emerald-400">
+                  {locationFilter === 'all'
+                    ? `${locationFilterOptions.length} campos activos`
+                    : `${boardStats.total} parcelas en campo`}
+                </span>
+              </label>
               <select
                 value={locationFilter}
                 onChange={e => {
-                  setLocationFilter(e.target.value);
+                  const newLoc = e.target.value;
+                  setLocationFilter(newLoc);
+                  setVarietyFilter('all');
                   setSelectedPlotId('');
                 }}
-                className="px-2.5 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-[11px] font-bold outline-none dark:text-white truncate"
+                className="w-full px-3 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500 dark:text-white"
               >
-                <option value="all">Todos los Campos ({locations.length})</option>
-                {locations.map(l => (
-                  <option key={l.id} value={l.id}>
-                    {l.name}
+                <option value="all">
+                  Todos los Establecimientos ({allEnrichedActivePlots.length} parcelas: {allEnrichedActivePlots.filter(p => p.plot.type === 'Ensayo').length} Ens. / {allEnrichedActivePlots.filter(p => p.plot.type === 'Producción').length} Prod.)
+                </option>
+                {locationFilterOptions.map(loc => (
+                  <option key={loc.id} value={loc.id}>
+                    {loc.name} — {loc.totalPlots} lotes ({loc.ensayosCount} Ensayo / {loc.produccionCount} Prod.)
                   </option>
                 ))}
               </select>
+            </div>
 
+            {/* PASO 2: Selector de Genética (FILTRADO EN CASCADA SEGÚN EL CAMPO ELEGIDO) */}
+            <div>
+              <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 flex items-center justify-between mb-1">
+                <span className="flex items-center gap-1">
+                  <Dna size={11} className="text-indigo-500" /> 2. Genética Asignada al Campo
+                </span>
+                <span className="font-mono text-indigo-600 dark:text-indigo-400">
+                  {availableVarietiesForSelectedLocation.length} genéticas disponibles
+                </span>
+              </label>
               <select
                 value={varietyFilter}
                 onChange={e => {
                   setVarietyFilter(e.target.value);
                   setSelectedPlotId('');
                 }}
-                className="px-2.5 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-[11px] font-bold outline-none dark:text-white truncate"
+                className="w-full px-3 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500 dark:text-white"
               >
-                <option value="all">Todas las Genéticas ({varieties.length})</option>
-                {varieties.map(v => (
+                <option value="all">
+                  Todas las Genéticas del Campo ({availableVarietiesForSelectedLocation.reduce((s, v) => s + v.totalPlots, 0)} parcelas)
+                </option>
+                {availableVarietiesForSelectedLocation.map(v => (
                   <option key={v.id} value={v.id}>
-                    {v.name}
+                    {v.name} — {v.totalPlots} {v.totalPlots === 1 ? 'parcela' : 'parcelas'} (
+                    {v.ensayosCount > 0 ? `${v.ensayosCount} Ens.` : ''}
+                    {v.ensayosCount > 0 && v.produccionCount > 0 ? ' / ' : ''}
+                    {v.produccionCount > 0 ? `${v.produccionCount} Prod.` : ''})
                   </option>
                 ))}
               </select>
+
+              {/* Chips rápidos de genéticas del campo seleccionado para tocar con un dedo en tablet/celular */}
+              {locationFilter !== 'all' && availableVarietiesForSelectedLocation.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => setVarietyFilter('all')}
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold transition cursor-pointer ${
+                      varietyFilter === 'all'
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                    }`}
+                  >
+                    Todas ({availableVarietiesForSelectedLocation.reduce((s, v) => s + v.totalPlots, 0)})
+                  </button>
+                  {availableVarietiesForSelectedLocation.map(v => (
+                    <button
+                      key={v.id}
+                      type="button"
+                      onClick={() => setVarietyFilter(varietyFilter === v.id ? 'all' : v.id)}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold transition cursor-pointer ${
+                        varietyFilter === v.id
+                          ? 'bg-indigo-600 text-white'
+                          : 'bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-300/70'
+                      }`}
+                    >
+                      {v.name} ({v.totalPlots})
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
-            {/* Filtro de Tipo real ('Ensayo' | 'Producción') y Urgencia */}
-            <div className="grid grid-cols-2 gap-2">
-              <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
-                {(['all', 'Ensayo', 'Producción'] as const).map(f => (
-                  <button
-                    key={f}
-                    type="button"
-                    onClick={() => setTypeFilter(f)}
-                    className={`flex-1 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition cursor-pointer ${
-                      typeFilter === f
-                        ? 'bg-slate-900 dark:bg-emerald-600 text-white'
-                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
-                    }`}
-                  >
-                    {f === 'all' ? 'Todos' : f === 'Ensayo' ? 'Ensayo' : 'Prod.'}
-                  </button>
-                ))}
-              </div>
+            {/* Búsqueda rápida por nombre o bloque */}
+            <div className="relative">
+              <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Buscar lote por código, bloque o nota..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none focus:ring-1 focus:ring-emerald-500 dark:text-white"
+              />
+            </div>
 
-              <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
-                {(
-                  [
-                    { id: 'all', label: 'Todos' },
-                    { id: 'urgent', label: '+7d Urg.' },
-                    { id: 'uptodate', label: 'Al Día' }
-                  ] as const
-                ).map(u => (
-                  <button
-                    key={u.id}
-                    type="button"
-                    onClick={() => setUrgencyFilter(u.id)}
-                    className={`flex-1 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition cursor-pointer ${
-                      urgencyFilter === u.id
-                        ? 'bg-slate-900 dark:bg-emerald-600 text-white'
-                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
-                    }`}
-                  >
-                    {u.label}
-                  </button>
-                ))}
+            {/* Filtro de Tipo real ('Ensayo' | 'Producción') con conteos en vivo y Urgencia */}
+            <div className="grid grid-cols-1 gap-2">
+              <div className="flex gap-1 bg-slate-200/70 dark:bg-slate-800 p-1 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setTypeFilter('all')}
+                  className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition cursor-pointer ${
+                    typeFilter === 'all'
+                      ? 'bg-slate-900 dark:bg-emerald-600 text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  Todos ({boardStats.total})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTypeFilter('Ensayo')}
+                  className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition cursor-pointer ${
+                    typeFilter === 'Ensayo'
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  Ensayos ({boardStats.ensayosCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTypeFilter('Producción')}
+                  className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition cursor-pointer ${
+                    typeFilter === 'Producción'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  Producción ({boardStats.produccionCount})
+                </button>
               </div>
             </div>
           </div>
@@ -1102,7 +1606,7 @@ export default function TrialManager() {
           <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
             {plotQueue.length === 0 ? (
               <div className="p-8 text-center text-slate-400 text-xs font-bold italic">
-                No se encontraron parcelas activas para los filtros seleccionados.
+                No se encontraron parcelas activas para la combinación seleccionada.
               </div>
             ) : (
               plotQueue.map(item => {
@@ -1111,31 +1615,34 @@ export default function TrialManager() {
                   <button
                     key={item.plot.id}
                     type="button"
-                    onClick={() => setSelectedPlotId(item.plot.id)}
+                    onClick={() => handleSelectPlotFromQueue(item.plot.id)}
                     className={`w-full p-3.5 rounded-2xl text-left transition-all border group relative overflow-hidden cursor-pointer ${
                       isSelected
                         ? 'bg-emerald-600 border-emerald-500 text-white shadow-md'
-                        : 'bg-white dark:bg-slate-800/90 border-slate-100 dark:border-slate-800 hover:border-emerald-300 dark:hover:border-emerald-800 text-slate-600 dark:text-slate-300'
+                        : 'bg-white dark:bg-slate-800/90 border-slate-200/80 dark:border-slate-800 hover:border-emerald-400 text-slate-700 dark:text-slate-300'
                     }`}
                   >
                     <div className="flex justify-between items-start mb-1 relative z-10">
                       <div className="truncate pr-2">
-                        <span className="font-black uppercase tracking-tighter text-sm truncate block">
+                        <span className="font-black uppercase tracking-tight text-sm truncate block">
                           {item.plot.name}
                         </span>
-                        <div className="flex items-center gap-1.5 mt-0.5">
+                        <div className="flex items-center gap-1.5 mt-0.5 text-[10px]">
                           <span
-                            className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded ${
+                            className={`font-black uppercase ${
                               isSelected
-                                ? 'bg-white/20 text-white'
-                                : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300'
+                                ? 'text-white'
+                                : item.plot.type === 'Ensayo'
+                                ? 'text-indigo-600 dark:text-indigo-400'
+                                : 'text-emerald-600 dark:text-emerald-400'
                             }`}
                           >
                             {item.plot.type}
                           </span>
+                          <span aria-hidden="true">·</span>
                           <span
-                            className={`text-[9px] font-bold uppercase truncate ${
-                              isSelected ? 'text-emerald-100' : 'text-slate-400'
+                            className={`font-bold truncate ${
+                              isSelected ? 'text-emerald-100' : 'text-slate-500 dark:text-slate-400'
                             }`}
                           >
                             {item.varietyName}
@@ -1144,73 +1651,49 @@ export default function TrialManager() {
                       </div>
                       {item.daysSince > 7 ? (
                         <span
-                          className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase flex items-center flex-shrink-0 ${
-                            isSelected ? 'bg-white/20 text-white' : 'bg-red-100 text-red-600'
+                          className={`px-2 py-0.5 rounded-md text-[9px] font-mono font-bold uppercase flex items-center flex-shrink-0 ${
+                            isSelected ? 'bg-white/20 text-white' : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
                           }`}
                         >
-                          <AlertTriangle size={8} className="mr-1" /> +{item.daysSince}d
+                          <AlertTriangle size={10} className="mr-1" /> +{item.daysSince}d
                         </span>
                       ) : (
                         <span
-                          className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase flex-shrink-0 ${
+                          className={`px-2 py-0.5 rounded-md text-[9px] font-mono font-bold uppercase flex-shrink-0 ${
                             isSelected
                               ? 'bg-white/20 text-white'
-                              : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-300'
+                              : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
                           }`}
                         >
-                          Hace {item.daysSince === 999 ? 'S/D' : `${item.daysSince}d`}
+                          {item.daysSince === 999 ? 'S/D' : `${item.daysSince}d`}
                         </span>
                       )}
                     </div>
 
                     <p
-                      className={`text-[9px] uppercase font-bold tracking-widest relative z-10 truncate mt-0.5 ${
+                      className={`text-[10px] font-medium truncate mt-0.5 ${
                         isSelected ? 'text-emerald-100' : 'text-slate-400'
                       }`}
                     >
-                      {item.locationName}
+                      {item.locationName} · {item.plot.surfaceArea} {item.plot.surfaceUnit}
                     </p>
 
-                    {/* Píldoras de Cotejo Rápido (Hídrico + Fotos Bitácora + Labores) */}
-                    <div className="mt-2 pt-1.5 border-t border-black/5 dark:border-white/10 flex flex-wrap items-center gap-1.5 text-[9px] font-mono">
-                      <span
-                        className={`px-1.5 py-0.5 rounded ${
-                          isSelected
-                            ? 'bg-black/20 text-white'
-                            : 'bg-sky-500/10 text-sky-600 dark:text-sky-400'
-                        }`}
-                        title="Lámina hídrica acumulada (Lluvia + Riego)"
-                      >
-                        💧 {item.totalWaterMm} mm
-                      </span>
-                      <span
-                        className={`px-1.5 py-0.5 rounded ${
-                          isSelected
-                            ? 'bg-black/20 text-white'
-                            : 'bg-purple-500/10 text-purple-600 dark:text-purple-400'
-                        }`}
-                        title="Registros en Bitácora Multimedia"
-                      >
+                    {/* Indicadores de Cotejo Rápido (Texto limpio con separador tipográfico) */}
+                    <div
+                      className={`mt-2 pt-1.5 border-t flex flex-wrap items-center gap-2 text-[10px] font-mono ${
+                        isSelected
+                          ? 'border-white/15 text-emerald-50'
+                          : 'border-slate-100 dark:border-slate-700/70 text-slate-500 dark:text-slate-400'
+                      }`}
+                    >
+                      <span title="Lámina hídrica acumulada (Lluvia + Riego)">💧 {item.totalWaterMm}mm</span>
+                      <span aria-hidden="true">·</span>
+                      <span title="Registros en Bitácora Multimedia">
                         📷 {item.logsCount} ({item.photosCount} fotos)
                       </span>
-                      <span
-                        className={`px-1.5 py-0.5 rounded ${
-                          isSelected
-                            ? 'bg-black/20 text-white'
-                            : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                        }`}
-                        title="Labores culturales y de preparación de suelo"
-                      >
-                        🚜 {item.tasksCount} lab.
-                      </span>
+                      <span aria-hidden="true">·</span>
+                      <span title="Labores culturales y de preparación de suelo">🚜 {item.tasksCount} lab.</span>
                     </div>
-
-                    <div
-                      className={`absolute bottom-0 left-0 h-1 transition-all ${
-                        item.daysSince > 7 ? 'bg-red-500' : 'bg-emerald-400'
-                      } opacity-40`}
-                      style={{ width: `${Math.min(item.daysSince * 10, 100)}%` }}
-                    ></div>
                   </button>
                 );
               })
@@ -1219,61 +1702,82 @@ export default function TrialManager() {
         </div>
 
         {/* PANEL PRINCIPAL: FICHA TÉCNICA + CINTA DE COTEJO + ATAJOS INTEGRADOS */}
-        <div className="lg:col-span-8 flex flex-col bg-white dark:bg-slate-900 rounded-[36px] shadow-xl border border-emerald-100 dark:border-emerald-900/30 overflow-hidden relative min-h-[820px]">
+        <div
+          ref={formContainerRef}
+          className="lg:col-span-8 flex flex-col bg-white dark:bg-slate-900 rounded-[28px] shadow-xl border border-slate-200 dark:border-slate-800 overflow-hidden relative min-h-[820px]"
+        >
           {currentPlotData ? (
             <>
-              {/* ENCABEZADO DE LA PARCELA SELECCIONADA + CINTA DE COTEJO 360° */}
-              <div className="bg-slate-50 dark:bg-slate-950/70 p-5 md:p-6 border-b dark:border-slate-800 space-y-4 flex-shrink-0">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              {/* ENCABEZADO DE LA PARCELA SELECCIONADA + NAVEGADOR DE LOTES + CINTA DE COTEJO 360° */}
+              <div className="bg-slate-50 dark:bg-slate-950/70 p-4 md:p-6 border-b dark:border-slate-800 space-y-4 flex-shrink-0">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                   <div>
-                    <div className="flex flex-wrap items-center gap-2 mb-1">
-                      <span className="bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 px-2.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest">
+                    <div className="flex flex-wrap items-center gap-2 text-xs mb-1">
+                      <span
+                        className={`font-black uppercase tracking-wider ${
+                          currentPlotData.plot.type === 'Ensayo'
+                            ? 'text-indigo-600 dark:text-indigo-400'
+                            : 'text-emerald-600 dark:text-emerald-400'
+                        }`}
+                      >
                         {currentPlotData.plot.type}
                       </span>
-                      <span className="text-[10px] text-slate-500 font-black uppercase tracking-widest">
+                      <span aria-hidden="true" className="text-slate-300 dark:text-slate-600">
+                        ·
+                      </span>
+                      <span className="font-bold text-slate-700 dark:text-slate-200">
                         Genética: {variety?.name || 'S/D'}
                       </span>
-                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-                        • {currentPlotData.locationName}
+                      <span aria-hidden="true" className="text-slate-300 dark:text-slate-600">
+                        ·
                       </span>
-                      <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">
-                        • Siembra: {currentPlotData.plot.sowingDate} ({currentPlotMetrics.dds} DDS)
+                      <span className="text-slate-500">{currentPlotData.locationName}</span>
+                      <span aria-hidden="true" className="text-slate-300 dark:text-slate-600">
+                        ·
+                      </span>
+                      <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">
+                        Siembra: {currentPlotData.plot.sowingDate} ({currentPlotMetrics.dds} DDS)
                       </span>
                     </div>
-                    <h2 className="text-2xl md:text-3xl font-black text-slate-800 dark:text-white uppercase tracking-tighter italic leading-none">
-                      {currentPlotData.plot.name}
-                    </h2>
+                    <div className="flex items-center gap-3">
+                      <h2 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tight leading-none">
+                        {currentPlotData.plot.name}
+                      </h2>
+                      <span className="text-xs font-mono text-slate-400">
+                        ({currentPlotIndex + 1} de {plotQueue.length})
+                      </span>
+                    </div>
                   </div>
 
                   {/* SELECTOR DE PESTAÑAS: RELEVAMIENTO + ATAJOS vs HISTORIAL COTEJADO 360° */}
-                  <div className="flex items-center gap-2 bg-white dark:bg-slate-900 p-1 rounded-2xl border dark:border-slate-800 shadow-sm self-stretch sm:self-auto">
+                  <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 p-1 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs self-stretch sm:self-auto">
                     <button
                       type="button"
                       onClick={() => setActiveTab('form')}
-                      className={`flex-1 sm:flex-initial px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                      className={`flex-1 sm:flex-initial px-3.5 py-2 rounded-xl text-[11px] font-black uppercase tracking-wider transition flex items-center justify-center gap-1.5 cursor-pointer ${
                         activeTab === 'form'
-                          ? 'bg-emerald-600 text-white shadow-md'
+                          ? 'bg-emerald-600 text-white shadow-xs'
                           : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
                       }`}
                     >
-                      <Activity size={12} /> Relevamiento & Atajos
+                      <Activity size={13} /> Relevamiento
                     </button>
                     <button
                       type="button"
                       onClick={() => setActiveTab('history')}
-                      className={`flex-1 sm:flex-initial px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                      className={`flex-1 sm:flex-initial px-3.5 py-2 rounded-xl text-[11px] font-black uppercase tracking-wider transition flex items-center justify-center gap-1.5 cursor-pointer ${
                         activeTab === 'history'
-                          ? 'bg-emerald-600 text-white shadow-md'
+                          ? 'bg-emerald-600 text-white shadow-xs'
                           : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
                       }`}
                     >
-                      <History size={12} /> Cotejo 360° (
+                      <History size={13} /> Cotejo 360° (
                       {plotHistory.length + currentPlotLogs.length + currentPlotHydric.length + currentPlotTasks.length})
                     </button>
                   </div>
                 </div>
 
-                {/* CINTA DE COTEJO INSTANTÁNEO CON PARCELAS DE CULTIVO */}
+                {/* CINTA DE COTEJO INSTANTÁNEO CON PARCELAS DE CULTIVO (4 TARJETAS INTERACTIVAS) */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 font-mono text-xs">
                   {/* 1. Superficie y Estadio BBCH */}
                   <div className="p-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
@@ -1294,7 +1798,7 @@ export default function TrialManager() {
                           currentUser?.name
                         )
                       }
-                      className="mt-1 w-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 rounded-lg px-1.5 py-0.5 text-[9.5px] font-bold outline-none cursor-pointer"
+                      className="mt-1 w-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 rounded-lg px-1.5 py-1 text-[10px] font-bold outline-none cursor-pointer"
                       title="Actualizar estadio fenológico BBCH de la parcela"
                     >
                       <option value="BBCH_00_09">BBCH 00-09 Germinación</option>
@@ -1308,31 +1812,35 @@ export default function TrialManager() {
                   </div>
 
                   {/* 2. Pluviómetro & Balance Hídrico */}
-                  <div
+                  <button
+                    type="button"
                     onClick={() => {
                       setActiveTab('form');
+                      setFieldViewSection('shortcuts');
                       setActiveShortcutTab('hydric');
                     }}
-                    className="p-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 hover:border-sky-500/50 transition cursor-pointer"
+                    className="p-2.5 rounded-2xl text-left bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 hover:border-sky-500 transition cursor-pointer"
                   >
                     <span className="text-[9px] uppercase font-bold text-sky-600 dark:text-sky-400 block">
                       🌧️ Pluviómetro & Riego ({currentPlotMetrics.waterPct}%)
                     </span>
                     <div className="font-black text-slate-900 dark:text-white text-xs mt-0.5">
-                      {currentPlotData.totalWaterMm} mm ({currentPlotData.totalWaterMm * 10} m³/ha)
+                      {currentPlotData.totalWaterMm} mm ({(currentPlotData.totalWaterMm * 10).toFixed(0)} m³/ha)
                     </div>
-                    <span className="text-[9.5px] text-slate-400 block">
-                      Lluvia: {currentPlotData.rainMm}mm • Riego: {currentPlotData.irrigMm}mm
+                    <span className="text-[9.5px] text-slate-400 block truncate">
+                      Lluvia: {currentPlotData.rainMm}mm · Riego: {currentPlotData.irrigMm}mm
                     </span>
-                  </div>
+                  </button>
 
                   {/* 3. Labores y Preparación de Suelo */}
-                  <div
+                  <button
+                    type="button"
                     onClick={() => {
                       setActiveTab('form');
+                      setFieldViewSection('shortcuts');
                       setActiveShortcutTab('labor');
                     }}
-                    className="p-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 hover:border-amber-500/50 transition cursor-pointer"
+                    className="p-2.5 rounded-2xl text-left bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 hover:border-amber-500 transition cursor-pointer"
                   >
                     <span className="text-[9px] uppercase font-bold text-amber-600 dark:text-amber-400 block">
                       🚜 Suelo & Labores ({currentPlotTasks.length})
@@ -1343,15 +1851,17 @@ export default function TrialManager() {
                     <span className="text-[9.5px] text-slate-400 block">
                       {currentPlotData.soilPrepCount} prep. suelo / siembra
                     </span>
-                  </div>
+                  </button>
 
                   {/* 4. Bitácora Multimedia */}
-                  <div
+                  <button
+                    type="button"
                     onClick={() => {
                       setActiveTab('form');
+                      setFieldViewSection('shortcuts');
                       setActiveShortcutTab('photo_log');
                     }}
-                    className="p-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 hover:border-purple-500/50 transition cursor-pointer"
+                    className="p-2.5 rounded-2xl text-left bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 hover:border-purple-500 transition cursor-pointer"
                   >
                     <span className="text-[9px] uppercase font-bold text-purple-600 dark:text-purple-400 block">
                       📷 Bitácora Multimedia ({currentPlotLogs.length})
@@ -1362,732 +1872,937 @@ export default function TrialManager() {
                     <span className="text-[9.5px] text-slate-400 block">
                       {currentPlotData.photosCount} fotografías georreferenciadas
                     </span>
-                  </div>
+                  </button>
                 </div>
+
+                {/* SELECTOR DE MODO DE VISTA EN CAMPO (FACILITA CARGA EN CELULAR/TABLET SIN SCROLL EXCESIVO) */}
+                {activeTab === 'form' && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                    <div className="flex flex-wrap gap-1 bg-slate-200/70 dark:bg-slate-900 p-1 rounded-xl w-full sm:w-auto">
+                      {(
+                        [
+                          { id: 'all', label: 'Vista Completa' },
+                          { id: 'biometrics', label: '1. Biometría & Sanidad' },
+                          { id: 'shortcuts', label: '2. Foto / Riego / Labor' },
+                          { id: 'harvest', label: '3. Cosecha & Semilla' }
+                        ] as const
+                      ).map(sec => (
+                        <button
+                          key={sec.id}
+                          type="button"
+                          onClick={() => setFieldViewSection(sec.id)}
+                          className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition cursor-pointer ${
+                            fieldViewSection === sec.id
+                              ? 'bg-slate-900 dark:bg-emerald-600 text-white shadow-xs'
+                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                          }`}
+                        >
+                          {sec.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {currentPlotData.lastRecord && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const last = currentPlotData.lastRecord!;
+                          setFormData(prev => ({
+                            ...prev,
+                            plantsPerMeter: last.plantsPerMeter ?? prev.plantsPerMeter,
+                            plantHeight: last.plantHeight ?? prev.plantHeight,
+                            vigor: last.vigor ?? prev.vigor,
+                            uniformity: last.uniformity ?? prev.uniformity
+                          }));
+                        }}
+                        className="text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
+                      >
+                        ↺ Restaurar base anterior ({currentPlotData.lastRecord.plantHeight || 0} cm ·{' '}
+                        {currentPlotData.lastRecord.plantsPerMeter || 0} pl/m²)
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* VISTA 1: FORMULARIO OFICIAL NUCLEUS TRACE + PANEL DE ATAJOS DE CAMPO */}
               {activeTab === 'form' && (
                 <div className="flex-1 flex flex-col justify-between">
-                  <form onSubmit={handleSave} className="p-5 md:p-7 space-y-6 overflow-y-auto custom-scrollbar">
-                    {/* TÍTULO OFICIAL DE LA FICHA NUCLEUS TRACE */}
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-2 border-b dark:border-slate-800">
-                      <div className="flex items-center gap-3">
-                        <div className="bg-hemp-600 p-2.5 rounded-2xl text-white shadow-md">
-                          <Activity size={20} />
-                        </div>
-                        <div>
-                          <h3 className="text-lg md:text-xl font-black dark:text-white uppercase tracking-tighter italic">
-                            1. Relevamiento Biométrico <span className="text-emerald-600">Nucleus Trace</span>
-                          </h3>
-                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                            Datos fenológicos, sanitarios y biométricos sincronizados con la Ficha de Parcela
-                          </p>
-                        </div>
-                      </div>
-                      {isFetchingConditions && (
-                        <div className="flex items-center text-[9px] font-black text-blue-500 uppercase tracking-widest bg-blue-50 dark:bg-blue-950/40 px-3 py-1.5 rounded-xl border border-blue-100 dark:border-blue-900/30">
-                          <Loader2 className="animate-spin mr-1.5" size={12} /> Capturando Clima Open-Meteo GFS...
-                        </div>
-                      )}
-                    </div>
-
-                    {/* GRILLA BIOMÉTRICA IDÉNTICA A PLOTDETAILS */}
-                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
-                      {/* COLUMNA 1: AMBIENTE & TIEMPO */}
-                      <div className="bg-slate-50 dark:bg-slate-950 p-5 rounded-3xl border dark:border-slate-800 space-y-3.5">
-                        <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 border-b dark:border-slate-800 pb-2 flex items-center">
-                          <Sun size={14} className="mr-2 text-amber-500" /> Ambiente & Tiempo
-                        </h3>
-                        <div>
-                          <label className={labelClass}>Fecha de Muestreo</label>
-                          <input
-                            type="date"
-                            required
-                            className={inputStyle}
-                            value={formData.date}
-                            onChange={e => {
-                              const newDate = e.target.value;
-                              setFormData(p => ({ ...p, date: newDate }));
-                              syncEnvironmentalData(newDate, currentPlotData.location);
-                            }}
-                          />
-                        </div>
-                        <div>
-                          <label className={labelClass}>Hora de Muestreo</label>
-                          <input
-                            type="time"
-                            required
-                            className={inputStyle}
-                            value={formData.time}
-                            onChange={e => setFormData({ ...formData, time: e.target.value })}
-                          />
-                        </div>
-                        <div>
-                          <label className={labelClass}>Fase Fisiológica</label>
-                          <select
-                            required
-                            className={inputStyle}
-                            value={formData.stage}
-                            onChange={e => setFormData({ ...formData, stage: e.target.value as any })}
-                          >
-                            <option value="Emergencia">Emergencia</option>
-                            <option value="Vegetativo">Vegetativo</option>
-                            <option value="Floración">Floración</option>
-                            <option value="Maduración">Maduración</option>
-                            <option value="Cosecha">Cosecha</option>
-                          </select>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div className="bg-orange-500 p-2.5 rounded-xl text-white text-center shadow-sm">
-                            <p className="text-[8px] font-black uppercase opacity-75">Temp.</p>
-                            <p className="text-sm font-black">{formData.temperature}°C</p>
-                          </div>
-                          <div className="bg-blue-600 p-2.5 rounded-xl text-white text-center shadow-sm">
-                            <p className="text-[8px] font-black uppercase opacity-75">Hum.</p>
-                            <p className="text-sm font-black">{formData.humidity}%</p>
-                          </div>
-                        </div>
-                        <div className="bg-slate-900 p-3.5 rounded-xl text-white text-center border border-white/10 flex flex-col justify-center gap-1.5">
-                          <div>
-                            <p className="text-[8px] font-black uppercase opacity-60">Luz Solar / Fotoperiodo</p>
-                            <p className="text-base font-black">{formData.lightHours} h</p>
-                          </div>
-                          <div className="border-t border-white/10 pt-1.5">
-                            <p className="text-[8px] font-black uppercase opacity-60">Luna</p>
-                            <p className="text-xs font-black text-amber-400 uppercase tracking-widest">
-                              {formData.lunarPhase || 'Nueva'}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* COLUMNAS 2 & 3: EVALUACIÓN VEGETAL (1-9) + SANIDAD (1-9) */}
-                      <div className="lg:col-span-2 space-y-5">
-                        <div className="bg-white dark:bg-slate-900 p-5 rounded-[28px] border dark:border-slate-800 shadow-sm grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                          <div className="md:col-span-2 border-b dark:border-slate-800 pb-2">
-                            <h3 className="text-[10px] font-black text-emerald-600 uppercase tracking-widest flex items-center">
-                              <Target size={14} className="mr-2" /> Evaluación Vegetal (1-9)
-                            </h3>
-                          </div>
-                          <div>
-                            <label className={labelClass}>Población (Pl/m²)</label>
-                            <input
-                              type="number"
-                              step="0.1"
-                              className={inputStyle}
-                              value={formData.plantsPerMeter}
-                              onChange={e => setFormData({ ...formData, plantsPerMeter: Number(e.target.value) })}
-                            />
-                          </div>
-                          <div>
-                            <div className="flex justify-between items-center mb-1.5">
-                              <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">
-                                Altura Media (cm)
-                              </label>
-                              <GrowthIndicator
-                                current={formData.plantHeight || 0}
-                                previous={currentPlotData.lastRecord?.plantHeight || 0}
-                              />
-                            </div>
-                            <input
-                              type="number"
-                              step="0.1"
-                              className={inputStyle}
-                              value={formData.plantHeight}
-                              onChange={e => setFormData({ ...formData, plantHeight: Number(e.target.value) })}
-                            />
-                          </div>
-                          <ScaleSelect
-                            label="Vigor (1-9)"
-                            value={formData.vigor}
-                            onChange={(v: number) => setFormData({ ...formData, vigor: v })}
-                          />
-                          <ScaleSelect
-                            label="Homogeneidad (1-9)"
-                            value={formData.uniformity}
-                            onChange={(v: number) => setFormData({ ...formData, uniformity: v })}
-                          />
-                          <ScaleSelect
-                            label="Encamado (1-9)"
-                            value={formData.lodging}
-                            onChange={(v: number) => setFormData({ ...formData, lodging: v })}
-                          />
-                          <ScaleSelect
-                            label="Daño Aves (1-9)"
-                            value={formData.birdDamage}
-                            onChange={(v: number) => setFormData({ ...formData, birdDamage: v })}
-                          />
-                        </div>
-
-                        <div className="bg-amber-50 dark:bg-amber-900/10 p-5 rounded-[28px] border border-amber-100 dark:border-amber-900/30 grid grid-cols-2 gap-3.5">
-                          <div className="col-span-2 border-b border-amber-100 dark:border-amber-900/30 pb-2">
-                            <h3 className="text-[10px] font-black text-amber-700 dark:text-amber-400 uppercase tracking-widest flex items-center">
-                              <AlertCircle size={14} className="mr-2" /> Sanidad (1-9)
-                            </h3>
-                          </div>
-                          <ScaleSelect
-                            label="Enfermedades (1-9)"
-                            value={formData.diseasesScore}
-                            onChange={(v: number) => setFormData({ ...formData, diseasesScore: v })}
-                          />
-                          <ScaleSelect
-                            label="Plagas / Parásitos (1-9)"
-                            value={formData.pestsScore}
-                            onChange={(v: number) => setFormData({ ...formData, pestsScore: v })}
-                          />
-                        </div>
-                      </div>
-
-                      {/* COLUMNA 4: DATOS DE COSECHA & CALIDAD SEMILLA */}
-                      <div className="bg-slate-900 p-5 rounded-[28px] text-white space-y-3.5 shadow-sm">
-                        <h3 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-2 border-b border-white/10 pb-2 flex items-center">
-                          <FlaskConical size={14} className="mr-2" /> Datos de Cosecha
-                        </h3>
-                        <div>
-                          <label className="text-[9px] uppercase font-black text-slate-400 block mb-1">
-                            Plena Floración (50%)
-                          </label>
-                          <input
-                            type="date"
-                            className="w-full bg-white/5 border border-white/10 p-2.5 rounded-xl text-xs outline-none focus:ring-1 focus:ring-emerald-500"
-                            value={formData.floweringDate}
-                            onChange={e => setFormData({ ...formData, floweringDate: e.target.value })}
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[9px] uppercase font-black text-slate-400 block mb-1">
-                            Rendimiento Semillas (g)
-                          </label>
-                          <input
-                            type="number"
-                            className="w-full bg-white/5 border border-white/10 p-2.5 rounded-xl text-xs outline-none focus:ring-1 focus:ring-emerald-500"
-                            value={formData.seedYield}
-                            onChange={e => setFormData({ ...formData, seedYield: Number(e.target.value) })}
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[9px] uppercase font-black text-slate-400 block mb-1">
-                            Peso Tallo / Biomasa (g)
-                          </label>
-                          <input
-                            type="number"
-                            className="w-full bg-white/5 border border-white/10 p-2.5 rounded-xl text-xs outline-none focus:ring-1 focus:ring-emerald-500"
-                            value={formData.stemWeight}
-                            onChange={e => setFormData({ ...formData, stemWeight: Number(e.target.value) })}
-                          />
-                        </div>
-                        <div className="pt-2 space-y-2 border-t border-white/10">
-                          <label className="text-[9px] uppercase font-black text-emerald-400 block">Calidad Semilla</label>
-                          <div className="grid grid-cols-2 gap-2">
-                            <div>
-                              <p className="text-[8px] text-slate-400 font-bold uppercase mb-1">Germinación %</p>
-                              <input
-                                type="number"
-                                className="w-full bg-white/10 border-none p-2 rounded-lg text-xs font-bold text-center"
-                                value={formData.seedQualityGermination}
-                                onChange={e =>
-                                  setFormData({ ...formData, seedQualityGermination: Number(e.target.value) })
-                                }
-                              />
+                  <form onSubmit={handleSave} className="p-4 md:p-6 space-y-6 overflow-y-auto custom-scrollbar">
+                    {/* ==================================================================== */}
+                    {/* SECCIÓN 1: BIOMETRÍA, AMBIENTE Y SANIDAD (ESCALAS TÁCTILES 1-9)      */}
+                    {/* ==================================================================== */}
+                    {(fieldViewSection === 'all' ||
+                      fieldViewSection === 'biometrics' ||
+                      fieldViewSection === 'harvest') && (
+                      <div className="space-y-5">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-2 border-b dark:border-slate-800">
+                          <div className="flex items-center gap-2.5">
+                            <div className="bg-emerald-600 p-2 rounded-xl text-white">
+                              <Activity size={18} />
                             </div>
                             <div>
-                              <p className="text-[8px] text-slate-400 font-bold uppercase mb-1">No Conforme %</p>
-                              <input
-                                type="number"
-                                className="w-full bg-white/10 border-none p-2 rounded-lg text-xs font-bold text-center"
-                                value={formData.seedQualityNonConformity}
-                                onChange={e =>
-                                  setFormData({ ...formData, seedQualityNonConformity: Number(e.target.value) })
-                                }
-                              />
+                              <h3 className="text-base md:text-lg font-black dark:text-white uppercase tracking-tight">
+                                Relevamiento Biométrico & Sanitario Nucleus Trace
+                              </h3>
+                              <p className="text-[10px] text-slate-400">
+                                Controles táctiles optimizados para carga con una mano en celular o tablet
+                              </p>
                             </div>
                           </div>
+                          {isFetchingConditions && (
+                            <div className="flex items-center text-[10px] font-mono font-bold text-sky-600 bg-sky-50 dark:bg-sky-950/40 px-3 py-1.5 rounded-xl border border-sky-200 dark:border-sky-900/40">
+                              <Loader2 className="animate-spin mr-1.5" size={12} /> Sincronizando Clima Open-Meteo...
+                            </div>
+                          )}
                         </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                          {/* COLUMNA AMBIENTE & TIEMPO */}
+                          {(fieldViewSection === 'all' || fieldViewSection === 'biometrics') && (
+                            <div className="lg:col-span-4 bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-3.5">
+                              <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest border-b dark:border-slate-800 pb-2 flex items-center">
+                                <Sun size={14} className="mr-1.5 text-amber-500" /> Ambiente & Fenología
+                              </h4>
+                              <div className="grid grid-cols-2 gap-2.5">
+                                <div>
+                                  <label className={labelClass}>Fecha</label>
+                                  <input
+                                    type="date"
+                                    required
+                                    className={inputStyle}
+                                    value={formData.date}
+                                    onChange={e => {
+                                      const newDate = e.target.value;
+                                      setFormData(p => ({ ...p, date: newDate }));
+                                      syncEnvironmentalData(newDate, currentPlotData.location);
+                                    }}
+                                  />
+                                </div>
+                                <div>
+                                  <label className={labelClass}>Hora</label>
+                                  <input
+                                    type="time"
+                                    required
+                                    className={inputStyle}
+                                    value={formData.time}
+                                    onChange={e => setFormData({ ...formData, time: e.target.value })}
+                                  />
+                                </div>
+                              </div>
+
+                              <div>
+                                <label className={labelClass}>Fase Fisiológica</label>
+                                <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-3 gap-1.5">
+                                  {(['Emergencia', 'Vegetativo', 'Floración', 'Maduración', 'Cosecha'] as const).map(
+                                    st => (
+                                      <button
+                                        key={st}
+                                        type="button"
+                                        onClick={() => setFormData({ ...formData, stage: st })}
+                                        className={`py-2 px-2 rounded-xl text-[10px] font-black uppercase transition cursor-pointer border ${
+                                          formData.stage === st
+                                            ? 'bg-emerald-600 border-emerald-500 text-white shadow-xs'
+                                            : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300'
+                                        }`}
+                                      >
+                                        {st}
+                                      </button>
+                                    )
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-3 gap-2 pt-1 font-mono">
+                                <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-center">
+                                  <p className="text-[9px] font-bold uppercase text-slate-400">Temp.</p>
+                                  <p className="text-sm font-black text-amber-600 dark:text-amber-400">
+                                    {formData.temperature}°C
+                                  </p>
+                                </div>
+                                <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-center">
+                                  <p className="text-[9px] font-bold uppercase text-slate-400">Humedad</p>
+                                  <p className="text-sm font-black text-sky-600 dark:text-sky-400">
+                                    {formData.humidity}%
+                                  </p>
+                                </div>
+                                <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-center">
+                                  <p className="text-[9px] font-bold uppercase text-slate-400">Fotoperiodo</p>
+                                  <p className="text-sm font-black text-slate-800 dark:text-white">
+                                    {formData.lightHours}h
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* COLUMNA CENTRAL: ALTURA, DENSIDAD Y ESCALAS TÁCTILES 1-9 */}
+                          {(fieldViewSection === 'all' || fieldViewSection === 'biometrics') && (
+                            <div className="lg:col-span-8 space-y-4">
+                              {/* Controles táctiles rápidos para Altura Media (cm) y Población (Pl/m²) */}
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                                {/* ALTURA MEDIA (CM) CON BOTONES DE INCREMENTO RÁPIDO */}
+                                <div className="bg-slate-50/70 dark:bg-slate-950/60 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-2">
+                                  <div className="flex justify-between items-center">
+                                    <label className="text-[10px] font-black uppercase text-slate-600 dark:text-slate-300 tracking-wider flex items-center gap-1">
+                                      <Ruler size={13} className="text-emerald-600" /> Altura Media (cm)
+                                    </label>
+                                    <GrowthIndicator
+                                      current={formData.plantHeight || 0}
+                                      previous={currentPlotData.lastRecord?.plantHeight || 0}
+                                    />
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setFormData(p => ({
+                                          ...p,
+                                          plantHeight: Math.max(0, Number(((p.plantHeight || 0) - 5).toFixed(1)))
+                                        }))
+                                      }
+                                      className="h-11 px-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-xs font-black text-slate-700 dark:text-slate-200 hover:bg-slate-100 cursor-pointer"
+                                    >
+                                      -5
+                                    </button>
+                                    <input
+                                      type="number"
+                                      inputMode="decimal"
+                                      step="0.5"
+                                      className="flex-1 h-11 text-center border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 font-mono text-lg font-black dark:text-white outline-none focus:ring-2 focus:ring-emerald-500"
+                                      value={formData.plantHeight}
+                                      onChange={e => setFormData({ ...formData, plantHeight: Number(e.target.value) })}
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setFormData(p => ({
+                                          ...p,
+                                          plantHeight: Number(((p.plantHeight || 0) + 5).toFixed(1))
+                                        }))
+                                      }
+                                      className="h-11 px-3 rounded-xl bg-emerald-600 text-white font-mono text-xs font-black hover:bg-emerald-500 cursor-pointer"
+                                    >
+                                      +5
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setFormData(p => ({
+                                          ...p,
+                                          plantHeight: Number(((p.plantHeight || 0) + 10).toFixed(1))
+                                        }))
+                                      }
+                                      className="h-11 px-3 rounded-xl bg-emerald-700 text-white font-mono text-xs font-black hover:bg-emerald-600 cursor-pointer"
+                                    >
+                                      +10
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* POBLACIÓN (PL/M²) CON BOTONES DE INCREMENTO RÁPIDO */}
+                                <div className="bg-slate-50/70 dark:bg-slate-950/60 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-2">
+                                  <div className="flex justify-between items-center">
+                                    <label className="text-[10px] font-black uppercase text-slate-600 dark:text-slate-300 tracking-wider flex items-center gap-1">
+                                      <Sprout size={13} className="text-emerald-600" /> Densidad / Población (Pl/m²)
+                                    </label>
+                                    <span className="text-[10px] font-mono text-slate-400">
+                                      Ant: {currentPlotData.lastRecord?.plantsPerMeter || 0} pl/m²
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setFormData(p => ({
+                                          ...p,
+                                          plantsPerMeter: Math.max(0, Number(((p.plantsPerMeter || 0) - 5).toFixed(1)))
+                                        }))
+                                      }
+                                      className="h-11 px-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-xs font-black text-slate-700 dark:text-slate-200 hover:bg-slate-100 cursor-pointer"
+                                    >
+                                      -5
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setFormData(p => ({
+                                          ...p,
+                                          plantsPerMeter: Math.max(0, Number(((p.plantsPerMeter || 0) - 1).toFixed(1)))
+                                        }))
+                                      }
+                                      className="h-11 px-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-xs font-black text-slate-700 dark:text-slate-200 hover:bg-slate-100 cursor-pointer"
+                                    >
+                                      -1
+                                    </button>
+                                    <input
+                                      type="number"
+                                      inputMode="decimal"
+                                      step="0.5"
+                                      className="flex-1 h-11 text-center border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 font-mono text-lg font-black dark:text-white outline-none focus:ring-2 focus:ring-emerald-500"
+                                      value={formData.plantsPerMeter}
+                                      onChange={e =>
+                                        setFormData({ ...formData, plantsPerMeter: Number(e.target.value) })
+                                      }
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setFormData(p => ({
+                                          ...p,
+                                          plantsPerMeter: Number(((p.plantsPerMeter || 0) + 1).toFixed(1))
+                                        }))
+                                      }
+                                      className="h-11 px-2.5 rounded-xl bg-emerald-600 text-white font-mono text-xs font-black hover:bg-emerald-500 cursor-pointer"
+                                    >
+                                      +1
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setFormData(p => ({
+                                          ...p,
+                                          plantsPerMeter: Number(((p.plantsPerMeter || 0) + 5).toFixed(1))
+                                        }))
+                                      }
+                                      className="h-11 px-3 rounded-xl bg-emerald-700 text-white font-mono text-xs font-black hover:bg-emerald-600 cursor-pointer"
+                                    >
+                                      +5
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Escalas Táctiles 1-9 (Vigor, Homogeneidad, Sanidad, Encamado, Daño Aves) */}
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <TouchScaleControl
+                                  label="Vigor Vegetativo (1-9)"
+                                  helperText="9 = Máximo vigor foliar y elongación"
+                                  value={formData.vigor}
+                                  onChange={v => setFormData({ ...formData, vigor: v })}
+                                />
+                                <TouchScaleControl
+                                  label="Homogeneidad de Lote (1-9)"
+                                  helperText="9 = Canopia totalmente uniforme"
+                                  value={formData.uniformity}
+                                  onChange={v => setFormData({ ...formData, uniformity: v })}
+                                />
+                                <TouchScaleControl
+                                  label="Sanidad: Enfermedades (1-9)"
+                                  helperText="1 = Sano sin síntomas · 9 = Afectación severa"
+                                  invertColor
+                                  value={formData.diseasesScore}
+                                  onChange={v => setFormData({ ...formData, diseasesScore: v })}
+                                />
+                                <TouchScaleControl
+                                  label="Sanidad: Plagas / Insectos (1-9)"
+                                  helperText="1 = Sin plagas · 9 = Presión crítica"
+                                  invertColor
+                                  value={formData.pestsScore}
+                                  onChange={v => setFormData({ ...formData, pestsScore: v })}
+                                />
+                                <TouchScaleControl
+                                  label="Encamado / Vuelco (1-9)"
+                                  helperText="1 = Tallo erecto · 9 = Vuelco generalizado"
+                                  invertColor
+                                  value={formData.lodging}
+                                  onChange={v => setFormData({ ...formData, lodging: v })}
+                                />
+                                <TouchScaleControl
+                                  label="Daño por Aves (1-9)"
+                                  helperText="1 = Sin daño · 9 = Pérdida severa de grano"
+                                  invertColor
+                                  value={formData.birdDamage}
+                                  onChange={v => setFormData({ ...formData, birdDamage: v })}
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* BLOQUE DE COSECHA Y CALIDAD DE SEMILLA */}
+                        {(fieldViewSection === 'all' || fieldViewSection === 'harvest') && (
+                          <div className="bg-slate-900 p-4 md:p-5 rounded-2xl text-white space-y-3">
+                            <h4 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest border-b border-white/10 pb-2 flex items-center">
+                              <FlaskConical size={14} className="mr-2" /> Datos de Floración, Cosecha & Calidad de Semilla
+                            </h4>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                              <div>
+                                <label className="text-[9px] uppercase font-black text-slate-400 block mb-1">
+                                  Plena Floración (50%)
+                                </label>
+                                <input
+                                  type="date"
+                                  className="w-full bg-white/5 border border-white/10 p-2.5 rounded-xl text-xs outline-none focus:ring-1 focus:ring-emerald-500"
+                                  value={formData.floweringDate}
+                                  onChange={e => setFormData({ ...formData, floweringDate: e.target.value })}
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[9px] uppercase font-black text-slate-400 block mb-1">
+                                  Rend. Semillas (g/m²)
+                                </label>
+                                <input
+                                  type="number"
+                                  inputMode="decimal"
+                                  className="w-full bg-white/5 border border-white/10 p-2.5 rounded-xl text-xs font-mono outline-none focus:ring-1 focus:ring-emerald-500"
+                                  value={formData.seedYield}
+                                  onChange={e => setFormData({ ...formData, seedYield: Number(e.target.value) })}
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[9px] uppercase font-black text-slate-400 block mb-1">
+                                  Peso Tallo / Biomasa (g)
+                                </label>
+                                <input
+                                  type="number"
+                                  inputMode="decimal"
+                                  className="w-full bg-white/5 border border-white/10 p-2.5 rounded-xl text-xs font-mono outline-none focus:ring-1 focus:ring-emerald-500"
+                                  value={formData.stemWeight}
+                                  onChange={e => setFormData({ ...formData, stemWeight: Number(e.target.value) })}
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[9px] uppercase font-black text-emerald-400 block mb-1">
+                                  Poder Germinativo %
+                                </label>
+                                <input
+                                  type="number"
+                                  inputMode="decimal"
+                                  className="w-full bg-white/10 border border-white/10 p-2.5 rounded-xl text-xs font-mono font-bold text-center"
+                                  value={formData.seedQualityGermination}
+                                  onChange={e =>
+                                    setFormData({ ...formData, seedQualityGermination: Number(e.target.value) })
+                                  }
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[9px] uppercase font-black text-slate-400 block mb-1">
+                                  No Conformidad %
+                                </label>
+                                <input
+                                  type="number"
+                                  inputMode="decimal"
+                                  className="w-full bg-white/10 border border-white/10 p-2.5 rounded-xl text-xs font-mono font-bold text-center"
+                                  value={formData.seedQualityNonConformity}
+                                  onChange={e =>
+                                    setFormData({ ...formData, seedQualityNonConformity: Number(e.target.value) })
+                                  }
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    </div>
+                    )}
 
                     {/* ==================================================================== */}
                     {/* SECCIÓN 2: ATAJOS OPERATIVOS COTEJADOS CON LA PARCELA (3 MÓDULOS)    */}
                     {/* ==================================================================== */}
-                    <div className="bg-slate-50 dark:bg-slate-950/90 rounded-[28px] border border-slate-200 dark:border-slate-800 p-5 space-y-4">
-                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">
-                        <div>
-                          <span className="text-[9px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 block">
-                            Atajos Directos de Carga en Campo • Fuente Única de Verdad con Parcelas
-                          </span>
-                          <h4 className="text-sm font-black uppercase text-slate-900 dark:text-white">
-                            2. Bitácora Fotográfica, Pluviómetro/Riego & Labores de Suelo ({currentPlotData.plot.name})
-                          </h4>
-                        </div>
-
-                        {/* Pestañas de los 3 Atajos */}
-                        <div className="flex flex-wrap gap-1.5 bg-white dark:bg-slate-900 p-1 rounded-2xl border border-slate-200 dark:border-slate-800">
-                          <button
-                            type="button"
-                            onClick={() => setActiveShortcutTab('photo_log')}
-                            className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition cursor-pointer ${
-                              activeShortcutTab === 'photo_log'
-                                ? 'bg-purple-600 text-white shadow-xs'
-                                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-                            }`}
-                          >
-                            <Camera size={12} />
-                            <span>Bitácora & Foto ({currentPlotLogs.length})</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setActiveShortcutTab('hydric')}
-                            className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition cursor-pointer ${
-                              activeShortcutTab === 'hydric'
-                                ? 'bg-sky-600 text-white shadow-xs'
-                                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-                            }`}
-                          >
-                            <CloudRain size={12} />
-                            <span>Pluviómetro & Riego ({currentPlotHydric.length})</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setActiveShortcutTab('labor')}
-                            className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition cursor-pointer ${
-                              activeShortcutTab === 'labor'
-                                ? 'bg-amber-600 text-white shadow-xs'
-                                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-                            }`}
-                          >
-                            <Tractor size={12} />
-                            <span>Labores & Suelo ({currentPlotTasks.length})</span>
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* ATAJO A: BITÁCORA MULTIMEDIA & TOMA FOTOGRÁFICA */}
-                      {activeShortcutTab === 'photo_log' && (
-                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-                          <div className="lg:col-span-7 space-y-3">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={startWebCamera}
-                                className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm cursor-pointer"
-                              >
-                                <Camera size={14} /> Abrir Cámara en Vivo
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => fileInputMobileCamRef.current?.click()}
-                                className="px-3.5 py-2 rounded-xl bg-slate-900 dark:bg-slate-800 hover:bg-slate-700 text-white text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5 cursor-pointer"
-                              >
-                                <Camera size={14} /> Cámara Celular
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => fileInputGalleryRef.current?.click()}
-                                className="px-3.5 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5 cursor-pointer"
-                              >
-                                <Upload size={14} /> Subir Foto
-                              </button>
-
-                              <input
-                                ref={fileInputMobileCamRef}
-                                type="file"
-                                accept="image/*"
-                                capture="environment"
-                                onChange={handleSelectPhotoFile}
-                                className="hidden"
-                              />
-                              <input
-                                ref={fileInputGalleryRef}
-                                type="file"
-                                accept="image/*"
-                                onChange={handleSelectPhotoFile}
-                                className="hidden"
-                              />
-                            </div>
-
-                            {isProcessingImage && (
-                              <div className="text-xs font-mono text-purple-600 flex items-center gap-1.5">
-                                <Loader2 size={14} className="animate-spin" /> Comprimiendo y optimizando fotografía...
-                              </div>
-                            )}
-
-                            {quickLogPhoto && (
-                              <div className="relative inline-block rounded-2xl overflow-hidden border-2 border-purple-500 shadow-md">
-                                <img
-                                  src={quickLogPhoto}
-                                  alt="Evidencia capturada"
-                                  className="h-32 w-auto object-cover"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => setQuickLogPhoto('')}
-                                  className="absolute top-1.5 right-1.5 p-1 rounded-full bg-black/70 text-white hover:bg-red-600"
-                                >
-                                  <X size={13} />
-                                </button>
-                              </div>
-                            )}
-
-                            <textarea
-                              rows={2}
-                              value={quickLogNote}
-                              onChange={e => setQuickLogNote(e.target.value)}
-                              placeholder={`Observación de Bitácora para ${currentPlotData.plot.name} (ej. estado foliar, humedad en línea de siembra, presencia de benéficos)...`}
-                              className="w-full p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-medium outline-none focus:border-purple-500 dark:text-white"
-                            />
-
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                              <label className="flex items-center gap-2 text-[11px] text-slate-600 dark:text-slate-400 cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={autoAttachBiometricsToLog}
-                                  onChange={e => setAutoAttachBiometricsToLog(e.target.checked)}
-                                  className="rounded accent-purple-600"
-                                />
-                                <span>Incluir resumen biométrico (Altura/Población/Vigor) en la nota</span>
-                              </label>
-
-                              <button
-                                type="button"
-                                onClick={handleQuickSaveLogOnly}
-                                disabled={isSavingQuickLog || (!quickLogNote.trim() && !quickLogPhoto)}
-                                className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
-                              >
-                                {isSavingQuickLog ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
-                                <span>Guardar en Bitácora Ahora</span>
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Cotejo de últimas fotos y notas de la parcela */}
-                          <div className="lg:col-span-5 bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2 max-h-56 overflow-y-auto">
-                            <span className="text-[10px] font-black uppercase text-slate-400 block">
-                              Últimos Registros en Bitácora ({currentPlotLogs.length})
+                    {(fieldViewSection === 'all' || fieldViewSection === 'shortcuts') && (
+                      <div className="bg-slate-50 dark:bg-slate-950/90 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 md:p-5 space-y-4">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">
+                          <div>
+                            <span className="text-[9px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 block">
+                              Atajos Directos de Carga en Campo • Fuente Única de Verdad con Parcelas
                             </span>
-                            {currentPlotLogs.length === 0 ? (
-                              <p className="text-xs text-slate-400 italic py-4 text-center">
-                                Sin fotografías ni notas previas en esta parcela.
-                              </p>
-                            ) : (
-                              currentPlotLogs.slice(0, 4).map(lg => (
-                                <div
-                                  key={lg.id}
-                                  className="p-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 flex items-start gap-2.5 text-xs"
-                                >
-                                  {lg.photoUrl && (
-                                    <img
-                                      src={lg.photoUrl}
-                                      alt="Foto bitácora"
-                                      onClick={() => setPreviewPhotoUrl(lg.photoUrl!)}
-                                      className="w-12 h-12 rounded-lg object-cover shrink-0 cursor-pointer border border-purple-500/30"
-                                    />
-                                  )}
-                                  <div className="min-w-0 flex-1">
-                                    <span className="text-[10px] font-mono font-bold text-purple-600 dark:text-purple-400 block">
-                                      {lg.date} {lg.time || ''}
-                                    </span>
-                                    <p className="text-[11px] text-slate-700 dark:text-slate-300 line-clamp-2">
-                                      {lg.note}
-                                    </p>
-                                  </div>
-                                </div>
-                              ))
-                            )}
+                            <h4 className="text-sm font-black uppercase text-slate-900 dark:text-white">
+                              Bitácora Fotográfica, Pluviómetro/Riego & Labores de Suelo ({currentPlotData.plot.name})
+                            </h4>
+                          </div>
+
+                          {/* Pestañas de los 3 Atajos */}
+                          <div className="grid grid-cols-3 gap-1 bg-white dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800">
+                            <button
+                              type="button"
+                              onClick={() => setActiveShortcutTab('photo_log')}
+                              className={`px-2.5 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                                activeShortcutTab === 'photo_log'
+                                  ? 'bg-purple-600 text-white shadow-xs'
+                                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                              }`}
+                            >
+                              <Camera size={13} />
+                              <span>Foto & Bitácora ({currentPlotLogs.length})</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setActiveShortcutTab('hydric')}
+                              className={`px-2.5 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                                activeShortcutTab === 'hydric'
+                                  ? 'bg-sky-600 text-white shadow-xs'
+                                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                              }`}
+                            >
+                              <CloudRain size={13} />
+                              <span>Pluviómetro ({currentPlotHydric.length})</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setActiveShortcutTab('labor')}
+                              className={`px-2.5 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                                activeShortcutTab === 'labor'
+                                  ? 'bg-amber-600 text-white shadow-xs'
+                                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                              }`}
+                            >
+                              <Tractor size={13} />
+                              <span>Labores ({currentPlotTasks.length})</span>
+                            </button>
                           </div>
                         </div>
-                      )}
 
-                      {/* ATAJO B: PLUVIÓMETRO & RIEGO SUPLEMENTARIO */}
-                      {activeShortcutTab === 'hydric' && (
-                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-                          <div className="lg:col-span-7 space-y-3">
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                              <div>
-                                <label className="text-[9px] font-black uppercase text-slate-400 block mb-1">
-                                  Tipo de Aporte
-                                </label>
-                                <select
-                                  value={quickHydricType}
-                                  onChange={e => setQuickHydricType(e.target.value as 'Riego' | 'Lluvia')}
-                                  className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold dark:text-white"
-                                >
-                                  <option value="Riego">💧 Riego (Agua Azul)</option>
-                                  <option value="Lluvia">🌧️ Pluviómetro (Lluvia)</option>
-                                </select>
-                              </div>
-
-                              <div>
-                                <label className="text-[9px] font-black uppercase text-slate-400 block mb-1">
-                                  Lámina (mm) *
-                                </label>
-                                <input
-                                  type="number"
-                                  step="0.5"
-                                  min="0"
-                                  value={quickHydricMm}
-                                  onChange={e => setQuickHydricMm(e.target.value)}
-                                  placeholder="Ej: 12.5"
-                                  className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-mono font-bold dark:text-white"
-                                />
-                              </div>
-
-                              <div>
-                                <label className="text-[9px] font-black uppercase text-slate-400 block mb-1">
-                                  Hora Inicio
-                                </label>
-                                <input
-                                  type="time"
-                                  value={quickHydricStartTime}
-                                  onChange={e => setQuickHydricStartTime(e.target.value)}
-                                  className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-mono dark:text-white"
-                                />
-                              </div>
-
-                              <div>
-                                <label className="text-[9px] font-black uppercase text-slate-400 block mb-1">
-                                  Hora Fin
-                                </label>
-                                <input
-                                  type="time"
-                                  value={quickHydricEndTime}
-                                  onChange={e => setQuickHydricEndTime(e.target.value)}
-                                  disabled={quickHydricType === 'Lluvia'}
-                                  className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-mono dark:text-white disabled:opacity-40"
-                                />
-                              </div>
-                            </div>
-
-                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
-                              <input
-                                type="text"
-                                value={quickHydricNotes}
-                                onChange={e => setQuickHydricNotes(e.target.value)}
-                                placeholder="Observaciones del turno de riego o lectura de pluviómetro físico..."
-                                className="flex-1 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs dark:text-white"
-                              />
-                              <button
-                                type="button"
-                                onClick={handleQuickSaveHydricOnly}
-                                disabled={isSavingQuickHydric || !quickHydricMm}
-                                className="px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-40 shrink-0"
-                              >
-                                {isSavingQuickHydric ? (
-                                  <Loader2 size={13} className="animate-spin" />
-                                ) : (
-                                  <Droplets size={13} />
-                                )}
-                                <span>Registrar en Pluviómetro</span>
-                              </button>
-                            </div>
-
-                            {parseFloat(quickHydricMm) > 0 && (
-                              <div className="text-[11px] font-mono text-sky-600 dark:text-sky-400 bg-sky-500/10 px-3 py-1.5 rounded-xl border border-sky-500/20">
-                                Conversión en {currentPlotData.plot.name}:{' '}
-                                <strong>{(parseFloat(quickHydricMm) * 10).toFixed(1)} m³/ha</strong> • Volumen real en
-                                lote:{' '}
-                                <strong>
-                                  {Math.round(parseFloat(quickHydricMm) * currentPlotMetrics.areaM2).toLocaleString(
-                                    'es-AR'
-                                  )}{' '}
-                                  Litros
-                                </strong>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Cotejo con registros hídricos de la parcela */}
-                          <div className="lg:col-span-5 bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2 max-h-56 overflow-y-auto font-mono">
-                            <div className="flex items-center justify-between">
-                              <span className="text-[10px] font-black uppercase text-slate-400">
-                                Historial Pluviómetro & Riego ({currentPlotHydric.length})
-                              </span>
-                              <span className="text-[10px] font-bold text-sky-600">
-                                Total: {currentPlotData.totalWaterMm} mm
-                              </span>
-                            </div>
-                            {currentPlotHydric.slice(0, 5).map(hr => {
-                              const isSat =
-                                String(hr.id).startsWith('auto-rain-') || String(hr.notes || '').includes('Open-Meteo');
-                              return (
-                                <div
-                                  key={hr.id}
-                                  className="p-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px]"
-                                >
-                                  <div>
-                                    <span className="font-bold text-slate-800 dark:text-white">{hr.date}</span>{' '}
-                                    <span
-                                      className={
-                                        hr.type === 'Riego'
-                                          ? 'text-emerald-600 font-bold'
-                                          : 'text-sky-600 font-bold'
-                                      }
-                                    >
-                                      • {hr.type}
-                                    </span>
-                                    <span className="text-[9.5px] text-slate-400 block">
-                                      {isSat ? '🛰️ Satélite Open-Meteo ERA5' : '🧑‍🌾 Registro de Campo'}
-                                    </span>
-                                  </div>
-                                  <strong className="text-slate-900 dark:text-white">{hr.amountMm} mm</strong>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* ATAJO C: LABORES CULTURALES & PREPARACIÓN DE SUELO */}
-                      {activeShortcutTab === 'labor' && (
-                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-                          <div className="lg:col-span-7 space-y-3">
-                            {/* Plantillas rápidas de preparación de suelo y labores */}
-                            <div className="flex flex-wrap gap-1.5">
-                              {QUICK_LABOR_PRESETS.map((preset, idx) => (
+                        {/* ATAJO A: BITÁCORA MULTIMEDIA & TOMA FOTOGRÁFICA */}
+                        {activeShortcutTab === 'photo_log' && (
+                          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+                            <div className="lg:col-span-7 space-y-3">
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                 <button
-                                  key={idx}
                                   type="button"
-                                  onClick={() => {
-                                    setQuickLaborType(preset.laborType);
-                                    setQuickLaborTitle(preset.title);
-                                    setQuickLaborDescription(preset.description);
-                                    setQuickLaborTractor(preset.tractor);
-                                    setQuickLaborImplement(preset.implement);
-                                  }}
-                                  className="px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/20 text-[10px] font-mono font-bold cursor-pointer"
+                                  onClick={startWebCamera}
+                                  className="py-2.5 px-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-[11px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
                                 >
-                                  + {preset.label}
+                                  <Camera size={15} /> Cámara en Vivo
                                 </button>
-                              ))}
-                            </div>
-
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                              <div>
-                                <label className="text-[9px] font-black uppercase text-slate-400 block mb-1">
-                                  Categoría de Labor
-                                </label>
-                                <select
-                                  value={quickLaborType}
-                                  onChange={e => setQuickLaborType(e.target.value as AgriculturalLaborType)}
-                                  className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold dark:text-white"
+                                <button
+                                  type="button"
+                                  onClick={() => fileInputMobileCamRef.current?.click()}
+                                  className="py-2.5 px-3 rounded-xl bg-slate-900 dark:bg-slate-800 hover:bg-slate-700 text-white text-[11px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer"
                                 >
-                                  <option value="PREPARACION_SUELO">🚜 Preparación de Suelo</option>
-                                  <option value="SIEMBRA">🌱 Siembra / Implantación</option>
-                                  <option value="LABOR_CULTURAL">🛠️ Labor Cultural / Desmalezado</option>
-                                  <option value="FERTIRRIEGO">🧪 Fertirriego / Enmienda</option>
-                                  <option value="MANEJO_HIDRICO">💧 Manejo Hídrico</option>
-                                  <option value="FITOSANITARIO">🛡️ Aplicación Fitosanitaria</option>
-                                  <option value="MONITOREO">🔍 Depuración / Roguing</option>
-                                </select>
+                                  <Smartphone size={15} /> Cámara Celular
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => fileInputGalleryRef.current?.click()}
+                                  className="py-2.5 px-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-[11px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer"
+                                >
+                                  <Upload size={15} /> Galería
+                                </button>
+
+                                <input
+                                  ref={fileInputMobileCamRef}
+                                  type="file"
+                                  accept="image/*"
+                                  capture="environment"
+                                  onChange={handleSelectPhotoFile}
+                                  className="hidden"
+                                />
+                                <input
+                                  ref={fileInputGalleryRef}
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={handleSelectPhotoFile}
+                                  className="hidden"
+                                />
                               </div>
 
-                              <div className="sm:col-span-2">
-                                <label className="text-[9px] font-black uppercase text-slate-400 block mb-1">
-                                  Título de la Labor Ejecutada / Verificada *
+                              {isProcessingImage && (
+                                <div className="text-xs font-mono text-purple-600 flex items-center gap-1.5">
+                                  <Loader2 size={14} className="animate-spin" /> Comprimiendo y optimizando fotografía...
+                                </div>
+                              )}
+
+                              {quickLogPhoto && (
+                                <div className="relative inline-block rounded-2xl overflow-hidden border-2 border-purple-500 shadow-md">
+                                  <img
+                                    src={quickLogPhoto}
+                                    alt="Evidencia capturada"
+                                    className="h-36 w-auto object-cover"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => setQuickLogPhoto('')}
+                                    className="absolute top-1.5 right-1.5 p-1.5 rounded-full bg-black/70 text-white hover:bg-red-600"
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                </div>
+                              )}
+
+                              <textarea
+                                rows={2}
+                                value={quickLogNote}
+                                onChange={e => setQuickLogNote(e.target.value)}
+                                placeholder={`Observación de Bitácora para ${currentPlotData.plot.name} (ej. estado foliar, humedad en línea de siembra, presencia de benéficos)...`}
+                                className="w-full p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-medium outline-none focus:border-purple-500 dark:text-white"
+                              />
+
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <label className="flex items-center gap-2 text-[11px] text-slate-600 dark:text-slate-400 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={autoAttachBiometricsToLog}
+                                    onChange={e => setAutoAttachBiometricsToLog(e.target.checked)}
+                                    className="rounded accent-purple-600"
+                                  />
+                                  <span>Incluir resumen biométrico (Altura/Población/Vigor) en la nota</span>
                                 </label>
+
+                                <button
+                                  type="button"
+                                  onClick={handleQuickSaveLogOnly}
+                                  disabled={isSavingQuickLog || (!quickLogNote.trim() && !quickLogPhoto)}
+                                  className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
+                                >
+                                  {isSavingQuickLog ? (
+                                    <Loader2 size={13} className="animate-spin" />
+                                  ) : (
+                                    <Save size={13} />
+                                  )}
+                                  <span>Guardar en Bitácora Ahora</span>
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Cotejo de últimas fotos y notas de la parcela */}
+                            <div className="lg:col-span-5 bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2 max-h-56 overflow-y-auto">
+                              <span className="text-[10px] font-black uppercase text-slate-400 block">
+                                Últimos Registros en Bitácora ({currentPlotLogs.length})
+                              </span>
+                              {currentPlotLogs.length === 0 ? (
+                                <p className="text-xs text-slate-400 italic py-4 text-center">
+                                  Sin fotografías ni notas previas en esta parcela.
+                                </p>
+                              ) : (
+                                currentPlotLogs.slice(0, 4).map(lg => (
+                                  <div
+                                    key={lg.id}
+                                    className="p-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 flex items-start gap-2.5 text-xs"
+                                  >
+                                    {lg.photoUrl && (
+                                      <img
+                                        src={lg.photoUrl}
+                                        alt="Foto bitácora"
+                                        onClick={() => setPreviewPhotoUrl(lg.photoUrl!)}
+                                        className="w-12 h-12 rounded-lg object-cover shrink-0 cursor-pointer border border-purple-500/30"
+                                      />
+                                    )}
+                                    <div className="min-w-0 flex-1">
+                                      <span className="text-[10px] font-mono font-bold text-purple-600 dark:text-purple-400 block">
+                                        {lg.date} {lg.time || ''}
+                                      </span>
+                                      <p className="text-[11px] text-slate-700 dark:text-slate-300 line-clamp-2">
+                                        {lg.note}
+                                      </p>
+                                    </div>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* ATAJO B: PLUVIÓMETRO & RIEGO SUPLEMENTARIO */}
+                        {activeShortcutTab === 'hydric' && (
+                          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+                            <div className="lg:col-span-7 space-y-3">
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                                <div>
+                                  <label className="text-[9px] font-black uppercase text-slate-400 block mb-1">
+                                    Tipo de Aporte
+                                  </label>
+                                  <select
+                                    value={quickHydricType}
+                                    onChange={e => setQuickHydricType(e.target.value as 'Riego' | 'Lluvia')}
+                                    className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold dark:text-white"
+                                  >
+                                    <option value="Riego">💧 Riego (Agua Azul)</option>
+                                    <option value="Lluvia">🌧️ Pluviómetro (Lluvia)</option>
+                                  </select>
+                                </div>
+
+                                <div>
+                                  <label className="text-[9px] font-black uppercase text-slate-400 block mb-1">
+                                    Lámina (mm) *
+                                  </label>
+                                  <input
+                                    type="number"
+                                    inputMode="decimal"
+                                    step="0.5"
+                                    min="0"
+                                    value={quickHydricMm}
+                                    onChange={e => setQuickHydricMm(e.target.value)}
+                                    placeholder="Ej: 15"
+                                    className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-mono font-bold dark:text-white"
+                                  />
+                                </div>
+
+                                <div>
+                                  <label className="text-[9px] font-black uppercase text-slate-400 block mb-1">
+                                    Hora Inicio
+                                  </label>
+                                  <input
+                                    type="time"
+                                    value={quickHydricStartTime}
+                                    onChange={e => setQuickHydricStartTime(e.target.value)}
+                                    className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-mono dark:text-white"
+                                  />
+                                </div>
+
+                                <div>
+                                  <label className="text-[9px] font-black uppercase text-slate-400 block mb-1">
+                                    Hora Fin
+                                  </label>
+                                  <input
+                                    type="time"
+                                    value={quickHydricEndTime}
+                                    onChange={e => setQuickHydricEndTime(e.target.value)}
+                                    disabled={quickHydricType === 'Lluvia'}
+                                    className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-mono dark:text-white disabled:opacity-40"
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Botones rápidos de milímetros frecuentes para carga táctil */}
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="text-[10px] font-bold text-slate-400 mr-1">Lámina rápida:</span>
+                                {[5, 10, 15, 20, 25, 35, 50].map(mmPreset => (
+                                  <button
+                                    key={mmPreset}
+                                    type="button"
+                                    onClick={() => setQuickHydricMm(String(mmPreset))}
+                                    className={`px-2.5 py-1 rounded-lg font-mono text-[11px] font-bold border transition cursor-pointer ${
+                                      Number(quickHydricMm) === mmPreset
+                                        ? 'bg-sky-600 border-sky-500 text-white'
+                                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                                    }`}
+                                  >
+                                    {mmPreset} mm
+                                  </button>
+                                ))}
+                              </div>
+
+                              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
                                 <input
                                   type="text"
-                                  value={quickLaborTitle}
-                                  onChange={e => setQuickLaborTitle(e.target.value)}
-                                  placeholder="Ej: Cincelado profundo + Rastra de disco (Cama de siembra)"
-                                  className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold dark:text-white"
+                                  value={quickHydricNotes}
+                                  onChange={e => setQuickHydricNotes(e.target.value)}
+                                  placeholder="Observaciones del turno de riego o lectura de pluviómetro físico..."
+                                  className="flex-1 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs dark:text-white"
                                 />
+                                <button
+                                  type="button"
+                                  onClick={handleQuickSaveHydricOnly}
+                                  disabled={isSavingQuickHydric || !quickHydricMm}
+                                  className="px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-40 shrink-0"
+                                >
+                                  {isSavingQuickHydric ? (
+                                    <Loader2 size={13} className="animate-spin" />
+                                  ) : (
+                                    <Droplets size={13} />
+                                  )}
+                                  <span>Registrar en Pluviómetro</span>
+                                </button>
+                              </div>
+
+                              {parseFloat(quickHydricMm) > 0 && (
+                                <div className="text-[11px] font-mono text-sky-600 dark:text-sky-400 bg-sky-500/10 px-3 py-1.5 rounded-xl border border-sky-500/20">
+                                  Conversión en {currentPlotData.plot.name}:{' '}
+                                  <strong>{(parseFloat(quickHydricMm) * 10).toFixed(1)} m³/ha</strong> · Volumen real en
+                                  lote:{' '}
+                                  <strong>
+                                    {Math.round(parseFloat(quickHydricMm) * currentPlotMetrics.areaM2).toLocaleString(
+                                      'es-AR'
+                                    )}{' '}
+                                    Litros
+                                  </strong>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Cotejo con registros hídricos de la parcela */}
+                            <div className="lg:col-span-5 bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2 max-h-56 overflow-y-auto font-mono">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-black uppercase text-slate-400">
+                                  Historial Pluviómetro & Riego ({currentPlotHydric.length})
+                                </span>
+                                <span className="text-[10px] font-bold text-sky-600">
+                                  Total: {currentPlotData.totalWaterMm} mm
+                                </span>
+                              </div>
+                              {currentPlotHydric.slice(0, 5).map(hr => {
+                                const isSat =
+                                  String(hr.id).startsWith('auto-rain-') || String(hr.notes || '').includes('Open-Meteo');
+                                return (
+                                  <div
+                                    key={hr.id}
+                                    className="p-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px]"
+                                  >
+                                    <div>
+                                      <span className="font-bold text-slate-800 dark:text-white">{hr.date}</span>{' '}
+                                      <span
+                                        className={
+                                          hr.type === 'Riego'
+                                            ? 'text-emerald-600 font-bold'
+                                            : 'text-sky-600 font-bold'
+                                        }
+                                      >
+                                        · {hr.type}
+                                      </span>
+                                      <span className="text-[9.5px] text-slate-400 block">
+                                        {isSat ? '🛰️ Satélite Open-Meteo ERA5' : '🧑‍🌾 Registro de Campo'}
+                                      </span>
+                                    </div>
+                                    <strong className="text-slate-900 dark:text-white">{hr.amountMm} mm</strong>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* ATAJO C: LABORES CULTURALES & PREPARACIÓN DE SUELO */}
+                        {activeShortcutTab === 'labor' && (
+                          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+                            <div className="lg:col-span-7 space-y-3">
+                              {/* Plantillas rápidas de preparación de suelo y labores */}
+                              <div className="flex flex-wrap gap-1.5">
+                                {QUICK_LABOR_PRESETS.map((preset, idx) => (
+                                  <button
+                                    key={idx}
+                                    type="button"
+                                    onClick={() => {
+                                      setQuickLaborType(preset.laborType);
+                                      setQuickLaborTitle(preset.title);
+                                      setQuickLaborDescription(preset.description);
+                                      setQuickLaborTractor(preset.tractor);
+                                      setQuickLaborImplement(preset.implement);
+                                    }}
+                                    className="px-2.5 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/20 text-[10px] font-mono font-bold cursor-pointer"
+                                  >
+                                    + {preset.label}
+                                  </button>
+                                ))}
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                <div>
+                                  <label className="text-[9px] font-black uppercase text-slate-400 block mb-1">
+                                    Categoría de Labor
+                                  </label>
+                                  <select
+                                    value={quickLaborType}
+                                    onChange={e => setQuickLaborType(e.target.value as AgriculturalLaborType)}
+                                    className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold dark:text-white"
+                                  >
+                                    <option value="PREPARACION_SUELO">🚜 Preparación de Suelo</option>
+                                    <option value="SIEMBRA">🌱 Siembra / Implantación</option>
+                                    <option value="LABOR_CULTURAL">🛠️ Labor Cultural / Desmalezado</option>
+                                    <option value="FERTIRRIEGO">🧪 Fertirriego / Enmienda</option>
+                                    <option value="MANEJO_HIDRICO">💧 Manejo Hídrico</option>
+                                    <option value="FITOSANITARIO">🛡️ Aplicación Fitosanitaria</option>
+                                    <option value="MONITOREO">🔍 Depuración / Roguing</option>
+                                  </select>
+                                </div>
+
+                                <div className="sm:col-span-2">
+                                  <label className="text-[9px] font-black uppercase text-slate-400 block mb-1">
+                                    Título de la Labor Ejecutada / Verificada *
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={quickLaborTitle}
+                                    onChange={e => setQuickLaborTitle(e.target.value)}
+                                    placeholder="Ej: Cincelado profundo + Rastra de disco (Cama de siembra)"
+                                    className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold dark:text-white"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                <input
+                                  type="text"
+                                  value={quickLaborTractor}
+                                  onChange={e => setQuickLaborTractor(e.target.value)}
+                                  placeholder="Tractor / Unidad Motriz"
+                                  className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs dark:text-white"
+                                />
+                                <input
+                                  type="text"
+                                  value={quickLaborImplement}
+                                  onChange={e => setQuickLaborImplement(e.target.value)}
+                                  placeholder="Implemento / Herramienta"
+                                  className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs dark:text-white"
+                                />
+                                <select
+                                  value={quickLaborStatus}
+                                  onChange={e => setQuickLaborStatus(e.target.value as Task['status'])}
+                                  className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold dark:text-white"
+                                >
+                                  <option value="Completada">✓ Ejecutada / Completada</option>
+                                  <option value="En_Curso">⏳ En Curso</option>
+                                  <option value="Pendiente">📌 Programada / Pendiente</option>
+                                </select>
+                              </div>
+
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <label className="flex items-center gap-2 text-[11px] text-slate-600 dark:text-slate-400 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={quickLaborApplyBlock}
+                                    onChange={e => setQuickLaborApplyBlock(e.target.checked)}
+                                    className="rounded accent-amber-600"
+                                  />
+                                  <span>
+                                    Replicar labor en todo el establecimiento ({currentPlotData.locationName})
+                                  </span>
+                                </label>
+
+                                <button
+                                  type="button"
+                                  onClick={handleQuickSaveLaborOnly}
+                                  disabled={isSavingQuickLabor || !quickLaborTitle.trim()}
+                                  className="px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
+                                >
+                                  {isSavingQuickLabor ? (
+                                    <Loader2 size={13} className="animate-spin" />
+                                  ) : (
+                                    <Tractor size={13} />
+                                  )}
+                                  <span>Asentar Labor de Suelo/Cultivo</span>
+                                </button>
                               </div>
                             </div>
 
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                              <input
-                                type="text"
-                                value={quickLaborTractor}
-                                onChange={e => setQuickLaborTractor(e.target.value)}
-                                placeholder="Tractor / Unidad Motriz"
-                                className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs dark:text-white"
-                              />
-                              <input
-                                type="text"
-                                value={quickLaborImplement}
-                                onChange={e => setQuickLaborImplement(e.target.value)}
-                                placeholder="Implemento / Herramienta"
-                                className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs dark:text-white"
-                              />
-                              <select
-                                value={quickLaborStatus}
-                                onChange={e => setQuickLaborStatus(e.target.value as Task['status'])}
-                                className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold dark:text-white"
-                              >
-                                <option value="Completada">✓ Ejecutada / Completada</option>
-                                <option value="En_Curso">⏳ En Curso</option>
-                                <option value="Pendiente">📌 Programada / Pendiente</option>
-                              </select>
-                            </div>
-
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                              <label className="flex items-center gap-2 text-[11px] text-slate-600 dark:text-slate-400 cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={quickLaborApplyBlock}
-                                  onChange={e => setQuickLaborApplyBlock(e.target.checked)}
-                                  className="rounded accent-amber-600"
-                                />
-                                <span>
-                                  Replicar labor en todo el bloque/establecimiento ({currentPlotData.locationName})
-                                </span>
-                              </label>
-
-                              <button
-                                type="button"
-                                onClick={handleQuickSaveLaborOnly}
-                                disabled={isSavingQuickLabor || !quickLaborTitle.trim()}
-                                className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
-                              >
-                                {isSavingQuickLabor ? (
-                                  <Loader2 size={13} className="animate-spin" />
-                                ) : (
-                                  <Tractor size={13} />
-                                )}
-                                <span>Asentar Labor de Suelo/Cultivo</span>
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Cotejo con labores registradas en la parcela */}
-                          <div className="lg:col-span-5 bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2 max-h-56 overflow-y-auto">
-                            <span className="text-[10px] font-black uppercase text-slate-400 block">
-                              Labores & Preparación de Suelo en Lote ({currentPlotTasks.length})
-                            </span>
-                            {currentPlotTasks.length === 0 ? (
-                              <p className="text-xs text-slate-400 italic py-4 text-center">
-                                Sin labores culturales o de preparación de suelo registradas en esta parcela.
-                              </p>
-                            ) : (
-                              currentPlotTasks.slice(0, 4).map(tk => (
-                                <div
-                                  key={tk.id}
-                                  className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 text-xs"
-                                >
-                                  <div className="flex items-center justify-between gap-2">
-                                    <span className="text-[9.5px] font-mono font-bold text-amber-600 dark:text-amber-400 uppercase">
-                                      {tk.laborType || 'LABOR'} • {tk.executionDate || tk.dueDate}
-                                    </span>
-                                    <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 text-[9px] font-bold">
-                                      {tk.status}
-                                    </span>
+                            {/* Cotejo con labores registradas en la parcela */}
+                            <div className="lg:col-span-5 bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2 max-h-56 overflow-y-auto">
+                              <span className="text-[10px] font-black uppercase text-slate-400 block">
+                                Labores & Preparación de Suelo en Lote ({currentPlotTasks.length})
+                              </span>
+                              {currentPlotTasks.length === 0 ? (
+                                <p className="text-xs text-slate-400 italic py-4 text-center">
+                                  Sin labores culturales o de preparación de suelo registradas en esta parcela.
+                                </p>
+                              ) : (
+                                currentPlotTasks.slice(0, 4).map(tk => (
+                                  <div
+                                    key={tk.id}
+                                    className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 text-xs"
+                                  >
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="text-[9.5px] font-mono font-bold text-amber-600 dark:text-amber-400 uppercase">
+                                        {tk.laborType || 'LABOR'} · {tk.executionDate || tk.dueDate}
+                                      </span>
+                                      <span className="text-[9px] font-mono font-bold text-emerald-600">
+                                        {tk.status}
+                                      </span>
+                                    </div>
+                                    <p className="font-bold text-slate-800 dark:text-white mt-0.5 truncate">{tk.title}</p>
+                                    {tk.machinery?.implement && (
+                                      <span className="text-[10px] text-slate-400 block truncate">
+                                        {tk.machinery.tractor} · {tk.machinery.implement}
+                                      </span>
+                                    )}
                                   </div>
-                                  <p className="font-bold text-slate-800 dark:text-white mt-0.5 truncate">{tk.title}</p>
-                                  {tk.machinery?.implement && (
-                                    <span className="text-[10px] text-slate-400 block truncate">
-                                      {tk.machinery.tractor} • {tk.machinery.implement}
-                                    </span>
-                                  )}
-                                </div>
-                              ))
-                            )}
+                                ))
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      )}
-                    </div>
+                        )}
+                      </div>
+                    )}
 
-                    {/* FOOTER DE ACCIONES Y SELLADO INTEGRAL */}
+                    {/* FOOTER DE ACCIONES Y SELLADO INTEGRAL (FIJO O ACCESIBLE EN CAMPO) */}
                     <div className="pt-4 border-t dark:border-slate-800 flex flex-col sm:flex-row justify-between items-center gap-4">
                       <label className="flex items-center gap-2 text-xs font-bold text-slate-500 cursor-pointer">
                         <input
@@ -2096,7 +2811,7 @@ export default function TrialManager() {
                           onChange={e => setAutoAdvance(e.target.checked)}
                           className="rounded accent-emerald-600 w-4 h-4"
                         />
-                        <span>Avanzar automáticamente al siguiente lote de la recorrida al sellar</span>
+                        <span>Avanzar automáticamente al siguiente lote de la cola al sellar</span>
                       </label>
 
                       <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -2107,7 +2822,7 @@ export default function TrialManager() {
                               setEditingRecordId(null);
                               setActiveTab('history');
                             }}
-                            className="px-5 py-4 rounded-[24px] font-black text-xs uppercase tracking-wider bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300 transition cursor-pointer"
+                            className="px-5 py-3.5 rounded-2xl font-black text-xs uppercase tracking-wider bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300 transition cursor-pointer"
                           >
                             Cancelar Edición
                           </button>
@@ -2115,10 +2830,10 @@ export default function TrialManager() {
                         <button
                           type="submit"
                           disabled={isSaving || isFetchingConditions}
-                          className={`w-full sm:w-auto px-8 py-4 rounded-[24px] font-black text-xs uppercase tracking-[0.2em] shadow-2xl flex items-center justify-center transition-all hover:scale-[1.01] active:scale-95 disabled:opacity-50 cursor-pointer ${
+                          className={`w-full sm:w-auto px-7 py-4 rounded-2xl font-black text-xs uppercase tracking-wider shadow-xl flex items-center justify-center transition-all active:scale-95 disabled:opacity-50 cursor-pointer ${
                             justSaved
                               ? 'bg-emerald-600 text-white'
-                              : 'bg-slate-900 dark:bg-emerald-600 text-white hover:bg-black dark:hover:bg-emerald-700'
+                              : 'bg-slate-900 dark:bg-emerald-600 text-white hover:bg-black dark:hover:bg-emerald-500'
                           }`}
                         >
                           {isSaving ? (
@@ -2142,7 +2857,7 @@ export default function TrialManager() {
 
               {/* VISTA 2: HISTORIAL COTEJADO 360° (BIOMETRÍA + BITÁCORA + PLUVIÓMETRO + LABORES) */}
               {activeTab === 'history' && (
-                <div className="p-6 md:p-8 space-y-6 flex-1 overflow-y-auto custom-scrollbar">
+                <div className="p-5 md:p-7 space-y-6 flex-1 overflow-y-auto custom-scrollbar">
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                     <div>
                       <h3 className="text-lg font-black uppercase text-slate-800 dark:text-white">
@@ -2212,8 +2927,8 @@ export default function TrialManager() {
                                   {record.date}{' '}
                                   <span className="text-xs font-normal text-slate-400">{record.time || ''} HS</span>
                                 </span>
-                                <span className="px-2.5 py-0.5 rounded-md text-[9px] font-black uppercase bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                                  {record.stage}
+                                <span className="text-[10px] font-mono font-bold uppercase text-emerald-600 dark:text-emerald-400">
+                                  · {record.stage}
                                 </span>
                               </div>
                               <div className="flex items-center gap-2">
@@ -2275,19 +2990,19 @@ export default function TrialManager() {
                               <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border dark:border-slate-800">
                                 <p className="text-[8px] font-black text-slate-400 uppercase">Vigor / Homog.</p>
                                 <p className="font-black text-emerald-600 text-sm">
-                                  {record.vigor || '-'}/9 • {record.uniformity || '-'}/9
+                                  {record.vigor || '-'}/9 · {record.uniformity || '-'}/9
                                 </p>
                               </div>
                               <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border dark:border-slate-800">
                                 <p className="text-[8px] font-black text-slate-400 uppercase">Sanidad (Enf/Plag)</p>
                                 <p className="font-black text-amber-600 text-sm">
-                                  {record.diseasesScore || 1}/9 • {record.pestsScore || 1}/9
+                                  {record.diseasesScore || 1}/9 · {record.pestsScore || 1}/9
                                 </p>
                               </div>
                               <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border dark:border-slate-800">
                                 <p className="text-[8px] font-black text-slate-400 uppercase">Clima / Fotoperiodo</p>
                                 <p className="font-black text-slate-600 dark:text-slate-300 text-sm">
-                                  {record.temperature}°C • {record.lightHours || 12}h
+                                  {record.temperature}°C · {record.lightHours || 12}h
                                 </p>
                               </div>
                               <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border dark:border-slate-800">
@@ -2371,16 +3086,14 @@ export default function TrialManager() {
                               className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200/80 dark:border-slate-800 flex items-center justify-between gap-3"
                             >
                               <div>
-                                <div className="flex items-center gap-2">
-                                  <span className="px-2 py-0.5 rounded bg-amber-500/15 text-amber-700 dark:text-amber-300 text-[10px] font-mono font-bold">
+                                <div className="flex items-center gap-2 text-xs font-mono">
+                                  <span className="font-bold text-amber-600 dark:text-amber-400">
                                     {tk.laborType || 'LABOR'}
                                   </span>
-                                  <span className="text-xs font-mono font-bold text-slate-500">
-                                    {tk.executionDate || tk.dueDate}
-                                  </span>
-                                  <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-[9.5px] font-bold">
-                                    {tk.status}
-                                  </span>
+                                  <span aria-hidden="true">·</span>
+                                  <span className="text-slate-500">{tk.executionDate || tk.dueDate}</span>
+                                  <span aria-hidden="true">·</span>
+                                  <span className="font-bold text-emerald-600">{tk.status}</span>
                                 </div>
                                 <p className="text-sm font-black text-slate-800 dark:text-white mt-1">{tk.title}</p>
                                 {tk.description && <p className="text-xs text-slate-500">{tk.description}</p>}
@@ -2429,7 +3142,9 @@ export default function TrialManager() {
                                 <strong className="text-sm font-black text-slate-900 dark:text-white">
                                   {hr.amountMm} mm
                                 </strong>
-                                <span className="block text-[9.5px] text-slate-400">{(hr.amountMm * 10).toFixed(0)} m³/ha</span>
+                                <span className="block text-[9.5px] text-slate-400">
+                                  {(hr.amountMm * 10).toFixed(0)} m³/ha
+                                </span>
                               </div>
                             </div>
                           );
@@ -2441,7 +3156,7 @@ export default function TrialManager() {
               )}
             </>
           ) : (
-            <div className="flex flex-col items-center justify-center h-full text-slate-400 p-12 text-center bg-gray-50 dark:bg-slate-950/50">
+            <div className="flex flex-col items-center justify-center h-full text-slate-400 p-12 text-center bg-slate-50 dark:bg-slate-950/50">
               <div className="bg-white dark:bg-slate-900 p-8 rounded-full mb-6 shadow-sm">
                 <CheckCircle2 size={64} className="text-emerald-500" />
               </div>
@@ -2449,7 +3164,7 @@ export default function TrialManager() {
                 Sin Lotes para el Filtro Seleccionado
               </h3>
               <p className="text-sm font-medium max-w-xs mx-auto text-slate-500">
-                Ajuste los filtros de establecimiento, genética o urgencia en el panel izquierdo para continuar la recorrida.
+                Ajustá los filtros de establecimiento, genética o tipo de lote para continuar la recorrida.
               </p>
             </div>
           )}
