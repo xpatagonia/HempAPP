@@ -20,7 +20,7 @@ import { PlotIdentificationModal } from '../components/PlotIdentificationModal';
 import { PlotCycleClosureModal } from '../components/PlotCycleClosureModal';
 import SeedingProtocolModal from '../components/SeedingProtocolModal';
 import { LiveTelemetryPanel } from '../components/LiveTelemetryPanel';
-import { TrialRecord, AgrochemicalApplication, AgrochemicalCategory, HempStageId, FieldLog, Task, AgriculturalLaborType } from '../types';
+import { TrialRecord, AgrochemicalApplication, AgrochemicalCategory, HempStageId, FieldLog, Task, AgriculturalLaborType, Resource } from '../types';
 import { sendAgronomicAlertEmail } from '../src/services/emailNotificationService';
 
 // ============================================================================
@@ -204,7 +204,7 @@ export default function PlotDetails() {
     addTrialRecord, updateTrialRecord, deleteTrialRecord,
     currentUser, hydricRecords, logs, addLog, updateLog, deleteLog, seedBatches, clients,
     updatePlotPhenology, closePlotCycle, reopenPlotCycle,
-    tasks, addTask, updateTask, deleteTask, homologateLabor, usersList,
+    tasks, addTask, updateTask, deleteTask, homologateLabor, usersList, resources,
     agrochemicalApplications: agroApps, addAgrochemicalApplication, updateAgrochemicalApplication, deleteAgrochemicalApplication
   } = useAppContext();
 
@@ -251,27 +251,61 @@ export default function PlotDetails() {
   const [alertDetails, setAlertDetails] = useState('');
   const [emailAlertToast, setEmailAlertToast] = useState<{ message: string; via: string; sentTo: string } | null>(null);
 
-  // Estado para formulario del Cuaderno Fitosanitario SENASA (conectado al estado centralizado agroApps de AppContext)
+  // Estado para formulario del Cuaderno Fitosanitario SENASA (conectado al estado centralizado agroApps y resources de AppContext)
   const [isAgroModalOpen, setIsAgroModalOpen] = useState(false);
   const [editingAgroId, setEditingAgroId] = useState<string | null>(null);
+  const [isCustomAgroProduct, setIsCustomAgroProduct] = useState(false);
   const [agroForm, setAgroForm] = useState({
     date: new Date().toISOString().split('T')[0],
-    productName: '',
-    activeIngredient: '',
-    senasaRegisterNumber: '',
-    category: 'Bioestimulante' as AgrochemicalCategory,
-    batchNumber: '',
-    dosagePerHa: 2.5,
+    productName: 'HumiFulvic Complex + Glomus intraradices',
+    activeIngredient: 'Ácidos Húmicos 15% + Ácidos Fúlvicos 8% + Endomicorrizas (1.5x10^4 esporas/ml)',
+    senasaRegisterNumber: 'SENASA-ENM-9042-AR',
+    category: 'Mejorador de Suelo' as AgrochemicalCategory,
+    batchNumber: 'HUMI-SOIL-26A',
+    dosagePerHa: 5.0,
     dosageUnit: 'L/ha' as AgrochemicalApplication['dosageUnit'],
     totalAppliedAmount: 5,
     safetyPeriodDays: 0,
-    applicationMethod: 'Pulverización Terrestre' as AgrochemicalApplication['applicationMethod'],
-    targetPestOrPurpose: '',
+    applicationMethod: 'Fertirriego' as AgrochemicalApplication['applicationMethod'],
+    targetPestOrPurpose: 'Mejorador físico-biológico de estructura edáfica, CIC y floculación radicular',
     responsibleAgronomist: currentUser?.name || 'Ing. Agr. Gastón Barea',
     agronomistLicense: 'MP-4821-CIAFBA',
     weatherConditionsAtApp: '21°C | Hum: 48% | Viento: 9 km/h',
     notes: ''
   });
+
+  const prescribedPlotResources = useMemo(() => {
+    const cat = agroForm.category || 'Mejorador de Suelo';
+    return resources.filter(r => {
+      if (r.agroCategory) return r.agroCategory === cat;
+      if (
+        cat === 'Fertilizante Edáfico' ||
+        cat === 'Fertilizante Foliar' ||
+        cat === 'Mejorador de Suelo' ||
+        cat === 'Enmienda Orgánica'
+      ) {
+        return r.type === 'Fertilizante';
+      }
+      return r.type === 'Fitosanitario';
+    });
+  }, [resources, agroForm.category]);
+
+  const applyCatalogResourceToPlotAgro = (res: Resource) => {
+    setIsCustomAgroProduct(false);
+    setAgroForm(prev => ({
+      ...prev,
+      category: res.agroCategory || prev.category,
+      productName: res.name,
+      activeIngredient: res.activeIngredient || 'Bioinsumo Agrícola Homologado',
+      senasaRegisterNumber: res.senasaRegisterNumber || 'SENASA-OFICIAL',
+      batchNumber: res.batchNumber || 'LOT-2026-A',
+      dosagePerHa: res.recommendedDosagePerHa ?? 2.0,
+      dosageUnit: res.dosageUnit || (res.unit === 'kg' ? 'kg/ha' : 'L/ha'),
+      safetyPeriodDays: res.safetyPeriodDays ?? 0,
+      applicationMethod: res.applicationMethod || 'Pulverización Terrestre',
+      targetPestOrPurpose: res.targetPestOrDisease || prev.targetPestOrPurpose
+    }));
+  };
 
   const plotAgroApps = useMemo(
     () => agroApps.filter(a => a.plotId === id).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
@@ -2852,19 +2886,22 @@ export default function PlotDetails() {
                     <button
                       onClick={() => {
                         setEditingAgroId(null);
+                        setIsCustomAgroProduct(false);
+                        const defaultCat: AgrochemicalCategory = 'Mejorador de Suelo';
+                        const firstRes = resources.find(r => r.agroCategory === defaultCat) || resources[0];
                         setAgroForm({
                           date: localClockData.dateIso,
-                          productName: '',
-                          activeIngredient: '',
-                          senasaRegisterNumber: '',
-                          category: 'Bioestimulante',
-                          batchNumber: '',
-                          dosagePerHa: 2.5,
-                          dosageUnit: 'L/ha',
+                          productName: firstRes?.name || 'HumiFulvic Complex + Glomus intraradices',
+                          activeIngredient: firstRes?.activeIngredient || 'Ácidos Húmicos 15% + Ácidos Fúlvicos 8% + Endomicorrizas',
+                          senasaRegisterNumber: firstRes?.senasaRegisterNumber || 'SENASA-ENM-9042-AR',
+                          category: firstRes?.agroCategory || defaultCat,
+                          batchNumber: firstRes?.batchNumber || 'HUMI-SOIL-26A',
+                          dosagePerHa: firstRes?.recommendedDosagePerHa ?? 5.0,
+                          dosageUnit: firstRes?.dosageUnit || 'L/ha',
                           totalAppliedAmount: 5,
-                          safetyPeriodDays: 0,
-                          applicationMethod: 'Pulverización Terrestre',
-                          targetPestOrPurpose: '',
+                          safetyPeriodDays: firstRes?.safetyPeriodDays ?? 0,
+                          applicationMethod: firstRes?.applicationMethod || 'Fertirriego',
+                          targetPestOrPurpose: firstRes?.targetPestOrDisease || 'Mejorador físico-biológico de estructura edáfica',
                           responsibleAgronomist: currentUser?.name || 'Ing. Agr. Gastón Barea',
                           agronomistLicense: 'MP-4821-CIAFBA',
                           weatherConditionsAtApp: `${stats.liveTemp}°C | Hum: ${stats.liveHum}% | Viento: ${stats.liveWind} km/h`,
@@ -3998,16 +4035,25 @@ export default function PlotDetails() {
                   <label className={labelClass}>Categoría de Insumo *</label>
                   <select
                     value={agroForm.category}
-                    onChange={e => setAgroForm({ ...agroForm, category: e.target.value as AgrochemicalCategory })}
+                    onChange={e => {
+                      const nextCat = e.target.value as AgrochemicalCategory;
+                      const catProducts = resources.filter(r => r.agroCategory === nextCat);
+                      if (catProducts.length > 0) {
+                        applyCatalogResourceToPlotAgro(catProducts[0]);
+                      } else {
+                        setAgroForm({ ...agroForm, category: nextCat });
+                      }
+                    }}
                     className={inputStyle}
                   >
-                    <option value="Mejorador de Suelo">Mejorador de Suelo</option>
-                    <option value="Fertilizante Edáfico">Fertilizante Edáfico</option>
-                    <option value="Fertilizante Foliar">Fertilizante Foliar</option>
-                    <option value="Bioestimulante">Bioestimulante</option>
-                    <option value="Insecticida">Insecticida / Biocontrol</option>
-                    <option value="Fungicida">Fungicida</option>
-                    <option value="Enmienda Orgánica">Enmienda Orgánica</option>
+                    <option value="Mejorador de Suelo">🌱 Mejorador de Suelo</option>
+                    <option value="Fertilizante Edáfico">🧪 Fertilizante Edáfico</option>
+                    <option value="Fertilizante Foliar">🍃 Fertilizante Foliar</option>
+                    <option value="Bioestimulante">⚡ Bioestimulante</option>
+                    <option value="Insecticida">🐛 Insecticida / Biocontrol</option>
+                    <option value="Fungicida">🍄 Fungicida / Biofungicida</option>
+                    <option value="Enmienda Orgánica">♻️ Enmienda Orgánica</option>
+                    <option value="Herbicida">🌾 Herbicida</option>
                   </select>
                 </div>
                 <div>
@@ -4020,25 +4066,56 @@ export default function PlotDetails() {
                     placeholder="Ej: Oruga cogollera / Deficiencia N / Estructura suelo"
                   />
                 </div>
-                <div>
-                  <label className={labelClass}>Producto / Bioinsumo *</label>
-                  <input
-                    type="text"
-                    required
-                    value={agroForm.productName}
-                    onChange={e => setAgroForm({ ...agroForm, productName: e.target.value })}
+                <div className="sm:col-span-2 space-y-1.5">
+                  <label className={labelClass}>
+                    Producto Comercial Prescripto * ({prescribedPlotResources.length} en Base de Datos)
+                  </label>
+                  <select
+                    value={
+                      isCustomAgroProduct
+                        ? '__CUSTOM__'
+                        : prescribedPlotResources.some(r => r.name === agroForm.productName)
+                        ? agroForm.productName
+                        : prescribedPlotResources[0]?.name || '__CUSTOM__'
+                    }
+                    onChange={e => {
+                      const val = e.target.value;
+                      if (val === '__CUSTOM__') {
+                        setIsCustomAgroProduct(true);
+                        setAgroForm({ ...agroForm, productName: '' });
+                      } else {
+                        const found = prescribedPlotResources.find(r => r.name === val);
+                        if (found) applyCatalogResourceToPlotAgro(found);
+                      }
+                    }}
                     className={inputStyle}
-                    placeholder="Ej: Trichoderma harzianum"
-                  />
+                  >
+                    {prescribedPlotResources.map(res => (
+                      <option key={res.id} value={res.name}>
+                        {res.name} — {res.recommendedDosagePerHa ?? 2} {res.dosageUnit || 'L/ha'} ({res.senasaRegisterNumber || 'SENASA'}) [Stock: {res.stock ?? 0} {res.unit}]
+                      </option>
+                    ))}
+                    <option value="__CUSTOM__">+ Otro Producto Comercial (Guardar en Base de Datos)</option>
+                  </select>
+                  {isCustomAgroProduct && (
+                    <input
+                      type="text"
+                      required
+                      value={agroForm.productName}
+                      onChange={e => setAgroForm({ ...agroForm, productName: e.target.value })}
+                      className={inputStyle}
+                      placeholder="Escribir nombre del nuevo producto comercial..."
+                    />
+                  )}
                 </div>
-                <div>
-                  <label className={labelClass}>Principio Activo</label>
+                <div className="sm:col-span-2">
+                  <label className={labelClass}>Principio Activo / Composición</label>
                   <input
                     type="text"
                     value={agroForm.activeIngredient}
                     onChange={e => setAgroForm({ ...agroForm, activeIngredient: e.target.value })}
                     className={inputStyle}
-                    placeholder="Ej: Cepa TH-35"
+                    placeholder="Ej: Cepa TH-35 / Ácidos Húmicos"
                   />
                 </div>
                 <div>

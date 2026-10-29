@@ -2,7 +2,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { 
   Supplier, SupplierCategory, TechnicalHomologationStatus, 
-  SupplierLotInspection, AgronomicInspectionVerdict, LotQualityGrade, SeedBatch 
+  SupplierLotInspection, AgronomicInspectionVerdict, LotQualityGrade, SeedBatch,
+  SupplierHumanActor, SupplierActorRole, User
 } from '../types';
 import { DEMO_SUPPLIER_INSPECTIONS } from '../src/data/initialDemoData';
 import { 
@@ -12,11 +13,18 @@ import {
   ExternalLink, Printer, Check, Copy, FileText, ChevronRight,
   Filter, CheckSquare, Phone, Globe, Microscope, Droplets,
   Scale, ClipboardCheck, ArrowUpDown, Sparkles, Building2,
-  Calendar, UserCheck, AlertCircle, QrCode, Users, Layers, PackageCheck
+  Calendar, UserCheck, AlertCircle, QrCode, Users, Layers, PackageCheck,
+  Send, Eye, Lock
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { BarcodeRenderer } from '../components/BarcodeRenderer';
+import { sendUserProfileWelcomeEmail } from '../src/services/emailNotificationService';
+import {
+  SUPPLIER_ACTOR_ROLES,
+  SUPPLIER_ACTOR_ROLES_INFO,
+  doesPlotBelongToSupplier
+} from '../src/utils/structurePermissions';
 
 const generateId = (prefix = 'sup') => {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
@@ -229,7 +237,9 @@ export default function Suppliers() {
   const { 
     suppliers, addSupplier, updateSupplier, deleteSupplier, 
     currentUser, varieties, seedBatches, addSeedBatch, updateSeedBatch,
-    plots, storagePoints, usersList: users
+    resources, addResource, updateResource,
+    plots, allPlots, storagePoints, usersList: users,
+    addUser, updateUser, startImpersonation
   } = useAppContext();
   const navigate = useNavigate();
 
@@ -242,7 +252,32 @@ export default function Suppliers() {
   const [selectedSupplierForAudit, setSelectedSupplierForAudit] = useState<Supplier | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [modalTab, setModalTab] = useState<'technical' | 'regulatory' | 'quality' | 'logistics'>('technical');
+  const [modalTab, setModalTab] = useState<'technical' | 'regulatory' | 'quality' | 'logistics' | 'humanTeam'>('technical');
+  const [dispatchingActorId, setDispatchingActorId] = useState<string | null>(null);
+  const [emailToast, setEmailToast] = useState<{
+    show: boolean;
+    success: boolean;
+    message: string;
+    sentTo: string;
+    via: string;
+  } | null>(null);
+  const [newActorDraft, setNewActorDraft] = useState<{
+    name: string;
+    actorRole: SupplierActorRole;
+    jobTitle: string;
+    email: string;
+    phone: string;
+    dniOrMatricula: string;
+    isAccessActive: boolean;
+  }>({
+    name: '',
+    actorRole: 'director_tecnico_obtentor',
+    jobTitle: '',
+    email: '',
+    phone: '',
+    dniOrMatricula: '',
+    isAccessActive: true
+  });
 
   // Modal para Inspecciones de Lotes
   const [isNewInspectionModalOpen, setIsNewInspectionModalOpen] = useState(false);
@@ -282,6 +317,7 @@ export default function Suppliers() {
   const [formData, setFormData] = useState<Partial<Supplier> & { lat: string; lng: string }>({
     name: '', category: 'Semillero_Criadero', legalName: '', cuit: '', country: 'Argentina', province: '', city: '', address: '',
     whatsapp: '', email: '', website: '', notes: '', isOfficialPartner: true,
+    commercialContact: '', logisticsContact: '', humanTeam: [],
     inaseRncyfsNumber: '', senasaRegisterNumber: '', ariccameLicenseNumber: '',
     homologationStatus: 'Homologado_Conforme',
     technicalSpecialty: '', activeIngredientsProvided: [], batchReturnWarrantyDays: 60,
@@ -438,9 +474,12 @@ export default function Suppliers() {
     };
   }, [suppliers, lotInspections]);
 
-  // Proveedores filtrados
+  // Proveedores filtrados (respeta aislamiento si el usuario logueado es un Proveedor Homologado)
   const filteredSuppliers = useMemo(() => {
     return suppliers.filter(s => {
+      if (currentUser?.supplierId && !currentUser?.clientId && String(s.id) !== String(currentUser.supplierId)) {
+        return false;
+      }
       const matchSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           (s.legalName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                           (s.inaseRncyfsNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -450,11 +489,14 @@ export default function Suppliers() {
       const matchHomologation = filterHomologation === 'all' || (s.homologationStatus || 'Homologado_Conforme') === filterHomologation;
       return matchSearch && matchCategory && matchHomologation;
     });
-  }, [suppliers, searchTerm, filterCategory, filterHomologation]);
+  }, [suppliers, searchTerm, filterCategory, filterHomologation, currentUser]);
 
   // Inspecciones filtradas
   const filteredInspections = useMemo(() => {
     return lotInspections.filter(i => {
+      if (currentUser?.supplierId && !currentUser?.clientId && String(i.supplierId) !== String(currentUser.supplierId)) {
+        return false;
+      }
       const matchSearch = i.supplierName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           i.lotNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           (i.guideOrRemitoNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -462,7 +504,93 @@ export default function Suppliers() {
       const matchVerdict = filterVerdict === 'all' || i.verdict === filterVerdict;
       return matchSearch && matchVerdict;
     });
-  }, [lotInspections, searchTerm, filterVerdict]);
+  }, [lotInspections, searchTerm, filterVerdict, currentUser]);
+
+  // Alta / vinculación de un humano del proveedor como usuario del sistema + envío de credenciales por email
+  const provisionOrNotifySupplierActor = async (
+    supplier: Supplier,
+    actor: SupplierHumanActor,
+    sendWelcomeEmail = true
+  ): Promise<{ linkedUserId: string; userRecord: User } | null> => {
+    if (!actor.email || !actor.email.trim()) {
+      alert('El actor humano debe poseer un correo electrónico válido para habilitar su usuario y enviar credenciales.');
+      return null;
+    }
+    const cleanEmail = actor.email.trim().toLowerCase();
+    const existingUser = users.find(
+      u => (actor.linkedUserId && String(u.id) === String(actor.linkedUserId)) || u.email.toLowerCase() === cleanEmail
+    );
+
+    const roleMeta = SUPPLIER_ACTOR_ROLES_INFO[actor.actorRole] || SUPPLIER_ACTOR_ROLES_INFO.director_tecnico_obtentor;
+    const tempPassword = existingUser?.password || `HempC-${Math.floor(1000 + Math.random() * 9000)}!`;
+    const userId = existingUser?.id || `user-sup-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`;
+
+    const userPayload: User = {
+      id: userId,
+      name: actor.name.trim(),
+      email: actor.email.trim(),
+      role: actor.actorRole === 'director_tecnico_obtentor' ? 'technician' : 'viewer',
+      structureRole: actor.actorRole === 'director_tecnico_obtentor' ? 'agronomo' : 'monitoreador',
+      supplierId: supplier.id,
+      supplierActorRole: actor.actorRole,
+      clientId: null,
+      isNetworkMember: true,
+      memberType: 'Proveedor_Homologado',
+      organizationName: `${supplier.name} · Proveedor Homologado`,
+      jobTitle: actor.jobTitle?.trim() || roleMeta.label,
+      phone: actor.phone?.trim() || supplier.whatsapp || '',
+      password: tempPassword,
+      avatar: existingUser?.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sawyer&backgroundColor=d1d4f9'
+    };
+
+    if (existingUser) {
+      await updateUser(userPayload);
+    } else {
+      await addUser(userPayload);
+    }
+
+    if (sendWelcomeEmail) {
+      try {
+        const dispatch = await sendUserProfileWelcomeEmail({
+          toEmail: userPayload.email,
+          toName: userPayload.name,
+          roleName: `${roleMeta.label} (Acceso Exclusivo a Parcelas con Semilla ${supplier.name})`,
+          organizationName: `${supplier.name} · Semillero / Proveedor Homologado`,
+          tempPassword,
+          actionUrl: window.location.origin
+        });
+        setEmailToast({
+          show: true,
+          success: dispatch.success,
+          message: dispatch.message,
+          sentTo: userPayload.email,
+          via: dispatch.deliveredVia
+        });
+      } catch (e) {
+        console.warn('Error al despachar email de bienvenida al proveedor:', e);
+      }
+    }
+
+    return { linkedUserId: userId, userRecord: userPayload };
+  };
+
+  const handleEnableOrNotifyCardActor = async (supplier: Supplier, actor: SupplierHumanActor) => {
+    setDispatchingActorId(actor.id);
+    try {
+      const res = await provisionOrNotifySupplierActor(supplier, actor, true);
+      if (res) {
+        const updatedTeam = (supplier.humanTeam || []).map(a =>
+          a.id === actor.id ? { ...a, linkedUserId: res.linkedUserId, isAccessActive: true } : a
+        );
+        await updateSupplier({
+          ...supplier,
+          humanTeam: updatedTeam
+        });
+      }
+    } finally {
+      setDispatchingActorId(null);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -473,9 +601,44 @@ export default function Suppliers() {
       const finalLat = parseFloat((formData.lat || '').replace(',', '.'));
       const finalLng = parseFloat((formData.lng || '').replace(',', '.'));
       const coordinates = (!isNaN(finalLat) && !isNaN(finalLng)) ? { lat: finalLat, lng: finalLng } : undefined;
+      const supplierId = editingId || generateId('sup');
+
+      // Procesar equipo humano y dar de alta / actualizar usuarios con notificación por email
+      const rawTeam: SupplierHumanActor[] = Array.isArray(formData.humanTeam) ? [...formData.humanTeam] : [];
+      const syncedTeam: SupplierHumanActor[] = [];
+
+      const baseSupplierForProvision: Supplier = {
+        id: supplierId,
+        name: formData.name!.trim(),
+        category: formData.category as SupplierCategory,
+        whatsapp: formData.whatsapp
+      };
+
+      for (const actor of rawTeam) {
+        if (actor.isAccessActive && actor.email && actor.email.trim()) {
+          const alreadyLinked = actor.linkedUserId && users.some(u => String(u.id) === String(actor.linkedUserId));
+          const provisioned = await provisionOrNotifySupplierActor(
+            baseSupplierForProvision,
+            actor,
+            !alreadyLinked // envía email de alta automáticamente cuando es nuevo acceso
+          );
+          if (provisioned) {
+            syncedTeam.push({
+              ...actor,
+              linkedUserId: provisioned.linkedUserId,
+              isAccessActive: true
+            });
+            continue;
+          }
+        }
+        syncedTeam.push(actor);
+      }
+
+      const directorOrCommercial = syncedTeam.find(a => a.actorRole === 'responsable_comercial' || a.actorRole === 'director_tecnico_obtentor');
+      const logisticsActor = syncedTeam.find(a => a.actorRole === 'responsable_logistica');
 
       const payload: Supplier = {
-        id: editingId || generateId('sup'),
+        id: supplierId,
         name: formData.name!.trim(),
         category: formData.category as SupplierCategory,
         legalName: formData.legalName,
@@ -487,6 +650,9 @@ export default function Suppliers() {
         whatsapp: formData.whatsapp,
         email: formData.email,
         website: formData.website,
+        commercialContact: formData.commercialContact || (directorOrCommercial ? `${directorOrCommercial.name} (${directorOrCommercial.jobTitle || 'Responsable'})` : undefined),
+        logisticsContact: formData.logisticsContact || (logisticsActor ? `${logisticsActor.name} (${logisticsActor.jobTitle || 'Logística'})` : undefined),
+        humanTeam: syncedTeam,
         notes: formData.notes,
         isOfficialPartner: formData.isOfficialPartner,
         inaseRncyfsNumber: formData.inaseRncyfsNumber,
@@ -599,6 +765,48 @@ export default function Suppliers() {
         };
         await addSeedBatch(createdBatch);
       }
+    } else if (
+      syncWithSeedBatch &&
+      (newInspectionData.inputCategory === 'Bioinsumo / Enmienda' ||
+        newInspectionData.inputCategory === 'Fitosanitario / Biológico') &&
+      evalResult.grade !== 'NO_CONFORME'
+    ) {
+      const isBio = newInspectionData.inputCategory === 'Bioinsumo / Enmienda';
+      const existingRes = resources.find(
+        r =>
+          (r.batchNumber && r.batchNumber.toLowerCase() === cleanLotNumber.toLowerCase()) ||
+          r.name.toLowerCase() === (newInspectionData.varietyName || cleanLotNumber).toLowerCase()
+      );
+      if (existingRes) {
+        await updateResource({
+          ...existingRes,
+          batchNumber: cleanLotNumber,
+          supplierId: matchedSup?.id || existingRes.supplierId,
+          supplierName: matchedSup?.name || existingRes.supplierName,
+          stock: (existingRes.stock || 0) + (Number(newInspectionData.initialQuantityKg) || 20)
+        });
+      } else {
+        await addResource({
+          id: `senasa-insp-${Date.now()}`,
+          name: newInspectionData.varietyName?.trim() || `${newInspectionData.inputCategory} (${cleanLotNumber})`,
+          type: isBio ? 'Fertilizante' : 'Fitosanitario',
+          agroCategory: isBio ? 'Mejorador de Suelo' : 'Insecticida',
+          activeIngredient: matchedSup?.technicalSpecialty || 'Insumo Biológico Homologado GACP',
+          senasaRegisterNumber: matchedSup?.senasaRegisterNumber || `SENASA-LOTE-${cleanLotNumber}`,
+          toxicologicalClass: 'Biológico / Orgánico Certificado',
+          recommendedDosagePerHa: 2,
+          dosageUnit: 'L/ha',
+          safetyPeriodDays: 0,
+          applicationMethod: isBio ? 'Fertirriego' : 'Pulverización Terrestre',
+          supplierId: matchedSup?.id,
+          supplierName: matchedSup?.name || 'Proveedor Homologado',
+          manufacturer: matchedSup?.legalName || matchedSup?.name || 'Laboratorio Homologado',
+          batchNumber: cleanLotNumber,
+          unit: 'lts',
+          costPerUnit: 18,
+          stock: Number(newInspectionData.initialQuantityKg) || 50
+        });
+      }
     }
 
     const inspection: SupplierLotInspection = {
@@ -704,6 +912,7 @@ export default function Suppliers() {
     setFormData({ 
       name: '', category: 'Semillero_Criadero', legalName: '', cuit: '', country: 'Argentina', province: '', city: '', address: '',
       whatsapp: '', email: '', website: '', notes: '', isOfficialPartner: true,
+      commercialContact: '', logisticsContact: '', humanTeam: [],
       inaseRncyfsNumber: '', senasaRegisterNumber: '', ariccameLicenseNumber: '',
       homologationStatus: 'Homologado_Conforme',
       technicalSpecialty: '', activeIngredientsProvided: [], batchReturnWarrantyDays: 60,
@@ -722,6 +931,15 @@ export default function Suppliers() {
         labAccreditationStandard: 'ISTA / ISO 17025 & Red ARICCAME'
       }
     });
+    setNewActorDraft({
+      name: '',
+      actorRole: 'director_tecnico_obtentor',
+      jobTitle: '',
+      email: '',
+      phone: '',
+      dniOrMatricula: '',
+      isAccessActive: true
+    });
     setEditingId(null);
     setModalTab('technical');
   };
@@ -729,6 +947,9 @@ export default function Suppliers() {
   const handleEdit = (s: Supplier) => {
     setFormData({
       ...s,
+      commercialContact: s.commercialContact || '',
+      logisticsContact: s.logisticsContact || '',
+      humanTeam: Array.isArray(s.humanTeam) ? s.humanTeam : [],
       lat: s.coordinates?.lat?.toString() || '',
       lng: s.coordinates?.lng?.toString() || '',
       audit: s.audit || {
@@ -811,6 +1032,33 @@ export default function Suppliers() {
           )}
         </div>
       </div>
+
+      {/* TOAST DE NOTIFICACIÓN DE CREDENCIALES POR EMAIL AL PROVEEDOR */}
+      {emailToast && emailToast.show && (
+        <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/70 border border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 flex items-center justify-between gap-3 shadow-md animate-in slide-in-from-top-2">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-emerald-600 text-white shrink-0">
+              <CheckCircle2 size={18} />
+            </div>
+            <div>
+              <p className="text-xs font-black uppercase tracking-wider">
+                Usuario de Proveedor Habilitado & Credenciales Despachadas por Email
+              </p>
+              <p className="text-xs opacity-90">{emailToast.message}</p>
+              <p className="text-[10px] text-emerald-700 dark:text-emerald-400 mt-0.5">
+                Destino: <strong>{emailToast.sentTo}</strong> · Vía: {emailToast.via} · Aislamiento Estricto por Semilla Activo
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setEmailToast(null)}
+            className="p-1.5 rounded-lg text-emerald-700 hover:bg-emerald-100 dark:hover:bg-emerald-900"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
 
       {/* BANNER DE KPIS AGRONÓMICOS */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -967,6 +1215,11 @@ export default function Suppliers() {
 
               const linkedAgroApps = agroAppsCountBySupplier[s.name.toLowerCase()] || 0;
               const supplierInspectionsCount = lotInspections.filter(i => i.supplierId === s.id).length;
+              const globalPlotPool = allPlots && allPlots.length > 0 ? allPlots : plots;
+              const plotsWithSupplierSeed = globalPlotPool.filter(p =>
+                doesPlotBelongToSupplier(s.id, p, varieties, seedBatches)
+              );
+              const directSupplierUsers = users.filter(u => String(u.supplierId) === String(s.id));
 
               return (
                 <div 
@@ -979,7 +1232,7 @@ export default function Suppliers() {
                         type="button"
                         onClick={() => handleEdit(s)} 
                         className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-slate-800 rounded-xl transition"
-                        title="Editar Ficha Técnica"
+                        title="Editar Ficha Técnica & Equipo Humano"
                       >
                         <Edit2 size={14} />
                       </button>
@@ -1072,6 +1325,120 @@ export default function Suppliers() {
                       )}
                     </div>
 
+                    {/* EQUIPO HUMANO DEL PROVEEDOR & ACCESO AISLADO POR SEMILLA */}
+                    <div className="mb-3 p-3 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-800/70 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[9px] font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                          <Users size={12} className="text-emerald-600" />
+                          <span>Equipo Humano & Usuarios ({(s.humanTeam || []).length || directSupplierUsers.length})</span>
+                        </span>
+                        {plotsWithSupplierSeed.length > 0 && (
+                          <span className="px-2 py-0.5 rounded-md bg-emerald-600 text-white text-[9px] font-black uppercase">
+                            {plotsWithSupplierSeed.length} Parcelas con su Semilla
+                          </span>
+                        )}
+                      </div>
+
+                      {(s.humanTeam && s.humanTeam.length > 0) ? (
+                        <div className="space-y-1.5">
+                          {s.humanTeam.map(actor => {
+                            const roleMeta = SUPPLIER_ACTOR_ROLES_INFO[actor.actorRole] || SUPPLIER_ACTOR_ROLES_INFO.director_tecnico_obtentor;
+                            const linkedUser = users.find(
+                              u => (actor.linkedUserId && String(u.id) === String(actor.linkedUserId)) ||
+                                   (actor.email && u.email.toLowerCase() === actor.email.toLowerCase())
+                            );
+                            const isBusy = dispatchingActorId === actor.id;
+
+                            return (
+                              <div
+                                key={actor.id}
+                                className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-emerald-200/70 dark:border-slate-800 flex flex-col gap-1.5"
+                              >
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <strong className="text-[11px] font-black text-slate-900 dark:text-white truncate">
+                                        {actor.name}
+                                      </strong>
+                                      <span className="px-1.5 py-0.2 rounded text-[8px] font-black uppercase bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                                        {roleMeta.shortLabel}
+                                      </span>
+                                    </div>
+                                    <span className="text-[9px] text-slate-500 dark:text-slate-400 block truncate">
+                                      {actor.jobTitle || roleMeta.label} {actor.email ? `· ${actor.email}` : ''}
+                                    </span>
+                                  </div>
+
+                                  {linkedUser ? (
+                                    <span className="px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 text-[8px] font-black uppercase flex items-center gap-1 shrink-0 border border-emerald-300 dark:border-emerald-800">
+                                      <Lock size={9} /> Usuario Activo
+                                    </span>
+                                  ) : (
+                                    <span className="px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 text-[8px] font-bold uppercase shrink-0">
+                                      Contacto Registrado
+                                    </span>
+                                  )}
+                                </div>
+
+                                {isAdmin && (
+                                  <div className="flex items-center justify-end gap-1.5 pt-1 border-t border-slate-100 dark:border-slate-800/80">
+                                    {linkedUser && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          startImpersonation(linkedUser.id);
+                                          navigate('/plots');
+                                        }}
+                                        className="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[9px] font-black uppercase flex items-center gap-1 transition cursor-pointer"
+                                        title={`Simular vista aislada de ${actor.name} (${plotsWithSupplierSeed.length} parcelas con genética ${s.name})`}
+                                      >
+                                        <Eye size={10} />
+                                        <span>Simular Vista ({plotsWithSupplierSeed.length})</span>
+                                      </button>
+                                    )}
+                                    {actor.email && (
+                                      <button
+                                        type="button"
+                                        disabled={isBusy}
+                                        onClick={() => handleEnableOrNotifyCardActor(s, actor)}
+                                        className="px-2 py-1 rounded-lg bg-slate-900 dark:bg-slate-800 hover:bg-purple-600 text-white text-[9px] font-bold uppercase flex items-center gap-1 transition cursor-pointer disabled:opacity-50"
+                                        title={linkedUser ? 'Reenviar credenciales de acceso por correo electrónico' : 'Dar de alta como usuario aislado y notificar acceso por email'}
+                                      >
+                                        {isBusy ? <Loader2 size={10} className="animate-spin" /> : <Send size={10} />}
+                                        <span>{linkedUser ? 'Notificar Email' : 'Dar Alta & Email'}</span>
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="text-[10px] text-slate-500 space-y-1">
+                          {s.commercialContact && (
+                            <p className="truncate"><strong>Resp. Comercial:</strong> {s.commercialContact}</p>
+                          )}
+                          {s.logisticsContact && (
+                            <p className="truncate"><strong>Logística:</strong> {s.logisticsContact}</p>
+                          )}
+                          {isAdmin && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleEdit(s);
+                                setModalTab('humanTeam');
+                              }}
+                              className="text-[10px] font-black text-emerald-700 dark:text-emerald-400 hover:underline flex items-center gap-1 pt-0.5"
+                            >
+                              <Plus size={11} />
+                              <span>Cargar humanos responsables y habilitar usuario</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
                     {/* TRAZABILIDAD CRUZADA CON EL SISTEMA */}
                     <div className="border-t border-slate-100 dark:border-slate-800 pt-3 space-y-1.5 text-xs text-slate-600 dark:text-slate-400">
                       {linkedVarieties.length > 0 && (
@@ -1085,7 +1452,23 @@ export default function Suppliers() {
                             onClick={() => navigate(`/varieties`)}
                             className="font-bold text-emerald-600 hover:underline"
                           >
-                            {linkedVarieties.length} Genéticas
+                            {linkedVarieties.map(v => v.name).join(', ')} ({linkedVarieties.length})
+                          </button>
+                        </div>
+                      )}
+
+                      {plotsWithSupplierSeed.length > 0 && (
+                        <div className="flex justify-between items-center text-[11px]">
+                          <span className="flex items-center gap-1 text-slate-400">
+                            <Layers size={12} className="text-emerald-600" />
+                            <span>Parcelas con su Semilla:</span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/plots`)}
+                            className="font-bold text-emerald-700 dark:text-emerald-400 hover:underline"
+                          >
+                            {plotsWithSupplierSeed.length} Parcelas Activas
                           </button>
                         </div>
                       )}
@@ -1447,77 +1830,99 @@ export default function Suppliers() {
         </div>
       )}
 
-      {/* VISTA 3: VADEMÉCUM AGRONÓMICO & PROTOCOLO SENASA */}
+      {/* VISTA 3: VADEMÉCUM AGRONÓMICO & PROTOCOLO SENASA (CONECTADO EN VIVO CON INVENTARIO BD) */}
       {activeMainTab === 'vademecum' && (
         <div className="space-y-6">
           <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 mb-4 pb-3 border-b border-slate-100 dark:border-slate-800">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-4 pb-3 border-b border-slate-100 dark:border-slate-800">
               <div>
                 <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600">
-                  Protocolo Fitosanitario & GACP Oficial
+                  Protocolo Fitosanitario & GACP Oficial · Sincronizado con Inventario BD ({resources.filter(r => r.type !== 'Labor').length} Insumos)
                 </span>
                 <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight flex items-center gap-2 mt-0.5">
                   <ShieldCheck size={20} className="text-emerald-500" />
                   <span>Vademécum Agronómico de Insumos Homologados SENASA</span>
                 </h3>
               </div>
-              <span className="px-3 py-1 rounded-xl bg-purple-50 dark:bg-purple-950 text-purple-700 dark:text-purple-300 text-xs font-bold border border-purple-200 dark:border-purple-800">
-                Límites Máximos de Residuos (LMR = Cero en Inflorescencia & Grano)
-              </span>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="px-3 py-1 rounded-xl bg-purple-50 dark:bg-purple-950 text-purple-700 dark:text-purple-300 text-xs font-bold border border-purple-200 dark:border-purple-800">
+                  LMR = Cero Residuos en Inflorescencia & Grano
+                </span>
+                <button
+                  type="button"
+                  onClick={() => navigate('/resources')}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm cursor-pointer"
+                >
+                  <Plus size={14} />
+                  <span>Gestionar / Cargar Insumo SENASA</span>
+                </button>
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {AGRONOMIC_VADEMECUM.map((item, idx) => (
-                <div 
-                  key={idx} 
-                  className="p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 space-y-3"
-                >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">
-                        {item.category}
-                      </span>
-                      <h4 className="text-base font-black text-slate-900 dark:text-white mt-1">
-                        {item.name}
-                      </h4>
-                      <span className="text-[10px] font-mono text-slate-400 block">
-                        Registro: {item.senasaReg}
-                      </span>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {resources
+                .filter(r => r.type !== 'Labor')
+                .map(item => (
+                  <div
+                    key={item.id}
+                    className="p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 space-y-2.5 flex flex-col justify-between"
+                  >
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-start gap-2">
+                        <div>
+                          <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">
+                            {item.agroCategory || item.type}
+                          </span>
+                          <h4 className="text-sm font-black text-slate-900 dark:text-white mt-1 leading-snug">
+                            {item.name}
+                          </h4>
+                          <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold block">
+                            {item.senasaRegisterNumber || 'SENASA Homologado'} · Lote: {item.batchNumber || 'S/N'}
+                          </span>
+                        </div>
+
+                        <div className="text-right shrink-0">
+                          <span className="text-[8px] text-slate-400 uppercase font-bold block">Carencia</span>
+                          <strong className="text-[11px] font-black text-purple-600 bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded inline-block">
+                            {(item.safetyPeriodDays ?? 0) === 0 ? '0 Días (Inocuo)' : `${item.safetyPeriodDays} Días`}
+                          </strong>
+                        </div>
+                      </div>
+
+                      <div className="text-xs space-y-1 bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800">
+                        <div>
+                          <span className="text-[9px] text-slate-400 uppercase font-bold block">Principio Activo:</span>
+                          <p className="font-bold text-slate-800 dark:text-slate-200 text-[11px]">
+                            {item.activeIngredient || 'Composición Biológica / Nutricional Homologada'}
+                          </p>
+                        </div>
+                        {item.targetPestOrDisease && (
+                          <div>
+                            <span className="text-[9px] text-slate-400 uppercase font-bold block">Objetivo / Blanco MIP:</span>
+                            <p className="text-slate-600 dark:text-slate-400 text-[10px]">{item.targetPestOrDisease}</p>
+                          </div>
+                        )}
+                        <div className="flex justify-between items-center pt-1 border-t border-slate-100 dark:border-slate-800 text-[10px] font-mono">
+                          <span>
+                            Dosis: <strong>{item.recommendedDosagePerHa ?? 2} {item.dosageUnit || 'L/ha'}</strong>
+                          </span>
+                          <span className="text-emerald-600 font-bold">
+                            Stock: {item.stock ?? 0} {item.unit}
+                          </span>
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="text-right">
-                      <span className="text-[9px] text-slate-400 uppercase font-bold block">Tiempo de Carencia</span>
-                      <strong className="text-xs font-black text-purple-600 bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded">
-                        {item.withholdingDays === 0 ? '0 Días (Inocuo)' : `${item.withholdingDays} Días`}
-                      </strong>
-                    </div>
-                  </div>
-
-                  <div className="text-xs space-y-1 bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800">
-                    <div>
-                      <span className="text-[9px] text-slate-400 uppercase font-bold block">Principio Activo:</span>
-                      <p className="font-bold text-slate-800 dark:text-slate-200">{item.activeSubstance}</p>
-                    </div>
-                    <div>
-                      <span className="text-[9px] text-slate-400 uppercase font-bold block">Objetivo / Blanco:</span>
-                      <p className="text-slate-600 dark:text-slate-400 text-[11px]">{item.target}</p>
-                    </div>
-                    <div className="flex justify-between items-center pt-1 border-t border-slate-100 dark:border-slate-800 text-[10px]">
-                      <span>Dosis recomendada: <strong>{item.dose}</strong></span>
-                      <span className="text-emerald-600 font-bold">✓ Cero Residuos Químicos</span>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-between items-center text-[10px] text-slate-400 pt-1">
-                    <span>Proveedor Homologado: <strong className="text-slate-700 dark:text-slate-300">{item.supplierName}</strong></span>
-                    {item.certifiedOrganic && (
-                      <span className="px-2 py-0.5 bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 rounded font-bold">
-                        Orgánico Acreditado
+                    <div className="flex justify-between items-center text-[10px] text-slate-400 pt-1 border-t border-slate-200/50 dark:border-slate-800">
+                      <span className="truncate">
+                        Prov: <strong className="text-slate-700 dark:text-slate-300">{item.supplierName || 'Red Homologada'}</strong>
                       </span>
-                    )}
+                      <span className="px-2 py-0.5 bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 rounded font-bold shrink-0">
+                        SENASA OK
+                      </span>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
             </div>
           </div>
         </div>
@@ -2590,7 +2995,7 @@ export default function Suppliers() {
             </div>
 
             {/* TABS DEL FORMULARIO */}
-            <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 mb-6 pb-2 text-xs">
+            <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 dark:border-slate-800 mb-6 pb-2 text-xs">
               <button
                 type="button"
                 onClick={() => setModalTab('technical')}
@@ -2635,6 +3040,18 @@ export default function Suppliers() {
               >
                 4. Ubicación & Contacto
               </button>
+              <button
+                type="button"
+                onClick={() => setModalTab('humanTeam')}
+                className={`px-3 py-1.5 rounded-xl font-bold uppercase transition text-[11px] flex items-center gap-1.5 ${
+                  modalTab === 'humanTeam'
+                    ? 'bg-amber-500 text-slate-950 shadow-sm'
+                    : 'text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40'
+                }`}
+              >
+                <Users size={13} />
+                <span>5. Equipo Humano & Usuarios ({(formData.humanTeam || []).length})</span>
+              </button>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-6">
@@ -2644,7 +3061,7 @@ export default function Suppliers() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nombre Comercial / Semillero *</label>
-                      <input required disabled={isSaving} type="text" className={inputClass} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Ej: BioGenética Andina & Semillas" />
+                      <input required disabled={isSaving} type="text" className={inputClass} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Ej: Ananda Pampa / BioGenética Andina" />
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Categoría Agronómica *</label>
@@ -2792,7 +3209,18 @@ export default function Suppliers() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Email Técnico / Calidad</label>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Responsable Comercial / Dirección</label>
+                      <input disabled={isSaving} type="text" className={inputClass} value={formData.commercialContact || ''} onChange={e => setFormData({...formData, commercialContact: e.target.value})} placeholder="Ej: Gabriel Blocki (Director Semillero)" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Responsable de Logística & Despacho de Lotes</label>
+                      <input disabled={isSaving} type="text" className={inputClass} value={formData.logisticsContact || ''} onChange={e => setFormData({...formData, logisticsContact: e.target.value})} placeholder="Ej: Hernán Villalba (Despacho & Guías)" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Email Institucional / Calidad</label>
                       <input disabled={isSaving} type="email" className={inputClass} value={formData.email || ''} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="calidad@proveedor.com" />
                     </div>
                     <div>
@@ -2814,9 +3242,231 @@ export default function Suppliers() {
                 </div>
               )}
 
+              {/* TAB 5: EQUIPO HUMANO & USUARIOS VINCULADOS AL PROVEEDOR */}
+              {modalTab === 'humanTeam' && (
+                <div className="space-y-4">
+                  <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/70 text-xs text-amber-900 dark:text-amber-200 space-y-1">
+                    <div className="font-black uppercase flex items-center gap-1.5">
+                      <Lock size={14} className="text-amber-600" />
+                      <span>Candado de Aislamiento por Semilla & Notificación de Acceso por Email</span>
+                    </div>
+                    <p className="text-[11px] opacity-90 leading-relaxed">
+                      Declare aquí las personas humanas del proveedor (Director Técnico/Obtentor, Comercial, Logística, Calidad ISTA). Si activa <strong>"Habilitar como Usuario del Sistema"</strong>, al guardar se creará su perfil en <strong>Equipos & Accesos</strong>, se le enviará automáticamente un correo con sus credenciales y <strong>solo podrá acceder a las parcelas implantadas con semillas de este proveedor</strong>.
+                    </p>
+                  </div>
+
+                  {/* FORMULARIO RÁPIDO PARA AGREGAR ACTOR HUMANO */}
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 space-y-3">
+                    <span className="text-[10px] font-black uppercase text-emerald-600 tracking-wider block">
+                      + Incorporar Persona Humana al Proveedor
+                    </span>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nombre y Apellido *</label>
+                        <input
+                          type="text"
+                          className={inputClass}
+                          value={newActorDraft.name}
+                          onChange={e => setNewActorDraft({ ...newActorDraft, name: e.target.value })}
+                          placeholder="Ej: Ing. Agr. Gabriel Blocki"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Función en el Proveedor *</label>
+                        <select
+                          className={inputClass}
+                          value={newActorDraft.actorRole}
+                          onChange={e => setNewActorDraft({ ...newActorDraft, actorRole: e.target.value as SupplierActorRole })}
+                        >
+                          {SUPPLIER_ACTOR_ROLES.map(r => (
+                            <option key={r.value} value={r.value}>
+                              {r.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Cargo / Especialidad</label>
+                        <input
+                          type="text"
+                          className={inputClass}
+                          value={newActorDraft.jobTitle}
+                          onChange={e => setNewActorDraft({ ...newActorDraft, jobTitle: e.target.value })}
+                          placeholder="Ej: Director Obtentor / Logística"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Email (Para Usuario & Notificación) *</label>
+                        <input
+                          type="email"
+                          className={inputClass}
+                          value={newActorDraft.email}
+                          onChange={e => setNewActorDraft({ ...newActorDraft, email: e.target.value })}
+                          placeholder="actor@semillero.com.ar"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">WhatsApp / Teléfono Directo</label>
+                        <input
+                          type="text"
+                          className={inputClass}
+                          value={newActorDraft.phone}
+                          onChange={e => setNewActorDraft({ ...newActorDraft, phone: e.target.value })}
+                          placeholder="+54 9 11 5555-0000"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Matrícula Profesional / DNI</label>
+                        <input
+                          type="text"
+                          className={inputClass}
+                          value={newActorDraft.dniOrMatricula}
+                          onChange={e => setNewActorDraft({ ...newActorDraft, dniOrMatricula: e.target.value })}
+                          placeholder="Ej: MP-AGRO-4102"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-slate-200 dark:border-slate-700">
+                      <label className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-slate-200 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={newActorDraft.isAccessActive}
+                          onChange={e => setNewActorDraft({ ...newActorDraft, isAccessActive: e.target.checked })}
+                          className="rounded text-emerald-600 w-4 h-4"
+                        />
+                        <span>Habilitar como Usuario del Sistema (acceso exclusivo a sus semillas) y notificar por Email</span>
+                      </label>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!newActorDraft.name.trim()) {
+                            alert('Ingrese el nombre y apellido de la persona responsable.');
+                            return;
+                          }
+                          if (newActorDraft.isAccessActive && !newActorDraft.email.trim()) {
+                            alert('Ingrese el correo electrónico para poder crear el usuario y enviarle las credenciales.');
+                            return;
+                          }
+                          const createdActor: SupplierHumanActor = {
+                            id: generateId('actor'),
+                            name: newActorDraft.name.trim(),
+                            actorRole: newActorDraft.actorRole,
+                            jobTitle: newActorDraft.jobTitle.trim() || SUPPLIER_ACTOR_ROLES_INFO[newActorDraft.actorRole].label,
+                            email: newActorDraft.email.trim(),
+                            phone: newActorDraft.phone.trim() || undefined,
+                            dniOrMatricula: newActorDraft.dniOrMatricula.trim() || undefined,
+                            isAccessActive: newActorDraft.isAccessActive
+                          };
+                          setFormData(prev => ({
+                            ...prev,
+                            humanTeam: [...(prev.humanTeam || []), createdActor]
+                          }));
+                          setNewActorDraft({
+                            name: '',
+                            actorRole: 'responsable_logistica',
+                            jobTitle: '',
+                            email: '',
+                            phone: '',
+                            dniOrMatricula: '',
+                            isAccessActive: true
+                          });
+                        }}
+                        className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shrink-0 cursor-pointer"
+                      >
+                        <Plus size={14} />
+                        <span>Agregar al Equipo del Proveedor</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* LISTADO DE ACTORES HUMANOS CARGADOS EN EL PROVEEDOR */}
+                  <div className="space-y-2">
+                    <span className="text-[10px] font-black uppercase text-slate-400 block">
+                      Personas Humanas Vinculadas a {formData.name || 'este Proveedor'} ({(formData.humanTeam || []).length})
+                    </span>
+
+                    {(formData.humanTeam || []).length === 0 ? (
+                      <div className="p-6 text-center rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 text-xs text-slate-400">
+                        Aún no se han registrado personas humanas en el equipo de este proveedor.
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {(formData.humanTeam || []).map(actor => {
+                          const roleMeta = SUPPLIER_ACTOR_ROLES_INFO[actor.actorRole] || SUPPLIER_ACTOR_ROLES_INFO.director_tecnico_obtentor;
+                          return (
+                            <div
+                              key={actor.id}
+                              className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                            >
+                              <div className="space-y-0.5">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <strong className="text-xs font-black text-slate-900 dark:text-white uppercase">
+                                    {actor.name}
+                                  </strong>
+                                  <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                                    {roleMeta.label}
+                                  </span>
+                                  {actor.isAccessActive && (
+                                    <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                                      ✉️ Usuario Activo + Notificación Email
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[11px] text-slate-500">
+                                  {actor.jobTitle} · Email: <strong>{actor.email || 'Sin email'}</strong> {actor.phone ? `· Tel: ${actor.phone}` : ''} {actor.dniOrMatricula ? `· Matrícula/DNI: ${actor.dniOrMatricula}` : ''}
+                                </p>
+                              </div>
+
+                              <div className="flex items-center gap-2 shrink-0">
+                                <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-600 dark:text-slate-300 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={Boolean(actor.isAccessActive)}
+                                    onChange={e => {
+                                      const checked = e.target.checked;
+                                      setFormData(prev => ({
+                                        ...prev,
+                                        humanTeam: (prev.humanTeam || []).map(a =>
+                                          a.id === actor.id ? { ...a, isAccessActive: checked } : a
+                                        )
+                                      }));
+                                    }}
+                                    className="rounded text-emerald-600"
+                                  />
+                                  <span>Acceso Sistema</span>
+                                </label>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setFormData(prev => ({
+                                      ...prev,
+                                      humanTeam: (prev.humanTeam || []).filter(a => a.id !== actor.id)
+                                    }));
+                                  }}
+                                  className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg"
+                                  title="Quitar persona"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center text-xs">
                 <span className="text-[10px] text-slate-400">
-                  Homologación fitotécnica estricta (no CRM).
+                  Homologación fitotécnica + Alta de usuarios del proveedor con notificación por email.
                 </span>
                 <div className="flex items-center gap-2">
                   <button 
@@ -2833,7 +3483,7 @@ export default function Suppliers() {
                     className="bg-emerald-600 text-white px-6 py-2.5 rounded-2xl font-bold uppercase tracking-wider shadow flex items-center hover:bg-emerald-500 transition disabled:opacity-50"
                   >
                     {isSaving ? <Loader2 className="animate-spin mr-2" size={16}/> : <Save className="mr-2" size={16}/>}
-                    <span>{editingId ? 'Actualizar Ficha' : 'Homologar Proveedor'}</span>
+                    <span>{editingId ? 'Actualizar Ficha & Accesos' : 'Homologar & Notificar'}</span>
                   </button>
                 </div>
               </div>

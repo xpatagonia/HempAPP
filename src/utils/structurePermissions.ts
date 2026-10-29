@@ -1,7 +1,11 @@
-import { User, Location, Plot, Client, Task, StoragePoint, SeedBatch, StructureRole, UserRole } from '../../types';
+import {
+  User, Location, Plot, Client, Task, StoragePoint, SeedBatch,
+  StructureRole, UserRole, Supplier, Variety, SupplierActorRole
+} from '../../types';
+import { DEMO_VARIETIES, DEMO_SEED_BATCHES, DEMO_SUPPLIERS, DEMO_PLOTS } from '../data/initialDemoData';
 
 /**
- * Configuración visual y descriptiva de los roles dentro de cada estructura de campo.
+ * Configuración visual y descriptiva de los roles dentro de cada estructura de campo (Socios de la Red).
  */
 export const STRUCTURE_ROLES_INFO: Record<StructureRole, {
   label: string;
@@ -56,27 +60,125 @@ export const STRUCTURE_ROLES: { value: StructureRole; label: string; description
 }));
 
 /**
+ * Configuración visual y descriptiva de los Actores Humanos dentro de un Proveedor / Semillero Homologado.
+ */
+export const SUPPLIER_ACTOR_ROLES_INFO: Record<SupplierActorRole, {
+  label: string;
+  shortLabel: string;
+  badgeClass: string;
+  description: string;
+  defaultSystemRole: UserRole;
+}> = {
+  director_tecnico_obtentor: {
+    label: 'Director Técnico / Obtentor (Ing. Agrónomo)',
+    shortLabel: 'Director Técnico / Obtentor',
+    badgeClass: 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 border-purple-300 dark:border-purple-700',
+    description: 'Seguimiento fitotécnico y fenológico exclusivo de las parcelas implantadas con sus semillas/insumos y emisión de recomendaciones.',
+    defaultSystemRole: 'viewer'
+  },
+  responsable_comercial: {
+    label: 'Responsable Comercial / Representante Legal',
+    shortLabel: 'Resp. Comercial',
+    badgeClass: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700',
+    description: 'Representante oficial de la firma proveedora, convenios de provisión, garantías de reposición y estado de lotes.',
+    defaultSystemRole: 'viewer'
+  },
+  responsable_logistica: {
+    label: 'Responsable de Logística, Remitos & Despacho',
+    shortLabel: 'Logística & Despacho',
+    badgeClass: 'bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300 border-sky-300 dark:border-sky-700',
+    description: 'Coordinación de envíos, carga de guías ARICCAME / remitos INASE, patente/chofer y seguimiento de recepción en almacenes.',
+    defaultSystemRole: 'viewer'
+  },
+  responsable_calidad_ista: {
+    label: 'Responsable de Calidad / Laboratorio ISTA-SENASA',
+    shortLabel: 'Calidad & Laboratorio',
+    badgeClass: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border-amber-300 dark:border-amber-700',
+    description: 'Auditoría de Poder Germinativo (PG %), pureza físico-botánica, actas de inspección de lotes y certificados QR.',
+    defaultSystemRole: 'viewer'
+  }
+};
+
+export const SUPPLIER_ACTOR_ROLES: { value: SupplierActorRole; label: string; shortLabel: string; description: string }[] = (
+  Object.keys(SUPPLIER_ACTOR_ROLES_INFO) as SupplierActorRole[]
+).map(key => ({
+  value: key,
+  label: SUPPLIER_ACTOR_ROLES_INFO[key].label,
+  shortLabel: SUPPLIER_ACTOR_ROLES_INFO[key].shortLabel,
+  description: SUPPLIER_ACTOR_ROLES_INFO[key].description
+}));
+
+/**
  * Determina si el usuario actual es un Administrador o Supervisor de la Cooperativa Central.
- * Los administradores de la cooperativa (sin clientId asignado) son los ÚNICOS con acceso
+ * Los administradores de la cooperativa (sin clientId ni supplierId asignado) son los ÚNICOS con acceso
  * de gestión irrestricto a todas las estructuras, campos y parcelas de la red.
  */
 export function isCentralAdminOrSupervisor(user: User | null): boolean {
   if (!user) return false;
   if (user.role === 'super_admin' || user.role === 'admin') return true;
-  if (user.memberType === 'Cooperativa_Central' && !user.clientId) return true;
+  if (user.memberType === 'Cooperativa_Central' && !user.clientId && !user.supplierId) return true;
   return false;
 }
 
 /**
- * Determina si un usuario tiene alcance de lectura global (Admin Central o Auditor Externo sin establecimiento fijo).
+ * Determina si el usuario pertenece a un Proveedor / Semillero Homologado con acceso restringido a sus semillas/insumos.
+ */
+export function isSupplierRestrictedUser(user: User | null): boolean {
+  if (!user) return false;
+  if (isCentralAdminOrSupervisor(user)) return false;
+  return Boolean(user.supplierId && String(user.supplierId).trim().length > 0 && !user.clientId);
+}
+
+/**
+ * Determina si un usuario tiene alcance de lectura global (Admin Central o Auditor Externo sin establecimiento ni proveedor fijo).
  */
 export function hasGlobalReadScope(user: User | null): boolean {
   if (!user) return false;
   if (isCentralAdminOrSupervisor(user)) return true;
-  // Los visores/auditores externos sin clientId ni parcelas restringidas (ej. HempIT France) pueden auditar en modo solo lectura
-  if (user.role === 'viewer' && !user.clientId && (!user.assignedPlotIds || user.assignedPlotIds.length === 0)) {
+  if (isSupplierRestrictedUser(user)) return false;
+  // Los visores/auditores externos sin clientId ni supplierId ni parcelas restringidas pueden auditar en modo solo lectura
+  if (user.role === 'viewer' && !user.clientId && !user.supplierId && (!user.assignedPlotIds || user.assignedPlotIds.length === 0)) {
     return true;
   }
+  return false;
+}
+
+/**
+ * Verifica si una parcela utiliza una genética (`varietyId`) o lote de semilla (`seedBatchId`) provisto por `supplierId`.
+ */
+export function doesPlotBelongToSupplier(
+  supplierId: string,
+  plot: Plot,
+  varieties: Variety[] = DEMO_VARIETIES,
+  seedBatches: SeedBatch[] = DEMO_SEED_BATCHES
+): boolean {
+  if (!supplierId || !plot) return false;
+  const supIdStr = String(supplierId).trim();
+  const effectiveVarieties = varieties && varieties.length > 0 ? varieties : DEMO_VARIETIES;
+  const effectiveBatches = seedBatches && seedBatches.length > 0 ? seedBatches : DEMO_SEED_BATCHES;
+
+  const supplierVarietyIds = new Set(
+    effectiveVarieties
+      .filter(v => String(v.supplierId || '').trim() === supIdStr)
+      .map(v => String(v.id))
+  );
+
+  if (plot.varietyId && supplierVarietyIds.has(String(plot.varietyId))) {
+    return true;
+  }
+
+  if (plot.seedBatchId) {
+    const matchedBatch = effectiveBatches.find(b => String(b.id) === String(plot.seedBatchId));
+    if (matchedBatch) {
+      if (matchedBatch.supplierId && String(matchedBatch.supplierId).trim() === supIdStr) {
+        return true;
+      }
+      if (matchedBatch.varietyId && supplierVarietyIds.has(String(matchedBatch.varietyId))) {
+        return true;
+      }
+    }
+  }
+
   return false;
 }
 
@@ -95,20 +197,39 @@ export function canManageStructure(user: User | null, client: Client | null): bo
 
 /**
  * Obtiene los IDs de los campos (locations) a los que tiene acceso una estructura/usuario.
- * Regla de negocio estricta de Aislamiento Multi-Establecimiento:
- * - Central Admin / Auditor Global sin clientId: Acceso a todos los campos.
+ * Regla de negocio estricta de Aislamiento Multi-Establecimiento y por Semillero:
+ * - Central Admin / Auditor Global sin clientId ni supplierId: Acceso a todos los campos.
  * - Usuario vinculado a un Establecimiento (`user.clientId`): Acceso EXCLUSIVAMENTE a los campos
  *   cuyo `loc.clientId === user.clientId` o `userStructure.locationId === loc.id`.
- *   PROHIBIDO acceder a campos de otro `clientId` aunque figure nominalmente en listas heredadas.
+ * - Usuario vinculado a un Proveedor Homologado (`user.supplierId`): Acceso ÚNICAMENTE a los campos
+ *   que alojan parcelas implantadas con semillas/genéticas de ese proveedor.
  */
 export function getAllowedLocationIds(
   user: User | null,
   locations: Location[],
-  clients: Client[]
+  clients: Client[],
+  plots: Plot[] = DEMO_PLOTS,
+  varieties: Variety[] = DEMO_VARIETIES,
+  seedBatches: SeedBatch[] = DEMO_SEED_BATCHES
 ): string[] {
   if (!user) return [];
   if (hasGlobalReadScope(user)) {
     return locations.map(l => l.id);
+  }
+
+  // Si es un usuario de un Proveedor Homologado (ej. Ananda Pampa o HEMPIT France):
+  // Solo ve los campos donde existan parcelas con sus semillas/genéticas
+  if (isSupplierRestrictedUser(user) && user.supplierId) {
+    const effectivePlots = plots && plots.length > 0 ? plots : DEMO_PLOTS;
+    const locIdsWithSupplierSeeds = new Set(
+      effectivePlots
+        .filter(p =>
+          doesPlotBelongToSupplier(user.supplierId!, p, varieties, seedBatches) ||
+          (user.assignedPlotIds && user.assignedPlotIds.includes(p.id))
+        )
+        .map(p => String(p.locationId))
+    );
+    return locations.filter(l => locIdsWithSupplierSeeds.has(String(l.id))).map(l => l.id);
   }
 
   const userClientId = user.clientId ? String(user.clientId).trim() : '';
@@ -144,6 +265,7 @@ export function canAccessClient(
 ): boolean {
   if (!user) return false;
   if (hasGlobalReadScope(user)) return true;
+  if (isSupplierRestrictedUser(user)) return false;
   if (user.clientId && String(user.clientId) === String(client.id)) return true;
   if (client.relatedUserId && String(client.relatedUserId) === String(user.id)) return true;
   if (client.teamUserIds && client.teamUserIds.includes(user.id)) return true;
@@ -156,29 +278,43 @@ export function canAccessClient(
 export function canAccessLocation(
   user: User | null,
   location: Location,
-  clients: Client[]
+  clients: Client[],
+  plots: Plot[] = DEMO_PLOTS,
+  varieties: Variety[] = DEMO_VARIETIES,
+  seedBatches: SeedBatch[] = DEMO_SEED_BATCHES
 ): boolean {
   if (!user || !location) return false;
   if (hasGlobalReadScope(user)) return true;
-  const allowed = getAllowedLocationIds(user, [location], clients);
+  const allowed = getAllowedLocationIds(user, [location], clients, plots, varieties, seedBatches);
   return allowed.includes(location.id);
 }
 
 /**
  * Verifica si el usuario puede acceder a una parcela específica (Plot).
  * Regla de aislamiento estricto:
- * Si el usuario está asociado a un Establecimiento (`user.clientId`), ÚNICAMENTE puede acceder
- * a parcelas emplazadas dentro de los campos (`locations`) de su propio Establecimiento.
- * Nunca puede acceder a parcelas de otros establecimientos/cultivos.
+ * 1. Si el usuario está asociado a un Establecimiento (`user.clientId`), ÚNICAMENTE puede acceder
+ *    a parcelas emplazadas dentro de los campos (`locations`) de su propio Establecimiento.
+ * 2. Si el usuario está asociado a un Proveedor Homologado (`user.supplierId`), ÚNICAMENTE puede acceder
+ *    a las parcelas donde esté implantada una genética o lote de semilla provisto por su empresa (ej. Ananda Pampa -> Yuma).
  */
 export function canAccessPlot(
   user: User | null,
   plot: Plot,
   locations: Location[],
-  clients: Client[]
+  clients: Client[],
+  varieties: Variety[] = DEMO_VARIETIES,
+  seedBatches: SeedBatch[] = DEMO_SEED_BATCHES
 ): boolean {
   if (!user || !plot) return false;
   if (hasGlobalReadScope(user)) return true;
+
+  // Candado de seguridad por Proveedor / Semillero Homologado (ej. Ananda Pampa o HEMPIT France)
+  if (isSupplierRestrictedUser(user) && user.supplierId) {
+    if (user.assignedPlotIds && user.assignedPlotIds.includes(plot.id)) {
+      return true;
+    }
+    return doesPlotBelongToSupplier(user.supplierId, plot, varieties, seedBatches);
+  }
 
   const allowedLocations = getAllowedLocationIds(user, locations, clients);
   const parentLoc = locations.find(l => String(l.id) === String(plot.locationId));
@@ -218,6 +354,10 @@ export function canAccessStoragePoint(
 ): boolean {
   if (!user || !storagePoint) return false;
   if (hasGlobalReadScope(user)) return true;
+  if (isSupplierRestrictedUser(user)) {
+    // Los proveedores ven los nodos de recepción donde se alojan sus lotes
+    return true;
+  }
   if (user.clientId) {
     return String(storagePoint.clientId || '') === String(user.clientId);
   }
@@ -236,10 +376,30 @@ export function canAccessSeedBatch(
   storagePoints: StoragePoint[],
   plots: Plot[],
   locations: Location[],
-  clients: Client[]
+  clients: Client[],
+  varieties: Variety[] = DEMO_VARIETIES
 ): boolean {
   if (!user || !batch) return false;
   if (hasGlobalReadScope(user)) return true;
+
+  const allowedPlots = plots.filter(p => canAccessPlot(user, p, locations, clients, varieties));
+  const allowedPlotIds = new Set(allowedPlots.map(p => p.id));
+  const usedSeedBatchIds = new Set(allowedPlots.map(p => p.seedBatchId).filter(Boolean));
+
+  if (isSupplierRestrictedUser(user) && user.supplierId) {
+    const supIdStr = String(user.supplierId).trim();
+    const effectiveVarieties = varieties && varieties.length > 0 ? varieties : DEMO_VARIETIES;
+    const supplierVarietyIds = new Set(
+      effectiveVarieties
+        .filter(v => String(v.supplierId || '').trim() === supIdStr)
+        .map(v => String(v.id))
+    );
+    if (batch.supplierId && String(batch.supplierId).trim() === supIdStr) return true;
+    if (batch.varietyId && supplierVarietyIds.has(String(batch.varietyId))) return true;
+    if (batch.originPlotId && allowedPlotIds.has(batch.originPlotId)) return true;
+    if (usedSeedBatchIds.has(batch.id)) return true;
+    return false;
+  }
 
   const allowedStorageIds = new Set(
     storagePoints.filter(sp => canAccessStoragePoint(user, sp, locations, clients)).map(sp => sp.id)
@@ -247,10 +407,6 @@ export function canAccessSeedBatch(
   if (batch.storagePointId && allowedStorageIds.has(batch.storagePointId)) {
     return true;
   }
-
-  const allowedPlots = plots.filter(p => canAccessPlot(user, p, locations, clients));
-  const allowedPlotIds = new Set(allowedPlots.map(p => p.id));
-  const usedSeedBatchIds = new Set(allowedPlots.map(p => p.seedBatchId).filter(Boolean));
 
   if (batch.originPlotId && allowedPlotIds.has(batch.originPlotId)) {
     return true;
@@ -270,7 +426,9 @@ export function canAccessTask(
   task: Task,
   plots: Plot[],
   locations: Location[],
-  clients: Client[]
+  clients: Client[],
+  varieties: Variety[] = DEMO_VARIETIES,
+  seedBatches: SeedBatch[] = DEMO_SEED_BATCHES
 ): boolean {
   if (!user || !task) return false;
   if (hasGlobalReadScope(user)) return true;
@@ -281,7 +439,7 @@ export function canAccessTask(
   const targetPlot = plots.find(p => p.id === task.plotId);
   if (!targetPlot) return false;
 
-  return canAccessPlot(user, targetPlot, locations, clients);
+  return canAccessPlot(user, targetPlot, locations, clients, varieties, seedBatches);
 }
 
 /**
@@ -292,12 +450,19 @@ export function getUserAccessAudit(
   locations: Location[],
   plots: Plot[],
   clients: Client[],
-  storagePoints: StoragePoint[] = []
+  storagePoints: StoragePoint[] = [],
+  suppliers: Supplier[] = DEMO_SUPPLIERS,
+  varieties: Variety[] = DEMO_VARIETIES,
+  seedBatches: SeedBatch[] = DEMO_SEED_BATCHES
 ) {
   const isGlobal = hasGlobalReadScope(user);
+  const isSupplierUser = isSupplierRestrictedUser(user);
+  const effectiveSuppliers = suppliers && suppliers.length > 0 ? suppliers : DEMO_SUPPLIERS;
   const linkedClient = user.clientId ? clients.find(c => String(c.id) === String(user.clientId)) : undefined;
-  const allowedLocations = locations.filter(l => canAccessLocation(user, l, clients));
-  const allowedPlots = plots.filter(p => canAccessPlot(user, p, locations, clients));
+  const linkedSupplier = user.supplierId ? effectiveSuppliers.find(s => String(s.id) === String(user.supplierId)) : undefined;
+
+  const allowedLocations = locations.filter(l => canAccessLocation(user, l, clients, plots, varieties, seedBatches));
+  const allowedPlots = plots.filter(p => canAccessPlot(user, p, locations, clients, varieties, seedBatches));
   const allowedStorages = storagePoints.filter(sp => canAccessStoragePoint(user, sp, locations, clients));
   const blockedPlotsCount = Math.max(0, plots.length - allowedPlots.length);
 
@@ -306,13 +471,19 @@ export function getUserAccessAudit(
     accessLevelLabel = 'Total Red Cooperativa (Admin Central)';
   } else if (isGlobal) {
     accessLevelLabel = 'Auditoría Global (Solo Lectura)';
+  } else if (isSupplierUser && linkedSupplier) {
+    accessLevelLabel = `Exclusivo Semillas: ${linkedSupplier.name}`;
   } else if (linkedClient) {
     accessLevelLabel = `Exclusivo: ${linkedClient.name}`;
   } else {
     accessLevelLabel = 'Sin Establecimiento Asignado';
   }
 
-  const structureRoleLabel = user.structureRole && STRUCTURE_ROLES_INFO[user.structureRole]
+  const structureRoleLabel = isSupplierUser && user.supplierActorRole && SUPPLIER_ACTOR_ROLES_INFO[user.supplierActorRole]
+    ? SUPPLIER_ACTOR_ROLES_INFO[user.supplierActorRole].shortLabel
+    : isSupplierUser
+    ? 'Representante de Proveedor'
+    : user.structureRole && STRUCTURE_ROLES_INFO[user.structureRole]
     ? STRUCTURE_ROLES_INFO[user.structureRole].shortLabel
     : user.role === 'super_admin' || user.role === 'admin'
     ? 'Dirección Central'
@@ -324,11 +495,17 @@ export function getUserAccessAudit(
 
   return {
     isGlobal,
+    isSupplierUser,
     isCentralAdmin: isCentralAdminOrSupervisor(user),
-    isolationScope: isGlobal ? ('RED_GLOBAL' as const) : ('ESTABLECIMIENTO_AISLADO' as const),
+    isolationScope: isGlobal
+      ? ('RED_GLOBAL' as const)
+      : isSupplierUser
+      ? ('PROVEEDOR_SEMILLERO_AISLADO' as const)
+      : ('ESTABLECIMIENTO_AISLADO' as const),
     structureRoleLabel,
     accessLevelLabel,
     linkedClient,
+    linkedSupplier,
     allowedLocations,
     allowedLocationsCount: allowedLocations.length,
     allowedPlots,

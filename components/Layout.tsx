@@ -84,7 +84,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
   const {
-    currentUser, logout, theme, toggleTheme, tasks, plots, locations, clients,
+    currentUser, logout, theme, toggleTheme, tasks, plots, locations, clients, suppliers,
     appName, appLogo, impersonatingAdmin, startImpersonation, stopImpersonation, usersList
   } = useAppContext();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -173,6 +173,10 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
 
   const pendingTasksCount = tasks.filter(t => t.status === 'Pendiente').length;
   const isClient = currentUser.role === 'client';
+  const isSupplierUser = Boolean(currentUser.supplierId && !currentUser.clientId);
+  const currentSupplierName = isSupplierUser
+    ? (suppliers || []).find(s => String(s.id) === String(currentUser.supplierId))?.name || currentUser.organizationName || 'Semillero Homologado'
+    : null;
 
   const navGroups = [
     {
@@ -208,22 +212,24 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
         { to: '/storage', icon: Warehouse, label: 'Almacenes & Custodia' },
         { to: '/resources', icon: Archive, label: 'Insumos & Inventario' },
         { to: '/varieties', icon: BookOpen, label: 'Banco Genético' },
-        ...(!isClient
-          ? [
-              { to: '/suppliers', icon: Truck, label: 'Proveedores' },
-              { to: '/clients', icon: Building, label: 'Socios de Red' }
-            ]
-          : [{ to: '/clients', icon: Building, label: 'Mi Organización' }])
+        ...(isSupplierUser
+          ? [{ to: '/suppliers', icon: Truck, label: 'Mi Semillero / Proveedor' }]
+          : !isClient
+            ? [
+                { to: '/suppliers', icon: Truck, label: 'Proveedores' },
+                { to: '/clients', icon: Building, label: 'Socios de Red' }
+              ]
+            : [{ to: '/clients', icon: Building, label: 'Mi Organización' }])
       ]
     },
     {
       id: 'sistema',
       title: 'Finanzas & Gobernanza',
       items: [
-        { to: '/finances', icon: DollarSign, label: 'Costos & Finanzas' },
+        ...(!isSupplierUser ? [{ to: '/finances', icon: DollarSign, label: 'Costos & Finanzas' }] : []),
         { to: '/analytics', icon: BarChart3, label: 'Comparativa Genética' },
         { to: '/integrity', icon: ShieldAlert, label: 'Integridad & Licencias' },
-        ...(!isClient ? [{ to: '/users', icon: UserCheck, label: 'Equipo & Accesos' }] : []),
+        ...(!isClient && !isSupplierUser ? [{ to: '/users', icon: UserCheck, label: 'Equipo & Accesos' }] : []),
         ...(currentUser.role === 'super_admin' ? [{ to: '/settings', icon: Settings, label: 'Admin Server' }] : [])
       ]
     }
@@ -245,11 +251,11 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
 
       {/* SIDEBAR COMPACTO Y ORGANIZADO */}
       <aside className={`fixed lg:static inset-y-0 left-0 z-50 ${isCollapsed ? 'lg:w-20' : 'lg:w-64'} w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col transition-all duration-200 lg:translate-x-0 ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className={`h-16 flex items-center ${isCollapsed ? 'justify-center px-2' : 'justify-between px-3.5'} border-b border-slate-100 dark:border-slate-800 shrink-0`}>
+        <div className={`h-16 flex items-center ${isCollapsed ? 'justify-center px-2' : 'justify-between px-3.5'} bg-[#DDDB00] border-b border-[#b8b600]/60 shrink-0`}>
           <Link to="/" className={`flex items-center ${isCollapsed ? 'justify-center' : 'space-x-2.5'} min-w-0 group`}>
             <div
-              className={`bg-[#DDDB00] rounded-xl border border-[#b8b600]/80 dark:border-yellow-400/50 shadow-sm group-hover:shadow-md transition-all flex items-center justify-center shrink-0 overflow-hidden ${
-                isCollapsed ? 'w-12 h-11 p-1' : 'h-11 w-[106px] px-2 py-1'
+              className={`flex items-center justify-center shrink-0 overflow-hidden transition-transform group-hover:scale-[1.02] ${
+                isCollapsed ? 'w-12 h-11' : 'h-11 w-[106px]'
               }`}
             >
               <img
@@ -260,17 +266,17 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
             </div>
             {!isCollapsed && (
               <div className="min-w-0">
-                <span className="text-sm font-black tracking-tight text-slate-900 dark:text-white truncate uppercase italic block leading-tight">
-                  {appName && appName.toUpperCase() !== 'HEMPC' ? `Red ${appName}` : 'Red Cooperativa'}
+                <span className="text-sm font-black tracking-tight text-slate-900 truncate uppercase italic block leading-tight">
+                  {appName && appName.toUpperCase() !== 'HEMPC' ? `Nucleus ${appName}` : 'Nucleus Cooperativa'}
                 </span>
-                <span className="text-[9px] font-mono font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider block mt-0.5 truncate">
+                <span className="text-[9px] font-mono font-bold text-emerald-950/80 uppercase tracking-wider block mt-0.5 truncate">
                   {/* @ts-ignore */}
-                  {typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'V7.18.2-STABLE'}
+                  {typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'V7.20.0-STABLE'}
                 </span>
               </div>
             )}
           </Link>
-          <button className="lg:hidden p-1.5 text-slate-400" onClick={() => setIsMobileOpen(false)}>
+          <button className="lg:hidden p-1.5 text-slate-800 hover:text-slate-950" onClick={() => setIsMobileOpen(false)}>
             <X size={18} />
           </button>
         </div>
@@ -414,9 +420,11 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
               </span>
               <span className="hidden sm:inline">•</span>
               <span className="px-2 py-0.5 rounded bg-amber-400/60 border border-slate-950/20 text-[11px] font-black">
-                {currentUser.clientId
-                  ? `🔒 Establecimiento Aislado: ${clients.find(c => c.id === currentUser.clientId)?.name || currentUser.organizationName || 'Socio'} (${plots.length} parcelas)`
-                  : `🌐 Red Global (${plots.length} parcelas)`}
+                {isSupplierUser
+                  ? `🌱 Semillero Aislado: ${currentSupplierName} (${plots.length} parcelas con su semilla)`
+                  : currentUser.clientId
+                    ? `🔒 Establecimiento Aislado: ${clients.find(c => c.id === currentUser.clientId)?.name || currentUser.organizationName || 'Socio'} (${plots.length} parcelas)`
+                    : `🌐 Red Global (${plots.length} parcelas)`}
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -466,15 +474,19 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
               <OfflineIndicator />
               <span
                 className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-black uppercase border ${
-                  currentUser.clientId
-                    ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60'
-                    : 'bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800/60'
+                  isSupplierUser
+                    ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800/60'
+                    : currentUser.clientId
+                      ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60'
+                      : 'bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800/60'
                 }`}
                 title="Alcance de datos habilitado para la sesión actual"
               >
-                {currentUser.clientId
-                  ? `Establecimiento: ${clients.find(c => c.id === currentUser.clientId)?.name || currentUser.organizationName || 'Socio'} (${plots.length} Lotes)`
-                  : `Red Global (${plots.length} Lotes)`}
+                {isSupplierUser
+                  ? `Semillero: ${currentSupplierName} (${plots.length} Lotes con su Semilla)`
+                  : currentUser.clientId
+                    ? `Establecimiento: ${clients.find(c => c.id === currentUser.clientId)?.name || currentUser.organizationName || 'Socio'} (${plots.length} Lotes)`
+                    : `Red Global (${plots.length} Lotes)`}
               </span>
             </div>
           </div>

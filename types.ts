@@ -108,6 +108,25 @@ export type StructureRole =
   | 'operario'        // Operario de Campo / Maquinista / Riego
   | 'monitoreador';   // Monitoreador de Ensayos / Muestreador
 
+export type SupplierActorRole =
+  | 'director_tecnico_obtentor' // Director Técnico / Obtentor (Ing. Agrónomo)
+  | 'responsable_comercial'     // Responsable Comercial / Representante Legal
+  | 'responsable_logistica'     // Responsable de Logística, Remitos y Despacho
+  | 'responsable_calidad_ista'; // Responsable de Calidad / Laboratorio ISTA-SENASA
+
+export interface SupplierHumanActor {
+  id: string;
+  name: string;
+  actorRole: SupplierActorRole;
+  jobTitle?: string;
+  email: string;
+  phone?: string;
+  dniOrMatricula?: string;
+  linkedUserId?: string;
+  isAccessActive?: boolean;
+  notes?: string;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -118,9 +137,11 @@ export interface User {
   jobTitle?: string;
   phone?: string;
   avatar?: string;
-  clientId?: string;
+  clientId?: string | null;
+  supplierId?: string | null;
+  supplierActorRole?: SupplierActorRole;
   isNetworkMember: boolean; 
-  memberType?: 'Socio_Productor' | 'Cooperativa_Central' | 'Auditor_Tecnico';
+  memberType?: 'Socio_Productor' | 'Cooperativa_Central' | 'Auditor_Tecnico' | 'Proveedor_Homologado';
   organizationName?: string;
   assignedPlotIds?: string[];
   invitedAt?: string;
@@ -259,12 +280,13 @@ export interface Supplier {
   postalCode?: string;
   whatsapp?: string;
   email?: string;
-  commercialContact?: string;
-  logisticsContact?: string;
+  commercialContact?: string | null;
+  logisticsContact?: string | null;
   coordinates?: { lat: number; lng: number };
   website?: string;
-  notes?: string;
+  notes?: string | null;
   isOfficialPartner?: boolean;
+  humanTeam?: SupplierHumanActor[];
 
   // ACREDITACIONES REGULATORIAS & AGRONÓMICAS (NO CRM)
   inaseRncyfsNumber?: string;          // N° Registro Nacional de Comercio y Fiscalización de Semillas (INASE)
@@ -579,6 +601,22 @@ export interface Resource {
   unit: string;
   costPerUnit: number;
   stock?: number;
+  // Relación agronómica y regulatoria SENASA / INASE con Cuaderno Fitosanitario y Monitoreo Rápido
+  agroCategory?: AgrochemicalCategory;
+  activeIngredient?: string;
+  senasaRegisterNumber?: string;
+  toxicologicalClass?: ToxicologicalBand;
+  recommendedDosagePerHa?: number;
+  dosageUnit?: 'L/ha' | 'kg/ha' | 'ml/ha' | 'cc/ha' | 'g/ha' | 't/ha';
+  safetyPeriodDays?: number;
+  applicationMethod?: AgrochemicalApplication['applicationMethod'];
+  supplierId?: string;
+  supplierName?: string;
+  manufacturer?: string;
+  batchNumber?: string;
+  targetPestOrDisease?: string;
+  expirationDate?: string;
+  notes?: string;
 }
 
 export type ExpenseScope = 'PARCELA_SOCIO' | 'COOPERATIVA_GENERAL';

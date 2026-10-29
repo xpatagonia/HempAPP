@@ -11,7 +11,8 @@ import {
   HempStageId,
   AgrochemicalApplication,
   AgrochemicalCategory,
-  ToxicologicalBand
+  ToxicologicalBand,
+  Resource
 } from '../types';
 import { PlotCycleClosureModal } from '../components/PlotCycleClosureModal';
 import {
@@ -414,6 +415,7 @@ export default function TrialManager() {
     tasks,
     addTask,
     deleteTask,
+    resources,
     agrochemicalApplications,
     addAgrochemicalApplication,
     deleteAgrochemicalApplication,
@@ -492,20 +494,89 @@ export default function TrialManager() {
   const [quickLaborApplyBlock, setQuickLaborApplyBlock] = useState<boolean>(false);
   const [isSavingQuickLabor, setIsSavingQuickLabor] = useState(false);
 
-  // Atajo 4: Cuaderno Fitosanitario SENASA (Fertilizantes, Mejoradores de Suelo e Insecticidas/Fungicidas)
+  // Atajo 4: Cuaderno Fitosanitario SENASA (Fertilizantes, Mejoradores de Suelo e Insecticidas/Fungicidas vinculados a Base de Datos)
   const [quickAgroCategory, setQuickAgroCategory] = useState<AgrochemicalCategory>('Mejorador de Suelo');
-  const [quickAgroProduct, setQuickAgroProduct] = useState<string>('');
-  const [quickAgroActiveIngredient, setQuickAgroActiveIngredient] = useState<string>('');
+  const [quickAgroProduct, setQuickAgroProduct] = useState<string>('HumiFulvic Complex + Glomus intraradices');
+  const [isCustomAgroProduct, setIsCustomAgroProduct] = useState<boolean>(false);
+  const [quickAgroActiveIngredient, setQuickAgroActiveIngredient] = useState<string>(
+    'Ácidos Húmicos 15% + Ácidos Fúlvicos 8% + Endomicorrizas'
+  );
   const [quickAgroSenasa, setQuickAgroSenasa] = useState<string>('SENASA-ENM-9042-AR');
-  const [quickAgroBatch, setQuickAgroBatch] = useState<string>('LOT-2026-A');
-  const [quickAgroDosage, setQuickAgroDosage] = useState<string>('3.0');
+  const [quickAgroBatch, setQuickAgroBatch] = useState<string>('HUMI-SOIL-26A');
+  const [quickAgroDosage, setQuickAgroDosage] = useState<string>('5.0');
   const [quickAgroUnit, setQuickAgroUnit] = useState<AgrochemicalApplication['dosageUnit']>('L/ha');
   const [quickAgroSafetyDays, setQuickAgroSafetyDays] = useState<string>('0');
   const [quickAgroMethod, setQuickAgroMethod] = useState<AgrochemicalApplication['applicationMethod']>('Fertirriego');
   const [quickAgroToxClass, setQuickAgroToxClass] = useState<ToxicologicalBand>('Biológico / Orgánico Certificado');
-  const [quickAgroTarget, setQuickAgroTarget] = useState<string>('');
+  const [quickAgroTarget, setQuickAgroTarget] = useState<string>(
+    'Estructura edáfica, CIC, floculación de arcillas y retención hídrica'
+  );
+  const [quickAgroSupplierName, setQuickAgroSupplierName] = useState<string>(
+    'BioFábrica & Insumos Agrícolas Red HempC'
+  );
+  const [quickAgroManufacturer, setQuickAgroManufacturer] = useState<string>('BioTerra Patagonia Labs');
   const [quickAgroNotes, setQuickAgroNotes] = useState<string>('');
   const [isSavingQuickAgro, setIsSavingQuickAgro] = useState(false);
+
+  // Catálogo relacional de Productos Comerciales Prescriptos desde la Base de Datos (`resources`) filtrado por Categoría Insumo
+  const prescribedProductsByCategory = useMemo(() => {
+    const matched = resources.filter(r => {
+      if (r.agroCategory) return r.agroCategory === quickAgroCategory;
+      if (
+        quickAgroCategory === 'Fertilizante Edáfico' ||
+        quickAgroCategory === 'Fertilizante Foliar' ||
+        quickAgroCategory === 'Mejorador de Suelo' ||
+        quickAgroCategory === 'Enmienda Orgánica'
+      ) {
+        return r.type === 'Fertilizante';
+      }
+      return r.type === 'Fitosanitario';
+    });
+    return matched;
+  }, [resources, quickAgroCategory]);
+
+  const applyCatalogResourceToQuickAgro = (res: Resource) => {
+    setIsCustomAgroProduct(false);
+    setQuickAgroProduct(res.name);
+    if (res.agroCategory) setQuickAgroCategory(res.agroCategory);
+    setQuickAgroActiveIngredient(res.activeIngredient || 'Insumo Agrícola Homologado');
+    setQuickAgroDosage(String(res.recommendedDosagePerHa ?? 2.0));
+    setQuickAgroUnit(res.dosageUnit || (res.unit === 'kg' ? 'kg/ha' : 'L/ha'));
+    setQuickAgroSafetyDays(String(res.safetyPeriodDays ?? 0));
+    setQuickAgroMethod(res.applicationMethod || 'Pulverización Terrestre');
+    setQuickAgroSenasa(res.senasaRegisterNumber || 'SENASA-OFICIAL');
+    setQuickAgroBatch(res.batchNumber || 'LOT-2026-A');
+    setQuickAgroToxClass(res.toxicologicalClass || 'Biológico / Orgánico Certificado');
+    setQuickAgroTarget(res.targetPestOrDisease || '');
+    setQuickAgroSupplierName(res.supplierName || 'BioFábrica & Insumos Agrícolas Red HempC');
+    setQuickAgroManufacturer(res.manufacturer || 'Elaborador Homologado GACP');
+  };
+
+  const handleQuickAgroCategoryChange = (newCategory: AgrochemicalCategory) => {
+    setQuickAgroCategory(newCategory);
+    const categoryProducts = resources.filter(r => r.agroCategory === newCategory);
+    if (categoryProducts.length > 0) {
+      applyCatalogResourceToQuickAgro(categoryProducts[0]);
+    } else {
+      const presetMatch = QUICK_AGRO_PRESETS.find(p => p.category === newCategory);
+      if (presetMatch) {
+        setIsCustomAgroProduct(false);
+        setQuickAgroProduct(presetMatch.productName);
+        setQuickAgroActiveIngredient(presetMatch.activeIngredient);
+        setQuickAgroDosage(String(presetMatch.dosagePerHa));
+        setQuickAgroUnit(presetMatch.dosageUnit);
+        setQuickAgroMethod(presetMatch.applicationMethod);
+        setQuickAgroSafetyDays(String(presetMatch.safetyPeriodDays));
+        setQuickAgroSenasa(presetMatch.senasaRegisterNumber);
+        setQuickAgroBatch(presetMatch.batchNumber);
+        setQuickAgroToxClass(presetMatch.toxicologicalClass);
+        setQuickAgroTarget(presetMatch.targetPestOrDisease);
+      } else {
+        setIsCustomAgroProduct(true);
+        setQuickAgroProduct('');
+      }
+    }
+  };
 
   // Valores predeterminados oficiales sincronizados con Nucleus Trace
   const [formData, setFormData] = useState<Partial<TrialRecord>>({
@@ -1337,8 +1408,8 @@ export default function TrialManager() {
         category: quickAgroCategory,
         productName: quickAgroProduct.trim(),
         activeIngredient: quickAgroActiveIngredient.trim() || 'Insumo Agrícola Homologado',
-        manufacturer: 'Elaborador Homologado GACP',
-        supplierName: 'Red Cooperativa HempC',
+        manufacturer: quickAgroManufacturer || 'Elaborador Homologado GACP',
+        supplierName: quickAgroSupplierName || 'BioFábrica & Insumos Agrícolas Red HempC',
         senasaRegisterNumber: quickAgroSenasa.trim() || 'SENASA-OFICIAL',
         toxicologicalClass: quickAgroToxClass,
         dosagePerHa: dosage,
@@ -1371,7 +1442,7 @@ export default function TrialManager() {
       };
 
       await addAgrochemicalApplication(newApp);
-      setQuickAgroProduct('');
+      setIsCustomAgroProduct(false);
       setQuickAgroNotes('');
       setSaveSummaryBanner(
         `✓ ${newApp.category} "${newApp.productName}" asentado en Cuaderno Fitosanitario SENASA y en Parcela ${currentPlotData.plot.name} (Carencia: ${safetyDays}d)`
@@ -1485,8 +1556,12 @@ export default function TrialManager() {
         extraSaved.push(`Labor (${quickLaborType})`);
       }
 
-      // 4. Si el técnico dejó cargado un Fertilizante, Mejorador de Suelo o Fitosanitario, asentarlo en Cuaderno Fitosanitario SENASA
-      if (success && quickAgroProduct.trim()) {
+      // 4. Si el técnico está en la pestaña Fitosanitario (o ingresó notas/producto personalizado), asentarlo en Cuaderno Fitosanitario SENASA
+      if (
+        success &&
+        quickAgroProduct.trim() &&
+        (activeShortcutTab === 'phytosanitary' || isCustomAgroProduct || Boolean(quickAgroNotes.trim()))
+      ) {
         const appDate = formData.date || new Date().toISOString().split('T')[0];
         const safetyDays = Math.max(0, Number(quickAgroSafetyDays) || 0);
         const harvestSafetyDate = addDaysToIsoDate(appDate, safetyDays);
@@ -1503,8 +1578,8 @@ export default function TrialManager() {
           category: quickAgroCategory,
           productName: quickAgroProduct.trim(),
           activeIngredient: quickAgroActiveIngredient.trim() || 'Insumo Agrícola Homologado',
-          manufacturer: 'Elaborador Homologado GACP',
-          supplierName: 'Red Cooperativa HempC',
+          manufacturer: quickAgroManufacturer || 'Elaborador Homologado GACP',
+          supplierName: quickAgroSupplierName || 'BioFábrica & Insumos Agrícolas Red HempC',
           senasaRegisterNumber: quickAgroSenasa.trim() || 'SENASA-OFICIAL',
           toxicologicalClass: quickAgroToxClass,
           dosagePerHa: dosage,
@@ -1536,7 +1611,7 @@ export default function TrialManager() {
             `Sellado junto a Relevamiento Biométrico Nucleus Trace (${formData.stage || 'Vegetativo'}).`,
           status: safetyDays > 0 ? 'En Carencia' : 'Apto Cosecha'
         });
-        setQuickAgroProduct('');
+        setIsCustomAgroProduct(false);
         setQuickAgroNotes('');
         extraSaved.push(`Cuaderno SENASA (${quickAgroCategory})`);
       }
@@ -3782,34 +3857,48 @@ export default function TrialManager() {
                         {activeShortcutTab === 'phytosanitary' && (
                           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start min-w-0">
                             <div className="lg:col-span-7 space-y-3 min-w-0">
-                              {/* Presets rápidos de insumos homologados SENASA */}
-                              <div>
-                                <span className="text-[9px] font-black uppercase tracking-widest text-teal-600 dark:text-teal-400 block mb-1.5">
-                                  Plantillas Rápidas SENASA (Mejoradores de Suelo, Fertilizantes y Bioinsumos MIP)
-                                </span>
+                              {/* Vincular Insumo Recepcionado de Proveedor Homologado (en vivo desde BD resources) */}
+                              <div className="p-3 rounded-2xl bg-teal-50/60 dark:bg-teal-950/20 border border-teal-200/70 dark:border-teal-800/60 space-y-2">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <span className="text-[9px] font-black uppercase tracking-widest text-teal-700 dark:text-teal-300 flex items-center gap-1.5">
+                                    <ShieldCheck size={13} />
+                                    <span>
+                                      Vincular Insumo Recepcionado de Proveedor Homologado ({prescribedProductsByCategory.length} en {quickAgroCategory})
+                                    </span>
+                                  </span>
+                                  <Link
+                                    to="/resources"
+                                    className="text-[9px] font-mono font-bold text-teal-700 dark:text-teal-300 hover:underline"
+                                  >
+                                    + Registrar Nuevo Recurso en Inventario BD →
+                                  </Link>
+                                </div>
                                 <div className="flex flex-wrap gap-1.5">
-                                  {QUICK_AGRO_PRESETS.map((preset, idx) => (
-                                    <button
-                                      key={idx}
-                                      type="button"
-                                      onClick={() => {
-                                        setQuickAgroCategory(preset.category);
-                                        setQuickAgroProduct(preset.productName);
-                                        setQuickAgroActiveIngredient(preset.activeIngredient);
-                                        setQuickAgroDosage(String(preset.dosagePerHa));
-                                        setQuickAgroUnit(preset.dosageUnit);
-                                        setQuickAgroMethod(preset.applicationMethod);
-                                        setQuickAgroSafetyDays(String(preset.safetyPeriodDays));
-                                        setQuickAgroSenasa(preset.senasaRegisterNumber);
-                                        setQuickAgroBatch(preset.batchNumber);
-                                        setQuickAgroToxClass(preset.toxicologicalClass);
-                                        setQuickAgroTarget(preset.targetPestOrDisease);
-                                      }}
-                                      className="px-2.5 py-1.5 rounded-lg bg-teal-500/10 hover:bg-teal-500/20 text-teal-700 dark:text-teal-300 border border-teal-500/20 text-[10px] font-mono font-bold cursor-pointer"
-                                    >
-                                      + {preset.label}
-                                    </button>
-                                  ))}
+                                  {prescribedProductsByCategory.map(res => {
+                                    const isSelected = quickAgroProduct === res.name && !isCustomAgroProduct;
+                                    return (
+                                      <button
+                                        key={res.id}
+                                        type="button"
+                                        onClick={() => applyCatalogResourceToQuickAgro(res)}
+                                        className={`px-2.5 py-1.5 rounded-xl text-[10px] font-mono font-bold border transition cursor-pointer text-left ${
+                                          isSelected
+                                            ? 'bg-teal-600 text-white border-teal-500 shadow-xs'
+                                            : 'bg-white dark:bg-slate-900 hover:bg-teal-500/15 text-teal-800 dark:text-teal-200 border-teal-500/30'
+                                        }`}
+                                      >
+                                        <span className="block truncate max-w-[230px]">{res.name}</span>
+                                        <span
+                                          className={`block text-[8.5px] ${
+                                            isSelected ? 'text-teal-100' : 'text-slate-400'
+                                          }`}
+                                        >
+                                          {res.batchNumber || res.senasaRegisterNumber || 'SENASA'} · Stock: {res.stock ?? 0}{' '}
+                                          {res.unit}
+                                        </span>
+                                      </button>
+                                    );
+                                  })}
                                 </div>
                               </div>
 
@@ -3820,7 +3909,7 @@ export default function TrialManager() {
                                   </label>
                                   <select
                                     value={quickAgroCategory}
-                                    onChange={e => setQuickAgroCategory(e.target.value as AgrochemicalCategory)}
+                                    onChange={e => handleQuickAgroCategoryChange(e.target.value as AgrochemicalCategory)}
                                     className="w-full min-w-0 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold dark:text-white"
                                   >
                                     <option value="Mejorador de Suelo">🌱 Mejorador de Suelo</option>
@@ -3834,17 +3923,59 @@ export default function TrialManager() {
                                   </select>
                                 </div>
 
-                                <div className="sm:col-span-2 min-w-0">
-                                  <label className="text-[9px] font-black uppercase text-slate-400 block mb-1">
-                                    Producto Comercial Aplicado / Prescripto *
-                                  </label>
-                                  <input
-                                    type="text"
-                                    value={quickAgroProduct}
-                                    onChange={e => setQuickAgroProduct(e.target.value)}
-                                    placeholder="Ej: HumiFulvic + Micorrizas / Trichoderma / NeemAzal / Nitrofoska"
-                                    className="w-full min-w-0 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold dark:text-white"
-                                  />
+                                <div className="sm:col-span-2 min-w-0 space-y-1.5">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <label className="text-[9px] font-black uppercase text-slate-400 block">
+                                      Producto Comercial Aplicado / Prescripto * ({prescribedProductsByCategory.length} en BD)
+                                    </label>
+                                    <Link
+                                      to="/resources"
+                                      className="text-[9px] font-mono font-bold text-teal-600 dark:text-teal-400 hover:underline"
+                                    >
+                                      Ver Catálogo BD →
+                                    </Link>
+                                  </div>
+                                  <select
+                                    value={
+                                      isCustomAgroProduct
+                                        ? '__CUSTOM__'
+                                        : prescribedProductsByCategory.some(r => r.name === quickAgroProduct)
+                                        ? quickAgroProduct
+                                        : prescribedProductsByCategory[0]?.name || '__CUSTOM__'
+                                    }
+                                    onChange={e => {
+                                      const val = e.target.value;
+                                      if (val === '__CUSTOM__') {
+                                        setIsCustomAgroProduct(true);
+                                        setQuickAgroProduct('');
+                                      } else {
+                                        const found = prescribedProductsByCategory.find(r => r.name === val);
+                                        if (found) {
+                                          applyCatalogResourceToQuickAgro(found);
+                                        }
+                                      }
+                                    }}
+                                    className="w-full min-w-0 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-teal-500/40 dark:border-teal-500/40 text-xs font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500 outline-none"
+                                  >
+                                    {prescribedProductsByCategory.map(res => (
+                                      <option key={res.id} value={res.name}>
+                                        {res.name} — {res.recommendedDosagePerHa ?? 2} {res.dosageUnit || 'L/ha'} ({res.senasaRegisterNumber || 'SENASA'}) [Stock: {res.stock ?? 0} {res.unit}]
+                                      </option>
+                                    ))}
+                                    <option value="__CUSTOM__">
+                                      + Otro Producto Comercial (Registrar en Base de Datos)
+                                    </option>
+                                  </select>
+
+                                  {isCustomAgroProduct && (
+                                    <input
+                                      type="text"
+                                      value={quickAgroProduct}
+                                      onChange={e => setQuickAgroProduct(e.target.value)}
+                                      placeholder="Escribir nombre del nuevo producto comercial (se vinculará a la BD)..."
+                                      className="w-full min-w-0 p-2.5 rounded-xl bg-teal-50/50 dark:bg-slate-950 border border-teal-500/50 text-xs font-bold text-slate-900 dark:text-white"
+                                    />
+                                  )}
                                 </div>
                               </div>
 
@@ -3904,7 +4035,7 @@ export default function TrialManager() {
                                 </div>
                               </div>
 
-                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 min-w-0">
+                              <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 min-w-0">
                                 <div className="min-w-0">
                                   <label className="text-[9px] font-black uppercase text-slate-400 block mb-1">
                                     Método de Aplicación
@@ -3928,20 +4059,7 @@ export default function TrialManager() {
 
                                 <div className="min-w-0">
                                   <label className="text-[9px] font-black uppercase text-slate-400 block mb-1">
-                                    Blanco MIP / Objetivo Nutricional
-                                  </label>
-                                  <input
-                                    type="text"
-                                    value={quickAgroTarget}
-                                    onChange={e => setQuickAgroTarget(e.target.value)}
-                                    placeholder="Ej: Arañuela Roja / Estructura de Suelo / NPK"
-                                    className="w-full min-w-0 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs dark:text-white"
-                                  />
-                                </div>
-
-                                <div className="min-w-0">
-                                  <label className="text-[9px] font-black uppercase text-slate-400 block mb-1">
-                                    Reg. SENASA / Lote
+                                    Registro Oficial SENASA *
                                   </label>
                                   <input
                                     type="text"
@@ -3951,26 +4069,70 @@ export default function TrialManager() {
                                     className="w-full min-w-0 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-mono dark:text-white"
                                   />
                                 </div>
+
+                                <div className="min-w-0">
+                                  <label className="text-[9px] font-black uppercase text-slate-400 block mb-1">
+                                    N° Lote Recepcionado *
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={quickAgroBatch}
+                                    onChange={e => setQuickAgroBatch(e.target.value)}
+                                    placeholder="LOT-2026-A"
+                                    className="w-full min-w-0 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-mono dark:text-white"
+                                  />
+                                </div>
+
+                                <div className="min-w-0">
+                                  <label className="text-[9px] font-black uppercase text-slate-400 block mb-1">
+                                    Blanco MIP / Objetivo
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={quickAgroTarget}
+                                    onChange={e => setQuickAgroTarget(e.target.value)}
+                                    placeholder="Ej: Arañuela Roja / NPK"
+                                    className="w-full min-w-0 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs dark:text-white"
+                                  />
+                                </div>
                               </div>
 
                               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 min-w-0">
-                                <div className="text-[11px] font-mono text-teal-700 dark:text-teal-300 bg-teal-500/10 px-3 py-2 rounded-xl border border-teal-500/20 flex-1 min-w-0">
-                                  Total en {currentPlotData.plot.name} ({currentPlotMetrics.areaHa} ha):{' '}
-                                  <strong>
-                                    {(
+                                {(() => {
+                                  const totalToApply = Number(
+                                    (
                                       Math.max(0.1, Number(quickAgroDosage) || 0) *
                                       Math.max(0.05, currentPlotMetrics.areaHa || 0.1)
-                                    ).toFixed(2)}{' '}
-                                    {quickAgroUnit.replace('/ha', '')}
-                                  </strong>{' '}
-                                  · Liberación Cosecha:{' '}
-                                  <strong>
-                                    {addDaysToIsoDate(
-                                      formData.date || new Date().toISOString().split('T')[0],
-                                      Math.max(0, Number(quickAgroSafetyDays) || 0)
-                                    )}
-                                  </strong>
-                                </div>
+                                    ).toFixed(2)
+                                  );
+                                  const selectedRes = resources.find(
+                                    r => r.name.trim().toLowerCase() === quickAgroProduct.trim().toLowerCase()
+                                  );
+                                  const currentStock = selectedRes?.stock ?? 0;
+                                  const remainingStock = Math.max(0, Number((currentStock - totalToApply).toFixed(2)));
+                                  return (
+                                    <div className="text-[10.5px] font-mono text-teal-700 dark:text-teal-300 bg-teal-500/10 px-3 py-2 rounded-xl border border-teal-500/20 flex-1 min-w-0">
+                                      Total en {currentPlotData.plot.name} ({currentPlotMetrics.areaHa} ha):{' '}
+                                      <strong>
+                                        {totalToApply} {quickAgroUnit.replace('/ha', '')}
+                                      </strong>
+                                      {selectedRes && (
+                                        <>
+                                          {' '}
+                                          · Stock Galpón: <strong>{currentStock}</strong> → Remanente:{' '}
+                                          <strong>{remainingStock} {selectedRes.unit}</strong>
+                                        </>
+                                      )}{' '}
+                                      · Libera Cosecha:{' '}
+                                      <strong>
+                                        {addDaysToIsoDate(
+                                          formData.date || new Date().toISOString().split('T')[0],
+                                          Math.max(0, Number(quickAgroSafetyDays) || 0)
+                                        )}
+                                      </strong>
+                                    </div>
+                                  );
+                                })()}
 
                                 <button
                                   type="button"

@@ -93,12 +93,12 @@ export const registerServiceWorker = async (): Promise<ServiceWorkerRegistration
   }
 
   try {
-    // Limpiar cachés antiguas (ej. hempc-nucleus-v7.17.1) para asegurar versión fresca V7.18.1-STABLE
+    // Limpiar cachés antiguas para asegurar versión fresca V7.20.0-STABLE
     if ('caches' in window) {
       const keys = await window.caches.keys();
       await Promise.all(
         keys
-          .filter((k) => k !== 'hempc-nucleus-v7.18.1')
+          .filter((k) => k !== 'hempc-nucleus-v7.20.0')
           .map((k) => window.caches.delete(k))
       );
     }
@@ -117,7 +117,7 @@ export const registerServiceWorker = async (): Promise<ServiceWorkerRegistration
       if (installingWorker) {
         installingWorker.onstatechange = () => {
           if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            console.log('[ServiceWorker] Nueva versión V7.18.1-STABLE activada.');
+            console.log('[ServiceWorker] Nueva versión V7.20.0-STABLE activada.');
           }
         };
       }

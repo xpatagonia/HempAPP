@@ -10,7 +10,7 @@ import {
   ADMIN_USER, DEMO_USER, DEMO_USERS_LIST, DEMO_CLIENTS, DEMO_VARIETIES, DEMO_LOCATIONS, DEMO_PLOTS, 
   DEMO_PROJECTS, DEMO_TRIALS, DEMO_HYDRIC, DEMO_TASKS,
   DEMO_STORAGE_POINTS, DEMO_SUPPLIERS, DEMO_SEED_BATCHES, DEMO_SEED_MOVEMENTS, DEMO_RESOURCES,
-  DEMO_OPERATIONAL_EXPENSES
+  DEMO_AGROCHEMICAL_APPLICATIONS, DEMO_OPERATIONAL_EXPENSES
 } from '../src/data/initialDemoData';
 import {
   canAccessClient,
@@ -20,7 +20,8 @@ import {
   canAccessSeedBatch,
   canAccessTask,
   hasGlobalReadScope,
-  isCentralAdminOrSupervisor
+  isCentralAdminOrSupervisor,
+  isSupplierRestrictedUser
 } from '../src/utils/structurePermissions';
 
 interface AppContextType {
@@ -245,19 +246,35 @@ const unmarkIdDeleted = (table: string, id: string) => {
 export const AppProvider = ({ children }: { children?: ReactNode }) => {
     const healSingleUser = (u: User): User => {
         if (!u) return u;
+        let savedUserMeta: Partial<User> = {};
+        if (typeof window !== 'undefined') {
+            try {
+                const rawMeta = localStorage.getItem('ht_users_meta_v1');
+                if (rawMeta) {
+                    const metaMap = JSON.parse(rawMeta) || {};
+                    savedUserMeta =
+                        metaMap[String(u.id)] ||
+                        (u.email ? metaMap[u.email.trim().toLowerCase()] : undefined) ||
+                        {};
+                }
+            } catch {}
+        }
         const demoById = DEMO_USERS_LIST.find(d => String(d.id) === String(u.id));
         const demoByEmail = u.email ? DEMO_USERS_LIST.find(d => d.email?.toLowerCase() === u.email.toLowerCase()) : undefined;
         const demoMatch = demoById || demoByEmail;
-        if (!demoMatch) return u;
+        if (!demoMatch && Object.keys(savedUserMeta).length === 0) return u;
         return {
-            ...demoMatch,
+            ...(demoMatch || {}),
+            ...savedUserMeta,
             ...u,
-            role: u.role || demoMatch.role,
-            structureRole: u.structureRole || demoMatch.structureRole,
-            memberType: u.memberType || demoMatch.memberType,
-            organizationName: u.organizationName || demoMatch.organizationName,
-            clientId: u.clientId !== undefined ? u.clientId : demoMatch.clientId,
-            isNetworkMember: u.isNetworkMember !== undefined ? u.isNetworkMember : demoMatch.isNetworkMember
+            role: u.role || savedUserMeta.role || demoMatch?.role || 'viewer',
+            structureRole: u.structureRole || savedUserMeta.structureRole || demoMatch?.structureRole,
+            supplierId: u.supplierId !== undefined ? u.supplierId : (savedUserMeta.supplierId !== undefined ? savedUserMeta.supplierId : demoMatch?.supplierId),
+            supplierActorRole: u.supplierActorRole || savedUserMeta.supplierActorRole || demoMatch?.supplierActorRole,
+            memberType: u.memberType || savedUserMeta.memberType || demoMatch?.memberType,
+            organizationName: u.organizationName || savedUserMeta.organizationName || demoMatch?.organizationName,
+            clientId: u.clientId !== undefined ? u.clientId : (savedUserMeta.clientId !== undefined ? savedUserMeta.clientId : demoMatch?.clientId),
+            isNetworkMember: u.isNetworkMember !== undefined ? u.isNetworkMember : (savedUserMeta.isNetworkMember ?? demoMatch?.isNetworkMember ?? false)
         };
     };
 
@@ -787,24 +804,200 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             });
     };
 
+    const SUPPLIER_META_MARKER_START = '<!--HEMPC_SUPPLIER_META_JSON:';
+    const SUPPLIER_META_MARKER_END = ':END_HEMPC_SUPPLIER_META-->';
+
+    const unpackSupplierMetaFromNotes = (
+        rawNotes?: string | null
+    ): { cleanNotes: string; parsedMeta: Partial<Supplier> } => {
+        const str = String(rawNotes || '');
+        const startIdx = str.indexOf(SUPPLIER_META_MARKER_START);
+        const endIdx = str.indexOf(SUPPLIER_META_MARKER_END);
+        if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+            const cleanNotes = str.slice(0, startIdx).trim();
+            const jsonPart = str.slice(startIdx + SUPPLIER_META_MARKER_START.length, endIdx);
+            try {
+                const parsed = JSON.parse(jsonPart);
+                if (parsed && typeof parsed === 'object') {
+                    return { cleanNotes, parsedMeta: parsed };
+                }
+            } catch {}
+            return { cleanNotes, parsedMeta: {} };
+        }
+        return { cleanNotes: str, parsedMeta: {} };
+    };
+
+    const packSupplierMetaIntoNotes = (s: Supplier): string => {
+        const base = String(s.notes || '')
+            .replace(/<!--HEMPC_SUPPLIER_META_JSON:[\s\S]*?:END_HEMPC_SUPPLIER_META-->/g, '')
+            .trim();
+        const extraMeta: Partial<Supplier> = {
+            humanTeam: s.humanTeam,
+            audit: s.audit,
+            inaseRncyfsNumber: s.inaseRncyfsNumber,
+            senasaRegisterNumber: s.senasaRegisterNumber,
+            ariccameLicenseNumber: s.ariccameLicenseNumber,
+            homologationStatus: s.homologationStatus,
+            technicalSpecialty: s.technicalSpecialty,
+            batchReturnWarrantyDays: s.batchReturnWarrantyDays
+        };
+        return `${base}\n${SUPPLIER_META_MARKER_START}${JSON.stringify(extraMeta)}${SUPPLIER_META_MARKER_END}`;
+    };
+
     const healSuppliers = (supList: Supplier[]): Supplier[] => {
         const deletedMap = getDeletedIdsMap();
         const deletedSet = new Set(deletedMap['suppliers'] || []);
         const demoById = new Map(DEMO_SUPPLIERS.map(s => [String(s.id), s]));
-        return (supList || [])
+        let savedSupMetaById: Record<string, Partial<Supplier>> = {};
+        if (typeof window !== 'undefined') {
+            try {
+                const rawMeta = localStorage.getItem('ht_suppliers_meta_v1');
+                if (rawMeta) savedSupMetaById = JSON.parse(rawMeta) || {};
+            } catch {}
+        }
+
+        const healed: Supplier[] = (supList || [])
             .filter(s => !deletedSet.has(String(s.id)) && !isPurgedDemoItem(s))
             .map((s: Supplier) => {
                 const demoMatch = demoById.get(String(s.id));
+                const savedMeta = savedSupMetaById[String(s.id)] || {};
+                const { cleanNotes, parsedMeta } = unpackSupplierMetaFromNotes(s.notes ?? savedMeta.notes ?? demoMatch?.notes);
                 const isHempItFrance = String(s.id) === '3bfc9bcd-4ab1-4149-b46a-1a5d1e3392cd' || s.name?.toLowerCase().includes('hempit');
                 return {
                     ...(demoMatch || {}),
+                    ...parsedMeta,
+                    ...savedMeta,
                     ...s,
-                    country: isHempItFrance ? 'Francia' : (s.country || demoMatch?.country || 'Argentina'),
-                    province: s.province || demoMatch?.province || '',
-                    city: s.city || demoMatch?.city || '',
-                    address: s.address || demoMatch?.address || ''
+                    notes: cleanNotes,
+                    country: isHempItFrance ? 'Francia' : (s.country || savedMeta.country || demoMatch?.country || 'Argentina'),
+                    province: s.province || savedMeta.province || demoMatch?.province || '',
+                    city: s.city || savedMeta.city || demoMatch?.city || '',
+                    address: s.address || savedMeta.address || demoMatch?.address || '',
+                    commercialContact: s.commercialContact || savedMeta.commercialContact || demoMatch?.commercialContact || '',
+                    logisticsContact: s.logisticsContact || savedMeta.logisticsContact || demoMatch?.logisticsContact || '',
+                    humanTeam:
+                        (s.humanTeam && s.humanTeam.length > 0)
+                            ? s.humanTeam
+                            : (savedMeta.humanTeam && savedMeta.humanTeam.length > 0)
+                            ? savedMeta.humanTeam
+                            : (parsedMeta.humanTeam && parsedMeta.humanTeam.length > 0)
+                            ? parsedMeta.humanTeam
+                            : (demoMatch?.humanTeam || []),
+                    audit: s.audit || savedMeta.audit || parsedMeta.audit || demoMatch?.audit,
+                    inaseRncyfsNumber: s.inaseRncyfsNumber || savedMeta.inaseRncyfsNumber || parsedMeta.inaseRncyfsNumber || demoMatch?.inaseRncyfsNumber,
+                    senasaRegisterNumber: s.senasaRegisterNumber || savedMeta.senasaRegisterNumber || parsedMeta.senasaRegisterNumber || demoMatch?.senasaRegisterNumber,
+                    ariccameLicenseNumber: s.ariccameLicenseNumber || savedMeta.ariccameLicenseNumber || parsedMeta.ariccameLicenseNumber || demoMatch?.ariccameLicenseNumber,
+                    homologationStatus: s.homologationStatus || savedMeta.homologationStatus || parsedMeta.homologationStatus || demoMatch?.homologationStatus || 'Homologado_Conforme',
+                    technicalSpecialty: s.technicalSpecialty || savedMeta.technicalSpecialty || parsedMeta.technicalSpecialty || demoMatch?.technicalSpecialty
                 };
             });
+        DEMO_SUPPLIERS.forEach(ds => {
+            if (!deletedSet.has(String(ds.id)) && !healed.some(s => String(s.id) === String(ds.id))) {
+                healed.push(ds);
+            }
+        });
+        return healed;
+    };
+
+    const inferAgroCategory = (r: Resource): Resource['agroCategory'] => {
+        if (r.agroCategory) return r.agroCategory;
+        if (r.type === 'Labor') return undefined;
+        const n = (r.name || '').toLowerCase();
+        if (n.includes('humic') || n.includes('húmic') || n.includes('suelo') || n.includes('micorriz') || n.includes('glomus') || n.includes('yeso')) {
+            return 'Mejorador de Suelo';
+        }
+        if (n.includes('foliar') || n.includes('alga') || n.includes('amino') || n.includes('calcio') || n.includes('boro')) {
+            return 'Fertilizante Foliar';
+        }
+        if (n.includes('compost') || n.includes('bokashi') || n.includes('guano') || n.includes('humus') || n.includes('enmienda')) {
+            return 'Enmienda Orgánica';
+        }
+        if (n.includes('trichoderma') || n.includes('fungic') || n.includes('bacillus subtilis') || n.includes('cobre')) {
+            return 'Fungicida';
+        }
+        if (n.includes('neem') || n.includes('azadiractina') || n.includes('jabón') || n.includes('jabon') || n.includes('beauveria') || n.includes('kurstaki') || n.includes('spinosad') || n.includes('insectic') || n.includes('acaric')) {
+            return 'Insecticida';
+        }
+        if (n.includes('herbic') || n.includes('pelarg') || n.includes('corteza')) {
+            return 'Herbicida';
+        }
+        if (n.includes('bioestimul') || n.includes('azospirillum') || n.includes('fosfito')) {
+            return 'Bioestimulante';
+        }
+        return r.type === 'Fertilizante' ? 'Fertilizante Edáfico' : 'Bioestimulante';
+    };
+
+    const healResources = (resList: Resource[]): Resource[] => {
+        const deletedMap = getDeletedIdsMap();
+        const deletedSet = new Set(deletedMap['resources'] || []);
+        const demoById = new Map(DEMO_RESOURCES.map(r => [String(r.id), r]));
+        const demoByName = new Map(DEMO_RESOURCES.map(r => [r.name.trim().toLowerCase(), r]));
+        let metaById: Record<string, Partial<Resource>> = {};
+        try {
+            const rawMeta = typeof window !== 'undefined' ? localStorage.getItem('ht_resources_meta_v1') : null;
+            if (rawMeta) metaById = JSON.parse(rawMeta) || {};
+        } catch {}
+
+        const healed: Resource[] = (resList || [])
+            .filter(r => !deletedSet.has(String(r.id)) && !isPurgedDemoItem(r))
+            .map((r: Resource) => {
+                const demoMatch = demoById.get(String(r.id)) || (r.name ? demoByName.get(r.name.trim().toLowerCase()) : undefined);
+                const savedMeta = metaById[String(r.id)] || (r.name ? metaById[r.name.trim().toLowerCase()] : undefined) || {};
+                const base = { ...(demoMatch || {}), ...savedMeta, ...r };
+                if (base.type === 'Labor') return base;
+                return {
+                    ...base,
+                    agroCategory: r.agroCategory || savedMeta.agroCategory || demoMatch?.agroCategory || inferAgroCategory(base),
+                    activeIngredient: r.activeIngredient || savedMeta.activeIngredient || demoMatch?.activeIngredient || 'Insumo Agrícola Homologado GACP',
+                    senasaRegisterNumber: r.senasaRegisterNumber || savedMeta.senasaRegisterNumber || demoMatch?.senasaRegisterNumber || 'SENASA-OFICIAL',
+                    toxicologicalClass: r.toxicologicalClass || savedMeta.toxicologicalClass || demoMatch?.toxicologicalClass || 'Biológico / Orgánico Certificado',
+                    recommendedDosagePerHa: r.recommendedDosagePerHa ?? savedMeta.recommendedDosagePerHa ?? demoMatch?.recommendedDosagePerHa ?? 2,
+                    dosageUnit: r.dosageUnit || savedMeta.dosageUnit || demoMatch?.dosageUnit || (base.unit === 'kg' ? 'kg/ha' : 'L/ha'),
+                    safetyPeriodDays: r.safetyPeriodDays ?? savedMeta.safetyPeriodDays ?? demoMatch?.safetyPeriodDays ?? 0,
+                    applicationMethod: r.applicationMethod || savedMeta.applicationMethod || demoMatch?.applicationMethod || 'Fertirriego',
+                    supplierId: r.supplierId || savedMeta.supplierId || demoMatch?.supplierId || 'sup-biofabrica-patagonia-01',
+                    supplierName: r.supplierName || savedMeta.supplierName || demoMatch?.supplierName || 'BioFábrica & Insumos Agrícolas Red HempC',
+                    manufacturer: r.manufacturer || savedMeta.manufacturer || demoMatch?.manufacturer || 'Laboratorio Homologado GACP',
+                    batchNumber: r.batchNumber || savedMeta.batchNumber || demoMatch?.batchNumber || 'LOT-SENASA-2026',
+                    targetPestOrDisease: r.targetPestOrDisease || savedMeta.targetPestOrDisease || demoMatch?.targetPestOrDisease,
+                    expirationDate: r.expirationDate || savedMeta.expirationDate || demoMatch?.expirationDate || '2027-12-31'
+                };
+            });
+
+        DEMO_RESOURCES.forEach(dr => {
+            if (
+                !deletedSet.has(String(dr.id)) &&
+                !healed.some(r => String(r.id) === String(dr.id) || r.name.trim().toLowerCase() === dr.name.trim().toLowerCase())
+            ) {
+                healed.push(dr);
+            }
+        });
+
+        return healed;
+    };
+
+    const healAgrochemicalApplications = (appList: AgrochemicalApplication[]): AgrochemicalApplication[] => {
+        const deletedMap = getDeletedIdsMap();
+        const deletedSet = new Set(deletedMap['agrochemical_apps'] || []);
+        const demoById = new Map(DEMO_AGROCHEMICAL_APPLICATIONS.map(a => [String(a.id), a]));
+
+        const healed: AgrochemicalApplication[] = (appList || [])
+            .filter(a => !deletedSet.has(String(a.id)) && !isPurgedDemoItem(a))
+            .map((a: AgrochemicalApplication) => {
+                const demoMatch = demoById.get(String(a.id));
+                return {
+                    ...(demoMatch || {}),
+                    ...a
+                };
+            });
+
+        DEMO_AGROCHEMICAL_APPLICATIONS.forEach(da => {
+            if (!deletedSet.has(String(da.id)) && !healed.some(a => String(a.id) === String(da.id))) {
+                healed.push(da);
+            }
+        });
+
+        return healed;
     };
 
     const [locations, setLocations] = useState<Location[]>(() => 
@@ -835,7 +1028,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         getStoredCollection('ht_seed_movements', DEMO_SEED_MOVEMENTS)
     );
     const [resources, setResources] = useState<Resource[]>(() => 
-        getStoredCollection('ht_resources', DEMO_RESOURCES)
+        healResources(getStoredCollection('ht_resources', DEMO_RESOURCES))
     );
     const [storagePoints, setStoragePoints] = useState<StoragePoint[]>(() => 
         healStoragePoints(getStoredCollection('ht_storage_points', DEMO_STORAGE_POINTS))
@@ -847,10 +1040,28 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         getStoredCollection('ht_field_logs', [])
     );
     const [agrochemicalApplications, setAgrochemicalApplications] = useState<AgrochemicalApplication[]>(() =>
-        getStoredCollection('ht_agrochemical_apps', [])
+        healAgrochemicalApplications(getStoredCollection('ht_agrochemical_apps', DEMO_AGROCHEMICAL_APPLICATIONS))
     );
 
     useEffect(() => {
+        try {
+            if (localStorage.getItem('ht_supplier_users_schema_v7_20_0') !== 'true') {
+                const healedRes = healResources(getStoredCollection('ht_resources', DEMO_RESOURCES));
+                setResources(healedRes);
+                localStorage.setItem('ht_resources', JSON.stringify(healedRes));
+
+                const healedSups = healSuppliers(getStoredCollection('ht_suppliers', DEMO_SUPPLIERS));
+                setSuppliers(healedSups);
+                localStorage.setItem('ht_suppliers', JSON.stringify(healedSups));
+
+                const healedUsrs = healUsersList(getStoredCollection('ht_users', DEMO_USERS_LIST));
+                setUsersList(healedUsrs);
+                localStorage.setItem('ht_users', JSON.stringify(healedUsrs));
+
+                localStorage.setItem('ht_resources_schema_v7_19_0', 'true');
+                localStorage.setItem('ht_supplier_users_schema_v7_20_0', 'true');
+            }
+        } catch {}
         refreshData();
         
         const savedTheme = localStorage.getItem('ht_theme') as 'light' | 'dark';
@@ -997,7 +1208,11 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                         try { localStorage.setItem('ht_seed_batches', JSON.stringify(healed)); } catch (e) {}
                     }, DEMO_SEED_BATCHES),
                     fetchTable('seed_movements', setSeedMovements, DEMO_SEED_MOVEMENTS),
-                    fetchTable('resources', setResources, DEMO_RESOURCES),
+                    fetchTable('resources', (data: any[]) => {
+                        const healed = healResources(data || []);
+                        setResources(healed);
+                        try { localStorage.setItem('ht_resources', JSON.stringify(healed)); } catch (e) {}
+                    }, DEMO_RESOURCES),
                     fetchTable('storage_points', (data: any[]) => {
                         const healed = healStoragePoints(data || []);
                         setStoragePoints(healed);
@@ -1035,6 +1250,16 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 setPlots(prev => {
                     const healed = healPlotsWithSeedBatches(prev);
                     try { localStorage.setItem('ht_plots', JSON.stringify(healed)); } catch (e) {}
+                    return healed;
+                });
+                setResources(prev => {
+                    const healed = healResources(prev);
+                    try { localStorage.setItem('ht_resources', JSON.stringify(healed)); } catch (e) {}
+                    return healed;
+                });
+                setAgrochemicalApplications(prev => {
+                    const healed = healAgrochemicalApplications(prev);
+                    try { localStorage.setItem('ht_agrochemical_apps', JSON.stringify(healed)); } catch (e) {}
                     return healed;
                 });
             }
@@ -1269,8 +1494,17 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 return next;
             });
         } else if (table === 'users') {
+            if (action !== 'delete' && item && typeof item === 'object') {
+                try {
+                    const rawMeta = localStorage.getItem('ht_users_meta_v1');
+                    const metaMap = rawMeta ? JSON.parse(rawMeta) : {};
+                    if (item.id) metaMap[String(item.id)] = item;
+                    if (item.email) metaMap[String(item.email).trim().toLowerCase()] = item;
+                    localStorage.setItem('ht_users_meta_v1', JSON.stringify(metaMap));
+                } catch {}
+            }
             setUsersList(prev => {
-                const next = updateList(prev);
+                const next = healUsersList(updateList(prev));
                 try { localStorage.setItem('ht_users', JSON.stringify(next)); } catch (e) {}
                 return next;
             });
@@ -1287,8 +1521,16 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 return next;
             });
         } else if (table === 'suppliers') {
+            if (action !== 'delete' && item && typeof item === 'object' && item.id) {
+                try {
+                    const rawMeta = localStorage.getItem('ht_suppliers_meta_v1');
+                    const metaMap = rawMeta ? JSON.parse(rawMeta) : {};
+                    metaMap[String(item.id)] = item;
+                    localStorage.setItem('ht_suppliers_meta_v1', JSON.stringify(metaMap));
+                } catch {}
+            }
             setSuppliers(prev => {
-                const next = updateList(prev);
+                const next = healSuppliers(updateList(prev));
                 try { localStorage.setItem('ht_suppliers', JSON.stringify(next)); } catch (e) {}
                 return next;
             });
@@ -1317,8 +1559,17 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 return next;
             });
         } else if (table === 'resources') {
+            if (action !== 'delete' && item && typeof item === 'object') {
+                try {
+                    const rawMeta = localStorage.getItem('ht_resources_meta_v1');
+                    const metaMap = rawMeta ? JSON.parse(rawMeta) : {};
+                    if (item.id) metaMap[String(item.id)] = item;
+                    if (item.name) metaMap[String(item.name).trim().toLowerCase()] = item;
+                    localStorage.setItem('ht_resources_meta_v1', JSON.stringify(metaMap));
+                } catch {}
+            }
             setResources(prev => {
-                const next = updateList(prev);
+                const next = healResources(updateList(prev));
                 try { localStorage.setItem('ht_resources', JSON.stringify(next)); } catch (e) {}
                 return next;
             });
@@ -1570,7 +1821,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         suppliers: ['id', 'name', 'category', 'cuit', 'country', 'province', 'city', 'address', 'email', 'coordinates', 'legal_name', 'postal_code', 'whatsapp', 'commercial_contact', 'website', 'is_official_partner', 'logistics_contact', 'notes'],
         seed_batches: ['id', 'variety_id', 'supplier_id', 'batch_code', 'label_serial_number', 'category', 'analysis_date', 'purity', 'germination', 'gs1_code', 'certification_number', 'purchase_order', 'purchase_date', 'price_per_kg', 'initial_quantity', 'remaining_quantity', 'storage_conditions', 'storage_point_id', 'logistics_responsible', 'notes', 'is_active', 'created_at'],
         seed_movements: ['id', 'batch_id', 'client_id', 'target_location_id', 'quantity', 'date', 'dispatch_time', 'transport_guide_number', 'transport_type', 'driver_name', 'vehicle_plate', 'vehicle_model', 'transport_company', 'route_itinerary', 'status', 'origin_storage_id', 'route_google_link', 'estimated_distance_km', 'driver_dni', 'recipient_name', 'recipient_dni'],
-        resources: ['id', 'name', 'category', 'unit', 'stock', 'min_stock', 'cost_per_unit'],
+        resources: ['id', 'name', 'type', 'unit', 'cost_per_unit', 'stock'],
         storage_points: ['id', 'name', 'node_code', 'type', 'address', 'city', 'province', 'coordinates', 'responsible_user_id', 'client_id', 'surface_m2', 'conditions', 'notes'],
         hydric_records: ['id', 'location_id', 'plot_id', 'date', 'time', 'type', 'amount_mm', 'notes', 'created_by', 'end_time'],
         field_logs: ['id', 'plot_id', 'date', 'time', 'note', 'photo_url']
@@ -1621,8 +1872,8 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             : normalizedItem;
         updateLocalState(table, enrichedItem, action, idField);
 
-        // operational_expenses se gestiona en colección de auditoría sin tabla SQL dedicada
-        if (table === 'operational_expenses') {
+        // operational_expenses y agrochemical_apps se sincronizan localmente y vinculan insumos con public.resources
+        if (table === 'operational_expenses' || table === 'agrochemical_apps') {
             return true;
         }
 
@@ -1642,6 +1893,8 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                     delete cleanItem._localUpdatedAt;
                     if (table === 'clients') {
                         cleanItem.notes = packClientContractsIntoNotes(cleanItem.notes, cleanItem.contractDocuments);
+                    } else if (table === 'suppliers') {
+                        cleanItem.notes = packSupplierMetaIntoNotes(cleanItem);
                     }
                     const rawPayload = toSnakeCase(cleanItem);
 
@@ -2335,7 +2588,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     }, [plots.length]);
 
     // ============================================================================
-    // AISLAMIENTO MULTI-ESTABLECIMIENTO CENTRALIZADO POR USUARIO Y ROL
+    // AISLAMIENTO MULTI-ESTABLECIMIENTO Y POR PROVEEDOR CENTRALIZADO POR USUARIO Y ROL
     // ============================================================================
     const scopedClients = useMemo(
         () => clients.filter(c => canAccessClient(currentUser, c, locations)),
@@ -2343,13 +2596,13 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     );
 
     const scopedLocations = useMemo(
-        () => locations.filter(l => canAccessLocation(currentUser, l, clients)),
-        [locations, clients, currentUser]
+        () => locations.filter(l => canAccessLocation(currentUser, l, clients, plots, varieties, seedBatches)),
+        [locations, clients, plots, varieties, seedBatches, currentUser]
     );
 
     const scopedPlots = useMemo(
-        () => plots.filter(p => canAccessPlot(currentUser, p, locations, clients)),
-        [plots, locations, clients, currentUser]
+        () => plots.filter(p => canAccessPlot(currentUser, p, locations, clients, varieties, seedBatches)),
+        [plots, locations, clients, varieties, seedBatches, currentUser]
     );
 
     const scopedPlotIds = useMemo(
@@ -2373,8 +2626,8 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     }, [trialRecords, scopedPlotIds, currentUser]);
 
     const scopedTasks = useMemo(
-        () => tasks.filter(t => canAccessTask(currentUser, t, plots, locations, clients)),
-        [tasks, plots, locations, clients, currentUser]
+        () => tasks.filter(t => canAccessTask(currentUser, t, plots, locations, clients, varieties, seedBatches)),
+        [tasks, plots, locations, clients, varieties, seedBatches, currentUser]
     );
 
     const scopedHydricRecords = useMemo(() => {
@@ -2382,7 +2635,8 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         return hydricRecords.filter(
             h =>
                 (h.plotId && scopedPlotIds.has(String(h.plotId))) ||
-                (h.locationId && scopedLocationIds.has(String(h.locationId)))
+                (!isSupplierRestrictedUser(currentUser) && h.locationId && scopedLocationIds.has(String(h.locationId))) ||
+                (isSupplierRestrictedUser(currentUser) && !h.plotId && h.locationId && scopedLocationIds.has(String(h.locationId)))
         );
     }, [hydricRecords, scopedPlotIds, scopedLocationIds, currentUser]);
 
@@ -2402,12 +2656,16 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     );
 
     const scopedSeedBatches = useMemo(
-        () => seedBatches.filter(sb => canAccessSeedBatch(currentUser, sb, storagePoints, plots, locations, clients)),
-        [seedBatches, storagePoints, plots, locations, clients, currentUser]
+        () => seedBatches.filter(sb => canAccessSeedBatch(currentUser, sb, storagePoints, plots, locations, clients, varieties)),
+        [seedBatches, storagePoints, plots, locations, clients, varieties, currentUser]
     );
 
     const scopedSeedMovements = useMemo(() => {
         if (hasGlobalReadScope(currentUser)) return seedMovements;
+        if (isSupplierRestrictedUser(currentUser)) {
+            const allowedBatchIds = new Set(scopedSeedBatches.map(b => String(b.id)));
+            return seedMovements.filter(m => m.batchId && allowedBatchIds.has(String(m.batchId)));
+        }
         const allowedSpIds = new Set(scopedStoragePoints.map(sp => String(sp.id)));
         return seedMovements.filter(
             m =>
@@ -2415,10 +2673,11 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 (m.targetLocationId && scopedLocationIds.has(String(m.targetLocationId))) ||
                 (m.originStorageId && allowedSpIds.has(String(m.originStorageId)))
         );
-    }, [seedMovements, scopedClientIds, scopedLocationIds, scopedStoragePoints, currentUser]);
+    }, [seedMovements, scopedClientIds, scopedLocationIds, scopedStoragePoints, scopedSeedBatches, currentUser]);
 
     const scopedOperationalExpenses = useMemo(() => {
         if (hasGlobalReadScope(currentUser)) return operationalExpenses;
+        if (isSupplierRestrictedUser(currentUser)) return [];
         return operationalExpenses.filter(
             e =>
                 (e.plotId && scopedPlotIds.has(String(e.plotId))) ||
@@ -2460,7 +2719,58 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             hydricRecords: scopedHydricRecords, addHydricRecord: (r) => crud('hydric_records', r, 'insert'), updateHydricRecord: (r) => crud('hydric_records', r, 'update'), deleteHydricRecord: (id) => crud('hydric_records', id, 'delete'),
             logs: scopedLogs, addLog: (l) => crud('field_logs', l, 'insert'), updateLog: (l) => crud('field_logs', l, 'update'), deleteLog: (id) => crud('field_logs', id, 'delete'),
             agrochemicalApplications: scopedAgrochemicalApplications,
-            addAgrochemicalApplication: (app) => crud('agrochemical_apps', app, 'insert'),
+            addAgrochemicalApplication: async (app) => {
+                const ok = await crud('agrochemical_apps', app, 'insert');
+                // Buscar si el producto comercial existe en el catálogo de recursos (public.resources)
+                const matchedRes = resources.find(
+                    r => r.name.trim().toLowerCase() === app.productName.trim().toLowerCase()
+                );
+                if (matchedRes) {
+                    // Descontar automáticamente del stock de galpón el volumen/peso total aplicado en la parcela
+                    const appliedQty = Math.max(0, Number(app.totalAppliedAmount) || 0);
+                    const nextStock = Math.max(0, Number(((matchedRes.stock || 0) - appliedQty).toFixed(2)));
+                    const updatedCatalogResource: Resource = {
+                        ...matchedRes,
+                        stock: nextStock,
+                        agroCategory: matchedRes.agroCategory || app.category,
+                        activeIngredient: app.activeIngredient || matchedRes.activeIngredient,
+                        senasaRegisterNumber: app.senasaRegisterNumber || matchedRes.senasaRegisterNumber,
+                        batchNumber: app.batchNumber || matchedRes.batchNumber,
+                        supplierName: app.supplierName || matchedRes.supplierName
+                    };
+                    await crud('resources', updatedCatalogResource, 'update');
+                } else if (app.productName.trim()) {
+                    // Si es un producto comercial nuevo cargado desde Monitoreo Rápido o Cuaderno SENASA, darlo de alta en `resources`
+                    const isFert =
+                        app.category === 'Fertilizante Edáfico' ||
+                        app.category === 'Fertilizante Foliar' ||
+                        app.category === 'Mejorador de Suelo' ||
+                        app.category === 'Enmienda Orgánica';
+                    const newCatalogResource: Resource = {
+                        id: `senasa-custom-${Date.now()}`,
+                        name: app.productName.trim(),
+                        type: isFert ? 'Fertilizante' : 'Fitosanitario',
+                        agroCategory: app.category,
+                        activeIngredient: app.activeIngredient,
+                        senasaRegisterNumber: app.senasaRegisterNumber,
+                        toxicologicalClass: app.toxicologicalClass,
+                        recommendedDosagePerHa: app.dosagePerHa,
+                        dosageUnit: app.dosageUnit,
+                        safetyPeriodDays: app.safetyPeriodDays,
+                        applicationMethod: app.applicationMethod,
+                        supplierId: app.supplierId || 'sup-biofabrica-patagonia-01',
+                        supplierName: app.supplierName || 'BioFábrica & Insumos Agrícolas Red HempC',
+                        manufacturer: app.manufacturer || 'Elaborador Homologado GACP',
+                        batchNumber: app.batchNumber,
+                        targetPestOrDisease: app.targetPestOrDisease,
+                        unit: app.dosageUnit?.includes('kg') || app.dosageUnit?.includes('g') ? 'kg' : 'lts',
+                        costPerUnit: 18,
+                        stock: 100
+                    };
+                    await crud('resources', newCatalogResource, 'insert');
+                }
+                return ok;
+            },
             updateAgrochemicalApplication: (app) => crud('agrochemical_apps', app, 'update'),
             deleteAgrochemicalApplication: (id) => crud('agrochemical_apps', id, 'delete'),
             isRefreshing, refreshData,

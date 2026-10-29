@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { AgrochemicalApplication, ToxicologicalBand, Plot, SupplierLotInspection } from '../types';
+import { AgrochemicalApplication, AgrochemicalCategory, ToxicologicalBand, Plot, SupplierLotInspection, Resource } from '../types';
 import { getPlotAgrochemicalApplications } from '../src/services/agro40Service';
 import { DEMO_SUPPLIER_INSPECTIONS } from '../src/data/initialDemoData';
 import { 
@@ -130,6 +130,7 @@ export default function PhytosanitaryBook() {
     locations,
     varieties,
     clients,
+    resources,
     agrochemicalApplications: applications,
     addAgrochemicalApplication,
     updateAgrochemicalApplication,
@@ -148,6 +149,7 @@ export default function PhytosanitaryBook() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [selectedAppForPrint, setSelectedAppForPrint] = useState<AgrochemicalApplication | null>(null);
+  const [isCustomProduct, setIsCustomProduct] = useState(false);
 
   // Parcelas accesibles según el aislamiento de estructura
   const availablePlots = useMemo(() => {
@@ -242,8 +244,47 @@ export default function PhytosanitaryBook() {
     });
   }, [applications, searchTerm, filterPlotId, filterCategory, filterStatus, plots, currentUser, locations, clients]);
 
+  // Productos comerciales prescriptos en la Base de Datos (`resources`) filtrados por la Categoría seleccionada
+  const prescribedResourcesForCategory = useMemo(() => {
+    const cat = formData.category || 'Mejorador de Suelo';
+    return resources.filter(r => {
+      if (r.agroCategory) return r.agroCategory === cat;
+      if (
+        cat === 'Fertilizante Edáfico' ||
+        cat === 'Fertilizante Foliar' ||
+        cat === 'Mejorador de Suelo' ||
+        cat === 'Enmienda Orgánica'
+      ) {
+        return r.type === 'Fertilizante';
+      }
+      return r.type === 'Fitosanitario';
+    });
+  }, [resources, formData.category]);
+
+  const applyCatalogResourceToForm = (res: Resource) => {
+    setIsCustomProduct(false);
+    setFormData(prev => ({
+      ...prev,
+      category: res.agroCategory || prev.category || 'Mejorador de Suelo',
+      productName: res.name,
+      activeIngredient: res.activeIngredient || 'Insumo Agrícola Homologado',
+      manufacturer: res.manufacturer || 'Elaborador Homologado GACP',
+      supplierId: res.supplierId || 'sup-biofabrica-patagonia-01',
+      supplierName: res.supplierName || 'BioFábrica & Insumos Agrícolas Red HempC',
+      senasaRegisterNumber: res.senasaRegisterNumber || 'SENASA-OFICIAL',
+      toxicologicalClass: res.toxicologicalClass || 'Biológico / Orgánico Certificado',
+      dosagePerHa: res.recommendedDosagePerHa ?? 2.0,
+      dosageUnit: res.dosageUnit || (res.unit === 'kg' ? 'kg/ha' : 'L/ha'),
+      batchNumber: res.batchNumber || 'LOT-2026-A',
+      safetyPeriodDays: res.safetyPeriodDays ?? 0,
+      applicationMethod: res.applicationMethod || 'Pulverización Terrestre',
+      targetPestOrDisease: res.targetPestOrDisease || prev.targetPestOrDisease || ''
+    }));
+  };
+
   // Al seleccionar un insumo preconfigurado / recepcionado
   const handleSelectPresetInput = (preset: typeof RECEIVEABLE_INPUT_PRESETS[0]) => {
+    setIsCustomProduct(false);
     setFormData(prev => ({
       ...prev,
       productName: preset.productName,
@@ -264,24 +305,29 @@ export default function PhytosanitaryBook() {
 
   const resetForm = () => {
     setEditingAppId(null);
+    setIsCustomProduct(false);
+    const defaultCategory: AgrochemicalCategory = 'Mejorador de Suelo';
+    const firstRes = resources.find(r => r.agroCategory === defaultCategory) || resources[0];
     setFormData({
       plotId: availablePlots[0]?.id || plots[0]?.id || '',
       date: new Date().toISOString().split('T')[0],
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
-      category: 'Bioestimulante',
-      productName: '',
-      activeIngredient: '',
-      manufacturer: '',
-      supplierName: '',
-      senasaRegisterNumber: '',
-      toxicologicalClass: 'Biológico / Orgánico Certificado',
-      dosagePerHa: 1.5,
-      dosageUnit: 'L/ha',
-      applicationMethod: 'Pulverización Terrestre',
-      batchNumber: '',
-      safetyPeriodDays: 0,
-      responsibleAgronomist: currentUser?.name || 'Ing. Agr. Lucas Berardi',
-      agronomistLicense: 'MP-AGRO-3321 MZA',
+      category: firstRes?.agroCategory || defaultCategory,
+      productName: firstRes?.name || 'HumiFulvic Complex + Glomus intraradices',
+      activeIngredient: firstRes?.activeIngredient || 'Ácidos Húmicos 15% + Ácidos Fúlvicos 8% + Endomicorrizas',
+      manufacturer: firstRes?.manufacturer || 'BioTerra Patagonia Labs',
+      supplierId: firstRes?.supplierId || 'sup-biofabrica-patagonia-01',
+      supplierName: firstRes?.supplierName || 'BioFábrica & Insumos Agrícolas Red HempC',
+      senasaRegisterNumber: firstRes?.senasaRegisterNumber || 'SENASA-ENM-9042-AR',
+      toxicologicalClass: firstRes?.toxicologicalClass || 'Biológico / Orgánico Certificado',
+      dosagePerHa: firstRes?.recommendedDosagePerHa ?? 5.0,
+      dosageUnit: firstRes?.dosageUnit || 'L/ha',
+      applicationMethod: firstRes?.applicationMethod || 'Fertirriego',
+      batchNumber: firstRes?.batchNumber || 'HUMI-SOIL-26A',
+      safetyPeriodDays: firstRes?.safetyPeriodDays ?? 0,
+      targetPestOrDisease: firstRes?.targetPestOrDisease || '',
+      responsibleAgronomist: currentUser?.name || 'Ing. Agr. Gastón Barea',
+      agronomistLicense: 'MP-4821-CIAFBA',
       weatherCondition: {
         temperatureC: 22.0,
         windSpeedKmH: 8.5,
@@ -293,6 +339,7 @@ export default function PhytosanitaryBook() {
 
   const handleOpenEditApplication = (app: AgrochemicalApplication) => {
     setEditingAppId(app.id);
+    setIsCustomProduct(false);
     setFormData({ ...app });
     setIsAddModalOpen(true);
   };
@@ -740,33 +787,67 @@ export default function PhytosanitaryBook() {
               <button onClick={() => { setIsAddModalOpen(false); resetForm(); }} className="text-slate-400 hover:text-slate-600 cursor-pointer"><X size={22}/></button>
             </div>
 
-            {/* BARRA DE ACCIÓN RÁPIDA: VINCULAR INSUMO RECEPCIONADO */}
-            <div className="mb-6 p-4 bg-emerald-50/60 dark:bg-emerald-950/30 rounded-2xl border border-emerald-200 dark:border-emerald-800/80 space-y-2">
-              <div className="flex justify-between items-center">
+            {/* BARRA DE ACCIÓN RÁPIDA: VINCULAR INSUMO RECEPCIONADO DE PROVEEDOR HOMOLOGADO (EN VIVO DESDE BASE DE DATOS) */}
+            <div className="mb-6 p-4 bg-emerald-50/60 dark:bg-emerald-950/30 rounded-2xl border border-emerald-200 dark:border-emerald-800/80 space-y-2.5">
+              <div className="flex flex-wrap justify-between items-center gap-2">
                 <span className="text-[10px] font-black uppercase text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
                   <Package size={14} />
-                  <span>Vincular Insumo Recepcionado de Proveedor Homologado:</span>
+                  <span>
+                    Vincular Insumo Recepcionado de Proveedor Homologado ({prescribedResourcesForCategory.length} disponibles en {formData.category}):
+                  </span>
                 </span>
-                <span className="text-[9px] text-slate-500">Autocompleta N° Lote, SENASA y Carencia</span>
+                <a
+                  href="#/resources"
+                  className="text-[10px] font-mono font-bold text-emerald-700 dark:text-emerald-300 hover:underline flex items-center gap-1"
+                >
+                  <span>+ Cargar Nuevo Insumo en Inventario BD</span>
+                  <ArrowUpRight size={12} />
+                </a>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                {RECEIVEABLE_INPUT_PRESETS.map((preset, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => handleSelectPresetInput(preset)}
-                    className="p-2 text-left bg-white dark:bg-slate-900 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 rounded-xl border border-slate-200 dark:border-slate-700 text-xs transition group"
-                  >
-                    <strong className="block text-[11px] font-bold text-slate-900 dark:text-white truncate group-hover:text-emerald-600">
-                      {preset.productName}
-                    </strong>
-                    <div className="flex justify-between items-center text-[9px] text-slate-400 mt-0.5">
-                      <span>{preset.lotNumber}</span>
-                      <span className="font-bold text-emerald-600">{preset.safetyPeriodDays}d carencia</span>
-                    </div>
-                  </button>
-                ))}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-40 overflow-y-auto pr-1">
+                {prescribedResourcesForCategory.map(res => {
+                  const isSelected = formData.productName === res.name && !isCustomProduct;
+                  return (
+                    <button
+                      key={res.id}
+                      type="button"
+                      onClick={() => applyCatalogResourceToForm(res)}
+                      className={`p-2.5 text-left rounded-xl border text-xs transition group cursor-pointer ${
+                        isSelected
+                          ? 'bg-emerald-600 text-white border-emerald-500 shadow-xs'
+                          : 'bg-white dark:bg-slate-900 hover:bg-emerald-100/70 dark:hover:bg-emerald-900/40 border-slate-200 dark:border-slate-700'
+                      }`}
+                    >
+                      <strong
+                        className={`block text-[11px] font-bold truncate ${
+                          isSelected ? 'text-white' : 'text-slate-900 dark:text-white group-hover:text-emerald-600'
+                        }`}
+                      >
+                        {res.name}
+                      </strong>
+                      <div
+                        className={`flex justify-between items-center text-[9px] mt-0.5 font-mono ${
+                          isSelected ? 'text-emerald-100' : 'text-slate-400'
+                        }`}
+                      >
+                        <span>{res.batchNumber || res.senasaRegisterNumber || 'SENASA'}</span>
+                        <span className={isSelected ? 'font-bold text-white' : 'font-bold text-emerald-600'}>
+                          Stock: {res.stock ?? 0} {res.unit} · {res.safetyPeriodDays ?? 0}d
+                        </span>
+                      </div>
+                      {res.supplierName && (
+                        <span
+                          className={`block text-[9px] truncate mt-0.5 ${
+                            isSelected ? 'text-emerald-100/90' : 'text-slate-400'
+                          }`}
+                        >
+                          Prov: {res.supplierName}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -810,19 +891,79 @@ export default function PhytosanitaryBook() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Producto Comercial *</label>
-                  <input
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Categoría de Insumo *</label>
+                  <select
                     required
-                    type="text"
-                    placeholder="Ej: Bio-Hemp Root Optimizer"
-                    className="w-full border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white p-2.5 rounded-xl font-mono text-xs focus:ring-2 focus:ring-emerald-500 outline-none"
-                    value={formData.productName}
-                    onChange={e => setFormData({ ...formData, productName: e.target.value })}
-                  />
+                    className="w-full border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white p-2.5 rounded-xl font-mono text-xs font-bold focus:ring-2 focus:ring-emerald-500 outline-none"
+                    value={formData.category || 'Mejorador de Suelo'}
+                    onChange={e => {
+                      const nextCat = e.target.value as AgrochemicalCategory;
+                      const catProducts = resources.filter(r => r.agroCategory === nextCat);
+                      if (catProducts.length > 0) {
+                        applyCatalogResourceToForm(catProducts[0]);
+                      } else {
+                        setFormData({ ...formData, category: nextCat });
+                      }
+                    }}
+                  >
+                    <option value="Mejorador de Suelo">🌱 Mejorador de Suelo</option>
+                    <option value="Fertilizante Edáfico">🧪 Fertilizante Edáfico</option>
+                    <option value="Fertilizante Foliar">🍃 Fertilizante Foliar</option>
+                    <option value="Bioestimulante">⚡ Bioestimulante</option>
+                    <option value="Insecticida">🐛 Insecticida / Acaricida</option>
+                    <option value="Fungicida">🍄 Fungicida / Biofungicida</option>
+                    <option value="Enmienda Orgánica">♻️ Enmienda Orgánica</option>
+                    <option value="Herbicida">🌾 Herbicida</option>
+                  </select>
                 </div>
 
+                <div className="md:col-span-2 space-y-1.5">
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase">
+                    Producto Comercial Prescripto * ({prescribedResourcesForCategory.length} en Base de Datos)
+                  </label>
+                  <select
+                    className="w-full border border-emerald-500/40 bg-white dark:bg-slate-900 text-slate-900 dark:text-white p-2.5 rounded-xl font-mono text-xs font-bold focus:ring-2 focus:ring-emerald-500 outline-none"
+                    value={
+                      isCustomProduct
+                        ? '__CUSTOM__'
+                        : prescribedResourcesForCategory.some(r => r.name === formData.productName)
+                        ? formData.productName
+                        : prescribedResourcesForCategory[0]?.name || '__CUSTOM__'
+                    }
+                    onChange={e => {
+                      const val = e.target.value;
+                      if (val === '__CUSTOM__') {
+                        setIsCustomProduct(true);
+                        setFormData({ ...formData, productName: '' });
+                      } else {
+                        const found = prescribedResourcesForCategory.find(r => r.name === val);
+                        if (found) applyCatalogResourceToForm(found);
+                      }
+                    }}
+                  >
+                    {prescribedResourcesForCategory.map(res => (
+                      <option key={res.id} value={res.name}>
+                        {res.name} — {res.recommendedDosagePerHa ?? 2} {res.dosageUnit || 'L/ha'} ({res.senasaRegisterNumber || 'SENASA'}) [Stock: {res.stock ?? 0} {res.unit}]
+                      </option>
+                    ))}
+                    <option value="__CUSTOM__">+ Otro Producto Comercial (Guardar en Base de Datos)</option>
+                  </select>
+                  {isCustomProduct && (
+                    <input
+                      required
+                      type="text"
+                      placeholder="Escribir nombre del nuevo producto comercial..."
+                      className="w-full border border-emerald-500/50 bg-emerald-50/40 dark:bg-slate-950 text-slate-900 dark:text-white p-2.5 rounded-xl font-mono text-xs font-bold focus:ring-2 focus:ring-emerald-500 outline-none"
+                      value={formData.productName}
+                      onChange={e => setFormData({ ...formData, productName: e.target.value })}
+                    />
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Principio Activo / Composición *</label>
                   <input
@@ -832,6 +973,17 @@ export default function PhytosanitaryBook() {
                     className="w-full border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white p-2.5 rounded-xl font-mono text-xs focus:ring-2 focus:ring-emerald-500 outline-none"
                     value={formData.activeIngredient}
                     onChange={e => setFormData({ ...formData, activeIngredient: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Blanco MIP / Objetivo Nutricional</label>
+                  <input
+                    type="text"
+                    placeholder="Ej: Estructura edáfica / Control Arañuela Roja / NPK"
+                    className="w-full border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white p-2.5 rounded-xl font-mono text-xs focus:ring-2 focus:ring-emerald-500 outline-none"
+                    value={formData.targetPestOrDisease || ''}
+                    onChange={e => setFormData({ ...formData, targetPestOrDisease: e.target.value })}
                   />
                 </div>
               </div>

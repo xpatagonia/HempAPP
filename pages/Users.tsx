@@ -1,20 +1,26 @@
 import React, { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAppContext } from "../context/AppContext";
-import { User, UserRole, StructureRole, Client } from "../types";
+import { User, UserRole, StructureRole, Client, SupplierActorRole } from "../types";
 import { 
   Plus, Trash2, Edit2, Shield, Wrench, Eye, EyeOff, AlertCircle, Lock, Key, 
   Save, Loader2, Phone, Briefcase, User as UserIcon, CloudOff, Link as LinkIcon, 
   UserCheck, Building, X, Sparkles, PlusCircle, Star, Search, Filter, FilterX,
   Send, RefreshCw, CheckCircle2, AlertTriangle, ShieldCheck, Users as UsersIcon,
-  Sprout, MapPin, Globe
+  Sprout, MapPin, Globe, Truck
 } from "lucide-react";
 import { 
   sendUserProfileWelcomeEmail, 
   sendPasswordResetEmail, 
   EmailDispatchResult 
 } from "../src/services/emailNotificationService";
-import { getUserAccessAudit, STRUCTURE_ROLES } from "../src/utils/structurePermissions";
+import {
+  getUserAccessAudit,
+  STRUCTURE_ROLES,
+  SUPPLIER_ACTOR_ROLES,
+  SUPPLIER_ACTOR_ROLES_INFO,
+  doesPlotBelongToSupplier
+} from "../src/utils/structurePermissions";
 
 const PRESET_AVATARS = [
   "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix&backgroundColor=b6e3f4",
@@ -32,6 +38,7 @@ export default function Users() {
   const {
     usersList, addUser, updateUser, deleteUser, currentUser,
     clients, allClients, allLocations, allPlots, addClient,
+    suppliers, varieties, seedBatches,
     startImpersonation, stopImpersonation, impersonatingAdmin
   } = useAppContext();
 
@@ -76,8 +83,11 @@ export default function Users() {
     phone: "", 
     avatar: PRESET_AVATARS[0], 
     clientId: "", 
+    supplierId: "",
+    supplierActorRole: "director_tecnico_obtentor",
     isNetworkMember: false
   });
+  const [entityLinkMode, setEntityLinkMode] = useState<"client" | "supplier" | "none">("client");
 
   const isSuperAdmin = currentUser?.role === "super_admin";
   const isAdmin = currentUser?.role === "admin" || isSuperAdmin;
@@ -100,14 +110,26 @@ export default function Users() {
   const techCount = usersList.filter(u => u.role === "technician").length;
   const clientCount = usersList.filter(u => u.role === "client").length;
 
-  // Matriz de Auditoría de Aislamiento por Establecimiento para cada usuario
+  // Matriz de Auditoría de Aislamiento por Establecimiento o Semillero para cada usuario
   const userAuditMap = useMemo(() => {
     const map = new Map<string, ReturnType<typeof getUserAccessAudit>>();
     usersList.forEach(u => {
-      map.set(u.id, getUserAccessAudit(u, allLocations || [], allPlots || [], effectiveClients || []));
+      map.set(
+        u.id,
+        getUserAccessAudit(
+          u,
+          allLocations || [],
+          allPlots || [],
+          effectiveClients || [],
+          [],
+          suppliers || [],
+          varieties || [],
+          seedBatches || []
+        )
+      );
     });
     return map;
-  }, [usersList, allPlots, allLocations, effectiveClients]);
+  }, [usersList, allPlots, allLocations, effectiveClients, suppliers, varieties, seedBatches]);
 
   // Generador de contraseñas de alta seguridad
   const handleGeneratePassword = () => {
@@ -128,7 +150,14 @@ export default function Users() {
       alert("Permisos insuficientes para editar un Super Administrador.");
       return;
     }
-    setFormData({ ...user, password: "" });
+    setFormData({
+      ...user,
+      password: "",
+      clientId: user.clientId || "",
+      supplierId: user.supplierId || "",
+      supplierActorRole: user.supplierActorRole || "director_tecnico_obtentor"
+    });
+    setEntityLinkMode(user.supplierId ? "supplier" : user.clientId ? "client" : "none");
     setEditingId(user.id);
     setSendEmailOnSave(false);
     setIsModalOpen(true);
@@ -167,25 +196,38 @@ export default function Users() {
 
     setIsSaving(true);
     try {
-      const matchedClient = effectiveClients.find(c => c.id === formData.clientId);
-      const payload = {
+      const isLinkingSupplier =
+        (formData.role === "client" || formData.role === "technician" || formData.role === "viewer") &&
+        entityLinkMode === "supplier" &&
+        Boolean(formData.supplierId);
+      const isLinkingClient =
+        (formData.role === "client" || formData.role === "technician" || formData.role === "viewer") &&
+        entityLinkMode === "client" &&
+        Boolean(formData.clientId);
+
+      const matchedClient = isLinkingClient ? effectiveClients.find(c => c.id === formData.clientId) : undefined;
+      const matchedSupplier = isLinkingSupplier ? (suppliers || []).find(s => s.id === formData.supplierId) : undefined;
+
+      const payload: Partial<User> = {
         name: formData.name.trim(),
         email: formData.email.trim(),
         role: formData.role as UserRole,
         structureRole: formData.structureRole || (
-          formData.role === "super_admin" ? "super_admin" :
-          formData.role === "admin" ? "admin" :
+          isLinkingSupplier ? "agronomo" :
           formData.role === "client" ? "propietario" :
-          formData.role === "technician" ? "encargado" : "invitado"
+          formData.role === "technician" ? "encargado" : "monitoreador"
         ),
-        organizationName: matchedClient?.name || formData.organizationName || "Red Cooperativa Nucleus",
-        jobTitle: formData.jobTitle || "",
+        organizationName: matchedSupplier
+          ? `${matchedSupplier.name} · Proveedor Homologado`
+          : matchedClient?.name || formData.organizationName || "Red Cooperativa Nucleus",
+        jobTitle: formData.jobTitle || (isLinkingSupplier && formData.supplierActorRole ? SUPPLIER_ACTOR_ROLES_INFO[formData.supplierActorRole]?.label : ""),
         phone: formData.phone || "",
         avatar: formData.avatar || PRESET_AVATARS[0],
-        clientId: (formData.role === "client" || formData.role === "technician" || formData.role === "viewer")
-          ? (formData.clientId || null)
-          : null,
-        isNetworkMember: formData.isNetworkMember || Boolean(formData.clientId)
+        clientId: isLinkingClient ? (formData.clientId || null) : null,
+        supplierId: isLinkingSupplier ? (formData.supplierId || null) : null,
+        supplierActorRole: isLinkingSupplier ? (formData.supplierActorRole || "director_tecnico_obtentor") : undefined,
+        memberType: isLinkingSupplier ? "Proveedor_Homologado" : formData.memberType,
+        isNetworkMember: formData.isNetworkMember || Boolean(isLinkingClient || isLinkingSupplier)
       };
 
       let finalPassword = formData.password;
@@ -205,7 +247,9 @@ export default function Users() {
 
         // Despacho de bienvenida y credenciales por correo si está activo
         if (sendEmailOnSave && formData.password) {
-          const clientName = clients.find(c => c.id === formData.clientId)?.name;
+          const orgLabel = matchedSupplier
+            ? `${matchedSupplier.name} · Proveedor Homologado (Acceso Aislado a sus Semillas)`
+            : matchedClient?.name || "Red Cooperativa Nucleus";
           const roleLabels: Record<string, string> = {
             admin: "Administrador General",
             technician: "Técnico / Asesor Agronómico",
@@ -216,8 +260,10 @@ export default function Users() {
             const dispatch = await sendUserProfileWelcomeEmail({
               toEmail: formData.email.trim(),
               toName: formData.name.trim(),
-              roleName: roleLabels[formData.role || "technician"] || formData.role || "Técnico",
-              organizationName: clientName || "Red Cooperativa Nucleus",
+              roleName: isLinkingSupplier && formData.supplierActorRole
+                ? `${SUPPLIER_ACTOR_ROLES_INFO[formData.supplierActorRole]?.label} (${matchedSupplier?.name})`
+                : roleLabels[formData.role || "technician"] || formData.role || "Técnico",
+              organizationName: orgLabel,
               tempPassword: formData.password,
               actionUrl: window.location.origin
             });
@@ -246,6 +292,7 @@ export default function Users() {
     setActionLoadingId(user.id);
     try {
       const clientName = clients.find(c => c.id === user.clientId)?.name;
+      const supplierName = (suppliers || []).find(s => s.id === user.supplierId)?.name;
       const roleLabels: Record<string, string> = {
         super_admin: "Super Administrador",
         admin: "Administrador General",
@@ -257,8 +304,12 @@ export default function Users() {
       const dispatch = await sendUserProfileWelcomeEmail({
         toEmail: user.email,
         toName: user.name,
-        roleName: roleLabels[user.role] || user.role,
-        organizationName: clientName || "Red Cooperativa Nucleus",
+        roleName: user.supplierId && user.supplierActorRole
+          ? `${SUPPLIER_ACTOR_ROLES_INFO[user.supplierActorRole]?.label || user.jobTitle} (${supplierName || 'Proveedor Homologado'})`
+          : roleLabels[user.role] || user.role,
+        organizationName: supplierName
+          ? `${supplierName} · Proveedor Homologado (Acceso Aislado a sus Semillas)`
+          : clientName || user.organizationName || "Red Cooperativa Nucleus",
         tempPassword: user.password || "Asignada previamente por el administrador",
         actionUrl: window.location.origin
       });
@@ -391,8 +442,11 @@ export default function Users() {
               password: "", 
               avatar: PRESET_AVATARS[0], 
               clientId: "", 
+              supplierId: "",
+              supplierActorRole: "director_tecnico_obtentor",
               isNetworkMember: false 
             }); 
+            setEntityLinkMode("client");
             setSendEmailOnSave(true);
             setIsModalOpen(true); 
           }} 
@@ -574,90 +628,203 @@ export default function Users() {
         </div>
 
         {showAuditMatrix && (
-          <div className="p-4 sm:p-5 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3.5 bg-slate-50/50 dark:bg-slate-950/40">
-            {effectiveClients.map(client => {
-              const clientLocs = (allLocations || []).filter(l => l.clientId === client.id);
-              const clientLocIds = new Set(clientLocs.map(l => l.id));
-              const clientPlots = (allPlots || []).filter(p => clientLocIds.has(p.locationId));
-              const assignedUsers = usersList.filter(u => String(u.clientId) === String(client.id));
-              return (
-                <div
-                  key={client.id}
-                  className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 flex flex-col justify-between gap-3 shadow-xs"
-                >
-                  <div className="space-y-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <span className="text-[9px] font-mono font-bold uppercase text-emerald-600 dark:text-emerald-400 block">
-                          Establecimiento Socio
-                        </span>
-                        <h3 className="text-xs font-black uppercase text-slate-900 dark:text-white leading-snug">
-                          {client.name}
-                        </h3>
-                      </div>
-                      <span className="px-2 py-0.5 rounded-lg text-[10px] font-mono font-black bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 shrink-0">
-                        {clientPlots.length} Parcelas
-                      </span>
-                    </div>
-
-                    <div className="text-[11px] font-mono text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                      <MapPin size={12} className="text-emerald-500 shrink-0" />
-                      <span className="truncate">
-                        {clientLocs.map(l => `${l.name} (${l.city})`).join(", ") || "Sin sitio"}
-                      </span>
-                    </div>
-
-                    <div className="pt-1 border-t border-slate-100 dark:border-slate-800 space-y-1.5">
-                      <span className="text-[9px] font-mono font-bold uppercase text-slate-400 block">
-                        Usuarios con Acceso Exclusivo ({assignedUsers.length}):
-                      </span>
-                      {assignedUsers.length === 0 ? (
-                        <p className="text-[10px] font-mono text-slate-400 italic">
-                          Gestionado por Dirección Central (Admin)
-                        </p>
-                      ) : (
-                        <div className="space-y-1">
-                          {assignedUsers.map(au => (
-                            <div
-                              key={au.id}
-                              className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200/60 dark:border-slate-700/60"
-                            >
-                              <div className="min-w-0">
-                                <p className="text-[11px] font-black text-slate-800 dark:text-slate-100 truncate">
-                                  {au.name}
-                                </p>
-                                <p className="text-[9px] font-mono text-slate-500 dark:text-slate-400 uppercase">
-                                  {au.role === "client" ? "Titular / Productor" : "Técnico / Encargado"} · {au.jobTitle || au.role}
-                                </p>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  startImpersonation(au.id);
-                                  navigate("/plots");
-                                }}
-                                title={`Auditar vista aislada de ${au.name} (${clientPlots.length} parcelas)`}
-                                className="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[9px] font-mono font-black uppercase shrink-0 cursor-pointer"
-                              >
-                                Simular
-                              </button>
-                            </div>
-                          ))}
+          <div className="p-4 sm:p-5 space-y-5 bg-slate-50/50 dark:bg-slate-950/40">
+            {/* SUBSECCIÓN 1: ESTABLECIMIENTOS SOCIOS DE LA RED (INTACTOS) */}
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-mono font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
+                  <Building size={13} />
+                  <span>1. Aislamiento por Establecimiento Socio de la Red ({effectiveClients.length} Socios)</span>
+                </span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3.5">
+                {effectiveClients.map(client => {
+                  const clientLocs = (allLocations || []).filter(l => l.clientId === client.id);
+                  const clientLocIds = new Set(clientLocs.map(l => l.id));
+                  const clientPlots = (allPlots || []).filter(p => clientLocIds.has(p.locationId));
+                  const assignedUsers = usersList.filter(u => String(u.clientId) === String(client.id));
+                  return (
+                    <div
+                      key={client.id}
+                      className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 flex flex-col justify-between gap-3 shadow-xs"
+                    >
+                      <div className="space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <span className="text-[9px] font-mono font-bold uppercase text-emerald-600 dark:text-emerald-400 block">
+                              Establecimiento Socio
+                            </span>
+                            <h3 className="text-xs font-black uppercase text-slate-900 dark:text-white leading-snug">
+                              {client.name}
+                            </h3>
+                          </div>
+                          <span className="px-2 py-0.5 rounded-lg text-[10px] font-mono font-black bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 shrink-0">
+                            {clientPlots.length} Parcelas
+                          </span>
                         </div>
-                      )}
-                    </div>
-                  </div>
 
-                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[10px] font-mono text-slate-400">
-                    <span>Aislamiento: Estricto</span>
-                    <span className="font-bold text-slate-600 dark:text-slate-300 truncate max-w-[160px]">
-                      {clientPlots.slice(0, 2).map(p => p.name).join(", ")}
-                      {clientPlots.length > 2 ? ` +${clientPlots.length - 2}` : ""}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
+                        <div className="text-[11px] font-mono text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                          <MapPin size={12} className="text-emerald-500 shrink-0" />
+                          <span className="truncate">
+                            {clientLocs.map(l => `${l.name} (${l.city})`).join(", ") || "Sin sitio"}
+                          </span>
+                        </div>
+
+                        <div className="pt-1 border-t border-slate-100 dark:border-slate-800 space-y-1.5">
+                          <span className="text-[9px] font-mono font-bold uppercase text-slate-400 block">
+                            Usuarios con Acceso Exclusivo ({assignedUsers.length}):
+                          </span>
+                          {assignedUsers.length === 0 ? (
+                            <p className="text-[10px] font-mono text-slate-400 italic">
+                              Gestionado por Dirección Central (Admin)
+                            </p>
+                          ) : (
+                            <div className="space-y-1">
+                              {assignedUsers.map(au => (
+                                <div
+                                  key={au.id}
+                                  className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200/60 dark:border-slate-700/60"
+                                >
+                                  <div className="min-w-0">
+                                    <p className="text-[11px] font-black text-slate-800 dark:text-slate-100 truncate">
+                                      {au.name}
+                                    </p>
+                                    <p className="text-[9px] font-mono text-slate-500 dark:text-slate-400 uppercase">
+                                      {au.role === "client" ? "Titular / Productor" : "Técnico / Encargado"} · {au.jobTitle || au.role}
+                                    </p>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      startImpersonation(au.id);
+                                      navigate("/plots");
+                                    }}
+                                    title={`Auditar vista aislada de ${au.name} (${clientPlots.length} parcelas)`}
+                                    className="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[9px] font-mono font-black uppercase shrink-0 cursor-pointer"
+                                  >
+                                    Simular
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[10px] font-mono text-slate-400">
+                        <span>Aislamiento: Estricto</span>
+                        <span className="font-bold text-slate-600 dark:text-slate-300 truncate max-w-[160px]">
+                          {clientPlots.slice(0, 2).map(p => p.name).join(", ")}
+                          {clientPlots.length > 2 ? ` +${clientPlots.length - 2}` : ""}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* SUBSECCIÓN 2: AISLAMIENTO POR SEMILLERO / PROVEEDOR HOMOLOGADO (ACCESO EXCLUSIVO A PARCELAS CON SU SEMILLA) */}
+            <div className="space-y-2.5 pt-3 border-t border-slate-200/80 dark:border-slate-800">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-[10px] font-mono font-black uppercase tracking-wider text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                  <Sprout size={13} />
+                  <span>2. Aislamiento por Semillero / Proveedor Homologado (Acceso Exclusivo a Parcelas con su Semilla)</span>
+                </span>
+                <span className="text-[10px] font-mono text-slate-400">
+                  Los usuarios de un semillero ven únicamente los lotes implantados con su genética
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5">
+                {(suppliers || []).map(sup => {
+                  const supVarieties = (varieties || []).filter(v => String(v.supplierId) === String(sup.id));
+                  const supPlots = (allPlots || []).filter(p =>
+                    doesPlotBelongToSupplier(sup.id, p, varieties || [], seedBatches || [])
+                  );
+                  const supUsers = usersList.filter(u => String(u.supplierId) === String(sup.id));
+                  if (supPlots.length === 0 && supUsers.length === 0) return null;
+
+                  return (
+                    <div
+                      key={sup.id}
+                      className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-amber-300/70 dark:border-amber-800/70 flex flex-col justify-between gap-3 shadow-xs"
+                    >
+                      <div className="space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <span className="text-[9px] font-mono font-bold uppercase text-amber-600 dark:text-amber-400 block">
+                              Semillero / Proveedor Homologado
+                            </span>
+                            <h3 className="text-xs font-black uppercase text-slate-900 dark:text-white leading-snug">
+                              {sup.name}
+                            </h3>
+                          </div>
+                          <span className="px-2 py-0.5 rounded-lg text-[10px] font-mono font-black bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 shrink-0">
+                            {supPlots.length} Parcelas con su Semilla
+                          </span>
+                        </div>
+
+                        <div className="text-[11px] font-mono text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                          <Sprout size={12} className="text-amber-500 shrink-0" />
+                          <span className="truncate">
+                            Genéticas: <strong>{supVarieties.map(v => v.name).join(", ") || "Insumos SENASA"}</strong>
+                          </span>
+                        </div>
+
+                        <div className="pt-1 border-t border-slate-100 dark:border-slate-800 space-y-1.5">
+                          <span className="text-[9px] font-mono font-bold uppercase text-slate-400 block">
+                            Humanos del Proveedor con Acceso ({supUsers.length}):
+                          </span>
+                          {supUsers.length === 0 ? (
+                            <p className="text-[10px] font-mono text-slate-400 italic">
+                              Sin usuarios activos aún (habilitar desde Proveedores)
+                            </p>
+                          ) : (
+                            <div className="space-y-1">
+                              {supUsers.map(su => (
+                                <div
+                                  key={su.id}
+                                  className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-amber-50/50 dark:bg-amber-950/30 border border-amber-200/70 dark:border-amber-800/60"
+                                >
+                                  <div className="min-w-0">
+                                    <p className="text-[11px] font-black text-slate-800 dark:text-slate-100 truncate">
+                                      {su.name}
+                                    </p>
+                                    <p className="text-[9px] font-mono text-slate-500 dark:text-slate-400 uppercase truncate">
+                                      {su.jobTitle || "Director Técnico Semillero"} · {su.email}
+                                    </p>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      startImpersonation(su.id);
+                                      navigate("/plots");
+                                    }}
+                                    title={`Simular vista aislada de ${su.name} (${supPlots.length} parcelas con semilla de ${sup.name})`}
+                                    className="px-2 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-[9px] font-mono font-black uppercase shrink-0 cursor-pointer"
+                                  >
+                                    Simular
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[10px] font-mono text-slate-400">
+                        <span>Candado: Por Genética</span>
+                        <span className="font-bold text-slate-600 dark:text-slate-300 truncate max-w-[180px]">
+                          {supPlots.slice(0, 2).map(p => p.name).join(", ")}
+                          {supPlots.length > 2 ? ` +${supPlots.length - 2}` : ""}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -749,7 +916,17 @@ export default function Users() {
 
                     {/* Entidad */}
                     <td className="px-6 py-5">
-                      {user.clientId ? (
+                      {user.supplierId ? (
+                        <div className="space-y-0.5">
+                          <div className="flex items-center text-gray-800 dark:text-gray-200 font-black text-xs uppercase tracking-tight">
+                            <Truck size={14} className="mr-1.5 text-amber-600 shrink-0"/>
+                            <span>{(suppliers || []).find(s => s.id === user.supplierId)?.name || user.organizationName || "Semillero Homologado"}</span>
+                          </div>
+                          <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded border border-amber-300 dark:border-amber-800/60">
+                            <Sprout size={10} /> Exclusivo Parcelas con su Semilla
+                          </span>
+                        </div>
+                      ) : user.clientId ? (
                         <div className="space-y-0.5">
                           <div className="flex items-center text-gray-800 dark:text-gray-200 font-black text-xs uppercase tracking-tight">
                             <Building size={14} className="mr-1.5 text-emerald-600 shrink-0"/>
@@ -778,9 +955,11 @@ export default function Users() {
                         <div className="space-y-1 max-w-xs">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-black ${
-                              audit.isolationScope === "ESTABLECIMIENTO_AISLADO"
-                                ? "bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800"
-                                : "bg-purple-100 dark:bg-purple-950/70 text-purple-800 dark:text-purple-300 border border-purple-300 dark:border-purple-800"
+                              audit.isolationScope === "PROVEEDOR_SEMILLERO_AISLADO"
+                                ? "bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800"
+                                : audit.isolationScope === "ESTABLECIMIENTO_AISLADO"
+                                  ? "bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800"
+                                  : "bg-purple-100 dark:bg-purple-950/70 text-purple-800 dark:text-purple-300 border border-purple-300 dark:border-purple-800"
                             }`}>
                               <Sprout size={10} className="inline mr-1" />
                               {audit.allowedPlotsCount} Parcelas Habilitadas
@@ -1199,35 +1378,115 @@ export default function Users() {
 
               {/* Entidad vinculada si es productor, técnico o visor */}
               {(formData.role === "client" || formData.role === "technician" || formData.role === "viewer") && (
-                <div className="bg-blue-50 dark:bg-blue-900/10 p-5 rounded-3xl border border-blue-100 dark:border-blue-900/30 space-y-3">
+                <div className="bg-blue-50 dark:bg-blue-900/10 p-5 rounded-3xl border border-blue-100 dark:border-blue-900/30 space-y-4">
                   <div>
                     <label className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest block mb-2">
-                      Establecimiento / Organización Vinculada (Aislamiento de Parcelas) {formData.role !== "viewer" ? "*" : "(Opcional para Auditor)"}
+                      Tipo de Aislamiento Operativo del Usuario
                     </label>
-                    <select 
-                      required={formData.role === "client" || formData.role === "technician"} 
-                      className={inputClass} 
-                      value={formData.clientId || ""} 
-                      onChange={e => setFormData({...formData, clientId: e.target.value})}
-                    >
-                      <option value="">{formData.role === "viewer" ? "Sin restricción (Auditoría Global Lectura)" : "Seleccionar establecimiento asociado..."}</option>
-                      {effectiveClients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setEntityLinkMode("client")}
+                        className={`py-2.5 px-3 rounded-xl text-[10px] font-black uppercase border transition cursor-pointer ${
+                          entityLinkMode === "client"
+                            ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                            : "bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+                        }`}
+                      >
+                        1. Establecimiento Socio
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEntityLinkMode("supplier")}
+                        className={`py-2.5 px-3 rounded-xl text-[10px] font-black uppercase border transition cursor-pointer ${
+                          entityLinkMode === "supplier"
+                            ? "bg-amber-500 text-slate-950 border-amber-500 shadow-sm"
+                            : "bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+                        }`}
+                      >
+                        2. Proveedor / Semillero
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEntityLinkMode("none")}
+                        className={`py-2.5 px-3 rounded-xl text-[10px] font-black uppercase border transition cursor-pointer ${
+                          entityLinkMode === "none"
+                            ? "bg-purple-600 text-white border-purple-600 shadow-sm"
+                            : "bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+                        }`}
+                      >
+                        3. Red Central / Global
+                      </button>
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest block mb-2">
-                      Función Operativa en el Establecimiento
-                    </label>
-                    <select
-                      className={inputClass}
-                      value={formData.structureRole || (formData.role === "client" ? "propietario" : formData.role === "technician" ? "encargado" : "monitoreador")}
-                      onChange={e => setFormData({...formData, structureRole: e.target.value as StructureRole})}
-                    >
-                      {STRUCTURE_ROLES.map(sr => (
-                        <option key={sr.value} value={sr.value}>{sr.label} — {sr.description}</option>
-                      ))}
-                    </select>
-                  </div>
+
+                  {entityLinkMode === "client" && (
+                    <>
+                      <div>
+                        <label className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest block mb-2">
+                          Establecimiento Socio Vinculado (Aislamiento de Parcelas) *
+                        </label>
+                        <select 
+                          required
+                          className={inputClass} 
+                          value={formData.clientId || ""} 
+                          onChange={e => setFormData({...formData, clientId: e.target.value, supplierId: ""})}
+                        >
+                          <option value="">Seleccionar establecimiento asociado...</option>
+                          {effectiveClients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest block mb-2">
+                          Función Operativa en el Establecimiento
+                        </label>
+                        <select
+                          className={inputClass}
+                          value={formData.structureRole || (formData.role === "client" ? "propietario" : formData.role === "technician" ? "encargado" : "monitoreador")}
+                          onChange={e => setFormData({...formData, structureRole: e.target.value as StructureRole})}
+                        >
+                          {STRUCTURE_ROLES.map(sr => (
+                            <option key={sr.value} value={sr.value}>{sr.label} — {sr.description}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </>
+                  )}
+
+                  {entityLinkMode === "supplier" && (
+                    <>
+                      <div>
+                        <label className="text-[10px] font-black text-amber-700 dark:text-amber-400 uppercase tracking-widest block mb-2">
+                          Proveedor / Semillero Homologado (Acceso Exclusivo a Parcelas con su Semilla) *
+                        </label>
+                        <select
+                          required
+                          className={inputClass}
+                          value={formData.supplierId || ""}
+                          onChange={e => setFormData({ ...formData, supplierId: e.target.value, clientId: "" })}
+                        >
+                          <option value="">Seleccionar semillero o proveedor homologado...</option>
+                          {(suppliers || []).map(s => (
+                            <option key={s.id} value={s.id}>{s.name} ({s.category})</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-amber-700 dark:text-amber-400 uppercase tracking-widest block mb-2">
+                          Rol del Humano dentro del Proveedor
+                        </label>
+                        <select
+                          className={inputClass}
+                          value={formData.supplierActorRole || "director_tecnico_obtentor"}
+                          onChange={e => setFormData({ ...formData, supplierActorRole: e.target.value as SupplierActorRole })}
+                        >
+                          {SUPPLIER_ACTOR_ROLES.map(r => (
+                            <option key={r.value} value={r.value}>{r.label} — {r.description}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
 
