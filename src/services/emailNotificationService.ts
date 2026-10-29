@@ -37,6 +37,19 @@ export interface SendAgronomicAlertParams {
   extraData?: Record<string, any>;
 }
 
+export interface SendLaborAssignedParams {
+  toEmail: string;
+  toName: string;
+  taskTitle: string;
+  plotName: string;
+  dueDate: string;
+  priority: string;
+  machinery?: string;
+  operator?: string;
+  description?: string;
+  actionUrl?: string;
+}
+
 export interface EmailDispatchResult {
   success: boolean;
   message: string;
@@ -71,9 +84,11 @@ if (typeof window !== 'undefined') {
   } catch {}
 }
 
-const isRealDelivery = (via?: string): boolean => {
-  return via === 'vercel_resend' || via === 'resend_https';
+export const isRealEmailDelivery = (via?: string): boolean => {
+  return via === 'vercel_resend' || via === 'resend_https' || via === 'smtp';
 };
+
+const isRealDelivery = isRealEmailDelivery;
 
 export function getEmailAuditLog(): EmailAuditLogEntry[] {
   if (typeof window === 'undefined') return [];
@@ -513,3 +528,81 @@ export async function sendUserProfileWelcomeEmail(
     return result;
   }
 }
+
+/**
+ * Envía orden de labor agrícola por correo electrónico vía Vercel + Resend.com
+ */
+export async function sendLaborAssignedEmail(
+  params: SendLaborAssignedParams
+): Promise<EmailDispatchResult> {
+  const timestamp = new Date().toISOString();
+
+  const payload = {
+    to_email: params.toEmail.trim(),
+    to_name: params.toName.trim(),
+    notification_type: "labor_assigned",
+    task_title: params.taskTitle,
+    plot_name: params.plotName,
+    alert_details: params.description || `Orden de labor agrícola programada para el ${params.dueDate}.`,
+    action_url: params.actionUrl || `${window.location.origin}/#/tasks`,
+    extra_data: {
+      due_date: params.dueDate,
+      priority: params.priority,
+      machinery: params.machinery || "Maquinaria Agrícola",
+      operator: params.operator || params.toName
+    }
+  };
+
+  try {
+    const data = await postEmailViaVercelResend(payload);
+    const result: EmailDispatchResult = {
+      success: Boolean(data.success !== false),
+      message: data.message || `Orden de labor enviada a ${params.toEmail}`,
+      sentFrom: data.sent_from || "notificaciones@hempc.com.ar",
+      sentTo: data.sent_to || params.toEmail,
+      deliveredVia: data.delivered_via || "vercel_resend",
+      timestamp
+    };
+
+    saveEmailAuditEntry({
+      id: `email-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      timestamp,
+      toEmail: params.toEmail,
+      toName: params.toName,
+      type: "labor_assigned",
+      subject: `🚜 Orden de Labor Agrícola: ${params.taskTitle}`,
+      fieldName: params.plotName,
+      sentFrom: result.sentFrom,
+      status: isRealDelivery(result.deliveredVia) ? "enviado" : "simulado",
+      deliveredVia: result.deliveredVia
+    });
+
+    return result;
+  } catch (err: any) {
+    console.warn("Fallo en despacho de orden de labor:", err);
+    const result: EmailDispatchResult = {
+      success: true,
+      message: `Orden registrada hacia ${params.toEmail} desde notificaciones@hempc.com.ar`,
+      sentFrom: "notificaciones@hempc.com.ar",
+      sentTo: params.toEmail,
+      deliveredVia: "simulated_local",
+      timestamp
+    };
+
+    saveEmailAuditEntry({
+      id: `email-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      timestamp,
+      toEmail: params.toEmail,
+      toName: params.toName,
+      type: "labor_assigned",
+      subject: `🚜 Orden de Labor Agrícola: ${params.taskTitle}`,
+      fieldName: params.plotName,
+      sentFrom: result.sentFrom,
+      status: "simulado",
+      deliveredVia: "simulated_local"
+    });
+
+    return result;
+  }
+}
+

@@ -424,30 +424,30 @@ export default function Users() {
 
       {/* TOAST DE FEEDBACK DE ENVÍO DE EMAIL */}
       {emailToast && (() => {
-        const isRealSmtp = emailToast.via === "smtp";
+        const isRealDelivery = emailToast.via === "vercel_resend" || emailToast.via === "resend_https" || emailToast.via === "smtp";
         return (
           <div className={`mb-6 p-4 rounded-2xl border flex items-center justify-between animate-in slide-in-from-top-2 shadow-lg ${
-            isRealSmtp
+            isRealDelivery
               ? "bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-700/60 text-emerald-900 dark:text-emerald-200"
               : "bg-amber-50 dark:bg-amber-950/60 border-amber-300 dark:border-amber-700/60 text-amber-900 dark:text-amber-200"
           }`}>
             <div className="flex items-center space-x-3">
-              <div className={`p-2 rounded-xl text-white ${isRealSmtp ? "bg-emerald-600" : "bg-amber-600"}`}>
-                {isRealSmtp ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
+              <div className={`p-2 rounded-xl text-white ${isRealDelivery ? "bg-emerald-600" : "bg-amber-600"}`}>
+                {isRealDelivery ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
               </div>
               <div>
                 <p className="text-xs font-black uppercase tracking-wider">
-                  {isRealSmtp ? "Notificación de Acceso Despachada (SMTP Real)" : "Despacho Registrado en Auditoría Local"}
+                  {isRealDelivery ? "Notificación de Acceso Despachada (Vercel + Resend.com)" : "Despacho Registrado en Auditoría Local"}
                 </p>
                 <p className="text-xs opacity-90">{emailToast.message}</p>
-                <p className={`text-[10px] font-mono mt-0.5 ${isRealSmtp ? "text-emerald-700 dark:text-emerald-400" : "text-amber-800 dark:text-amber-300"}`}>
+                <p className={`text-[10px] font-mono mt-0.5 ${isRealDelivery ? "text-emerald-700 dark:text-emerald-400" : "text-amber-800 dark:text-amber-300"}`}>
                   Remitente: notificaciones@hempc.com.ar • Destino: {emailToast.sentTo} • Vía: {emailToast.via}
                 </p>
               </div>
             </div>
             <button 
               onClick={() => setEmailToast(null)} 
-              className={`p-1.5 rounded-lg cursor-pointer ${isRealSmtp ? "text-emerald-600 hover:bg-emerald-100" : "text-amber-700 hover:bg-amber-100"}`}
+              className={`p-1.5 rounded-lg cursor-pointer ${isRealDelivery ? "text-emerald-600 hover:bg-emerald-100" : "text-amber-700 hover:bg-amber-100"}`}
             >
               <X size={18} />
             </button>

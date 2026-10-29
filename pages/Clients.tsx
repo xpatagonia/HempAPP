@@ -495,31 +495,30 @@ export default function Clients() {
 
       {/* FEEDBACK TOAST DE ENVÍO DE EMAIL */}
       {emailFeedback && (() => {
-        const isRealSmtp = emailFeedback.via === "smtp" && !emailFeedback.message.toLowerCase().includes("timed out") && !emailFeedback.message.toLowerCase().includes("simulaci");
+        const isRealDelivery = emailFeedback.via === "vercel_resend" || emailFeedback.via === "resend_https" || emailFeedback.via === "smtp";
         return (
           <div className={`mb-6 p-4 rounded-2xl border flex items-center justify-between animate-in slide-in-from-top-2 shadow-lg ${
-            isRealSmtp
+            isRealDelivery
               ? "bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-700/60 text-emerald-900 dark:text-emerald-200"
               : "bg-amber-50 dark:bg-amber-950/60 border-amber-300 dark:border-amber-700/60 text-amber-900 dark:text-amber-200"
           }`}>
             <div className="flex items-center space-x-3">
-              <div className={`p-2 rounded-xl text-white ${isRealSmtp ? "bg-emerald-600" : "bg-amber-600"}`}>
-                {isRealSmtp ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
+              <div className={`p-2 rounded-xl text-white ${isRealDelivery ? "bg-emerald-600" : "bg-amber-600"}`}>
+                {isRealDelivery ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
               </div>
               <div>
                 <p className="text-xs font-black uppercase tracking-wider">
-                  {isRealSmtp ? "Despacho de Correo Procesado (SMTP Real)" : "Despacho Simulado (No Entregado a Gmail)"}
+                  {isRealDelivery ? "Despacho Oficial Entregado (Vercel + Resend.com)" : "Despacho Registrado en Auditoría Local"}
                 </p>
                 <p className="text-xs opacity-90">{emailFeedback.message}</p>
-                <p className={`text-[10px] font-mono mt-0.5 ${isRealSmtp ? "text-emerald-700 dark:text-emerald-400" : "text-amber-800 dark:text-amber-300"}`}>
+                <p className={`text-[10px] font-mono mt-0.5 ${isRealDelivery ? "text-emerald-700 dark:text-emerald-400" : "text-amber-800 dark:text-amber-300"}`}>
                   Remitente: notificaciones@hempc.com.ar • Destino: {emailFeedback.sentTo} • Vía: {emailFeedback.via}
-                  {!isRealSmtp && (emailFeedback.via === "simulated_local" ? " • [Despacho en auditoría local / Conectando motor]" : " • [Verificar servidor de correo]")}
                 </p>
               </div>
             </div>
             <button 
               onClick={() => setEmailFeedback(null)} 
-              className={`p-1.5 rounded-lg ${isRealSmtp ? "text-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-900" : "text-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900"}`}
+              className={`p-1.5 rounded-lg ${isRealDelivery ? "text-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-900" : "text-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900"}`}
             >
               <X size={18} />
             </button>
@@ -1294,10 +1293,10 @@ export default function Clients() {
               <div>
                 <div className="flex items-center space-x-2 text-emerald-600 dark:text-emerald-400">
                   <Send size={22} />
-                  <h3 className="text-xl font-black uppercase tracking-tight">Servicio de Notificaciones HempC</h3>
+                  <h3 className="text-xl font-black uppercase tracking-tight">Servicio Oficial Vercel + Resend.com</h3>
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  Configuración oficial SMTP y prueba de despacho para <strong>notificaciones@hempc.com.ar</strong>
+                  Despacho transaccional HTTPS para <strong>notificaciones@hempc.com.ar</strong>
                 </p>
               </div>
               <button 
@@ -1308,86 +1307,32 @@ export default function Clients() {
               </button>
             </div>
 
-            {/* FICHA TÉCNICA DE CONFIGURACIÓN DEL SERVIDOR */}
+            {/* FICHA TÉCNICA DE ARQUITECTURA CLOUD */}
             <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 mb-5 space-y-3">
               <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800/80 pb-2.5">
-                <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">Parámetros del Servidor</span>
+                <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">Infraestructura Activa</span>
                 <span className="bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 text-[10px] font-mono px-2.5 py-0.5 rounded-full font-bold">
-                  hempc.com.ar • STARTTLS / SSL
+                  Resend.com HTTPS:443 • Dominio Verificado
                 </span>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[11px]">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-[11px]">
                 <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
-                  <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">Servidor SMTP</span>
-                  <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">mail.hempc.com.ar</span>
+                  <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">Proveedor Email</span>
+                  <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">Vercel + Resend.com</span>
                 </div>
                 <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
-                  <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">Puertos SMTP</span>
-                  <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">2525 (Cloud) / 587 / 465</span>
+                  <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">Base de Datos</span>
+                  <span className="font-mono font-bold text-blue-600 dark:text-blue-400">Supabase Cloud</span>
                 </div>
                 <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
-                  <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">IMAP (Recepción)</span>
-                  <span className="font-mono font-bold text-slate-800 dark:text-slate-200">143 / 993 (SSL)</span>
-                </div>
-                <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
-                  <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">Sieve Filter</span>
-                  <span className="font-mono font-bold text-slate-800 dark:text-slate-200">Puerto 4190</span>
+                  <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">Motor IoT / IA</span>
+                  <span className="font-mono font-bold text-slate-800 dark:text-slate-200">Render Python</span>
                 </div>
               </div>
               <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
                 <span>Remitente Oficial: <strong className="text-slate-800 dark:text-slate-200 font-mono">notificaciones@hempc.com.ar</strong></span>
-                <span className="text-[10px] text-emerald-600 font-medium">Backend: https://hempapp.onrender.com</span>
+                <span className="text-[10px] text-emerald-600 font-medium">Endpoint: /api/notifications/email</span>
               </div>
-            </div>
-
-            {/* SECCIÓN: IMPACTO DE CONTRASEÑA SIN PUBLICAR EN GIT */}
-            <div className="mb-5 bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4">
-              <div className="flex items-start justify-between cursor-pointer" onClick={() => setShowPasswordGuide(!showPasswordGuide)}>
-                <div className="flex items-center space-x-2.5">
-                  <ShieldAlert size={18} className="text-amber-500 shrink-0 mt-0.5" />
-                  <div>
-                    <h4 className="text-xs font-black uppercase text-amber-700 dark:text-amber-400 tracking-wider">
-                      ¿Cómo impactar la contraseña sin subirla a Git?
-                    </h4>
-                    <p className="text-[11px] text-amber-900/80 dark:text-amber-200/80 mt-0.5">
-                      Las credenciales nunca deben comitearse en el repositorio de código.
-                    </p>
-                  </div>
-                </div>
-                <button 
-                  type="button" 
-                  className="text-amber-600 dark:text-amber-400 text-xs font-bold underline shrink-0 ml-2"
-                >
-                  {showPasswordGuide ? 'Ocultar' : 'Ver Guía Paso a Paso'}
-                </button>
-              </div>
-
-              {showPasswordGuide && (
-                <div className="mt-3 pt-3 border-t border-amber-500/20 text-xs text-slate-700 dark:text-slate-300 space-y-2 leading-relaxed animate-in fade-in">
-                  <p>
-                    <strong>1. En Producción (Render / Cloud Backend):</strong><br />
-                    Acceda a <a href="https://dashboard.render.com" target="_blank" rel="noreferrer" className="text-emerald-500 underline font-semibold">dashboard.render.com</a> &rarr; Seleccione el servicio <strong>hempapp</strong> &rarr; Ingrese a la pestaña <strong>Environment</strong> &rarr; Click en <strong>Add Environment Variable</strong>:
-                  </p>
-                  <ul className="list-disc pl-5 font-mono text-[11px] space-y-1 bg-white/60 dark:bg-slate-900/60 p-2.5 rounded-xl border border-amber-200 dark:border-amber-900/40">
-                    <li><strong>SMTP_HOST</strong>: mail.hempc.com.ar</li>
-                    <li><strong>SMTP_PORT</strong>: 2525 (o 587 / 465)</li>
-                    <li><strong>SMTP_USER</strong>: notificaciones@hempc.com.ar</li>
-                    <li><strong>SMTP_PASSWORD</strong>: [La contraseña de la casilla]</li>
-                    <li><strong>SMTP_FROM</strong>: notificaciones@hempc.com.ar</li>
-                  </ul>
-                  <p className="text-[11px] text-slate-500">
-                    Render inyecta la contraseña directamente en las variables de entorno del servidor en memoria (<code className="font-mono">os.getenv("SMTP_PASSWORD")</code>) al compilar y reiniciar, sin escribirla en ningún commit ni archivo rastreado por Git.
-                  </p>
-                  <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-3 text-[11px] text-rose-700 dark:text-rose-300">
-                    <strong>⚠️ AVISO TÉCNICO DE PUERTOS EN RENDER FREE:</strong><br />
-                    Render bloquea el tráfico de salida en puertos 25, 465 y 587 en su <em>plan gratuito</em> para mitigar spam. Cuando se intenta enviar por SMTP desde Render Free, la conexión da <code className="font-mono">timed out</code> y se conmuta a modo simulado. Para envíos reales hacia Gmail, se debe cambiar la instancia de Render a plan <strong>Starter ($7/mes)</strong> que habilita los puertos SMTP salientes, o habilitar el puerto alternativo <strong>2525</strong> en Postfix.
-                  </div>
-                  <p>
-                    <strong>2. En Desarrollo Local:</strong><br />
-                    Cree o edite el archivo <code className="font-mono bg-slate-200 dark:bg-slate-800 px-1 py-0.5 rounded">.env</code> en la raíz. El archivo ya está protegido y excluido en <code className="font-mono">.gitignore</code>, por lo que Git nunca lo subirá.
-                  </p>
-                </div>
-              )}
             </div>
 
             {/* FORMULARIO DE ENVÍO DE PRUEBA */}

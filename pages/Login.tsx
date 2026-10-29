@@ -143,10 +143,11 @@ export default function Login() {
         actionUrl: window.location.origin
       });
 
+      const isReal = res.deliveredVia === "vercel_resend" || res.deliveredVia === "resend_https" || res.deliveredVia === "smtp";
       setForgotStatus({
         type: "success",
-        message: `Hemos despachado una contraseña provisoria de acceso a tu casilla "${targetEmail}" vía ${res.deliveredVia === "smtp" ? "SMTP Real (mail.hempc.com.ar)" : "Auditoría Local"}. Revisa tu bandeja de entrada o spam para ingresar.`,
-        tempPassword: res.deliveredVia !== "smtp" ? tempPassword : undefined
+        message: `Hemos despachado una contraseña provisoria de acceso a tu casilla "${targetEmail}" vía ${isReal ? "Vercel + Resend.com (notificaciones@hempc.com.ar)" : "Auditoría Local"}. Revisa tu bandeja de entrada o spam para ingresar.`,
+        tempPassword: !isReal ? tempPassword : undefined
       });
     } catch (err: any) {
       setForgotStatus({

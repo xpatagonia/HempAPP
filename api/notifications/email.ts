@@ -259,6 +259,63 @@ function buildPasswordResetHtml(req: EmailNotificationPayload): string {
   </html>`;
 }
 
+function buildLaborAssignedHtml(req: EmailNotificationPayload): string {
+  const taskTitle = req.task_title || req.alert_title || 'Orden de Labor Agrícola';
+  const plot = req.plot_name || 'Parcela Asignada';
+  const details = req.alert_details || 'Se ha emitido una nueva orden de trabajo técnico en campo.';
+  const actionUrl = req.action_url || 'https://hemp-net.vercel.app/#/tasks';
+  const extra = req.extra_data || {};
+  const dueDate = extra.due_date || 'Programada';
+  const priority = extra.priority || 'Alta';
+  const machinery = extra.machinery || 'Maquinaria Agrícola';
+  const operator = extra.operator || req.to_name;
+
+  return `
+  <!DOCTYPE html>
+  <html>
+  <head>
+    <meta charset="utf-8">
+    <style>
+      body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 24px; }
+      .container { max-width: 580px; margin: 0 auto; background: #ffffff; border-radius: 24px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.04); }
+      .header { background: #0f172a; padding: 26px 32px; color: #ffffff; border-bottom: 4px solid #10b981; }
+      .content { padding: 32px; color: #334155; line-height: 1.6; }
+      .btn { display: inline-block; background: #10b981; color: #ffffff !important; padding: 14px 28px; border-radius: 14px; font-weight: 800; text-decoration: none; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; }
+      .footer { background: #f8fafc; padding: 20px 32px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #94a3b8; text-align: center; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <div style="font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: #34d399; font-weight: 800; margin-bottom: 2px;">PatagonianC LTDA Cooperativa de Trabajo</div>
+        <div style="font-size: 12px; font-weight: 900; color: #ffffff; margin-bottom: 6px;">CUIT: 30-71816113-0 · HempC (Unidad de Negocios)</div>
+        <h1 style="margin: 6px 0 0 0; font-size: 20px; font-weight: 900;">🚜 Orden de Labor Agrícola: ${taskTitle}</h1>
+      </div>
+      <div class="content">
+        <p style="font-size: 14px; margin-top: 0;">Hola <strong>${req.to_name}</strong>,</p>
+        <p style="font-size: 13px; color: #475569;">
+          Se ha registrado y asignado una orden de labor técnica en la plataforma cooperativa para la parcela <strong>${plot}</strong>:
+        </p>
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #10b981; border-radius: 14px; padding: 16px 20px; margin: 18px 0; font-size: 13px;">
+          <p style="margin: 0 0 6px 0;"><strong>📍 Lote / Parcela:</strong> ${plot}</p>
+          <p style="margin: 0 0 6px 0;"><strong>📅 Fecha Programada:</strong> ${dueDate} • <strong>Prioridad:</strong> ${priority}</p>
+          <p style="margin: 0 0 6px 0;"><strong>🚜 Maquinaria / Implemento:</strong> ${machinery}</p>
+          <p style="margin: 0 0 10px 0;"><strong>👷 Operario Responsable:</strong> ${operator}</p>
+          <p style="margin: 0; color: #0f172a; font-weight: 500;">${details}</p>
+        </div>
+        <div style="text-align: center; margin: 28px 0 16px 0;">
+          <a href="${actionUrl}" class="btn">Abrir Orden de Trabajo en Plataforma</a>
+        </div>
+      </div>
+      <div class="footer">
+        <div style="margin-bottom: 6px; font-weight: 800; color: #334155; font-size: 12px;">PatagonianC LTDA Cooperativa de Trabajo · CUIT: 30-71816113-0 · HempC (Unidad de Negocios)</div>
+        <div style="font-size: 11px; color: #64748b;">Enviado por <strong>notificaciones@hempc.com.ar</strong> (Vercel + Resend HTTPS)</div>
+      </div>
+    </div>
+  </body>
+  </html>`;
+}
+
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -301,6 +358,8 @@ export default async function handler(req: any, res: any) {
       subject = `Alta de Operario • ${body.structure_name || 'HempC Nucleus'}`;
     } else if (body.notification_type === 'agronomic_alert') {
       subject = `⚠️ ALERTA CRÍTICA: ${body.alert_title || 'Desvío en Lote'}`;
+    } else if (body.notification_type === 'labor_assigned') {
+      subject = `🚜 Orden de Labor Agrícola: ${body.task_title || 'Tarea de Campo'}`;
     } else {
       subject = 'Notificación Oficial de HempC | Red Cooperativa Nucleus';
     }
@@ -313,6 +372,8 @@ export default async function handler(req: any, res: any) {
     htmlBody = buildUserWelcomeHtml(body);
   } else if (body.notification_type === 'agronomic_alert') {
     htmlBody = buildAgronomicAlertHtml(body);
+  } else if (body.notification_type === 'labor_assigned') {
+    htmlBody = buildLaborAssignedHtml(body);
   } else {
     htmlBody = buildOperatorInvitationHtml(body);
   }

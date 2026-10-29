@@ -10,13 +10,14 @@ import {
   Tractor, Sprout, Droplets, ShieldAlert, Waves, Wrench, Search, Scissors,
   Package, Filter, Check, X, FileText, ChevronRight, UserCheck, Fuel,
   Gauge, Wind, Thermometer, MapPin, Building2, User, DollarSign, ShieldCheck,
-  Sparkles, ExternalLink, BellRing, Bell
+  Sparkles, ExternalLink, BellRing, Bell, Mail
 } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { 
   dispatchPushNotification, 
   evaluateUpcomingTasksReminders 
 } from '../src/services/pushNotificationService';
+import { sendLaborAssignedEmail, isRealEmailDelivery } from '../src/services/emailNotificationService';
 import { canAccessTask, canAccessPlot } from '../src/utils/structurePermissions';
 
 export default function Tasks() {
@@ -135,6 +136,35 @@ export default function Tasks() {
     });
     setPushFeedback(`Recordatorio push emitido para "${labor.title}".`);
     setTimeout(() => setPushFeedback(null), 3000);
+  };
+
+  const handleEmailIndividual = async (labor: Task) => {
+    const plot = plots.find(p => p.id === labor.plotId);
+    const assignedUser = usersList.find(
+      u => u.name.toLowerCase() === (labor.operator || '').toLowerCase()
+    );
+    const recipientEmail = assignedUser?.email || currentUser?.email || 'xpatagonia.com@gmail.com';
+    const recipientName = assignedUser?.name || labor.operator || currentUser?.name || 'Operario de Campo';
+
+    setPushFeedback(`Enviando orden de labor "${labor.title}" a ${recipientEmail} vía Resend.com...`);
+    const res = await sendLaborAssignedEmail({
+      toEmail: recipientEmail,
+      toName: recipientName,
+      taskTitle: labor.title,
+      description: labor.description,
+      plotName: plot?.name || 'Parcela Operativa',
+      dueDate: labor.dueDate,
+      priority: labor.priority,
+      machinery: labor.machinery?.tractor,
+      operator: labor.operator || recipientName
+    });
+
+    if (res.success && isRealEmailDelivery(res.deliveredVia)) {
+      setPushFeedback(`✅ Orden de labor enviada a ${recipientEmail} vía Vercel + Resend.com (notificaciones@hempc.com.ar).`);
+    } else {
+      setPushFeedback(`ℹ️ Orden registrada para ${recipientEmail} (${res.message}).`);
+    }
+    setTimeout(() => setPushFeedback(null), 5000);
   };
 
   // Role and structure assigned plots
@@ -478,6 +508,19 @@ export default function Tasks() {
         </div>
       </div>
 
+      {/* TOAST DE NOTIFICACIONES PUSH / RESEND.COM */}
+      {pushFeedback && (
+        <div className="bg-emerald-950/90 text-emerald-100 border border-emerald-500/40 rounded-2xl p-4 shadow-lg flex items-center justify-between text-xs font-bold">
+          <div className="flex items-center gap-2.5">
+            <Mail size={16} className="text-emerald-400 shrink-0" />
+            <span>{pushFeedback}</span>
+          </div>
+          <button onClick={() => setPushFeedback(null)} className="text-emerald-300 hover:text-white">
+            <X size={15} />
+          </button>
+        </div>
+      )}
+
       {/* ACCIONES Y FILTROS */}
       <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -803,6 +846,14 @@ export default function Tasks() {
                         <X size={15} />
                       </button>
                     )}
+                    {/* BOTÓN NOTIFICACIÓN CORREO VÍA RESEND.COM */}
+                    <button 
+                      onClick={() => handleEmailIndividual(labor)}
+                      title="Enviar orden de labor por correo vía Resend.com (notificaciones@hempc.com.ar)"
+                      className="p-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 rounded-lg transition"
+                    >
+                      <Mail size={15} />
+                    </button>
                     {/* BOTÓN RECORDATORIO PUSH INDIVIDUAL */}
                     {(labor.status === 'Pendiente' || labor.status === 'En_Curso') && (
                       <button 
