@@ -10,6 +10,7 @@ import {
 import { getPlotAgrochemicalApplications } from '../src/services/agro40Service';
 import { AgrochemicalApplication, Plot, Location, Variety, Supplier, SupplierLotInspection, SeedBatch } from '../types';
 import { BarcodeSVG } from '../components/BarcodeSVG';
+import { formatPlotSeedLoad, formatBatchMassKg } from '../src/utils/seedTraceability';
 import { DEMO_PLOTS as HISTORICAL_PLOTS, DEMO_LOCATIONS as HISTORICAL_LOCATIONS, DEMO_VARIETIES as HISTORICAL_VARIETIES, DEMO_SEED_BATCHES as HISTORICAL_BATCHES } from '../src/data/historicalCampaignSeed';
 import { 
     DEMO_PLOTS as INITIAL_PLOTS, 
@@ -407,11 +408,18 @@ export default function PublicTraceability() {
     const seedLotCode = sowingBatch?.batchCode || urlParams.get('seedLot') || urlParams.get('code') || urlParams.get('lot') || resolvedInspection?.lotNumber || 'FUT-83-25-HEM';
     const seedMotherLot = sowingBatch?.certificationNumber || urlParams.get('seedCert') || (seedLotCode.includes('-REC-') ? seedLotCode.split('-REC-')[0] : seedLotCode);
     const seedRotuloInase = sowingBatch?.labelSerialNumber || urlParams.get('seedRotulo') || 'INASE-SERIE-2025-A0041928';
+    const plotSeedLoad = formatPlotSeedLoad(resolvedPlot, urlParams);
+    const batchInitialMass = formatBatchMassKg(batch?.initialQuantity ?? ( urlParams.get('initKg') ? Number(urlParams.get('initKg')) : 1 ));
+    const batchRemainingMass = formatBatchMassKg(batch?.remainingQuantity ?? ( urlParams.get('remKg') ? Number(urlParams.get('remKg')) : 0 ));
 
     // Parcelas sembradas con este Lote de Semilla
     const plotsWithThisSeedLot = useMemo(() => {
         if (!sowingBatch) return resolvedPlot ? [resolvedPlot] : [];
-        const matched = allPlots.filter(p => p.seedBatchId === sowingBatch.id || p.varietyId === sowingBatch.varietyId);
+        const matched = allPlots.filter(p => p.seedBatchId === sowingBatch.id);
+        if (matched.length === 0) {
+            const byVar = allPlots.filter(p => p.varietyId === sowingBatch.varietyId);
+            byVar.forEach(p => matched.push(p));
+        }
         if (resolvedPlot && !matched.some(p => p.id === resolvedPlot.id)) matched.unshift(resolvedPlot);
         return matched;
     }, [sowingBatch, allPlots, resolvedPlot]);
@@ -448,6 +456,12 @@ export default function PublicTraceability() {
                             <Sprout size={13} className="text-sky-400"/>
                             N° Lote de Semilla: {seedMotherLot}
                         </span>
+                        {resolvedPlot && (
+                            <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-400/50 px-3 py-1 rounded-full text-[10px] font-black uppercase flex items-center gap-1.5 shadow-lg">
+                                <Scale size={13} className="text-emerald-400"/>
+                                Carga en Parcela: {plotSeedLoad.fullTriUnitDisplay}
+                            </span>
+                        )}
                         <span className="bg-slate-800/80 backdrop-blur-md text-emerald-400 border border-emerald-500/30 px-3 py-1 rounded-full text-[10px] font-bold uppercase">
                             Rótulo INASE: {seedRotuloInase}
                         </span>
@@ -572,15 +586,15 @@ export default function PublicTraceability() {
                             }`}
                         >
                             <div className="flex items-center justify-between">
-                                <span className="text-[9px] font-black uppercase text-emerald-400">3. Parcela de Cultivo</span>
+                                <span className="text-[9px] font-black uppercase text-emerald-400">3. Parcela & Carga Siembra</span>
                                 <MapPin size={14} className="text-emerald-400" />
                             </div>
-                            <strong className="text-white block truncate">{resolvedPlot?.name || 'Parcela Demostrativa Activa'}</strong>
-                            <p className="text-[10px] text-slate-400 truncate">
-                                {resolvedLocation?.name || 'Campo Fiscalizado'} · {resolvedPlot?.surfaceArea || 1} ha
+                            <strong className="text-white block truncate">{resolvedPlot?.name || 'Parcela Activa'}</strong>
+                            <p className="text-[10px] text-emerald-300 font-bold truncate">
+                                Carga: {plotSeedLoad.compactDisplay} · {resolvedPlot?.surfaceArea || 1} ha
                             </p>
                             <span className="inline-block text-[9px] font-bold text-emerald-300 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                                Semilla: {seedMotherLot} · {resolvedPlot?.campaign || '2025/2026'}
+                                Lote: {seedMotherLot} · {resolvedPlot?.campaign || '2025/2026'}
                             </span>
                         </Link>
 
@@ -726,7 +740,7 @@ export default function PublicTraceability() {
                     </div>
                 </div>
 
-                {/* MATRIZ DE RESUMEN FISCAL, N° DE LOTE DE SEMILLA & CALIDAD */}
+                {/* MATRIZ DE RESUMEN FISCAL, N° DE LOTE DE SEMILLA, CARGA EN PARCELA & CALIDAD */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <div className="bg-emerald-950/40 border-2 border-emerald-500/40 p-4 rounded-2xl">
                         <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest block mb-1">
@@ -740,13 +754,16 @@ export default function PublicTraceability() {
                         </span>
                     </div>
 
-                    <div className="bg-slate-900/90 border border-slate-800 p-4 rounded-2xl">
-                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">
-                            Calidad Determinada
+                    <div className="bg-indigo-950/40 border-2 border-indigo-500/40 p-4 rounded-2xl">
+                        <span className="text-[9px] font-black text-indigo-300 uppercase tracking-widest block mb-1">
+                            {resolvedPlot ? 'Carga a la Parcela (T/kg/gr)' : 'Stock Lote (T/kg/gr)'}
                         </span>
-                        <p className="text-sm md:text-base font-black text-emerald-400 uppercase">
-                            {qualityBadge.label} ({activeQualityScore}/100)
+                        <p className="text-sm md:text-base font-black text-white uppercase truncate">
+                            {resolvedPlot ? plotSeedLoad.primaryDisplay : batchRemainingMass.combinedKgGr}
                         </p>
+                        <span className="text-[9px] text-indigo-300 font-bold block mt-0.5 truncate">
+                            {resolvedPlot ? plotSeedLoad.tnFormatted : `Ingreso: ${batchInitialMass.kgStr}`}
+                        </span>
                     </div>
 
                     <div className="bg-slate-900/90 border border-slate-800 p-4 rounded-2xl">
@@ -761,7 +778,7 @@ export default function PublicTraceability() {
 
                     <div className="bg-slate-900/90 border border-slate-800 p-4 rounded-2xl">
                         <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">
-                            RNC INASE / Sanidad
+                            RNC INASE / Calidad
                         </span>
                         <p className="text-sm md:text-base font-black text-emerald-400 uppercase flex items-center gap-1 truncate">
                             <CheckCircle2 size={14} />
@@ -800,30 +817,33 @@ export default function PublicTraceability() {
                         <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
                             <span className="text-[9px] text-emerald-400 uppercase font-black block">1. Origen y Certificación del Lote</span>
                             <p className="text-slate-300">N° Lote Madre: <strong className="text-white">{seedMotherLot}</strong></p>
-                            <p className="text-slate-300">Semillero: <strong className="text-white">{resolvedSupplier?.name || batch?.supplierName || 'HEMP-IT ADN France'}</strong></p>
+                            <p className="text-slate-300">Semillero: <strong className="text-white">{resolvedSupplier?.name || batch?.supplierName || 'Ananda Pampa / Hemp-It ADN'}</strong></p>
                             <p className="text-slate-400 text-[10px]">Rótulo Oficial: {seedRotuloInase}</p>
                         </div>
 
                         <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
-                            <span className="text-[9px] text-sky-400 uppercase font-black block">2. Custodia, Muestreo y Almacenamiento</span>
-                            <p className="text-slate-300">Almacén / Bóveda: <strong className="text-white">{resolvedStorage?.name || 'Bóveda Central Pergamino'}</strong></p>
-                            <p className="text-slate-300">Acta Muestra ISTA: <strong className="text-indigo-300">{sampleCode}</strong></p>
-                            <p className="text-slate-400 text-[10px]">Ingreso: {batch?.purchaseDate || '2025-10-15'} · Stock: {(batch?.remainingQuantity ?? 220).toLocaleString()} kg</p>
+                            <span className="text-[9px] text-sky-400 uppercase font-black block">2. Custodia, Masa Inicial y Stock Neto</span>
+                            <p className="text-slate-300">Almacén / Bóveda: <strong className="text-white">{resolvedStorage?.name || 'Bóveda Central'}</strong></p>
+                            <p className="text-slate-300">Masa Inicial Lote: <strong className="text-emerald-300">{batchInitialMass.combinedKgGr}</strong></p>
+                            <p className="text-slate-400 text-[10px]">Stock Disponible Actual: <strong className="text-white">{batchRemainingMass.combinedKgGr}</strong> ({batchRemainingMass.tnStr})</p>
                         </div>
 
                         <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
-                            <span className="text-[9px] text-amber-400 uppercase font-black block">3. Destino y Parcelas Sembradas ({plotsWithThisSeedLot.length})</span>
+                            <span className="text-[9px] text-amber-400 uppercase font-black block">3. Destino y Carga en Parcelas ({plotsWithThisSeedLot.length})</span>
                             {plotsWithThisSeedLot.length > 0 ? (
                                 <div className="space-y-1">
-                                    {plotsWithThisSeedLot.slice(0, 3).map(p => (
-                                        <Link
-                                            key={p.id}
-                                            to={`/trace/${p.id}`}
-                                            className="text-emerald-300 hover:underline block truncate text-[11px] font-bold"
-                                        >
-                                            • {p.name} ({p.surfaceArea} {p.surfaceUnit || 'ha'})
-                                        </Link>
-                                    ))}
+                                    {plotsWithThisSeedLot.slice(0, 4).map(p => {
+                                        const pLoad = formatPlotSeedLoad(p);
+                                        return (
+                                            <Link
+                                                key={p.id}
+                                                to={`/trace/${p.id}`}
+                                                className="text-emerald-300 hover:underline block truncate text-[11px] font-bold"
+                                            >
+                                                • {p.name}: <span className="text-white">{pLoad.compactDisplay}</span> ({p.surfaceArea} {p.surfaceUnit || 'ha'})
+                                            </Link>
+                                        );
+                                    })}
                                 </div>
                             ) : (
                                 <p className="text-slate-400">En bóveda listo para asignación a parcela</p>
@@ -845,8 +865,9 @@ export default function PublicTraceability() {
                             <strong className="text-base text-amber-400">{batch?.moisturePct || resolvedInspection?.moisturePct || 8.6}%</strong>
                         </div>
                         <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800/80">
-                            <span className="text-[9px] text-slate-400 uppercase block font-bold">Masa Declarada</span>
-                            <strong className="text-base text-white">{(batch?.remainingQuantity ?? 220).toLocaleString()} kg</strong>
+                            <span className="text-[9px] text-slate-400 uppercase block font-bold">Stock Neto del Lote</span>
+                            <strong className="text-sm text-white block">{batchRemainingMass.combinedKgGr}</strong>
+                            <span className="text-[9px] text-slate-400">{batchRemainingMass.tnStr}</span>
                         </div>
                     </div>
 
@@ -936,9 +957,10 @@ export default function PublicTraceability() {
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
                             <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
-                                <span className="text-[9px] text-slate-400 uppercase font-black block">1. Fecha de Siembra</span>
+                                <span className="text-[9px] text-slate-400 uppercase font-black block">1. Siembra, Lote & Carga</span>
                                 <strong className="text-white text-sm block">{resolvedPlot.sowingDate || urlParams.get('sowing') || '2025-11-05'}</strong>
-                                <span className="text-[10px] text-emerald-400 block">Densidad: {resolvedPlot.density || 45} kg/ha</span>
+                                <span className="text-[10px] text-emerald-400 font-bold block">Lote: {seedMotherLot}</span>
+                                <span className="text-[10px] text-sky-300 font-bold block">Carga: {plotSeedLoad.fullTriUnitDisplay}</span>
                             </div>
 
                             <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">

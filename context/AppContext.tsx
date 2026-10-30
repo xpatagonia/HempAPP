@@ -178,7 +178,7 @@ const toSnakeCase = (obj: any): any => {
 
 const DELETED_IDS_STORAGE_KEY = 'ht_deleted_ids_v1';
 
-// Registros demostrativos o huérfanos depurados definitivamente para producción
+// Registros demostrativos o huérfanos depurados definitivamente para producción (Cierre Campaña 25/26)
 const PURGED_DEMO_IDS = new Set([
     'trial-1',
     'trial-2',
@@ -199,14 +199,36 @@ const PURGED_DEMO_IDS = new Set([
     '91ce0dcf-a760-41fe-82d5-52c438685944',
     '7076a122-77b5-49ce-80fa-890440c2d66c',
     'res-1', 'res-2', 'res-3', 'res-4', 'res-5', 'res-6', 'res-7', 'res-8',
-    'insp-1', 'insp-2', 'insp-3', 'insp-4'
+    'insp-1', 'insp-2', 'insp-3', 'insp-4',
+    // Lote y movimiento duplicado huérfano en INTA Hilario Ascasubi (0,200 kg Yuma extra sin parcelas)
+    '30600dce-b7cd-47e4-939b-ebd7446b17ee',
+    'c65e98e2-87d8-40f2-a5d6-0ab59a425f80',
+    // 9 variedades de catálogo sin stock ni parcelas en la campaña 25/26
+    '26229acf-b9f3-465e-84d9-38e92415f37b',
+    '8a5da2d7-d9b4-400a-abaa-c75e48a2bbba',
+    '59d45e03-493b-483b-8858-22274e0faf51',
+    '1e29d4ef-6ee5-4aaa-b75c-36a98b296e65',
+    '7fa50028-b9b8-4ba1-a04b-367ee8ee691c',
+    'daf6a5db-3b8d-4ebf-9b72-a4bd2a0160da',
+    'da78a13d-ff40-4152-9455-c1021a5766b1',
+    '6777c366-becd-4193-8671-60772bfed9ab',
+    '060cfb25-a003-46d6-bed7-647b4c457c06',
+    // Proveedor demo de bioinsumos y tareas duplicadas
+    'sup-biofabrica-patagonia-01',
+    'f52831a5-a2de-488b-8840-f3b986299e16',
+    'f1a54586-9f69-4138-a1cd-41d034c703df'
 ]);
 
 const isPurgedDemoItem = (item: any): boolean => {
     if (!item || typeof item !== 'object') return false;
     const id = String(item.id || '');
     if (PURGED_DEMO_IDS.has(id)) return true;
-    if (id.startsWith('exp-demo-') || id.startsWith('demo-alert-')) return true;
+    if (
+        id.startsWith('exp-demo-') ||
+        id.startsWith('demo-alert-') ||
+        id.startsWith('senasa-res-') ||
+        id.startsWith('app-2026-00')
+    ) return true;
     if (item.plotId && (String(item.plotId) === '91ce0dcf-a760-41fe-82d5-52c438685944' || String(item.plotId) === '7076a122-77b5-49ce-80fa-890440c2d66c')) return true;
     return false;
 };
@@ -489,11 +511,15 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             .filter(b => !deletedSet.has(String(b.id)) && !isPurgedDemoItem(b))
             .map((b: SeedBatch): SeedBatch => {
                 const demoMatch = demoMapById.get(String(b.id)) || demoMapByCode.get(String(b.batchCode));
+                const hasLocalOverride = Boolean((b as any)._localUpdatedAt);
                 return {
                     ...(demoMatch || {}),
                     ...b,
+                    supplierId: b.supplierId || demoMatch?.supplierId || null,
+                    initialQuantity: (!hasLocalOverride && demoMatch) ? demoMatch.initialQuantity : Number(Number(b.initialQuantity || 0).toFixed(3)),
+                    remainingQuantity: (!hasLocalOverride && demoMatch) ? demoMatch.remainingQuantity : Number(Number(b.remainingQuantity || 0).toFixed(3)),
                     labelSerialNumber: b.labelSerialNumber || demoMatch?.labelSerialNumber || '00000012',
-                    certificationNumber: b.certificationNumber || demoMatch?.certificationNumber || 'S/N',
+                    certificationNumber: (b.certificationNumber && b.certificationNumber !== 'S/N') ? b.certificationNumber : (demoMatch?.certificationNumber || b.certificationNumber || 'S/N'),
                     originInspectionId: b.originInspectionId || demoMatch?.originInspectionId,
                     qualityGrade: b.qualityGrade || demoMatch?.qualityGrade,
                     qualityScore: b.qualityScore ?? demoMatch?.qualityScore,
@@ -505,12 +531,43 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                     parentSeedBatchId: b.parentSeedBatchId || demoMatch?.parentSeedBatchId,
                     originPlotId: b.originPlotId || demoMatch?.originPlotId,
                     materialType: b.materialType || demoMatch?.materialType,
+                    notes: (!hasLocalOverride && demoMatch?.notes) ? demoMatch.notes : (b.notes || demoMatch?.notes || null),
+                    logisticsResponsible: b.logisticsResponsible || demoMatch?.logisticsResponsible || null,
+                    storageConditions: b.storageConditions || demoMatch?.storageConditions || null
                 };
             });
 
         DEMO_SEED_BATCHES.forEach(db => {
             if (!deletedSet.has(String(db.id)) && !enriched.some(b => String(b.id) === String(db.id) || String(b.batchCode) === String(db.batchCode))) {
                 enriched.push(db);
+            }
+        });
+
+        return enriched;
+    };
+
+    const healSeedMovements = (list: SeedMovement[]): SeedMovement[] => {
+        const deletedMap = getDeletedIdsMap();
+        const deletedSet = new Set(deletedMap['seed_movements'] || []);
+        const demoMapById = new Map(DEMO_SEED_MOVEMENTS.map(m => [String(m.id), m]));
+
+        const enriched: SeedMovement[] = (list || [])
+            .filter(m => !deletedSet.has(String(m.id)) && !isPurgedDemoItem(m))
+            .map((m: SeedMovement): SeedMovement => {
+                const demoMatch = demoMapById.get(String(m.id));
+                const hasLocalOverride = Boolean((m as any)._localUpdatedAt);
+                return {
+                    ...(demoMatch || {}),
+                    ...m,
+                    quantity: (!hasLocalOverride && demoMatch) ? demoMatch.quantity : Number(Number(m.quantity || 0).toFixed(3)),
+                    recipientName: m.recipientName || demoMatch?.recipientName || '',
+                    routeItinerary: (!hasLocalOverride && demoMatch?.routeItinerary) ? demoMatch.routeItinerary : (m.routeItinerary || demoMatch?.routeItinerary || '')
+                };
+            });
+
+        DEMO_SEED_MOVEMENTS.forEach(dm => {
+            if (!deletedSet.has(String(dm.id)) && !enriched.some(m => String(m.id) === String(dm.id))) {
+                enriched.push(dm);
             }
         });
 
@@ -719,6 +776,20 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                     ? p.responsibleIds
                     : estRespIds;
 
+                // Conciliación auditada de dosis de semilla sembrada por parcela (Campaña 25/26):
+                // - INTA Hilario Ascasubi (12 parcelas): 0,900 kg utilizados en total -> 75 gr por parcela
+                // - Chacra La Regina (12 parcelas): 0,600 kg utilizados en total (100% utilizado) -> 50 gr por parcela
+                // - CAP Puerto Madryn (15 parcelas activas): 45 gr por parcela
+                const hasLocalPlotOverride = Boolean((p as any)._localUpdatedAt);
+                let resolvedUsedSeedValue = p.usedSeedValue ?? demoMatch?.usedSeedValue;
+                if (!hasLocalPlotOverride) {
+                    if (locIdStr === '1766450631873' && (resolvedUsedSeedValue === 80 || !resolvedUsedSeedValue)) {
+                        resolvedUsedSeedValue = 75;
+                    } else if (locIdStr === '1766444697119' && (resolvedUsedSeedValue === 25 || resolvedUsedSeedValue === 18 || !resolvedUsedSeedValue)) {
+                        resolvedUsedSeedValue = 50;
+                    }
+                }
+
                 return {
                     ...(demoMatch || {}),
                     ...p,
@@ -726,6 +797,8 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                     name: (p.name || demoMatch?.name || '').trim(),
                     varietyId: resolvedVarietyId || p.varietyId,
                     seedBatchId: resolvedBatchId || p.seedBatchId,
+                    usedSeedValue: resolvedUsedSeedValue,
+                    usedSeedUnit: p.usedSeedUnit || demoMatch?.usedSeedUnit || 'gr',
                     surfaceUnit: resolvedUnit,
                     soilType: inheritedSoil,
                     irrigationType: inheritedIrrigation,
@@ -1055,7 +1128,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         healSuppliers(getStoredCollection('ht_suppliers', DEMO_SUPPLIERS))
     );
     const [seedMovements, setSeedMovements] = useState<SeedMovement[]>(() => 
-        getStoredCollection('ht_seed_movements', DEMO_SEED_MOVEMENTS)
+        healSeedMovements(getStoredCollection('ht_seed_movements', DEMO_SEED_MOVEMENTS))
     );
     const [resources, setResources] = useState<Resource[]>(() => 
         healResources(getStoredCollection('ht_resources', DEMO_RESOURCES))
@@ -1075,12 +1148,35 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
     useEffect(() => {
         try {
-            if (localStorage.getItem('ht_structure_hr_sync_v7_21_0') !== 'true') {
-                const healedRes = healResources(getStoredCollection('ht_resources', DEMO_RESOURCES));
+            if (localStorage.getItem('ht_audit_seed_stock_v7_22_0') !== 'true') {
+                // Sincronizar auditoría de stock de semillas, remitos, parcelas y depuración de datos demo (Campaña 25/26)
+                setVarieties(DEMO_VARIETIES);
+                localStorage.setItem('ht_varieties', JSON.stringify(DEMO_VARIETIES));
+
+                const healedBatches = healSeedBatches(DEMO_SEED_BATCHES);
+                setSeedBatches(healedBatches);
+                localStorage.setItem('ht_seed_batches', JSON.stringify(healedBatches));
+
+                const healedMoves = healSeedMovements(DEMO_SEED_MOVEMENTS);
+                setSeedMovements(healedMoves);
+                localStorage.setItem('ht_seed_movements', JSON.stringify(healedMoves));
+
+                const healedPlts = healPlotsWithSeedBatches(
+                    getStoredCollection('ht_plots', DEMO_PLOTS),
+                    healedBatches
+                );
+                setPlots(healedPlts);
+                localStorage.setItem('ht_plots', JSON.stringify(healedPlts));
+
+                const healedRes = healResources([]);
                 setResources(healedRes);
                 localStorage.setItem('ht_resources', JSON.stringify(healedRes));
 
-                const healedSups = healSuppliers(getStoredCollection('ht_suppliers', DEMO_SUPPLIERS));
+                const healedApps = healAgrochemicalApplications([]);
+                setAgrochemicalApplications(healedApps);
+                localStorage.setItem('ht_agrochemical_apps', JSON.stringify(healedApps));
+
+                const healedSups = healSuppliers(DEMO_SUPPLIERS);
                 setSuppliers(healedSups);
                 localStorage.setItem('ht_suppliers', JSON.stringify(healedSups));
 
@@ -1103,6 +1199,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 localStorage.setItem('ht_resources_schema_v7_19_0', 'true');
                 localStorage.setItem('ht_supplier_users_schema_v7_20_0', 'true');
                 localStorage.setItem('ht_structure_hr_sync_v7_21_0', 'true');
+                localStorage.setItem('ht_audit_seed_stock_v7_22_0', 'true');
             }
         } catch {}
         refreshData();
@@ -1250,7 +1347,11 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                         setSeedBatches(healed);
                         try { localStorage.setItem('ht_seed_batches', JSON.stringify(healed)); } catch (e) {}
                     }, DEMO_SEED_BATCHES),
-                    fetchTable('seed_movements', setSeedMovements, DEMO_SEED_MOVEMENTS),
+                    fetchTable('seed_movements', (data: any[]) => {
+                        const healed = healSeedMovements(data || []);
+                        setSeedMovements(healed);
+                        try { localStorage.setItem('ht_seed_movements', JSON.stringify(healed)); } catch (e) {}
+                    }, DEMO_SEED_MOVEMENTS),
                     fetchTable('resources', (data: any[]) => {
                         const healed = healResources(data || []);
                         setResources(healed);

@@ -7,14 +7,21 @@ import {
   Trash2, Edit2, QrCode, X, Save, Search, Filter, 
   MapPin, Calendar, Sprout, Printer, Activity, Plus, Loader2, Info, FolderKanban, FileUp,
   Link as LinkIcon, Scale, Box, Weight, Archive, Globe, LayoutDashboard, Eye, Palette,
-  Power, AlertCircle, CheckCircle2, ShieldCheck, Tractor, Layers, Clock, FileText, Download, UserCheck, Award, Lock
+  Power, AlertCircle, CheckCircle2, ShieldCheck, Tractor, Layers, Clock, FileText, Download, UserCheck, Award, Lock, ScanLine
 } from 'lucide-react';
 import MapEditor from '../components/MapEditor';
 import { PlotIdentificationModal } from '../components/PlotIdentificationModal';
 import { PlotCycleClosureModal } from '../components/PlotCycleClosureModal';
 import { BarcodeSVG } from '../components/BarcodeSVG';
 import SeedingProtocolModal from '../components/SeedingProtocolModal';
+import BarcodeScannerModal from '../components/BarcodeScannerModal';
 import { canAccessPlot, canAccessLocation } from '../src/utils/structurePermissions';
+import {
+  formatPlotSeedLoad,
+  convertSeedMassToKg,
+  convertKgToUnit,
+  formatBatchMassKg
+} from '../src/utils/seedTraceability';
 
 // Algoritmo de cálculo de área geodésica
 const calculateGeodesicArea = (latLngs: { lat: number, lng: number }[]) => {
@@ -114,6 +121,7 @@ export default function Plots() {
   const [selectedPlotForIdModal, setSelectedPlotForIdModal] = useState<Plot | null>(null);
   const [selectedPlotForClosureModal, setSelectedPlotForClosureModal] = useState<Plot | null>(null);
   const [isProtocolModalOpen, setIsProtocolModalOpen] = useState(false);
+  const [isSeedScannerOpen, setIsSeedScannerOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState<any>({
@@ -272,14 +280,18 @@ export default function Plots() {
   const availableBatches = useMemo(() => {
       return seedBatches.filter(b => {
           if (b.materialType && b.materialType !== 'seed') return false;
-          if (!b.isActive || b.remainingQuantity <= 0.001) return false;
+          // Mantener siempre visible el lote actualmente asignado a la parcela en edición aunque su remanente sea 0 kg
+          if (b.id === formData.seedBatchId || (editingPlot && b.id === editingPlot.seedBatchId)) {
+              return true;
+          }
+          if (!b.isActive || b.remainingQuantity <= 0.0001) return false;
           if ((isClient || isTechnician) && currentUser?.clientId) {
               const storage = storagePoints.find(s => s.id === b.storagePointId);
               if (storage && storage.clientId && storage.clientId !== currentUser.clientId) return false;
           }
           return true;
       });
-  }, [seedBatches, isClient, isTechnician, currentUser, storagePoints]);
+  }, [seedBatches, isClient, isTechnician, currentUser, storagePoints, formData.seedBatchId, editingPlot]);
 
   const availableLocations = useMemo(() => {
       return locations.filter(l => canAccessLocation(currentUser, l, clients));
@@ -495,14 +507,19 @@ export default function Plots() {
     }
 
     const selectedBatch = seedBatches.find(b => b.id === formData.seedBatchId);
-    
-    // FIX: Math Safe Comparison
-    const epsilon = 0.0001; 
+    const oldBatch = editingPlot?.seedBatchId ? seedBatches.find(b => b.id === editingPlot.seedBatchId) : undefined;
+    const oldUsageKg = editingPlot ? convertSeedMassToKg(editingPlot.usedSeedValue, editingPlot.usedSeedUnit || 'kg') : 0;
+    const isSameBatch = Boolean(editingPlot && editingPlot.seedBatchId && editingPlot.seedBatchId === formData.seedBatchId);
+
+    // Cálculo diferencial de stock (evita descontar dos veces al editar una parcela ya sembrada)
+    const epsilon = 0.0001;
     const currentStock = Number(selectedBatch?.remainingQuantity || 0);
     const usage = Number(calculatedUsedKg);
+    const requiredAdditionalStock = isSameBatch ? (usage - oldUsageKg) : usage;
 
-    if (selectedBatch && usage > (currentStock + epsilon)) {
-        alert(`STOCK INSUFICIENTE: El lote posee ${currentStock.toFixed(3)} kg y se requieren ${usage.toFixed(3)} kg.`);
+    if (selectedBatch && requiredAdditionalStock > (currentStock + epsilon)) {
+        const availPool = isSameBatch ? (currentStock + oldUsageKg) : currentStock;
+        alert(`STOCK INSUFICIENTE EN LOTE ${selectedBatch.batchCode}: Disponible ${availPool.toFixed(3)} kg (${Math.round(availPool * 1000)} gr) y se requieren ${usage.toFixed(3)} kg (${Math.round(usage * 1000)} gr).`);
         return;
     }
 
@@ -554,6 +571,8 @@ export default function Plots() {
             responsibleIds: combinedResponsibleIds,
             surfaceArea: Number(formData.surfaceArea),
             density: Number(formData.density),
+            usedSeedValue: Number(formData.usedSeedValue || 0),
+            usedSeedUnit: formData.usedSeedUnit || 'kg',
             campaign: assignedCampaign,
             activeCampaigns: campaignsList,
             coordinates,
@@ -567,18 +586,34 @@ export default function Plots() {
           success = await addPlot(payload);
         }
         
-        if (success && selectedBatch && usage > 0) {
-            let newRemaining = currentStock - usage;
-            newRemaining = Math.round(newRemaining * 1000) / 1000;
-            if (newRemaining < 0) newRemaining = 0;
-
-            await updateSeedBatch({
-                ...selectedBatch,
-                remainingQuantity: newRemaining
-            });
-        }
-
         if (success) {
+            if (isSameBatch && selectedBatch) {
+                const deltaKg = usage - oldUsageKg;
+                if (Math.abs(deltaKg) > 0.00001) {
+                    const newRemaining = Math.max(0, Math.round((currentStock - deltaKg) * 1000) / 1000);
+                    await updateSeedBatch({
+                        ...selectedBatch,
+                        remainingQuantity: newRemaining
+                    });
+                }
+            } else {
+                // Si cambió de lote en edición, restituir los kg usados al lote anterior
+                if (oldBatch && oldUsageKg > 0) {
+                    const restoredRemaining = Math.round((Number(oldBatch.remainingQuantity || 0) + oldUsageKg) * 1000) / 1000;
+                    await updateSeedBatch({
+                        ...oldBatch,
+                        remainingQuantity: restoredRemaining
+                    });
+                }
+                if (selectedBatch && usage > 0) {
+                    const newRemaining = Math.max(0, Math.round((currentStock - usage) * 1000) / 1000);
+                    await updateSeedBatch({
+                        ...selectedBatch,
+                        remainingQuantity: newRemaining
+                    });
+                }
+            }
+
             setIsAddModalOpen(false);
             resetForm();
         }
@@ -1079,7 +1114,10 @@ export default function Plots() {
                             {vari?.name || 'Genética Certificada'}
                           </span>
                           <div className="text-[10px] font-mono text-slate-600 dark:text-slate-400">
-                            Lote: <strong className="text-slate-800 dark:text-slate-200">{linkedBatch?.certificationNumber || linkedBatch?.batchCode || '103'}</strong> · Rótulo: {linkedBatch?.labelSerialNumber || '00000012'}
+                            Lote: <strong className="text-slate-800 dark:text-slate-200">{linkedBatch?.batchCode || linkedBatch?.certificationNumber || 'S/L'}</strong> · Cert: {linkedBatch?.certificationNumber || '103'}
+                          </div>
+                          <div className="text-[10px] font-mono text-emerald-700 dark:text-emerald-400 font-bold">
+                            Carga: {formatPlotSeedLoad(p.usedSeedValue, p.usedSeedUnit).compactDisplay}
                           </div>
                         </div>
                       </td>
@@ -1391,7 +1429,7 @@ export default function Plots() {
                         <div className="flex items-center justify-between gap-1 pb-1.5 border-b border-slate-200/70 dark:border-slate-800">
                           <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1 truncate">
                             <Award size={11} className="text-emerald-600 shrink-0" />
-                            Semilla INASE: {linkedBatch?.certificationNumber || linkedBatch?.batchCode || '103'} (Rótulo {linkedBatch?.labelSerialNumber || '00000012'})
+                            Lote: {linkedBatch?.batchCode || linkedBatch?.certificationNumber || 'S/L'} · Carga: {formatPlotSeedLoad(p.usedSeedValue, p.usedSeedUnit).primaryDisplay} ({formatPlotSeedLoad(p.usedSeedValue, p.usedSeedUnit).kgFormatted})
                           </span>
                           <span className="text-[9px] text-indigo-600 dark:text-indigo-400 font-bold shrink-0 flex items-center gap-1">
                             <Tractor size={10} />
@@ -1724,20 +1762,31 @@ export default function Plots() {
                 {/* COLUMNA 2: GENÉTICA Y PROTOCOLO DE SIEMBRA */}
                 <div className="space-y-5">
                   <div className="p-4 bg-emerald-50 dark:bg-emerald-950/30 rounded-2xl border border-emerald-100 dark:border-emerald-900/40 space-y-3">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-1.5 flex-wrap">
                       <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5">
                         <FlaskConical size={14} />
-                        <span>Genética & Insumos</span>
+                        <span>Genética, Lote & Carga de Semilla</span>
                       </h3>
-                      <button
-                        type="button"
-                        onClick={() => setIsProtocolModalOpen(true)}
-                        className="text-[10px] font-mono font-bold text-emerald-700 dark:text-emerald-300 hover:underline flex items-center gap-1 bg-white/80 dark:bg-slate-900/80 px-2 py-0.5 rounded-md border border-emerald-300 dark:border-emerald-800"
-                        title="Ver pautas técnicas y dosis de 50 kg/Ha"
-                      >
-                        <FileText size={11} />
-                        <span>Anexo II (50 kg/Ha)</span>
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setIsSeedScannerOpen(true)}
+                          className="text-[10px] font-mono font-bold text-white bg-emerald-600 hover:bg-emerald-500 px-2.5 py-1 rounded-md shadow-sm flex items-center gap-1 cursor-pointer transition"
+                          title="Escanear Rótulo INASE / Código QR o Barras del Lote de Semilla"
+                        >
+                          <ScanLine size={11} />
+                          <span>Escanear Lote QR</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIsProtocolModalOpen(true)}
+                          className="text-[10px] font-mono font-bold text-emerald-700 dark:text-emerald-300 hover:underline flex items-center gap-1 bg-white/80 dark:bg-slate-900/80 px-2 py-1 rounded-md border border-emerald-300 dark:border-emerald-800 cursor-pointer"
+                          title="Ver pautas técnicas y dosis de 50 kg/Ha"
+                        >
+                          <FileText size={11} />
+                          <span>Anexo II</span>
+                        </button>
+                      </div>
                     </div>
 
                     <div>
@@ -1756,59 +1805,179 @@ export default function Plots() {
                     </div>
 
                     <div>
-                      <label className={labelClass}>Lote Maestro de Semilla Homologado</label>
+                      <label className={labelClass}>Lote de Semilla Homologado (Trazabilidad INASE) *</label>
                       <select 
                         className={inputClass} 
                         value={formData.seedBatchId} 
                         onChange={e => setFormData({ ...formData, seedBatchId: e.target.value })}
                       >
                         <option value="">Seleccione lote de semilla homologado...</option>
-                        {availableBatches.map(b => (
-                          <option key={b.id} value={b.id}>
-                            {b.batchCode} · {b.qualityGrade === 'GRADO_B_ESTANDAR' ? 'Grado B' : 'Grado A Élite'} ({Number(b.remainingQuantity.toFixed(1))} kg disp.)
-                          </option>
-                        ))}
+                        {availableBatches
+                          .slice()
+                          .sort((a, b) => {
+                            const aMatch = a.varietyId === formData.varietyId ? 0 : 1;
+                            const bMatch = b.varietyId === formData.varietyId ? 0 : 1;
+                            return aMatch - bMatch;
+                          })
+                          .map(b => (
+                            <option key={b.id} value={b.id}>
+                              {b.batchCode} · Cert. {b.certificationNumber || 'S/N'} · Stock disp: {Number(b.remainingQuantity || 0).toFixed(3)} kg ({Math.round(Number(b.remainingQuantity || 0) * 1000)} gr)
+                            </option>
+                          ))}
                       </select>
                       {(() => {
                         const selB = seedBatches.find(b => b.id === formData.seedBatchId);
                         if (!selB) return null;
+                        const batchInfo = formatBatchMassKg(selB.remainingQuantity);
                         return (
-                          <div className="mt-1.5 p-2 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-emerald-200 dark:border-emerald-800 text-[10px] font-mono flex items-center justify-between">
-                            <span className="text-emerald-700 dark:text-emerald-300 font-bold">
-                              Calidad: {selB.qualityGrade === 'GRADO_B_ESTANDAR' ? 'Grado B Estándar' : 'Grado A Élite'} ({selB.qualityScore || 96}/100) · PG {selB.germination || 94}%
-                            </span>
-                            <span className="text-indigo-600 dark:text-indigo-400 font-bold">
-                              Muestreo: {selB.samplerName || 'M. Quintana'}
-                            </span>
+                          <div className="mt-1.5 p-2.5 rounded-xl bg-white/90 dark:bg-slate-900/90 border border-emerald-200 dark:border-emerald-800 text-[10px] font-mono space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-emerald-700 dark:text-emerald-300 font-bold">
+                                Lote: {selB.batchCode} · Cert. INASE {selB.certificationNumber || '103'}
+                              </span>
+                              <span className="text-indigo-600 dark:text-indigo-400 font-bold">
+                                PG {selB.germination || 94}% · Pureza {selB.purity || 99}%
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 pt-1 border-t border-emerald-100 dark:border-emerald-900/50">
+                              <span>Stock disponible en envase:</span>
+                              <strong className="text-slate-900 dark:text-white">
+                                {batchInfo.kgFormatted} ({batchInfo.grFormatted})
+                              </strong>
+                            </div>
                           </div>
                         );
                       })()}
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className={labelClass}>Dosis de Semilla</label>
-                        <input 
-                          type="number" 
-                          step="any" 
-                          min="0" 
-                          className={inputClass} 
-                          value={formData.usedSeedValue} 
-                          onChange={e => setFormData({ ...formData, usedSeedValue: Number(e.target.value) })} 
-                        />
+                    {/* CARGA DE SEMILLA A LA PARCELA EN T / KILOS / GRAMOS */}
+                    <div className="p-3 rounded-xl bg-white/90 dark:bg-slate-900/80 border border-emerald-200/80 dark:border-emerald-800/80 space-y-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <label className="text-[10px] font-mono font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-300 flex items-center gap-1">
+                          <Scale size={12} className="text-emerald-600" />
+                          <span>Carga de Semilla a la Parcela (T / Kilos / Gramos) *</span>
+                        </label>
+                        {/* Selector rápido de unidad con conversión automática */}
+                        <div className="inline-flex rounded-lg bg-slate-100 dark:bg-slate-800 p-0.5 border border-slate-200 dark:border-slate-700">
+                          {([
+                            { unit: 'gr' as MassUnit, label: 'Gramos (gr)' },
+                            { unit: 'kg' as MassUnit, label: 'Kilos (kg)' },
+                            { unit: 'tn' as MassUnit, label: 'Toneladas (T)' }
+                          ]).map(uOpt => {
+                            const isCurrent = (formData.usedSeedUnit || 'kg') === uOpt.unit;
+                            return (
+                              <button
+                                key={uOpt.unit}
+                                type="button"
+                                onClick={() => {
+                                  const currentKg = convertSeedMassToKg(formData.usedSeedValue, formData.usedSeedUnit || 'kg');
+                                  const convertedVal = convertKgToUnit(currentKg, uOpt.unit);
+                                  setFormData({
+                                    ...formData,
+                                    usedSeedUnit: uOpt.unit,
+                                    usedSeedValue: Number(convertedVal.toFixed(uOpt.unit === 'tn' ? 6 : uOpt.unit === 'kg' ? 4 : 1))
+                                  });
+                                }}
+                                className={`px-2 py-0.5 rounded-md text-[9.5px] font-mono font-bold transition cursor-pointer ${
+                                  isCurrent
+                                    ? 'bg-emerald-600 text-white shadow-sm'
+                                    : 'text-slate-600 dark:text-slate-300 hover:text-emerald-600'
+                                }`}
+                              >
+                                {uOpt.label}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
-                      <div>
-                        <label className={labelClass}>Unidad Dosis</label>
-                        <select 
-                          className={inputClass} 
-                          value={formData.usedSeedUnit} 
-                          onChange={e => setFormData({ ...formData, usedSeedUnit: e.target.value as any })}
-                        >
-                          <option value="kg">KG</option>
-                          <option value="gr">GR</option>
-                          <option value="tn">TN</option>
-                        </select>
+
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="col-span-2">
+                          <input 
+                            type="number" 
+                            step="any" 
+                            min="0" 
+                            placeholder="Ej: 75 gr o 0.075 kg"
+                            className={inputClass} 
+                            value={formData.usedSeedValue} 
+                            onChange={e => setFormData({ ...formData, usedSeedValue: Number(e.target.value) })} 
+                          />
+                        </div>
+                        <div>
+                          <select 
+                            className={inputClass} 
+                            value={formData.usedSeedUnit} 
+                            onChange={e => {
+                              const targetUnit = e.target.value as MassUnit;
+                              const currentKg = convertSeedMassToKg(formData.usedSeedValue, formData.usedSeedUnit || 'kg');
+                              const convertedVal = convertKgToUnit(currentKg, targetUnit);
+                              setFormData({
+                                ...formData,
+                                usedSeedUnit: targetUnit,
+                                usedSeedValue: Number(convertedVal.toFixed(targetUnit === 'tn' ? 6 : targetUnit === 'kg' ? 4 : 1))
+                              });
+                            }}
+                          >
+                            <option value="gr">Gramos (gr)</option>
+                            <option value="kg">Kilos (kg)</option>
+                            <option value="tn">Toneladas (T)</option>
+                          </select>
+                        </div>
                       </div>
+
+                      {/* Botones rápidos de carga por protocolo de ensayo o densidad */}
+                      <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                        <span className="text-[9px] font-mono text-slate-400 uppercase font-bold">Cargas frecuentes:</span>
+                        {[
+                          { label: '50 gr (La Regina)', val: 50, unit: 'gr' as MassUnit },
+                          { label: '60 gr', val: 60, unit: 'gr' as MassUnit },
+                          { label: '75 gr (Ascasubi)', val: 75, unit: 'gr' as MassUnit },
+                          { label: '150 gr', val: 150, unit: 'gr' as MassUnit },
+                          { label: '1 kg', val: 1, unit: 'kg' as MassUnit }
+                        ].map(preset => (
+                          <button
+                            key={preset.label}
+                            type="button"
+                            onClick={() =>
+                              setFormData({
+                                ...formData,
+                                usedSeedValue: preset.val,
+                                usedSeedUnit: preset.unit
+                              })
+                            }
+                            className="px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-[9px] font-mono font-bold cursor-pointer transition"
+                          >
+                            {preset.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Panel en vivo de triple equivalencia (gr / kg / T) y densidad kg/ha */}
+                      {(() => {
+                        const loadSummary = formatPlotSeedLoad(formData.usedSeedValue, formData.usedSeedUnit);
+                        const areaHa =
+                          formData.surfaceUnit === 'ha'
+                            ? Number(formData.surfaceArea || 0)
+                            : Number(formData.surfaceArea || 0) / 10000;
+                        const eqKgHa = areaHa > 0 ? loadSummary.kg / areaHa : 0;
+
+                        return (
+                          <div className="p-2 rounded-lg bg-slate-900 text-white font-mono text-[10px] space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-slate-400 uppercase text-[9px]">Equivalencia Trazable (gr · kg · T):</span>
+                              <strong className="text-emerald-400">
+                                {loadSummary.fullTriUnitDisplay}
+                              </strong>
+                            </div>
+                            {areaHa > 0 && (
+                              <div className="flex items-center justify-between text-[9.5px] pt-1 border-t border-slate-800 text-slate-300">
+                                <span>Densidad de Siembra Estimada:</span>
+                                <strong className="text-amber-300">{eqKgHa.toFixed(1)} kg/ha</strong>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
 
@@ -2115,6 +2284,27 @@ export default function Plots() {
       <SeedingProtocolModal
         isOpen={isProtocolModalOpen}
         onClose={() => setIsProtocolModalOpen(false)}
+      />
+
+      {/* ESCÁNER QR / BARCODE INTEGRADO EN PROCESO DE SIEMBRA */}
+      <BarcodeScannerModal
+        isOpen={isSeedScannerOpen}
+        onClose={() => setIsSeedScannerOpen(false)}
+        onSelectBatch={(batchId) => {
+          const matchedBatch = seedBatches.find(
+            b =>
+              b.id === batchId ||
+              b.batchCode.toLowerCase() === batchId.toLowerCase()
+          );
+          if (matchedBatch) {
+            setFormData((prev: any) => ({
+              ...prev,
+              seedBatchId: matchedBatch.id,
+              varietyId: matchedBatch.varietyId || prev.varietyId
+            }));
+          }
+          setIsSeedScannerOpen(false);
+        }}
       />
 
     </div>

@@ -3,9 +3,11 @@ import { QRCodeSVG } from 'qrcode.react';
 import { BarcodeRenderer } from './BarcodeRenderer';
 import { 
   X, Printer, Download, ShieldCheck, QrCode, ScanBarcode, 
-  Sprout, Package, Check, Copy, ExternalLink, Calendar, MapPin, UserCheck, Award
+  Sprout, Package, Check, Copy, ExternalLink, Calendar, MapPin, UserCheck, Award, Scale
 } from 'lucide-react';
 import { SeedBatch, Variety, StoragePoint } from '../types';
+import { useAppContext } from '../context/AppContext';
+import { formatBatchMassKg, convertSeedMassToKg } from '../src/utils/seedTraceability';
 
 interface TraceabilityLabelModalProps {
   isOpen: boolean;
@@ -29,6 +31,7 @@ export const TraceabilityLabelModal: React.FC<TraceabilityLabelModalProps> = ({
   variety,
   storagePoint
 }) => {
+  const { plots } = useAppContext();
   const [copied, setCopied] = useState(false);
 
   if (!isOpen || !batch) return null;
@@ -40,6 +43,15 @@ export const TraceabilityLabelModal: React.FC<TraceabilityLabelModalProps> = ({
 
   const motherSeedLot = batch.certificationNumber || (batch.batchCode.includes('-REC-') ? batch.batchCode.split('-REC-')[0] : batch.batchCode);
   const officialRotulo = batch.labelSerialNumber || 'INASE-SERIE-2025-A0041928';
+
+  const plotsWithThisBatch = plots.filter(p => p.seedBatchId === batch.id);
+  const usedInPlotsKg = plotsWithThisBatch.reduce(
+    (acc, p) => acc + convertSeedMassToKg(p.usedSeedValue, p.usedSeedUnit || 'gr'),
+    0
+  );
+  const initialMass = formatBatchMassKg(batch.initialQuantity);
+  const usedMass = formatBatchMassKg(usedInPlotsKg);
+  const remainingMass = formatBatchMassKg(batch.remainingQuantity);
 
   // URL de trazabilidad directa al Lote (Semilla o Material Obtenido) con parámetros de respaldo
   const traceUrl = (() => {
@@ -54,6 +66,10 @@ export const TraceabilityLabelModal: React.FC<TraceabilityLabelModalProps> = ({
     if (batch.inspectorName) params.set('inspector', batch.inspectorName);
     if (batch.originPlotId) params.set('plotId', batch.originPlotId);
     if (batch.originInspectionId) params.set('inspId', batch.originInspectionId);
+    params.set('initKg', initialMass.kg.toFixed(3));
+    params.set('remKg', remainingMass.kg.toFixed(3));
+    params.set('usedKg', usedMass.kg.toFixed(3));
+    params.set('usedGr', String(usedMass.gr));
     return `${baseUrl}/#/trace/${encodeURIComponent(batch.id)}?${params.toString()}`;
   })();
 
@@ -135,7 +151,7 @@ export const TraceabilityLabelModal: React.FC<TraceabilityLabelModalProps> = ({
                 RNC INASE: <strong>{variety?.inaseRncNumber || 'INASE-RNC-8492/23'}</strong>
               </span>
               <span className="text-[9px] text-slate-500 block mt-0.5">
-                Proveedor: <strong>{batch.supplierName || 'Hemp-It ADN / Ananda'}</strong>
+                Proveedor: <strong>{batch.supplierName || 'Ananda Pampa / Hemp-It ADN'}</strong>
               </span>
             </div>
 
@@ -186,6 +202,27 @@ export const TraceabilityLabelModal: React.FC<TraceabilityLabelModalProps> = ({
             </div>
           </div>
 
+          {/* BALANCE FÍSICO AUDITADO EN T / KILOS / GRAMOS */}
+          <div className="grid grid-cols-3 gap-2 bg-emerald-50/60 p-2.5 rounded-xl border border-emerald-200 text-center text-[10px]">
+            <div className="bg-white p-1.5 rounded-lg border border-emerald-100">
+              <span className="text-[8px] text-slate-400 uppercase block font-bold">Masa Inicial Lote</span>
+              <strong className="text-slate-900 font-black block">{initialMass.kgStr}</strong>
+              <span className="text-[8px] text-slate-500 block">{initialMass.grStr} · {initialMass.tnStr}</span>
+            </div>
+            <div className="bg-white p-1.5 rounded-lg border border-indigo-100">
+              <span className="text-[8px] text-indigo-700 uppercase block font-bold">
+                Carga Siembra ({plotsWithThisBatch.length} Parc.)
+              </span>
+              <strong className="text-indigo-900 font-black block">{usedMass.kgStr}</strong>
+              <span className="text-[8px] text-indigo-600 font-bold block">{usedMass.grStr} · {usedMass.tnStr}</span>
+            </div>
+            <div className="bg-white p-1.5 rounded-lg border border-emerald-300">
+              <span className="text-[8px] text-emerald-800 uppercase block font-black">Stock Remanente Neto</span>
+              <strong className="text-emerald-800 font-black block">{remainingMass.kgStr}</strong>
+              <span className="text-[8px] text-emerald-700 font-bold block">{remainingMass.grStr} · {remainingMass.tnStr}</span>
+            </div>
+          </div>
+
           {/* MATRIZ DE CALIDAD TÉCNICA */}
           <div className="grid grid-cols-4 gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-center text-xs">
             {batch.materialType === 'harvested_grain' ? (
@@ -203,8 +240,8 @@ export const TraceabilityLabelModal: React.FC<TraceabilityLabelModalProps> = ({
                   <strong className="text-emerald-700 font-bold">{batch.purity || 99.1}%</strong>
                 </div>
                 <div>
-                  <span className="text-[8px] text-slate-400 uppercase block font-bold">Masa Neta</span>
-                  <strong className="text-slate-900">{Number(batch.remainingQuantity.toFixed(1))} kg</strong>
+                  <span className="text-[8px] text-slate-400 uppercase block font-bold">Masa Neta (T/kg/gr)</span>
+                  <strong className="text-slate-900 text-[10px]">{remainingMass.combinedKgGr}</strong>
                 </div>
               </>
             ) : batch.materialType === 'biomass_cbg' ? (
@@ -222,8 +259,8 @@ export const TraceabilityLabelModal: React.FC<TraceabilityLabelModalProps> = ({
                   <strong className="text-slate-900">{batch.hplcCbgPct || 2.7}%</strong>
                 </div>
                 <div>
-                  <span className="text-[8px] text-slate-400 uppercase block font-bold">Masa Neta</span>
-                  <strong className="text-slate-900">{Number(batch.remainingQuantity.toFixed(1))} kg</strong>
+                  <span className="text-[8px] text-slate-400 uppercase block font-bold">Masa Neta (T/kg/gr)</span>
+                  <strong className="text-slate-900 text-[10px]">{remainingMass.combinedKgGr}</strong>
                 </div>
               </>
             ) : (
@@ -241,8 +278,8 @@ export const TraceabilityLabelModal: React.FC<TraceabilityLabelModalProps> = ({
                   <strong className="text-slate-900">{batch.purity || 99.4}%</strong>
                 </div>
                 <div>
-                  <span className="text-[8px] text-slate-400 uppercase block font-bold">Masa Neta</span>
-                  <strong className="text-slate-900">{Number(batch.remainingQuantity.toFixed(1))} kg</strong>
+                  <span className="text-[8px] text-slate-400 uppercase block font-bold">Masa Neta (kg/gr)</span>
+                  <strong className="text-slate-900 text-[10px]">{remainingMass.combinedKgGr}</strong>
                 </div>
               </>
             )}

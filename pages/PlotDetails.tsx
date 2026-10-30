@@ -22,6 +22,7 @@ import SeedingProtocolModal from '../components/SeedingProtocolModal';
 import { LiveTelemetryPanel } from '../components/LiveTelemetryPanel';
 import { TrialRecord, AgrochemicalApplication, AgrochemicalCategory, HempStageId, FieldLog, Task, AgriculturalLaborType, Resource } from '../types';
 import { sendAgronomicAlertEmail } from '../src/services/emailNotificationService';
+import { formatPlotSeedLoad } from '../src/utils/seedTraceability';
 
 // ============================================================================
 // MOTOR ASTRONÓMICO Y FOTOPERIÓDICO DETERMINÍSTICO (NOAA SOLAR CALCULATOR)
@@ -1230,15 +1231,19 @@ export default function PlotDetails() {
             </div>
           </div>
 
-          {/* Trazabilidad de Lote de Semilla INASE/ARICCAME */}
+          {/* Trazabilidad de Lote de Semilla INASE/ARICCAME + Carga en Parcela (T / kg / gr) */}
           <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono border-t lg:border-t-0 pt-2.5 lg:pt-0 border-slate-800 w-full lg:w-auto justify-between lg:justify-end">
-            <div className="flex items-center gap-1.5 text-emerald-300 bg-emerald-950/70 border border-emerald-800/60 px-2.5 py-1 rounded-lg">
+            <div className="flex flex-wrap items-center gap-1.5 text-emerald-300 bg-emerald-950/70 border border-emerald-800/60 px-2.5 py-1 rounded-lg">
               <Award size={13} className="text-emerald-400 shrink-0" />
               <span>
-                Lote Semilla: <strong>{seedBatch?.batchCode || 'FUT-83-25-HEM'}</strong>
+                Lote Semilla: <strong>{seedBatch?.batchCode || 'S/L'}</strong>
               </span>
-              <span className="text-slate-400">|</span>
+              <span className="text-slate-500">|</span>
               <span>Cert. N° <strong>{seedBatch?.certificationNumber || '103'}</strong></span>
+              <span className="text-slate-500">|</span>
+              <span className="text-amber-300">
+                Carga Parcela: <strong>{formatPlotSeedLoad(plot.usedSeedValue, plot.usedSeedUnit).fullTriUnitDisplay}</strong>
+              </span>
             </div>
             <Link
               to="/seed-batches"

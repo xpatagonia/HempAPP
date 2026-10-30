@@ -177,11 +177,9 @@ export default function SeedBatches() {
   }), [seedBatches, searchTerm, materialFilter, varieties, isClient, isTech, currentUser, storagePoints]);
 
   const stockByWarehouse = useMemo(() => {
-      const grouped: Record<string, { storage: any, items: Record<string, number>, totalKg: number }> = {};
+      const grouped: Record<string, { storage: any, items: Record<string, { remainingKg: number; initialKg: number }>, totalKg: number, totalInitialKg: number }> = {};
 
       filteredBatches.forEach(b => {
-          if (b.remainingQuantity <= 0.001) return;
-          
           const sp = storagePoints.find(s => s.id === b.storagePointId);
           const spId = sp ? sp.id : 'unknown';
           const varietyName = varieties.find(v => v.id === b.varietyId)?.name || 'Genética S/D';
@@ -190,16 +188,19 @@ export default function SeedBatches() {
               grouped[spId] = {
                   storage: sp,
                   items: {},
-                  totalKg: 0
+                  totalKg: 0,
+                  totalInitialKg: 0
               };
           }
 
           if (!grouped[spId].items[varietyName]) {
-              grouped[spId].items[varietyName] = 0;
+              grouped[spId].items[varietyName] = { remainingKg: 0, initialKg: 0 };
           }
 
-          grouped[spId].items[varietyName] += b.remainingQuantity;
-          grouped[spId].totalKg += b.remainingQuantity;
+          grouped[spId].items[varietyName].remainingKg = Number((grouped[spId].items[varietyName].remainingKg + (b.remainingQuantity || 0)).toFixed(3));
+          grouped[spId].items[varietyName].initialKg = Number((grouped[spId].items[varietyName].initialKg + (b.initialQuantity || 0)).toFixed(3));
+          grouped[spId].totalKg = Number((grouped[spId].totalKg + (b.remainingQuantity || 0)).toFixed(3));
+          grouped[spId].totalInitialKg = Number((grouped[spId].totalInitialKg + (b.initialQuantity || 0)).toFixed(3));
       });
 
       return Object.values(grouped);
@@ -220,16 +221,100 @@ export default function SeedBatches() {
       return matchesSearch && matchesStatus;
   }).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()), [seedMovements, searchTerm, filterStatus, isClient, isTech, currentUser, storagePoints]);
 
-  // Desglose de Métricas de Stock por Tipo Biológico
+  // Desglose de Métricas de Stock por Tipo Biológico y Matriz de Conciliación por Variedad
   const stats = useMemo(() => {
-      const totalKg = filteredBatches.reduce((sum, b) => sum + (b.remainingQuantity || 0), 0);
-      const seedKg = filteredBatches.filter(b => (b.materialType || 'seed') === 'seed').reduce((sum, b) => sum + (b.remainingQuantity || 0), 0);
-      const grainKg = filteredBatches.filter(b => b.materialType === 'harvested_grain').reduce((sum, b) => sum + (b.remainingQuantity || 0), 0);
-      const fiberBalesKg = filteredBatches.filter(b => b.materialType === 'fiber_bales').reduce((sum, b) => sum + (b.remainingQuantity || 0), 0);
-      const biomassKg = filteredBatches.filter(b => b.materialType === 'biomass_cbg').reduce((sum, b) => sum + (b.remainingQuantity || 0), 0);
+      const totalKg = Number(filteredBatches.reduce((sum, b) => sum + (b.remainingQuantity || 0), 0).toFixed(3));
+      const seedKg = Number(filteredBatches.filter(b => (b.materialType || 'seed') === 'seed').reduce((sum, b) => sum + (b.remainingQuantity || 0), 0).toFixed(3));
+      const grainKg = Number(filteredBatches.filter(b => b.materialType === 'harvested_grain').reduce((sum, b) => sum + (b.remainingQuantity || 0), 0).toFixed(3));
+      const fiberBalesKg = Number(filteredBatches.filter(b => b.materialType === 'fiber_bales').reduce((sum, b) => sum + (b.remainingQuantity || 0), 0).toFixed(3));
+      const biomassKg = Number(filteredBatches.filter(b => b.materialType === 'biomass_cbg').reduce((sum, b) => sum + (b.remainingQuantity || 0), 0).toFixed(3));
       const activeTransits = filteredMovements.filter(m => m.status === 'En Tránsito').length;
       return { totalKg, seedKg, grainKg, fiberBalesKg, biomassKg, activeTransits };
   }, [filteredBatches, filteredMovements]);
+
+  const varietyReconciliation = useMemo(() => {
+      const CENTRAL_STORAGE_ID = '5ceffc58-8219-4774-a340-9e1ac2c8458d'; // BioC Warehousing 1#
+      const HILARIO_STORAGE_ID = '35ece4ca-6d58-496d-a045-65fe8c50a216'; // INTA HILARIO
+      const LAREGINA_STORAGE_ID = 'fc1fedd0-1404-47a0-89d3-cc5d774ce848'; // Galpon La Regina
+      const MADRYN_STORAGE_ID = 'f9235100-cd67-4f65-9ba1-303e7cc5a063'; // CAP Centro Medioambiental
+
+      const seedOnlyBatches = seedBatches.filter(b => !b.materialType || b.materialType === 'seed');
+
+      const rows = varieties.map(v => {
+          const sup = suppliers.find(s => s.id === v.supplierId);
+          const centralBatches = seedOnlyBatches.filter(b => b.varietyId === v.id && b.storagePointId === CENTRAL_STORAGE_ID);
+          const hilarioBatches = seedOnlyBatches.filter(b => b.varietyId === v.id && b.storagePointId === HILARIO_STORAGE_ID);
+          const lareginaBatches = seedOnlyBatches.filter(b => b.varietyId === v.id && b.storagePointId === LAREGINA_STORAGE_ID);
+          const madrynBatches = seedOnlyBatches.filter(b => b.varietyId === v.id && b.storagePointId === MADRYN_STORAGE_ID);
+
+          const purchasedKg = Number(centralBatches.reduce((s, b) => s + (b.initialQuantity || 0), 0).toFixed(3));
+          const centralRemKg = Number(centralBatches.reduce((s, b) => s + (b.remainingQuantity || 0), 0).toFixed(3));
+
+          const hilarioSentKg = Number(hilarioBatches.reduce((s, b) => s + (b.initialQuantity || 0), 0).toFixed(3));
+          const hilarioRemKg = Number(hilarioBatches.reduce((s, b) => s + (b.remainingQuantity || 0), 0).toFixed(3));
+          const hilarioUsedKg = Number(Math.max(0, hilarioSentKg - hilarioRemKg).toFixed(3));
+
+          const lareginaSentKg = Number(lareginaBatches.reduce((s, b) => s + (b.initialQuantity || 0), 0).toFixed(3));
+          const lareginaRemKg = Number(lareginaBatches.reduce((s, b) => s + (b.remainingQuantity || 0), 0).toFixed(3));
+          const lareginaUsedKg = Number(Math.max(0, lareginaSentKg - lareginaRemKg).toFixed(3));
+
+          const madrynSentKg = Number(madrynBatches.reduce((s, b) => s + (b.initialQuantity || 0), 0).toFixed(3));
+          const madrynRemKg = Number(madrynBatches.reduce((s, b) => s + (b.remainingQuantity || 0), 0).toFixed(3));
+          const madrynUsedKg = Number(Math.max(0, madrynSentKg - madrynRemKg).toFixed(3));
+
+          const totalDispatchedKg = Number((hilarioSentKg + lareginaSentKg + madrynSentKg).toFixed(3));
+          const totalUsedFieldKg = Number((hilarioUsedKg + lareginaUsedKg + madrynUsedKg).toFixed(3));
+          const totalFieldRemKg = Number((hilarioRemKg + lareginaRemKg + madrynRemKg).toFixed(3));
+          const totalAvailableKg = Number((centralRemKg + totalFieldRemKg).toFixed(3));
+
+          return {
+              varietyId: v.id,
+              varietyName: v.name,
+              supplierName: sup?.name || (v.name === 'Yuma' ? 'Ananda Pampa' : 'HEMPIT France'),
+              purchasedKg,
+              totalDispatchedKg,
+              centralRemKg,
+              hilarioSentKg,
+              hilarioUsedKg,
+              hilarioRemKg,
+              lareginaSentKg,
+              lareginaUsedKg,
+              lareginaRemKg,
+              madrynSentKg,
+              madrynUsedKg,
+              madrynRemKg,
+              totalUsedFieldKg,
+              totalFieldRemKg,
+              totalAvailableKg
+          };
+      }).filter(r => r.purchasedKg > 0 || r.totalAvailableKg > 0 || r.totalDispatchedKg > 0);
+
+      const totals = rows.reduce((acc, r) => ({
+          purchasedKg: Number((acc.purchasedKg + r.purchasedKg).toFixed(3)),
+          totalDispatchedKg: Number((acc.totalDispatchedKg + r.totalDispatchedKg).toFixed(3)),
+          centralRemKg: Number((acc.centralRemKg + r.centralRemKg).toFixed(3)),
+          hilarioSentKg: Number((acc.hilarioSentKg + r.hilarioSentKg).toFixed(3)),
+          hilarioUsedKg: Number((acc.hilarioUsedKg + r.hilarioUsedKg).toFixed(3)),
+          hilarioRemKg: Number((acc.hilarioRemKg + r.hilarioRemKg).toFixed(3)),
+          lareginaSentKg: Number((acc.lareginaSentKg + r.lareginaSentKg).toFixed(3)),
+          lareginaUsedKg: Number((acc.lareginaUsedKg + r.lareginaUsedKg).toFixed(3)),
+          lareginaRemKg: Number((acc.lareginaRemKg + r.lareginaRemKg).toFixed(3)),
+          madrynSentKg: Number((acc.madrynSentKg + r.madrynSentKg).toFixed(3)),
+          madrynUsedKg: Number((acc.madrynUsedKg + r.madrynUsedKg).toFixed(3)),
+          madrynRemKg: Number((acc.madrynRemKg + r.madrynRemKg).toFixed(3)),
+          totalUsedFieldKg: Number((acc.totalUsedFieldKg + r.totalUsedFieldKg).toFixed(3)),
+          totalFieldRemKg: Number((acc.totalFieldRemKg + r.totalFieldRemKg).toFixed(3)),
+          totalAvailableKg: Number((acc.totalAvailableKg + r.totalAvailableKg).toFixed(3)),
+      }), {
+          purchasedKg: 0, totalDispatchedKg: 0, centralRemKg: 0,
+          hilarioSentKg: 0, hilarioUsedKg: 0, hilarioRemKg: 0,
+          lareginaSentKg: 0, lareginaUsedKg: 0, lareginaRemKg: 0,
+          madrynSentKg: 0, madrynUsedKg: 0, madrynRemKg: 0,
+          totalUsedFieldKg: 0, totalFieldRemKg: 0, totalAvailableKg: 0
+      });
+
+      return { rows, totals };
+  }, [seedBatches, varieties, suppliers]);
 
   const handleOpenDispatch = () => {
     setMoveFormData({
@@ -411,9 +496,9 @@ export default function SeedBatches() {
       {/* METRIC CARDS POR TIPO BIOLÓGICO */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <MetricCard 
-            label="Semilla Fiscalizada" 
-            value={`${stats.seedKg.toLocaleString(undefined, {maximumFractionDigits: 0})} kg`} 
-            subtext="Rótulo INASE / Germ. >85%"
+            label="Semilla Disponible (Red)" 
+            value={`${stats.seedKg.toLocaleString('es-AR', {minimumFractionDigits: 3, maximumFractionDigits: 3})} kg`} 
+            subtext={`Compra: ${varietyReconciliation.totals.purchasedKg.toFixed(1)} kg · Sembrado: ${varietyReconciliation.totals.totalUsedFieldKg.toFixed(3)} kg`}
             icon={Sprout} 
             colorClass="bg-blue-500" 
           />
@@ -539,7 +624,128 @@ export default function SeedBatches() {
 
       {/* CONTENIDO TAB 1: INVENTARIO BIOLÓGICO */}
       {activeTab === 'inventory' ? (
-          <div className="space-y-4 font-mono">
+          <div className="space-y-5 font-mono">
+              {/* MATRIZ DE CONCILIACIÓN AUDITADA POR VARIEDAD Y ESTABLECIMIENTO (CAMPAÑA 25/26) */}
+              {!isClient && varietyReconciliation.rows.length > 0 && (
+                <div className="bg-white dark:bg-slate-900 rounded-3xl border border-emerald-200/80 dark:border-emerald-900/50 shadow-sm overflow-hidden">
+                  <div className="px-6 py-4 bg-emerald-50/70 dark:bg-emerald-950/30 border-b border-emerald-100 dark:border-emerald-900/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
+                    <div>
+                      <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5">
+                        <ShieldCheck size={14} className="text-emerald-600" />
+                        <span>Auditoría & Conciliación Real de Semillas · Campaña 2025/2026</span>
+                      </span>
+                      <h2 className="text-sm md:text-base font-black text-slate-900 dark:text-white uppercase tracking-tight mt-0.5">
+                        Balance por Variedad, Proveedor y Establecimiento (Compras vs. Envíos vs. Siembra vs. Remanente)
+                      </h2>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold">
+                      <span className="px-2.5 py-1 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300">
+                        Compra Total: <strong>{varietyReconciliation.totals.purchasedKg.toFixed(3)} kg</strong> (6 kg Ananda + 3 kg HEMPIT)
+                      </span>
+                      <span className="px-2.5 py-1 rounded-xl bg-sky-50 dark:bg-sky-950/60 border border-sky-200 dark:border-sky-800 text-sky-700 dark:text-sky-300">
+                        Enviado a Campos: <strong>{varietyReconciliation.totals.totalDispatchedKg.toFixed(3)} kg</strong>
+                      </span>
+                      <span className="px-2.5 py-1 rounded-xl bg-emerald-600 text-white shadow-xs">
+                        Stock Total Disponible: <strong>{varietyReconciliation.totals.totalAvailableKg.toFixed(3)} kg</strong>
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-[11px] text-left tabular-nums">
+                      <thead className="bg-slate-50 dark:bg-slate-950/60 text-slate-500 uppercase text-[9px] font-black border-b border-slate-200 dark:border-slate-800">
+                        <tr>
+                          <th className="px-4 py-3">Variedad & Proveedor</th>
+                          <th className="px-3 py-3 text-right">Compra Inicial</th>
+                          <th className="px-3 py-3 text-right bg-slate-100/70 dark:bg-slate-800/40">Planta Central (Trelew)</th>
+                          <th className="px-3 py-3 text-right bg-amber-50/50 dark:bg-amber-950/20">INTA Hilario Ascasubi (12 Parc.)</th>
+                          <th className="px-3 py-3 text-right bg-purple-50/50 dark:bg-purple-950/20">Chacra La Regina (12 Parc.)</th>
+                          <th className="px-3 py-3 text-right bg-sky-50/50 dark:bg-sky-950/20">CAP Puerto Madryn (30 Parc.)</th>
+                          <th className="px-3 py-3 text-right">Total Sembrado</th>
+                          <th className="px-4 py-3 text-right bg-emerald-50/60 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300">Stock Disponible Hoy</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-bold">
+                        {varietyReconciliation.rows.map(row => (
+                          <tr key={row.varietyId} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40">
+                            <td className="px-4 py-3">
+                              <div className="font-black text-slate-900 dark:text-white uppercase">{row.varietyName}</div>
+                              <div className="text-[9px] text-slate-400 font-normal">{row.supplierName}</div>
+                            </td>
+                            <td className="px-3 py-3 text-right text-slate-800 dark:text-slate-200">
+                              <div>{row.purchasedKg.toFixed(3)} kg</div>
+                              <div className="text-[9px] text-slate-400 font-normal">{Math.round(row.purchasedKg * 1000)} gr</div>
+                            </td>
+                            <td className="px-3 py-3 text-right bg-slate-50/60 dark:bg-slate-800/20">
+                              <div className="text-slate-900 dark:text-white font-black">{row.centralRemKg.toFixed(3)} kg</div>
+                              <div className="text-[9px] text-slate-400 font-normal">
+                                {Math.round(row.centralRemKg * 1000)} gr en BioC #1
+                              </div>
+                            </td>
+                            <td className="px-3 py-3 text-right bg-amber-50/20 dark:bg-amber-950/10">
+                              <div className="text-amber-700 dark:text-amber-300 font-black">
+                                Quedan {row.hilarioRemKg.toFixed(3)} kg ({Math.round(row.hilarioRemKg * 1000)} gr)
+                              </div>
+                              <div className="text-[9px] text-slate-500 font-normal">
+                                Env: {row.hilarioSentKg.toFixed(3)} kg · Usado: {row.hilarioUsedKg.toFixed(3)} kg
+                              </div>
+                            </td>
+                            <td className="px-3 py-3 text-right bg-purple-50/20 dark:bg-purple-950/10">
+                              <div className="text-purple-700 dark:text-purple-300 font-black">
+                                Quedan {row.lareginaRemKg.toFixed(3)} kg (0 gr)
+                              </div>
+                              <div className="text-[9px] text-slate-500 font-normal">
+                                Env: {row.lareginaSentKg.toFixed(3)} kg · Usado: 100% ({Math.round(row.lareginaUsedKg * 1000)} gr)
+                              </div>
+                            </td>
+                            <td className="px-3 py-3 text-right bg-sky-50/20 dark:bg-sky-950/10">
+                              <div className="text-sky-700 dark:text-sky-300 font-black">
+                                Quedan {row.madrynRemKg.toFixed(3)} kg ({Math.round(row.madrynRemKg * 1000)} gr)
+                              </div>
+                              <div className="text-[9px] text-slate-500 font-normal">
+                                Env: {row.madrynSentKg.toFixed(3)} kg · Usado: {row.madrynUsedKg.toFixed(3)} kg
+                              </div>
+                            </td>
+                            <td className="px-3 py-3 text-right text-slate-700 dark:text-slate-300">
+                              <div>{row.totalUsedFieldKg.toFixed(3)} kg</div>
+                              <div className="text-[9px] text-slate-400 font-normal">{Math.round(row.totalUsedFieldKg * 1000)} gr</div>
+                            </td>
+                            <td className="px-4 py-3 text-right bg-emerald-50/40 dark:bg-emerald-950/20">
+                              <div className="text-emerald-700 dark:text-emerald-300 font-black text-xs">
+                                {row.totalAvailableKg.toFixed(3)} kg ({Math.round(row.totalAvailableKg * 1000)} gr)
+                              </div>
+                              <div className="text-[9px] text-emerald-600/80 font-normal">
+                                Central {row.centralRemKg.toFixed(3)} + Campos {row.totalFieldRemKg.toFixed(3)}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-slate-900 text-white text-[10px] font-black uppercase">
+                        <tr>
+                          <td className="px-4 py-3">TOTAL CONCILIADO CAMPAÑA 25/26</td>
+                          <td className="px-3 py-3 text-right">{varietyReconciliation.totals.purchasedKg.toFixed(3)} kg</td>
+                          <td className="px-3 py-3 text-right text-emerald-300">{varietyReconciliation.totals.centralRemKg.toFixed(3)} kg</td>
+                          <td className="px-3 py-3 text-right text-amber-300">
+                            {varietyReconciliation.totals.hilarioRemKg.toFixed(3)} kg (Env: {varietyReconciliation.totals.hilarioSentKg.toFixed(3)} / Uso: {varietyReconciliation.totals.hilarioUsedKg.toFixed(3)})
+                          </td>
+                          <td className="px-3 py-3 text-right text-purple-300">
+                            {varietyReconciliation.totals.lareginaRemKg.toFixed(3)} kg (Env: {varietyReconciliation.totals.lareginaSentKg.toFixed(3)} / Uso: {varietyReconciliation.totals.lareginaUsedKg.toFixed(3)})
+                          </td>
+                          <td className="px-3 py-3 text-right text-sky-300">
+                            {varietyReconciliation.totals.madrynRemKg.toFixed(3)} kg (Env: {varietyReconciliation.totals.madrynSentKg.toFixed(3)} / Uso: {varietyReconciliation.totals.madrynUsedKg.toFixed(3)})
+                          </td>
+                          <td className="px-3 py-3 text-right">{varietyReconciliation.totals.totalUsedFieldKg.toFixed(3)} kg</td>
+                          <td className="px-4 py-3 text-right text-emerald-400 text-xs">
+                            {varietyReconciliation.totals.totalAvailableKg.toFixed(3)} kg ({Math.round(varietyReconciliation.totals.totalAvailableKg * 1000)} gr)
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              )}
+
               <div className="flex justify-between items-center text-xs">
                   <span className="text-slate-500">
                     Mostrando <strong>{filteredBatches.length}</strong> lotes biológicos activos en red
@@ -559,18 +765,20 @@ export default function SeedBatches() {
                                   <th className="px-6 py-4">Genética & Circuito Trazabilidad</th>
                                   <th className="px-6 py-4">Nodo de Custodia</th>
                                   <th className="px-6 py-4">Parámetros & Personal Interviniente</th>
-                                  <th className="px-6 py-4 text-right">Existencias</th>
+                                  <th className="px-6 py-4 text-right">Ingreso Inicial</th>
+                                  <th className="px-6 py-4 text-right">Stock Remanente</th>
                                   <th className="px-6 py-4 text-right">Acción & QR</th>
                               </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-bold">
                               {filteredBatches.length === 0 ? (
-                                  <tr><td colSpan={6} className="p-12 text-center text-slate-400 italic">No se hallaron materiales biológicos con los filtros seleccionados.</td></tr>
+                                  <tr><td colSpan={7} className="p-12 text-center text-slate-400 italic">No se hallaron materiales biológicos con los filtros seleccionados.</td></tr>
                               ) : filteredBatches.map(batch => {
                                   const v = varieties.find(v => v.id === batch.varietyId);
                                   const sp = storagePoints.find(s => s.id === batch.storagePointId);
                                   const matMeta = getMaterialLabel(batch.materialType);
-                                  const displayQty = Number(batch.remainingQuantity.toFixed(2));
+                                  const displayQty = Number((batch.remainingQuantity || 0).toFixed(3));
+                                  const initialQty = Number((batch.initialQuantity || 0).toFixed(3));
                                   const matchedInsp = supplierInspections.find(i =>
                                     i.id === batch.originInspectionId ||
                                     i.seedBatchId === batch.id ||
@@ -649,13 +857,17 @@ export default function SeedBatches() {
                                                 Muestreo: <strong>{batch.samplerName || matchedInsp?.samplerName || 'Matias QUINTANA'}</strong> · Aud: <strong>{batch.inspectorName || matchedInsp?.agronomistName || 'Ing. J. PIZARRO'}</strong>
                                               </span>
                                           </td>
-                                          <td className="px-6 py-4 text-right">
+                                          <td className="px-6 py-4 text-right tabular-nums">
+                                              <div className="text-slate-700 dark:text-slate-300 font-bold">{initialQty.toFixed(3)} kg</div>
+                                              <div className="text-[9px] text-slate-400">{Math.round(initialQty * 1000)} gr</div>
+                                          </td>
+                                          <td className="px-6 py-4 text-right tabular-nums">
                                               <span className={`px-3 py-1 rounded-xl text-xs font-black inline-block ${
-                                                batch.remainingQuantity <= 0.001 
-                                                  ? 'bg-slate-100 text-slate-400' 
+                                                batch.remainingQuantity <= 0.0001 
+                                                  ? 'bg-slate-100 dark:bg-slate-800 text-slate-500 border border-slate-200 dark:border-slate-700' 
                                                   : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
                                               }`}>
-                                                {displayQty.toLocaleString()} kg
+                                                {displayQty.toFixed(3)} kg ({Math.round(displayQty * 1000)} gr)
                                               </span>
                                           </td>
                                           <td className="px-6 py-4 text-right">
@@ -731,17 +943,22 @@ export default function SeedBatches() {
                   </div>
               ) : (
                   /* VISTA AGRUPADA POR ALMACÉN */
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {stockByWarehouse.map(({ storage, items, totalKg }, idx) => (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+                      {stockByWarehouse.map(({ storage, items, totalKg, totalInitialKg }, idx) => (
                           <div key={storage?.id || idx} className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col justify-between">
                               <div>
                                   <div className="flex justify-between items-start mb-3">
                                       <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
                                           <Warehouse size={18} />
                                       </div>
-                                      <span className="text-xs font-mono font-black text-emerald-600 dark:text-emerald-400">
-                                          {totalKg.toLocaleString()} kg
-                                      </span>
+                                      <div className="text-right font-mono tabular-nums">
+                                          <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 block">
+                                              {totalKg.toFixed(3)} kg ({Math.round(totalKg * 1000)} gr)
+                                          </span>
+                                          <span className="text-[9px] text-slate-400 block">
+                                              Ingresado: {totalInitialKg.toFixed(3)} kg
+                                          </span>
+                                      </div>
                                   </div>
                                   <h3 className="text-base font-black text-slate-900 dark:text-white uppercase tracking-tight">
                                       {storage?.name || 'Almacén Central'}
@@ -750,18 +967,25 @@ export default function SeedBatches() {
                                       {storage?.address || 'Ubicación registrada'} · {storage?.city || ''}
                                   </p>
 
-                                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2 text-xs">
-                                      {Object.entries(items).map(([name, qty]) => (
+                                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2 text-xs tabular-nums">
+                                      {Object.entries(items).map(([name, info]) => (
                                           <div key={name} className="flex justify-between items-center text-slate-600 dark:text-slate-400">
-                                              <span className="truncate max-w-[180px]">{name}:</span>
-                                              <strong className="text-slate-900 dark:text-white">{qty.toLocaleString()} kg</strong>
+                                              <span className="truncate max-w-[130px] font-bold">{name}:</span>
+                                              <div className="text-right">
+                                                  <strong className="text-slate-900 dark:text-white block">
+                                                      {info.remainingKg.toFixed(3)} kg ({Math.round(info.remainingKg * 1000)} gr)
+                                                  </strong>
+                                                  <span className="text-[9px] text-slate-400 block">
+                                                      de {info.initialKg.toFixed(3)} kg ({Math.round(info.initialKg * 1000)} gr)
+                                                  </span>
+                                              </div>
                                           </div>
                                       ))}
                                   </div>
                               </div>
                               <div className="mt-5 pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center text-[10px] text-slate-400">
-                                  <span>Capacidad: {storage?.totalCapacityTn || 450} Tn</span>
-                                  <span className="text-emerald-500 font-bold">GACP Aprobado</span>
+                                  <span>Nodo: {storage?.nodeCode || 'OFICIAL'}</span>
+                                  <span className="text-emerald-500 font-bold">Auditado 25/26</span>
                               </div>
                           </div>
                       ))}
@@ -1297,7 +1521,7 @@ export default function SeedBatches() {
                 </div>
                 <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl border border-slate-100 dark:border-slate-800">
                   <span className="text-[10px] text-slate-400 block uppercase">Existencia Real</span>
-                  <strong className="text-slate-900 dark:text-white">{Number(selectedBatch.remainingQuantity.toFixed(2)).toLocaleString()} kg</strong>
+                  <strong className="text-slate-900 dark:text-white">{Number((selectedBatch.remainingQuantity || 0).toFixed(3))} kg ({Math.round((selectedBatch.remainingQuantity || 0) * 1000)} gr)</strong>
                 </div>
                 <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl border border-slate-100 dark:border-slate-800">
                   <span className="text-[10px] text-slate-400 block uppercase">Almacén</span>

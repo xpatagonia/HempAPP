@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { Plot, Location, Variety, Client, SeedBatch } from '../types';
 import { BarcodeSVG } from './BarcodeSVG';
+import { formatPlotSeedLoad } from '../src/utils/seedTraceability';
 
 interface PlotIdentificationModalProps {
   isOpen: boolean;
@@ -53,6 +54,7 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
   const seedLotCode = seedBatch?.batchCode || 'FUT-83-25-HEM';
   const seedMotherLot = seedBatch?.certificationNumber || (seedLotCode.includes('-REC-') ? seedLotCode.split('-REC-')[0] : seedLotCode);
   const seedRotuloInase = seedBatch?.labelSerialNumber || 'INASE-SERIE-2025-A0041928';
+  const seedLoad = formatPlotSeedLoad(plot);
   const isCycleClosed = Boolean(plot.closureConfirmed || plot.status === 'Cosechada');
   const actCode = plot.closureActCode || `ACTA-SIEMBRA-${(plot.campaign || '2526').replace('/', '')}-${plot.id.slice(-5).toUpperCase()}`;
   const barcodeCode = plot.closureBarcode || `7798394${plot.id.replace(/[^0-9A-Za-z]/g, '').toUpperCase().slice(0, 6)}2026`;
@@ -74,6 +76,11 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
     params.set('seedLot', seedLotCode);
     params.set('seedCert', seedMotherLot);
     params.set('seedRotulo', seedRotuloInase);
+    params.set('seedLoadVal', String(seedLoad.rawValue));
+    params.set('seedLoadUnit', seedLoad.unit);
+    params.set('seedLoadKg', seedLoad.kg.toFixed(3));
+    params.set('seedLoadGr', String(seedLoad.gr));
+    params.set('seedLoadTn', seedLoad.tn.toFixed(6));
     if (plot.samplingResponsibleName || seedBatch?.samplerName) params.set('sampler', plot.samplingResponsibleName || seedBatch?.samplerName || '');
     if (plot.sowingResponsibleName) params.set('sower', plot.sowingResponsibleName);
     if (plot.technicalResponsibleName || seedBatch?.inspectorName) params.set('inspector', plot.technicalResponsibleName || seedBatch?.inspectorName || '');
@@ -666,9 +673,11 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                         </div>
 
                         <div className="p-2 bg-emerald-50 rounded-xl border-2 border-emerald-500">
-                          <span className="text-[8.5px] uppercase font-black text-emerald-800 block">N° Lote de Semilla:</span>
+                          <span className="text-[8.5px] uppercase font-black text-emerald-800 block">Lote & Carga Semilla:</span>
                           <strong className="text-sm font-black uppercase text-slate-950 block truncate" title={seedLotCode}>{seedMotherLot}</strong>
-                          <span className="text-[9px] text-emerald-800 font-bold block truncate" title={seedRotuloInase}>Rótulo: {seedRotuloInase}</span>
+                          <span className="text-[9px] text-emerald-800 font-black block truncate">
+                            Carga: {seedLoad.compactDisplay}
+                          </span>
                         </div>
                       </div>
 
@@ -686,9 +695,9 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                           <div>
                             <span className="font-black text-slate-800 block text-xs">PatagonianC LTDA · CUIT: 30-71816113-0 · HempC</span>
                             <span className="text-[9.5px] text-emerald-800 font-black block">
-                              N° Lote de Semilla: {seedMotherLot} · Rótulo INASE: {seedRotuloInase}
+                              Lote Semilla: {seedMotherLot} · Carga Parcela: {seedLoad.fullTriUnitDisplay}
                             </span>
-                            <span className="text-[8.5px] text-slate-500 block">Escanear QR para trazabilidad del lote y verificación digital</span>
+                            <span className="text-[8.5px] text-slate-500 block">Escanear QR para trazabilidad del lote, carga (T/kg/gr) y verificación digital</span>
                           </div>
                         </div>
                         <div className="text-right">
@@ -768,11 +777,11 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                           </div>
 
                           <div className="space-y-0.5">
-                            <span className="text-[9px] text-slate-400 uppercase font-bold block">Genética & Lote de Semilla:</span>
+                            <span className="text-[9px] text-slate-400 uppercase font-bold block">Genética, Lote & Carga:</span>
                             <strong className="text-xs text-emerald-800 font-black block">{variety?.name || 'Cultivar Homologado'}</strong>
                             <span className="text-[10px] text-slate-900 block">N° Lote Semilla: <strong>{seedMotherLot}</strong></span>
+                            <span className="text-[10px] text-emerald-800 font-black block">Carga Siembra: {seedLoad.fullTriUnitDisplay}</span>
                             <span className="text-[10px] text-slate-600 block truncate" title={seedRotuloInase}>Rótulo INASE: <strong>{seedRotuloInase}</strong></span>
-                            <span className="text-[10px] text-slate-600 block">RNC INASE: <strong>{variety?.inaseRncNumber || 'Certificación RNC'}</strong></span>
                           </div>
                         </div>
                       </div>
@@ -816,15 +825,15 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                         </div>
 
                         <div className="p-2.5 bg-emerald-50/70 border-2 border-emerald-300 rounded-xl space-y-0.5">
-                          <span className="text-[9px] uppercase text-emerald-800 font-black block">N° de Lote de Semilla y Trazabilidad del Lote</span>
+                          <span className="text-[9px] uppercase text-emerald-800 font-black block">N° Lote de Semilla y Carga a la Parcela (T/kg/gr)</span>
                           <span className="text-[10px] text-slate-900 block">
                             N° Lote de Semilla: <strong className="font-black text-emerald-900">{seedMotherLot}</strong> ({seedBatch?.qualityGrade === 'GRADO_B_ESTANDAR' ? 'Grado B' : 'Grado A Élite'} · {seedBatch?.qualityScore || 96}/100 pts)
                           </span>
-                          <span className="text-[9.5px] text-slate-700 block truncate" title={seedLotCode}>
-                            Código Trazabilidad / Remito: <strong>{seedLotCode}</strong>
+                          <span className="text-[9.5px] text-emerald-900 font-black block">
+                            Carga de Semilla en Parcela: {seedLoad.fullTriUnitDisplay}
                           </span>
-                          <span className="text-[9.5px] text-emerald-800 font-bold block">
-                            Rótulo Oficial INASE: <strong>{seedRotuloInase}</strong> · PG: {seedBatch?.germination || 94}%
+                          <span className="text-[9.5px] text-slate-700 block truncate" title={seedLotCode}>
+                            Código Trazabilidad / Remito: <strong>{seedLotCode}</strong> · Rótulo: {seedRotuloInase}
                           </span>
                           <span className="text-[9.5px] text-indigo-800 font-bold block truncate">
                             Muestreo: {plot.samplingResponsibleName || seedBatch?.samplerName || 'Matias QUINTANA'} · DT: {plot.technicalResponsibleName || seedBatch?.inspectorName || 'Ing. Agr. Julian PIZARRO'}
@@ -971,9 +980,9 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                     </span>
                   </div>
                   <div className="bg-emerald-50 border-2 border-emerald-500 rounded-xl px-3 py-2 font-mono text-right">
-                    <span className="text-[9px] font-black uppercase text-emerald-800 block">N° de Lote de Semilla</span>
+                    <span className="text-[9px] font-black uppercase text-emerald-800 block">Lote de Semilla & Carga</span>
                     <strong className="text-sm font-black uppercase text-slate-950 block">{seedMotherLot}</strong>
-                    <span className="text-[9px] font-bold text-emerald-700 block">Rótulo: {seedRotuloInase}</span>
+                    <span className="text-[9px] font-black text-emerald-700 block">Carga: {seedLoad.fullTriUnitDisplay}</span>
                   </div>
                 </div>
 
@@ -994,8 +1003,9 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                     <strong className="text-slate-900 block text-sm">{surfaceDisplay}</strong>
                   </div>
                   <div>
-                    <span className="text-[9px] text-slate-400 uppercase block font-bold">Campaña:</span>
-                    <strong className="text-slate-900 block text-sm">{campaignDisplay}</strong>
+                    <span className="text-[9px] text-emerald-700 uppercase block font-black">Carga Semilla (T / kg / gr):</span>
+                    <strong className="text-emerald-900 block text-xs font-black">{seedLoad.primaryDisplay}</strong>
+                    <span className="text-[9.5px] text-slate-600">{seedLoad.tnFormatted} · Campaña {campaignDisplay}</span>
                   </div>
                   <div className="col-span-2">
                     <span className="text-[9px] text-slate-400 uppercase block font-bold">Coordenadas GPS Centroide:</span>
@@ -1008,7 +1018,7 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                   <div className="flex items-center justify-between border-b border-indigo-200 pb-1.5">
                     <span className="font-black uppercase text-indigo-900 flex items-center gap-1">
                       <UserCheck size={13} className="text-indigo-700" />
-                      N° de Lote de Semilla, Trazabilidad & Personal Interviniente
+                      N° de Lote de Semilla, Carga & Personal Interviniente
                     </span>
                     <span className="px-2 py-0.5 rounded bg-emerald-600 text-white font-black text-[8px] uppercase flex items-center gap-1">
                       <Award size={10} />
@@ -1017,8 +1027,8 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                   </div>
                   <div className="grid grid-cols-2 gap-2.5">
                     <div className="bg-white p-2 rounded-xl border border-indigo-100">
-                      <span className="text-[8px] text-emerald-700 uppercase font-black block">N° de Lote de Semilla (Lote Madre):</span>
-                      <strong className="text-slate-950 text-xs font-black block truncate">{seedMotherLot}</strong>
+                      <span className="text-[8px] text-emerald-700 uppercase font-black block">N° Lote de Semilla & Carga:</span>
+                      <strong className="text-slate-950 text-xs font-black block truncate">{seedMotherLot} · {seedLoad.compactDisplay}</strong>
                       <span className="text-[8.5px] text-slate-600 block truncate" title={seedLotCode}>
                         Cód. Recepción: <strong>{seedLotCode}</strong>
                       </span>

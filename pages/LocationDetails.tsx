@@ -22,6 +22,7 @@ import {
   resolveLocationStructureRoster,
   STRUCTURE_ROLES_INFO
 } from '../src/utils/structurePermissions';
+import { formatPlotSeedLoad } from '../src/utils/seedTraceability';
 import { Plot, Variety, Location, CAMPAIGNS } from '../types';
 
 const stringToColor = (str: string) => {
@@ -202,41 +203,32 @@ export default function LocationDetails() {
   const stockInventory = useMemo(() => {
     const linkedIds = linkedStorages.map(s => s.id);
     const batchesInScope = seedBatches.filter(
-      b => linkedIds.includes(b.storagePointId || '') && b.remainingQuantity > 0
+      b => linkedIds.includes(b.storagePointId || '')
     );
 
-    const consolidated: Record<string, { variety: string; totalKg: number; count: number }> = {};
+    const consolidated: Record<string, { variety: string; initialKg: number; totalKg: number; count: number }> = {};
     batchesInScope.forEach(b => {
       const varId = b.varietyId;
       const varName = varieties.find(v => v.id === varId)?.name || 'Desconocida';
       if (!consolidated[varId]) {
-        consolidated[varId] = { variety: varName, totalKg: 0, count: 0 };
+        consolidated[varId] = { variety: varName, initialKg: 0, totalKg: 0, count: 0 };
       }
-      consolidated[varId].totalKg += b.remainingQuantity;
+      consolidated[varId].initialKg = Number((consolidated[varId].initialKg + (b.initialQuantity || 0)).toFixed(3));
+      consolidated[varId].totalKg = Number((consolidated[varId].totalKg + (b.remainingQuantity || 0)).toFixed(3));
       consolidated[varId].count += 1;
     });
 
-    const byStorage: Record<string, { name: string; city: string; items: { variety: string; kg: number; batchCode: string }[] }> = {};
-    batchesInScope.forEach(b => {
-      const sp = storagePoints.find(s => s.id === b.storagePointId);
-      if (!sp) return;
-      const varName = varieties.find(v => v.id === b.varietyId)?.name || 'Desconocida';
-      if (!byStorage[sp.id]) {
-        byStorage[sp.id] = { name: sp.name, city: sp.city || '', items: [] };
-      }
-      byStorage[sp.id].items.push({
-        variety: varName,
-        kg: b.remainingQuantity,
-        batchCode: b.batchCode
-      });
-    });
+    const totalInitialKg = Number(batchesInScope.reduce((s, b) => s + (b.initialQuantity || 0), 0).toFixed(3));
+    const totalRemainingKg = Number(batchesInScope.reduce((s, b) => s + (b.remainingQuantity || 0), 0).toFixed(3));
 
     return {
       consolidated: Object.values(consolidated),
-      byStorage: Object.values(byStorage),
-      hasStock: batchesInScope.length > 0
+      totalInitialKg,
+      totalRemainingKg,
+      hasBatches: batchesInScope.length > 0,
+      hasStock: totalRemainingKg > 0
     };
-  }, [seedBatches, linkedStorages, varieties, storagePoints]);
+  }, [seedBatches, linkedStorages, varieties]);
 
   const consumedStock = useMemo(() => {
     return locationPlots.reduce((acc, p) => {
@@ -1023,7 +1015,10 @@ export default function LocationDetails() {
                               {vari?.name || 'Cultivar Homologado'}
                             </span>
                             <span className="text-[10px] text-slate-600 dark:text-slate-400 block mt-1">
-                              Lote: <strong>{linkedBatch?.certificationNumber || linkedBatch?.batchCode || '103'}</strong> · Rótulo: {linkedBatch?.labelSerialNumber || '00000012'}
+                              Lote: <strong>{linkedBatch?.batchCode || linkedBatch?.certificationNumber || '103'}</strong> · Cert: {linkedBatch?.certificationNumber || '103'}
+                            </span>
+                            <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-bold block mt-0.5">
+                              Carga: {formatPlotSeedLoad(p.usedSeedValue, p.usedSeedUnit).compactDisplay}
                             </span>
                           </td>
 
@@ -1195,9 +1190,9 @@ export default function LocationDetails() {
 
                         <div className="grid grid-cols-2 gap-1.5 text-[10px]">
                           <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 truncate">
-                            <span className="text-[8px] uppercase text-slate-400 block">Cultivar</span>
+                            <span className="text-[8px] uppercase text-slate-400 block">Cultivar & Carga</span>
                             <strong className="text-emerald-600 dark:text-emerald-400 truncate block">
-                              {vari?.name || 'Certificada'}
+                              {vari?.name || 'Certificada'} · {formatPlotSeedLoad(p.usedSeedValue, p.usedSeedUnit).primaryDisplay}
                             </strong>
                           </div>
                           <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 truncate">
@@ -1385,7 +1380,7 @@ export default function LocationDetails() {
                             <div className="flex items-center justify-between gap-1 pb-1.5 border-b border-slate-200/70 dark:border-slate-800">
                               <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1 truncate">
                                 <Award size={11} className="text-emerald-600 shrink-0" />
-                                Semilla INASE: {linkedBatch?.certificationNumber || linkedBatch?.batchCode || '103'} (Rótulo {linkedBatch?.labelSerialNumber || '00000012'})
+                                Lote: {linkedBatch?.batchCode || linkedBatch?.certificationNumber || '103'} · Carga: {formatPlotSeedLoad(p.usedSeedValue, p.usedSeedUnit).primaryDisplay} ({formatPlotSeedLoad(p.usedSeedValue, p.usedSeedUnit).kgFormatted})
                               </span>
                               <span className="text-[9px] text-indigo-600 dark:text-indigo-400 font-bold shrink-0 flex items-center gap-1">
                                 <Tractor size={10} />
@@ -1485,23 +1480,41 @@ export default function LocationDetails() {
             </div>
           </div>
 
-          {!stockInventory.hasStock && linkedStorages.length > 0 && (
-            <div className="p-12 text-center bg-white dark:bg-slate-900 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800 flex flex-col items-center">
-              <Package size={32} className="text-slate-300 mb-2" />
-              <p className="text-slate-400 font-mono text-xs">
-                No hay stock de semillas disponible en los depósitos vinculados.
-              </p>
-              <Link
-                to="/seed-batches"
-                className="mt-4 text-xs font-mono font-bold text-emerald-600 uppercase hover:underline"
-              >
-                Gestionar Inventario Logístico →
-              </Link>
+          {/* RESUMEN DE CONCILIACIÓN DEL ESTABLECIMIENTO */}
+          {stockInventory.hasBatches && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 font-mono tabular-nums">
+              <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
+                <span className="text-[10px] font-bold uppercase text-slate-400 block">Total Enviado / Recepcionado</span>
+                <strong className="text-2xl font-black text-slate-900 dark:text-white mt-1 block">
+                  {stockInventory.totalInitialKg.toFixed(3)} kg ({Math.round(stockInventory.totalInitialKg * 1000)} gr)
+                </strong>
+                <span className="text-[10px] text-slate-500 mt-1 block">
+                  En {receivedMaterials.length} remitos oficiales ARICCAME
+                </span>
+              </div>
+              <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-sky-200/80 dark:border-sky-900/50 shadow-xs">
+                <span className="text-[10px] font-bold uppercase text-sky-600 block">Total Utilizado en Siembra ({locationPlots.length} Parcelas)</span>
+                <strong className="text-2xl font-black text-sky-600 dark:text-sky-400 mt-1 block">
+                  {Number((Object.values(consumedStock) as number[]).reduce((a, b) => a + b, 0)).toFixed(3)} kg ({Math.round((Object.values(consumedStock) as number[]).reduce((a, b) => a + b, 0) * 1000)} gr)
+                </strong>
+                <span className="text-[10px] text-slate-500 mt-1 block">
+                  Implantado en las unidades activas del campo
+                </span>
+              </div>
+              <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-emerald-200/80 dark:border-emerald-900/50 shadow-xs">
+                <span className="text-[10px] font-bold uppercase text-emerald-600 block">Stock Remanente en Depósito</span>
+                <strong className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1 block">
+                  {stockInventory.totalRemainingKg.toFixed(3)} kg ({Math.round(stockInventory.totalRemainingKg * 1000)} gr)
+                </strong>
+                <span className="text-[10px] text-slate-500 mt-1 block">
+                  {stockInventory.totalRemainingKg === 0 ? '100% de la semilla enviada fue utilizada en las parcelas' : 'Disponible en custodia del establecimiento'}
+                </span>
+              </div>
             </div>
           )}
 
-          {stockInventory.hasStock && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {stockInventory.hasBatches && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
               {stockInventory.consolidated.map((item, idx) => (
                 <div
                   key={idx}
@@ -1516,12 +1529,16 @@ export default function LocationDetails() {
                       <p className="text-sm font-black text-slate-900 dark:text-white uppercase">{item.variety}</p>
                     </div>
                   </div>
-                  <div className="space-y-1 font-mono tabular-nums">
-                    <p className="text-3xl font-black text-slate-900 dark:text-white">
-                      {item.totalKg.toLocaleString()} <span className="text-sm text-slate-400">kg</span>
+                  <div className="space-y-1.5 font-mono tabular-nums">
+                    <p className="text-2xl font-black text-slate-900 dark:text-white">
+                      {item.totalKg.toFixed(3)} <span className="text-xs text-slate-400">kg</span>{' '}
+                      <span className="text-xs font-bold text-emerald-600">({Math.round(item.totalKg * 1000)} gr)</span>
+                    </p>
+                    <p className="text-[10px] text-slate-500">
+                      Enviado: <strong>{item.initialKg.toFixed(3)} kg ({Math.round(item.initialKg * 1000)} gr)</strong>
                     </p>
                     <p className="text-[10px] font-bold text-emerald-600 uppercase flex items-center gap-1">
-                      <CheckCircle2 size={11} /> Disponible para siembra ({item.count} lotes)
+                      <CheckCircle2 size={11} /> {item.totalKg > 0 ? `Disponible en depósito (${item.count} lote)` : 'Consumido 100% en parcelas'}
                     </p>
                   </div>
                 </div>
@@ -1532,9 +1549,9 @@ export default function LocationDetails() {
           {Object.keys(consumedStock).length > 0 && (
             <div className="bg-sky-50/70 dark:bg-sky-950/20 p-6 rounded-2xl border border-sky-200/70 dark:border-sky-900/40">
               <h3 className="text-xs font-mono font-black text-sky-800 dark:text-sky-300 uppercase tracking-wider flex items-center mb-4">
-                <TrendingDown size={15} className="mr-2" /> Semilla Aplicada en Unidades Productivas
+                <TrendingDown size={15} className="mr-2" /> Semilla Aplicada en Unidades Productivas ({locationPlots.length} Parcelas)
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 font-mono tabular-nums">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 font-mono tabular-nums">
                 {Object.entries(consumedStock).map(([variety, kg]) => (
                   <div
                     key={variety}
@@ -1545,7 +1562,9 @@ export default function LocationDetails() {
                       <p className="text-xs font-black text-slate-900 dark:text-white">{variety}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-lg font-black text-sky-600">{(kg as number).toFixed(1)} kg</p>
+                      <p className="text-base font-black text-sky-600">
+                        {Number((kg as number).toFixed(3))} kg ({Math.round((kg as number) * 1000)} gr)
+                      </p>
                       <p className="text-[9px] font-bold text-slate-400 uppercase">Implantado</p>
                     </div>
                   </div>

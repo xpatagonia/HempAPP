@@ -9,6 +9,7 @@ import { Plot, Location, Variety, Client, SeedBatch, Task } from '../types';
 import { useAppContext } from '../context/AppContext';
 import { isCentralAdminOrSupervisor } from '../src/utils/structurePermissions';
 import { BarcodeSVG } from './BarcodeSVG';
+import { formatPlotSeedLoad } from '../src/utils/seedTraceability';
 
 interface PlotCycleClosureModalProps {
   isOpen: boolean;
@@ -157,6 +158,7 @@ export const PlotCycleClosureModal: React.FC<PlotCycleClosureModalProps> = ({
   const seedMotherLot =
     seedBatch?.certificationNumber || (seedLotCode.includes('-REC-') ? seedLotCode.split('-REC-')[0] : seedLotCode);
   const seedRotuloInase = seedBatch?.labelSerialNumber || 'INASE-SERIE-2025-A0041928';
+  const seedLoad = formatPlotSeedLoad(plot);
 
   // Días totales del ciclo desde fecha de siembra hasta fecha de cierre
   const sowDateStr = plot.sowingDate || '2026-01-13';
@@ -195,6 +197,11 @@ export const PlotCycleClosureModal: React.FC<PlotCycleClosureModalProps> = ({
     params.set('seedLot', seedLotCode);
     params.set('seedCert', seedMotherLot);
     params.set('seedRotulo', seedRotuloInase);
+    params.set('seedLoadVal', String(seedLoad.rawValue));
+    params.set('seedLoadUnit', seedLoad.unit);
+    params.set('seedLoadKg', seedLoad.kg.toFixed(3));
+    params.set('seedLoadGr', String(seedLoad.gr));
+    params.set('seedLoadTn', seedLoad.tn.toFixed(6));
     params.set('actCode', computedCodes.actCode);
     params.set('barcode', computedCodes.barcode);
     if (plot.closedAt || closedDate) params.set('closedAt', plot.closedAt || closedDate);
@@ -835,16 +842,16 @@ export const PlotCycleClosureModal: React.FC<PlotCycleClosureModalProps> = ({
                   </div>
 
                   <div className="p-3 rounded-xl bg-emerald-50/70 border border-emerald-300 space-y-1">
-                    <span className="text-[9px] font-bold uppercase text-emerald-800 block">3. Semilla INASE & Siembra</span>
+                    <span className="text-[9px] font-bold uppercase text-emerald-800 block">3. Semilla INASE, Lote & Carga</span>
                     <strong className="text-sm font-black text-emerald-950 block">{variety?.name || 'Futura 83'}</strong>
                     <span className="text-[10px] text-slate-800 block">
                       Lote Semilla: <strong>{seedMotherLot}</strong> ({seedLotCode})
                     </span>
-                    <span className="text-[10px] text-emerald-900 font-bold block">
-                      Rótulo Oficial: {seedRotuloInase}
+                    <span className="text-[10px] text-emerald-900 font-black block">
+                      Carga en Parcela: {seedLoad.fullTriUnitDisplay}
                     </span>
                     <span className="text-[10px] text-slate-700 block">
-                      Fecha de Siembra: <strong>{sowDateStr}</strong>
+                      Rótulo: {seedRotuloInase} · Siembra: <strong>{sowDateStr}</strong>
                     </span>
                   </div>
                 </div>
