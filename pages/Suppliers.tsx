@@ -712,17 +712,22 @@ export default function Suppliers() {
     const inspectionId = editingInspectionId || generateId('insp');
     const cleanLotNumber = newInspectionData.lotNumber!.trim().toUpperCase();
 
+    const finalVerdict = newInspectionData.verdict || evalResult.recommendedVerdict;
+    const isQualityApprovedActive = finalVerdict === 'APROBADO_CAMPO' && evalResult.grade !== 'NO_CONFORME';
     let linkedBatchId = newInspectionData.seedBatchId || undefined;
 
-    // Si es Semilla y está activada la vinculación con Lotes de Siembra, creamos o actualizamos el SeedBatch
-    if (newInspectionData.inputCategory === 'Semilla C1/C2' && syncWithSeedBatch) {
+    // Al emitir el dictamen de Semilla Fiscalizada, se da de alta o actualiza automáticamente en el Stock como ACTIVO (si aprobó Calidad)
+    if (newInspectionData.inputCategory === 'Semilla C1/C2') {
       const existingBatch = seedBatches.find(b =>
         (linkedBatchId && b.id === linkedBatchId) ||
+        b.originInspectionId === inspectionId ||
         b.batchCode.toUpperCase() === cleanLotNumber
       );
 
       if (existingBatch) {
         linkedBatchId = existingBatch.id;
+        const canUpdateQty = Math.abs((existingBatch.initialQuantity || 0) - (existingBatch.remainingQuantity || 0)) < 0.0001;
+        const nextInitialQty = Number(newInspectionData.initialQuantityKg) || existingBatch.initialQuantity || 1;
         await updateSeedBatch({
           ...existingBatch,
           supplierId: matchedSup?.id || existingBatch.supplierId,
@@ -734,12 +739,16 @@ export default function Suppliers() {
           originInspectionId: inspectionId,
           qualityGrade: evalResult.grade,
           qualityScore: evalResult.score,
+          initialQuantity: canUpdateQty ? nextInitialQty : existingBatch.initialQuantity,
+          remainingQuantity: canUpdateQty ? nextInitialQty : existingBatch.remainingQuantity,
+          storagePointId: newInspectionData.storagePointId || existingBatch.storagePointId,
           samplerName: newInspectionData.samplerName?.trim() || existingBatch.samplerName,
           samplerMatricula: newInspectionData.samplerDniOrMatricula?.trim() || existingBatch.samplerMatricula,
           sampleCode: newInspectionData.sampleCode?.trim() || existingBatch.sampleCode,
           inspectorName: newInspectionData.agronomistName?.trim() || existingBatch.inspectorName,
           inspectorMatricula: newInspectionData.agronomistMatricula?.trim() || existingBatch.inspectorMatricula,
-          logisticsResponsible: newInspectionData.receptionResponsibleName?.trim() || existingBatch.logisticsResponsible
+          logisticsResponsible: newInspectionData.receptionResponsibleName?.trim() || existingBatch.logisticsResponsible,
+          isActive: isQualityApprovedActive
         });
       } else {
         const newBatchId = generateId('batch');
@@ -771,8 +780,8 @@ export default function Suppliers() {
           sampleCode: newInspectionData.sampleCode?.trim() || `MUE-${cleanLotNumber}`,
           inspectorName: newInspectionData.agronomistName?.trim() || 'Ing. Agr. Julian PIZARRO',
           inspectorMatricula: newInspectionData.agronomistMatricula?.trim() || 'MP-AGRO-1492 CH',
-          notes: `Lote de siembra homologado desde Inspección Técnica #${inspectionId} (${QUALITY_GRADE_CONFIG[evalResult.grade].shortLabel}).`,
-          isActive: evalResult.grade !== 'NO_CONFORME',
+          notes: `Lote de siembra dado de alta en Stock como ${isQualityApprovedActive ? 'ACTIVO (Aprobado por Calidad)' : 'OBSERVADO / CUARENTENA'} desde Inspección Técnica #${inspectionId} (${QUALITY_GRADE_CONFIG[evalResult.grade].shortLabel}).`,
+          isActive: isQualityApprovedActive,
           createdAt: new Date().toISOString()
         };
         await addSeedBatch(createdBatch);
@@ -1783,10 +1792,21 @@ export default function Suppliers() {
                         </td>
 
                         <td className="py-3.5 px-4 text-center">
-                          <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[10px] font-black uppercase border ${verdictCfg.bg} ${verdictCfg.text} ${verdictCfg.border}`}>
-                            <VIcon size={12} />
-                            <span>{verdictCfg.label}</span>
-                          </span>
+                          <div className="flex flex-col items-center gap-1">
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[10px] font-black uppercase border ${verdictCfg.bg} ${verdictCfg.text} ${verdictCfg.border}`}>
+                              <VIcon size={12} />
+                              <span>{verdictCfg.label}</span>
+                            </span>
+                            {insp.inputCategory === 'Semilla C1/C2' && (
+                              <span className={`px-2 py-0.5 rounded text-[8.5px] font-black uppercase border ${
+                                insp.verdict === 'APROBADO_CAMPO'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800'
+                                  : 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800'
+                              }`}>
+                                {insp.verdict === 'APROBADO_CAMPO' ? '● En Stock Activo (Calidad OK)' : '○ No Activo p/ Siembra'}
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         <td className="py-3.5 px-4 text-right">
@@ -1962,25 +1982,34 @@ export default function Suppliers() {
             </div>
 
             <form onSubmit={handleCreateInspection} className="space-y-5">
-              {/* BLOQUE 1: ORIGEN DEL LOTE Y ASOCIACIÓN A LOTE DE SIEMBRA */}
+              {/* BLOQUE 1: ORIGEN DEL LOTE, GENÉTICA INSPECCIONADA Y ALTA EN STOCK ACTIVO POR CALIDAD */}
               <div className="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3">
                 <div className="flex flex-wrap justify-between items-center gap-2">
                   <span className="text-[10px] font-black uppercase text-emerald-600 tracking-wider flex items-center gap-1.5">
                     <Sprout size={14} />
-                    <span>1. Identificación del Lote & Vinculación a Lotes de Siembra</span>
+                    <span>1. Identificación del Lote, Genética Evaluada & Alta Automática en Stock por Calidad</span>
                   </span>
                   {newInspectionData.inputCategory === 'Semilla C1/C2' && (
-                    <label className="flex items-center gap-2 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={syncWithSeedBatch}
-                        onChange={e => setSyncWithSeedBatch(e.target.checked)}
-                        className="rounded text-emerald-600"
-                      />
-                      <span>Sincronizar / Crear Lote de Siembra Activo en Inventario QR</span>
-                    </label>
+                    <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase border flex items-center gap-1.5 ${
+                      newInspectionData.verdict === 'APROBADO_CAMPO'
+                        ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                        : 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800'
+                    }`}>
+                      <ShieldCheck size={13} />
+                      <span>
+                        {newInspectionData.verdict === 'APROBADO_CAMPO'
+                          ? 'Dictamen Aprobado ➔ Queda en Stock como ACTIVO (Pasó Calidad)'
+                          : 'Lote Observado / Rechazado ➔ Bloqueado para Siembra'}
+                      </span>
+                    </span>
                   )}
                 </div>
+
+                {newInspectionData.inputCategory === 'Semilla C1/C2' && (
+                  <div className="p-2.5 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-800/70 text-[10px] text-emerald-900 dark:text-emerald-200">
+                    <strong>Regla de Calidad & Stock:</strong> Al emitir este Dictamen Técnico con veredicto <strong>APROBADO PARA CAMPO</strong>, el lote de semilla ingresa o se actualiza automáticamente en el <strong>Stock Biológico como ACTIVO</strong>, quedando habilitado para ser tomado directamente al crear el Lote o Parcela de Cultivo.
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div>
@@ -2022,57 +2051,12 @@ export default function Suppliers() {
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Vincular con Lote de Siembra Existente</label>
+                    <label className="block text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase mb-1">
+                      Genética / Variedad Evaluada en Inspección *
+                    </label>
                     <select
-                      className={inputClass}
-                      value={newInspectionData.seedBatchId || ''}
-                      onChange={e => {
-                        const chosenBatch = seedBatches.find(b => b.id === e.target.value);
-                        if (chosenBatch) {
-                          const v = varieties.find(va => va.id === chosenBatch.varietyId);
-                          setNewInspectionData({
-                            ...newInspectionData,
-                            seedBatchId: chosenBatch.id,
-                            lotNumber: chosenBatch.batchCode,
-                            varietyId: chosenBatch.varietyId,
-                            varietyName: v?.name || '',
-                            germinationTestedPct: chosenBatch.germination || 92,
-                            purityPct: chosenBatch.purity || 99.5,
-                            initialQuantityKg: chosenBatch.initialQuantity || 1,
-                            storagePointId: chosenBatch.storagePointId || newInspectionData.storagePointId
-                          });
-                        } else {
-                          setNewInspectionData({ ...newInspectionData, seedBatchId: '' });
-                        }
-                      }}
-                    >
-                      <option value="">+ Crear Nuevo Lote o Por Código de Marbete</option>
-                      {seedBatches.filter(b => (b.materialType || 'seed') === 'seed').map(b => (
-                        <option key={b.id} value={b.id}>
-                          {b.batchCode} ({b.remainingQuantity} kg disp.)
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">N° de Lote / Marbete Oficial *</label>
-                    <input
-                      required
-                      type="text"
-                      className={inputClass}
-                      placeholder="Ej: FUT-75-25-HEM"
-                      value={newInspectionData.lotNumber}
-                      onChange={e => setNewInspectionData({ ...newInspectionData, lotNumber: e.target.value })}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Genética / Variedad Asociada</label>
-                    <select
-                      className={inputClass}
+                      required={newInspectionData.inputCategory === 'Semilla C1/C2'}
+                      className="w-full p-2.5 bg-emerald-50/70 dark:bg-emerald-950/40 border-2 border-emerald-300 dark:border-emerald-700 rounded-xl text-xs font-bold text-emerald-900 dark:text-emerald-200 outline-none focus:ring-2 focus:ring-emerald-500"
                       value={newInspectionData.varietyId || ''}
                       onChange={e => {
                         const v = varieties.find(va => va.id === e.target.value);
@@ -2083,11 +2067,25 @@ export default function Suppliers() {
                         });
                       }}
                     >
-                      <option value="">Seleccionar Genética...</option>
+                      <option value="">Seleccionar Genética Inspeccionada...</option>
                       {varieties.map(v => (
-                        <option key={v.id} value={v.id}>{v.name}</option>
+                        <option key={v.id} value={v.id}>{v.name} ({v.usage})</option>
                       ))}
                     </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">N° de Lote / Marbete Oficial INASE *</label>
+                    <input
+                      required
+                      type="text"
+                      className={inputClass}
+                      placeholder="Ej: FUT-75-25-HEM"
+                      value={newInspectionData.lotNumber}
+                      onChange={e => setNewInspectionData({ ...newInspectionData, lotNumber: e.target.value.toUpperCase() })}
+                    />
                   </div>
 
                   <div>
@@ -2112,10 +2110,10 @@ export default function Suppliers() {
                   </div>
                 </div>
 
-                {newInspectionData.inputCategory === 'Semilla C1/C2' && syncWithSeedBatch && (
+                {newInspectionData.inputCategory === 'Semilla C1/C2' && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-slate-200 dark:border-slate-700">
                     <div>
-                      <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Cantidad Recepcionada p/ Siembra (Kg)</label>
+                      <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Cantidad Habilitada en Stock Activo (Kg) *</label>
                       <input
                         type="number"
                         step="0.05"
@@ -2126,7 +2124,7 @@ export default function Suppliers() {
                       />
                     </div>
                     <div>
-                      <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Nodo de Almacenamiento Destino</label>
+                      <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Nodo de Almacenamiento Destino (Stock) *</label>
                       <select
                         className={inputClass}
                         value={newInspectionData.storagePointId || ''}

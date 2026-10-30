@@ -271,7 +271,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
                 </span>
                 <span className="text-[9px] font-mono font-bold text-emerald-950/80 uppercase tracking-wider block mt-0.5 truncate">
                   {/* @ts-ignore */}
-                  {typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'V7.22.0-STABLE'}
+                  {typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'V7.23.0-STABLE'}
                 </span>
               </div>
             )}

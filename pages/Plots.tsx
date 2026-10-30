@@ -1765,7 +1765,7 @@ export default function Plots() {
                     <div className="flex items-center justify-between gap-1.5 flex-wrap">
                       <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5">
                         <FlaskConical size={14} />
-                        <span>Genética, Lote & Carga de Semilla</span>
+                        <span>Lote de Semilla en Stock Activo (Calidad Aprobada) & Carga</span>
                       </h3>
                       <div className="flex items-center gap-1.5">
                         <button
@@ -1789,65 +1789,109 @@ export default function Plots() {
                       </div>
                     </div>
 
-                    <div>
-                      <label className={labelClass}>Variedad Genética *</label>
-                      <select 
-                        required 
-                        className={inputClass} 
-                        value={formData.varietyId} 
-                        onChange={e => setFormData({ ...formData, varietyId: e.target.value })}
-                      >
-                        <option value="">Seleccionar cultivar...</option>
-                        {varieties.map(v => (
-                          <option key={v.id} value={v.id}>{v.name} ({v.usage})</option>
-                        ))}
-                      </select>
-                    </div>
+                    <p className="text-[10px] font-mono text-emerald-800 dark:text-emerald-200 bg-white/80 dark:bg-slate-900/70 px-2.5 py-1.5 rounded-xl border border-emerald-200/80 dark:border-emerald-800/60">
+                      ✅ <strong>Trazabilidad de Calidad:</strong> Seleccione directamente el lote disponible de semillas que aprobó la <strong>Inspección Técnica (Dictamen Emitido = ACTIVO en Stock)</strong>. Al elegir el lote se asigna automáticamente su Genética.
+                    </p>
 
                     <div>
-                      <label className={labelClass}>Lote de Semilla Homologado (Trazabilidad INASE) *</label>
+                      <label className="text-[10px] font-mono font-black uppercase mb-1 block text-emerald-800 dark:text-emerald-300 tracking-wider">
+                        1. Lote Disponible en Stock Activo (Pasó Inspección Técnica de Calidad) *
+                      </label>
                       <select 
-                        className={inputClass} 
+                        className="w-full border-2 border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 p-2.5 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all font-bold text-xs" 
                         value={formData.seedBatchId} 
-                        onChange={e => setFormData({ ...formData, seedBatchId: e.target.value })}
+                        onChange={e => {
+                          const chosenId = e.target.value;
+                          const chosenB = seedBatches.find(b => b.id === chosenId);
+                          setFormData({
+                            ...formData,
+                            seedBatchId: chosenId,
+                            varietyId: chosenB?.varietyId || formData.varietyId
+                          });
+                        }}
                       >
-                        <option value="">Seleccione lote de semilla homologado...</option>
+                        <option value="">Seleccione lote activo aprobado por Calidad ({availableBatches.length} disp.)...</option>
                         {availableBatches
                           .slice()
                           .sort((a, b) => {
-                            const aMatch = a.varietyId === formData.varietyId ? 0 : 1;
-                            const bMatch = b.varietyId === formData.varietyId ? 0 : 1;
+                            const aMatch = formData.varietyId && a.varietyId === formData.varietyId ? 0 : 1;
+                            const bMatch = formData.varietyId && b.varietyId === formData.varietyId ? 0 : 1;
                             return aMatch - bMatch;
                           })
-                          .map(b => (
-                            <option key={b.id} value={b.id}>
-                              {b.batchCode} · Cert. {b.certificationNumber || 'S/N'} · Stock disp: {Number(b.remainingQuantity || 0).toFixed(3)} kg ({Math.round(Number(b.remainingQuantity || 0) * 1000)} gr)
-                            </option>
-                          ))}
+                          .map(b => {
+                            const vName = varieties.find(v => v.id === b.varietyId)?.name || 'Genética Homologada';
+                            const spName = storagePoints.find(s => s.id === b.storagePointId)?.name || 'Almacén';
+                            return (
+                              <option key={b.id} value={b.id}>
+                                ● [ACTIVO · CALIDAD OK] {b.batchCode} · Genética: {vName} · Stock: {Number(b.remainingQuantity || 0).toFixed(3)} kg ({Math.round(Number(b.remainingQuantity || 0) * 1000)} gr) · PG {b.germination || 90}% ({spName})
+                              </option>
+                            );
+                          })}
                       </select>
                       {(() => {
                         const selB = seedBatches.find(b => b.id === formData.seedBatchId);
                         if (!selB) return null;
                         const batchInfo = formatBatchMassKg(selB.remainingQuantity);
+                        const selVar = varieties.find(v => v.id === selB.varietyId);
                         return (
-                          <div className="mt-1.5 p-2.5 rounded-xl bg-white/90 dark:bg-slate-900/90 border border-emerald-200 dark:border-emerald-800 text-[10px] font-mono space-y-1">
-                            <div className="flex items-center justify-between">
-                              <span className="text-emerald-700 dark:text-emerald-300 font-bold">
-                                Lote: {selB.batchCode} · Cert. INASE {selB.certificationNumber || '103'}
+                          <div className="mt-1.5 p-2.5 rounded-xl bg-white/95 dark:bg-slate-900/95 border border-emerald-300 dark:border-emerald-800 text-[10px] font-mono space-y-1.5 shadow-sm">
+                            <div className="flex items-center justify-between flex-wrap gap-1">
+                              <span className="px-2 py-0.5 rounded bg-emerald-600 text-white font-black uppercase text-[9px] flex items-center gap-1">
+                                <ShieldCheck size={11} />
+                                <span>STOCK ACTIVO · APROBADO POR CALIDAD</span>
                               </span>
-                              <span className="text-indigo-600 dark:text-indigo-400 font-bold">
-                                PG {selB.germination || 94}% · Pureza {selB.purity || 99}%
+                              <span className="text-purple-700 dark:text-purple-300 font-black uppercase text-[9px]">
+                                {selB.qualityGrade?.replace(/_/g, ' ') || 'GRADO A SUPERIOR'} · PG {selB.germination || 90}% · Pureza {selB.purity || 99}%
                               </span>
                             </div>
+                            <div className="flex items-center justify-between text-slate-700 dark:text-slate-300">
+                              <span>
+                                Lote: <strong>{selB.batchCode}</strong> · Genética: <strong className="text-emerald-700 dark:text-emerald-400">{selVar?.name || 'Homologada'}</strong>
+                              </span>
+                              <span>Cert. {selB.certificationNumber || 'INASE'}</span>
+                            </div>
                             <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 pt-1 border-t border-emerald-100 dark:border-emerald-900/50">
-                              <span>Stock disponible en envase:</span>
-                              <strong className="text-slate-900 dark:text-white">
+                              <span>Stock disponible para siembra:</span>
+                              <strong className="text-emerald-700 dark:text-emerald-300 text-[11px]">
                                 {batchInfo.kgFormatted} ({batchInfo.grFormatted})
                               </strong>
                             </div>
                           </div>
                         );
                       })()}
+                    </div>
+
+                    <div>
+                      <label className={labelClass}>2. Variedad Genética (Sincronizada con el Lote Aprobado) *</label>
+                      <select 
+                        required 
+                        className={inputClass} 
+                        value={formData.varietyId} 
+                        onChange={e => {
+                          const nextVarId = e.target.value;
+                          const currentBatch = seedBatches.find(b => b.id === formData.seedBatchId);
+                          const nextBatch =
+                            currentBatch && currentBatch.varietyId === nextVarId
+                              ? currentBatch
+                              : availableBatches.find(b => b.varietyId === nextVarId);
+                          setFormData({
+                            ...formData,
+                            varietyId: nextVarId,
+                            seedBatchId: nextBatch ? nextBatch.id : formData.seedBatchId
+                          });
+                        }}
+                      >
+                        <option value="">Seleccionar cultivar...</option>
+                        {varieties.map(v => {
+                          const activeLotsForVar = availableBatches.filter(b => b.varietyId === v.id);
+                          const totalActiveKg = activeLotsForVar.reduce((acc, b) => acc + (b.remainingQuantity || 0), 0);
+                          return (
+                            <option key={v.id} value={v.id}>
+                              {v.name} ({v.usage}){activeLotsForVar.length > 0 ? ` — [${activeLotsForVar.length} lote(s) ACTIVO(S) · ${totalActiveKg.toFixed(3)} kg disp.]` : ''}
+                            </option>
+                          );
+                        })}
+                      </select>
                     </div>
 
                     {/* CARGA DE SEMILLA A LA PARCELA EN T / KILOS / GRAMOS */}

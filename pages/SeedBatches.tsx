@@ -926,6 +926,15 @@ export default function SeedBatches() {
                                                 <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase border ${matMeta.color}`}>
                                                   {matMeta.label}
                                                 </span>
+                                                {(!batch.materialType || batch.materialType === 'seed') && (
+                                                  <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase border ${
+                                                    batch.isActive
+                                                      ? 'bg-emerald-600 text-white border-emerald-700'
+                                                      : 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300'
+                                                  }`}>
+                                                    {batch.isActive ? '● STOCK ACTIVO · CALIDAD OK' : '○ NO ACTIVO'}
+                                                  </span>
+                                                )}
                                                 <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase border ${
                                                   qGrade === 'GRADO_A_SUPERIOR'
                                                     ? 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300'
@@ -1245,7 +1254,7 @@ export default function SeedBatches() {
                       <ShieldCheck size={15} /> Actas Oficiales de Inspección Técnica de Lote & Recepción INASE / ISTA ({supplierInspections.length})
                     </span>
                     <p className="text-[10px] text-slate-500 mt-0.5">
-                      Área de origen de las Actas: <strong className="text-slate-700 dark:text-slate-300">Proveedores & Insumos ➔ Control de Lotes & Ensayos (Nueva Inspección de Lote)</strong> o emisión directa al ingresar material.
+                      Al emitir el dictamen <strong className="text-emerald-700 dark:text-emerald-300">APROBADO CAMPO</strong> en <strong className="text-slate-700 dark:text-slate-300">Proveedores & Insumos ➔ Control de Lotes & Ensayos</strong>, el lote queda en el <strong className="text-emerald-700 dark:text-emerald-300">Stock como ACTIVO (Pasó Calidad)</strong>, listo para seleccionarse al crear el Lote o Parcela de Cultivo.
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -1254,7 +1263,7 @@ export default function SeedBatches() {
                       onClick={() => navigate('/suppliers?tab=inspections&newInspection=1')}
                       className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-[10px] font-bold uppercase flex items-center gap-1.5 shadow-sm transition"
                     >
-                      <Plus size={12} /> Emitir Nueva Acta en Proveedores & Insumos
+                      <Plus size={12} /> Emitir Nueva Acta y Activar Lote en Stock
                     </button>
                   </div>
               </div>
@@ -1267,8 +1276,8 @@ export default function SeedBatches() {
                               <th className="px-5 py-3.5">Semillero / Proveedor</th>
                               <th className="px-5 py-3.5 text-center">Calidad ISTA (PG / Pureza)</th>
                               <th className="px-5 py-3.5">Muestreador & Certificador</th>
-                              <th className="px-5 py-3.5 text-center">Dictamen</th>
-                              <th className="px-5 py-3.5 text-right">Acción Directa</th>
+                              <th className="px-5 py-3.5 text-center">Dictamen & Estado Stock</th>
+                              <th className="px-5 py-3.5 text-right">Disponibilidad p/ Parcelas</th>
                           </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -1276,7 +1285,8 @@ export default function SeedBatches() {
                               <tr><td colSpan={7} className="p-12 text-center text-slate-400 italic">No hay actas de inspección registradas.</td></tr>
                           ) : supplierInspections.map(insp => {
                               const vName = varieties.find(v => v.id === insp.varietyId)?.name || insp.varietyName || 'Sin asignar';
-                              const linkedBatch = seedBatches.find(b => b.originInspectionId === insp.id || b.batchCode === insp.lotNumber);
+                              const linkedBatch = seedBatches.find(b => b.originInspectionId === insp.id || b.batchCode.toUpperCase() === insp.lotNumber.toUpperCase());
+                              const isApproved = insp.verdict === 'APROBADO_CAMPO';
                               return (
                                   <tr key={insp.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition">
                                       <td className="px-5 py-4">
@@ -1301,51 +1311,80 @@ export default function SeedBatches() {
                                           <div><strong>Ing. Certificador:</strong> {insp.agronomistName || 'Ing. Agr. Julian PIZARRO'}</div>
                                       </td>
                                       <td className="px-5 py-4 text-center">
-                                          <span className="px-2.5 py-1 rounded-xl bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 text-[10px] font-black uppercase">
-                                              {insp.verdict?.replace(/_/g, ' ') || 'APROBADO CAMPO'}
-                                          </span>
+                                          <div className="flex flex-col items-center gap-1">
+                                              <span className={`px-2.5 py-1 rounded-xl text-[10px] font-black uppercase ${
+                                                isApproved
+                                                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
+                                                  : 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
+                                              }`}>
+                                                  {insp.verdict?.replace(/_/g, ' ') || 'APROBADO CAMPO'}
+                                              </span>
+                                              <span className={`text-[9px] font-black uppercase ${
+                                                linkedBatch?.isActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600'
+                                              }`}>
+                                                  {linkedBatch?.isActive ? '● EN STOCK ACTIVO (CALIDAD OK)' : '○ Pendiente Activar en Stock'}
+                                              </span>
+                                          </div>
                                       </td>
                                       <td className="px-5 py-4 text-right">
                                           <div className="flex justify-end items-center gap-2">
-                                              {linkedBatch ? (
-                                                  <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800">
-                                                      Vinculada a {linkedBatch.batchCode}
-                                                  </span>
-                                              ) : null}
-                                              <button
-                                                  type="button"
-                                                  onClick={() => {
-                                                      setEditingBatchId(null);
-                                                      setBatchFormData({
-                                                          ...batchFormData,
-                                                          materialType: 'seed',
-                                                          batchCode: insp.lotNumber,
-                                                          varietyId: insp.varietyId,
-                                                          supplierId: insp.supplierId,
-                                                          storagePointId: storagePoints[0]?.id || '',
-                                                          originInspectionId: insp.id,
-                                                          purchaseDate: insp.date || new Date().toISOString().split('T')[0],
-                                                          category: 'C1',
-                                                          germination: insp.germinationTestedPct || 90,
-                                                          purity: insp.purityPct || 100,
-                                                          certificationNumber: `INASE-${insp.lotNumber}`,
-                                                          labelSerialNumber: `ROT-INASE-${insp.lotNumber}`,
-                                                          qualityGrade: insp.qualityGrade || 'GRADO_A_SUPERIOR',
-                                                          qualityScore: insp.qualityScore || 98,
-                                                          samplerName: insp.samplerName || 'Matias QUINTANA',
-                                                          samplerMatricula: insp.samplerDniOrMatricula || 'TEC-MUESTREO-ISTA-108',
-                                                          sampleCode: insp.sampleCode || `MUE-${insp.lotNumber}`,
-                                                          inspectorName: insp.agronomistName || 'Ing. Agr. Julian PIZARRO',
-                                                          inspectorMatricula: insp.agronomistMatricula || 'MP-AGRO-1492 CH',
-                                                          analysisDate: insp.date,
-                                                          isActive: true
-                                                      });
-                                                      setIsBatchModalOpen(true);
-                                                  }}
-                                                  className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[10px] font-bold uppercase transition shadow-sm"
-                                              >
-                                                  Usar Acta en Ingreso
-                                              </button>
+                                              {linkedBatch && linkedBatch.isActive ? (
+                                                  <>
+                                                      <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                                                          Activo: {Number(linkedBatch.remainingQuantity || 0).toFixed(3)} kg disp.
+                                                      </span>
+                                                      <button
+                                                          type="button"
+                                                          onClick={() => navigate('/plots')}
+                                                          className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[10px] font-bold uppercase transition shadow-sm"
+                                                          title="Ir a Unidades Productivas para sembrar parcelas con este lote activo"
+                                                      >
+                                                          Sembrar en Parcela
+                                                      </button>
+                                                  </>
+                                              ) : (
+                                                  <button
+                                                      type="button"
+                                                      onClick={async () => {
+                                                          if (linkedBatch) {
+                                                              await updateSeedBatch({ ...linkedBatch, isActive: true });
+                                                          } else {
+                                                              await addSeedBatch({
+                                                                  id: generateId(),
+                                                                  varietyId: insp.varietyId || varieties[0]?.id || '',
+                                                                  supplierId: insp.supplierId,
+                                                                  batchCode: insp.lotNumber,
+                                                                  labelSerialNumber: `ROT-INASE-${insp.lotNumber}`,
+                                                                  category: 'C1',
+                                                                  materialType: 'seed',
+                                                                  analysisDate: insp.date,
+                                                                  purity: insp.purityPct || 99.5,
+                                                                  germination: insp.germinationTestedPct || 90,
+                                                                  moisturePct: insp.moisturePct || 8.5,
+                                                                  certificationNumber: insp.guideOrRemitoNumber || `INASE-${insp.lotNumber}`,
+                                                                  purchaseDate: insp.date || new Date().toISOString().split('T')[0],
+                                                                  pricePerKg: 0,
+                                                                  initialQuantity: insp.initialQuantityKg || 1,
+                                                                  remainingQuantity: insp.initialQuantityKg || 1,
+                                                                  storagePointId: insp.storagePointId || storagePoints[0]?.id,
+                                                                  originInspectionId: insp.id,
+                                                                  qualityGrade: insp.qualityGrade || 'GRADO_A_SUPERIOR',
+                                                                  qualityScore: insp.qualityScore || 96,
+                                                                  samplerName: insp.samplerName || 'Matias QUINTANA',
+                                                                  samplerMatricula: insp.samplerDniOrMatricula || 'TEC-MUESTREO-ISTA-108',
+                                                                  sampleCode: insp.sampleCode || `MUE-${insp.lotNumber}`,
+                                                                  inspectorName: insp.agronomistName || 'Ing. Agr. Julian PIZARRO',
+                                                                  inspectorMatricula: insp.agronomistMatricula || 'MP-AGRO-1492 CH',
+                                                                  isActive: true,
+                                                                  createdAt: new Date().toISOString()
+                                                              });
+                                                          }
+                                                      }}
+                                                      className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[10px] font-bold uppercase transition shadow-sm"
+                                                  >
+                                                      Activar en Stock
+                                                  </button>
+                                              )}
                                           </div>
                                       </td>
                                   </tr>
