@@ -16,7 +16,7 @@ import {
   Calendar, UserCheck, AlertCircle, QrCode, Users, Layers, PackageCheck,
   Send, Eye, Lock
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { BarcodeRenderer } from '../components/BarcodeRenderer';
 import { sendUserProfileWelcomeEmail } from '../src/services/emailNotificationService';
@@ -242,9 +242,12 @@ export default function Suppliers() {
     addUser, updateUser, startImpersonation
   } = useAppContext();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   // Tabs de navegación de la sección agronómica
-  const [activeMainTab, setActiveMainTab] = useState<'suppliers' | 'inspections' | 'vademecum'>('suppliers');
+  const [activeMainTab, setActiveMainTab] = useState<'suppliers' | 'inspections' | 'vademecum'>(
+    (searchParams.get('tab') as any) === 'inspections' ? 'inspections' : 'suppliers'
+  );
 
   // Modales
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -280,7 +283,7 @@ export default function Suppliers() {
   });
 
   // Modal para Inspecciones de Lotes
-  const [isNewInspectionModalOpen, setIsNewInspectionModalOpen] = useState(false);
+  const [isNewInspectionModalOpen, setIsNewInspectionModalOpen] = useState(searchParams.get('newInspection') === '1');
   const [editingInspectionId, setEditingInspectionId] = useState<string | null>(null);
   const [selectedInspectionForView, setSelectedInspectionForView] = useState<SupplierLotInspection | null>(null);
   const [syncWithSeedBatch, setSyncWithSeedBatch] = useState<boolean>(true);
@@ -291,15 +294,24 @@ export default function Suppliers() {
   const [filterHomologation, setFilterHomologation] = useState<string>('all');
   const [filterVerdict, setFilterVerdict] = useState<string>('all');
 
-  // Inspecciones de Lote con persistencia en localStorage y semilla automática si estaba vacío
+  // Inspecciones de Lote con persistencia en localStorage y fusión garantizada de las 4 Actas Oficiales 25/26
   const [lotInspections, setLotInspections] = useState<SupplierLotInspection[]>(() => {
+    const purgedIds = new Set(['insp-1', 'insp-2', 'insp-3', 'insp-4']);
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('ht_supplier_inspections');
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            return parsed;
+          if (Array.isArray(parsed)) {
+            const validCustom = parsed.filter((i: any) => i && i.id && !purgedIds.has(String(i.id)));
+            const existingIds = new Set(validCustom.map((i: any) => i.id));
+            const merged = [...validCustom];
+            DEMO_SUPPLIER_INSPECTIONS.forEach(demoInsp => {
+              if (!existingIds.has(demoInsp.id)) {
+                merged.push(demoInsp);
+              }
+            });
+            if (merged.length > 0) return merged;
           }
         } catch (e) {}
       }
