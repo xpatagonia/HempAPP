@@ -379,7 +379,7 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
           <div className="px-6 py-4 bg-slate-50 dark:bg-slate-950/60 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
             <span className="text-[11px] font-mono text-slate-400">
               {/* @ts-ignore */}
-              HempC Nucleus • PWA & Desktop {typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'V7.18.1-STABLE'}
+              HempC Nucleus • PWA & Desktop {typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'V7.21.0-STABLE'}
             </span>
             <button
               type="button"
