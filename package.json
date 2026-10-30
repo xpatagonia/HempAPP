@@ -41,5 +41,6 @@
     "tsx": "^4.7.1",
     "typescript": "^5.2.2",
     "vite": "^5.2.0"
-  }
+  },
+  "description": "HempC Nucleus Cooperativa - V7.21.0-STABLE"
 }
