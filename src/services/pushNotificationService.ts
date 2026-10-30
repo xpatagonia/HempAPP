@@ -93,18 +93,18 @@ export const registerServiceWorker = async (): Promise<ServiceWorkerRegistration
   }
 
   try {
-    // Limpiar cachés antiguas para asegurar versión fresca V7.20.0-STABLE
+    // Limpiar cachés antiguas para asegurar versión fresca V7.21.0-STABLE
     if ('caches' in window) {
       const keys = await window.caches.keys();
       await Promise.all(
         keys
-          .filter((k) => k !== 'hempc-nucleus-v7.20.0')
+          .filter((k) => k !== 'hempc-nucleus-v7.21.0')
           .map((k) => window.caches.delete(k))
       );
     }
 
     // Registrar el archivo sw.js ubicado en public/
-    const registration = await navigator.serviceWorker.register('/sw.js', {
+    const registration = await navigator.serviceWorker.register('/sw.js?v=7.21.0', {
       scope: '/',
       updateViaCache: 'none'
     });
@@ -117,7 +117,7 @@ export const registerServiceWorker = async (): Promise<ServiceWorkerRegistration
       if (installingWorker) {
         installingWorker.onstatechange = () => {
           if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            console.log('[ServiceWorker] Nueva versión V7.20.0-STABLE activada.');
+            console.log('[ServiceWorker] Nueva versión V7.21.0-STABLE activada.');
           }
         };
       }

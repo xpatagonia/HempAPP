@@ -1148,8 +1148,13 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
     useEffect(() => {
         try {
-            if (localStorage.getItem('ht_audit_seed_stock_v7_22_0') !== 'true') {
-                // Sincronizar auditoría de stock de semillas, remitos, parcelas y depuración de datos demo (Campaña 25/26)
+            if (localStorage.getItem('ht_audit_seed_stock_v7_21_0_final') !== 'true') {
+                // Sincronizar auditoría de stock de semillas, remitos, parcelas y depuración de datos demo (Campaña 25/26 - V7.21.0-STABLE)
+                localStorage.removeItem('ht_varieties');
+                localStorage.removeItem('ht_seed_batches');
+                localStorage.removeItem('ht_seed_movements');
+                localStorage.removeItem('ht_plots');
+
                 setVarieties(DEMO_VARIETIES);
                 localStorage.setItem('ht_varieties', JSON.stringify(DEMO_VARIETIES));
 
@@ -1161,10 +1166,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 setSeedMovements(healedMoves);
                 localStorage.setItem('ht_seed_movements', JSON.stringify(healedMoves));
 
-                const healedPlts = healPlotsWithSeedBatches(
-                    getStoredCollection('ht_plots', DEMO_PLOTS),
-                    healedBatches
-                );
+                const healedPlts = healPlotsWithSeedBatches(DEMO_PLOTS, healedBatches);
                 setPlots(healedPlts);
                 localStorage.setItem('ht_plots', JSON.stringify(healedPlts));
 
@@ -1200,6 +1202,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 localStorage.setItem('ht_supplier_users_schema_v7_20_0', 'true');
                 localStorage.setItem('ht_structure_hr_sync_v7_21_0', 'true');
                 localStorage.setItem('ht_audit_seed_stock_v7_22_0', 'true');
+                localStorage.setItem('ht_audit_seed_stock_v7_21_0_final', 'true');
             }
         } catch {}
         refreshData();

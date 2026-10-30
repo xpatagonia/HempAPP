@@ -1,11 +1,11 @@
 // Service Worker para HempC • Red Cooperativa Nucleus
 // Soporte de Notificaciones Push & Alertas Agronómicas en Segundo Plano
 
-const CACHE_NAME = 'hempc-nucleus-v7.20.0';
+const CACHE_NAME = 'hempc-nucleus-v7.21.0';
 const ASSETS_TO_CACHE = [
-  '/manifest.json?v=7.20.0',
-  '/pwa-192x192.png?v=7.20.0',
-  '/icon.svg?v=7.20.0'
+  '/manifest.json?v=7.21.0',
+  '/pwa-192x192.png?v=7.21.0',
+  '/icon.svg?v=7.21.0'
 ];
 
 // Ciclo de vida: Instalación inmediata
