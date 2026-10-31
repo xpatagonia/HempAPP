@@ -457,6 +457,9 @@ export interface SeedBatch {
   analysisDate?: string;
   purity?: number;
   germination?: number;
+  breederGerminationPct?: number;    // 1° PG declarado por el Obtentor / Semillero en origen al ingresar
+  coopGerminationPct?: number;       // 2° PG realizado por la Cooperativa para determinar QA Calidad
+  qaStatus?: 'PENDIENTE_QA' | 'APROBADO_QA' | 'OBSERVADO_QA'; // Estado de QA de la Cooperativa
   gs1Code?: string;
   certificationNumber?: string;
   purchaseOrder?: string;

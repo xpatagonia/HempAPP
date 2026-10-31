@@ -1821,9 +1821,11 @@ export default function Plots() {
                           .map(b => {
                             const vName = varieties.find(v => v.id === b.varietyId)?.name || 'Genética Homologada';
                             const spName = storagePoints.find(s => s.id === b.storagePointId)?.name || 'Almacén';
+                            const breederPg = b.breederGerminationPct ?? b.germination ?? 90;
+                            const coopPg = b.coopGerminationPct ?? b.germination ?? 90;
                             return (
                               <option key={b.id} value={b.id}>
-                                ● [ACTIVO · CALIDAD OK] {b.batchCode} · Genética: {vName} · Stock: {Number(b.remainingQuantity || 0).toFixed(3)} kg ({Math.round(Number(b.remainingQuantity || 0) * 1000)} gr) · PG {b.germination || 90}% ({spName})
+                                ● [STOCK ACTIVO · QA COOP OK] {b.batchCode} · Genética: {vName} · Stock: {Number(b.remainingQuantity || 0).toFixed(3)} kg ({Math.round(Number(b.remainingQuantity || 0) * 1000)} gr) · 1° PG Obt: {breederPg}% / 2° PG Coop: {coopPg}% ({spName})
                               </option>
                             );
                           })}
@@ -1833,22 +1835,26 @@ export default function Plots() {
                         if (!selB) return null;
                         const batchInfo = formatBatchMassKg(selB.remainingQuantity);
                         const selVar = varieties.find(v => v.id === selB.varietyId);
+                        const breederPg = selB.breederGerminationPct ?? selB.germination ?? 90;
+                        const coopPg = selB.coopGerminationPct ?? selB.germination ?? 90;
                         return (
                           <div className="mt-1.5 p-2.5 rounded-xl bg-white/95 dark:bg-slate-900/95 border border-emerald-300 dark:border-emerald-800 text-[10px] font-mono space-y-1.5 shadow-sm">
                             <div className="flex items-center justify-between flex-wrap gap-1">
                               <span className="px-2 py-0.5 rounded bg-emerald-600 text-white font-black uppercase text-[9px] flex items-center gap-1">
                                 <ShieldCheck size={11} />
-                                <span>STOCK ACTIVO · APROBADO POR CALIDAD</span>
+                                <span>STOCK ACTIVO · 2° PG COOPERATIVA (QA) APROBADO</span>
                               </span>
                               <span className="text-purple-700 dark:text-purple-300 font-black uppercase text-[9px]">
-                                {selB.qualityGrade?.replace(/_/g, ' ') || 'GRADO A SUPERIOR'} · PG {selB.germination || 90}% · Pureza {selB.purity || 99}%
+                                1° PG Obtentor: {breederPg}% ➔ 2° PG Coop QA: {coopPg}% · Pureza {selB.purity || 99}%
                               </span>
                             </div>
-                            <div className="flex items-center justify-between text-slate-700 dark:text-slate-300">
+                            <div className="flex items-center justify-between text-slate-700 dark:text-slate-300 flex-wrap gap-1">
                               <span>
-                                Lote: <strong>{selB.batchCode}</strong> · Genética: <strong className="text-emerald-700 dark:text-emerald-400">{selVar?.name || 'Homologada'}</strong>
+                                Lote: <strong>{selB.batchCode}</strong> · Genética (Acta): <strong className="text-emerald-700 dark:text-emerald-400">{selVar?.name || 'Homologada'}</strong>
                               </span>
-                              <span>Cert. {selB.certificationNumber || 'INASE'}</span>
+                              <span>
+                                Alta: {selB.purchaseDate || '2025-10-10'} · Vto PG: <strong>{selB.germinationExpiryDate || '2026-10-10'}</strong>
+                              </span>
                             </div>
                             <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 pt-1 border-t border-emerald-100 dark:border-emerald-900/50">
                               <span>Stock disponible para siembra:</span>

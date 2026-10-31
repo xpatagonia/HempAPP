@@ -55,6 +55,17 @@ export default function SeedBatches() {
   const [searchTerm, setSearchTerm] = useState(searchParams.get('variety') || '');
   const [filterStatus, setFilterStatus] = useState('');
 
+  const addOneYearIso = (dateStr?: string) => {
+    const base = dateStr ? new Date(`${dateStr}T12:00:00`) : new Date();
+    if (isNaN(base.getTime())) {
+      const fallback = new Date();
+      fallback.setFullYear(fallback.getFullYear() + 1);
+      return fallback.toISOString().split('T')[0];
+    }
+    base.setFullYear(base.getFullYear() + 1);
+    return base.toISOString().split('T')[0];
+  };
+
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
@@ -62,6 +73,26 @@ export default function SeedBatches() {
   const [isScannerModalOpen, setIsScannerModalOpen] = useState(false);
   const [labelBatch, setLabelBatch] = useState<SeedBatch | null>(null);
   const [showInlineActaCreator, setShowInlineActaCreator] = useState(false);
+  const [qaModalBatch, setQaModalBatch] = useState<SeedBatch | null>(null);
+  const [qaFormDraft, setQaFormDraft] = useState({
+    varietyId: '',
+    supplierId: '',
+    lotNumber: '',
+    guideOrRemitoNumber: '',
+    date: new Date().toISOString().split('T')[0],
+    breederGerminationPct: 90,
+    coopGerminationPct: 92,
+    purityPct: 99.8,
+    moisturePct: 8.6,
+    vigorScore: 9,
+    verdict: 'APROBADO_CAMPO' as 'APROBADO_CAMPO' | 'EN_CUARENTENA_OBSERVADO' | 'RECHAZADO_DEVOLUCION',
+    sampleCode: `MUE-ISTA-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`,
+    samplerName: 'Matias QUINTANA',
+    samplerDniOrMatricula: 'TEC-MUESTREO-ISTA-108',
+    agronomistName: 'Ing. Agr. Julian PIZARRO',
+    agronomistMatricula: 'MP-AGRO-1492 CH',
+    observations: ''
+  });
   const [newActaDraft, setNewActaDraft] = useState({
     varietyId: '',
     supplierId: '',
@@ -128,13 +159,16 @@ export default function SeedBatches() {
     purchaseDate: new Date().toISOString().split('T')[0], 
     pricePerKg: 0, 
     storagePointId: '', 
-    isActive: true,
+    isActive: false,
+    qaStatus: 'PENDIENTE_QA',
+    breederGerminationPct: 90,
+    coopGerminationPct: undefined,
     labelSerialNumber: '', 
     category: 'C1', 
     certificationNumber: '', 
     gs1Code: '', 
     analysisDate: '', 
-    germinationExpiryDate: '',
+    germinationExpiryDate: addOneYearIso(new Date().toISOString().split('T')[0]),
     germination: 90, 
     purity: 99, 
     originPlotId: '',
@@ -365,6 +399,152 @@ export default function SeedBatches() {
     setIsViewModalOpen(true);
   };
 
+  const openCoopQaModal = (batch: SeedBatch) => {
+    const matchedInsp = supplierInspections.find(i =>
+      i.id === batch.originInspectionId ||
+      i.seedBatchId === batch.id ||
+      batch.batchCode.toUpperCase() === i.lotNumber.toUpperCase()
+    );
+    const v = varieties.find(va => va.id === batch.varietyId);
+    const supId = batch.supplierId || v?.supplierId || suppliers[0]?.id || '';
+    const breederPg = batch.breederGerminationPct || matchedInsp?.germinationDeclaredPct || batch.germination || 90;
+    const coopPg = batch.coopGerminationPct || matchedInsp?.germinationTestedPct || batch.germination || 92;
+
+    setQaModalBatch(batch);
+    setQaFormDraft({
+      varietyId: batch.varietyId || matchedInsp?.varietyId || '',
+      supplierId: supId,
+      lotNumber: batch.batchCode,
+      guideOrRemitoNumber: matchedInsp?.guideOrRemitoNumber || batch.certificationNumber || `INASE-${batch.batchCode}`,
+      date: new Date().toISOString().split('T')[0],
+      breederGerminationPct: Number(breederPg),
+      coopGerminationPct: Number(coopPg),
+      purityPct: Number(batch.purity || matchedInsp?.purityPct || 99.8),
+      moisturePct: Number(batch.moisturePct || matchedInsp?.moisturePct || 8.6),
+      vigorScore: Number(matchedInsp?.vigorScore || 9),
+      verdict: 'APROBADO_CAMPO',
+      sampleCode: batch.sampleCode || matchedInsp?.sampleCode || `MUE-ISTA-${batch.batchCode}`,
+      samplerName: batch.samplerName || matchedInsp?.samplerName || 'Matias QUINTANA',
+      samplerDniOrMatricula: batch.samplerMatricula || matchedInsp?.samplerDniOrMatricula || 'TEC-MUESTREO-ISTA-108',
+      agronomistName: batch.inspectorName || matchedInsp?.agronomistName || 'Ing. Agr. Julian PIZARRO',
+      agronomistMatricula: batch.inspectorMatricula || matchedInsp?.agronomistMatricula || 'MP-AGRO-1492 CH',
+      observations: matchedInsp?.observations || ''
+    });
+  };
+
+  const handleSaveCoopQaAndActivate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!qaModalBatch) return;
+    if (!qaFormDraft.varietyId) {
+      alert('Por favor seleccione la Genética / Cultivar que pasó la inspección.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const v = varieties.find(va => va.id === qaFormDraft.varietyId);
+      const supId = qaFormDraft.supplierId || qaModalBatch.supplierId || v?.supplierId || suppliers[0]?.id || '';
+      const sup = suppliers.find(s => s.id === supId);
+      const cleanLot = (qaFormDraft.lotNumber || qaModalBatch.batchCode).trim().toUpperCase();
+      const breederPg = Number(qaFormDraft.breederGerminationPct) || 90;
+      const coopPg = Number(qaFormDraft.coopGerminationPct) || 92;
+      const purity = Number(qaFormDraft.purityPct) || 99.5;
+      const grade: LotQualityGrade =
+        qaFormDraft.verdict === 'RECHAZADO_DEVOLUCION'
+          ? 'NO_CONFORME'
+          : coopPg >= 90 && purity >= 98.5
+          ? 'GRADO_A_SUPERIOR'
+          : coopPg >= 80
+          ? 'GRADO_B_ESTANDAR'
+          : 'GRADO_C_CONDICIONAL';
+      const score =
+        qaFormDraft.verdict === 'RECHAZADO_DEVOLUCION'
+          ? 45
+          : coopPg >= 90 && purity >= 98.5
+          ? 96
+          : coopPg >= 80
+          ? 86
+          : 75;
+      const isApprovedForStockActivo = qaFormDraft.verdict === 'APROBADO_CAMPO' && grade !== 'NO_CONFORME';
+
+      const existingInsp = supplierInspections.find(
+        i => i.id === qaModalBatch.originInspectionId || i.seedBatchId === qaModalBatch.id || i.lotNumber.toUpperCase() === cleanLot
+      );
+      const actaId = existingInsp?.id || `insp-qa-${Date.now()}`;
+
+      const emittedActa: SupplierLotInspection = {
+        id: actaId,
+        supplierId: supId,
+        supplierName: sup?.name || 'Semillero Homologado',
+        date: qaFormDraft.date || new Date().toISOString().split('T')[0],
+        inputCategory: 'Semilla C1/C2',
+        lotNumber: cleanLot,
+        guideOrRemitoNumber: qaFormDraft.guideOrRemitoNumber.trim() || undefined,
+        germinationDeclaredPct: breederPg,
+        germinationTestedPct: coopPg,
+        purityPct: purity,
+        moisturePct: Number(qaFormDraft.moisturePct) || 8.5,
+        vigorScore: Number(qaFormDraft.vigorScore) || 9,
+        weedSeedsFound: false,
+        pathogenScreeningResult: 'Negativo (Conforme)',
+        residueStatus: 'Cero Residuos / Orgánico',
+        qualityGrade: grade,
+        qualityScore: score,
+        verdict: qaFormDraft.verdict,
+        varietyId: v?.id || qaFormDraft.varietyId,
+        varietyName: v?.name || 'Genética Homologada',
+        seedBatchId: qaModalBatch.id,
+        initialQuantityKg: qaModalBatch.initialQuantity,
+        storagePointId: qaModalBatch.storagePointId,
+        sampleCode: qaFormDraft.sampleCode.trim() || `MUE-ISTA-${cleanLot}`,
+        samplingDate: qaFormDraft.date || new Date().toISOString().split('T')[0],
+        samplingMethod: 'Calador ISTA Compuesto (3 Submuestras Precintadas)',
+        samplerName: qaFormDraft.samplerName.trim() || 'Matias QUINTANA',
+        samplerDniOrMatricula: qaFormDraft.samplerDniOrMatricula.trim() || 'TEC-MUESTREO-ISTA-108',
+        agronomistName: qaFormDraft.agronomistName.trim() || 'Ing. Agr. Julian PIZARRO',
+        agronomistMatricula: qaFormDraft.agronomistMatricula.trim() || 'MP-AGRO-1492 CH',
+        receptionResponsibleName: currentUser?.name || 'Gastón BAREA M.',
+        observations:
+          qaFormDraft.observations.trim() ||
+          `2° PG Cooperativa QA (${coopPg}%) contrastado con PG Obtentor (${breederPg}%). Acta vinculada a la variedad genética ${v?.name || ''}.`,
+        createdAt: existingInsp?.createdAt || new Date().toISOString()
+      };
+
+      const nextInspections = existingInsp
+        ? supplierInspections.map(i => (i.id === existingInsp.id ? emittedActa : i))
+        : [emittedActa, ...supplierInspections];
+      saveInspectionsToStorage(nextInspections);
+
+      const updatedBatch: SeedBatch = {
+        ...qaModalBatch,
+        varietyId: v?.id || qaFormDraft.varietyId,
+        supplierId: supId,
+        batchCode: cleanLot,
+        breederGerminationPct: breederPg,
+        coopGerminationPct: coopPg,
+        germination: coopPg,
+        purity,
+        moisturePct: Number(qaFormDraft.moisturePct) || 8.5,
+        analysisDate: qaFormDraft.date,
+        originInspectionId: actaId,
+        qualityGrade: grade,
+        qualityScore: score,
+        sampleCode: emittedActa.sampleCode,
+        samplerName: emittedActa.samplerName,
+        samplerMatricula: emittedActa.samplerDniOrMatricula,
+        inspectorName: emittedActa.agronomistName,
+        inspectorMatricula: emittedActa.agronomistMatricula,
+        qaStatus: isApprovedForStockActivo ? 'APROBADO_QA' : 'OBSERVADO_QA',
+        isActive: isApprovedForStockActivo
+      };
+
+      await updateSeedBatch(updatedBatch);
+      setQaModalBatch(null);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleCreateInlineActa = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!newActaDraft.varietyId || !newActaDraft.lotNumber.trim()) {
@@ -388,7 +568,7 @@ export default function SeedBatches() {
       inputCategory: 'Semilla C1/C2',
       lotNumber: cleanLot,
       guideOrRemitoNumber: newActaDraft.guideOrRemitoNumber.trim() || undefined,
-      germinationDeclaredPct: 90,
+      germinationDeclaredPct: Number(batchFormData.breederGerminationPct || batchFormData.germination || 90),
       germinationTestedPct: pg,
       purityPct: purity,
       moisturePct: Number(newActaDraft.moisturePct) || 8.5,
@@ -416,13 +596,13 @@ export default function SeedBatches() {
     const updatedList = [createdActa, ...supplierInspections];
     saveInspectionsToStorage(updatedList);
 
-    // Vincular automáticamente el Acta recién creada y su Genética al formulario de ingreso de lote
     setBatchFormData((prev: any) => ({
       ...prev,
       originInspectionId: createdActa.id,
       varietyId: createdActa.varietyId || prev.varietyId,
       supplierId: createdActa.supplierId || prev.supplierId,
       batchCode: prev.batchCode || createdActa.lotNumber,
+      coopGerminationPct: createdActa.germinationTestedPct || 90,
       germination: createdActa.germinationTestedPct || 90,
       purity: createdActa.purityPct || 100,
       moisturePct: createdActa.moisturePct || 8.5,
@@ -433,33 +613,47 @@ export default function SeedBatches() {
       samplerName: createdActa.samplerName || 'Matias QUINTANA',
       samplerMatricula: createdActa.samplerDniOrMatricula || 'TEC-MUESTREO-ISTA-108',
       inspectorName: createdActa.agronomistName || 'Ing. Agr. Julian PIZARRO',
-      inspectorMatricula: createdActa.agronomistMatricula || 'MP-AGRO-1492 CH'
+      inspectorMatricula: createdActa.agronomistMatricula || 'MP-AGRO-1492 CH',
+      qaStatus: 'APROBADO_QA',
+      isActive: true
     }));
 
     setShowInlineActaCreator(false);
   };
 
-  const handleBatchSubmit = async (e: React.FormEvent) => {
+  const handleBatchSubmit = async (e: React.FormEvent, openQaModalAfterSave = false) => {
       e.preventDefault();
-      if (!batchFormData.varietyId || !batchFormData.batchCode || (calculatedEntryKg <= 0.000001 && !editingBatchId) || isSubmitting) {
-          alert("Por favor seleccione la Genética aprobada en la Certificación / Acta de Inspección, indique el código del lote y asegure que la masa sea mayor a 0.");
+      const isSeedMaterial = (batchFormData.materialType || 'seed') === 'seed';
+      if (!batchFormData.varietyId || !batchFormData.batchCode || !batchFormData.storagePointId || (calculatedEntryKg <= 0.000001 && !editingBatchId) || isSubmitting) {
+          alert("Por favor complete: 1) Proveedor y Galpón de Almacenamiento, 2) Variedad Genética, Fecha de Alta y Vencimiento, Código de Lote y Masa mayor a 0.");
           return;
       }
       setIsSubmitting(true);
       try {
           const { inputValue, ...baseData } = batchFormData;
           const selectedVar = varieties.find(v => v.id === batchFormData.varietyId);
-          
+          const breederPg = Number(batchFormData.breederGerminationPct ?? batchFormData.germination ?? 90);
+          const hasCompletedCoopQa = Boolean(
+            editingBatchId
+              ? batchFormData.isActive
+              : !isSeedMaterial || (batchFormData.originInspectionId && batchFormData.qaStatus === 'APROBADO_QA')
+          );
+
           const payload: SeedBatch = { 
             ...baseData, 
             id: editingBatchId || generateId(), 
             supplierId: batchFormData.supplierId || selectedVar?.supplierId,
+            breederGerminationPct: isSeedMaterial ? breederPg : undefined,
+            coopGerminationPct: isSeedMaterial ? batchFormData.coopGerminationPct : undefined,
+            germination: isSeedMaterial ? Number(batchFormData.coopGerminationPct || breederPg) : Number(batchFormData.germination || 90),
+            germinationExpiryDate: batchFormData.germinationExpiryDate || addOneYearIso(batchFormData.purchaseDate),
             initialQuantity: Number(calculatedEntryKg.toFixed(3)),
             remainingQuantity: editingBatchId 
                 ? Number(Number(batchFormData.remainingQuantity || 0).toFixed(3)) 
                 : Number(calculatedEntryKg.toFixed(3)), 
             pricePerKg: Number(batchFormData.pricePerKg || 0), 
-            isActive: true, 
+            qaStatus: isSeedMaterial ? (hasCompletedCoopQa ? 'APROBADO_QA' : 'PENDIENTE_QA') : 'APROBADO_QA',
+            isActive: hasCompletedCoopQa, 
             createdAt: batchFormData.createdAt || new Date().toISOString() 
           };
           
@@ -467,6 +661,9 @@ export default function SeedBatches() {
           if (success) { 
               setIsBatchModalOpen(false); 
               setEditingBatchId(null); 
+              if (openQaModalAfterSave && isSeedMaterial) {
+                openCoopQaModal(payload);
+              }
           }
       } finally { setIsSubmitting(false); }
   };
@@ -548,7 +745,7 @@ export default function SeedBatches() {
               <span>Inventario Biológico & Derivados Industriales</span>
             </h1>
             <p className="text-xs text-slate-500 font-mono mt-0.5">
-              Trazabilidad integral: desde el Acta de Inspección INASE y la Genética Fiscalizada hasta el grano, fibra y biomasa.
+              Trazabilidad integral: 1° Ingreso a Galpón con PG Obtentor ➔ 2° Variedad Genética y Vto. Manual (1 Año) ➔ 3° PG Cooperativa QA + Acta = Stock Activo.
             </p>
         </div>
         {isAdmin && (
@@ -560,7 +757,7 @@ export default function SeedBatches() {
                 title="Ir al Área Oficial de Emisión de Actas de Inspección de Recepción & Calidad (Proveedores & Laboratorio)"
               >
                 <ClipboardCheck size={15} /> 
-                <span>Emitir Acta INASE</span>
+                <span>Emitir Acta QA</span>
               </button>
               <button 
                 type="button"
@@ -582,25 +779,30 @@ export default function SeedBatches() {
               <button 
                 type="button"
                 onClick={() => { 
+                  const todayIso = new Date().toISOString().split('T')[0];
                   setEditingBatchId(null); 
                   setEntryUnit('kg'); 
                   setShowInlineActaCreator(false);
                   setBatchFormData({ 
                     materialType: 'seed',
                     varietyId: '', 
-                    supplierId: '', 
+                    supplierId: suppliers[0]?.id || '', 
                     batchCode: '', 
                     initialQuantity: 0, 
                     inputValue: 0, 
-                    purchaseDate: new Date().toISOString().split('T')[0], 
+                    purchaseDate: todayIso, 
+                    germinationExpiryDate: addOneYearIso(todayIso),
                     pricePerKg: 0, 
                     storagePointId: storagePoints[0]?.id || '', 
-                    isActive: true,
+                    isActive: false,
+                    qaStatus: 'PENDIENTE_QA',
+                    breederGerminationPct: 90,
+                    coopGerminationPct: undefined,
                     labelSerialNumber: '00000012',
                     certificationNumber: '',
                     category: 'C1',
                     germination: 90,
-                    purity: 100,
+                    purity: 99.8,
                     originInspectionId: '',
                     originCampaign: '2025/2026'
                   }); 
@@ -609,7 +811,7 @@ export default function SeedBatches() {
                 className="bg-emerald-600 text-white px-4 py-2.5 rounded-2xl flex items-center justify-center hover:bg-emerald-500 transition shadow font-mono font-bold text-xs uppercase tracking-wider gap-1.5"
               >
                 <Plus size={15} /> 
-                <span>Ingresar Material</span>
+                <span>Nuevo Lote Biológico</span>
               </button>
           </div>
         )}
@@ -932,7 +1134,9 @@ export default function SeedBatches() {
                                                       ? 'bg-emerald-600 text-white border-emerald-700'
                                                       : 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300'
                                                   }`}>
-                                                    {batch.isActive ? '● STOCK ACTIVO · CALIDAD OK' : '○ NO ACTIVO'}
+                                                    {batch.isActive
+                                                      ? '● STOCK ACTIVO · QA COOPERATIVA OK'
+                                                      : '⏳ EN GALPÓN · PENDIENTE 2° PG COOPERATIVA (QA)'}
                                                   </span>
                                                 )}
                                                 <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase border ${
@@ -951,11 +1155,15 @@ export default function SeedBatches() {
                                           </td>
                                           <td className="px-6 py-4">
                                               <div className="font-bold text-slate-800 dark:text-slate-200">{v?.name || 'S/D'}</div>
-                                              <div className="text-[9px] text-slate-400">{v?.usage || 'Fibra'} · {v?.breederCountry || 'ARG'}</div>
+                                              <div className="text-[9px] text-slate-400">
+                                                {v?.usage || 'Fibra'} · {v?.breederCountry || 'ARG'}
+                                                {batch.purchaseDate ? ` · Alta: ${batch.purchaseDate}` : ''}
+                                                {batch.germinationExpiryDate ? ` · Vto: ${batch.germinationExpiryDate}` : ''}
+                                              </div>
                                               <div className="flex flex-wrap items-center gap-1 mt-1 text-[9px]">
                                                 {matchedInsp && (
                                                   <span className="text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/50 px-1.5 py-0.5 rounded border border-purple-200 dark:border-purple-800">
-                                                    Inspección: {matchedInsp.lotNumber}
+                                                    Acta QA: {matchedInsp.lotNumber}
                                                   </span>
                                                 )}
                                                 {(!batch.materialType || batch.materialType === 'seed') && linkedPlotsCount > 0 && (
@@ -989,7 +1197,10 @@ export default function SeedBatches() {
                                                 </span>
                                               ) : (
                                                 <span className="text-blue-600 dark:text-blue-400 block">
-                                                  PG: {batch.germination || 90}% · Pureza: {batch.purity || 99}% · Cat {batch.category || 'C1'}
+                                                  1° PG Obtentor: <strong>{batch.breederGerminationPct || matchedInsp?.germinationDeclaredPct || batch.germination || 90}%</strong>
+                                                  {' ➔ '}
+                                                  2° PG Coop (QA): <strong>{batch.isActive ? `${batch.coopGerminationPct || matchedInsp?.germinationTestedPct || batch.germination || 90}%` : 'Pendiente'}</strong>
+                                                  {' · '}Pureza: {batch.purity || 99}%
                                                 </span>
                                               )}
                                               <span className="text-[9px] text-slate-500 block mt-0.5">
@@ -1010,7 +1221,22 @@ export default function SeedBatches() {
                                               </span>
                                           </td>
                                           <td className="px-6 py-4 text-right">
-                                              <div className="flex justify-end space-x-1">
+                                              <div className="flex justify-end items-center space-x-1">
+                                                  {isAdmin && (!batch.materialType || batch.materialType === 'seed') && (
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => openCoopQaModal(batch)}
+                                                      className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase transition flex items-center gap-1 shadow-xs ${
+                                                        batch.isActive
+                                                          ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100'
+                                                          : 'bg-purple-600 hover:bg-purple-500 text-white'
+                                                      }`}
+                                                      title="Paso 3: Realizar 2° PG en Laboratorio de la Cooperativa (QA Calidad), emitir Nueva Acta vinculada a la Genética y pasar a STOCK ACTIVO"
+                                                    >
+                                                      <FlaskConical size={12} />
+                                                      <span>{batch.isActive ? '2° PG / Acta QA' : 'Realizar 2° PG & Acta QA'}</span>
+                                                    </button>
+                                                  )}
                                                   <button 
                                                     type="button"
                                                     onClick={() => handleOpenView(batch)} 
@@ -1034,7 +1260,7 @@ export default function SeedBatches() {
                                                     <>
                                                       <button 
                                                         type="button"
-                                                        onClick={() => { setBatchFormData({...batch, inputValue: batch.initialQuantity}); setEditingBatchId(batch.id); setIsBatchModalOpen(true); }} 
+                                                        onClick={() => { setBatchFormData({...batch, inputValue: batch.initialQuantity, breederGerminationPct: batch.breederGerminationPct || batch.germination || 90, germinationExpiryDate: batch.germinationExpiryDate || addOneYearIso(batch.purchaseDate)}); setEditingBatchId(batch.id); setIsBatchModalOpen(true); }} 
                                                         className="p-1.5 text-slate-400 hover:text-emerald-600 bg-slate-100 dark:bg-slate-800 rounded-lg transition"
                                                         title="Editar Lote"
                                                       >
@@ -1396,15 +1622,21 @@ export default function SeedBatches() {
           </div>
       )}
 
-      {/* MODAL ALTA / EDICIÓN DE MATERIAL BIOLÓGICO */}
+      {/* MODAL ALTA / EDICIÓN DE MATERIAL BIOLÓGICO (PASO 1: PROVEEDOR + GALPÓN + PG OBTENTOR -> PASO 2: VARIEDAD GENÉTICA + ALTA Y VENCIMIENTO 1 AÑO -> PASO 3: PG COOPERATIVA QA + ACTA = STOCK ACTIVO) */}
       {isBatchModalOpen && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-50 p-4 font-mono">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-3xl w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-3xl w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 max-h-[92vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4 border-b border-slate-100 dark:border-slate-800 pb-3">
               <div>
                 <span className="text-[10px] font-bold uppercase text-emerald-600 flex items-center gap-1">
                   <Package size={12} />
-                  <span>{editingBatchId ? 'Modificar Material' : 'Ingreso de Material a Custodia'}</span>
+                  <span>
+                    {editingBatchId
+                      ? 'Modificar Lote Biológico'
+                      : batchFormData.materialType === 'seed'
+                      ? 'Semilla Fiscalizada / Nuevo Lote Biológico (Circuito de 3 Pasos)'
+                      : 'Ingreso de Material a Custodia'}
+                  </span>
                 </span>
                 <h2 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight mt-0.5">
                   {batchFormData.batchCode || 'Nuevo Lote Biológico'}
@@ -1413,7 +1645,7 @@ export default function SeedBatches() {
               <button onClick={() => !isSubmitting && setIsBatchModalOpen(false)} disabled={isSubmitting} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
             </div>
 
-            <form onSubmit={handleBatchSubmit} className="space-y-4">
+            <form onSubmit={(e) => handleBatchSubmit(e, false)} className="space-y-4">
               
               {/* TIPO DE MATERIAL */}
               <div className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
@@ -1477,535 +1709,691 @@ export default function SeedBatches() {
                 </div>
               </div>
 
-              {/* BLOQUE PRIMARIO PARA SEMILLA FISCALIZADA: CERTIFICACIÓN INASE, INSPECCIÓN DE RECEPCIÓN, CALIDAD & GENÉTICA VINCULADA */}
-              {batchFormData.materialType === 'seed' && (
-                <div className="bg-blue-50/60 dark:bg-blue-950/25 p-4 rounded-2xl border-2 border-blue-200 dark:border-blue-800/70 space-y-3.5">
-                  <div className="flex flex-wrap justify-between items-start gap-2 border-b border-blue-200/70 dark:border-blue-800/60 pb-2.5">
-                    <div>
-                      <h4 className="text-[11px] font-black uppercase text-blue-800 dark:text-blue-300 flex items-center gap-1.5">
-                        <ShieldCheck size={14} className="text-blue-600" />
-                        1. Certificación INASE, Inspección de Recepción & Calidad (Vinculación de Acta y Genética)
-                      </h4>
-                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
-                        Las Actas se emiten en <strong className="text-blue-700 dark:text-blue-300">Proveedores & Insumos ➔ Control de Lotes & Ensayos</strong> o desde el botón <strong className="text-purple-700 dark:text-purple-300">+ Emitir Acta INASE Aquí</strong>. Al elegir el Acta o la Genética se vinculan automáticamente.
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setNewActaDraft({
-                            ...newActaDraft,
-                            varietyId: batchFormData.varietyId || varieties[0]?.id || '',
-                            supplierId: batchFormData.supplierId || suppliers[0]?.id || '',
-                            lotNumber: batchFormData.batchCode || ''
-                          });
-                          setShowInlineActaCreator(!showInlineActaCreator);
-                        }}
-                        className="px-2.5 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-[10px] font-bold uppercase flex items-center gap-1 shadow-sm transition"
-                      >
-                        <Plus size={11} /> {showInlineActaCreator ? 'Cerrar Emisor de Acta' : 'Emitir Acta INASE Aquí'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsBatchModalOpen(false);
-                          navigate('/suppliers?tab=inspections&newInspection=1');
-                        }}
-                        className="px-2.5 py-1 bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800 hover:border-blue-400 text-blue-700 dark:text-blue-300 rounded-xl text-[10px] font-bold uppercase transition"
-                        title="Ir al módulo Proveedores & Insumos -> Control de Lotes & Ensayos"
-                      >
-                        Ir a Área de Actas
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* CREADOR RÁPIDO DE ACTA IN-SITU */}
-                  {showInlineActaCreator && (
-                    <div className="bg-purple-50/90 dark:bg-purple-950/40 p-3.5 rounded-2xl border border-purple-300 dark:border-purple-800 space-y-3">
-                      <div className="flex justify-between items-center">
-                        <span className="text-[10px] font-black uppercase text-purple-800 dark:text-purple-300 flex items-center gap-1">
-                          <Award size={13} /> Emisión Directa de Acta de Inspección Técnica de Lote (INASE / ISTA)
-                        </span>
-                        <span className="text-[9px] text-purple-600 dark:text-purple-400 font-bold">
-                          Se guardará en Proveedores & Insumos y seleccionará la Genética
-                        </span>
+              {batchFormData.materialType === 'seed' ? (
+                <>
+                  {/* PASO 1: INGRESO DE NUEVO LOTE BIOLÓGICO AL ALMACENAMIENTO (PROVEEDOR VERIFICADO + GALPÓN DE ALMACENAMIENTO + 1° PRUEBA DE PG DEL OBTENTOR) */}
+                  <div className="bg-blue-50/70 dark:bg-blue-950/25 p-4 rounded-2xl border-2 border-blue-200 dark:border-blue-800/70 space-y-3.5">
+                    <div className="border-b border-blue-200/70 dark:border-blue-800/60 pb-2.5 flex flex-wrap justify-between items-start gap-2">
+                      <div>
+                        <h4 className="text-[11px] font-black uppercase text-blue-900 dark:text-blue-200 flex items-center gap-1.5">
+                          <Warehouse size={15} className="text-blue-600" />
+                          <span>PASO 1: Ingreso a Almacenamiento · Proveedor Verificado, Galpón Destino & 1° PG del Obtentor</span>
+                        </h4>
+                        <p className="text-[10px] text-slate-600 dark:text-slate-400 mt-0.5">
+                          Seleccione el <strong>Proveedor Verificado</strong>, el <strong>Galpón de Almacenamiento</strong> donde ingresa el lote y registre la <strong>1° Prueba de PG por parte del Obtentor</strong>.
+                        </p>
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                        <div>
-                          <label className={labelClass}>Genética que Pasó la Inspección *</label>
-                          <select
-                            className={inputClass}
-                            value={newActaDraft.varietyId}
-                            onChange={e => setNewActaDraft({ ...newActaDraft, varietyId: e.target.value })}
-                          >
-                            <option value="">Seleccionar Genética...</option>
-                            {varieties.map(v => (
-                              <option key={v.id} value={v.id}>{v.name} ({v.usage})</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          <label className={labelClass}>Semillero / Proveedor *</label>
-                          <select
-                            className={inputClass}
-                            value={newActaDraft.supplierId}
-                            onChange={e => setNewActaDraft({ ...newActaDraft, supplierId: e.target.value })}
-                          >
-                            <option value="">Seleccionar Proveedor...</option>
-                            {suppliers.map(s => (
-                              <option key={s.id} value={s.id}>{s.name}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          <label className={labelClass}>N° Lote / Código de Acta *</label>
-                          <input
-                            type="text"
-                            className={inputClass}
-                            value={newActaDraft.lotNumber}
-                            onChange={e => setNewActaDraft({ ...newActaDraft, lotNumber: e.target.value.toUpperCase() })}
-                            placeholder="Ej: YUM-501-L125"
-                          />
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                        <div>
-                          <label className={labelClass}>Remito / Guía INASE</label>
-                          <input
-                            type="text"
-                            className={inputClass}
-                            value={newActaDraft.guideOrRemitoNumber}
-                            onChange={e => setNewActaDraft({ ...newActaDraft, guideOrRemitoNumber: e.target.value.toUpperCase() })}
-                            placeholder="Ej: REM-INASE-2025"
-                          />
-                        </div>
-                        <div>
-                          <label className={labelClass}>PG Laboratorio (%)</label>
-                          <input
-                            type="number"
-                            className={inputClass}
-                            value={newActaDraft.germinationTestedPct}
-                            onChange={e => setNewActaDraft({ ...newActaDraft, germinationTestedPct: Number(e.target.value) })}
-                          />
-                        </div>
-                        <div>
-                          <label className={labelClass}>Pureza Físico-Botánica (%)</label>
-                          <input
-                            type="number"
-                            step="0.1"
-                            className={inputClass}
-                            value={newActaDraft.purityPct}
-                            onChange={e => setNewActaDraft({ ...newActaDraft, purityPct: Number(e.target.value) })}
-                          />
-                        </div>
-                        <div className="flex items-end">
-                          <button
-                            type="button"
-                            onClick={handleCreateInlineActa}
-                            className="w-full py-2 px-3 bg-purple-600 hover:bg-purple-500 text-white font-black uppercase text-[10px] rounded-xl shadow transition"
-                          >
-                            Guardar Acta y Vincular Genética
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* SELECTORES PRINCIPALES VINCULADOS: ACTA DE INSPECCIÓN <-> GENÉTICA QUE PASÓ LA INSPECCIÓN */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-white/80 dark:bg-slate-900/70 p-3.5 rounded-2xl border border-blue-200/80 dark:border-blue-800/60">
-                    <div>
-                      <label className="block text-[10px] font-black text-purple-700 dark:text-purple-300 uppercase mb-1">
-                        Acta de Inspección de Recepción & Calidad INASE *
-                      </label>
-                      <select
-                        className="w-full px-3 py-2 bg-purple-50/70 dark:bg-purple-950/40 border-2 border-purple-300 dark:border-purple-700 rounded-xl text-xs font-bold text-purple-900 dark:text-purple-200 focus:ring-2 focus:ring-purple-500 outline-none"
-                        value={batchFormData.originInspectionId || ''}
-                        onChange={e => {
-                          const insp = supplierInspections.find(i => i.id === e.target.value);
-                          if (insp) {
-                            setBatchFormData({
-                              ...batchFormData,
-                              originInspectionId: insp.id,
-                              varietyId: insp.varietyId || batchFormData.varietyId,
-                              supplierId: insp.supplierId || batchFormData.supplierId,
-                              batchCode: batchFormData.batchCode || insp.lotNumber,
-                              certificationNumber: batchFormData.certificationNumber || `INASE-${insp.lotNumber}`,
-                              labelSerialNumber: batchFormData.labelSerialNumber || `ROT-INASE-${insp.lotNumber}`,
-                              germination: insp.germinationTestedPct || batchFormData.germination,
-                              purity: insp.purityPct || batchFormData.purity,
-                              qualityGrade: insp.qualityGrade || 'GRADO_A_SUPERIOR',
-                              qualityScore: insp.qualityScore || 96,
-                              samplerName: insp.samplerName || 'Matias QUINTANA',
-                              samplerMatricula: insp.samplerDniOrMatricula || 'TEC-MUESTREO-ISTA-108',
-                              sampleCode: insp.sampleCode || `MUE-${insp.lotNumber}`,
-                              inspectorName: insp.agronomistName || 'Ing. Agr. Julian PIZARRO',
-                              inspectorMatricula: insp.agronomistMatricula || 'MP-AGRO-1492 CH',
-                              analysisDate: insp.date || batchFormData.analysisDate
-                            });
-                          } else {
-                            setBatchFormData({ ...batchFormData, originInspectionId: '' });
-                          }
-                        }}
-                      >
-                        <option value="">Seleccionar Acta de Inspección Oficial...</option>
-                        {supplierInspections.map(i => {
-                          const vName = varieties.find(v => v.id === i.varietyId)?.name || i.varietyName || 'Genética';
-                          return (
-                            <option key={i.id} value={i.id}>
-                              Acta {i.lotNumber} · GENÉTICA: {vName} · {i.supplierName} (PG {i.germinationTestedPct}%)
-                            </option>
-                          );
-                        })}
-                      </select>
-                      <span className="text-[9px] text-slate-500 mt-1 block">
-                        Al seleccionar el Acta se asigna automáticamente la <strong>Genética</strong> por la cual se aprobó la inspección.
+                      <span className="px-2.5 py-1 rounded-xl bg-amber-100 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-300 text-[9px] font-black uppercase">
+                        1° Etapa: Custodia en Galpón
                       </span>
                     </div>
 
-                    <div>
-                      <label className="block text-[10px] font-black text-emerald-700 dark:text-emerald-300 uppercase mb-1">
-                        Genética / Cultivar que Pasó la Inspección (Vinculada al Acta) *
-                      </label>
-                      <select
-                        required
-                        disabled={isSubmitting}
-                        className="w-full px-3 py-2 bg-emerald-50/70 dark:bg-emerald-950/40 border-2 border-emerald-300 dark:border-emerald-700 rounded-xl text-xs font-bold text-emerald-900 dark:text-emerald-200 focus:ring-2 focus:ring-emerald-500 outline-none"
-                        value={batchFormData.varietyId || ''}
-                        onChange={e => {
-                          const selectedVarietyId = e.target.value;
-                          const matchingActa = supplierInspections.find(i => i.varietyId === selectedVarietyId);
-                          if (matchingActa) {
-                            setBatchFormData({
-                              ...batchFormData,
-                              varietyId: selectedVarietyId,
-                              originInspectionId: matchingActa.id,
-                              supplierId: matchingActa.supplierId || batchFormData.supplierId,
-                              batchCode: batchFormData.batchCode || matchingActa.lotNumber,
-                              certificationNumber: batchFormData.certificationNumber || `INASE-${matchingActa.lotNumber}`,
-                              labelSerialNumber: batchFormData.labelSerialNumber || `ROT-INASE-${matchingActa.lotNumber}`,
-                              germination: matchingActa.germinationTestedPct || batchFormData.germination,
-                              purity: matchingActa.purityPct || batchFormData.purity,
-                              qualityGrade: matchingActa.qualityGrade || 'GRADO_A_SUPERIOR',
-                              qualityScore: matchingActa.qualityScore || 96,
-                              samplerName: matchingActa.samplerName || 'Matias QUINTANA',
-                              samplerMatricula: matchingActa.samplerDniOrMatricula || 'TEC-MUESTREO-ISTA-108',
-                              sampleCode: matchingActa.sampleCode || `MUE-${matchingActa.lotNumber}`,
-                              inspectorName: matchingActa.agronomistName || 'Ing. Agr. Julian PIZARRO',
-                              inspectorMatricula: matchingActa.agronomistMatricula || 'MP-AGRO-1492 CH',
-                              analysisDate: matchingActa.date || batchFormData.analysisDate
-                            });
-                          } else {
-                            setBatchFormData({
-                              ...batchFormData,
-                              varietyId: selectedVarietyId
-                            });
-                          }
-                        }}
-                      >
-                        <option value="">Seleccionar Genética Inspeccionada...</option>
-                        {varieties.map(v => {
-                          const hasActa = supplierInspections.find(i => i.varietyId === v.id);
-                          const supName = suppliers.find(s => s.id === v.supplierId)?.name || '';
-                          return (
-                            <option key={v.id} value={v.id}>
-                              {v.name} ({v.usage}){supName ? ` · ${supName}` : ''}{hasActa ? ` — [Acta: ${hasActa.lotNumber}]` : ''}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[10px] font-black text-blue-800 dark:text-blue-300 uppercase mb-1">
+                          1.1 Proveedor / Obtentor Verificado (Dado de Alta) *
+                        </label>
+                        <select
+                          required
+                          disabled={isSubmitting}
+                          className="w-full px-3 py-2.5 bg-white dark:bg-slate-900 border-2 border-blue-300 dark:border-blue-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                          value={batchFormData.supplierId || ''}
+                          onChange={e => setBatchFormData({ ...batchFormData, supplierId: e.target.value })}
+                        >
+                          <option value="">Seleccionar Proveedor Verificado...</option>
+                          {suppliers.map(s => (
+                            <option key={s.id} value={s.id}>
+                              {s.name} ({s.country || 'ARG'} · {s.homologationStatus === 'Homologado_Conforme' ? 'Verificado OK' : 'Homologado'})
                             </option>
-                          );
-                        })}
-                      </select>
-                      <span className="text-[9px] text-slate-500 mt-1 block">
-                        Seleccionar la Genética vincula su Acta de Inspección aprobada y precarga los parámetros ISTA/INASE.
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* FICHA RESUMEN DE VINCULACIÓN ACTA <-> GENÉTICA */}
-                  {(() => {
-                    const activeActa = supplierInspections.find(i => i.id === batchFormData.originInspectionId);
-                    const activeVariety = varieties.find(v => v.id === batchFormData.varietyId);
-                    if (!activeActa && !activeVariety) return null;
-                    return (
-                      <div className="bg-emerald-50/70 dark:bg-emerald-950/30 px-3.5 py-2.5 rounded-xl border border-emerald-200 dark:border-emerald-800/70 flex flex-wrap items-center justify-between gap-2 text-[10px]">
-                        <div className="flex items-center gap-2">
-                          <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />
-                          <div>
-                            <span className="font-black uppercase text-emerald-900 dark:text-emerald-300">
-                              Genética Homologada: {activeVariety?.name || activeActa?.varietyName || 'Seleccionada'}
-                            </span>
-                            <span className="text-slate-600 dark:text-slate-400 ml-2">
-                              {activeActa
-                                ? `· Acta Oficial ${activeActa.lotNumber} (${activeActa.supplierName}) · Muestra ${activeActa.sampleCode || 'ISTA'}`
-                                : '· Sin acta previa vinculada (puedes emitirla con el botón superior)'}
-                            </span>
-                          </div>
-                        </div>
-                        {activeActa && (
-                          <span className="px-2 py-0.5 rounded-lg bg-purple-100 dark:bg-purple-900/50 text-purple-800 dark:text-purple-200 font-black uppercase">
-                            {activeActa.verdict?.replace(/_/g, ' ') || 'APROBADO CAMPO'}
-                          </span>
-                        )}
+                          ))}
+                        </select>
                       </div>
-                    );
-                  })()}
 
-                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                    <div>
-                      <label className={labelClass}>Serie Rótulo / Cert. INASE</label>
-                      <input type="text" className={inputClass} value={batchFormData.labelSerialNumber || ''} onChange={e => setBatchFormData({...batchFormData, labelSerialNumber: e.target.value})} placeholder="ROT-INASE-2025-..." />
-                    </div>
-                    <div>
-                      <label className={labelClass}>Categoría Fiscal INASE</label>
-                      <select className={inputClass} value={batchFormData.category || 'C1'} onChange={e => setBatchFormData({...batchFormData, category: e.target.value})}>
-                        <option value="Original">Original / Básica</option>
-                        <option value="Base">Base / Prebásica</option>
-                        <option value="C1">Certificada 1° (C1)</option>
-                        <option value="C2">Certificada 2° (C2)</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className={labelClass}>Poder Germinativo (%)</label>
-                      <input type="number" className={inputClass} value={batchFormData.germination || 90} onChange={e => setBatchFormData({...batchFormData, germination: Number(e.target.value)})} />
-                    </div>
-                    <div>
-                      <label className={labelClass}>Pureza Físico-Botánica (%)</label>
-                      <input type="number" step="0.1" className={inputClass} value={batchFormData.purity || 99} onChange={e => setBatchFormData({...batchFormData, purity: Number(e.target.value)})} />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* IDENTIFICACIÓN OPERATIVA DEL LOTE & NODO DE ACOPIO */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className={labelClass}>Código del Lote *</label>
-                  <input required disabled={isSubmitting} type="text" className={inputClass} value={batchFormData.batchCode} onChange={e => setBatchFormData({...batchFormData, batchCode: e.target.value.toUpperCase()})} placeholder="Ej: YUM-501-L125" />
-                </div>
-                {batchFormData.materialType === 'seed' ? (
-                  <div>
-                    <label className={labelClass}>Semillero / Proveedor Homologado</label>
-                    <select
-                      disabled={isSubmitting}
-                      className={inputClass}
-                      value={batchFormData.supplierId || ''}
-                      onChange={e => setBatchFormData({ ...batchFormData, supplierId: e.target.value })}
-                    >
-                      <option value="">Seleccionar Proveedor...</option>
-                      {suppliers.map(s => <option key={s.id} value={s.id}>{s.name} ({s.country})</option>)}
-                    </select>
-                  </div>
-                ) : (
-                  <div>
-                    <label className={labelClass}>Genética / Cultivar *</label>
-                    <select required disabled={isSubmitting} className={inputClass} value={batchFormData.varietyId} onChange={e => setBatchFormData({...batchFormData, varietyId: e.target.value})}>
-                      <option value="">Seleccionar Genética...</option>
-                      {varieties.map(v => <option key={v.id} value={v.id}>{v.name} ({v.usage})</option>)}
-                    </select>
-                  </div>
-                )}
-                <div>
-                  <label className={labelClass}>Nodo de Acopio Destino *</label>
-                  <select required disabled={isSubmitting} className={inputClass} value={batchFormData.storagePointId} onChange={e => setBatchFormData({...batchFormData, storagePointId: e.target.value})}>
-                    <option value="">Seleccionar Depósito...</option>
-                    {storagePoints.map(sp => <option key={sp.id} value={sp.id}>{sp.name} ({sp.city})</option>)}
-                  </select>
-                </div>
-              </div>
-
-              {batchFormData.materialType !== 'seed' && (
-                <div className="bg-amber-50/50 dark:bg-amber-950/20 p-4 rounded-2xl border border-amber-200 dark:border-amber-900/40 space-y-3">
-                  <h4 className="text-[10px] font-bold uppercase text-amber-700 dark:text-amber-300">
-                    Origen de Trazabilidad del Material Obtenido (Parcela ➔ Lote Siembra ➔ Homologación)
-                  </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div>
-                      <label className={labelClass}>Parcela de Cultivo Origen *</label>
-                      <select
-                        className={inputClass}
-                        value={batchFormData.originPlotId || ''}
-                        onChange={e => {
-                          const p = plots.find(pl => pl.id === e.target.value);
-                          const parentBatch = p?.seedBatchId ? seedBatches.find(b => b.id === p.seedBatchId) : undefined;
-                          const originInsp = parentBatch
-                            ? supplierInspections.find(i => i.id === parentBatch.originInspectionId || i.seedBatchId === parentBatch.id || parentBatch.batchCode.includes(i.lotNumber))
-                            : undefined;
-                          setBatchFormData({
-                            ...batchFormData,
-                            originPlotId: e.target.value,
-                            varietyId: p?.varietyId || batchFormData.varietyId,
-                            parentSeedBatchId: parentBatch?.id || batchFormData.parentSeedBatchId,
-                            originInspectionId: originInsp?.id || parentBatch?.originInspectionId || batchFormData.originInspectionId,
-                            qualityGrade: parentBatch?.qualityGrade || originInsp?.qualityGrade || 'GRADO_A_SUPERIOR',
-                            sowingResponsibleName: p?.sowingResponsibleName || p?.ownerName || 'Matias QUINTANA'
-                          });
-                        }}
-                      >
-                        <option value="">Seleccionar Parcela Cosechada...</option>
-                        {plots.map(p => <option key={p.id} value={p.id}>{p.name} ({p.surfaceArea} {p.surfaceUnit})</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className={labelClass}>Lote de Siembra Madre</label>
-                      <select
-                        className={inputClass}
-                        value={batchFormData.parentSeedBatchId || ''}
-                        onChange={e => setBatchFormData({ ...batchFormData, parentSeedBatchId: e.target.value })}
-                      >
-                        <option value="">Asociado por parcela...</option>
-                        {seedBatches.filter(b => (b.materialType || 'seed') === 'seed').map(b => (
-                          <option key={b.id} value={b.id}>{b.batchCode}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className={labelClass}>Calidad Determinada del Material</label>
-                      <select
-                        className={inputClass}
-                        value={batchFormData.qualityGrade || 'GRADO_A_SUPERIOR'}
-                        onChange={e => setBatchFormData({ ...batchFormData, qualityGrade: e.target.value })}
-                      >
-                        <option value="GRADO_A_SUPERIOR">Grado A · Calidad Superior</option>
-                        <option value="GRADO_B_ESTANDAR">Grado B · Estándar Fiscalizado</option>
-                        <option value="GRADO_C_CONDICIONAL">Grado C · Condicional</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {batchFormData.materialType === 'harvested_grain' && (
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
                       <div>
-                        <label className={labelClass}>% Humedad de Recibo (&lt;9%)</label>
-                        <input type="number" step="0.1" className={inputClass} value={batchFormData.moisturePct || 8.4} onChange={e => setBatchFormData({...batchFormData, moisturePct: Number(e.target.value)})} />
-                      </div>
-                      <div>
-                        <label className={labelClass}>% Poder Germinativo Grano</label>
-                        <input type="number" step="0.5" className={inputClass} value={batchFormData.germination || 92} onChange={e => setBatchFormData({...batchFormData, germination: Number(e.target.value)})} />
-                      </div>
-                      <div>
-                        <label className={labelClass}>Certificado Inocuidad SENASA</label>
-                        <input type="text" className={inputClass} value={batchFormData.aflatoxinFreeCertificate || ''} onChange={e => setBatchFormData({...batchFormData, aflatoxinFreeCertificate: e.target.value})} placeholder="SENASA-INOC-2026-8812" />
-                      </div>
-                    </div>
-                  )}
-
-                  {batchFormData.materialType === 'fiber_bales' && (
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-                      <div>
-                        <label className={labelClass}>Cantidad de Fardos</label>
-                        <input type="number" className={inputClass} value={batchFormData.baleCount || 200} onChange={e => setBatchFormData({...batchFormData, baleCount: Number(e.target.value)})} />
-                      </div>
-                      <div>
-                        <label className={labelClass}>Peso Medio por Fardo (kg)</label>
-                        <input type="number" className={inputClass} value={batchFormData.avgBaleWeightKg || 500} onChange={e => setBatchFormData({...batchFormData, avgBaleWeightKg: Number(e.target.value)})} />
-                      </div>
-                      <div>
-                        <label className={labelClass}>Calidad de Enriado en Campo</label>
-                        <select className={inputClass} value={batchFormData.rettingQuality || 'Óptimo (Gris plateado)'} onChange={e => setBatchFormData({...batchFormData, rettingQuality: e.target.value})}>
-                          <option value="Óptimo (Gris plateado)">Óptimo (Gris plateado)</option>
-                          <option value="Medio (Amarillo tostado)">Medio (Amarillo tostado)</option>
-                          <option value="Verde (Sin enriar)">Verde (Sin enriar)</option>
+                        <label className="block text-[10px] font-black text-emerald-800 dark:text-emerald-300 uppercase mb-1">
+                          1.2 Galpón de Almacenamiento Destino (Custodia Física) *
+                        </label>
+                        <select
+                          required
+                          disabled={isSubmitting}
+                          className="w-full px-3 py-2.5 bg-white dark:bg-slate-900 border-2 border-emerald-400 dark:border-emerald-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none"
+                          value={batchFormData.storagePointId || ''}
+                          onChange={e => setBatchFormData({ ...batchFormData, storagePointId: e.target.value })}
+                        >
+                          <option value="">Seleccionar Galpón de Almacenamiento...</option>
+                          {storagePoints.map(sp => (
+                            <option key={sp.id} value={sp.id}>
+                              {sp.name} ({sp.city}) — Nodo {sp.nodeCode}
+                            </option>
+                          ))}
                         </select>
                       </div>
                     </div>
-                  )}
 
-                  {batchFormData.materialType === 'biomass_cbg' && (
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-1">
                       <div>
-                        <label className={labelClass}>% THC Certificado (&lt;0.3%) *</label>
-                        <input type="number" step="0.001" className={inputClass} value={batchFormData.hplcThcPct || 0.038} onChange={e => setBatchFormData({...batchFormData, hplcThcPct: Number(e.target.value)})} />
+                        <label className={labelClass}>1.3 Código del Lote / Marbete *</label>
+                        <input
+                          required
+                          disabled={isSubmitting}
+                          type="text"
+                          className={inputClass}
+                          value={batchFormData.batchCode}
+                          onChange={e => setBatchFormData({ ...batchFormData, batchCode: e.target.value.toUpperCase() })}
+                          placeholder="Ej: YUM-501-L125"
+                        />
                       </div>
                       <div>
-                        <label className={labelClass}>% CBG Analizado</label>
-                        <input type="number" step="0.01" className={inputClass} value={batchFormData.hplcCbgPct || 2.72} onChange={e => setBatchFormData({...batchFormData, hplcCbgPct: Number(e.target.value)})} />
+                        <label className={labelClass}>Serie Rótulo INASE</label>
+                        <input
+                          type="text"
+                          className={inputClass}
+                          value={batchFormData.labelSerialNumber || ''}
+                          onChange={e => setBatchFormData({ ...batchFormData, labelSerialNumber: e.target.value })}
+                          placeholder="ROT-INASE-2025-..."
+                        />
                       </div>
                       <div>
-                        <label className={labelClass}>N° Protocolo CoA Oficial</label>
-                        <input type="text" className={inputClass} value={batchFormData.hplcLabCertificate || ''} onChange={e => setBatchFormData({...batchFormData, hplcLabCertificate: e.target.value})} placeholder="CoA-HPLC-CANNATECH-2026-0419" />
+                        <label className="text-[9px] font-mono font-black uppercase text-blue-700 dark:text-blue-300 ml-1 mb-1 block tracking-wider">
+                          1.4 Prueba PG del Obtentor (%) *
+                        </label>
+                        <input
+                          required
+                          type="number"
+                          step="0.5"
+                          min="0"
+                          max="100"
+                          className="w-full border-2 border-blue-300 dark:border-blue-700 bg-white dark:bg-slate-900 text-blue-900 dark:text-blue-200 p-2.5 rounded-xl font-mono text-xs font-black focus:ring-2 focus:ring-blue-500 outline-none"
+                          value={batchFormData.breederGerminationPct ?? batchFormData.germination ?? 90}
+                          onChange={e => {
+                            const val = Number(e.target.value);
+                            setBatchFormData({
+                              ...batchFormData,
+                              breederGerminationPct: val,
+                              germination: batchFormData.coopGerminationPct || val
+                            });
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Pureza de Origen (%)</label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          className={inputClass}
+                          value={batchFormData.purity || 99.8}
+                          onChange={e => setBatchFormData({ ...batchFormData, purity: Number(e.target.value) })}
+                        />
                       </div>
                     </div>
-                  )}
-                </div>
+                  </div>
+
+                  {/* PASO 2: SELECCIÓN DE VARIEDAD (GENÉTICA · 1 VARIEDAD PUEDE TENER MUCHOS LOTES), FECHA DE ALTA, VENCIMIENTO MANUAL (1 AÑO) Y MASA */}
+                  <div className="bg-emerald-50/70 dark:bg-emerald-950/25 p-4 rounded-2xl border-2 border-emerald-200 dark:border-emerald-800/70 space-y-3.5">
+                    <div className="border-b border-emerald-200/70 dark:border-emerald-800/60 pb-2.5 flex flex-wrap justify-between items-start gap-2">
+                      <div>
+                        <h4 className="text-[11px] font-black uppercase text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5">
+                          <Dna size={15} className="text-emerald-600" />
+                          <span>PASO 2: Variedad (Genética), Fecha de Alta del Lote, Vencimiento Manual (1 Año) & Masa</span>
+                        </h4>
+                        <p className="text-[10px] text-slate-600 dark:text-slate-400 mt-0.5">
+                          Seleccione la <strong>Variedad dada de alta en GENÉTICA</strong> (una variedad puede tener múltiples lotes) e ingrese manualmente la <strong>Fecha de Alta</strong> y la <strong>Fecha de Vencimiento</strong> (por lo general 1 año).
+                        </p>
+                      </div>
+                      <span className="px-2.5 py-1 rounded-xl bg-emerald-100 dark:bg-emerald-900/50 border border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-200 text-[9px] font-black uppercase">
+                        Relación 1 Variedad : N Lotes
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-[10px] font-black text-emerald-800 dark:text-emerald-300 uppercase mb-1">
+                          2.1 Variedad / Cultivar (Dada de Alta en GENÉTICA) *
+                        </label>
+                        <select
+                          required
+                          disabled={isSubmitting}
+                          className="w-full px-3 py-2.5 bg-white dark:bg-slate-900 border-2 border-emerald-400 dark:border-emerald-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none"
+                          value={batchFormData.varietyId || ''}
+                          onChange={e => {
+                            const selectedVarietyId = e.target.value;
+                            const v = varieties.find(va => va.id === selectedVarietyId);
+                            setBatchFormData({
+                              ...batchFormData,
+                              varietyId: selectedVarietyId,
+                              supplierId: batchFormData.supplierId || v?.supplierId || ''
+                            });
+                          }}
+                        >
+                          <option value="">Seleccionar Variedad de GENÉTICA...</option>
+                          {varieties.map(v => {
+                            const lotCount = seedBatches.filter(b => b.varietyId === v.id && (!b.materialType || b.materialType === 'seed')).length;
+                            const supName = suppliers.find(s => s.id === v.supplierId)?.name || '';
+                            return (
+                              <option key={v.id} value={v.id}>
+                                {v.name} ({v.usage}){supName ? ` · ${supName}` : ''} — [{lotCount} lotes registrados]
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-700 dark:text-slate-300 uppercase mb-1">
+                          2.2 Fecha de Alta del Lote (Manual) *
+                        </label>
+                        <input
+                          required
+                          type="date"
+                          className={inputClass}
+                          value={batchFormData.purchaseDate || ''}
+                          onChange={e => {
+                            const newPurchaseDate = e.target.value;
+                            setBatchFormData({
+                              ...batchFormData,
+                              purchaseDate: newPurchaseDate,
+                              germinationExpiryDate: addOneYearIso(newPurchaseDate)
+                            });
+                          }}
+                        />
+                      </div>
+
+                      <div>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="text-[10px] font-black text-amber-800 dark:text-amber-300 uppercase">
+                            2.3 Fecha de Vencimiento (Manual · Gral. 1 Año) *
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setBatchFormData({
+                                ...batchFormData,
+                                germinationExpiryDate: addOneYearIso(batchFormData.purchaseDate)
+                              })
+                            }
+                            className="text-[9px] font-black text-emerald-700 dark:text-emerald-300 underline hover:text-emerald-600"
+                            title="Calcular exactamente +1 año desde la Fecha de Alta"
+                          >
+                            +1 Año
+                          </button>
+                        </div>
+                        <input
+                          required
+                          type="date"
+                          className="w-full border-2 border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white p-2.5 rounded-xl font-mono text-xs font-bold focus:ring-2 focus:ring-amber-500 outline-none"
+                          value={batchFormData.germinationExpiryDate || ''}
+                          onChange={e => setBatchFormData({ ...batchFormData, germinationExpiryDate: e.target.value })}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                      <div>
+                        <label className={labelClass}>2.4 Masa a Ingresar al Galpón *</label>
+                        <div className="flex gap-2">
+                          <input
+                            required
+                            type="number"
+                            step="any"
+                            min="0"
+                            className={`${inputClass} text-lg font-black`}
+                            value={batchFormData.inputValue}
+                            onChange={e => setBatchFormData({ ...batchFormData, inputValue: Number(e.target.value) })}
+                          />
+                          <select
+                            className="w-24 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold uppercase text-center"
+                            value={entryUnit}
+                            onChange={e => setEntryUnit(e.target.value as MassUnit)}
+                          >
+                            <option value="kg">KG</option>
+                            <option value="gr">GR</option>
+                            <option value="tn">TN</option>
+                          </select>
+                        </div>
+                        <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-bold block mt-1">
+                          Masa Equivalente: {calculatedEntryKg.toFixed(3)} kg ({Math.round(calculatedEntryKg * 1000)} gr)
+                        </span>
+                      </div>
+
+                      <div>
+                        <label className={labelClass}>Categoría Fiscal INASE</label>
+                        <select
+                          className={inputClass}
+                          value={batchFormData.category || 'C1'}
+                          onChange={e => setBatchFormData({ ...batchFormData, category: e.target.value })}
+                        >
+                          <option value="Original">Original / Básica</option>
+                          <option value="Base">Base / Prebásica</option>
+                          <option value="C1">Certificada 1° (C1)</option>
+                          <option value="C2">Certificada 2° (C2)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className={labelClass}>Condiciones de Almacenamiento en Galpón</label>
+                        <input
+                          type="text"
+                          className={inputClass}
+                          value={batchFormData.storageConditions || ''}
+                          onChange={e => setBatchFormData({ ...batchFormData, storageConditions: e.target.value })}
+                          placeholder="Ej: Cámara seca 15°C / 45% HR"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* PASO 3 RESUMEN EXPLICATIVO: 2° PG REALIZADO POR LA COOPERATIVA (QA CALIDAD) + NUEVA ACTA = PASE A STOCK ACTIVO */}
+                  <div className="bg-purple-50/80 dark:bg-purple-950/30 p-4 rounded-2xl border-2 border-purple-200 dark:border-purple-800/70 space-y-2">
+                    <div className="flex flex-wrap justify-between items-center gap-2">
+                      <h4 className="text-[11px] font-black uppercase text-purple-900 dark:text-purple-200 flex items-center gap-1.5">
+                        <FlaskConical size={15} className="text-purple-600" />
+                        <span>PASO 3 (Siguiente Etapa): 2° PG por la Cooperativa (QA Calidad) + Emisión de Nueva Acta ➔ Pase a STOCK ACTIVO</span>
+                      </h4>
+                      <span className={`px-2.5 py-0.5 rounded-lg text-[9px] font-black uppercase ${
+                        editingBatchId && batchFormData.isActive
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-amber-200/80 text-amber-900 dark:bg-amber-900/50 dark:text-amber-200'
+                      }`}>
+                        {editingBatchId && batchFormData.isActive
+                          ? '● Lote Ya en STOCK ACTIVO (QA Aprobado)'
+                          : '⏳ Ingresa en Galpón como PENDIENTE 2° PG COOPERATIVA'}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-600 dark:text-slate-300 leading-relaxed">
+                      Una vez que el lote ingresa a nuestro <strong>Galpón de Almacenamiento</strong> con el PG del Obtentor, <strong>la Cooperativa realiza otro PG (2° Prueba de Poder Germinativo)</strong> para determinar <strong>QA Calidad</strong>. Realizado ese PG, se emite una <strong>Nueva Acta (Genética / Cultivar que Pasó la Inspección vinculada al Acta)</strong> y recién cumplidos estos pasos el lote pasa a <strong>STOCK ACTIVO</strong>.
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* IDENTIFICACIÓN OPERATIVA PARA DERIVADOS COSECHADOS (GRANO / FIBRA / BIOMASA / CAÑAMIZA) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className={labelClass}>Código del Lote *</label>
+                      <input required disabled={isSubmitting} type="text" className={inputClass} value={batchFormData.batchCode} onChange={e => setBatchFormData({...batchFormData, batchCode: e.target.value.toUpperCase()})} placeholder="Ej: GRN-YUM-2026" />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Genética / Cultivar *</label>
+                      <select required disabled={isSubmitting} className={inputClass} value={batchFormData.varietyId} onChange={e => setBatchFormData({...batchFormData, varietyId: e.target.value})}>
+                        <option value="">Seleccionar Genética...</option>
+                        {varieties.map(v => <option key={v.id} value={v.id}>{v.name} ({v.usage})</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className={labelClass}>Nodo de Acopio Destino *</label>
+                      <select required disabled={isSubmitting} className={inputClass} value={batchFormData.storagePointId} onChange={e => setBatchFormData({...batchFormData, storagePointId: e.target.value})}>
+                        <option value="">Seleccionar Depósito...</option>
+                        {storagePoints.map(sp => <option key={sp.id} value={sp.id}>{sp.name} ({sp.city})</option>)}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="bg-amber-50/50 dark:bg-amber-950/20 p-4 rounded-2xl border border-amber-200 dark:border-amber-900/40 space-y-3">
+                    <h4 className="text-[10px] font-bold uppercase text-amber-700 dark:text-amber-300">
+                      Origen de Trazabilidad del Material Obtenido (Parcela ➔ Lote Siembra ➔ Homologación)
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className={labelClass}>Parcela de Cultivo Origen *</label>
+                        <select
+                          className={inputClass}
+                          value={batchFormData.originPlotId || ''}
+                          onChange={e => {
+                            const p = plots.find(pl => pl.id === e.target.value);
+                            const parentBatch = p?.seedBatchId ? seedBatches.find(b => b.id === p.seedBatchId) : undefined;
+                            const originInsp = parentBatch
+                              ? supplierInspections.find(i => i.id === parentBatch.originInspectionId || i.seedBatchId === parentBatch.id || parentBatch.batchCode.includes(i.lotNumber))
+                              : undefined;
+                            setBatchFormData({
+                              ...batchFormData,
+                              originPlotId: e.target.value,
+                              varietyId: p?.varietyId || batchFormData.varietyId,
+                              parentSeedBatchId: parentBatch?.id || batchFormData.parentSeedBatchId,
+                              originInspectionId: originInsp?.id || parentBatch?.originInspectionId || batchFormData.originInspectionId,
+                              qualityGrade: parentBatch?.qualityGrade || originInsp?.qualityGrade || 'GRADO_A_SUPERIOR',
+                              sowingResponsibleName: p?.sowingResponsibleName || p?.ownerName || 'Matias QUINTANA'
+                            });
+                          }}
+                        >
+                          <option value="">Seleccionar Parcela Cosechada...</option>
+                          {plots.map(p => <option key={p.id} value={p.id}>{p.name} ({p.surfaceArea} {p.surfaceUnit})</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className={labelClass}>Lote de Siembra Madre</label>
+                        <select
+                          className={inputClass}
+                          value={batchFormData.parentSeedBatchId || ''}
+                          onChange={e => setBatchFormData({ ...batchFormData, parentSeedBatchId: e.target.value })}
+                        >
+                          <option value="">Asociado por parcela...</option>
+                          {seedBatches.filter(b => (b.materialType || 'seed') === 'seed').map(b => (
+                            <option key={b.id} value={b.id}>{b.batchCode}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className={labelClass}>Calidad Determinada del Material</label>
+                        <select
+                          className={inputClass}
+                          value={batchFormData.qualityGrade || 'GRADO_A_SUPERIOR'}
+                          onChange={e => setBatchFormData({ ...batchFormData, qualityGrade: e.target.value })}
+                        >
+                          <option value="GRADO_A_SUPERIOR">Grado A · Calidad Superior</option>
+                          <option value="GRADO_B_ESTANDAR">Grado B · Estándar Fiscalizado</option>
+                          <option value="GRADO_C_CONDICIONAL">Grado C · Condicional</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {batchFormData.materialType === 'harvested_grain' && (
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                        <div>
+                          <label className={labelClass}>% Humedad de Recibo (&lt;9%)</label>
+                          <input type="number" step="0.1" className={inputClass} value={batchFormData.moisturePct || 8.4} onChange={e => setBatchFormData({...batchFormData, moisturePct: Number(e.target.value)})} />
+                        </div>
+                        <div>
+                          <label className={labelClass}>% Poder Germinativo Grano</label>
+                          <input type="number" step="0.5" className={inputClass} value={batchFormData.germination || 92} onChange={e => setBatchFormData({...batchFormData, germination: Number(e.target.value)})} />
+                        </div>
+                        <div>
+                          <label className={labelClass}>Certificado Inocuidad SENASA</label>
+                          <input type="text" className={inputClass} value={batchFormData.aflatoxinFreeCertificate || ''} onChange={e => setBatchFormData({...batchFormData, aflatoxinFreeCertificate: e.target.value})} placeholder="SENASA-INOC-2026-8812" />
+                        </div>
+                      </div>
+                    )}
+
+                    {batchFormData.materialType === 'fiber_bales' && (
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                        <div>
+                          <label className={labelClass}>Cantidad de Fardos</label>
+                          <input type="number" className={inputClass} value={batchFormData.baleCount || 200} onChange={e => setBatchFormData({...batchFormData, baleCount: Number(e.target.value)})} />
+                        </div>
+                        <div>
+                          <label className={labelClass}>Peso Medio por Fardo (kg)</label>
+                          <input type="number" className={inputClass} value={batchFormData.avgBaleWeightKg || 500} onChange={e => setBatchFormData({...batchFormData, avgBaleWeightKg: Number(e.target.value)})} />
+                        </div>
+                        <div>
+                          <label className={labelClass}>Calidad de Enriado en Campo</label>
+                          <select className={inputClass} value={batchFormData.rettingQuality || 'Óptimo (Gris plateado)'} onChange={e => setBatchFormData({...batchFormData, rettingQuality: e.target.value})}>
+                            <option value="Óptimo (Gris plateado)">Óptimo (Gris plateado)</option>
+                            <option value="Medio (Amarillo tostado)">Medio (Amarillo tostado)</option>
+                            <option value="Verde (Sin enriar)">Verde (Sin enriar)</option>
+                          </select>
+                        </div>
+                      </div>
+                    )}
+
+                    {batchFormData.materialType === 'biomass_cbg' && (
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                        <div>
+                          <label className={labelClass}>% THC Certificado (&lt;0.3%) *</label>
+                          <input type="number" step="0.001" className={inputClass} value={batchFormData.hplcThcPct || 0.038} onChange={e => setBatchFormData({...batchFormData, hplcThcPct: Number(e.target.value)})} />
+                        </div>
+                        <div>
+                          <label className={labelClass}>% CBG Analizado</label>
+                          <input type="number" step="0.01" className={inputClass} value={batchFormData.hplcCbgPct || 2.72} onChange={e => setBatchFormData({...batchFormData, hplcCbgPct: Number(e.target.value)})} />
+                        </div>
+                        <div>
+                          <label className={labelClass}>N° Protocolo CoA Oficial</label>
+                          <input type="text" className={inputClass} value={batchFormData.hplcLabCertificate || ''} onChange={e => setBatchFormData({...batchFormData, hplcLabCertificate: e.target.value})} placeholder="CoA-HPLC-CANNATECH-2026-0419" />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* MASA Y UNIDADES PARA DERIVADOS */}
+                  <div className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className={labelClass}>Masa a Ingresar *</label>
+                        <div className="flex gap-2">
+                          <input required type="number" step="any" min="0" className={`${inputClass} text-xl font-bold`} value={batchFormData.inputValue} onChange={e => setBatchFormData({...batchFormData, inputValue: Number(e.target.value)})} />
+                          <select className="w-24 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold uppercase text-center" value={entryUnit} onChange={e => setEntryUnit(e.target.value as MassUnit)}>
+                            <option value="kg">KG</option>
+                            <option value="tn">TN</option>
+                            <option value="gr">GR</option>
+                          </select>
+                        </div>
+                        <span className="text-[10px] text-emerald-600 block mt-1">Cálculo Real: {calculatedEntryKg.toLocaleString()} KG</span>
+                      </div>
+
+                      <div>
+                        <label className={labelClass}>Condiciones de Guarda / Almacenamiento</label>
+                        <input type="text" className={inputClass} value={batchFormData.storageConditions || ''} onChange={e => setBatchFormData({...batchFormData, storageConditions: e.target.value})} placeholder="Ej: Cámara fría 15°C / 45% HR" />
+                      </div>
+                    </div>
+                  </div>
+                </>
               )}
 
-              {/* PERSONAL INTERVINIENTE EN TOMA DE MUESTRAS Y TRAZABILIDAD */}
-              <div className="bg-purple-50/40 dark:bg-purple-950/20 p-4 rounded-2xl border border-purple-200 dark:border-purple-900/40 space-y-3">
-                <h4 className="text-[10px] font-bold uppercase text-purple-700 dark:text-purple-300 flex items-center gap-1.5">
-                  <Users size={13} />
-                  <span>Personal Interviniente en Toma de Muestras y Cadena de Custodia</span>
-                </h4>
+              <div className="flex flex-wrap justify-between items-center gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <button type="button" disabled={isSubmitting} onClick={() => setIsBatchModalOpen(false)} className="px-4 py-2 text-slate-400 font-bold uppercase text-xs hover:text-slate-600">
+                  Cancelar
+                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  {batchFormData.materialType === 'seed' && !editingBatchId && (
+                    <button
+                      type="button"
+                      disabled={isSubmitting}
+                      onClick={(e) => handleBatchSubmit(e as any, true)}
+                      className="bg-purple-600 text-white px-4 py-2.5 rounded-2xl font-bold text-xs uppercase tracking-wider shadow flex items-center hover:bg-purple-500 transition"
+                    >
+                      <FlaskConical className="mr-1.5" size={14} />
+                      <span>Guardar en Galpón y Realizar 2° PG Cooperativa Ahora</span>
+                    </button>
+                  )}
+                  <button type="submit" disabled={isSubmitting} className="bg-emerald-600 text-white px-5 py-2.5 rounded-2xl font-bold text-xs uppercase tracking-wider shadow flex items-center hover:bg-emerald-500 transition">
+                    {isSubmitting ? <Loader2 className="animate-spin mr-2" size={15}/> : <Save className="mr-2" size={15}/>}
+                    {editingBatchId
+                      ? 'Actualizar Lote'
+                      : batchFormData.materialType === 'seed'
+                      ? 'Guardar Ingreso en Galpón (Pendiente 2° PG)'
+                      : 'Ingresar a Inventario'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL PASO 3: SEGUNDO PG REALIZADO POR LA COOPERATIVA (QA CALIDAD) + EMISIÓN DE NUEVA ACTA (GENÉTICA VINCULADA) ➔ PASE A STOCK ACTIVO */}
+      {qaModalBatch && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-[75] p-4 font-mono">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-3xl w-full p-6 shadow-2xl border-2 border-purple-300 dark:border-purple-800 max-h-[92vh] overflow-y-auto">
+            <div className="flex justify-between items-start mb-4 border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div>
+                <span className="text-[10px] font-black uppercase text-purple-600 dark:text-purple-400 flex items-center gap-1.5">
+                  <FlaskConical size={14} />
+                  <span>PASO 3: Laboratorio QA de la Cooperativa · 2° Prueba de PG & Emisión de Nueva Acta</span>
+                </span>
+                <h2 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight mt-0.5">
+                  Determinación QA Calidad y Pase a STOCK ACTIVO · Lote {qaModalBatch.batchCode}
+                </h2>
+              </div>
+              <button onClick={() => !isSubmitting && setQaModalBatch(null)} className="text-slate-400 hover:text-slate-600">
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCoopQaAndActivate} className="space-y-4">
+              {/* RESUMEN DEL PASO 1 Y PASO 2 (LOTE EN GALPÓN) */}
+              <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <div>
+                  <span className="text-[9px] text-slate-400 uppercase block font-bold">Galpón de Custodia</span>
+                  <strong className="text-slate-900 dark:text-white block">
+                    {storagePoints.find(s => s.id === qaModalBatch.storagePointId)?.name || 'Almacén Central'}
+                  </strong>
+                </div>
+                <div>
+                  <span className="text-[9px] text-slate-400 uppercase block font-bold">Proveedor / Obtentor</span>
+                  <strong className="text-slate-900 dark:text-white block">
+                    {suppliers.find(s => s.id === qaModalBatch.supplierId)?.name || 'Proveedor Verificado'}
+                  </strong>
+                </div>
+                <div>
+                  <span className="text-[9px] text-slate-400 uppercase block font-bold">Alta y Vencimiento</span>
+                  <strong className="text-slate-900 dark:text-white block">
+                    {qaModalBatch.purchaseDate || '-'} ➔ {qaModalBatch.germinationExpiryDate || addOneYearIso(qaModalBatch.purchaseDate)}
+                  </strong>
+                </div>
+                <div>
+                  <span className="text-[9px] text-slate-400 uppercase block font-bold">Masa en Galpón</span>
+                  <strong className="text-emerald-600 dark:text-emerald-400 block">
+                    {Number(qaModalBatch.remainingQuantity || 0).toFixed(3)} kg ({Math.round((qaModalBatch.remainingQuantity || 0) * 1000)} gr)
+                  </strong>
+                </div>
+              </div>
+
+              {/* CONTRASTE DE DOBLE PG (1° PG OBTENTOR VS 2° PG COOPERATIVA QA) */}
+              <div className="bg-purple-50/60 dark:bg-purple-950/25 p-4 rounded-2xl border-2 border-purple-200 dark:border-purple-800/70 space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] font-black uppercase text-purple-800 dark:text-purple-300">
+                    1. Contraste de Poder Germinativo: 1° PG del Obtentor vs. 2° PG Realizado por la Cooperativa (QA Calidad)
+                  </span>
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                  <div>
+                    <label className="text-[9px] font-mono font-black uppercase text-blue-700 dark:text-blue-300 ml-1 mb-1 block">
+                      1° PG del Obtentor (%)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      className={inputClass}
+                      value={qaFormDraft.breederGerminationPct}
+                      onChange={e => setQaFormDraft({ ...qaFormDraft, breederGerminationPct: Number(e.target.value) })}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-mono font-black uppercase text-purple-700 dark:text-purple-300 ml-1 mb-1 block">
+                      2° PG Cooperativa QA (%) *
+                    </label>
+                    <input
+                      required
+                      type="number"
+                      step="0.5"
+                      min="0"
+                      max="100"
+                      className="w-full border-2 border-purple-400 dark:border-purple-600 bg-white dark:bg-slate-900 text-purple-900 dark:text-purple-200 p-2.5 rounded-xl font-mono text-sm font-black focus:ring-2 focus:ring-purple-500 outline-none"
+                      value={qaFormDraft.coopGerminationPct}
+                      onChange={e => setQaFormDraft({ ...qaFormDraft, coopGerminationPct: Number(e.target.value) })}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Pureza Analizada QA (%)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      className={inputClass}
+                      value={qaFormDraft.purityPct}
+                      onChange={e => setQaFormDraft({ ...qaFormDraft, purityPct: Number(e.target.value) })}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Humedad de Grano (%)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      className={inputClass}
+                      value={qaFormDraft.moisturePct}
+                      onChange={e => setQaFormDraft({ ...qaFormDraft, moisturePct: Number(e.target.value) })}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* EMISIÓN DE LA NUEVA ACTA (GENÉTICA / CULTIVAR QUE PASÓ LA INSPECCIÓN VINCULADA AL ACTA) */}
+              <div className="bg-emerald-50/70 dark:bg-emerald-950/25 p-4 rounded-2xl border-2 border-emerald-300 dark:border-emerald-800/70 space-y-3">
+                <span className="text-[10px] font-black uppercase text-emerald-800 dark:text-emerald-300 block">
+                  2. Emisión de Nueva Acta de Inspección QA · Genética / Cultivar que Pasó la Inspección (Vinculada al Acta)
+                </span>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-black text-emerald-700 dark:text-emerald-300 uppercase mb-1">
+                      Genética / Cultivar que Pasó la Inspección (Vinculada al Acta) *
+                    </label>
+                    <select
+                      required
+                      className="w-full px-3 py-2.5 bg-white dark:bg-slate-900 border-2 border-emerald-400 dark:border-emerald-700 rounded-xl text-xs font-bold text-emerald-900 dark:text-emerald-200 focus:ring-2 focus:ring-emerald-500 outline-none"
+                      value={qaFormDraft.varietyId}
+                      onChange={e => setQaFormDraft({ ...qaFormDraft, varietyId: e.target.value })}
+                    >
+                      <option value="">Seleccionar Variedad de GENÉTICA...</option>
+                      {varieties.map(v => (
+                        <option key={v.id} value={v.id}>
+                          {v.name} ({v.usage})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-purple-700 dark:text-purple-300 uppercase mb-1">
+                      Dictamen QA Cooperativa (Define Pase a STOCK ACTIVO) *
+                    </label>
+                    <select
+                      required
+                      className="w-full px-3 py-2.5 bg-white dark:bg-slate-900 border-2 border-purple-300 dark:border-purple-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none"
+                      value={qaFormDraft.verdict}
+                      onChange={e => setQaFormDraft({ ...qaFormDraft, verdict: e.target.value as any })}
+                    >
+                      <option value="APROBADO_CAMPO">APROBADO QA CALIDAD ➔ PASA A STOCK ACTIVO</option>
+                      <option value="EN_CUARENTENA_OBSERVADO">OBSERVADO EN CUARENTENA (No pasa a Stock Activo)</option>
+                      <option value="RECHAZADO_DEVOLUCION">RECHAZADO (No Apto)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className={labelClass}>Código de Muestra ISTA</label>
+                    <input
+                      type="text"
+                      className={inputClass}
+                      value={qaFormDraft.sampleCode}
+                      onChange={e => setQaFormDraft({ ...qaFormDraft, sampleCode: e.target.value })}
+                    />
+                  </div>
                   <div>
                     <label className={labelClass}>Responsable Toma de Muestra</label>
                     <input
                       type="text"
                       className={inputClass}
-                      value={batchFormData.samplerName || ''}
-                      onChange={e => setBatchFormData({ ...batchFormData, samplerName: e.target.value })}
-                      placeholder="Matias QUINTANA"
+                      value={qaFormDraft.samplerName}
+                      onChange={e => setQaFormDraft({ ...qaFormDraft, samplerName: e.target.value })}
                     />
                   </div>
                   <div>
-                    <label className={labelClass}>Código Muestra / Precinto</label>
+                    <label className={labelClass}>Ing. Agrónomo Certificador QA</label>
                     <input
                       type="text"
                       className={inputClass}
-                      value={batchFormData.sampleCode || ''}
-                      onChange={e => setBatchFormData({ ...batchFormData, sampleCode: e.target.value })}
-                      placeholder="MUE-ISTA-2026-01"
-                    />
-                  </div>
-                  <div>
-                    <label className={labelClass}>Agrónomo Certificante</label>
-                    <input
-                      type="text"
-                      className={inputClass}
-                      value={batchFormData.inspectorName || ''}
-                      onChange={e => setBatchFormData({ ...batchFormData, inspectorName: e.target.value })}
-                      placeholder="Ing. Agr. Julian PIZARRO"
-                    />
-                  </div>
-                  <div>
-                    <label className={labelClass}>Responsable Siembra / Cosecha</label>
-                    <input
-                      type="text"
-                      className={inputClass}
-                      value={batchFormData.harvestResponsibleName || batchFormData.sowingResponsibleName || ''}
-                      onChange={e => setBatchFormData({ ...batchFormData, harvestResponsibleName: e.target.value, sowingResponsibleName: e.target.value })}
-                      placeholder="Gastón BAREA M."
+                      value={qaFormDraft.agronomistName}
+                      onChange={e => setQaFormDraft({ ...qaFormDraft, agronomistName: e.target.value })}
                     />
                   </div>
                 </div>
               </div>
 
-              {/* MASA Y UNIDADES */}
-              <div className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className={labelClass}>Masa a Ingresar *</label>
-                    <div className="flex gap-2">
-                      <input required type="number" step="any" min="0" className={`${inputClass} text-xl font-bold`} value={batchFormData.inputValue} onChange={e => setBatchFormData({...batchFormData, inputValue: Number(e.target.value)})} />
-                      <select className="w-24 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold uppercase text-center" value={entryUnit} onChange={e => setEntryUnit(e.target.value as MassUnit)}>
-                        <option value="kg">KG</option>
-                        <option value="tn">TN</option>
-                        <option value="gr">GR</option>
-                      </select>
-                    </div>
-                    <span className="text-[10px] text-emerald-600 block mt-1">Cálculo Real: {calculatedEntryKg.toLocaleString()} KG</span>
-                  </div>
-
-                  <div>
-                    <label className={labelClass}>Condiciones de Guarda / Almacenamiento</label>
-                    <input type="text" className={inputClass} value={batchFormData.storageConditions || ''} onChange={e => setBatchFormData({...batchFormData, storageConditions: e.target.value})} placeholder="Ej: Cámara fría 15°C / 45% HR" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-end space-x-2 pt-3 border-t border-slate-100 dark:border-slate-800">
-                <button type="button" disabled={isSubmitting} onClick={() => setIsBatchModalOpen(false)} className="px-4 py-2 text-slate-400 font-bold uppercase text-xs hover:text-slate-600">Cancelar</button>
-                <button type="submit" disabled={isSubmitting} className="bg-emerald-600 text-white px-6 py-2.5 rounded-2xl font-bold text-xs uppercase tracking-wider shadow flex items-center hover:bg-emerald-500 transition">
-                  {isSubmitting ? <Loader2 className="animate-spin mr-2" size={15}/> : <Save className="mr-2" size={15}/>}
-                  {editingBatchId ? 'Actualizar Material' : 'Ingresar a Inventario'}
+              <div className="flex justify-end items-center gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setQaModalBatch(null)}
+                  className="px-4 py-2 text-slate-400 font-bold uppercase text-xs hover:text-slate-600"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2.5 rounded-2xl font-black text-xs uppercase tracking-wider shadow flex items-center gap-2 transition"
+                >
+                  {isSubmitting ? <Loader2 className="animate-spin" size={15} /> : <ShieldCheck size={16} />}
+                  <span>Emitir Nueva Acta QA y Pasar Lote a STOCK ACTIVO</span>
                 </button>
               </div>
             </form>

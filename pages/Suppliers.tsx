@@ -728,11 +728,15 @@ export default function Suppliers() {
         linkedBatchId = existingBatch.id;
         const canUpdateQty = Math.abs((existingBatch.initialQuantity || 0) - (existingBatch.remainingQuantity || 0)) < 0.0001;
         const nextInitialQty = Number(newInspectionData.initialQuantityKg) || existingBatch.initialQuantity || 1;
+        const nextCoopPg = Number(newInspectionData.germinationTestedPct) || existingBatch.coopGerminationPct || existingBatch.germination || 92;
+        const nextBreederPg = Number(newInspectionData.germinationDeclaredPct) || existingBatch.breederGerminationPct || existingBatch.germination || 90;
         await updateSeedBatch({
           ...existingBatch,
           supplierId: matchedSup?.id || existingBatch.supplierId,
           varietyId: matchedVar?.id || existingBatch.varietyId,
-          germination: Number(newInspectionData.germinationTestedPct) || existingBatch.germination,
+          breederGerminationPct: nextBreederPg,
+          coopGerminationPct: nextCoopPg,
+          germination: nextCoopPg,
           purity: Number(newInspectionData.purityPct) || existingBatch.purity,
           moisturePct: Number(newInspectionData.moisturePct) || existingBatch.moisturePct,
           analysisDate: newInspectionData.date || existingBatch.analysisDate,
@@ -748,11 +752,17 @@ export default function Suppliers() {
           inspectorName: newInspectionData.agronomistName?.trim() || existingBatch.inspectorName,
           inspectorMatricula: newInspectionData.agronomistMatricula?.trim() || existingBatch.inspectorMatricula,
           logisticsResponsible: newInspectionData.receptionResponsibleName?.trim() || existingBatch.logisticsResponsible,
+          qaStatus: isQualityApprovedActive ? 'APROBADO_QA' : 'OBSERVADO_QA',
           isActive: isQualityApprovedActive
         });
       } else {
         const newBatchId = generateId('batch');
         linkedBatchId = newBatchId;
+        const nextCoopPg = Number(newInspectionData.germinationTestedPct) || 92;
+        const nextBreederPg = Number(newInspectionData.germinationDeclaredPct) || 90;
+        const purchaseIso = newInspectionData.date || new Date().toISOString().split('T')[0];
+        const expiryD = new Date(purchaseIso);
+        expiryD.setFullYear(expiryD.getFullYear() + 1);
         const createdBatch: SeedBatch = {
           id: newBatchId,
           varietyId: matchedVar?.id || varieties[0]?.id || 'ce04b1d9-bde3-4040-94f3-3b57599ad4e7',
@@ -761,12 +771,15 @@ export default function Suppliers() {
           labelSerialNumber: `INASE-${Math.floor(100000 + Math.random() * 900000)}`,
           category: 'C1_CERTIFICADA_1',
           materialType: 'seed',
-          analysisDate: newInspectionData.date || new Date().toISOString().split('T')[0],
+          analysisDate: purchaseIso,
           purity: Number(newInspectionData.purityPct) || 99.5,
-          germination: Number(newInspectionData.germinationTestedPct) || 92,
+          breederGerminationPct: nextBreederPg,
+          coopGerminationPct: nextCoopPg,
+          germination: nextCoopPg,
+          germinationExpiryDate: expiryD.toISOString().split('T')[0],
           moisturePct: Number(newInspectionData.moisturePct) || 8.8,
           certificationNumber: newInspectionData.guideOrRemitoNumber || `CERT-${cleanLotNumber}`,
-          purchaseDate: newInspectionData.date || new Date().toISOString().split('T')[0],
+          purchaseDate: purchaseIso,
           pricePerKg: 0,
           initialQuantity: Number(newInspectionData.initialQuantityKg) || 1,
           remainingQuantity: Number(newInspectionData.initialQuantityKg) || 1,
@@ -780,7 +793,8 @@ export default function Suppliers() {
           sampleCode: newInspectionData.sampleCode?.trim() || `MUE-${cleanLotNumber}`,
           inspectorName: newInspectionData.agronomistName?.trim() || 'Ing. Agr. Julian PIZARRO',
           inspectorMatricula: newInspectionData.agronomistMatricula?.trim() || 'MP-AGRO-1492 CH',
-          notes: `Lote de siembra dado de alta en Stock como ${isQualityApprovedActive ? 'ACTIVO (Aprobado por Calidad)' : 'OBSERVADO / CUARENTENA'} desde Inspección Técnica #${inspectionId} (${QUALITY_GRADE_CONFIG[evalResult.grade].shortLabel}).`,
+          notes: `Lote de siembra dado de alta en Stock como ${isQualityApprovedActive ? 'ACTIVO (Aprobado por 2° PG Cooperativa QA)' : 'OBSERVADO / CUARENTENA'} desde Inspección Técnica #${inspectionId} (${QUALITY_GRADE_CONFIG[evalResult.grade].shortLabel}).`,
+          qaStatus: isQualityApprovedActive ? 'APROBADO_QA' : 'OBSERVADO_QA',
           isActive: isQualityApprovedActive,
           createdAt: new Date().toISOString()
         };
@@ -2006,8 +2020,60 @@ export default function Suppliers() {
                 </div>
 
                 {newInspectionData.inputCategory === 'Semilla C1/C2' && (
-                  <div className="p-2.5 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-800/70 text-[10px] text-emerald-900 dark:text-emerald-200">
-                    <strong>Regla de Calidad & Stock:</strong> Al emitir este Dictamen Técnico con veredicto <strong>APROBADO PARA CAMPO</strong>, el lote de semilla ingresa o se actualiza automáticamente en el <strong>Stock Biológico como ACTIVO</strong>, quedando habilitado para ser tomado directamente al crear el Lote o Parcela de Cultivo.
+                  <div className="space-y-2.5">
+                    <div className="p-2.5 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-800/70 text-[10px] text-emerald-900 dark:text-emerald-200">
+                      <strong>Protocolo de 3 Pasos (Almacenamiento ➔ 2° PG Cooperativa QA ➔ Stock Activo):</strong> Seleccione un lote ingresado en Galpón (con 1° PG del Obtentor) para cargar el <strong>2° PG realizado por la Cooperativa</strong> y emitir esta Nueva Acta vinculada a la Genética. Al aprobarse el dictamen, el lote pasa automáticamente a <strong>STOCK ACTIVO</strong>.
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-amber-50/60 dark:bg-amber-950/25 border border-amber-200 dark:border-amber-800/70">
+                      <label className="block text-[9.5px] font-black text-amber-800 dark:text-amber-300 uppercase mb-1">
+                        Seleccionar Lote Almacenado en Galpón para 2° PG Cooperativa (Paso 3) — Opcional
+                      </label>
+                      <select
+                        className="w-full p-2 bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700 rounded-lg text-xs font-bold text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-amber-500"
+                        value={newInspectionData.seedBatchId || ''}
+                        onChange={e => {
+                          const chosenBatchId = e.target.value;
+                          const sb = seedBatches.find(b => b.id === chosenBatchId);
+                          if (!sb) {
+                            setNewInspectionData({ ...newInspectionData, seedBatchId: '' });
+                            return;
+                          }
+                          const sup = suppliers.find(s => s.id === sb.supplierId);
+                          const v = varieties.find(va => va.id === sb.varietyId);
+                          setNewInspectionData({
+                            ...newInspectionData,
+                            seedBatchId: sb.id,
+                            lotNumber: sb.batchCode,
+                            supplierId: sb.supplierId || newInspectionData.supplierId,
+                            supplierName: sup?.name || newInspectionData.supplierName,
+                            varietyId: sb.varietyId || newInspectionData.varietyId,
+                            varietyName: v?.name || newInspectionData.varietyName,
+                            storagePointId: sb.storagePointId || newInspectionData.storagePointId,
+                            initialQuantityKg: sb.initialQuantity || 1,
+                            germinationDeclaredPct: sb.breederGerminationPct ?? sb.germination ?? 90,
+                            germinationTestedPct: sb.coopGerminationPct ?? sb.germination ?? 92,
+                            purityPct: sb.purity ?? 99.5,
+                            moisturePct: sb.moisturePct ?? 8.8
+                          });
+                        }}
+                      >
+                        <option value="">— Crear nuevo lote directo o vincular lote ya ingresado en Galpón —</option>
+                        {seedBatches
+                          .filter(b => !b.materialType || b.materialType === 'seed')
+                          .slice()
+                          .sort((a, b) => (a.isActive === false ? -1 : 1) - (b.isActive === false ? -1 : 1))
+                          .map(b => {
+                            const vName = varieties.find(v => v.id === b.varietyId)?.name || 'Genética';
+                            const spName = storagePoints.find(s => s.id === b.storagePointId)?.name || 'Galpón';
+                            const statusTag = b.isActive === false ? '⏳ PENDIENTE 2° PG COOP' : '● STOCK ACTIVO';
+                            return (
+                              <option key={b.id} value={b.id}>
+                                [{statusTag}] {b.batchCode} · Genética: {vName} · Galpón: {spName} · 1° PG Obtentor: {b.breederGerminationPct ?? b.germination ?? 90}%
+                              </option>
+                            );
+                          })}
+                      </select>
+                    </div>
                   </div>
                 )}
 
@@ -2160,7 +2226,7 @@ export default function Suppliers() {
 
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                   <div>
-                    <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">% Germinación Real</label>
+                    <label className="block text-[9px] font-black text-emerald-700 dark:text-emerald-400 uppercase mb-1">2° PG Cooperativa (QA) % *</label>
                     <input
                       type="number"
                       step="0.5"
@@ -2174,7 +2240,7 @@ export default function Suppliers() {
                   </div>
 
                   <div>
-                    <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">% Germinación Marbete</label>
+                    <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">1° PG Obtentor (Marbete) %</label>
                     <input
                       type="number"
                       step="0.5"
