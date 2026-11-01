@@ -634,7 +634,7 @@ export default function IntegrityCheck() {
                             {audit.reconciliation.centralVault.kgStr}
                         </strong>
                         <span className="text-[10px] text-slate-500 block">
-                            {audit.reconciliation.centralVault.grStr} (400 gr/var)
+                            4.360g Yuma · 80g Muka/F83/F75
                         </span>
                     </div>
 
@@ -654,7 +654,7 @@ export default function IntegrityCheck() {
                             {audit.reconciliation.loadedInPlots.kgStr}
                         </strong>
                         <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold block">
-                            {audit.reconciliation.loadedInPlots.grStr} · {audit.reconciliation.loadedInPlots.tnStr}
+                            900g HA · 600g LR · 2.000g PM
                         </span>
                     </div>
 
@@ -664,7 +664,7 @@ export default function IntegrityCheck() {
                             {audit.reconciliation.fieldRemaining.kgStr}
                         </strong>
                         <span className="text-[10px] text-amber-700 dark:text-amber-400 font-bold block">
-                            900g HA · 0g LR · 1.325g PM
+                            900g HA · 0g LR · 0g PM
                         </span>
                     </div>
 

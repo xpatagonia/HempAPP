@@ -212,10 +212,12 @@ const PURGED_DEMO_IDS = new Set([
     'da78a13d-ff40-4152-9455-c1021a5766b1',
     '6777c366-becd-4193-8671-60772bfed9ab',
     '060cfb25-a003-46d6-bed7-647b4c457c06',
-    // Proveedor demo de bioinsumos y tareas duplicadas
+    // Proveedor demo de bioinsumos, tareas NDVI duplicadas y logs duplicados
     'sup-biofabrica-patagonia-01',
     'f52831a5-a2de-488b-8840-f3b986299e16',
-    'f1a54586-9f69-4138-a1cd-41d034c703df'
+    'f1a54586-9f69-4138-a1cd-41d034c703df',
+    '23f56c7e-d381-43dd-86e0-8a52b9202e6a',
+    'd85c93f2-401c-45b5-b739-d8a53af6fa61'
 ]);
 
 const isPurgedDemoItem = (item: any): boolean => {
@@ -226,7 +228,8 @@ const isPurgedDemoItem = (item: any): boolean => {
         id.startsWith('exp-demo-') ||
         id.startsWith('demo-alert-') ||
         id.startsWith('senasa-res-') ||
-        id.startsWith('app-2026-00')
+        id.startsWith('app-2026-00') ||
+        (id.startsWith('task-ndvi-') && id.split('-').length > 7)
     ) return true;
     if (item.plotId && (String(item.plotId) === '91ce0dcf-a760-41fe-82d5-52c438685944' || String(item.plotId) === '7076a122-77b5-49ce-80fa-890440c2d66c')) return true;
     return false;
@@ -735,7 +738,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         const demoPlotByName = new Map(DEMO_PLOTS.map(dp => [dp.name.trim().toLowerCase(), dp]));
         const locMap = new Map(DEMO_LOCATIONS.map(l => [String(l.id), l]));
 
-        return (plotsList || [])
+        const healedPlots: Plot[] = (plotsList || [])
             .filter(p => !deletedSet.has(String(p.id)) && !isPurgedDemoItem(p))
             .map((p: Plot) => {
                 const demoMatch = demoPlotById.get(String(p.id)) || (p.name ? demoPlotByName.get(p.name.trim().toLowerCase()) : undefined);
@@ -760,7 +763,6 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                         resolvedBatchId = match.id;
                     }
                 }
-                const linkedBatch = batchesList.find(b => b.id === resolvedBatchId) || DEMO_SEED_BATCHES.find(b => b.id === resolvedBatchId);
 
                 const normPoly = normalizePolygonPoints((p as any).polygon);
                 const finalPoly = normPoly.length >= 3 ? normPoly : (demoMatch?.polygon || []);
@@ -846,9 +848,9 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                     : estRespIds;
 
                 // Conciliación auditada de dosis de semilla sembrada por parcela (Campaña 25/26):
-                // - INTA Hilario Ascasubi (12 parcelas): 0,900 kg utilizados en total -> 75 gr por parcela
-                // - Chacra La Regina (12 parcelas): 0,600 kg utilizados en total (100% utilizado) -> 50 gr por parcela
-                // - CAP Puerto Madryn (15 parcelas activas): 45 gr por parcela
+                // - INTA Hilario Ascasubi (12 parcelas): 1,800 kg enviados | 0,900 kg utilizados (75 gr/parcela) | 0,900 kg remanente
+                // - Chacra La Regina (12 parcelas): 0,600 kg enviados | 0,600 kg utilizados (50 gr/parcela) | 0,000 kg remanente
+                // - CAP Puerto Madryn (20 parcelas, 5 bloques × 4 variedades): 2,000 kg enviados | 2,000 kg utilizados (54 gr Muka/F83/F75 y 238 gr Yuma) | 0,000 kg remanente
                 const hasLocalPlotOverride = Boolean((p as any)._localUpdatedAt);
                 let resolvedUsedSeedValue = p.usedSeedValue ?? demoMatch?.usedSeedValue;
                 if (!hasLocalPlotOverride) {
@@ -856,6 +858,8 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                         resolvedUsedSeedValue = 75;
                     } else if (locIdStr === '1766444697119' && (resolvedUsedSeedValue === 25 || resolvedUsedSeedValue === 18 || !resolvedUsedSeedValue)) {
                         resolvedUsedSeedValue = 50;
+                    } else if (locIdStr === '1766471895190' && (resolvedUsedSeedValue === 45 || !resolvedUsedSeedValue)) {
+                        resolvedUsedSeedValue = (resolvedVarietyId === '5e115db0-7f9d-4640-abe5-769f414fe293') ? 238 : 54;
                     }
                 }
 
@@ -885,6 +889,14 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                     polygon: finalPoly
                 };
             });
+
+        DEMO_PLOTS.forEach(dp => {
+            if (!deletedSet.has(String(dp.id)) && !healedPlots.some(p => String(p.id) === String(dp.id) || (String(p.locationId) === String(dp.locationId) && p.name?.trim().toLowerCase() === dp.name.trim().toLowerCase()))) {
+                healedPlots.push(dp);
+            }
+        });
+
+        return healedPlots;
     };
 
     const healTrialRecords = (recordsList: TrialRecord[]): TrialRecord[] => {
@@ -1217,12 +1229,14 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
     useEffect(() => {
         try {
-            if (localStorage.getItem('ht_audit_seed_stock_v7_21_0_final') !== 'true') {
-                // Sincronizar auditoría de stock de semillas, remitos, parcelas y depuración de datos demo (Campaña 25/26 - V7.21.0-STABLE)
+            if (localStorage.getItem('ht_audit_seed_stock_v7_25_0_final') !== 'true') {
+                // Sincronizar auditoría de stock de semillas, remitos, 44 parcelas y depuración de duplicados (Campaña 25/26 - V7.25.0-STABLE)
                 localStorage.removeItem('ht_varieties');
                 localStorage.removeItem('ht_seed_batches');
                 localStorage.removeItem('ht_seed_movements');
                 localStorage.removeItem('ht_plots');
+                localStorage.removeItem('ht_tasks');
+                localStorage.removeItem('ht_field_logs');
 
                 setVarieties(DEMO_VARIETIES);
                 localStorage.setItem('ht_varieties', JSON.stringify(DEMO_VARIETIES));
@@ -1235,7 +1249,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 setSeedMovements(healedMoves);
                 localStorage.setItem('ht_seed_movements', JSON.stringify(healedMoves));
 
-                const healedPlts = healPlotsWithSeedBatches(DEMO_PLOTS, healedBatches);
+                const healedPlts = healPlotsWithSeedBatches([...DEMO_PLOTS], healedBatches);
                 setPlots(healedPlts);
                 localStorage.setItem('ht_plots', JSON.stringify(healedPlts));
 
@@ -1272,6 +1286,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 localStorage.setItem('ht_structure_hr_sync_v7_21_0', 'true');
                 localStorage.setItem('ht_audit_seed_stock_v7_22_0', 'true');
                 localStorage.setItem('ht_audit_seed_stock_v7_21_0_final', 'true');
+                localStorage.setItem('ht_audit_seed_stock_v7_25_0_final', 'true');
             }
         } catch {}
         refreshData();
