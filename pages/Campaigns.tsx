@@ -234,8 +234,11 @@ export default function Campaigns() {
     const activeFields = campaignLocations.filter(l => getLocationCampaignStatus(l, selectedCampaign) === 'Activo');
     const pausedFields = campaignLocations.filter(l => getLocationCampaignStatus(l, selectedCampaign) !== 'Activo');
 
-    // 3. Superficie efectiva en lotes activos vs lotes en pausa
-    const activePlots = campaignPlots.filter(p => getPlotCampaignStatus(p, selectedCampaign) === 'Activa');
+    // 3. Superficie efectiva en lotes activos/consolidados vs lotes en pausa
+    const activePlots = campaignPlots.filter(p => {
+      const s = getPlotCampaignStatus(p, selectedCampaign);
+      return s === 'Activa' || s === 'Cosechada';
+    });
     const pausedPlots = campaignPlots.filter(p => {
       const s = getPlotCampaignStatus(p, selectedCampaign);
       return s === 'Pausada' || s === 'En Barbecho';
@@ -743,14 +746,21 @@ export default function Campaigns() {
               <FolderKanban size={22} />
             </div>
             <div>
-              <h1 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight flex items-center gap-2">
+              <h1 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight flex flex-wrap items-center gap-2">
                 <span>Campañas Agrícolas</span>
                 <span className="text-xs font-mono font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
                   {selectedCampaign === 'all' ? 'Multicampaña' : `Campaña ${selectedCampaign}`}
                 </span>
+                {selectedCampaign === '2025/2026' && (
+                  <span className="text-[11px] font-mono font-black px-2.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+                    🏁 CICLO CERRADO Y CONSOLIDADO · 01/04/2026
+                  </span>
+                )}
               </h1>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
-                Gestión integral por ciclo: Campos participantes, DDJJ Geodésicas, Unidades Productivas & Auditoría de Estados.
+                {selectedCampaign === '2025/2026'
+                  ? 'Campaña 2025/2026 cerrada formalmente el 01/04/2026 (6,000 kg comprados · 4,400 kg despachados · 1,600 kg stock final · 44 parcelas homologadas).'
+                  : 'Gestión integral por ciclo: Campos participantes, DDJJ Geodésicas, Unidades Productivas & Auditoría de Estados.'}
               </p>
             </div>
           </div>

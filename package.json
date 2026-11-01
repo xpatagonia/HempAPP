@@ -1,7 +1,7 @@
 {
   "name": "hemptrack-app",
   "private": true,
-  "version": "7.25.0",
+  "version": "7.26.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 3000",
@@ -42,5 +42,5 @@
     "typescript": "^5.2.2",
     "vite": "^5.2.0"
   },
-  "description": "HempC Nucleus Cooperativa - V7.25.0-STABLE"
+  "description": "HempC Nucleus Cooperativa - V7.26.0-STABLE"
 }

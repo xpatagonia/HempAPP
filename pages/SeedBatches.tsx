@@ -14,6 +14,8 @@ import {
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { TraceabilityLabelModal } from '../components/TraceabilityLabelModal';
 import { BarcodeScannerModal } from '../components/BarcodeScannerModal';
+import { DateInputAr } from '../src/components/DateInputAr';
+import { formatDateAr } from '../src/utils/dateFormat';
 
 type MassUnit = 'gr' | 'kg' | 'tn';
 
@@ -964,21 +966,21 @@ export default function SeedBatches() {
                     <div>
                       <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5">
                         <ShieldCheck size={14} className="text-emerald-600" />
-                        <span>Auditoría & Conciliación Real de Semillas · Campaña 2025/2026</span>
+                        <span>Auditoría & Conciliación Real de Semillas · Campaña 2025/2026 (Cerrada 01/04/2026)</span>
                       </span>
                       <h2 className="text-sm md:text-base font-black text-slate-900 dark:text-white uppercase tracking-tight mt-0.5">
-                        Balance por Variedad, Proveedor y Establecimiento (Compras vs. Envíos vs. Siembra vs. Remanente)
+                        Balance por Variedad, Proveedor y Establecimiento (6,000 kg Comprados vs. 4,400 kg Despachados vs. 1,600 kg Stock Final)
                       </h2>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold">
                       <span className="px-2.5 py-1 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300">
-                        Compra Total: <strong>{varietyReconciliation.totals.purchasedKg.toFixed(3)} kg</strong> (6 kg Ananda + 3 kg HEMPIT)
+                        Compra Total: <strong>{varietyReconciliation.totals.purchasedKg.toFixed(3)} kg</strong> (3 kg Ananda Pampa + 3 kg HEMPIT)
                       </span>
                       <span className="px-2.5 py-1 rounded-xl bg-sky-50 dark:bg-sky-950/60 border border-sky-200 dark:border-sky-800 text-sky-700 dark:text-sky-300">
-                        Enviado a Campos: <strong>{varietyReconciliation.totals.totalDispatchedKg.toFixed(3)} kg</strong>
+                        Despachado (12 Remitos): <strong>{varietyReconciliation.totals.totalDispatchedKg.toFixed(3)} kg</strong> (1,8 HA + 0,6 LR + 2,0 CAP)
                       </span>
                       <span className="px-2.5 py-1 rounded-xl bg-emerald-600 text-white shadow-xs">
-                        Stock Total Disponible: <strong>{varietyReconciliation.totals.totalAvailableKg.toFixed(3)} kg</strong>
+                        Stock Final Planta Central: <strong>{varietyReconciliation.totals.centralRemKg.toFixed(3)} kg</strong> (1.600 gr)
                       </span>
                     </div>
                   </div>
@@ -989,10 +991,10 @@ export default function SeedBatches() {
                         <tr>
                           <th className="px-4 py-3">Variedad & Proveedor</th>
                           <th className="px-3 py-3 text-right">Compra Inicial</th>
-                          <th className="px-3 py-3 text-right bg-slate-100/70 dark:bg-slate-800/40">Planta Central (Trelew)</th>
+                          <th className="px-3 py-3 text-right bg-slate-100/70 dark:bg-slate-800/40">Stock Final (Planta Central)</th>
                           <th className="px-3 py-3 text-right bg-amber-50/50 dark:bg-amber-950/20">INTA Hilario Ascasubi (12 Parc.)</th>
                           <th className="px-3 py-3 text-right bg-purple-50/50 dark:bg-purple-950/20">Chacra La Regina (12 Parc.)</th>
-                          <th className="px-3 py-3 text-right bg-sky-50/50 dark:bg-sky-950/20">CAP Puerto Madryn (30 Parc.)</th>
+                          <th className="px-3 py-3 text-right bg-sky-50/50 dark:bg-sky-950/20">CAP Puerto Madryn (20 Parc.)</th>
                           <th className="px-3 py-3 text-right">Total Sembrado</th>
                           <th className="px-4 py-3 text-right bg-emerald-50/60 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300">Stock Disponible Hoy</th>
                         </tr>
@@ -1157,8 +1159,8 @@ export default function SeedBatches() {
                                               <div className="font-bold text-slate-800 dark:text-slate-200">{v?.name || 'S/D'}</div>
                                               <div className="text-[9px] text-slate-400">
                                                 {v?.usage || 'Fibra'} · {v?.breederCountry || 'ARG'}
-                                                {batch.purchaseDate ? ` · Alta: ${batch.purchaseDate}` : ''}
-                                                {batch.germinationExpiryDate ? ` · Vto: ${batch.germinationExpiryDate}` : ''}
+                                                {batch.purchaseDate ? ` · Alta: ${formatDateAr(batch.purchaseDate)}` : ''}
+                                                {batch.germinationExpiryDate ? ` · Vto: ${formatDateAr(batch.germinationExpiryDate)}` : ''}
                                               </div>
                                               <div className="flex flex-wrap items-center gap-1 mt-1 text-[9px]">
                                                 {matchedInsp && (
@@ -1390,7 +1392,7 @@ export default function SeedBatches() {
                                       {m.transportGuideNumber}
                                   </td>
                                   <td className="px-6 py-4 text-slate-500">
-                                      {m.date} {m.dispatchTime && `· ${m.dispatchTime} hs`}
+                                      {formatDateAr(m.date)} {m.dispatchTime && `· ${m.dispatchTime} hs`}
                                   </td>
                                   <td className="px-6 py-4 font-bold text-sky-600 dark:text-sky-400">
                                       {m.quantity.toLocaleString()} kg
@@ -1517,7 +1519,7 @@ export default function SeedBatches() {
                                   <tr key={insp.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition">
                                       <td className="px-5 py-4">
                                           <div className="font-black text-slate-900 dark:text-white">{insp.lotNumber}</div>
-                                          <div className="text-[10px] text-slate-400">Muestra: {insp.sampleCode || 'S/D'} · {insp.date}</div>
+                                          <div className="text-[10px] text-slate-400">Muestra: {insp.sampleCode || 'S/D'} · {formatDateAr(insp.date)}</div>
                                       </td>
                                       <td className="px-5 py-4">
                                           <span className="px-2.5 py-1 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 font-black text-[11px] inline-flex items-center gap-1">
@@ -1880,11 +1882,10 @@ export default function SeedBatches() {
 
                       <div>
                         <label className="block text-[10px] font-black text-slate-700 dark:text-slate-300 uppercase mb-1">
-                          2.2 Fecha de Alta del Lote (Manual) *
+                          2.2 Fecha de Alta del Lote (DD/MM/AAAA) *
                         </label>
-                        <input
+                        <DateInputAr
                           required
-                          type="date"
                           className={inputClass}
                           value={batchFormData.purchaseDate || ''}
                           onChange={e => {
@@ -1901,7 +1902,7 @@ export default function SeedBatches() {
                       <div>
                         <div className="flex justify-between items-center mb-1">
                           <label className="text-[10px] font-black text-amber-800 dark:text-amber-300 uppercase">
-                            2.3 Fecha de Vencimiento (Manual · Gral. 1 Año) *
+                            2.3 Fecha de Vencimiento (DD/MM/AAAA · 1 Año) *
                           </label>
                           <button
                             type="button"
@@ -1917,9 +1918,8 @@ export default function SeedBatches() {
                             +1 Año
                           </button>
                         </div>
-                        <input
+                        <DateInputAr
                           required
-                          type="date"
                           className="w-full border-2 border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white p-2.5 rounded-xl font-mono text-xs font-bold focus:ring-2 focus:ring-amber-500 outline-none"
                           value={batchFormData.germinationExpiryDate || ''}
                           onChange={e => setBatchFormData({ ...batchFormData, germinationExpiryDate: e.target.value })}
@@ -2235,7 +2235,7 @@ export default function SeedBatches() {
                 <div>
                   <span className="text-[9px] text-slate-400 uppercase block font-bold">Alta y Vencimiento</span>
                   <strong className="text-slate-900 dark:text-white block">
-                    {qaModalBatch.purchaseDate || '-'} ➔ {qaModalBatch.germinationExpiryDate || addOneYearIso(qaModalBatch.purchaseDate)}
+                    {formatDateAr(qaModalBatch.purchaseDate)} ➔ {formatDateAr(qaModalBatch.germinationExpiryDate || addOneYearIso(qaModalBatch.purchaseDate))}
                   </strong>
                 </div>
                 <div>

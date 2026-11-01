@@ -6363,7 +6363,7 @@ export const DEMO_SUPPLIER_INSPECTIONS: SupplierLotInspection[] = [
     "varietyId": "5e115db0-7f9d-4640-abe5-769f414fe293",
     "varietyName": "Yuma",
     "seedBatchId": "eaaa4263-c40a-4c7d-8f84-9e8809eb80a6",
-    "initialQuantityKg": 6.0,
+    "initialQuantityKg": 3.0,
     "storagePointId": "5ceffc58-8219-4774-a340-9e1ac2c8458d",
     "samplerUserId": "1766450364369",
     "samplerName": "Matias QUINTANA",
@@ -6376,7 +6376,7 @@ export const DEMO_SUPPLIER_INSPECTIONS: SupplierLotInspection[] = [
     "agronomistName": "Ing. Agr. Julian PIZARRO",
     "agronomistMatricula": "MP-AGRO-1492 CH",
     "receptionResponsibleName": "Gastón BAREA M.",
-    "observations": "Acta oficial de recepción e inspección fitosanitaria INASE/ISTA para el lote madre YUM-501-L125 (Cultivar Yuma · 6,000 kg provistos por Ananda Pampa · Certificación 501 · Rótulo 00000012).",
+    "observations": "Acta oficial de recepción e inspección fitosanitaria INASE/ISTA para el lote madre YUM-501-L125 (Cultivar Yuma · 3,000 kg provistos por Ananda Pampa · Compra total campaña: 6,000 kg · Certificación 501 · Rótulo 00000012).",
     "createdAt": "2025-12-20T14:00:00.000Z"
   },
   {

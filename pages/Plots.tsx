@@ -22,6 +22,8 @@ import {
   convertKgToUnit,
   formatBatchMassKg
 } from '../src/utils/seedTraceability';
+import { DateInputAr } from '../src/components/DateInputAr';
+import { formatDateAr } from '../src/utils/dateFormat';
 
 // Algoritmo de cálculo de área geodésica
 const calculateGeodesicArea = (latLngs: { lat: number, lng: number }[]) => {
@@ -392,15 +394,18 @@ export default function Plots() {
   // Resumen sincronizado de Ciclo Biológico y Fotoperiodo Local (UTC-3) por parcela
   const getPlotSyncSummary = (p: Plot, vari?: Variety, loc?: Location) => {
     const cycleLimit = vari?.cycleDays || 150;
-    const sowStr = p.sowingDate || '2026-01-13';
-    const sowDate = new Date(`${sowStr}T09:00:00`);
-    const now = new Date();
+    const rawSowStr = p.sowingDate || '2026-01-13';
+    const sowStr = formatDateAr(rawSowStr);
+    const sowDate = new Date(`${rawSowStr}T09:00:00`);
+    const closedIso = (p.closedDate || p.closedAt || '').split('T')[0];
+    const now = closedIso ? new Date(`${closedIso}T16:00:00`) : new Date();
+    const isClosedCycle = Boolean(p.closureConfirmed || p.status === 'Cosechada');
     const rawElapsed = Math.max(1, Math.floor((now.getTime() - sowDate.getTime()) / 86400000));
-    const activeDds = Math.min(cycleLimit, rawElapsed);
-    const progressPct = Math.min(100, Math.max(0, Math.round((activeDds / cycleLimit) * 100)));
+    const activeDds = isClosedCycle ? cycleLimit : Math.min(cycleLimit, rawElapsed);
+    const progressPct = isClosedCycle ? 100 : Math.min(100, Math.max(0, Math.round((activeDds / cycleLimit) * 100)));
 
     const stage =
-      p.status === 'Cosechada' || progressPct >= 95 ? 'Maduración / Cosecha' :
+      isClosedCycle || progressPct >= 95 ? `Ciclo Cerrado (${formatDateAr(closedIso || '2026-04-01')})` :
       progressPct >= 72 ? 'Maduración' :
       progressPct >= 42 ? 'Floración' :
       progressPct >= 12 ? 'Vegetativo' : 'Emergencia';
@@ -1153,11 +1158,11 @@ export default function Plots() {
                           <div className="space-y-0.5">
                             {isClosed ? (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 text-[10px] font-black uppercase">
-                                <Lock size={10} /> {p.closedDate || p.closedAt} {p.closedTime || ''}
+                                <Lock size={10} /> {formatDateAr(p.closedDate || p.closedAt || '2026-04-01')} {p.closedTime || ''}
                               </span>
                             ) : p.isHarvestScheduled && p.scheduledHarvestDate ? (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-sky-100 dark:bg-sky-950/70 text-sky-800 dark:text-sky-300 text-[10px] font-bold uppercase">
-                                <Clock size={10} /> Prog: {p.scheduledHarvestDate}
+                                <Clock size={10} /> Prog: {formatDateAr(p.scheduledHarvestDate)}
                               </span>
                             ) : (
                               <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold block">
@@ -1448,9 +1453,9 @@ export default function Plots() {
                             </span>
                             <strong className="text-slate-900 dark:text-white block truncate text-[10.5px]">
                               {isClosed
-                                ? `${p.closedDate || p.closedAt || ''} ${p.closedTime ? `${p.closedTime} hs` : ''} · ${actCode}`
+                                ? `${formatDateAr(p.closedDate || p.closedAt || '2026-04-01')} ${p.closedTime ? `${p.closedTime} hs` : ''} · ${actCode}`
                                 : p.isHarvestScheduled
-                                ? `Prog: ${p.scheduledHarvestDate} ${p.scheduledHarvestTime || ''} hs · ${actCode}`
+                                ? `Prog: ${formatDateAr(p.scheduledHarvestDate)} ${p.scheduledHarvestTime || ''} hs · ${actCode}`
                                 : `${actCode} · Resp: ${p.sowingResponsibleName || p.samplingResponsibleName || linkedBatch?.samplerName || 'M. Quintana'}`}
                             </strong>
                           </div>
@@ -1853,7 +1858,7 @@ export default function Plots() {
                                 Lote: <strong>{selB.batchCode}</strong> · Genética (Acta): <strong className="text-emerald-700 dark:text-emerald-400">{selVar?.name || 'Homologada'}</strong>
                               </span>
                               <span>
-                                Alta: {selB.purchaseDate || '2025-10-10'} · Vto PG: <strong>{selB.germinationExpiryDate || '2026-10-10'}</strong>
+                                Alta: {formatDateAr(selB.purchaseDate || '2025-10-10')} · Vto PG: <strong>{formatDateAr(selB.germinationExpiryDate || '2026-10-10')}</strong>
                               </span>
                             </div>
                             <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 pt-1 border-t border-emerald-100 dark:border-emerald-900/50">
@@ -2130,12 +2135,11 @@ export default function Plots() {
                     </h3>
 
                     <div>
-                      <label className={labelClass}>Fecha de Siembra / Inicio</label>
-                      <input 
-                        type="date" 
-                        className={inputClass} 
-                        value={formData.sowingDate} 
-                        onChange={e => setFormData({ ...formData, sowingDate: e.target.value })} 
+                      <label className={labelClass}>Fecha de Siembra / Inicio (DD/MM/AAAA)</label>
+                      <DateInputAr
+                        className={inputClass}
+                        value={formData.sowingDate}
+                        onChange={val => setFormData({ ...formData, sowingDate: val })}
                       />
                     </div>
 

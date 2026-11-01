@@ -15,6 +15,8 @@ import { dispatchPushNotification } from '../src/services/pushNotificationServic
 import AlertDashboard from '../components/AlertDashboard';
 import DashboardLicenseIntegritySummary from '../components/DashboardLicenseIntegritySummary';
 import YieldAndInputConsumptionWidget from '../components/YieldAndInputConsumptionWidget';
+import { DateInputAr } from '../src/components/DateInputAr';
+import { formatDateAr } from '../src/utils/dateFormat';
 
 interface MetricCardProps {
   label: string;
@@ -185,11 +187,11 @@ export default function Dashboard() {
     });
   }, [campaignScopedPlots, activeCampaign]);
 
-  // Parcelas de CICLO CERRADO / COSECHADAS en la campaña actual (Archivo de Cosecha)
+  // Parcelas de CICLO CERRADO / COSECHADAS en la campaña actual (Archivo de Cosecha · Campaña 25/26 cerrada el 01/04/2026)
   const closedCampaignPlots = useMemo(() => {
     return campaignScopedPlots.filter(p => {
       if (activeCampaign !== 'all' && p.campaignStatuses?.[activeCampaign] === 'Cosechada') return true;
-      return p.status === 'Cosechada';
+      return Boolean(p.closureConfirmed || p.status === 'Cosechada');
     });
   }, [campaignScopedPlots, activeCampaign]);
 
@@ -787,6 +789,11 @@ export default function Dashboard() {
                 <ShieldCheck size={10} className="text-purple-500" />
                 SENASA 100%
               </span>
+              {activeCampaign === '2025/2026' && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-mono font-black uppercase bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+                  🏁 Campaña 25/26 Cerrada · 01/04/2026
+                </span>
+              )}
             </div>
 
             <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-slate-50 tracking-tight flex items-baseline gap-2">
@@ -2523,10 +2530,9 @@ export default function Dashboard() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-[10px] font-mono font-bold uppercase text-slate-500 block mb-1">
-                    Fecha de Cierre / Cosecha
+                    Fecha de Cierre (DD/MM/AAAA)
                   </label>
-                  <input
-                    type="date"
+                  <DateInputAr
                     required
                     value={closureDate}
                     onChange={e => setClosureDate(e.target.value)}

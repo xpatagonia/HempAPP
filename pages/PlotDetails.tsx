@@ -23,6 +23,8 @@ import { LiveTelemetryPanel } from '../components/LiveTelemetryPanel';
 import { TrialRecord, AgrochemicalApplication, AgrochemicalCategory, HempStageId, FieldLog, Task, AgriculturalLaborType, Resource } from '../types';
 import { sendAgronomicAlertEmail } from '../src/services/emailNotificationService';
 import { formatPlotSeedLoad } from '../src/utils/seedTraceability';
+import { DateInputAr } from '../src/components/DateInputAr';
+import { formatDateAr } from '../src/utils/dateFormat';
 
 // ============================================================================
 // MOTOR ASTRONÓMICO Y FOTOPERIÓDICO DETERMINÍSTICO (NOAA SOLAR CALCULATOR)
@@ -1662,7 +1664,7 @@ export default function PlotDetails() {
                         return (
                           <tr key={r.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
                             <td className="px-5 py-3.5 whitespace-nowrap">
-                              <div className="font-bold text-slate-900 dark:text-white">{r.date}</div>
+                              <div className="font-bold text-slate-900 dark:text-white">{formatDateAr(r.date)}</div>
                               <div className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
                                 <Clock size={10} /> {r.time || '10:00'} hs (UTC-3)
                               </div>
@@ -4124,9 +4126,8 @@ export default function PlotDetails() {
                   />
                 </div>
                 <div>
-                  <label className={labelClass}>Fecha de Aplicación</label>
-                  <input
-                    type="date"
+                  <label className={labelClass}>Fecha de Aplicación (DD/MM/AAAA)</label>
+                  <DateInputAr
                     required
                     value={agroForm.date}
                     onChange={e => setAgroForm({ ...agroForm, date: e.target.value })}
@@ -4269,9 +4270,8 @@ export default function PlotDetails() {
                     <Sun size={13} className="text-amber-500" /> Ambiente & Fotoperiodo Local
                   </h3>
                   <div>
-                    <label className={labelClass}>Fecha de Muestreo</label>
-                    <input
-                      type="date"
+                    <label className={labelClass}>Fecha de Muestreo (DD/MM/AAAA)</label>
+                    <DateInputAr
                       required
                       disabled={isViewMode}
                       className={inputStyle}
@@ -4367,9 +4367,8 @@ export default function PlotDetails() {
                     <FlaskConical size={13} /> Rendimiento & Semilla
                   </h3>
                   <div>
-                    <label className="text-[10px] font-mono uppercase font-bold text-slate-400 block mb-1">Fecha Floración (50%)</label>
-                    <input
-                      type="date"
+                    <label className="text-[10px] font-mono uppercase font-bold text-slate-400 block mb-1">Fecha Floración (50%) (DD/MM/AAAA)</label>
+                    <DateInputAr
                       disabled={isViewMode}
                       className="w-full bg-slate-800 border border-slate-700 p-2.5 rounded-xl text-xs text-white"
                       value={recordForm.floweringDate}

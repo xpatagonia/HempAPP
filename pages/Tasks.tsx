@@ -19,6 +19,8 @@ import {
 } from '../src/services/pushNotificationService';
 import { sendLaborAssignedEmail, isRealEmailDelivery } from '../src/services/emailNotificationService';
 import { canAccessTask, canAccessPlot } from '../src/utils/structurePermissions';
+import { DateInputAr } from '../src/components/DateInputAr';
+import { formatDateAr } from '../src/utils/dateFormat';
 
 export default function Tasks() {
   const { 
@@ -671,7 +673,7 @@ export default function Tasks() {
                           {laborInfo?.category || 'Labor Agronómica'}
                         </span>
                         <div className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                          {labor.dueDate}
+                          {formatDateAr(labor.dueDate)}
                         </div>
                       </div>
                     </div>
@@ -910,7 +912,7 @@ export default function Tasks() {
                       </td>
 
                       <td className="py-3 px-4">
-                        <div className="font-mono text-slate-700 dark:text-slate-300">{labor.dueDate}</div>
+                        <div className="font-mono text-slate-700 dark:text-slate-300">{formatDateAr(labor.dueDate)}</div>
                         <div className="text-[10px] text-slate-400">{labor.operator || 'Operador'}</div>
                       </td>
 
@@ -1090,10 +1092,9 @@ export default function Tasks() {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                       <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                        Fecha Programada / Ejecución
+                        Fecha Programada / Ejecución (DD/MM/AAAA)
                       </label>
-                      <input 
-                        type="date"
+                      <DateInputAr 
                         className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none"
                         value={formData.dueDate}
                         onChange={(e) => setFormData({ ...formData, dueDate: e.target.value, executionDate: e.target.value })}

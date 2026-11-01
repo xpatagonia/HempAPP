@@ -863,6 +863,17 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                     }
                 }
 
+                // Cierre oficial de todos los ciclos de la Campaña 2025/2026 en fecha 01/04/2026 (ISO 2026-04-01)
+                const isCamp2526 = !p.campaign || p.campaign === '2025/2026' || (p.activeCampaigns || []).includes('2025/2026');
+                const plotIdSuffix = String(p.id).replace(/[^a-zA-Z0-9]/g, '').slice(-4).toUpperCase() || '2526';
+                let hashCode = 0;
+                const hashSeed = `${p.id}-2025/2026`;
+                for (let idx = 0; idx < hashSeed.length; idx++) {
+                    hashCode = (hashCode * 31 + hashSeed.charCodeAt(idx)) % 1000000;
+                }
+                const deterministicBarcode = `7798421${String(Math.abs(hashCode)).padStart(6, '0')}`;
+                const deterministicActCode = `ACTA-SIEMBRA-20252026-${plotIdSuffix}`;
+
                 return {
                     ...(demoMatch || {}),
                     ...p,
@@ -885,6 +896,18 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                     samplingResponsibleName: resolvedSampler,
                     sowingResponsibleName: resolvedSower,
                     technicalResponsibleName: resolvedTech,
+                    closedAt: isCamp2526 ? (p.closedAt || '2026-04-01') : p.closedAt,
+                    closedDate: isCamp2526 ? (p.closedDate || '2026-04-01') : p.closedDate,
+                    closedTime: isCamp2526 ? (p.closedTime || '16:00') : p.closedTime,
+                    closedBy: isCamp2526 ? (p.closedBy || resolvedTech || 'Gastón BAREA M.') : p.closedBy,
+                    closureConfirmed: isCamp2526 ? (p.closureConfirmed ?? true) : p.closureConfirmed,
+                    closureActCode: isCamp2526 ? (p.closureActCode || deterministicActCode) : p.closureActCode,
+                    closureBarcode: isCamp2526 ? (p.closureBarcode || deterministicBarcode) : p.closureBarcode,
+                    closureNotes: isCamp2526
+                        ? (p.closureNotes || 'Ciclo productivo Campaña 2025/2026 cerrado, consolidado y homologado en fecha 01/04/2026.')
+                        : p.closureNotes,
+                    currentPhenologicalStage: isCamp2526 ? (p.currentPhenologicalStage || 'BBCH_89_99') : p.currentPhenologicalStage,
+                    lastStageUpdateDate: isCamp2526 ? (p.lastStageUpdateDate || '2026-04-01') : p.lastStageUpdateDate,
                     coordinates: validCoords,
                     polygon: finalPoly
                 };
@@ -1229,8 +1252,8 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
     useEffect(() => {
         try {
-            if (localStorage.getItem('ht_audit_seed_stock_v7_25_0_final') !== 'true') {
-                // Sincronizar auditoría de stock de semillas, remitos, 44 parcelas y depuración de duplicados (Campaña 25/26 - V7.25.0-STABLE)
+            if (localStorage.getItem('ht_audit_seed_stock_v7_26_0_closed_01042026') !== 'true') {
+                // Sincronizar auditoría de stock (6.000 kg compra / 4.400 kg despachado / 1.600 kg stock final) y cierre de Campaña 25/26 el 01/04/2026
                 localStorage.removeItem('ht_varieties');
                 localStorage.removeItem('ht_seed_batches');
                 localStorage.removeItem('ht_seed_movements');
@@ -1287,6 +1310,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 localStorage.setItem('ht_audit_seed_stock_v7_22_0', 'true');
                 localStorage.setItem('ht_audit_seed_stock_v7_21_0_final', 'true');
                 localStorage.setItem('ht_audit_seed_stock_v7_25_0_final', 'true');
+                localStorage.setItem('ht_audit_seed_stock_v7_26_0_closed_01042026', 'true');
             }
         } catch {}
         refreshData();
@@ -2739,13 +2763,16 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 }
                 if (!coords) continue;
 
-                // Fecha de siembra más temprana del bloque activo y fin de ciclo máximo (~150 días)
+                // Fecha de siembra más temprana del bloque activo y fin de ciclo máximo (~150 días o fecha de cierre 2026-04-01)
                 const sowDates = locPlots.map(p => p.sowingDate || '2026-01-13').sort();
                 const sowStr = sowDates[0] || '2026-01-13';
                 const maxSowStr = sowDates[sowDates.length - 1] || sowStr;
-                const cycleEndIso = new Date(new Date(`${maxSowStr}T00:00:00`).getTime() + 155 * 86400000)
-                    .toISOString()
-                    .split('T')[0];
+                const closedDates = locPlots.map(p => p.closedDate || p.closedAt).filter(Boolean) as string[];
+                const cycleEndIso = closedDates.length > 0
+                    ? closedDates.sort()[closedDates.length - 1].split('T')[0]
+                    : new Date(new Date(`${maxSowStr}T00:00:00`).getTime() + 155 * 86400000)
+                        .toISOString()
+                        .split('T')[0];
                 const maxAllowedIso = cycleEndIso < todayIso ? cycleEndIso : todayIso;
 
                 interface RainEventHourlyStat {

@@ -601,19 +601,19 @@ export default function IntegrityCheck() {
                 </div>
             </div>
 
-            {/* MATRIZ DE CONCILIACIÓN MATEMÁTICA DE SEMILLAS CAMPAÑA 25/26 */}
+            {/* MATRIZ DE CONCILIACIÓN MATEMÁTICA DE SEMILLAS CAMPAÑA 25/26 (CERRADA 01/04/2026) */}
             <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-emerald-200 dark:border-emerald-800/60 shadow-sm space-y-4 font-mono">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
                     <div>
                         <span className="text-[10px] font-black uppercase text-emerald-600 dark:text-emerald-400 tracking-widest block">
-                            Cierre de Ciclos y Auditoría Física Campaña 25/26
+                            Cierre de Ciclos y Auditoría Física Campaña 25/26 · Cerrada el 01/04/2026
                         </span>
                         <h2 className="text-base md:text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">
-                            Conciliación Matemática de Stock: Compra Ananda Pampa vs. Despachos vs. Carga en Parcelas (T / kg / gr)
+                            Conciliación Matemática de Stock: 6,000 kg Comprados (Ananda Pampa) vs. 4,400 kg Despachados vs. 1,600 kg Stock Final
                         </h2>
                     </div>
                     <span className="px-3 py-1 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-bold self-start sm:self-auto">
-                        ✓ Balance Exacto Verificado (0,000 kg desvío)
+                        ✓ Campaña 25/26 Cerrada el 01/04/2026 · Desvío 0,000 kg
                     </span>
                 </div>
 
@@ -624,27 +624,27 @@ export default function IntegrityCheck() {
                             {audit.reconciliation.totalPurchased.kgStr}
                         </strong>
                         <span className="text-[10px] text-slate-500 block">
-                            {audit.reconciliation.totalPurchased.grStr} · {audit.reconciliation.totalPurchased.tnStr}
+                            {audit.reconciliation.totalPurchased.grStr} · 3kg Yuma + 3kg HEMPIT
                         </span>
                     </div>
 
                     <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
-                        <span className="text-[9px] font-bold uppercase text-slate-400 block">2. Stock Bóveda Central</span>
-                        <strong className="text-base font-black text-emerald-600 dark:text-emerald-400 block mt-0.5">
-                            {audit.reconciliation.centralVault.kgStr}
-                        </strong>
-                        <span className="text-[10px] text-slate-500 block">
-                            4.360g Yuma · 80g Muka/F83/F75
-                        </span>
-                    </div>
-
-                    <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
-                        <span className="text-[9px] font-bold uppercase text-sky-600 dark:text-sky-400 block">3. Enviado a Campos</span>
+                        <span className="text-[9px] font-bold uppercase text-sky-600 dark:text-sky-400 block">2. Despachado (12 Remitos)</span>
                         <strong className="text-base font-black text-sky-700 dark:text-sky-300 block mt-0.5">
                             {audit.reconciliation.dispatchedToFields.kgStr}
                         </strong>
                         <span className="text-[10px] text-slate-500 block">
-                            1.8 HA + 0.6 LR + 2.0 PM
+                            1,800 HA + 0,600 LR + 2,000 PM
+                        </span>
+                    </div>
+
+                    <div className="p-3.5 rounded-2xl bg-emerald-50/90 dark:bg-emerald-950/50 border-2 border-emerald-500">
+                        <span className="text-[9px] font-black uppercase text-emerald-800 dark:text-emerald-300 block">3. Stock Final (Central)</span>
+                        <strong className="text-base font-black text-emerald-950 dark:text-white block mt-0.5">
+                            {audit.reconciliation.centralVault.kgStr}
+                        </strong>
+                        <span className="text-[10px] text-emerald-800 dark:text-emerald-300 font-bold block">
+                            1.360g Yuma · 80g Muka/F83/F75
                         </span>
                     </div>
 
@@ -659,7 +659,7 @@ export default function IntegrityCheck() {
                     </div>
 
                     <div className="p-3.5 rounded-2xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
-                        <span className="text-[9px] font-black uppercase text-amber-700 dark:text-amber-300 block">5. Remanente en Campos</span>
+                        <span className="text-[9px] font-black uppercase text-amber-700 dark:text-amber-300 block">5. Remanente en Ensayo (HA)</span>
                         <strong className="text-base font-black text-amber-900 dark:text-amber-200 block mt-0.5">
                             {audit.reconciliation.fieldRemaining.kgStr}
                         </strong>
@@ -668,13 +668,13 @@ export default function IntegrityCheck() {
                         </span>
                     </div>
 
-                    <div className="p-3.5 rounded-2xl bg-emerald-50/90 dark:bg-emerald-950/50 border-2 border-emerald-500">
-                        <span className="text-[9px] font-black uppercase text-emerald-800 dark:text-emerald-300 block">6. Stock Total Disponible</span>
-                        <strong className="text-base font-black text-emerald-950 dark:text-white block mt-0.5">
-                            {audit.reconciliation.totalAvailableNetwork.kgStr}
+                    <div className="p-3.5 rounded-2xl bg-slate-900 text-white border border-slate-700">
+                        <span className="text-[9px] font-black uppercase text-amber-400 block">6. Cierre Campaña 25/26</span>
+                        <strong className="text-base font-black text-white block mt-0.5">
+                            01/04/2026
                         </strong>
-                        <span className="text-[10px] text-emerald-800 dark:text-emerald-300 font-bold block">
-                            {audit.reconciliation.totalAvailableNetwork.grStr} · {audit.reconciliation.totalAvailableNetwork.tnStr}
+                        <span className="text-[10px] text-emerald-400 font-bold block">
+                            Ciclo Cerrado · {plots.length}/{plots.length} Lotes
                         </span>
                     </div>
                 </div>

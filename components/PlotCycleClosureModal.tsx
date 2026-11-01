@@ -10,6 +10,8 @@ import { useAppContext } from '../context/AppContext';
 import { isCentralAdminOrSupervisor } from '../src/utils/structurePermissions';
 import { BarcodeSVG } from './BarcodeSVG';
 import { formatPlotSeedLoad } from '../src/utils/seedTraceability';
+import { DateInputAr } from '../src/components/DateInputAr';
+import { formatDateAr, CAMPAIGN_2526_CLOSE_DATE_ISO } from '../src/utils/dateFormat';
 
 interface PlotCycleClosureModalProps {
   isOpen: boolean;
@@ -54,7 +56,7 @@ export const PlotCycleClosureModal: React.FC<PlotCycleClosureModalProps> = ({
 
   const [activeTab, setActiveTab] = useState<'form' | 'document'>('form');
   const [operationMode, setOperationMode] = useState<'confirm' | 'schedule'>('confirm');
-  const [closedDate, setClosedDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [closedDate, setClosedDate] = useState<string>(CAMPAIGN_2526_CLOSE_DATE_ISO);
   const [closedTime, setClosedTime] = useState<string>('16:00');
   const [harvestYieldKg, setHarvestYieldKg] = useState<string>('');
   const [machinery, setMachinery] = useState<string>('Cosechadora Axial John Deere S760 / Segadora Acondicionadora');
@@ -110,7 +112,7 @@ export const PlotCycleClosureModal: React.FC<PlotCycleClosureModalProps> = ({
     const defaultDate =
       plot.closedAt ||
       plot.scheduledHarvestDate ||
-      new Date().toISOString().split('T')[0];
+      CAMPAIGN_2526_CLOSE_DATE_ISO;
     const defaultTime =
       plot.closedTime ||
       plot.scheduledHarvestTime ||
@@ -246,7 +248,7 @@ export const PlotCycleClosureModal: React.FC<PlotCycleClosureModalProps> = ({
         } else {
           setFeedbackBanner({
             type: 'success',
-            text: `Cierre de ciclo / cosecha programado para el ${closedDate} a las ${closedTime} hs y vinculado a Labores Agrícolas.`
+            text: `Cierre de ciclo / cosecha programado para el ${formatDateAr(closedDate)} a las ${closedTime} hs y vinculado a Labores Agrícolas.`
           });
         }
       }
@@ -456,7 +458,7 @@ export const PlotCycleClosureModal: React.FC<PlotCycleClosureModalProps> = ({
                   <div className="text-xs space-y-1">
                     <p className="font-bold uppercase tracking-wide">
                       {isConfirmed
-                        ? `Ciclo Finalizado y Confirmado el ${plot.closedAt} a las ${plot.closedTime || '16:00'} hs`
+                        ? `Ciclo Finalizado y Confirmado el ${formatDateAr(plot.closedAt || closedDate)} a las ${plot.closedTime || '16:00'} hs`
                         : 'Protocolo de Confirmación y Homologación de Cierre de Ciclo'}
                     </p>
                     <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
@@ -537,29 +539,25 @@ export const PlotCycleClosureModal: React.FC<PlotCycleClosureModalProps> = ({
                     <span>Fecha, Hora Exacta y Rendimiento de Cierre / Cosecha</span>
                   </h3>
                   <div className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
-                    Siembra registrada: <strong>{sowDateStr}</strong> · Duración resultante: <strong className="text-emerald-600 dark:text-emerald-400">{totalCycleDays} DDS</strong>
+                    Siembra registrada: <strong>{formatDateAr(sowDateStr)}</strong> · Duración resultante: <strong className="text-emerald-600 dark:text-emerald-400">{totalCycleDays} DDS</strong>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label className="text-[10px] font-mono font-bold uppercase text-slate-500 block mb-1">
-                      Fecha de Cierre / Cosecha (Pasada, Hoy o Futura) *
+                      Fecha de Cierre / Cosecha (Formato DD/MM/AAAA) *
                     </label>
-                    <input
-                      type="date"
+                    <DateInputAr
                       required
                       disabled={isLockedForCurrentUser}
                       value={closedDate}
                       onChange={e => setClosedDate(e.target.value)}
+                      placeholder="DD/MM/AAAA (Ej: 01/04/2026)"
                       className="w-full px-3 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-mono font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-60"
                     />
                     <span className="text-[10px] font-mono text-slate-500 mt-1 block">
-                      {isRetroactiveDate
-                        ? '⏪ Fecha hacia atrás (registro retroactivo habilitado)'
-                        : isFutureDate
-                        ? '📅 Fecha futura (programación anticipada)'
-                        : '📍 Fecha del día de hoy'}
+                      Fecha seleccionada: <strong>{formatDateAr(closedDate)}</strong> ({isRetroactiveDate ? '⏪ Registro retroactivo' : isFutureDate ? '📅 Programación anticipada' : '📍 Día actual'})
                     </span>
                   </div>
 
@@ -851,7 +849,7 @@ export const PlotCycleClosureModal: React.FC<PlotCycleClosureModalProps> = ({
                       Carga en Parcela: {seedLoad.fullTriUnitDisplay}
                     </span>
                     <span className="text-[10px] text-slate-700 block">
-                      Rótulo: {seedRotuloInase} · Siembra: <strong>{sowDateStr}</strong>
+                      Rótulo: {seedRotuloInase} · Siembra: <strong>{formatDateAr(sowDateStr)}</strong>
                     </span>
                   </div>
                 </div>
@@ -897,7 +895,7 @@ export const PlotCycleClosureModal: React.FC<PlotCycleClosureModalProps> = ({
                     <div className="p-2.5 bg-white rounded-lg border border-emerald-200">
                       <span className="text-[9px] uppercase text-slate-500 font-bold block">Fecha y Hora de Cierre</span>
                       <strong className="text-sm font-black text-slate-950 block">
-                        {plot.closedAt || closedDate} · {plot.closedTime || closedTime} hs
+                        {formatDateAr(plot.closedAt || closedDate)} · {plot.closedTime || closedTime} hs
                       </strong>
                     </div>
                     <div className="p-2.5 bg-white rounded-lg border border-emerald-200">
