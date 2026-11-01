@@ -195,7 +195,6 @@ const PURGED_DEMO_IDS = new Set([
     'mat-obt-tw-par-a2-103-grano',
     'var-multiproposito-biomasa',
     'var-grano-alimento',
-    'user-admin-xpatagonia',
     '91ce0dcf-a760-41fe-82d5-52c438685944',
     '7076a122-77b5-49ce-80fa-890440c2d66c',
     'res-1', 'res-2', 'res-3', 'res-4', 'res-5', 'res-6', 'res-7', 'res-8',
@@ -501,37 +500,102 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         });
         return updated;
     });
+    const SEED_BATCH_META_START = '<!--HEMPC_SEED_META_JSON:';
+    const SEED_BATCH_META_END = ':END_HEMPC_SEED_META-->';
+
+    const unpackSeedBatchMetaFromNotes = (
+        rawNotes?: string | null
+    ): { cleanNotes: string | null; parsedMeta: Partial<SeedBatch> } => {
+        if (!rawNotes) return { cleanNotes: null, parsedMeta: {} };
+        const str = String(rawNotes);
+        const startIdx = str.indexOf(SEED_BATCH_META_START);
+        const endIdx = str.indexOf(SEED_BATCH_META_END);
+        if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+            const cleanNotes = str.slice(0, startIdx).trim() || null;
+            const jsonPart = str.slice(startIdx + SEED_BATCH_META_START.length, endIdx);
+            try {
+                const parsed = JSON.parse(jsonPart);
+                if (parsed && typeof parsed === 'object') {
+                    return { cleanNotes, parsedMeta: parsed };
+                }
+            } catch {}
+            return { cleanNotes, parsedMeta: {} };
+        }
+        return { cleanNotes: str, parsedMeta: {} };
+    };
+
+    const packSeedBatchMetaIntoNotes = (b: SeedBatch): string | null => {
+        const base = String(b.notes || '')
+            .replace(/<!--HEMPC_SEED_META_JSON:[\s\S]*?:END_HEMPC_SEED_META-->/g, '')
+            .trim();
+        const meta: Partial<SeedBatch> = {
+            breederGerminationPct: b.breederGerminationPct,
+            coopGerminationPct: b.coopGerminationPct,
+            qaStatus: b.qaStatus,
+            germinationExpiryDate: b.germinationExpiryDate,
+            originInspectionId: b.originInspectionId,
+            qualityGrade: b.qualityGrade,
+            qualityScore: b.qualityScore,
+            samplerName: b.samplerName,
+            samplerMatricula: b.samplerMatricula,
+            sampleCode: b.sampleCode,
+            inspectorName: b.inspectorName,
+            inspectorMatricula: b.inspectorMatricula,
+            parentSeedBatchId: b.parentSeedBatchId,
+            originPlotId: b.originPlotId,
+            materialType: b.materialType
+        };
+        const hasAnyMeta = Object.values(meta).some(v => v !== undefined && v !== null);
+        if (!hasAnyMeta) return base || null;
+        return `${base}\n${SEED_BATCH_META_START}${JSON.stringify(meta)}${SEED_BATCH_META_END}`.trim();
+    };
+
     const healSeedBatches = (list: SeedBatch[]): SeedBatch[] => {
         const deletedMap = getDeletedIdsMap();
         const deletedSet = new Set(deletedMap['seed_batches'] || []);
         const demoMapById = new Map(DEMO_SEED_BATCHES.map(b => [String(b.id), b]));
         const demoMapByCode = new Map(DEMO_SEED_BATCHES.map(b => [String(b.batchCode), b]));
+        let savedBatchMetaById: Record<string, Partial<SeedBatch>> = {};
+        if (typeof window !== 'undefined') {
+            try {
+                const rawMeta = localStorage.getItem('ht_seed_batches_meta_v1');
+                if (rawMeta) savedBatchMetaById = JSON.parse(rawMeta) || {};
+            } catch {}
+        }
 
         const enriched: SeedBatch[] = (list || [])
             .filter(b => !deletedSet.has(String(b.id)) && !isPurgedDemoItem(b))
             .map((b: SeedBatch): SeedBatch => {
                 const demoMatch = demoMapById.get(String(b.id)) || demoMapByCode.get(String(b.batchCode));
+                const savedMeta = savedBatchMetaById[String(b.id)] || {};
+                const { cleanNotes, parsedMeta } = unpackSeedBatchMetaFromNotes(b.notes ?? savedMeta.notes ?? demoMatch?.notes);
                 const hasLocalOverride = Boolean((b as any)._localUpdatedAt);
                 return {
                     ...(demoMatch || {}),
+                    ...parsedMeta,
+                    ...savedMeta,
                     ...b,
-                    supplierId: b.supplierId || demoMatch?.supplierId || null,
+                    supplierId: b.supplierId || savedMeta.supplierId || parsedMeta.supplierId || demoMatch?.supplierId || null,
                     initialQuantity: (!hasLocalOverride && demoMatch) ? demoMatch.initialQuantity : Number(Number(b.initialQuantity || 0).toFixed(3)),
                     remainingQuantity: (!hasLocalOverride && demoMatch) ? demoMatch.remainingQuantity : Number(Number(b.remainingQuantity || 0).toFixed(3)),
                     labelSerialNumber: b.labelSerialNumber || demoMatch?.labelSerialNumber || '00000012',
                     certificationNumber: (b.certificationNumber && b.certificationNumber !== 'S/N') ? b.certificationNumber : (demoMatch?.certificationNumber || b.certificationNumber || 'S/N'),
-                    originInspectionId: b.originInspectionId || demoMatch?.originInspectionId,
-                    qualityGrade: b.qualityGrade || demoMatch?.qualityGrade,
-                    qualityScore: b.qualityScore ?? demoMatch?.qualityScore,
-                    samplerName: b.samplerName || demoMatch?.samplerName,
-                    samplerMatricula: b.samplerMatricula || demoMatch?.samplerMatricula,
-                    sampleCode: b.sampleCode || demoMatch?.sampleCode,
-                    inspectorName: b.inspectorName || demoMatch?.inspectorName,
-                    inspectorMatricula: b.inspectorMatricula || demoMatch?.inspectorMatricula,
-                    parentSeedBatchId: b.parentSeedBatchId || demoMatch?.parentSeedBatchId,
-                    originPlotId: b.originPlotId || demoMatch?.originPlotId,
-                    materialType: b.materialType || demoMatch?.materialType,
-                    notes: (!hasLocalOverride && demoMatch?.notes) ? demoMatch.notes : (b.notes || demoMatch?.notes || null),
+                    breederGerminationPct: b.breederGerminationPct ?? savedMeta.breederGerminationPct ?? parsedMeta.breederGerminationPct ?? demoMatch?.breederGerminationPct ?? b.germination ?? 90,
+                    coopGerminationPct: b.coopGerminationPct ?? savedMeta.coopGerminationPct ?? parsedMeta.coopGerminationPct ?? demoMatch?.coopGerminationPct ?? b.germination ?? 90,
+                    qaStatus: b.qaStatus || savedMeta.qaStatus || parsedMeta.qaStatus || demoMatch?.qaStatus || (b.isActive === false ? 'PENDIENTE_QA' : 'APROBADO_QA'),
+                    germinationExpiryDate: b.germinationExpiryDate || savedMeta.germinationExpiryDate || parsedMeta.germinationExpiryDate || demoMatch?.germinationExpiryDate,
+                    originInspectionId: b.originInspectionId || savedMeta.originInspectionId || parsedMeta.originInspectionId || demoMatch?.originInspectionId,
+                    qualityGrade: b.qualityGrade || savedMeta.qualityGrade || parsedMeta.qualityGrade || demoMatch?.qualityGrade,
+                    qualityScore: b.qualityScore ?? savedMeta.qualityScore ?? parsedMeta.qualityScore ?? demoMatch?.qualityScore,
+                    samplerName: b.samplerName || savedMeta.samplerName || parsedMeta.samplerName || demoMatch?.samplerName,
+                    samplerMatricula: b.samplerMatricula || savedMeta.samplerMatricula || parsedMeta.samplerMatricula || demoMatch?.samplerMatricula,
+                    sampleCode: b.sampleCode || savedMeta.sampleCode || parsedMeta.sampleCode || demoMatch?.sampleCode,
+                    inspectorName: b.inspectorName || savedMeta.inspectorName || parsedMeta.inspectorName || demoMatch?.inspectorName,
+                    inspectorMatricula: b.inspectorMatricula || savedMeta.inspectorMatricula || parsedMeta.inspectorMatricula || demoMatch?.inspectorMatricula,
+                    parentSeedBatchId: b.parentSeedBatchId || savedMeta.parentSeedBatchId || parsedMeta.parentSeedBatchId || demoMatch?.parentSeedBatchId,
+                    originPlotId: b.originPlotId || savedMeta.originPlotId || parsedMeta.originPlotId || demoMatch?.originPlotId,
+                    materialType: b.materialType || savedMeta.materialType || parsedMeta.materialType || demoMatch?.materialType,
+                    notes: (!hasLocalOverride && demoMatch?.notes) ? demoMatch.notes : (cleanNotes || demoMatch?.notes || null),
                     logisticsResponsible: b.logisticsResponsible || demoMatch?.logisticsResponsible || null,
                     storageConditions: b.storageConditions || demoMatch?.storageConditions || null
                 };
@@ -539,7 +603,12 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
         DEMO_SEED_BATCHES.forEach(db => {
             if (!deletedSet.has(String(db.id)) && !enriched.some(b => String(b.id) === String(db.id) || String(b.batchCode) === String(db.batchCode))) {
-                enriched.push(db);
+                enriched.push({
+                    ...db,
+                    breederGerminationPct: db.breederGerminationPct ?? db.germination ?? 90,
+                    coopGerminationPct: db.coopGerminationPct ?? db.germination ?? 90,
+                    qaStatus: db.qaStatus || 'APROBADO_QA'
+                });
             }
         });
 
@@ -1736,8 +1805,16 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 return next;
             });
         } else if (table === 'seed_batches') {
+            if (action !== 'delete' && item && typeof item === 'object' && item.id) {
+                try {
+                    const rawMeta = localStorage.getItem('ht_seed_batches_meta_v1');
+                    const metaMap = rawMeta ? JSON.parse(rawMeta) : {};
+                    metaMap[String(item.id)] = item;
+                    localStorage.setItem('ht_seed_batches_meta_v1', JSON.stringify(metaMap));
+                } catch {}
+            }
             setSeedBatches(prev => {
-                const next = updateList(prev);
+                const next = healSeedBatches(updateList(prev));
                 try { localStorage.setItem('ht_seed_batches', JSON.stringify(next)); } catch (e) {}
                 return next;
             });
@@ -2096,6 +2173,8 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                         cleanItem.notes = packClientContractsIntoNotes(cleanItem.notes, cleanItem.contractDocuments);
                     } else if (table === 'suppliers') {
                         cleanItem.notes = packSupplierMetaIntoNotes(cleanItem);
+                    } else if (table === 'seed_batches') {
+                        cleanItem.notes = packSeedBatchMetaIntoNotes(cleanItem);
                     }
                     const rawPayload = toSnakeCase(cleanItem);
 

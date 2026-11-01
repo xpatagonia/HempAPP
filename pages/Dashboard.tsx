@@ -712,13 +712,16 @@ export default function Dashboard() {
   const [syncedMessage, setSyncedMessage] = useState<string | null>(null);
 
   const getTaskForAlert = (alert: PlotNDVIAlert) => {
-    return tasks.find(t => 
-      t.plotId === alert.plotId && 
-      (t.title.includes('NDVI CRÍTICO') || t.title.includes('NDVI SUPERIOR') || t.title.includes('ALERTA NDVI'))
+    const detId = `task-ndvi-${alert.plotId}`;
+    return tasks.find(t =>
+      t.id === detId ||
+      (t.plotId === alert.plotId &&
+        (t.title.includes('NDVI CRÍTICO') || t.title.includes('NDVI SUPERIOR') || t.title.includes('ALERTA NDVI')))
     );
   };
 
   const syncNDVITasks = async () => {
+    if (isSyncingTasks) return;
     setIsSyncingTasks(true);
     let createdCount = 0;
 
@@ -728,7 +731,7 @@ export default function Dashboard() {
         const plot = plots.find(p => p.id === alert.plotId);
         const isLow = alert.isCriticalLow;
         const newTask: Task = {
-          id: `task-ndvi-${alert.plotId}-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          id: `task-ndvi-${alert.plotId}`,
           title: alert.title,
           description: `${alert.description} Acción recomendada: ${alert.suggestedAction}`,
           status: 'Pendiente',
@@ -751,13 +754,6 @@ export default function Dashboard() {
     }
     setTimeout(() => setSyncedMessage(null), 4000);
   };
-
-  useEffect(() => {
-    const missing = criticalAlerts.filter(a => !getTaskForAlert(a));
-    if (missing.length > 0 && tasks.length > 0) {
-      syncNDVITasks();
-    }
-  }, [criticalAlerts.length, tasks.length]);
 
   const plotsAtRisk = useMemo(() => {
     const now = new Date().getTime();

@@ -129,9 +129,18 @@ export const subscribePlotTelemetry = (
   try {
     eventSource = new EventSource(sseUrl);
 
-    eventSource.onopen = () => {
+    eventSource.onopen = async () => {
       if (isCleanedUp) return;
       onStatusChange?.('connected', 'Conectado en vivo al backend Render (SSE Stream)');
+      try {
+        const latestRes = await fetch(`${baseUrl}/api/v1/telemetry/latest/${encodeURIComponent(plotId)}`);
+        if (latestRes.ok && !isCleanedUp) {
+          const initialData = await latestRes.json();
+          if (initialData && initialData.metrics) {
+            onRecord(initialData as LiveTelemetryRecord);
+          }
+        }
+      } catch {}
     };
 
     eventSource.onmessage = (event) => {

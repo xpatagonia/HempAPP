@@ -647,10 +647,15 @@ export const fetchLiveStacPassesForPlot = async (
   }
 
   const now = new Date();
-  const sowingDate = plot.sowingDate ? new Date(plot.sowingDate) : new Date(now.getTime() - 120 * 86400000);
-  // Ventana de búsqueda STAC desde 30 días antes de siembra hasta hoy (o últimos 180 días)
-  const startWindow = new Date(Math.min(sowingDate.getTime() - 15 * 86400000, now.getTime() - 150 * 86400000));
-  const datetimeRange = `${startWindow.toISOString()}/${now.toISOString()}`;
+  const cycleDays = variety?.cycleDays || 110;
+  const sowingDate = plot.sowingDate ? new Date(plot.sowingDate) : new Date(now.getTime() - cycleDays * 86400000);
+  // Ventana de búsqueda STAC ajustada al ciclo biológico real de la parcela [Siembra - 5d, Fin de Ciclo + 15d]
+  const startWindow = new Date(sowingDate.getTime() - 5 * 86400000);
+  const biologicalEndMs = plot.closedAt
+    ? new Date(plot.closedAt).getTime() + 5 * 86400000
+    : sowingDate.getTime() + (cycleDays + 15) * 86400000;
+  const endWindow = new Date(Math.min(now.getTime(), Math.max(startWindow.getTime() + 30 * 86400000, biologicalEndMs)));
+  const datetimeRange = `${startWindow.toISOString()}/${endWindow.toISOString()}`;
 
   let s2Features: any[] = [];
   let s1Features: any[] = [];
@@ -1032,12 +1037,14 @@ export const getPlotNDVIAlertStatus = (
 ): PlotNDVIAlert => {
   const passes = generateDetailedSatellitePasses(plot, variety, trials);
   
-  // Determinamos la pasada más representativa del monitoreo actual
+  // Determinamos la pasada más representativa del monitoreo actual dentro del ciclo biológico
+  const cycleDays = variety?.cycleDays || 110;
   let currentPass = passes[0];
   if (plot.sowingDate) {
-    const daysSinceSowing = Math.max(0, Math.floor((Date.now() - new Date(plot.sowingDate).getTime()) / 86400000));
+    const rawDays = Math.max(0, Math.floor((Date.now() - new Date(plot.sowingDate).getTime()) / 86400000));
+    const targetDay = rawDays <= cycleDays + 10 ? rawDays : Math.round(cycleDays * 0.72);
     currentPass = passes.reduce((prev, curr) => 
-      Math.abs(curr.cycleDay - daysSinceSowing) < Math.abs(prev.cycleDay - daysSinceSowing) ? curr : prev
+      Math.abs(curr.cycleDay - targetDay) < Math.abs(prev.cycleDay - targetDay) ? curr : prev
     , passes[0]);
   } else {
     const defaultIdx = Math.min(Math.floor(passes.length * 0.65), passes.length - 1);

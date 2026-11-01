@@ -151,8 +151,10 @@ async def stream_plot_telemetry_sse(plot_id: str):
 
     async def event_generator():
         try:
-            # Emitir la última lectura disponible como primer frame
+            # Emitir la última lectura disponible (o generar lectura base inicial) como primer frame
             initial = stream_manager.get_latest(plot_id)
+            if not initial:
+                initial = await get_latest_telemetry(plot_id)
             if initial:
                 yield f"data: {initial.model_dump_json()}\n\n"
 
