@@ -217,7 +217,9 @@ const PURGED_DEMO_IDS = new Set([
     'f52831a5-a2de-488b-8840-f3b986299e16',
     'f1a54586-9f69-4138-a1cd-41d034c703df',
     '23f56c7e-d381-43dd-86e0-8a52b9202e6a',
-    'd85c93f2-401c-45b5-b739-d8a53af6fa61'
+    'd85c93f2-401c-45b5-b739-d8a53af6fa61',
+    // Registro de monitoreo fuera de rango de campaña (2026-10-23) depurado
+    '7ddbb0ef-b6ed-4621-aa58-996f73093cc1'
 ]);
 
 const isPurgedDemoItem = (item: any): boolean => {
@@ -229,7 +231,8 @@ const isPurgedDemoItem = (item: any): boolean => {
         id.startsWith('demo-alert-') ||
         id.startsWith('senasa-res-') ||
         id.startsWith('app-2026-00') ||
-        (id.startsWith('task-ndvi-') && id.split('-').length > 7)
+        (id.startsWith('task-ndvi-') && id.split('-').length > 7) ||
+        (id.startsWith('auto-rain-') && !id.startsWith('auto-rain-loc-'))
     ) return true;
     if (item.plotId && (String(item.plotId) === '91ce0dcf-a760-41fe-82d5-52c438685944' || String(item.plotId) === '7076a122-77b5-49ce-80fa-890440c2d66c')) return true;
     return false;
@@ -325,6 +328,8 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
     const CONTRACTS_MARKER_START = '<!--HEMPC_CONTRACTS_JSON:';
     const CONTRACTS_MARKER_END = ':END_HEMPC_CONTRACTS-->';
+    const LEGACY_CONTRACTS_START = '/*__HEMPC_CONTRACTS_V1__:';
+    const LEGACY_CONTRACTS_END = '*/';
 
     const unpackClientContractsFromNotes = (
         rawNotes?: string,
@@ -347,12 +352,29 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             } catch {}
             return { cleanNotes, contractDocuments: existingDocs || [] };
         }
+        const legStart = str.indexOf(LEGACY_CONTRACTS_START);
+        const legEnd = str.lastIndexOf(LEGACY_CONTRACTS_END);
+        if (legStart !== -1 && legEnd !== -1 && legEnd > legStart) {
+            const cleanNotes = str.slice(0, legStart).trim();
+            const jsonPart = str.slice(legStart + LEGACY_CONTRACTS_START.length, legEnd);
+            try {
+                const parsed = JSON.parse(jsonPart);
+                if (Array.isArray(parsed)) {
+                    return {
+                        cleanNotes,
+                        contractDocuments: existingDocs && existingDocs.length > 0 ? existingDocs : parsed
+                    };
+                }
+            } catch {}
+            return { cleanNotes, contractDocuments: existingDocs || [] };
+        }
         return { cleanNotes: str, contractDocuments: existingDocs || [] };
     };
 
     const packClientContractsIntoNotes = (cleanNotes?: string, docs?: ClientContractDocument[]): string => {
         const base = String(cleanNotes || '')
             .replace(/<!--HEMPC_CONTRACTS_JSON:[\s\S]*?:END_HEMPC_CONTRACTS-->/g, '')
+            .replace(/\/\*__HEMPC_CONTRACTS_V1__:[\s\S]*?\*\//g, '')
             .trim();
         if (!docs || docs.length === 0) return base;
         return `${base}\n${CONTRACTS_MARKER_START}${JSON.stringify(docs)}${CONTRACTS_MARKER_END}`;
@@ -929,7 +951,12 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         const plotMap = new Map(DEMO_PLOTS.map(p => [String(p.id), p]));
 
         const healed: TrialRecord[] = (recordsList || [])
-            .filter(r => !deletedSet.has(String(r.id)) && !isPurgedDemoItem(r))
+            .filter(r => {
+                if (!r || deletedSet.has(String(r.id)) || isPurgedDemoItem(r)) return false;
+                // Filtrar registros fuera del cierre oficial de la Campaña 2025/2026 (01/04/2026) para las 44 parcelas de la campaña
+                if (plotMap.has(String(r.plotId)) && r.date && (r.date < '2025-10-01' || r.date > '2026-04-01')) return false;
+                return true;
+            })
             .map((r: TrialRecord) => {
                 const demoMatch = demoById.get(String(r.id));
                 const plot = plotMap.get(String(r.plotId));
@@ -944,6 +971,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 return {
                     ...(demoMatch || {}),
                     ...r,
+                    replicate: r.replicate ?? demoMatch?.replicate ?? 1,
                     time: r.time || demoMatch?.time || '10:00',
                     temperature: r.temperature != null ? Number(r.temperature) : (demoMatch?.temperature ?? 21.5),
                     humidity: r.humidity != null ? Number(r.humidity) : (demoMatch?.humidity ?? 46),
@@ -960,9 +988,21 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         const deletedSet = new Set(deletedMap['hydric_records'] || []);
         const demoById = new Map(DEMO_HYDRIC.map(h => [String(h.id), h]));
         const plotMap = new Map(DEMO_PLOTS.map(p => [String(p.id), p]));
+        const camp2526LocIds = new Set(['1766450631873', '1766444697119', '1766471895190', '1767119987079']);
 
         const healed: HydricRecord[] = (recordsList || [])
-            .filter(h => !deletedSet.has(String(h.id)) && !isPurgedDemoItem(h))
+            .filter(h => {
+                if (!h || deletedSet.has(String(h.id)) || isPurgedDemoItem(h)) return false;
+                const hid = String(h.id || '');
+                // Depurar duplicados automáticos antiguos a nivel microparcela
+                if (hid.startsWith('auto-rain-') && !hid.startsWith('auto-rain-loc-')) return false;
+                // Depurar registros de lluvia/riego fuera de la ventana de la Campaña 2025/2026 (2025-10-01 a 2026-04-01)
+                const locId = String(h.locationId || (h.plotId ? plotMap.get(String(h.plotId))?.locationId : '') || '');
+                if ((camp2526LocIds.has(locId) || hid.startsWith('auto-rain-')) && h.date && (h.date < '2025-10-01' || h.date > '2026-04-01')) {
+                    return false;
+                }
+                return true;
+            })
             .map((h: HydricRecord) => {
                 const demoMatch = demoById.get(String(h.id));
                 const plot = h.plotId ? plotMap.get(String(h.plotId)) : undefined;
@@ -1252,14 +1292,20 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
     useEffect(() => {
         try {
-            if (localStorage.getItem('ht_audit_seed_stock_v7_26_0_closed_01042026') !== 'true') {
-                // Sincronizar auditoría de stock (6.000 kg compra / 4.400 kg despachado / 1.600 kg stock final) y cierre de Campaña 25/26 el 01/04/2026
+            if (localStorage.getItem('ht_audit_production_ready_v7_27_0') !== 'true') {
+                // Depuración integral de caché local para inicio en producción (Cierre Campaña 25/26 el 01/04/2026)
                 localStorage.removeItem('ht_varieties');
                 localStorage.removeItem('ht_seed_batches');
                 localStorage.removeItem('ht_seed_movements');
                 localStorage.removeItem('ht_plots');
+                localStorage.removeItem('ht_trial_records');
+                localStorage.removeItem('ht_hydric_records');
                 localStorage.removeItem('ht_tasks');
                 localStorage.removeItem('ht_field_logs');
+                localStorage.removeItem('ht_users');
+                localStorage.removeItem('ht_clients');
+                localStorage.removeItem('ht_locations');
+                localStorage.removeItem('ht_projects');
 
                 setVarieties(DEMO_VARIETIES);
                 localStorage.setItem('ht_varieties', JSON.stringify(DEMO_VARIETIES));
@@ -1276,6 +1322,20 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 setPlots(healedPlts);
                 localStorage.setItem('ht_plots', JSON.stringify(healedPlts));
 
+                const healedTrials = healTrialRecords(DEMO_TRIALS);
+                setTrialRecords(healedTrials);
+                localStorage.setItem('ht_trial_records', JSON.stringify(healedTrials));
+
+                const healedHydric = healHydricRecords(DEMO_HYDRIC);
+                setHydricRecords(healedHydric);
+                localStorage.setItem('ht_hydric_records', JSON.stringify(healedHydric));
+
+                setTasks(DEMO_TASKS);
+                localStorage.setItem('ht_tasks', JSON.stringify(DEMO_TASKS));
+
+                setProjects(DEMO_PROJECTS);
+                localStorage.setItem('ht_projects', JSON.stringify(DEMO_PROJECTS));
+
                 const healedRes = healResources([]);
                 setResources(healedRes);
                 localStorage.setItem('ht_resources', JSON.stringify(healedRes));
@@ -1288,16 +1348,16 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 setSuppliers(healedSups);
                 localStorage.setItem('ht_suppliers', JSON.stringify(healedSups));
 
-                const healedUsrs = healUsersList(getStoredCollection('ht_users', DEMO_USERS_LIST));
+                const healedUsrs = healUsersList(DEMO_USERS_LIST);
                 setUsersList(healedUsrs);
                 localStorage.setItem('ht_users', JSON.stringify(healedUsrs));
 
-                const healedClis = healClients(getStoredCollection('ht_clients', DEMO_CLIENTS));
+                const healedClis = healClients(DEMO_CLIENTS);
                 setClients(healedClis);
                 localStorage.setItem('ht_clients', JSON.stringify(healedClis));
 
                 const healedLocs = healLocationsWithPolygons(
-                    getStoredCollection('ht_locations', DEMO_LOCATIONS),
+                    DEMO_LOCATIONS,
                     healedClis,
                     healedUsrs
                 );
@@ -1311,6 +1371,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 localStorage.setItem('ht_audit_seed_stock_v7_21_0_final', 'true');
                 localStorage.setItem('ht_audit_seed_stock_v7_25_0_final', 'true');
                 localStorage.setItem('ht_audit_seed_stock_v7_26_0_closed_01042026', 'true');
+                localStorage.setItem('ht_audit_production_ready_v7_27_0', 'true');
             }
         } catch {}
         refreshData();
@@ -2768,12 +2829,20 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 const sowStr = sowDates[0] || '2026-01-13';
                 const maxSowStr = sowDates[sowDates.length - 1] || sowStr;
                 const closedDates = locPlots.map(p => p.closedDate || p.closedAt).filter(Boolean) as string[];
+                const allLocPlotsClosed = locPlots.every(p => Boolean(p.closureConfirmed || p.closedDate || p.closedAt));
+                const existingLocRainCount = hydricRecords.filter(
+                    r => r.locationId === locId && String(r.id).startsWith('auto-rain-loc-')
+                ).length;
+
+                // Si todos los lotes del establecimiento ya cerraron su ciclo y ya cuentan con la serie pluvial consolidada, no volver a consultar APIs
+                if (allLocPlotsClosed && existingLocRainCount > 0 && !forcePersist) {
+                    continue;
+                }
+
                 const cycleEndIso = closedDates.length > 0
                     ? closedDates.sort()[closedDates.length - 1].split('T')[0]
-                    : new Date(new Date(`${maxSowStr}T00:00:00`).getTime() + 155 * 86400000)
-                        .toISOString()
-                        .split('T')[0];
-                const maxAllowedIso = cycleEndIso < todayIso ? cycleEndIso : todayIso;
+                    : '2026-04-01';
+                const maxAllowedIso = [cycleEndIso, todayIso, '2026-04-01'].sort()[0];
 
                 interface RainEventHourlyStat {
                     mm: number;
