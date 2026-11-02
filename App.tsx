@@ -33,6 +33,7 @@ import PublicTraceability from './pages/PublicTraceability';
 import PublicRegistration from './pages/PublicRegistration';
 import PhytosanitaryBook from './pages/PhytosanitaryBook';
 import FinancialReports from './pages/FinancialReports';
+import DocumentsVault from './pages/DocumentsVault';
 
 const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
   const { currentUser } = useAppContext();
@@ -68,6 +69,7 @@ export default function App() {
                   <Route path="/agro40" element={<Agriculture40 />} />
                   <Route path="/phytosanitary" element={<PhytosanitaryBook />} />
                   <Route path="/finances" element={<FinancialReports />} />
+                  <Route path="/documents" element={<DocumentsVault />} />
                   <Route path="/analytics" element={<Analytics />} />
                   <Route path="/integrity" element={<IntegrityCheck />} />
                   <Route path="/advisor" element={<AIAdvisor />} />

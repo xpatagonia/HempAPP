@@ -7,8 +7,9 @@ import {
   Save, Loader2, Phone, Briefcase, User as UserIcon, CloudOff, Link as LinkIcon, 
   UserCheck, Building, X, Sparkles, PlusCircle, Star, Search, Filter, FilterX,
   Send, RefreshCw, CheckCircle2, AlertTriangle, ShieldCheck, Users as UsersIcon,
-  Sprout, MapPin, Globe, Truck
+  Sprout, MapPin, Globe, Truck, Camera, FileText, Download, CreditCard, ZoomIn
 } from "lucide-react";
+import jsPDF from "jspdf";
 import { 
   sendUserProfileWelcomeEmail, 
   sendPasswordResetEmail, 
@@ -85,12 +86,150 @@ export default function Users() {
     clientId: "", 
     supplierId: "",
     supplierActorRole: "director_tecnico_obtentor",
-    isNetworkMember: false
+    isNetworkMember: false,
+    dniNumber: "",
+    dniFrenteUrl: "",
+    dniDorsoUrl: "",
+    dniVerified: false
   });
   const [entityLinkMode, setEntityLinkMode] = useState<"client" | "supplier" | "none">("client");
+  const [isCompressingDni, setIsCompressingDni] = useState<"frente" | "dorso" | null>(null);
+  const [dniPreviewUser, setDniPreviewUser] = useState<Partial<User> | null>(null);
 
   const isSuperAdmin = currentUser?.role === "super_admin";
   const isAdmin = currentUser?.role === "admin" || isSuperAdmin;
+
+  const compressDniImageToDataUrl = (file: File, maxDimension = 1280, quality = 0.78): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("No se pudo leer la imagen del DNI."));
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error("Formato de imagen inválido."));
+        img.onload = () => {
+          let { width, height } = img;
+          if (width > maxDimension || height > maxDimension) {
+            if (width >= height) {
+              height = Math.round((height * maxDimension) / width);
+              width = maxDimension;
+            } else {
+              width = Math.round((width * maxDimension) / height);
+              height = maxDimension;
+            }
+          }
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            resolve(String(reader.result || ""));
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL("image/jpeg", quality));
+        };
+        img.src = String(reader.result || "");
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleDniPhotoSelect = async (side: "frente" | "dorso", e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsCompressingDni(side);
+    try {
+      const compressed = await compressDniImageToDataUrl(file);
+      const todayIso = new Date().toISOString().split("T")[0];
+      setFormData(prev => ({
+        ...prev,
+        ...(side === "frente" ? { dniFrenteUrl: compressed } : { dniDorsoUrl: compressed }),
+        dniUpdatedAt: todayIso
+      }));
+    } catch (err: any) {
+      setUserActionToast({
+        show: true,
+        success: false,
+        message: err?.message || "No se pudo procesar la foto del DNI."
+      });
+    } finally {
+      setIsCompressingDni(null);
+      e.target.value = "";
+    }
+  };
+
+  const handleDownloadUserDniPdf = (targetUser: Partial<User>) => {
+    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, 210, 32, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text("LEGAJO DE IDENTIDAD COMPLEMENTARIA — DNI FRENTE Y DORSO", 14, 14);
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.text("RED COOPERATIVA HEMPC / NUCLEUS TRACE · AUDITORÍA DOCUMENTAL DE SOCIOS Y OPERADORES", 14, 21);
+    doc.text(`Fecha de Emisión: ${new Date().toLocaleDateString("es-AR")} · N° Documento: ${targetUser.dniNumber || "S/D"}`, 14, 27);
+
+    doc.setTextColor(15, 23, 42);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text(`Titular / Usuario: ${targetUser.name || "Sin Nombre"}`, 14, 42);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9.5);
+    doc.text(`Correo Electrónico: ${targetUser.email || "-"}   |   Rol: ${targetUser.role || "-"}   |   Cargo: ${targetUser.jobTitle || "-"}`, 14, 48);
+    doc.text(`Organización / Establecimiento: ${targetUser.organizationName || "Red Cooperativa Nucleus"}`, 14, 54);
+    doc.text(`Estado de Validación DNI: ${targetUser.dniFrenteUrl && targetUser.dniDorsoUrl ? "LEGAJO COMPLETO (FRENTE Y DORSO)" : "INCOMPLETO"}`, 14, 60);
+
+    doc.setDrawColor(203, 213, 225);
+    doc.line(14, 64, 196, 64);
+
+    // Frente
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.text("1. FOTOGRAFÍA DNI — ANVERSO (FRENTE)", 14, 72);
+    doc.rect(14, 75, 135, 85);
+    if (targetUser.dniFrenteUrl) {
+      try {
+        doc.addImage(targetUser.dniFrenteUrl, "JPEG", 16, 77, 131, 81);
+      } catch {
+        doc.setFont("helvetica", "italic");
+        doc.text("Imagen adjunta disponible en el sistema.", 20, 115);
+      }
+    } else {
+      doc.setFont("helvetica", "italic");
+      doc.setTextColor(148, 163, 184);
+      doc.text("Sin captura de DNI Frente registrada.", 24, 118);
+      doc.setTextColor(15, 23, 42);
+    }
+
+    // Dorso
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.text("2. FOTOGRAFÍA DNI — REVERSO (DORSO)", 14, 172);
+    doc.rect(14, 175, 135, 85);
+    if (targetUser.dniDorsoUrl) {
+      try {
+        doc.addImage(targetUser.dniDorsoUrl, "JPEG", 16, 177, 131, 81);
+      } catch {
+        doc.setFont("helvetica", "italic");
+        doc.text("Imagen adjunta disponible en el sistema.", 20, 215);
+      }
+    } else {
+      doc.setFont("helvetica", "italic");
+      doc.setTextColor(148, 163, 184);
+      doc.text("Sin captura de DNI Dorso registrada.", 24, 218);
+      doc.setTextColor(15, 23, 42);
+    }
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139);
+    doc.text("Documento confidencial respaldado en la Bóveda Documental de Trazabilidad HempC (Cumplimiento ARICCAME / INASE).", 14, 278);
+
+    const safeName = String(targetUser.name || "usuario").replace(/[^a-zA-Z0-9_-]/g, "_");
+    doc.save(`Legajo_DNI_${safeName}.pdf`);
+  };
 
   // Filtrado de usuarios
   const filteredUsers = useMemo(() => {
@@ -227,7 +366,12 @@ export default function Users() {
         supplierId: isLinkingSupplier ? (formData.supplierId || null) : null,
         supplierActorRole: isLinkingSupplier ? (formData.supplierActorRole || "director_tecnico_obtentor") : undefined,
         memberType: isLinkingSupplier ? "Proveedor_Homologado" : formData.memberType,
-        isNetworkMember: formData.isNetworkMember || Boolean(isLinkingClient || isLinkingSupplier)
+        isNetworkMember: formData.isNetworkMember || Boolean(isLinkingClient || isLinkingSupplier),
+        dniNumber: formData.dniNumber?.trim() || "",
+        dniFrenteUrl: formData.dniFrenteUrl || "",
+        dniDorsoUrl: formData.dniDorsoUrl || "",
+        dniUpdatedAt: (formData.dniFrenteUrl || formData.dniDorsoUrl) ? (formData.dniUpdatedAt || new Date().toISOString().split("T")[0]) : undefined,
+        dniVerified: Boolean(formData.dniVerified)
       };
 
       let finalPassword = formData.password;
@@ -839,6 +983,7 @@ export default function Users() {
                 <th className="px-6 py-5">Rol & Jerarquía</th>
                 <th className="px-6 py-5">Establecimiento Vinculado</th>
                 <th className="px-6 py-5">Alcance de Parcelas (Auditoría)</th>
+                <th className="px-6 py-5">Legajo DNI (Frente / Dorso)</th>
                 <th className="px-6 py-5">Seguridad</th>
                 <th className="px-6 py-5 text-right">Gestión & Simulación</th>
               </tr>
@@ -846,7 +991,7 @@ export default function Users() {
             <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
               {filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="p-10 text-center text-gray-400 italic font-medium">
+                  <td colSpan={7} className="p-10 text-center text-gray-400 italic font-medium">
                     No se encontraron usuarios en el padrón cooperativo.
                   </td>
                 </tr>
@@ -974,6 +1119,69 @@ export default function Users() {
                           </p>
                         </div>
                       ) : null}
+                    </td>
+
+                    {/* Legajo DNI Frente y Dorso */}
+                    <td className="px-6 py-5">
+                      {(() => {
+                        const hasFrente = Boolean(user.dniFrenteUrl);
+                        const hasDorso = Boolean(user.dniDorsoUrl);
+                        const isComplete = hasFrente && hasDorso;
+                        const isPartial = (hasFrente || hasDorso) && !isComplete;
+                        return (
+                          <div className="space-y-1.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[10px] font-mono font-black uppercase border ${
+                                isComplete
+                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800"
+                                  : isPartial
+                                  ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800"
+                                  : "bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700"
+                              }`}>
+                                <CreditCard size={11} />
+                                {isComplete ? "DNI Completo" : isPartial ? "DNI Parcial" : "Sin DNI"}
+                              </span>
+                              {user.dniNumber && (
+                                <span className="text-[10px] font-mono font-bold text-slate-600 dark:text-slate-300">
+                                  N° {user.dniNumber}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              {(hasFrente || hasDorso) ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => setDniPreviewUser(user)}
+                                    className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-emerald-50 dark:bg-slate-800 dark:hover:bg-emerald-950/50 text-slate-700 dark:text-slate-200 text-[9px] font-mono font-bold uppercase flex items-center gap-1 border border-slate-200 dark:border-slate-700 cursor-pointer"
+                                  >
+                                    <ZoomIn size={11} className="text-emerald-600" />
+                                    <span>Ver Frente/Dorso</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDownloadUserDniPdf(user)}
+                                    className="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[9px] font-mono font-black uppercase flex items-center gap-1 cursor-pointer"
+                                    title="Descargar Legajo DNI en PDF"
+                                  >
+                                    <Download size={10} />
+                                    <span>PDF</span>
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleEdit(user)}
+                                  className="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 text-[9px] font-mono font-black uppercase flex items-center gap-1 cursor-pointer"
+                                >
+                                  <Camera size={11} />
+                                  <span>Cargar DNI Frente/Dorso</span>
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </td>
 
                     {/* Estado de Credencial */}
@@ -1490,6 +1698,181 @@ export default function Users() {
                 </div>
               )}
 
+              {/* DOCUMENTACIÓN COMPLEMENTARIA DE IDENTIDAD: DNI FRENTE Y DORSO */}
+              <div className="bg-emerald-50/60 dark:bg-emerald-950/20 p-5 rounded-3xl border border-emerald-200/80 dark:border-emerald-800/60 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-emerald-600 text-white">
+                      <CreditCard size={18} />
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white">
+                        Documentación Complementaria de Identidad (DNI Frente y Dorso)
+                      </h3>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Capturá desde la cámara del celular o subí las fotos del DNI para el legajo oficial del socio/usuario.
+                      </p>
+                    </div>
+                  </div>
+                  {(formData.dniFrenteUrl || formData.dniDorsoUrl) && (
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadUserDniPdf(formData)}
+                      className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-mono font-black uppercase flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Download size={13} />
+                      <span>Descargar Legajo DNI (PDF)</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest ml-1 block mb-1">
+                      N° de DNI / Documento de Identidad
+                    </label>
+                    <input
+                      type="text"
+                      className={inputClass}
+                      value={formData.dniNumber || ""}
+                      onChange={e => setFormData({ ...formData, dniNumber: e.target.value })}
+                      placeholder="Ej: 32.456.789"
+                    />
+                  </div>
+                  <div className="flex items-end">
+                    <label className="w-full p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(formData.dniVerified)}
+                        onChange={e => setFormData({ ...formData, dniVerified: e.target.checked })}
+                        className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500 cursor-pointer"
+                      />
+                      <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                        Identidad verificada en padrón oficial ARICCAME
+                      </span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* DNI FRENTE */}
+                  <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-mono font-black uppercase text-emerald-700 dark:text-emerald-400">
+                        1. Foto DNI — Frente (Anverso)
+                      </span>
+                      {formData.dniFrenteUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setFormData({ ...formData, dniFrenteUrl: "" })}
+                          className="text-[10px] font-mono font-bold text-red-500 hover:underline cursor-pointer"
+                        >
+                          Quitar
+                        </button>
+                      )}
+                    </div>
+
+                    {formData.dniFrenteUrl ? (
+                      <div className="relative rounded-xl overflow-hidden border border-emerald-200 dark:border-emerald-800 bg-slate-950 h-36">
+                        <img
+                          src={formData.dniFrenteUrl}
+                          alt="DNI Frente"
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
+                    ) : (
+                      <div className="h-36 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center text-slate-400 p-3 text-center">
+                        <CreditCard size={26} className="mb-1 opacity-60" />
+                        <span className="text-[11px] font-bold">Sin imagen de DNI Frente</span>
+                        <span className="text-[10px]">Subí archivo o usá la cámara del celular</span>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-mono font-black uppercase flex items-center justify-center gap-1.5 cursor-pointer text-center">
+                        <Camera size={13} />
+                        <span>{isCompressingDni === "frente" ? "Procesando..." : "Cámara Celular"}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          className="hidden"
+                          onChange={e => handleDniPhotoSelect("frente", e)}
+                        />
+                      </label>
+                      <label className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-[10px] font-mono font-black uppercase flex items-center justify-center gap-1.5 cursor-pointer text-center">
+                        <FileText size={13} />
+                        <span>Subir Archivo</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={e => handleDniPhotoSelect("frente", e)}
+                        />
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* DNI DORSO */}
+                  <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-mono font-black uppercase text-emerald-700 dark:text-emerald-400">
+                        2. Foto DNI — Dorso (Reverso)
+                      </span>
+                      {formData.dniDorsoUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setFormData({ ...formData, dniDorsoUrl: "" })}
+                          className="text-[10px] font-mono font-bold text-red-500 hover:underline cursor-pointer"
+                        >
+                          Quitar
+                        </button>
+                      )}
+                    </div>
+
+                    {formData.dniDorsoUrl ? (
+                      <div className="relative rounded-xl overflow-hidden border border-emerald-200 dark:border-emerald-800 bg-slate-950 h-36">
+                        <img
+                          src={formData.dniDorsoUrl}
+                          alt="DNI Dorso"
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
+                    ) : (
+                      <div className="h-36 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center text-slate-400 p-3 text-center">
+                        <CreditCard size={26} className="mb-1 opacity-60" />
+                        <span className="text-[11px] font-bold">Sin imagen de DNI Dorso</span>
+                        <span className="text-[10px]">Subí archivo o usá la cámara del celular</span>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-mono font-black uppercase flex items-center justify-center gap-1.5 cursor-pointer text-center">
+                        <Camera size={13} />
+                        <span>{isCompressingDni === "dorso" ? "Procesando..." : "Cámara Celular"}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          className="hidden"
+                          onChange={e => handleDniPhotoSelect("dorso", e)}
+                        />
+                      </label>
+                      <label className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-[10px] font-mono font-black uppercase flex items-center justify-center gap-1.5 cursor-pointer text-center">
+                        <FileText size={13} />
+                        <span>Subir Archivo</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={e => handleDniPhotoSelect("dorso", e)}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* Botones de acción */}
               <div className="flex justify-end space-x-3 pt-6 border-t dark:border-slate-800">
                 <button 
@@ -1509,6 +1892,96 @@ export default function Users() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL LIGHTBOX DE PREVISUALIZACIÓN DE DNI FRENTE Y DORSO */}
+      {dniPreviewUser && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl max-w-3xl w-full p-6 md:p-8 border border-slate-200 dark:border-slate-800 space-y-6">
+            <div className="flex items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-2xl bg-emerald-600 text-white">
+                  <CreditCard size={22} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black uppercase text-slate-900 dark:text-white">
+                    Legajo de Identidad DNI — {dniPreviewUser.name}
+                  </h3>
+                  <p className="text-xs font-mono text-slate-500 dark:text-slate-400">
+                    DNI N° {dniPreviewUser.dniNumber || "No especificado"} · Actualizado: {dniPreviewUser.dniUpdatedAt || "Reciente"}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleDownloadUserDniPdf(dniPreviewUser)}
+                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-mono font-black uppercase flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Download size={14} />
+                  <span>Descargar PDF</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDniPreviewUser(null)}
+                  className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 cursor-pointer"
+                >
+                  <X size={22} />
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-mono font-black uppercase text-emerald-700 dark:text-emerald-400">
+                    1. DNI Frente (Anverso)
+                  </span>
+                  {dniPreviewUser.dniFrenteUrl && (
+                    <a
+                      href={dniPreviewUser.dniFrenteUrl}
+                      download={`DNI_Frente_${dniPreviewUser.name || "socio"}.jpg`}
+                      className="text-[11px] font-mono font-bold text-emerald-600 hover:underline flex items-center gap-1"
+                    >
+                      <Download size={12} /> Descargar JPG
+                    </a>
+                  )}
+                </div>
+                <div className="h-60 rounded-2xl bg-slate-950 border border-slate-200 dark:border-slate-800 overflow-hidden flex items-center justify-center">
+                  {dniPreviewUser.dniFrenteUrl ? (
+                    <img src={dniPreviewUser.dniFrenteUrl} alt="DNI Frente" className="w-full h-full object-contain" />
+                  ) : (
+                    <span className="text-xs font-mono text-slate-400">Sin imagen de frente cargada</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-mono font-black uppercase text-emerald-700 dark:text-emerald-400">
+                    2. DNI Dorso (Reverso)
+                  </span>
+                  {dniPreviewUser.dniDorsoUrl && (
+                    <a
+                      href={dniPreviewUser.dniDorsoUrl}
+                      download={`DNI_Dorso_${dniPreviewUser.name || "socio"}.jpg`}
+                      className="text-[11px] font-mono font-bold text-emerald-600 hover:underline flex items-center gap-1"
+                    >
+                      <Download size={12} /> Descargar JPG
+                    </a>
+                  )}
+                </div>
+                <div className="h-60 rounded-2xl bg-slate-950 border border-slate-200 dark:border-slate-800 overflow-hidden flex items-center justify-center">
+                  {dniPreviewUser.dniDorsoUrl ? (
+                    <img src={dniPreviewUser.dniDorsoUrl} alt="DNI Dorso" className="w-full h-full object-contain" />
+                  ) : (
+                    <span className="text-xs font-mono text-slate-400">Sin imagen de dorso cargada</span>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}

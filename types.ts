@@ -147,6 +147,11 @@ export interface User {
   invitedAt?: string;
   invitationEmailSent?: boolean;
   lastInvitationSentAt?: string;
+  dniNumber?: string;
+  dniFrenteUrl?: string;
+  dniDorsoUrl?: string;
+  dniUpdatedAt?: string;
+  dniVerified?: boolean;
 }
 
 export type HempLicenseCategory = 
@@ -625,6 +630,8 @@ export interface TrialRecord {
   createdByName?: string;
   lightHours?: number;
   lunarPhase?: string;
+  sampleCode?: string;
+  samplePhotoUrl?: string;
 }
 
 export interface FieldLog {
@@ -634,6 +641,11 @@ export interface FieldLog {
   time?: string; 
   note: string;
   photoUrl?: string;
+  photoUrls?: string[];
+  sampleCode?: string;
+  sampleType?: 'Muestra Fenológica / Biometría' | 'Inspección Sanitaria / MIP' | 'Muestra de Suelo / Raíz' | 'Muestra Pre-Cosecha / Tricomas' | 'Observación General';
+  phenologicalStage?: string;
+  operatorName?: string;
 }
 
 export interface Resource {
@@ -1117,4 +1129,31 @@ export interface LiveTelemetryRecord {
 
 export type TelemetryStreamStatus = 'connecting' | 'connected' | 'simulated' | 'disconnected' | 'error';
 
+export type VaultDocumentCategory =
+  | 'TAD_ARICCAME'
+  | 'LICENCIA_OFICIAL'
+  | 'CONTRATO_SOCIO'
+  | 'FACTURA_REMITO'
+  | 'DNI_IDENTIDAD'
+  | 'MUESTRA_CAMPO'
+  | 'OTRO';
 
+export interface VaultDocument {
+  id: string;
+  title: string;
+  category: VaultDocumentCategory;
+  documentCode?: string;
+  clientId?: string;
+  clientName?: string;
+  locationId?: string;
+  plotId?: string;
+  userId?: string;
+  fileName: string;
+  fileType: 'pdf' | 'image';
+  fileDataUrl: string;
+  fileSizeKb?: number;
+  uploadedAt: string;
+  uploadedBy: string;
+  notes?: string;
+  isOfficial?: boolean;
+}

@@ -4,7 +4,7 @@ import {
   User, Location, Plot, TrialRecord, Task, Project, Variety, 
   Client, ClientContractDocument, Supplier, SeedBatch, SeedMovement, Resource, 
   StoragePoint, HydricRecord, FieldLog, OperationalExpense, ExpenseAuditStatus,
-  HempStageId, AgrochemicalApplication
+  HempStageId, AgrochemicalApplication, VaultDocument
 } from '../types';
 import { 
   ADMIN_USER, DEMO_USER, DEMO_USERS_LIST, DEMO_CLIENTS, DEMO_VARIETIES, DEMO_LOCATIONS, DEMO_PLOTS, 
@@ -118,6 +118,9 @@ interface AppContextType {
   addAgrochemicalApplication: (app: AgrochemicalApplication) => Promise<boolean>;
   updateAgrochemicalApplication: (app: AgrochemicalApplication) => Promise<boolean>;
   deleteAgrochemicalApplication: (id: string) => Promise<boolean>;
+  vaultDocuments: VaultDocument[];
+  addVaultDocument: (doc: VaultDocument) => Promise<boolean>;
+  deleteVaultDocument: (id: string) => Promise<boolean>;
   isRefreshing: boolean;
   refreshData: () => Promise<void>;
   activeCampaign: string;
@@ -302,7 +305,12 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             memberType: u.memberType || savedUserMeta.memberType || demoMatch?.memberType,
             organizationName: u.organizationName || savedUserMeta.organizationName || demoMatch?.organizationName,
             clientId: u.clientId !== undefined ? u.clientId : (savedUserMeta.clientId !== undefined ? savedUserMeta.clientId : demoMatch?.clientId),
-            isNetworkMember: u.isNetworkMember !== undefined ? u.isNetworkMember : (savedUserMeta.isNetworkMember ?? demoMatch?.isNetworkMember ?? false)
+            isNetworkMember: u.isNetworkMember !== undefined ? u.isNetworkMember : (savedUserMeta.isNetworkMember ?? demoMatch?.isNetworkMember ?? false),
+            dniNumber: u.dniNumber || savedUserMeta.dniNumber,
+            dniFrenteUrl: u.dniFrenteUrl !== undefined ? u.dniFrenteUrl : savedUserMeta.dniFrenteUrl,
+            dniDorsoUrl: u.dniDorsoUrl !== undefined ? u.dniDorsoUrl : savedUserMeta.dniDorsoUrl,
+            dniUpdatedAt: u.dniUpdatedAt || savedUserMeta.dniUpdatedAt,
+            dniVerified: u.dniVerified !== undefined ? u.dniVerified : savedUserMeta.dniVerified
         };
     };
 
@@ -1184,8 +1192,20 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 const cosOmega = Math.max(-0.99, Math.min(0.99, -Math.tan(latRad) * Math.tan(decl)));
                 const computedLight = Number(((2 * Math.acos(cosOmega) * 180 / Math.PI) / 15).toFixed(2));
 
+                let savedTrialMeta: Partial<TrialRecord> = {};
+                if (typeof window !== 'undefined') {
+                    try {
+                        const rawMeta = localStorage.getItem('ht_trial_records_meta_v1');
+                        if (rawMeta) {
+                            const map = JSON.parse(rawMeta) || {};
+                            savedTrialMeta = map[String(r.id)] || {};
+                        }
+                    } catch {}
+                }
+
                 return {
                     ...(demoMatch || {}),
+                    ...savedTrialMeta,
                     ...r,
                     replicate: r.replicate ?? demoMatch?.replicate ?? 1,
                     time: r.time || demoMatch?.time || '10:00',
@@ -1193,10 +1213,39 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                     humidity: r.humidity != null ? Number(r.humidity) : (demoMatch?.humidity ?? 46),
                     lightHours: (r.lightHours == null || r.lightHours === 18) ? (demoMatch?.lightHours || computedLight) : Number(r.lightHours),
                     lunarPhase: r.lunarPhase || demoMatch?.lunarPhase || 'Creciente',
+                    sampleCode: r.sampleCode || savedTrialMeta.sampleCode,
+                    samplePhotoUrl: r.samplePhotoUrl || savedTrialMeta.samplePhotoUrl,
                 };
             });
 
         return healed;
+    };
+
+    const healFieldLogs = (logsList: FieldLog[]): FieldLog[] => {
+        const deletedMap = getDeletedIdsMap();
+        const deletedSet = new Set(deletedMap['field_logs'] || []);
+        let savedLogMetaMap: Record<string, Partial<FieldLog>> = {};
+        if (typeof window !== 'undefined') {
+            try {
+                const rawMeta = localStorage.getItem('ht_field_logs_meta_v1');
+                if (rawMeta) savedLogMetaMap = JSON.parse(rawMeta) || {};
+            } catch {}
+        }
+        return (logsList || [])
+            .filter(l => l && !deletedSet.has(String(l.id)) && !isPurgedDemoItem(l))
+            .map(l => {
+                const meta = savedLogMetaMap[String(l.id)] || {};
+                return {
+                    ...meta,
+                    ...l,
+                    photoUrl: l.photoUrl || meta.photoUrl,
+                    photoUrls: l.photoUrls || meta.photoUrls,
+                    sampleCode: l.sampleCode || meta.sampleCode,
+                    sampleType: l.sampleType || meta.sampleType,
+                    phenologicalStage: l.phenologicalStage || meta.phenologicalStage,
+                    operatorName: l.operatorName || meta.operatorName,
+                };
+            });
     };
 
     const healHydricRecords = (recordsList: HydricRecord[]): HydricRecord[] => {
@@ -1500,10 +1549,13 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         healHydricRecords(getStoredCollection('ht_hydric_records', DEMO_HYDRIC))
     );
     const [logs, setLogs] = useState<FieldLog[]>(() => 
-        getStoredCollection('ht_field_logs', [])
+        healFieldLogs(getStoredCollection('ht_field_logs', []))
     );
     const [agrochemicalApplications, setAgrochemicalApplications] = useState<AgrochemicalApplication[]>(() =>
         healAgrochemicalApplications(getStoredCollection('ht_agrochemical_apps', DEMO_AGROCHEMICAL_APPLICATIONS))
+    );
+    const [vaultDocuments, setVaultDocuments] = useState<VaultDocument[]>(() =>
+        getStoredCollection('ht_vault_documents_v1', [])
     );
 
     useEffect(() => {
@@ -1757,7 +1809,11 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                         setHydricRecords(healed);
                         try { localStorage.setItem('ht_hydric_records', JSON.stringify(healed)); } catch (e) {}
                     }, DEMO_HYDRIC),
-                    fetchTable('field_logs', setLogs),
+                    fetchTable('field_logs', (data: any[]) => {
+                        const healed = healFieldLogs(data || []);
+                        setLogs(healed);
+                        try { localStorage.setItem('ht_field_logs', JSON.stringify(healed)); } catch (e) {}
+                    }),
                 ]);
             } else {
                 // Modo Autónomo / Local: respeta fielmente los datos del usuario en memoria/localStorage
@@ -2070,8 +2126,20 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 return next;
             });
         } else if (table === 'trial_records') {
+            if (action !== 'delete' && item && typeof item === 'object' && item.id) {
+                try {
+                    const rawMeta = localStorage.getItem('ht_trial_records_meta_v1');
+                    const metaMap = rawMeta ? JSON.parse(rawMeta) : {};
+                    metaMap[String(item.id)] = {
+                        ...(metaMap[String(item.id)] || {}),
+                        sampleCode: item.sampleCode,
+                        samplePhotoUrl: item.samplePhotoUrl
+                    };
+                    localStorage.setItem('ht_trial_records_meta_v1', JSON.stringify(metaMap));
+                } catch {}
+            }
             setTrialRecords(prev => {
-                const next = updateList(prev);
+                const next = healTrialRecords(updateList(prev));
                 try { localStorage.setItem('ht_trial_records', JSON.stringify(next)); } catch (e) {}
                 return next;
             });
@@ -2096,6 +2164,11 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 try { localStorage.setItem('ht_users', JSON.stringify(next)); } catch (e) {}
                 return next;
             });
+            if (action !== 'delete' && item && typeof item === 'object' && currentUser && String(currentUser.id) === String(item.id)) {
+                const healedCurrent = healSingleUser({ ...currentUser, ...item });
+                setCurrentUser(healedCurrent);
+                try { localStorage.setItem('ht_session_user', JSON.stringify(healedCurrent)); } catch {}
+            }
         } else if (table === 'projects') {
             setProjects(prev => {
                 const next = updateList(prev);
@@ -2200,8 +2273,24 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 return next;
             });
         } else if (table === 'field_logs') {
+            if (action !== 'delete' && item && typeof item === 'object' && item.id) {
+                try {
+                    const rawMeta = localStorage.getItem('ht_field_logs_meta_v1');
+                    const metaMap = rawMeta ? JSON.parse(rawMeta) : {};
+                    metaMap[String(item.id)] = {
+                        ...(metaMap[String(item.id)] || {}),
+                        photoUrl: item.photoUrl,
+                        photoUrls: item.photoUrls,
+                        sampleCode: item.sampleCode,
+                        sampleType: item.sampleType,
+                        phenologicalStage: item.phenologicalStage,
+                        operatorName: item.operatorName
+                    };
+                    localStorage.setItem('ht_field_logs_meta_v1', JSON.stringify(metaMap));
+                } catch {}
+            }
             setLogs(prev => {
-                const next = updateList(prev);
+                const next = healFieldLogs(updateList(prev));
                 try { localStorage.setItem('ht_field_logs', JSON.stringify(next)); } catch (e) {}
                 return next;
             });
@@ -3447,6 +3536,23 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             },
             updateAgrochemicalApplication: (app) => crud('agrochemical_apps', app, 'update'),
             deleteAgrochemicalApplication: (id) => crud('agrochemical_apps', id, 'delete'),
+            vaultDocuments,
+            addVaultDocument: async (doc: VaultDocument) => {
+                setVaultDocuments(prev => {
+                    const next = [doc, ...prev.filter(d => d.id !== doc.id)];
+                    try { localStorage.setItem('ht_vault_documents_v1', JSON.stringify(next)); } catch {}
+                    return next;
+                });
+                return true;
+            },
+            deleteVaultDocument: async (id: string) => {
+                setVaultDocuments(prev => {
+                    const next = prev.filter(d => d.id !== id);
+                    try { localStorage.setItem('ht_vault_documents_v1', JSON.stringify(next)); } catch {}
+                    return next;
+                });
+                return true;
+            },
             isRefreshing, refreshData,
             activeCampaign, setActiveCampaign,
             closePlotCycle, reopenPlotCycle,

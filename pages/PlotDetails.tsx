@@ -25,6 +25,7 @@ import { sendAgronomicAlertEmail } from '../src/services/emailNotificationServic
 import { formatPlotSeedLoad } from '../src/utils/seedTraceability';
 import { DateInputAr } from '../src/components/DateInputAr';
 import { formatDateAr } from '../src/utils/dateFormat';
+import jsPDF from 'jspdf';
 
 // ============================================================================
 // MOTOR ASTRONÓMICO Y FOTOPERIÓDICO DETERMINÍSTICO (NOAA SOLAR CALCULATOR)
@@ -223,17 +224,22 @@ export default function PlotDetails() {
   const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
-  // Estado Bitácora Multimedia (Escritorio + Cámara Celular + Edición CRUD)
+  // Estado Bitácora Multimedia (Escritorio + Cámara Celular + Edición CRUD + Muestras de Campo)
   const [editingLogId, setEditingLogId] = useState<string | null>(null);
   const [newLogNote, setNewLogNote] = useState('');
   const [newLogPhoto, setNewLogPhoto] = useState('');
   const [newLogDate, setNewLogDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [newLogTime, setNewLogTime] = useState(() => new Date().toTimeString().slice(0, 5));
+  const [newLogSampleCode, setNewLogSampleCode] = useState('');
+  const [newLogSampleType, setNewLogSampleType] = useState<NonNullable<FieldLog['sampleType']>>('Muestra Fenológica / Biometría');
+  const [newLogPhenologicalStage, setNewLogPhenologicalStage] = useState('Floración');
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const fileInputDesktopRef = useRef<HTMLInputElement | null>(null);
   const fileInputMobileCameraRef = useRef<HTMLInputElement | null>(null);
+  const recordSampleCameraRef = useRef<HTMLInputElement | null>(null);
+  const recordSampleGalleryRef = useRef<HTMLInputElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
 
@@ -711,7 +717,9 @@ export default function PlotDetails() {
     seedYield: 0,
     seedQualityGermination: 93,
     seedQualityNonConformity: 0,
-    notes: ''
+    notes: '',
+    sampleCode: '',
+    samplePhotoUrl: ''
   });
 
   // Sincroniza condiciones ambientales e iluminación solar local para cualquier fecha de muestreo
@@ -902,10 +910,67 @@ export default function PlotDetails() {
       seedYield: 0,
       seedQualityGermination: 93,
       seedQualityNonConformity: 0,
-      notes: ''
+      notes: '',
+      sampleCode: `MUE-${(plot?.name || 'PAR').replace(/[^a-zA-Z0-9]/g, '').slice(0, 5).toUpperCase()}-${todayStr.replace(/-/g, '')}`,
+      samplePhotoUrl: ''
     });
     setIsRecordModalOpen(true);
     syncEnvironmentalData(todayStr, data => setRecordForm(prev => ({ ...prev, ...data })));
+  };
+
+  const handleDownloadSamplePdf = (log: FieldLog) => {
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, 210, 32, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.text('ACTA DE MUESTRA DE CAMPO & REGISTRO FOTOGRÁFICO DE PARCELA', 14, 14);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`RED COOPERATIVA HEMPC · BITÁCORA MULTIMEDIA DE TRAZABILIDAD GACP`, 14, 21);
+    doc.text(`Código de Muestra: ${log.sampleCode || `MUE-${String(log.id).slice(0, 8).toUpperCase()}`} · Fecha: ${formatDateAr(log.date)} ${log.time || ''} hs`, 14, 27);
+
+    doc.setTextColor(15, 23, 42);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10.5);
+    doc.text(`Parcela / Unidad Productiva: ${plot?.name || '-'}   |   Variedad: ${variety?.name || '-'}`, 14, 42);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9.5);
+    doc.text(`Establecimiento: ${location?.name || '-'} (${location?.city || ''}, ${location?.province || ''})`, 14, 48);
+    doc.text(`Tipo de Muestra: ${log.sampleType || 'Muestra Fenológica / Biometría'}   |   Estadio: ${log.phenologicalStage || cycleSync.currentStage}`, 14, 54);
+    doc.text(`Operador / Responsable de Toma: ${log.operatorName || plot?.samplingResponsibleName || currentUser?.name || '-'}`, 14, 60);
+    doc.text(`Coordenadas GPS Lote: Lat ${activeCoords.lat.toFixed(6)}, Lng ${activeCoords.lng.toFixed(6)}`, 14, 66);
+
+    doc.setDrawColor(203, 213, 225);
+    doc.line(14, 70, 196, 70);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.text('OBSERVACIÓN AGRONÓMICA / DIAGNÓSTICO DE LA MUESTRA:', 14, 78);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9.5);
+    const splitNotes = doc.splitTextToSize(log.note || 'Sin observaciones adicionales.', 180);
+    doc.text(splitNotes, 14, 84);
+
+    if (log.photoUrl) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.text('EVIDENCIA FOTOGRÁFICA CAPTURADA EN CAMPO:', 14, 108);
+      doc.rect(14, 112, 160, 115);
+      try {
+        doc.addImage(log.photoUrl, 'JPEG', 16, 114, 156, 111);
+      } catch {
+        doc.setFont('helvetica', 'italic');
+        doc.text('Fotografía vinculada en la Bitácora Digital de la Parcela.', 20, 165);
+      }
+    }
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139);
+    doc.text('Certificación de Muestra de Campo — Respaldado en Bóveda Documental HempC / Nucleus Trace.', 14, 282);
+    doc.save(`Muestra_Campo_${(log.sampleCode || plot?.name || 'Parcela').replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`);
   };
 
   const handleSaveRecord = async (e: React.FormEvent) => {
@@ -913,14 +978,32 @@ export default function PlotDetails() {
     if (!id || !currentUser || isSaving || isViewMode) return;
     setIsSaving(true);
     try {
+      const recordId = editingRecordId || crypto.randomUUID();
       const payload = {
         ...recordForm,
-        id: editingRecordId || crypto.randomUUID(),
+        id: recordId,
         plotId: id,
         createdBy: currentUser.id,
-        createdByName: currentUser.name
+        createdByName: currentUser.name,
+        sampleCode: recordForm.sampleCode || `MUE-${(plot?.name || 'PAR').replace(/[^a-zA-Z0-9]/g, '').slice(0, 5).toUpperCase()}-${recordForm.date.replace(/-/g, '')}`,
+        samplePhotoUrl: recordForm.samplePhotoUrl || undefined
       };
       const success = editingRecordId ? await updateTrialRecord(payload as any) : await addTrialRecord(payload as any);
+      if (success && recordForm.samplePhotoUrl) {
+        const autoLog: FieldLog = {
+          id: `log-sample-${recordId}`,
+          plotId: id,
+          date: recordForm.date,
+          time: recordForm.time || localClockData.shortTimeStr,
+          sampleCode: payload.sampleCode,
+          sampleType: 'Muestra Fenológica / Biometría',
+          phenologicalStage: recordForm.stage,
+          operatorName: currentUser.name,
+          note: `[Muestra Fenológica ${payload.sampleCode}] Estadio: ${recordForm.stage} · Altura: ${recordForm.plantHeight} cm · Plantas/m²: ${recordForm.plantsPerMeter} · Vigor: ${recordForm.vigor}/9. ${recordForm.notes || ''}`.trim(),
+          photoUrl: recordForm.samplePhotoUrl
+        };
+        await addLog(autoLog);
+      }
       if (success) setIsRecordModalOpen(false);
     } finally {
       setIsSaving(false);
@@ -2415,13 +2498,20 @@ export default function PlotDetails() {
                 onSubmit={async e => {
                   e.preventDefault();
                   if (!newLogNote.trim()) return;
+                  const defaultSampleCode =
+                    newLogSampleCode.trim() ||
+                    `MUE-${(plot.name || 'PAR').replace(/[^a-zA-Z0-9]/g, '').slice(0, 5).toUpperCase()}-${(newLogDate || localClockData.dateIso).replace(/-/g, '')}-${String(plotLogs.length + 1).padStart(2, '0')}`;
                   const payload: FieldLog = {
                     id: editingLogId || crypto.randomUUID(),
                     plotId: plot.id,
                     date: newLogDate || localClockData.dateIso,
                     time: newLogTime || localClockData.shortTimeStr,
                     note: newLogNote.trim(),
-                    photoUrl: newLogPhoto.trim() || undefined
+                    photoUrl: newLogPhoto.trim() || undefined,
+                    sampleCode: defaultSampleCode,
+                    sampleType: newLogSampleType,
+                    phenologicalStage: newLogPhenologicalStage || cycleSync.currentStage,
+                    operatorName: currentUser?.name || plot.samplingResponsibleName || 'Operador de Campo'
                   };
                   if (editingLogId) {
                     await updateLog(payload);
@@ -2431,6 +2521,7 @@ export default function PlotDetails() {
                   setEditingLogId(null);
                   setNewLogNote('');
                   setNewLogPhoto('');
+                  setNewLogSampleCode('');
                   setNewLogDate(localClockData.dateIso);
                   setNewLogTime(localClockData.shortTimeStr);
                 }}
@@ -2438,7 +2529,7 @@ export default function PlotDetails() {
               >
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-mono font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
-                    {editingLogId ? '✏️ Editando Entrada de Bitácora' : '➕ Nueva Entrada en Bitácora de Campo'}
+                    {editingLogId ? '✏️ Editando Muestra / Entrada de Bitácora' : '📸 Nueva Muestra de Campo & Registro en Bitácora (Cámara Celular / Escritorio)'}
                   </span>
                   {editingLogId && (
                     <button
@@ -2447,6 +2538,7 @@ export default function PlotDetails() {
                         setEditingLogId(null);
                         setNewLogNote('');
                         setNewLogPhoto('');
+                        setNewLogSampleCode('');
                         setNewLogDate(localClockData.dateIso);
                         setNewLogTime(localClockData.shortTimeStr);
                       }}
@@ -2500,13 +2592,55 @@ export default function PlotDetails() {
                   }}
                 />
 
+                {/* Metadatos de Muestra de Campo */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <label className={labelClass}>Código de Muestra de Campo</label>
+                    <input
+                      type="text"
+                      placeholder={`Auto: MUE-${(plot.name || 'PAR').replace(/[^a-zA-Z0-9]/g, '').slice(0, 5).toUpperCase()}-...`}
+                      value={newLogSampleCode}
+                      onChange={e => setNewLogSampleCode(e.target.value)}
+                      className={inputStyle}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Tipo de Muestra / Registro</label>
+                    <select
+                      value={newLogSampleType}
+                      onChange={e => setNewLogSampleType(e.target.value as any)}
+                      className={inputStyle}
+                    >
+                      <option value="Muestra Fenológica / Biometría">Muestra Fenológica / Biometría</option>
+                      <option value="Inspección Sanitaria / MIP">Inspección Sanitaria / MIP</option>
+                      <option value="Muestra de Suelo / Raíz">Muestra de Suelo / Raíz</option>
+                      <option value="Muestra Pre-Cosecha / Tricomas">Muestra Pre-Cosecha / Tricomas</option>
+                      <option value="Observación General">Observación General</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelClass}>Estadio Fenológico al Muestreo</label>
+                    <select
+                      value={newLogPhenologicalStage}
+                      onChange={e => setNewLogPhenologicalStage(e.target.value)}
+                      className={inputStyle}
+                    >
+                      <option value="Emergencia">Emergencia</option>
+                      <option value="Vegetativo">Vegetativo</option>
+                      <option value="Floración">Floración</option>
+                      <option value="Maduración">Maduración</option>
+                      <option value="Cosecha">Cosecha</option>
+                    </select>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                   <div className="md:col-span-2">
-                    <label className={labelClass}>Observación Agronómica / Novedad de Campo *</label>
+                    <label className={labelClass}>Observación Agronómica / Detalle de la Muestra *</label>
                     <input
                       type="text"
                       required
-                      placeholder="Ej: Cierre de entresurco completo, excelente sanidad foliar sin presencia de plagas..."
+                      placeholder="Ej: Muestra tomada desde celular en bloque central, excelente sanidad foliar..."
                       value={newLogNote}
                       onChange={e => setNewLogNote(e.target.value)}
                       className={inputStyle}
@@ -2651,33 +2785,60 @@ export default function PlotDetails() {
                     className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 flex flex-col justify-between gap-3"
                   >
                     <div className="space-y-2">
-                      <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 tabular-nums">
-                        <span>📅 {log.date} · 🕒 {log.time || '10:00'} hs (UTC-3)</span>
-                        {canCreate && (
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditingLogId(log.id);
-                                setNewLogNote(log.note || '');
-                                setNewLogPhoto(log.photoUrl || '');
-                                setNewLogDate(log.date || localClockData.dateIso);
-                                setNewLogTime(log.time || localClockData.shortTimeStr);
-                              }}
-                              className="text-slate-400 hover:text-sky-600 transition cursor-pointer"
-                              title="Editar entrada"
-                            >
-                              <Edit2 size={14} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => deleteLog(log.id)}
-                              className="text-slate-400 hover:text-rose-600 transition cursor-pointer"
-                              title="Eliminar entrada"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-slate-400 tabular-nums">
+                        <span>📅 {formatDateAr(log.date)} · 🕒 {log.time || '10:00'} hs (UTC-3)</span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleDownloadSamplePdf(log)}
+                            className="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[9px] font-mono font-black uppercase flex items-center gap-1 cursor-pointer"
+                            title="Descargar Ficha PDF de Muestra de Campo"
+                          >
+                            <Download size={11} />
+                            <span>Ficha Muestra PDF</span>
+                          </button>
+                          {canCreate && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingLogId(log.id);
+                                  setNewLogNote(log.note || '');
+                                  setNewLogPhoto(log.photoUrl || '');
+                                  setNewLogDate(log.date || localClockData.dateIso);
+                                  setNewLogTime(log.time || localClockData.shortTimeStr);
+                                  setNewLogSampleCode(log.sampleCode || '');
+                                  setNewLogSampleType(log.sampleType || 'Muestra Fenológica / Biometría');
+                                  setNewLogPhenologicalStage(log.phenologicalStage || cycleSync.currentStage);
+                                }}
+                                className="text-slate-400 hover:text-sky-600 transition cursor-pointer"
+                                title="Editar entrada"
+                              >
+                                <Edit2 size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => deleteLog(log.id)}
+                                className="text-slate-400 hover:text-rose-600 transition cursor-pointer"
+                                title="Eliminar entrada"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-[10px] font-mono font-black uppercase">
+                          {log.sampleCode || `MUE-${String(log.id).slice(0, 6).toUpperCase()}`}
+                        </span>
+                        <span className="px-2 py-0.5 rounded-md bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800 text-[10px] font-mono font-bold">
+                          {log.sampleType || 'Muestra de Campo'}
+                        </span>
+                        {log.phenologicalStage && (
+                          <span className="px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 text-[10px] font-mono font-bold">
+                            Estadio: {log.phenologicalStage}
+                          </span>
                         )}
                       </div>
                       <p className="text-xs text-slate-800 dark:text-slate-200 font-medium leading-relaxed">
@@ -2685,12 +2846,24 @@ export default function PlotDetails() {
                       </p>
                     </div>
                     {log.photoUrl && (
-                      <img
-                        src={log.photoUrl}
-                        alt="Evidencia de campo"
-                        onClick={() => setPreviewPhoto(log.photoUrl || null)}
-                        className="w-full h-48 object-cover rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:opacity-90 transition"
-                      />
+                      <div className="space-y-1.5">
+                        <img
+                          src={log.photoUrl}
+                          alt="Evidencia de muestra de campo"
+                          onClick={() => setPreviewPhoto(log.photoUrl || null)}
+                          className="w-full h-48 object-cover rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:opacity-90 transition"
+                        />
+                        <div className="flex items-center justify-between text-[10px] font-mono text-slate-400">
+                          <span>👤 {log.operatorName || plot.samplingResponsibleName || 'Operador de Campo'}</span>
+                          <a
+                            href={log.photoUrl}
+                            download={`Foto_Muestra_${log.sampleCode || plot.name}.jpg`}
+                            className="text-emerald-600 dark:text-emerald-400 font-bold hover:underline flex items-center gap-1"
+                          >
+                            <Download size={11} /> Descargar Foto JPG
+                          </a>
+                        </div>
+                      </div>
                     )}
                   </div>
                 ))}
@@ -4383,30 +4556,157 @@ export default function PlotDetails() {
                       onChange={e => setRecordForm({ ...recordForm, seedYield: Number(e.target.value) })}
                     />
                   </div>
-                  <div>
-                    <label className="text-[10px] font-mono uppercase font-bold text-slate-400 block mb-1">Peso Biomasa Tallo (g/m²)</label>
-                    <input
-                      type="number"
-                      disabled={isViewMode}
-                      className="w-full bg-slate-800 border border-slate-700 p-2.5 rounded-xl text-xs text-white"
-                      value={recordForm.stemWeight}
-                      onChange={e => setRecordForm({ ...recordForm, stemWeight: Number(e.target.value) })}
-                    />
+                    <div>
+                      <label className="text-[10px] font-mono uppercase font-bold text-slate-400 block mb-1">Peso Biomasa Tallo (g/m²)</label>
+                      <input
+                        type="number"
+                        disabled={isViewMode}
+                        className="w-full bg-slate-800 border border-slate-700 p-2.5 rounded-xl text-xs text-white"
+                        value={recordForm.stemWeight}
+                        onChange={e => setRecordForm({ ...recordForm, stemWeight: Number(e.target.value) })}
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {!isViewMode && (
-                <button
-                  type="submit"
-                  disabled={isSaving || isFetchingConditions}
-                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-3.5 rounded-xl font-mono font-bold text-xs uppercase tracking-wider shadow-md flex items-center justify-center gap-2 transition disabled:opacity-50 cursor-pointer"
-                >
-                  {isSaving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
-                  <span>Guardar Muestreo en Ficha Técnica</span>
-                </button>
-              )}
-            </form>
+                {/* REGISTRO FOTOGRÁFICO DE LA MUESTRA DESDE EL CELULAR (SINCRONIZADO CON BITÁCORA) */}
+                <div className="p-4 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/60 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 rounded-xl bg-emerald-600 text-white">
+                        <Camera size={16} />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-mono font-black uppercase text-slate-900 dark:text-white">
+                          Fotografía de Muestra de Campo desde Celular (Sincronización Automática con Bitácora)
+                        </h4>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                          Tomá la foto con el celular al relevar la muestra; se guardará en esta planilla, en la Bitácora de la Parcela y en el Legajo Documental del Socio.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <input
+                        ref={recordSampleCameraRef}
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        className="hidden"
+                        onChange={async e => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          setIsProcessingImage(true);
+                          try {
+                            const compressed = await compressImageFileToDataUrl(file);
+                            setRecordForm(prev => ({ ...prev, samplePhotoUrl: compressed }));
+                          } finally {
+                            setIsProcessingImage(false);
+                            e.target.value = '';
+                          }
+                        }}
+                      />
+                      <input
+                        ref={recordSampleGalleryRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={async e => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          setIsProcessingImage(true);
+                          try {
+                            const compressed = await compressImageFileToDataUrl(file);
+                            setRecordForm(prev => ({ ...prev, samplePhotoUrl: compressed }));
+                          } finally {
+                            setIsProcessingImage(false);
+                            e.target.value = '';
+                          }
+                        }}
+                      />
+                      {!isViewMode && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => recordSampleCameraRef.current?.click()}
+                            className="px-3.5 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-[11px] font-mono font-black uppercase flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <Camera size={14} />
+                            <span>Tomar Foto Muestra (Celular)</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => recordSampleGalleryRef.current?.click()}
+                            className="px-3.5 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-[11px] font-mono font-bold uppercase flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <Upload size={14} />
+                            <span>Adjuntar de Galería</span>
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-center">
+                    <div>
+                      <label className={labelClass}>Código Único de Muestra</label>
+                      <input
+                        type="text"
+                        disabled={isViewMode}
+                        value={recordForm.sampleCode}
+                        onChange={e => setRecordForm({ ...recordForm, sampleCode: e.target.value })}
+                        placeholder="Ej: MUE-PAR-2026-01"
+                        className={inputStyle}
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      {recordForm.samplePhotoUrl ? (
+                        <div className="flex items-center justify-between p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-800">
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={recordForm.samplePhotoUrl}
+                              alt="Foto muestra"
+                              className="w-14 h-14 rounded-lg object-cover border border-slate-200"
+                            />
+                            <div className="font-mono">
+                              <span className="text-[10px] font-black uppercase text-emerald-600 block">
+                                ✓ Foto de Muestra Capturada
+                              </span>
+                              <span className="text-[11px] text-slate-500">
+                                Se impactará automáticamente en la Bitácora de {plot.name}
+                              </span>
+                            </div>
+                          </div>
+                          {!isViewMode && (
+                            <button
+                              type="button"
+                              onClick={() => setRecordForm(prev => ({ ...prev, samplePhotoUrl: '' }))}
+                              className="px-2.5 py-1 rounded-lg bg-rose-50 text-rose-600 text-[10px] font-mono font-bold uppercase cursor-pointer"
+                            >
+                              Quitar
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
+                          Opcional: Podés tomar una fotografía in-situ con la cámara del teléfono para dejar constancia visual de esta muestra.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {!isViewMode && (
+                  <button
+                    type="submit"
+                    disabled={isSaving || isFetchingConditions}
+                    className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-3.5 rounded-xl font-mono font-bold text-xs uppercase tracking-wider shadow-md flex items-center justify-center gap-2 transition disabled:opacity-50 cursor-pointer"
+                  >
+                    {isSaving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
+                    <span>Guardar Muestreo en Ficha Técnica</span>
+                  </button>
+                )}
+              </form>
           </div>
         </div>
       )}

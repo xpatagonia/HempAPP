@@ -226,6 +226,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
       id: 'sistema',
       title: 'Finanzas & Gobernanza',
       items: [
+        { to: '/documents', icon: FileText, label: 'Documentos & Legajos', special: true },
         ...(!isSupplierUser ? [{ to: '/finances', icon: DollarSign, label: 'Costos & Finanzas' }] : []),
         { to: '/analytics', icon: BarChart3, label: 'Comparativa Genética' },
         { to: '/integrity', icon: ShieldAlert, label: 'Integridad & Licencias' },

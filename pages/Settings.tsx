@@ -1,16 +1,22 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { 
+import {
   Save, Database, RefreshCw, Lock, Settings as SettingsIcon, 
   Trash2, RotateCcw, Shield, Image as ImageIcon,
   AlertTriangle, CheckCircle, XCircle, Info, FileCode, Server, DownloadCloud, Archive, Upload, Palette, Loader2,
-  Cloud, CloudRain, Copy, Check, ExternalLink, ArrowRight, Layers, Sprout, Tractor, Users, BookOpen, Mail, Cpu, Send
+  Cloud, CloudRain, Copy, Check, ExternalLink, ArrowRight, Layers, Sprout, Tractor, Users, BookOpen, Mail, Cpu, Send, FolderOpen
 } from 'lucide-react';
 import { supabase, getStoredCredentials, saveSupabaseCredentials, checkConnection } from '../supabaseClient';
 import {
   checkEmailServiceStatus,
   sendTestNotificationEmail
 } from '../src/services/emailNotificationService';
+import {
+  getGoogleDriveConfig,
+  saveGoogleDriveConfig,
+  getAppsScriptTemplateCode,
+  GoogleDriveConfig
+} from '../src/services/googleDriveBridgeService';
 import { wakeUpRenderEngine } from '../src/services/telemetryStreamService';
 import {
   DEMO_USERS_LIST as HISTORICAL_USERS,
@@ -31,12 +37,19 @@ import {
 
 export default function Settings() {
   const { currentUser, appName, appLogo, updateBranding, refreshData, isDbConnected } = useAppContext();
-  const [activeTab, setActiveTab] = useState<'branding' | 'system' | 'maintenance'>('branding');
+  const [activeTab, setActiveTab] = useState<'branding' | 'system' | 'maintenance'>('system');
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [isSavingBranding, setIsSavingBranding] = useState(false);
   const [tempName, setTempName] = useState(appName);
   const [tempLogo, setTempLogo] = useState(appLogo);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Google Drive (hempc.arg@gmail.com) Configuration State
+  const [driveConfig, setDriveConfig] = useState<GoogleDriveConfig>(() => getGoogleDriveConfig());
+  const [isTestingDrive, setIsTestingDrive] = useState(false);
+  const [driveStatusMsg, setDriveStatusMsg] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+  const [copiedDriveScript, setCopiedDriveScript] = useState(false);
+  const [showDriveScriptModal, setShowDriveScriptModal] = useState(false);
 
   // Supabase Configuration State
   const initialCreds = getStoredCredentials();
@@ -46,7 +59,7 @@ export default function Settings() {
   const [sbStatusMsg, setSbStatusMsg] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
   // Hybrid Architecture (Vercel + Resend.com + Supabase & Render Python IoT/AI) State
-  const [testEmailTarget, setTestEmailTarget] = useState(currentUser?.email || 'xpatagonia.com@gmail.com');
+  const [testEmailTarget, setTestEmailTarget] = useState(currentUser?.email || 'hempc.arg@gmail.com');
   const [hybridStatus, setHybridStatus] = useState<{
     engineOnline: boolean;
     resendConfigured: boolean;
@@ -77,10 +90,76 @@ export default function Settings() {
   const [syncReport, setSyncReport] = useState<{ success: boolean; message: string; details?: string[] } | null>(null);
   const [copiedSql, setCopiedSql] = useState(false);
 
+  const handleSaveAndTestDriveConfig = async () => {
+    setIsTestingDrive(true);
+    setDriveStatusMsg(null);
+    try {
+      const saved = saveGoogleDriveConfig(driveConfig);
+      setDriveConfig(saved);
+
+      if (!saved.appsScriptUrl.trim() && !saved.sharedFolderUrl.trim()) {
+        setDriveStatusMsg({
+          type: 'info',
+          text: `Configuración guardada para ${saved.targetEmail}. Pega la URL de tu Carpeta Compartida o la URL del Conector Google Apps Script para sincronizar archivos directamente en el Drive de ${saved.targetEmail}.`
+        });
+        return;
+      }
+
+      if (saved.appsScriptUrl.trim()) {
+        const res = await fetch(saved.appsScriptUrl.trim(), {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({
+            action: 'ping',
+            targetEmail: saved.targetEmail,
+            rootFolderName: saved.rootFolderName
+          })
+        });
+        const data = await res.json();
+        if (data && data.success) {
+          const updated = saveGoogleDriveConfig({
+            ...saved,
+            sharedFolderUrl: data.rootFolderUrl || saved.sharedFolderUrl,
+            lastVerifiedAt: new Date().toISOString()
+          });
+          setDriveConfig(updated);
+          setDriveStatusMsg({
+            type: 'success',
+            text: `✅ Conectado exitosamente al Google Drive de ${data.account || saved.targetEmail}. Carpeta raíz "${saved.rootFolderName}" verificada.`
+          });
+        } else {
+          setDriveStatusMsg({
+            type: 'error',
+            text: `Error en respuesta del script: ${data?.error || 'Verifique los permisos de publicación en script.google.com'}`
+          });
+        }
+      } else {
+        setDriveStatusMsg({
+          type: 'success',
+          text: `✅ Carpeta de Google Drive vinculada para ${saved.targetEmail}. Ya está disponible como acceso directo en Documentos & Legajos.`
+        });
+      }
+    } catch (err: any) {
+      setDriveStatusMsg({
+        type: 'info',
+        text: `Configuración guardada localmente para ${driveConfig.targetEmail}. Si ya publicaste el script en script.google.com como "Cualquier persona", los archivos se enviarán directo a su Drive.`
+      });
+    } finally {
+      setIsTestingDrive(false);
+    }
+  };
+
+  const handleCopyDriveScript = async () => {
+    const code = getAppsScriptTemplateCode(driveConfig.targetEmail, driveConfig.rootFolderName);
+    await navigator.clipboard.writeText(code);
+    setCopiedDriveScript(true);
+    setTimeout(() => setCopiedDriveScript(false), 3000);
+  };
+
   // @ts-ignore
   const buildTime = typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : 'Local Dev';
   // @ts-ignore
-  const appVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'V7.30.0-STABLE';
+  const appVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'V7.31.0-STABLE';
 
   if (currentUser?.role !== 'super_admin') {
       return (
@@ -345,6 +424,157 @@ export default function Settings() {
 
       {activeTab === 'system' && (
           <div className="space-y-8 animate-in slide-in-from-bottom-2">
+              {/* CARD 0: REPOSITORIO DOCUMENTAL GOOGLE DRIVE (hempc.arg@gmail.com) */}
+              <div className="bg-white dark:bg-slate-900 p-8 rounded-[40px] border-2 border-indigo-200 dark:border-indigo-900/60 shadow-sm">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-6 border-b border-slate-100 dark:border-slate-800">
+                      <div>
+                          <h3 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-tighter flex items-center gap-2">
+                              <FolderOpen className="text-indigo-600" size={24} /> Repositorio Google Drive Oficial ({driveConfig.targetEmail})
+                          </h3>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-1">
+                              Configura el almacenamiento directo hacia la cuenta institucional <strong>{driveConfig.targetEmail}</strong> sin depender del correo con el que abras el navegador.
+                          </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                          <span className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider ${
+                              driveConfig.appsScriptUrl.trim() || driveConfig.sharedFolderUrl.trim()
+                                ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-800'
+                                : 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
+                          }`}>
+                              <span className={`w-2 h-2 rounded-full ${driveConfig.appsScriptUrl.trim() || driveConfig.sharedFolderUrl.trim() ? 'bg-indigo-500 animate-pulse' : 'bg-amber-500'}`}></span>
+                              {driveConfig.appsScriptUrl.trim() ? 'Puente Automático Activo' : driveConfig.sharedFolderUrl.trim() ? 'Carpeta Vinculada' : 'Pendiente de Vincular'}
+                          </span>
+                      </div>
+                  </div>
+
+                  <div className="bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800/60 rounded-2xl p-4 mb-6 text-xs text-indigo-950 dark:text-indigo-200">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+                          <p className="font-black uppercase tracking-wider flex items-center gap-1.5">
+                              <Info size={14} className="text-indigo-600 dark:text-indigo-400" />
+                              ¿Cómo fijar {driveConfig.targetEmail} para que todos los archivos vayan a ese Drive?
+                          </p>
+                          <div className="flex items-center gap-2">
+                              <button
+                                  type="button"
+                                  onClick={handleCopyDriveScript}
+                                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 cursor-pointer"
+                              >
+                                  {copiedDriveScript ? <Check size={12} /> : <Copy size={12} />}
+                                  {copiedDriveScript ? '¡Código Copiado!' : '1. Copiar Script para hempc.arg@gmail.com'}
+                              </button>
+                              <button
+                                  type="button"
+                                  onClick={() => setShowDriveScriptModal(!showDriveScriptModal)}
+                                  className="px-3 py-1.5 bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 rounded-xl text-[10px] font-black uppercase tracking-wider cursor-pointer"
+                              >
+                                  {showDriveScriptModal ? 'Ocultar Código' : 'Ver Código'}
+                              </button>
+                          </div>
+                      </div>
+                      <ol className="list-decimal pl-5 space-y-1 text-[11px] leading-relaxed">
+                          <li>En cualquier navegador donde tengas abierto <strong>{driveConfig.targetEmail}</strong>, entra a <strong>script.google.com</strong> y crea un <strong>Nuevo proyecto</strong>.</li>
+                          <li>Pega el código copiado con el botón de arriba y haz clic en <strong>Implementar &rarr; Nueva implementación &rarr; Aplicación web</strong>.</li>
+                          <li>Elige <strong>Ejecutar como: Yo ({driveConfig.targetEmail})</strong> y <strong>Quién tiene acceso: Cualquier persona</strong>.</li>
+                          <li>Copia la <strong>URL de la aplicación web</strong> generada y pégala abajo en <strong>URL del Conector Google Apps Script</strong>. ¡Así todos los DNI, fotos de muestras y guías TAD se guardarán siempre en el Drive de <strong>{driveConfig.targetEmail}</strong> sin pedir inicio de sesión a cada usuario!</li>
+                      </ol>
+
+                      {showDriveScriptModal && (
+                          <pre className="mt-3 p-3 bg-slate-950 text-emerald-300 rounded-xl text-[10px] font-mono overflow-x-auto max-h-56 border border-slate-800">
+                              {getAppsScriptTemplateCode(driveConfig.targetEmail, driveConfig.rootFolderName)}
+                          </pre>
+                      )}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+                      <div>
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Cuenta Destino Oficial (Fija)</label>
+                          <input
+                              type="email"
+                              className="w-full bg-slate-50 dark:bg-slate-950 border dark:border-slate-800 p-3.5 rounded-xl text-xs font-mono font-bold dark:text-white outline-none focus:ring-2 focus:ring-indigo-500"
+                              value={driveConfig.targetEmail}
+                              onChange={e => setDriveConfig({ ...driveConfig, targetEmail: e.target.value })}
+                          />
+                      </div>
+                      <div>
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Carpeta Raíz en Google Drive</label>
+                          <input
+                              type="text"
+                              placeholder="HEMPC_LEGAJOS_Y_DOCUMENTOS"
+                              className="w-full bg-slate-50 dark:bg-slate-950 border dark:border-slate-800 p-3.5 rounded-xl text-xs font-mono font-bold dark:text-white outline-none focus:ring-2 focus:ring-indigo-500"
+                              value={driveConfig.rootFolderName}
+                              onChange={e => setDriveConfig({ ...driveConfig, rootFolderName: e.target.value })}
+                          />
+                      </div>
+                      <div className="md:col-span-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">
+                              URL del Conector Google Apps Script (Sincronización Automática hacia {driveConfig.targetEmail})
+                          </label>
+                          <input
+                              type="url"
+                              placeholder="https://script.google.com/macros/s/AKfycb.../exec"
+                              className="w-full bg-slate-50 dark:bg-slate-950 border dark:border-slate-800 p-3.5 rounded-xl text-xs font-mono font-bold dark:text-white outline-none focus:ring-2 focus:ring-indigo-500"
+                              value={driveConfig.appsScriptUrl}
+                              onChange={e => setDriveConfig({ ...driveConfig, appsScriptUrl: e.target.value })}
+                          />
+                      </div>
+                      <div className="md:col-span-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">
+                              Link Directo a Carpeta Compartida de Google Drive ({driveConfig.targetEmail}) (Opcional - Acceso Rápido)
+                          </label>
+                          <input
+                              type="url"
+                              placeholder="https://drive.google.com/drive/folders/1A2B3C..."
+                              className="w-full bg-slate-50 dark:bg-slate-950 border dark:border-slate-800 p-3.5 rounded-xl text-xs font-mono font-bold dark:text-white outline-none focus:ring-2 focus:ring-indigo-500"
+                              value={driveConfig.sharedFolderUrl}
+                              onChange={e => setDriveConfig({ ...driveConfig, sharedFolderUrl: e.target.value })}
+                          />
+                      </div>
+                  </div>
+
+                  <div className="flex items-center justify-between flex-wrap gap-4 mb-5 bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border dark:border-slate-800">
+                      <label className="flex items-center gap-3 cursor-pointer">
+                          <input
+                              type="checkbox"
+                              checked={driveConfig.autoSyncOnUpload}
+                              onChange={e => setDriveConfig({ ...driveConfig, autoSyncOnUpload: e.target.checked })}
+                              className="w-4 h-4 accent-indigo-600 rounded"
+                          />
+                          <div>
+                              <span className="text-xs font-black text-slate-800 dark:text-white block">
+                                  Enviar copia automática a Google Drive ({driveConfig.targetEmail}) al subir documentos
+                              </span>
+                              <span className="text-[11px] text-slate-500">
+                                  Impacta DNI Frente/Dorso, Fotos de Muestras desde Celular, Guías TAD/ARICCAME, Licencias y Contratos organizados por Socio.
+                              </span>
+                          </div>
+                      </label>
+                  </div>
+
+                  {driveStatusMsg && (
+                      <div className={`p-4 rounded-2xl text-xs font-bold mb-5 flex items-center gap-2 ${
+                          driveStatusMsg.type === 'success'
+                              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                              : driveStatusMsg.type === 'error'
+                              ? 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300 border border-red-200 dark:border-red-800'
+                              : 'bg-indigo-50 text-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800'
+                      }`}>
+                          {driveStatusMsg.type === 'success' ? <CheckCircle size={16} /> : <Info size={16} />}
+                          <span>{driveStatusMsg.text}</span>
+                      </div>
+                  )}
+
+                  <div className="flex justify-end">
+                      <button
+                          onClick={handleSaveAndTestDriveConfig}
+                          disabled={isTestingDrive}
+                          className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition flex items-center gap-2 shadow-md disabled:opacity-50 cursor-pointer"
+                      >
+                          {isTestingDrive ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                          Guardar &amp; Verificar Drive ({driveConfig.targetEmail})
+                      </button>
+                  </div>
+              </div>
+
               {/* CARD 1: CONEXIÓN CLOUD A SUPABASE */}
               <div className="bg-white dark:bg-slate-900 p-8 rounded-[40px] border border-slate-200 dark:border-slate-800 shadow-sm">
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-6 border-b border-slate-100 dark:border-slate-800">
