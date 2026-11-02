@@ -182,6 +182,7 @@ export default function Dashboard() {
   // Parcelas OPERATIVAS ACTIVAS (las parcelas con ciclo cerrado / cosechadas desaparecen del dashboard operativo actual)
   const relevantPlots = useMemo(() => {
     return campaignScopedPlots.filter(p => {
+      if (p.closureConfirmed || p.status === 'Cosechada') return false;
       if (activeCampaign !== 'all' && p.campaignStatuses?.[activeCampaign] === 'Cosechada') return false;
       return p.status === 'Activa';
     });
@@ -632,7 +633,7 @@ export default function Dashboard() {
   const criticalHighAlerts = useMemo(() => plotNDVIAlerts.filter(a => a.isCriticalHigh), [plotNDVIAlerts]);
 
   const avgNDVI = useMemo(() => {
-    if (plotNDVIAlerts.length === 0) return 0.58;
+    if (plotNDVIAlerts.length === 0) return '0.00';
     const sum = plotNDVIAlerts.reduce((acc, curr) => acc + (curr.ndvi || 0), 0);
     return (sum / plotNDVIAlerts.length).toFixed(2);
   }, [plotNDVIAlerts]);
@@ -1377,36 +1378,43 @@ export default function Dashboard() {
                 </div>
               ) : (
                 <div className="space-y-2 max-h-[260px] overflow-y-auto custom-scrollbar pr-1">
-                  {trialRecords.length > 0 ? (
-                    trialRecords.slice(0, 5).map((act, idx) => {
-                      const plot = plots.find(p => p.id === act.plotId);
-                      return (
-                        <Link
-                          key={idx}
-                          to={plot ? `/plots/${plot.id}` : '/trials-lite'}
-                          className="block p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800 hover:border-emerald-400 transition"
-                        >
-                          <div className="flex justify-between items-center text-[10px] font-mono mb-0.5">
-                            <span className="font-black text-emerald-600 dark:text-emerald-400 uppercase">
-                              {act.stage || 'Muestreo'}
-                            </span>
-                            <span className="text-slate-400">{act.date}</span>
-                          </div>
-                          <p className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
-                            {plot?.name || 'Registro Técnico'}
-                          </p>
-                          <div className="flex items-center gap-2 text-[10px] text-slate-500 mt-0.5">
-                            <ArrowUpRight size={10} className="text-emerald-500" />
-                            <span>Altura: {act.plantHeight || 0} cm</span>
-                            <span>·</span>
-                            <span>Vigor: {act.vigor || 8}/10</span>
-                          </div>
-                        </Link>
-                      );
-                    })
-                  ) : (
-                    <div className="py-6 text-center text-xs text-slate-400">Sin actividad reciente</div>
-                  )}
+                  {(() => {
+                    const visibleRecords = trialRecords.filter(r =>
+                      cycleViewMode === 'active' ? activePlotIdsSet.has(r.plotId) : true
+                    );
+                    return visibleRecords.length > 0 ? (
+                      visibleRecords.slice(0, 5).map((act, idx) => {
+                        const plot = plots.find(p => p.id === act.plotId);
+                        return (
+                          <Link
+                            key={idx}
+                            to={plot ? `/plots/${plot.id}` : '/trials-lite'}
+                            className="block p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800 hover:border-emerald-400 transition"
+                          >
+                            <div className="flex justify-between items-center text-[10px] font-mono mb-0.5">
+                              <span className="font-black text-emerald-600 dark:text-emerald-400 uppercase">
+                                {act.stage || 'Muestreo'}
+                              </span>
+                              <span className="text-slate-400">{act.date}</span>
+                            </div>
+                            <p className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
+                              {plot?.name || 'Registro Técnico'}
+                            </p>
+                            <div className="flex items-center gap-2 text-[10px] text-slate-500 mt-0.5">
+                              <ArrowUpRight size={10} className="text-emerald-500" />
+                              <span>Altura: {act.plantHeight || 0} cm</span>
+                              <span>·</span>
+                              <span>Vigor: {act.vigor || 8}/10</span>
+                            </div>
+                          </Link>
+                        );
+                      })
+                    ) : (
+                      <div className="py-6 text-center text-xs text-slate-400">
+                        Sin actividad en lotes activos (Campaña 2025/2026 cerrada el 01/04/2026)
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
 

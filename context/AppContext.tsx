@@ -222,7 +222,15 @@ const PURGED_DEMO_IDS = new Set([
     '23f56c7e-d381-43dd-86e0-8a52b9202e6a',
     'd85c93f2-401c-45b5-b739-d8a53af6fa61',
     // Registro de monitoreo fuera de rango de campaña (2026-10-23) depurado
-    '7ddbb0ef-b6ed-4621-aa58-996f73093cc1'
+    '7ddbb0ef-b6ed-4621-aa58-996f73093cc1',
+    // IDs de tablas demo antiguas depuradas definitivamente
+    'plot-alfa-cordoba', 'plot-alpha-cordoba', 'plot-beta-pergamino', 'plot-gamma-patagonia', 'plot-delta-pergamino-2', 'plot-demo-1',
+    'client-pergamino', 'client-idevi', 'client-cordoba',
+    'loc-pergamino', 'loc-idevi', 'loc-cordoba',
+    'proj-camp-2425', 'proj-camp-2526',
+    'user-socio-pergamino', 'user-socio-idevi', 'user-socio-cordoba',
+    'user-tecnico-pergamino', 'user-tecnico-idevi', 'user-tecnico-cordoba',
+    'labor-pergamino-01', 'labor-pergamino-02', 'labor-pergamino-03', 'labor-cordoba-01', 'labor-idevi-01'
 ]);
 
 const isPurgedDemoItem = (item: any): boolean => {
@@ -231,13 +239,17 @@ const isPurgedDemoItem = (item: any): boolean => {
     if (PURGED_DEMO_IDS.has(id)) return true;
     if (
         id.startsWith('exp-demo-') ||
+        id.startsWith('exp-coop-central-') ||
         id.startsWith('demo-alert-') ||
         id.startsWith('senasa-res-') ||
         id.startsWith('app-2026-00') ||
+        id.startsWith('labor-pergamino-') ||
+        id.startsWith('labor-cordoba-') ||
+        id.startsWith('labor-idevi-') ||
         (id.startsWith('task-ndvi-') && id.split('-').length > 7) ||
         (id.startsWith('auto-rain-') && !id.startsWith('auto-rain-loc-'))
     ) return true;
-    if (item.plotId && (String(item.plotId) === '91ce0dcf-a760-41fe-82d5-52c438685944' || String(item.plotId) === '7076a122-77b5-49ce-80fa-890440c2d66c')) return true;
+    if (item.plotId && (String(item.plotId) === '91ce0dcf-a760-41fe-82d5-52c438685944' || String(item.plotId) === '7076a122-77b5-49ce-80fa-890440c2d66c' || PURGED_DEMO_IDS.has(String(item.plotId)))) return true;
     return false;
 };
 
@@ -1120,6 +1132,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 const deterministicBarcode = `7798421${String(Math.abs(hashCode)).padStart(6, '0')}`;
                 const deterministicActCode = `ACTA-SIEMBRA-20252026-${plotIdSuffix}`;
 
+                const isReopenedLocally = Boolean((p as any)._localReopened);
                 return {
                     ...(demoMatch || {}),
                     ...p,
@@ -1142,11 +1155,15 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                     samplingResponsibleName: resolvedSampler,
                     sowingResponsibleName: resolvedSower,
                     technicalResponsibleName: resolvedTech,
+                    status: (isCamp2526 && !isReopenedLocally) ? 'Cosechada' : p.status,
+                    campaignStatuses: (isCamp2526 && !isReopenedLocally)
+                        ? { ...(p.campaignStatuses || {}), '2025/2026': 'Cosechada' }
+                        : p.campaignStatuses,
                     closedAt: isCamp2526 ? (p.closedAt || '2026-04-01') : p.closedAt,
                     closedDate: isCamp2526 ? (p.closedDate || '2026-04-01') : p.closedDate,
                     closedTime: isCamp2526 ? (p.closedTime || '16:00') : p.closedTime,
                     closedBy: isCamp2526 ? (p.closedBy || resolvedTech || 'Gastón BAREA M.') : p.closedBy,
-                    closureConfirmed: isCamp2526 ? (p.closureConfirmed ?? true) : p.closureConfirmed,
+                    closureConfirmed: (isCamp2526 && !isReopenedLocally) ? true : p.closureConfirmed,
                     closureActCode: isCamp2526 ? (p.closureActCode || deterministicActCode) : p.closureActCode,
                     closureBarcode: isCamp2526 ? (p.closureBarcode || deterministicBarcode) : p.closureBarcode,
                     closureNotes: isCamp2526

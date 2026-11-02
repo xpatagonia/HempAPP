@@ -3,8 +3,8 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
 
-// V7.31.0-STABLE - PRODUCTION PROTOCOL
-const version = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'V7.31.0-STABLE';
+// V7.32.0-STABLE - PRODUCTION PROTOCOL
+const version = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'V7.32.0-STABLE';
 const buildTime = typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : new Date().toISOString();
 
 console.log(`%c NUCLEUS APP ${version} `, 'background: #006633; color: #fff; font-weight: bold; padding: 10px; font-size: 20px; border: 2px solid #DDDB00;');
@@ -14,10 +14,18 @@ if (typeof window !== 'undefined') {
   const prevVersion = localStorage.getItem('ht_running_app_version');
   if (prevVersion !== version) {
     localStorage.setItem('ht_running_app_version', version);
+    // Depurar cachés locales de campaña previa y notificaciones residuales al actualizar a V7.32.0-STABLE
+    localStorage.removeItem('ht_plots');
+    localStorage.removeItem('ht_tasks');
+    localStorage.removeItem('ht_dismissed_alerts');
+    localStorage.removeItem('ht_agrochemical_apps');
+    localStorage.removeItem('nucleus_push_notifications_v1');
+    localStorage.removeItem('ht_push_notifications_v1');
+    localStorage.removeItem('ht_push_notifications_v2');
     if ('caches' in window) {
       caches.keys().then((keys) => {
         keys.forEach((k) => {
-          if (k !== 'hempc-nucleus-v7.31.0') {
+          if (k !== 'hempc-nucleus-v7.32.0') {
             caches.delete(k).catch(() => {});
           }
         });

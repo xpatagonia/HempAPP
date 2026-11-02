@@ -257,14 +257,14 @@ export default function NotificationCenterModal({ isOpen, onClose, initialTab }:
     const critPlots = await evaluateCriticalPlotAlerts(plots, locations, { force: true });
     const critTasks = await evaluateUpcomingTasksReminders(tasks, { force: true });
     const total = critPlots.length + critTasks.length;
-    if (total === 0) {
-      const fallbackPlot = plots[0];
-      await triggerTestPlotAlert(fallbackPlot?.name, fallbackPlot?.id);
-    }
     setTimeout(() => {
       setTestSending(null);
       loadData();
-      showTempBanner(`Barrido completado: ${Math.max(1, total)} alerta(s) push despachadas.`);
+      showTempBanner(
+        total > 0
+          ? `Barrido completado: ${total} alerta(s) push despachadas.`
+          : 'Barrido completado: 0 alertas pendientes (Campaña 2025/2026 cerrada el 01/04/2026).'
+      );
     }, 350);
   };
 

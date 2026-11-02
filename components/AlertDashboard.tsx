@@ -128,6 +128,11 @@ export default function AlertDashboard({
   } | null>(null);
 
   const allAlerts = useMemo<UnifiedAlert[]>(() => {
+    // Si la campaña se encuentra cerrada (0 lotes operativos activos), el Radar de Alertas permanece en 0 desvíos
+    if (activeOperationalPlots.length === 0) {
+      return [];
+    }
+
     const list: UnifiedAlert[] = [];
     const today = new Date();
     const todayStr = today.toISOString().split('T')[0];

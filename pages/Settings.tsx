@@ -771,8 +771,8 @@ export default function Settings() {
                           </h3>
                       </div>
                       <p className="text-xs text-slate-500 dark:text-slate-400 font-medium leading-relaxed">
-                          Sube e impacta directamente en las tablas de tu proyecto Supabase la base de datos de los ensayos de campo, 
-                          socios productores (Pergamino, Córdoba, IDEVI Patagonia), campos y sitios con sus parcelas y monitoreo fenológico.
+                          Sube e impacta directamente en las tablas de tu proyecto Supabase la base de datos oficial de la Campaña 2025/2026 (cerrada el 01/04/2026): 
+                          los 4 establecimientos reales (Puerto Madryn, Trelew, INTA Hilario Ascasubi y Puerto Pirámides), las 44 parcelas cosechadas y su monitoreo fenológico.
                       </p>
                   </div>
 

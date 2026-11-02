@@ -616,7 +616,7 @@ export default function TrialManager() {
   // 1. PARCELAS ACTIVAS ENRIQUECIDAS CON RELOJ DE COSECHA Y PROYECCIÓN COMERCIAL
   // ============================================================================
   const allEnrichedActivePlots = useMemo(() => {
-    const active = plots.filter(p => p.status === 'Activa');
+    const active = plots.filter(p => p.status === 'Activa' && !p.closureConfirmed);
 
     return active
       .map(p => {

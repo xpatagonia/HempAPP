@@ -30,9 +30,9 @@ export interface PushSettings {
   advanceTaskHours: number;
 }
 
-const STORAGE_NOTIFICATIONS_KEY = 'nucleus_push_notifications_v1';
+const STORAGE_NOTIFICATIONS_KEY = 'nucleus_push_notifications_v2_clean';
 const STORAGE_SETTINGS_KEY = 'nucleus_push_settings_v1';
-const STORAGE_DEDUP_KEY = 'nucleus_push_dedup_log_v1';
+const STORAGE_DEDUP_KEY = 'nucleus_push_dedup_log_v2';
 
 const DEFAULT_SETTINGS: PushSettings = {
   enabled: true,
@@ -93,18 +93,18 @@ export const registerServiceWorker = async (): Promise<ServiceWorkerRegistration
   }
 
   try {
-    // Limpiar cachés antiguas para asegurar versión fresca V7.31.0-STABLE
+    // Limpiar cachés antiguas para asegurar versión fresca V7.32.0-STABLE
     if ('caches' in window) {
       const keys = await window.caches.keys();
       await Promise.all(
         keys
-          .filter((k) => k !== 'hempc-nucleus-v7.31.0')
+          .filter((k) => k !== 'hempc-nucleus-v7.32.0')
           .map((k) => window.caches.delete(k))
       );
     }
 
     // Registrar el archivo sw.js ubicado en public/
-    const registration = await navigator.serviceWorker.register('/sw.js?v=7.31.0', {
+    const registration = await navigator.serviceWorker.register('/sw.js?v=7.32.0', {
       scope: '/',
       updateViaCache: 'none'
     });
@@ -117,7 +117,7 @@ export const registerServiceWorker = async (): Promise<ServiceWorkerRegistration
       if (installingWorker) {
         installingWorker.onstatechange = () => {
           if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            console.log('[ServiceWorker] Nueva versión V7.31.0-STABLE activada.');
+            console.log('[ServiceWorker] Nueva versión V7.32.0-STABLE activada.');
           }
         };
       }
@@ -192,6 +192,11 @@ export const savePushSettings = (settings: Partial<PushSettings>): PushSettings 
 export const getStoredNotifications = (): PushNotificationItem[] => {
   if (typeof window === 'undefined') return [];
   try {
+    // Depurar llaves antiguas de notificaciones de campañas cerradas o demos
+    localStorage.removeItem('nucleus_push_notifications_v1');
+    localStorage.removeItem('ht_push_notifications_v1');
+    localStorage.removeItem('ht_push_notifications_v2');
+
     const raw = localStorage.getItem(STORAGE_NOTIFICATIONS_KEY);
     if (!raw) {
       return [];
@@ -394,6 +399,11 @@ export const evaluateCriticalPlotAlerts = async (
   const dispatched: PushNotificationItem[] = [];
 
   for (const plot of plots) {
+    // Excluir parcelas con ciclo cerrado o cosechadas (Campaña 2025/2026 cerrada el 01/04/2026)
+    if (plot.closureConfirmed || plot.status === 'Cosechada') {
+      continue;
+    }
+
     const location = locations.find(l => l.id === plot.locationId);
     const plotLabel = `${plot.name}${location ? ` (${location.name})` : ''}`;
 
