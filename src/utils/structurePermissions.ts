@@ -116,7 +116,6 @@ export const SUPPLIER_ACTOR_ROLES: { value: SupplierActorRole; label: string; sh
 export function isCentralAdminOrSupervisor(user: User | null): boolean {
   if (!user) return false;
   if (user.role === 'super_admin' || user.role === 'admin') return true;
-  if (user.memberType === 'Cooperativa_Central' && !user.clientId && !user.supplierId) return true;
   return false;
 }
 
@@ -349,8 +348,8 @@ export function canAccessPlot(
 export function canAccessStoragePoint(
   user: User | null,
   storagePoint: StoragePoint,
-  _locations?: Location[] | Client[],
-  _clients?: Client[]
+  locations?: Location[] | Client[],
+  clients?: Client[]
 ): boolean {
   if (!user || !storagePoint) return false;
   if (hasGlobalReadScope(user)) return true;
@@ -358,11 +357,24 @@ export function canAccessStoragePoint(
     // Los proveedores ven los nodos de recepción donde se alojan sus lotes
     return true;
   }
-  if (user.clientId) {
-    return String(storagePoint.clientId || '') === String(user.clientId);
+  if (user.clientId && String(storagePoint.clientId || '') === String(user.clientId)) {
+    return true;
   }
   if (storagePoint.responsibleUserId && String(storagePoint.responsibleUserId) === String(user.id)) {
     return true;
+  }
+  if (Array.isArray(locations) && locations.length > 0 && 'coordinates' in (locations[0] as any)) {
+    const locList = locations as Location[];
+    const cliList = clients || [];
+    const allowedLocIds = new Set(getAllowedLocationIds(user, locList, cliList));
+    const allowedClientIds = new Set(
+      locList
+        .filter(l => allowedLocIds.has(l.id) && l.clientId)
+        .map(l => String(l.clientId))
+    );
+    if (storagePoint.clientId && allowedClientIds.has(String(storagePoint.clientId))) {
+      return true;
+    }
   }
   return false;
 }

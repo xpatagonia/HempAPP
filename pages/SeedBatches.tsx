@@ -9,7 +9,8 @@ import {
   Building, User, Calendar, FileText, Globe, ClipboardList, ShieldCheck, Warehouse,
   Plus, CheckCircle2, Navigation, Smartphone, UserCheck, Barcode, FlaskConical, Scale, ClipboardCheck,
   Map as MapIcon, Route, Compass, Weight, LayoutGrid, List, Droplets, Sparkles, Sprout,
-  FileCheck, ShieldAlert, Layers, QrCode, Users, ChevronRight, Dna, Award, PenTool, History
+  FileCheck, ShieldAlert, Layers, QrCode, Users, ChevronRight, Dna, Award, PenTool, History,
+  Upload, Download, Lock
 } from 'lucide-react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { TraceabilityLabelModal } from '../components/TraceabilityLabelModal';
@@ -18,6 +19,7 @@ import {
   TransitGuideModal,
   printSingleTransitGuidePDF,
   printMovementsHistoryLedgerPDF,
+  downloadTadDocumentPdf,
   SignatureRoleKey,
   TransitGuideContextData,
   generateSignatureHash,
@@ -213,12 +215,13 @@ export default function SeedBatches() {
   const [moveFormData, setMoveFormData] = useState<any>({
     batchId: '', clientId: '', targetLocationId: '', quantity: 0, inputValue: 0, date: new Date().toISOString().split('T')[0], status: 'En Tránsito', transportType: 'Propio',
     transportGuideNumber: '', remitoNumber: '', precintoNumber: '', driverName: '', driverDni: '', vehiclePlate: '', vehicleModel: '', transportCompany: '', recipientName: '', recipientDni: '',
-    routeItinerary: '', estimatedDistanceKm: 0, routeGoogleLink: '', notes: '', signOnIssue: true, dispatchTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
+    routeItinerary: '', estimatedDistanceKm: 0, routeGoogleLink: '', notes: '', signOnIssue: true, dispatchTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+    tadDocumentUrl: '', tadDocumentName: '', tadApprovalNumber: ''
   });
 
-  // Estados para el Visor PDF, Firma Electrónica e Historial de Guías de Tránsito & Remitos
+  // Estados para el Visor PDF, Firma Electrónica, TAD ARICCAME e Historial de Guías de Tránsito & Remitos
   const [selectedGuideId, setSelectedGuideId] = useState<string | null>(null);
-  const [guideModalTab, setGuideModalTab] = useState<'preview' | 'sign' | 'history'>('preview');
+  const [guideModalTab, setGuideModalTab] = useState<'preview' | 'sign' | 'history' | 'tad'>('preview');
   const [guideModalRole, setGuideModalRole] = useState<SignatureRoleKey>('receiver');
   const [movDestFilter, setMovDestFilter] = useState<string>('all');
   const [movVarietyFilter, setMovVarietyFilter] = useState<string>('all');
@@ -241,15 +244,14 @@ export default function SeedBatches() {
   const calculatedEntryKg = useMemo(() => convertToKg(batchFormData.inputValue || 0, entryUnit), [batchFormData.inputValue, entryUnit]);
   const calculatedMoveKg = useMemo(() => convertToKg(moveFormData.inputValue || 0, moveUnit), [moveFormData.inputValue, moveUnit]);
 
+  const allowedStoragePointIds = useMemo(() => new Set(storagePoints.map(s => String(s.id))), [storagePoints]);
+
   const filteredBatches = useMemo(() => seedBatches.filter(b => {
       const v = varieties.find(v => v.id === b.varietyId);
-      const sp = storagePoints.find(s => s.id === b.storagePointId);
-      
-      if (isClient && currentUser?.clientId) {
-          if (sp?.clientId !== currentUser.clientId) return false;
-      }
-      if (isTech) {
-          if (sp?.responsibleUserId !== currentUser?.id) return false;
+
+      // Para usuarios no administradores vinculados a un campo/estructura, mostrar únicamente el stock físico alojado en los depósitos de su estructura
+      if (!isAdmin && allowedStoragePointIds.size > 0 && currentUser?.clientId) {
+          if (!b.storagePointId || !allowedStoragePointIds.has(String(b.storagePointId))) return false;
       }
 
       const matchesSearch = b.batchCode.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -261,7 +263,7 @@ export default function SeedBatches() {
                               (b.materialType || 'seed') === materialFilter;
 
       return matchesSearch && matchesMaterial;
-  }), [seedBatches, searchTerm, materialFilter, varieties, isClient, isTech, currentUser, storagePoints]);
+  }), [seedBatches, searchTerm, materialFilter, varieties, isAdmin, allowedStoragePointIds, currentUser]);
 
   const stockByWarehouse = useMemo(() => {
       const grouped: Record<string, { storage: any, items: Record<string, { remainingKg: number; initialKg: number }>, totalKg: number, totalInitialKg: number }> = {};
@@ -316,12 +318,10 @@ export default function SeedBatches() {
   };
 
   const filteredMovements = useMemo(() => seedMovements.filter(m => {
-      if (isClient && currentUser?.clientId) {
-          if (m.clientId !== currentUser.clientId) return false;
-      }
-      if (isTech) {
-          const sp = storagePoints.find(s => s.id === m.targetLocationId);
-          if (sp?.responsibleUserId !== currentUser?.id) return false;
+      if (!isAdmin && currentUser?.clientId) {
+          const matchesClient = m.clientId === currentUser.clientId;
+          const matchesTargetSp = m.targetLocationId && allowedStoragePointIds.has(String(m.targetLocationId));
+          if (!matchesClient && !matchesTargetSp) return false;
       }
 
       const batch = seedBatches.find(b => b.id === m.batchId);
@@ -335,6 +335,8 @@ export default function SeedBatches() {
       if (movSigFilter === 'pending_sig' && hasAll3Sigs) return false;
       if (movSigFilter === 'Recibido' && m.status !== 'Recibido') return false;
       if (movSigFilter === 'En Tránsito' && m.status !== 'En Tránsito') return false;
+      if (movSigFilter === 'tad_ok' && !m.tadDocumentUrl) return false;
+      if (movSigFilter === 'tad_pending' && Boolean(m.tadDocumentUrl)) return false;
 
       const term = searchTerm.toLowerCase().trim();
       if (term) {
@@ -343,6 +345,7 @@ export default function SeedBatches() {
               (m.transportGuideNumber || '').toLowerCase().includes(term) ||
               (m.remitoNumber || '').toLowerCase().includes(term) ||
               (m.precintoNumber || '').toLowerCase().includes(term) ||
+              (m.tadDocumentName || '').toLowerCase().includes(term) ||
               (m.driverName || '').toLowerCase().includes(term) ||
               (m.vehiclePlate || '').toLowerCase().includes(term) ||
               (m.routeItinerary || '').toLowerCase().includes(term) ||
@@ -353,7 +356,17 @@ export default function SeedBatches() {
 
       const matchesStatus = !filterStatus || m.status === filterStatus;
       return matchesStatus;
-  }).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()), [seedMovements, seedBatches, varieties, searchTerm, filterStatus, movDestFilter, movVarietyFilter, movSigFilter, isClient, isTech, currentUser, storagePoints]);
+  }).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()), [seedMovements, seedBatches, varieties, searchTerm, filterStatus, movDestFilter, movVarietyFilter, movSigFilter, isAdmin, currentUser, allowedStoragePointIds]);
+
+  const scopedInspections = useMemo(() => {
+      if (isAdmin) return supplierInspections;
+      const allowedVarIds = new Set([
+          ...filteredBatches.map(b => b.varietyId),
+          ...plots.map(p => p.varietyId)
+      ].filter(Boolean));
+      if (allowedVarIds.size === 0) return supplierInspections;
+      return supplierInspections.filter(i => i.varietyId && allowedVarIds.has(i.varietyId));
+  }, [supplierInspections, isAdmin, filteredBatches, plots]);
 
   const movementSummaryStats = useMemo(() => {
       const totalGuides = filteredMovements.length;
@@ -361,7 +374,8 @@ export default function SeedBatches() {
       const receivedGuides = filteredMovements.filter(m => m.status === 'Recibido').length;
       const inTransitGuides = filteredMovements.filter(m => m.status === 'En Tránsito').length;
       const fullySignedGuides = filteredMovements.filter(m => m.issuerSignature && m.carrierSignature && m.receiverSignature).length;
-      return { totalGuides, totalKg, receivedGuides, inTransitGuides, fullySignedGuides };
+      const tadOfficialGuides = filteredMovements.filter(m => Boolean(m.tadDocumentUrl)).length;
+      return { totalGuides, totalKg, receivedGuides, inTransitGuides, fullySignedGuides, tadOfficialGuides };
   }, [filteredMovements]);
 
   // Filtros dinámicos y estado de visualización para la Matriz de Balance de Semillas
@@ -782,6 +796,7 @@ export default function SeedBatches() {
   };
 
   const handleOpenDispatch = () => {
+    if (!isAdmin) return;
     const nextIdx = seedMovements.length + 1;
     setMoveFormData({
       batchId: '', clientId: '', targetLocationId: '', quantity: 0, inputValue: 0, date: new Date().toISOString().split('T')[0], status: 'En Tránsito', transportType: 'Propio',
@@ -789,7 +804,8 @@ export default function SeedBatches() {
       remitoNumber: `R-0001-00025${String(nextIdx).padStart(3, '0')}`,
       precintoNumber: `PREC-SENASA-26${String(nextIdx).padStart(3, '0')}`,
       driverName: '', driverDni: '', vehiclePlate: '', vehicleModel: '', transportCompany: 'Cooperativa PatagonianC LTDA', recipientName: '', recipientDni: '',
-      routeItinerary: '', estimatedDistanceKm: 0, routeGoogleLink: '', notes: '', signOnIssue: true, dispatchTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
+      routeItinerary: '', estimatedDistanceKm: 0, routeGoogleLink: '', notes: '', signOnIssue: true, dispatchTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+      tadDocumentUrl: '', tadDocumentName: '', tadApprovalNumber: ''
     });
     setMoveUnit('kg');
     setIsMoveModalOpen(true);
@@ -1216,6 +1232,11 @@ export default function SeedBatches() {
               carrierSignature: carrierSig,
               receiverSignature: receiverSig,
               archivedAt: isReceived ? timestamp : undefined,
+              tadDocumentUrl: moveFormData.tadDocumentUrl || undefined,
+              tadDocumentName: moveFormData.tadDocumentName || undefined,
+              tadApprovalNumber: moveFormData.tadApprovalNumber || moveFormData.transportGuideNumber || undefined,
+              tadUploadedAt: moveFormData.tadDocumentUrl ? timestamp : undefined,
+              tadUploadedBy: moveFormData.tadDocumentUrl ? issuerName : undefined,
               auditHistory: [
                   {
                       id: `aud-emit-${newId}`,
@@ -1225,7 +1246,16 @@ export default function SeedBatches() {
                       actorRole: 'Emisor Planta Central',
                       details: `Guía ${moveFormData.transportGuideNumber} (${moveFormData.remitoNumber || 'Remito Oficial'}) emitida por ${usage.toFixed(3)} kg (${Math.round(usage * 1000)} gr) hacia ${targetSp?.name || 'Destino'}.`,
                       verificationHash: issuerHash
-                  }
+                  },
+                  ...(moveFormData.tadDocumentUrl ? [{
+                      id: `aud-tad-init-${newId}`,
+                      timestamp,
+                      action: 'OFICIALIZACIÓN DE GUÍA — CARGA DE DOCUMENTO PDF APROBADO EN TAD (ARICCAME)',
+                      actorName: issuerName,
+                      actorRole: 'Administración Central & Custodia Regulatoria',
+                      details: `Guía oficializada con archivo PDF de aprobación TAD (ARICCAME): "${moveFormData.tadDocumentName || 'Guia_TAD_ARICCAME.pdf'}".`,
+                      verificationHash: generateSignatureHash(`${newId}-TAD-INIT-${timestamp}`)
+                  }] : [])
               ]
           };
 
@@ -1355,6 +1385,26 @@ export default function SeedBatches() {
         )}
       </div>
 
+      {/* AVISO DE PERMISOS PARA USUARIOS DE CAMPO / ESTRUCTURA (SOLO VISUALIZACIÓN Y DESCARGA DOCUMENTAL) */}
+      {!isAdmin && (
+        <div className="bg-sky-50/90 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800/80 rounded-2xl px-5 py-3.5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 font-mono text-xs">
+          <div className="flex items-start gap-2.5">
+            <Lock size={16} className="text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
+            <div>
+              <span className="font-black uppercase text-sky-900 dark:text-sky-200 block">
+                Modo Consulta y Descarga Documental · Estructura: {clients.map(c => c.name).join(', ') || storagePoints.map(s => s.name).join(', ') || 'Campo Asignado'}
+              </span>
+              <span className="text-[11px] text-slate-600 dark:text-slate-300">
+                Usted visualiza exclusivamente los lotes, balance, guías de tránsito y documentación correspondientes a su campo y estructura, con descarga habilitada de PDFs (Remitos, Guías TAD ARICCAME, Balances y Marbetes). La alta, modificación y baja de semillas y emisión de guías está reservada a Super Admin y Administradores.
+              </span>
+            </div>
+          </div>
+          <span className="px-2.5 py-1 rounded-xl bg-sky-600 text-white text-[10px] font-black uppercase shrink-0">
+            Visualización & Descarga PDF
+          </span>
+        </div>
+      )}
+
       {/* METRIC CARDS POR TIPO BIOLÓGICO */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <MetricCard 
@@ -1413,7 +1463,7 @@ export default function SeedBatches() {
                     className={`px-4 py-2 rounded-xl transition flex items-center gap-1.5 ${activeTab === 'inspections' ? 'bg-white dark:bg-slate-900 text-purple-600 shadow-sm' : 'text-slate-500 hover:text-purple-600'}`}
                   >
                     <ClipboardCheck size={14} />
-                    <span>3. Actas de Inspección & Calidad INASE ({supplierInspections.length})</span>
+                    <span>3. Actas de Inspección & Calidad INASE ({scopedInspections.length})</span>
                   </button>
               </div>
 
@@ -1496,7 +1546,7 @@ export default function SeedBatches() {
       {activeTab === 'inventory' ? (
           <div className="space-y-5 font-mono">
               {/* MATRIZ DE CONCILIACIÓN AUDITADA POR VARIEDAD Y ESTABLECIMIENTO (CAMPAÑA 25/26) - DISEÑO ESCALABLE CON FILTROS Y PDF */}
-              {!isClient && varietyReconciliation.rows.length > 0 && (
+              {varietyReconciliation.rows.length > 0 && (
                 <div className="bg-white dark:bg-slate-900 rounded-3xl border border-emerald-200/80 dark:border-emerald-900/50 shadow-sm overflow-hidden">
                   {/* CABECERA Y KPIs DE BALANCE */}
                   <div className="px-6 py-4 bg-emerald-50/70 dark:bg-emerald-950/30 border-b border-emerald-100 dark:border-emerald-900/50 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-3">
@@ -2285,7 +2335,9 @@ export default function SeedBatches() {
                           onChange={e => setMovSigFilter(e.target.value)}
                           className="px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 font-bold text-[11px] outline-none"
                       >
-                          <option value="all">✍️ Todos los Estados de Firma y Tránsito</option>
+                          <option value="all">✍️ Todos los Estados de Firma, Tránsito y TAD</option>
+                          <option value="tad_ok">📄 Guía Oficializada con PDF TAD (ARICCAME)</option>
+                          <option value="tad_pending">⏳ Pendiente Subir PDF TAD (ARICCAME)</option>
                           <option value="signed_3">✅ Firmado Completo y Archivado (3/3 Firmas)</option>
                           <option value="pending_sig">⏳ Con Firma Pendiente</option>
                           <option value="Recibido">📦 Recibido en Destino</option>
@@ -2351,6 +2403,26 @@ export default function SeedBatches() {
                                               <div className="text-[10px] text-slate-400 mt-0.5">
                                                   Remito: <strong className="text-slate-600 dark:text-slate-300">{m.remitoNumber || 'Oficial'}</strong> · Precinto: {m.precintoNumber || 'SENASA'}
                                               </div>
+                                              <div className="mt-1 flex flex-wrap items-center gap-1">
+                                                  {m.tadDocumentUrl ? (
+                                                      <button
+                                                          type="button"
+                                                          onClick={() => {
+                                                              setSelectedGuideId(m.id);
+                                                              setGuideModalTab('tad');
+                                                          }}
+                                                          className="px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 text-[9px] font-black uppercase inline-flex items-center gap-1 hover:bg-emerald-200 transition cursor-pointer"
+                                                          title={`Guía Oficializada en TAD (ARICCAME): ${m.tadDocumentName || 'PDF Adjunto'}`}
+                                                      >
+                                                          <FileCheck size={10} />
+                                                          <span>✓ TAD ARICCAME Oficializada</span>
+                                                      </button>
+                                                  ) : (
+                                                      <span className="px-2 py-0.5 rounded bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 text-[9px] font-bold uppercase inline-flex items-center gap-1">
+                                                          <span>⏳ Sin PDF TAD ARICCAME</span>
+                                                      </span>
+                                                  )}
+                                              </div>
                                           </td>
                                           <td className="px-4 py-3.5 text-slate-600 dark:text-slate-300 whitespace-nowrap">
                                               <div className="font-bold">{formatDateAr(m.date)}</div>
@@ -2388,7 +2460,7 @@ export default function SeedBatches() {
                                                           onClick={() => {
                                                               setSelectedGuideId(m.id);
                                                               setGuideModalRole('issuer');
-                                                              setGuideModalTab('sign');
+                                                              setGuideModalTab(isAdmin ? 'sign' : 'preview');
                                                           }}
                                                           title={`1° Firma Emisor (Origen): ${m.issuerSignature?.signedBy || 'Pendiente'}`}
                                                           className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase cursor-pointer transition ${
@@ -2404,7 +2476,7 @@ export default function SeedBatches() {
                                                           onClick={() => {
                                                               setSelectedGuideId(m.id);
                                                               setGuideModalRole('carrier');
-                                                              setGuideModalTab('sign');
+                                                              setGuideModalTab(isAdmin ? 'sign' : 'preview');
                                                           }}
                                                           title={`2° Firma Transportista (Porte): ${m.carrierSignature?.signedBy || 'Pendiente'}`}
                                                           className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase cursor-pointer transition ${
@@ -2420,16 +2492,16 @@ export default function SeedBatches() {
                                                           onClick={() => {
                                                               setSelectedGuideId(m.id);
                                                               setGuideModalRole('receiver');
-                                                              setGuideModalTab('sign');
+                                                              setGuideModalTab(isAdmin ? 'sign' : 'preview');
                                                           }}
-                                                          title={`3° Firma Receptor (Destino): ${m.receiverSignature?.signedBy || 'Clic para firmar recepción'}`}
+                                                          title={`3° Firma Receptor (Destino): ${m.receiverSignature?.signedBy || 'Pendiente'}`}
                                                           className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase cursor-pointer transition ${
                                                               m.receiverSignature
                                                                   ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
                                                                   : 'bg-amber-100 text-amber-800 hover:bg-amber-200'
                                                           }`}
                                                       >
-                                                          {m.receiverSignature ? '✓ 3.Destino' : '✍️ 3.Firmar'}
+                                                          {m.receiverSignature ? '✓ 3.Destino' : isAdmin ? '✍️ 3.Firmar' : '⏳ 3.Destino'}
                                                       </button>
                                                   </div>
                                                   <span className="text-[8.5px] text-slate-400">
@@ -2440,7 +2512,14 @@ export default function SeedBatches() {
                                           <td className="px-4 py-3.5 text-center">
                                               <button
                                                   type="button"
-                                                  onClick={() => handleConfirmMovementReception(m)}
+                                                  onClick={() => {
+                                                      if (isAdmin) {
+                                                          handleConfirmMovementReception(m);
+                                                      } else {
+                                                          setSelectedGuideId(m.id);
+                                                          setGuideModalTab('preview');
+                                                      }
+                                                  }}
                                                   className={`px-2.5 py-1 rounded-xl text-[10px] font-black uppercase transition cursor-pointer ${
                                                       m.status === 'En Tránsito'
                                                           ? 'bg-amber-100 text-amber-800 hover:bg-amber-200 dark:bg-amber-950/60 dark:text-amber-300'
@@ -2451,7 +2530,7 @@ export default function SeedBatches() {
                                               </button>
                                           </td>
                                           <td className="px-4 py-3.5 text-right">
-                                              <div className="flex justify-end items-center gap-1.5">
+                                              <div className="flex flex-wrap justify-end items-center gap-1.5">
                                                   <button
                                                       type="button"
                                                       onClick={() => {
@@ -2462,29 +2541,60 @@ export default function SeedBatches() {
                                                       title="Visualizar Guía Oficial y Remito en formato A4"
                                                   >
                                                       <Eye size={12} />
-                                                      <span>Ver PDF</span>
+                                                      <span>Ver Guía</span>
                                                   </button>
-                                                  <button
-                                                      type="button"
-                                                      onClick={() => {
-                                                          setSelectedGuideId(m.id);
-                                                          setGuideModalRole(m.receiverSignature ? 'receiver' : 'receiver');
-                                                          setGuideModalTab('sign');
-                                                      }}
-                                                      className="px-2.5 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-[10px] font-black uppercase hover:bg-emerald-100 transition flex items-center gap-1 cursor-pointer"
-                                                      title="Firmar Electrónicamente (Emisor, Transportista o Receptor)"
-                                                  >
-                                                      <PenTool size={12} />
-                                                      <span>Firmar</span>
-                                                  </button>
+                                                  {m.tadDocumentUrl && (
+                                                      <button
+                                                          type="button"
+                                                          onClick={() => downloadTadDocumentPdf(m)}
+                                                          className="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black uppercase transition flex items-center gap-1 shadow-xs cursor-pointer"
+                                                          title={`Descargar Documento PDF Oficial TAD (ARICCAME): ${m.tadDocumentName || 'Guía Aprobada'}`}
+                                                      >
+                                                          <Download size={12} />
+                                                          <span>Descargar TAD</span>
+                                                      </button>
+                                                  )}
+                                                  {isAdmin && (
+                                                      <button
+                                                          type="button"
+                                                          onClick={() => {
+                                                              setSelectedGuideId(m.id);
+                                                              setGuideModalTab('tad');
+                                                          }}
+                                                          className={`px-2.5 py-1.5 rounded-xl text-[10px] font-black uppercase transition flex items-center gap-1 cursor-pointer ${
+                                                              m.tadDocumentUrl
+                                                                  ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100'
+                                                                  : 'bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 hover:bg-amber-100'
+                                                          }`}
+                                                          title="Subir o administrar el Documento PDF de la Guía Aprobada en el TAD (ARICCAME)"
+                                                      >
+                                                          <Upload size={12} />
+                                                          <span>{m.tadDocumentUrl ? 'TAD PDF' : 'Subir TAD'}</span>
+                                                      </button>
+                                                  )}
+                                                  {isAdmin && (
+                                                      <button
+                                                          type="button"
+                                                          onClick={() => {
+                                                              setSelectedGuideId(m.id);
+                                                              setGuideModalRole('receiver');
+                                                              setGuideModalTab('sign');
+                                                          }}
+                                                          className="px-2.5 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-[10px] font-black uppercase hover:bg-emerald-100 transition flex items-center gap-1 cursor-pointer"
+                                                          title="Firmar Electrónicamente (Emisor, Transportista o Receptor)"
+                                                      >
+                                                          <PenTool size={12} />
+                                                          <span>Firmar</span>
+                                                      </button>
+                                                  )}
                                                   <button
                                                       type="button"
                                                       onClick={() => printSingleTransitGuidePDF(m, ctx)}
                                                       className="px-2.5 py-1.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-[10px] font-black uppercase hover:opacity-90 transition flex items-center gap-1 cursor-pointer"
-                                                      title="Descargar / Imprimir PDF Oficial A4 de esta Guía"
+                                                      title="Descargar / Imprimir PDF Oficial A4 de esta Guía y Remito"
                                                   >
                                                       <Printer size={12} />
-                                                      <span>PDF</span>
+                                                      <span>Remito PDF</span>
                                                   </button>
                                                   <button
                                                       type="button"
@@ -2545,21 +2655,23 @@ export default function SeedBatches() {
               <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex flex-wrap justify-between items-center gap-3 text-xs bg-purple-50/40 dark:bg-purple-950/20">
                   <div>
                     <span className="font-black text-purple-800 dark:text-purple-300 uppercase flex items-center gap-1.5">
-                      <ShieldCheck size={15} /> Actas Oficiales de Inspección Técnica de Lote & Recepción INASE / ISTA ({supplierInspections.length})
+                      <ShieldCheck size={15} /> Actas Oficiales de Inspección Técnica de Lote & Recepción INASE / ISTA ({scopedInspections.length})
                     </span>
                     <p className="text-[10px] text-slate-500 mt-0.5">
                       Al emitir el dictamen <strong className="text-emerald-700 dark:text-emerald-300">APROBADO CAMPO</strong> en <strong className="text-slate-700 dark:text-slate-300">Proveedores & Insumos ➔ Control de Lotes & Ensayos</strong>, el lote queda en el <strong className="text-emerald-700 dark:text-emerald-300">Stock como ACTIVO (Pasó Calidad)</strong>, listo para seleccionarse al crear el Lote o Parcela de Cultivo.
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => navigate('/suppliers?tab=inspections&newInspection=1')}
-                      className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-[10px] font-bold uppercase flex items-center gap-1.5 shadow-sm transition"
-                    >
-                      <Plus size={12} /> Emitir Nueva Acta y Activar Lote en Stock
-                    </button>
-                  </div>
+                  {isAdmin && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => navigate('/suppliers?tab=inspections&newInspection=1')}
+                        className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-[10px] font-bold uppercase flex items-center gap-1.5 shadow-sm transition"
+                      >
+                        <Plus size={12} /> Emitir Nueva Acta y Activar Lote en Stock
+                      </button>
+                    </div>
+                  )}
               </div>
               <div className="overflow-x-auto">
                   <table className="min-w-full text-xs text-left">
@@ -2575,9 +2687,9 @@ export default function SeedBatches() {
                           </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                          {supplierInspections.length === 0 ? (
+                          {scopedInspections.length === 0 ? (
                               <tr><td colSpan={7} className="p-12 text-center text-slate-400 italic">No hay actas de inspección registradas.</td></tr>
-                          ) : supplierInspections.map(insp => {
+                          ) : scopedInspections.map(insp => {
                               const vName = varieties.find(v => v.id === insp.varietyId)?.name || insp.varietyName || 'Sin asignar';
                               const linkedBatch = seedBatches.find(b => b.originInspectionId === insp.id || b.batchCode.toUpperCase() === insp.lotNumber.toUpperCase());
                               const isApproved = insp.verdict === 'APROBADO_CAMPO';
@@ -2631,12 +2743,12 @@ export default function SeedBatches() {
                                                           type="button"
                                                           onClick={() => navigate('/plots')}
                                                           className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[10px] font-bold uppercase transition shadow-sm"
-                                                          title="Ir a Unidades Productivas para sembrar parcelas con este lote activo"
+                                                          title="Ir a Unidades Productivas"
                                                       >
-                                                          Sembrar en Parcela
+                                                          Ver Parcelas
                                                       </button>
                                                   </>
-                                              ) : (
+                                              ) : isAdmin ? (
                                                   <button
                                                       type="button"
                                                       onClick={async () => {
@@ -2678,6 +2790,8 @@ export default function SeedBatches() {
                                                   >
                                                       Activar en Stock
                                                   </button>
+                                              ) : (
+                                                  <span className="text-[10px] text-slate-400 italic">Solo lectura</span>
                                               )}
                                           </div>
                                       </td>
@@ -3820,6 +3934,45 @@ export default function SeedBatches() {
                                 <label className={labelClass}>Itinerario de Ruta</label>
                                 <input type="text" className={inputClass} value={moveFormData.routeItinerary} onChange={e => setMoveFormData({...moveFormData, routeItinerary: e.target.value})} placeholder="Planta Central Trelew -> Destino" />
                             </div>
+                            <div className="p-3 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 space-y-1.5">
+                                <label className="block text-[9px] font-black uppercase text-emerald-800 dark:text-emerald-300">
+                                  Documento PDF Guía Aprobada en el TAD (ARICCAME) · Oficializa el Tránsito
+                                </label>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <label className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black uppercase inline-flex items-center gap-1.5 cursor-pointer shadow-xs transition">
+                                        <Upload size={12} />
+                                        <span>{moveFormData.tadDocumentName ? 'Cambiar PDF TAD' : 'Subir Archivo PDF ARICCAME'}</span>
+                                        <input
+                                            type="file"
+                                            accept="application/pdf,.pdf"
+                                            className="hidden"
+                                            onChange={e => {
+                                                const f = e.target.files?.[0];
+                                                if (!f) return;
+                                                const reader = new FileReader();
+                                                reader.onload = () => {
+                                                    setMoveFormData((prev: any) => ({
+                                                        ...prev,
+                                                        tadDocumentUrl: String(reader.result || ''),
+                                                        tadDocumentName: f.name,
+                                                        tadApprovalNumber: prev.transportGuideNumber
+                                                    }));
+                                                };
+                                                reader.readAsDataURL(f);
+                                            }}
+                                        />
+                                    </label>
+                                    {moveFormData.tadDocumentName ? (
+                                        <span className="text-[10px] font-black text-emerald-700 dark:text-emerald-300 truncate max-w-[220px]">
+                                            ✓ {moveFormData.tadDocumentName}
+                                        </span>
+                                    ) : (
+                                        <span className="text-[10px] text-slate-500">
+                                            Opcional al emitir (también puede subirlo luego en la tabla)
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
                             <label className="flex items-center gap-2 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 pt-1 cursor-pointer">
                                 <input
                                     type="checkbox"
@@ -3844,7 +3997,7 @@ export default function SeedBatches() {
         </div>
       )}
 
-      {/* MODAL VISOR PDF OFICIAL, FIRMA ELECTRÓNICA E HISTORIAL DE GUÍA DE TRÁNSITO */}
+      {/* MODAL VISOR PDF OFICIAL, FIRMA ELECTRÓNICA, DOCUMENTO TAD ARICCAME E HISTORIAL DE GUÍA DE TRÁNSITO */}
       {selectedGuideId && (() => {
         const activeGuide = seedMovements.find(m => m.id === selectedGuideId);
         if (!activeGuide) return null;
@@ -3857,6 +4010,7 @@ export default function SeedBatches() {
             initialRole={guideModalRole}
             contextData={resolveMovementContext(activeGuide)}
             onSaveMovement={handleSaveSignedMovement}
+            canManageAdmin={isAdmin}
           />
         );
       })()}

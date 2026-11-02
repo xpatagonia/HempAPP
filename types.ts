@@ -576,6 +576,12 @@ export interface SeedMovement {
   receiverSignature?: ElectronicSignatureRecord;
   auditHistory?: MovementAuditEvent[];
   archivedAt?: string;
+  // DOCUMENTO OFICIAL GUÍA APROBADA EN EL TAD (ARICCAME)
+  tadDocumentUrl?: string;
+  tadDocumentName?: string;
+  tadApprovalNumber?: string;
+  tadUploadedAt?: string;
+  tadUploadedBy?: string;
 }
 
 export interface TrialRecord {

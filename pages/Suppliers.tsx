@@ -442,7 +442,7 @@ export default function Suppliers() {
     return `${baseUrl}#/trace/${encodeURIComponent(id)}?${sp.toString()}`;
   };
 
-  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || currentUser?.role === 'technician';
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
 
   // Insumos y aplicaciones fitosanitarias almacenadas
   const agroAppsCountBySupplier = useMemo(() => {

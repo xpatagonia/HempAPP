@@ -688,7 +688,12 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             carrierSignature: m.carrierSignature,
             receiverSignature: m.receiverSignature,
             auditHistory: m.auditHistory,
-            archivedAt: m.archivedAt
+            archivedAt: m.archivedAt,
+            tadDocumentName: m.tadDocumentName,
+            tadApprovalNumber: m.tadApprovalNumber,
+            tadUploadedAt: m.tadUploadedAt,
+            tadUploadedBy: m.tadUploadedBy,
+            ...(m.tadDocumentUrl && m.tadDocumentUrl.length < 350000 ? { tadDocumentUrl: m.tadDocumentUrl } : {})
         };
         const hasAnyMeta = Object.values(meta).some(v => v !== undefined && v !== null);
         if (!hasAnyMeta) return base;
@@ -727,10 +732,15 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         const deletedSet = new Set(deletedMap['seed_movements'] || []);
         const demoMapById = new Map(DEMO_SEED_MOVEMENTS.map(m => [String(m.id), m]));
         let savedMovMetaById: Record<string, Partial<SeedMovement>> = {};
+        let savedTadDocsById: Record<string, Partial<SeedMovement>> = {};
         if (typeof window !== 'undefined') {
             try {
                 const rawMeta = localStorage.getItem('ht_seed_movements_meta_v1');
                 if (rawMeta) savedMovMetaById = JSON.parse(rawMeta) || {};
+            } catch {}
+            try {
+                const rawTad = localStorage.getItem('ht_tad_documents_v1');
+                if (rawTad) savedTadDocsById = JSON.parse(rawTad) || {};
             } catch {}
         }
 
@@ -746,6 +756,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             .map((m: SeedMovement, idx: number): SeedMovement => {
                 const demoMatch = demoMapById.get(String(m.id));
                 const savedMeta = savedMovMetaById[String(m.id)] || {};
+                const savedTad = savedTadDocsById[String(m.id)] || {};
                 const { cleanLink, parsedMeta } = unpackSeedMovementMetaFromLink(
                     m.routeGoogleLink ?? savedMeta.routeGoogleLink ?? demoMatch?.routeGoogleLink
                 );
@@ -754,6 +765,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                     ...(demoMatch || {}),
                     ...parsedMeta,
                     ...savedMeta,
+                    ...savedTad,
                     ...m,
                     routeGoogleLink: cleanLink,
                     quantity: m.quantity !== undefined && m.quantity !== null
@@ -2132,6 +2144,22 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                     metaMap[String(item.id)] = item;
                     localStorage.setItem('ht_seed_movements_meta_v1', JSON.stringify(metaMap));
                 } catch {}
+                try {
+                    const rawTad = localStorage.getItem('ht_tad_documents_v1');
+                    const tadMap = rawTad ? JSON.parse(rawTad) : {};
+                    if (item.tadDocumentUrl) {
+                        tadMap[String(item.id)] = {
+                            tadDocumentUrl: item.tadDocumentUrl,
+                            tadDocumentName: item.tadDocumentName,
+                            tadApprovalNumber: item.tadApprovalNumber,
+                            tadUploadedAt: item.tadUploadedAt,
+                            tadUploadedBy: item.tadUploadedBy
+                        };
+                    } else if (item.tadDocumentUrl === '') {
+                        delete tadMap[String(item.id)];
+                    }
+                    localStorage.setItem('ht_tad_documents_v1', JSON.stringify(tadMap));
+                } catch {}
             }
             setSeedMovements(prev => {
                 const next = healSeedMovements(updateList(prev));
@@ -3292,25 +3320,34 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         [storagePoints, locations, clients, currentUser]
     );
 
-    const scopedSeedBatches = useMemo(
-        () => seedBatches.filter(sb => canAccessSeedBatch(currentUser, sb, storagePoints, plots, locations, clients, varieties)),
-        [seedBatches, storagePoints, plots, locations, clients, varieties, currentUser]
-    );
-
     const scopedSeedMovements = useMemo(() => {
         if (hasGlobalReadScope(currentUser)) return seedMovements;
         if (isSupplierRestrictedUser(currentUser)) {
-            const allowedBatchIds = new Set(scopedSeedBatches.map(b => String(b.id)));
+            const allowedBatchIds = new Set(
+                seedBatches
+                    .filter(sb => canAccessSeedBatch(currentUser, sb, storagePoints, plots, locations, clients, varieties))
+                    .map(b => String(b.id))
+            );
             return seedMovements.filter(m => m.batchId && allowedBatchIds.has(String(m.batchId)));
         }
         const allowedSpIds = new Set(scopedStoragePoints.map(sp => String(sp.id)));
         return seedMovements.filter(
             m =>
                 (m.clientId && scopedClientIds.has(String(m.clientId))) ||
-                (m.targetLocationId && scopedLocationIds.has(String(m.targetLocationId))) ||
+                (m.targetLocationId && (allowedSpIds.has(String(m.targetLocationId)) || scopedLocationIds.has(String(m.targetLocationId)))) ||
                 (m.originStorageId && allowedSpIds.has(String(m.originStorageId)))
         );
-    }, [seedMovements, scopedClientIds, scopedLocationIds, scopedStoragePoints, scopedSeedBatches, currentUser]);
+    }, [seedMovements, scopedClientIds, scopedLocationIds, scopedStoragePoints, seedBatches, storagePoints, plots, locations, clients, varieties, currentUser]);
+
+    const scopedSeedBatches = useMemo(() => {
+        if (hasGlobalReadScope(currentUser)) return seedBatches;
+        const movBatchIds = new Set(scopedSeedMovements.map(m => String(m.batchId)).filter(Boolean));
+        return seedBatches.filter(
+            sb =>
+                canAccessSeedBatch(currentUser, sb, storagePoints, plots, locations, clients, varieties) ||
+                movBatchIds.has(String(sb.id))
+        );
+    }, [seedBatches, storagePoints, plots, locations, clients, varieties, scopedSeedMovements, currentUser]);
 
     const scopedOperationalExpenses = useMemo(() => {
         if (hasGlobalReadScope(currentUser)) return operationalExpenses;

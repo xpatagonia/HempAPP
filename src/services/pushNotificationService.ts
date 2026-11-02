@@ -117,7 +117,7 @@ export const registerServiceWorker = async (): Promise<ServiceWorkerRegistration
       if (installingWorker) {
         installingWorker.onstatechange = () => {
           if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            console.log('[ServiceWorker] Nueva versión V7.29.0-STABLE activada.');
+            console.log('[ServiceWorker] Nueva versión V7.30.0-STABLE activada.');
           }
         };
       }

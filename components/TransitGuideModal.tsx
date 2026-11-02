@@ -30,7 +30,10 @@ import {
   AlertCircle,
   Download,
   Plus,
-  Lock
+  Lock,
+  Upload,
+  Eye,
+  Trash2
 } from 'lucide-react';
 import { DateInputAr } from '../src/components/DateInputAr';
 import { formatDateAr } from '../src/utils/dateFormat';
@@ -46,6 +49,18 @@ export interface TransitGuideContextData {
   client?: Client;
   currentUserName?: string;
 }
+
+export const downloadTadDocumentPdf = (movement: SeedMovement) => {
+  if (!movement.tadDocumentUrl) return;
+  const link = document.createElement('a');
+  link.href = movement.tadDocumentUrl;
+  const safeGuide = (movement.transportGuideNumber || movement.remitoNumber || movement.id || 'GUIA')
+    .replace(/[^a-zA-Z0-9_-]/g, '_');
+  link.download = movement.tadDocumentName || `Guia_Aprobada_TAD_ARICCAME_${safeGuide}.pdf`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
 
 export const generateSignatureHash = (seed: string): string => {
   let h1 = 0x811c9dc5;
@@ -223,7 +238,8 @@ export const printSingleTransitGuidePDF = (
             <div class="subtitle">Red Cooperativa PatagonianC LTDA · Sistema de Cadena de Custodia Nucleus Trace</div>
             <div style="font-size:9px; margin-top:4px;">
               <strong>Campaña Agrícola:</strong> ${movement.campaign || '2025/2026'} ·
-              <strong>Estado Documental:</strong> ${movement.status === 'Recibido' ? 'ENTREGADO Y CONFORMADO EN DESTINO' : 'EN TRÁNSITO OFICIAL'} (${sigCount}/3 Firmas Electrónicas)
+              <strong>Estado Documental:</strong> ${movement.status === 'Recibido' ? 'ENTREGADO Y CONFORMADO EN DESTINO' : 'EN TRÁNSITO OFICIAL'} (${sigCount}/3 Firmas Electrónicas) ·
+              <strong>Oficialización TAD (ARICCAME):</strong> ${movement.tadDocumentUrl ? `✓ OFICIALIZADA (${movement.tadDocumentName || 'PDF TAD Adjunto'})` : 'En trámite / Sin PDF TAD adjunto'}
             </div>
           </div>
           <div class="doc-box">
@@ -231,6 +247,7 @@ export const printSingleTransitGuidePDF = (
             <div class="doc-num">${guideNum}</div>
             <div style="font-size:9.5px; font-weight:bold; margin-top:3px;">Remito N°: ${remitoNum}</div>
             <div style="font-size:8.5px; color:#475569;">Precinto SENASA: <strong>${precintoNum}</strong></div>
+            <div style="font-size:8.5px; color:#047857; font-weight:bold;">TAD ARICCAME: ${movement.tadDocumentUrl ? '✓ PDF APROBADO CARGADO' : 'PENDIENTE PDF TAD'}</div>
             <div style="font-size:8.5px; color:#0f172a; margin-top:2px;">Emisión: <strong>${dateAr} ${movement.dispatchTime ? `· ${movement.dispatchTime} hs` : ''}</strong></div>
           </div>
         </div>
@@ -318,7 +335,7 @@ export const printSingleTransitGuidePDF = (
         }
 
         <div class="footer">
-          <div>Documento electrónico oficial generado y almacenado en <strong>Nucleus Trace V7.29.0-STABLE</strong></div>
+          <div>Documento electrónico oficial generado y almacenado en <strong>Nucleus Trace V7.30.0-STABLE</strong></div>
           <div>ID Registro: ${movement.id} · Archivo: ${movement.archivedAt ? formatDateTimeAr(movement.archivedAt) : 'Activo'}</div>
         </div>
       </div>
@@ -359,7 +376,8 @@ export const printMovementsHistoryLedgerPDF = (
           <td><strong>${idx + 1}</strong></td>
           <td>
             <strong>${m.transportGuideNumber || 'S/N'}</strong><br/>
-            <span class="sub">Remito: ${m.remitoNumber || '-'} · Precinto: ${m.precintoNumber || '-'}</span>
+            <span class="sub">Remito: ${m.remitoNumber || '-'} · Precinto: ${m.precintoNumber || '-'}</span><br/>
+            <span class="sub" style="color:${m.tadDocumentUrl ? '#047857' : '#b45309'}; font-weight:bold;">${m.tadDocumentUrl ? `✓ TAD Oficializada (${m.tadDocumentName || 'PDF'})` : 'Sin PDF TAD'}</span>
           </td>
           <td>${formatDateAr(m.date)}<br/><span class="sub">${m.dispatchTime || '08:00'} hs</span></td>
           <td>
@@ -487,10 +505,11 @@ interface TransitGuideModalProps {
   isOpen: boolean;
   onClose: () => void;
   movement: SeedMovement;
-  initialTab?: 'preview' | 'sign' | 'history';
+  initialTab?: 'preview' | 'sign' | 'history' | 'tad';
   initialRole?: SignatureRoleKey;
   contextData: TransitGuideContextData;
   onSaveMovement: (updated: SeedMovement, confirmReceptionSync?: boolean) => Promise<void>;
+  canManageAdmin?: boolean;
 }
 
 export const TransitGuideModal: React.FC<TransitGuideModalProps> = ({
@@ -500,9 +519,12 @@ export const TransitGuideModal: React.FC<TransitGuideModalProps> = ({
   initialTab = 'preview',
   initialRole = 'receiver',
   contextData,
-  onSaveMovement
+  onSaveMovement,
+  canManageAdmin = true
 }) => {
-  const [modalTab, setModalTab] = useState<'preview' | 'sign' | 'history'>(initialTab);
+  const [modalTab, setModalTab] = useState<'preview' | 'sign' | 'history' | 'tad'>(
+    !canManageAdmin && initialTab === 'sign' ? 'preview' : initialTab
+  );
   const [selectedRole, setSelectedRole] = useState<SignatureRoleKey>(initialRole);
   const [sigMode, setSigMode] = useState<'handwritten' | 'digital_seal'>('handwritten');
   const [signerName, setSignerName] = useState('');
@@ -517,14 +539,21 @@ export const TransitGuideModal: React.FC<TransitGuideModalProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [hasDrawnCanvas, setHasDrawnCanvas] = useState(false);
   const [newAuditNote, setNewAuditNote] = useState('');
+  const [tadApprovalInput, setTadApprovalInput] = useState(
+    movement.tadApprovalNumber || movement.transportGuideNumber || ''
+  );
+  const [tadUploadNotice, setTadUploadNotice] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const isDrawingRef = useRef(false);
+  const tadFileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    setModalTab(initialTab);
+    setModalTab(!canManageAdmin && initialTab === 'sign' ? 'preview' : initialTab);
     setSelectedRole(initialRole);
-  }, [initialTab, initialRole, movement.id]);
+    setTadApprovalInput(movement.tadApprovalNumber || movement.transportGuideNumber || '');
+    setTadUploadNotice(null);
+  }, [initialTab, initialRole, movement.id, canManageAdmin]);
 
   // Pre-fill form fields when role changes
   useEffect(() => {
@@ -794,6 +823,112 @@ export const TransitGuideModal: React.FC<TransitGuideModalProps> = ({
     }
   };
 
+  const handleTadFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!canManageAdmin) return;
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      setTadUploadNotice({
+        type: 'err',
+        text: 'Formato inválido: Seleccione únicamente un archivo PDF oficial emitido en el TAD (ARICCAME).'
+      });
+      return;
+    }
+
+    setIsSaving(true);
+    setTadUploadNotice(null);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const dataUrl = String(reader.result || '');
+        const nowIso = new Date().toISOString().split('T')[0];
+        const nowTime = new Date().toTimeString().slice(0, 5);
+        const timestamp = `${nowIso} ${nowTime}`;
+        const uploader = contextData.currentUserName || 'Gastón Barea Moreno';
+        const approvalCode = (tadApprovalInput || movement.transportGuideNumber || 'TAD-ARICCAME').trim();
+        const hash = generateSignatureHash(`${movement.id}-TAD-ARICCAME-${file.name}-${timestamp}`);
+
+        const tadAuditEvent: MovementAuditEvent = {
+          id: `aud-tad-${Date.now()}`,
+          timestamp,
+          action: 'OFICIALIZACIÓN DE GUÍA — CARGA DE DOCUMENTO PDF APROBADO EN TAD (ARICCAME)',
+          actorName: uploader,
+          actorRole: 'Administración Central & Custodia Regulatoria',
+          details: `Se adjuntó y oficializó el documento PDF de Guía Aprobada en el TAD (ARICCAME): "${file.name}" (Expediente/Guía: ${approvalCode}). El tránsito se encuentra formalmente aprobado y disponible para descarga.`,
+          verificationHash: hash
+        };
+
+        const updatedMov: SeedMovement = {
+          ...movement,
+          tadDocumentUrl: dataUrl,
+          tadDocumentName: file.name,
+          tadApprovalNumber: approvalCode,
+          tadUploadedAt: timestamp,
+          tadUploadedBy: uploader,
+          auditHistory: [...(movement.auditHistory || []), tadAuditEvent]
+        };
+
+        await onSaveMovement(updatedMov, false);
+        setTadUploadNotice({
+          type: 'ok',
+          text: `Documento "${file.name}" cargado con éxito. La Guía de Tránsito quedó OFICIALIZADA por ARICCAME / TAD.`
+        });
+      } catch {
+        setTadUploadNotice({
+          type: 'err',
+          text: 'No se pudo almacenar el documento PDF. Intente con un archivo PDF más liviano.'
+        });
+      } finally {
+        setIsSaving(false);
+        if (tadFileInputRef.current) tadFileInputRef.current.value = '';
+      }
+    };
+    reader.onerror = () => {
+      setIsSaving(false);
+      setTadUploadNotice({ type: 'err', text: 'Error al leer el archivo PDF seleccionado.' });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveTadPdf = async () => {
+    if (!canManageAdmin || !movement.tadDocumentUrl) return;
+    setIsSaving(true);
+    try {
+      const nowIso = new Date().toISOString().split('T')[0];
+      const nowTime = new Date().toTimeString().slice(0, 5);
+      const timestamp = `${nowIso} ${nowTime}`;
+      const uploader = contextData.currentUserName || 'Gastón Barea Moreno';
+      const removedName = movement.tadDocumentName || 'Documento TAD';
+      const hash = generateSignatureHash(`${movement.id}-TAD-REMOVE-${timestamp}`);
+
+      const removeEvent: MovementAuditEvent = {
+        id: `aud-tad-rem-${Date.now()}`,
+        timestamp,
+        action: 'BAJA / REEMPLAZO DE DOCUMENTO PDF TAD (ARICCAME)',
+        actorName: uploader,
+        actorRole: 'Administración Central',
+        details: `Se desvinculó el archivo PDF "${removedName}" para su actualización administrativa.`,
+        verificationHash: hash
+      };
+
+      const updatedMov: SeedMovement = {
+        ...movement,
+        tadDocumentUrl: '',
+        tadDocumentName: '',
+        tadUploadedAt: '',
+        tadUploadedBy: '',
+        auditHistory: [...(movement.auditHistory || []), removeEvent]
+      };
+      await onSaveMovement(updatedMov, false);
+      setTadUploadNotice({
+        type: 'ok',
+        text: 'El archivo PDF TAD anterior fue desvinculado.'
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const qtyKg = Number((movement.quantity || 0).toFixed(3));
   const qtyGr = Math.round(qtyKg * 1000);
   const vName = contextData.variety?.name || 'Semilla Fiscalizada';
@@ -806,6 +941,7 @@ export const TransitGuideModal: React.FC<TransitGuideModalProps> = ({
     movement.carrierSignature,
     movement.receiverSignature
   ].filter(Boolean).length;
+  const hasTadPdf = Boolean(movement.tadDocumentUrl);
 
   return (
     <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-[80] p-3 sm:p-5 font-mono">
@@ -832,13 +968,24 @@ export const TransitGuideModal: React.FC<TransitGuideModalProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {hasTadPdf && (
+              <button
+                type="button"
+                onClick={() => downloadTadDocumentPdf(movement)}
+                className="px-3.5 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow transition cursor-pointer"
+                title={`Descargar ${movement.tadDocumentName || 'PDF Guía Aprobada TAD ARICCAME'}`}
+              >
+                <Download size={14} />
+                <span>Descargar PDF TAD (ARICCAME)</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={() => printSingleTransitGuidePDF(movement, contextData)}
               className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow transition cursor-pointer"
             >
               <Printer size={14} />
-              <span>Descargar / Imprimir PDF (A4)</span>
+              <span>Descargar / Imprimir Remito (A4)</span>
             </button>
             <button
               type="button"
@@ -850,61 +997,96 @@ export const TransitGuideModal: React.FC<TransitGuideModalProps> = ({
           </div>
         </div>
 
-        {/* BARRA DE NAVEGACIÓN INTERNA (1. DOCUMENTO PDF A4 | 2. FIRMA ELECTRÓNICA | 3. HISTORIAL & AUDITORÍA) */}
+        {/* INPUT OCULTO PARA SUBIR ARCHIVO PDF DE LA GUÍA APROBADA EN EL TAD (ARICCAME) */}
+        {canManageAdmin && (
+          <input
+            ref={tadFileInputRef}
+            type="file"
+            accept="application/pdf,.pdf"
+            onChange={handleTadFileChange}
+            className="hidden"
+          />
+        )}
+
+        {/* BARRA DE NAVEGACIÓN INTERNA */}
         <div className="px-6 py-2.5 bg-slate-100 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 flex flex-wrap justify-between items-center gap-2 text-xs">
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             <button
               type="button"
               onClick={() => setModalTab('preview')}
-              className={`px-3.5 py-1.5 rounded-xl font-black uppercase flex items-center gap-1.5 transition ${
+              className={`px-3.5 py-1.5 rounded-xl font-black uppercase flex items-center gap-1.5 transition cursor-pointer ${
                 modalTab === 'preview'
                   ? 'bg-white dark:bg-slate-800 text-sky-600 dark:text-sky-400 shadow-xs border border-slate-200/80 dark:border-slate-700'
                   : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               <FileText size={14} />
-              <span>1. Vista Previa Documento PDF</span>
+              <span>1. Vista Previa Remito PDF</span>
             </button>
             <button
               type="button"
-              onClick={() => setModalTab('sign')}
-              className={`px-3.5 py-1.5 rounded-xl font-black uppercase flex items-center gap-1.5 transition ${
-                modalTab === 'sign'
+              onClick={() => setModalTab('tad')}
+              className={`px-3.5 py-1.5 rounded-xl font-black uppercase flex items-center gap-1.5 transition cursor-pointer ${
+                modalTab === 'tad'
                   ? 'bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 shadow-xs border border-slate-200/80 dark:border-slate-700'
                   : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              <PenTool size={14} />
-              <span>2. Firmar Electrónicamente ({sigCount}/3)</span>
+              <FileCheck size={14} />
+              <span>
+                2. Guía Aprobada TAD / ARICCAME ({hasTadPdf ? '✓ PDF Oficializado' : 'Pendiente PDF'})
+              </span>
             </button>
+            {canManageAdmin && (
+              <button
+                type="button"
+                onClick={() => setModalTab('sign')}
+                className={`px-3.5 py-1.5 rounded-xl font-black uppercase flex items-center gap-1.5 transition cursor-pointer ${
+                  modalTab === 'sign'
+                    ? 'bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 shadow-xs border border-slate-200/80 dark:border-slate-700'
+                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <PenTool size={14} />
+                <span>3. Firmar Electrónicamente ({sigCount}/3)</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={() => setModalTab('history')}
-              className={`px-3.5 py-1.5 rounded-xl font-black uppercase flex items-center gap-1.5 transition ${
+              className={`px-3.5 py-1.5 rounded-xl font-black uppercase flex items-center gap-1.5 transition cursor-pointer ${
                 modalTab === 'history'
                   ? 'bg-white dark:bg-slate-800 text-purple-600 dark:text-purple-400 shadow-xs border border-slate-200/80 dark:border-slate-700'
                   : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               <History size={14} />
-              <span>3. Historial y Archivo ({(movement.auditHistory || []).length})</span>
+              <span>
+                {canManageAdmin ? '4.' : '3.'} Historial y Archivo ({(movement.auditHistory || []).length})
+              </span>
             </button>
           </div>
 
-          <div className="flex items-center gap-2 text-[10px]">
+          <div className="flex flex-wrap items-center gap-2 text-[10px]">
             <span
               className={`px-2.5 py-1 rounded-lg font-black uppercase flex items-center gap-1 ${
-                sigCount === 3
+                hasTadPdf
                   ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
                   : 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
               }`}
             >
+              <FileCheck size={12} />
+              <span>{hasTadPdf ? 'TAD ARICCAME Oficializada' : 'Sin PDF TAD Adjunto'}</span>
+            </span>
+            <span
+              className={`px-2.5 py-1 rounded-lg font-black uppercase flex items-center gap-1 ${
+                sigCount === 3
+                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
+                  : 'bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300 border border-sky-300 dark:border-sky-800'
+              }`}
+            >
               <ShieldCheck size={12} />
-              <span>
-                {sigCount === 3
-                  ? 'Guía Conformada y Archivada (3/3 Firmas)'
-                  : `${sigCount}/3 Firmas Registradas`}
-              </span>
+              <span>{sigCount === 3 ? '3/3 Firmas OK' : `${sigCount}/3 Firmas`}</span>
             </span>
           </div>
         </div>
@@ -1135,7 +1317,9 @@ export const TransitGuideModal: React.FC<TransitGuideModalProps> = ({
                     </span>
                   </div>
                   <span className="text-[10px] text-slate-400">
-                    Haga clic en cualquier recuadro para firmar o actualizar la firma electrónica
+                    {canManageAdmin
+                      ? 'Haga clic en cualquier recuadro para firmar o actualizar la firma electrónica'
+                      : 'Certificación electrónica oficial (Modo Visualización y Descarga)'}
                   </span>
                 </div>
 
@@ -1229,29 +1413,265 @@ export const TransitGuideModal: React.FC<TransitGuideModalProps> = ({
                         )}
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedRole(item.key);
-                          setModalTab('sign');
-                        }}
-                        className={`mt-3 w-full py-1.5 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                          item.sig
-                            ? 'bg-white dark:bg-slate-800 border border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50'
-                            : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs'
-                        }`}
-                      >
-                        <PenTool size={11} />
-                        <span>{item.sig ? 'Re-Firmar / Actualizar' : 'Firmar Ahora'}</span>
-                      </button>
+                      {canManageAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedRole(item.key);
+                            setModalTab('sign');
+                          }}
+                          className={`mt-3 w-full py-1.5 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                            item.sig
+                              ? 'bg-white dark:bg-slate-800 border border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50'
+                              : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs'
+                          }`}
+                        >
+                          <PenTool size={11} />
+                          <span>{item.sig ? 'Re-Firmar / Actualizar' : 'Firmar Ahora'}</span>
+                        </button>
+                      )}
                     </div>
                   ))}
+                </div>
+              </div>
+
+              {/* SECCIÓN 6: OFICIALIZACIÓN DE LA GUÍA EN EL TAD (ARICCAME) — DOCUMENTO PDF ADJUNTO */}
+              <div
+                className={`p-4 rounded-2xl border-2 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 ${
+                  hasTadPdf
+                    ? 'border-emerald-500/80 bg-emerald-50/50 dark:bg-emerald-950/25'
+                    : 'border-amber-300 dark:border-amber-800 bg-amber-50/40 dark:bg-amber-950/15'
+                }`}
+              >
+                <div className="space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span
+                      className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${
+                        hasTadPdf
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-amber-500 text-white'
+                      }`}
+                    >
+                      {hasTadPdf
+                        ? '✓ GUÍA OFICIALIZADA EN TAD (ARICCAME)'
+                        : '⏳ PENDIENTE DOCUMENTO PDF TAD (ARICCAME)'}
+                    </span>
+                    <span className="text-[11px] font-black uppercase text-slate-900 dark:text-white">
+                      6. Documento Oficial de Aprobación de Tránsito (TAD — ARICCAME)
+                    </span>
+                  </div>
+                  {hasTadPdf ? (
+                    <div className="text-[11px] text-slate-700 dark:text-slate-300">
+                      Archivo Oficial:{' '}
+                      <strong className="text-emerald-700 dark:text-emerald-400">
+                        {movement.tadDocumentName || 'Guia_Aprobada_TAD_ARICCAME.pdf'}
+                      </strong>{' '}
+                      {movement.tadUploadedAt && (
+                        <span className="text-slate-500">
+                          · Subido el {formatDateTimeAr(movement.tadUploadedAt)} por{' '}
+                          {movement.tadUploadedBy || 'Administración Central'}
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                      {canManageAdmin
+                        ? 'Adjunte el documento PDF de la Guía Aprobada en el TAD (ARICCAME) para oficializar el tránsito de esta guía.'
+                        : 'El documento PDF de aprobación TAD (ARICCAME) aún no fue adjuntado por la Administración Central.'}
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  {hasTadPdf && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setModalTab('tad')}
+                        className="px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-[10px] font-black uppercase flex items-center gap-1.5 hover:bg-slate-100 transition cursor-pointer"
+                      >
+                        <Eye size={13} />
+                        <span>Ver PDF TAD</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => downloadTadDocumentPdf(movement)}
+                        className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black uppercase flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+                      >
+                        <Download size={13} />
+                        <span>Descargar PDF ARICCAME</span>
+                      </button>
+                    </>
+                  )}
+                  {canManageAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => tadFileInputRef.current?.click()}
+                      disabled={isSaving}
+                      className="px-3.5 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-[10px] font-black uppercase flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+                    >
+                      <Upload size={13} />
+                      <span>
+                        {hasTadPdf ? 'Reemplazar PDF TAD' : 'Subir PDF Guía TAD (ARICCAME)'}
+                      </span>
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
           )}
 
-          {modalTab === 'sign' && (
+          {modalTab === 'tad' && (
+            /* VISOR Y GESTIÓN DEL DOCUMENTO PDF DE LA GUÍA APROBADA EN EL TAD (ARICCAME) */
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 max-w-4xl mx-auto space-y-5 shadow-sm text-xs">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-200 dark:border-slate-800 pb-4">
+                <div>
+                  <span className="text-[10px] font-black uppercase text-emerald-600 block">
+                    Trámites a Distancia (TAD) · Agencia Regulatoria ARICCAME
+                  </span>
+                  <h3 className="text-base font-black text-slate-900 dark:text-white uppercase mt-0.5">
+                    Documento PDF Oficial — Guía Aprobada en el TAD (ARICCAME)
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Este documento oficializa la guía de tránsito y habilita la circulación federal del material biológico.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {hasTadPdf && (
+                    <button
+                      type="button"
+                      onClick={() => downloadTadDocumentPdf(movement)}
+                      className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase flex items-center gap-1.5 shadow transition cursor-pointer"
+                    >
+                      <Download size={14} />
+                      <span>Descargar PDF TAD ARICCAME</span>
+                    </button>
+                  )}
+                  {canManageAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => tadFileInputRef.current?.click()}
+                      disabled={isSaving}
+                      className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-black uppercase flex items-center gap-1.5 shadow transition cursor-pointer"
+                    >
+                      <Upload size={14} />
+                      <span>
+                        {hasTadPdf ? 'Reemplazar Archivo PDF' : 'Subir Archivo PDF ARICCAME'}
+                      </span>
+                    </button>
+                  )}
+                  {canManageAdmin && hasTadPdf && (
+                    <button
+                      type="button"
+                      onClick={handleRemoveTadPdf}
+                      disabled={isSaving}
+                      className="p-2 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 hover:bg-rose-100 border border-rose-200 dark:border-rose-800 transition cursor-pointer"
+                      title="Quitar PDF TAD adjunto"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {tadUploadNotice && (
+                <div
+                  className={`p-3.5 rounded-xl border text-xs font-bold flex items-center gap-2 ${
+                    tadUploadNotice.type === 'ok'
+                      ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
+                      : 'bg-rose-50 dark:bg-rose-950/40 border-rose-300 dark:border-rose-800 text-rose-800 dark:text-rose-300'
+                  }`}
+                >
+                  <CheckCircle2 size={15} className="shrink-0" />
+                  <span>{tadUploadNotice.text}</span>
+                </div>
+              )}
+
+              {canManageAdmin && (
+                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                  <div className="sm:col-span-2">
+                    <label className="text-[9px] font-black uppercase text-slate-500 block mb-1">
+                      N° de Expediente / Disposición TAD ARICCAME
+                    </label>
+                    <input
+                      type="text"
+                      value={tadApprovalInput}
+                      onChange={e => setTadApprovalInput(e.target.value)}
+                      placeholder="Ej: EX-2026-04104576-APN-ARICCAME#MEC"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-xs font-bold"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => tadFileInputRef.current?.click()}
+                    disabled={isSaving}
+                    className="w-full py-2 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white text-xs font-black uppercase flex items-center justify-center gap-2 transition cursor-pointer"
+                  >
+                    <Upload size={14} />
+                    <span>Seleccionar PDF (.pdf)</span>
+                  </button>
+                </div>
+              )}
+
+              {hasTadPdf ? (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap justify-between items-center gap-2 p-3 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800">
+                    <div className="flex items-center gap-2">
+                      <FileCheck size={16} className="text-emerald-600 shrink-0" />
+                      <div>
+                        <div className="font-black text-emerald-900 dark:text-emerald-200">
+                          {movement.tadDocumentName || 'Guia_Aprobada_TAD_ARICCAME.pdf'}
+                        </div>
+                        <div className="text-[10px] text-emerald-700 dark:text-emerald-400">
+                          Expediente: {movement.tadApprovalNumber || movement.transportGuideNumber} · Oficializado el{' '}
+                          {movement.tadUploadedAt ? formatDateTimeAr(movement.tadUploadedAt) : formatDateAr(movement.date)}{' '}
+                          por {movement.tadUploadedBy || 'Administración Central'}
+                        </div>
+                      </div>
+                    </div>
+                    <span className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[9px] font-black uppercase">
+                      ✓ Tránsito Aprobado TAD
+                    </span>
+                  </div>
+
+                  <div className="rounded-2xl overflow-hidden border-2 border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-950">
+                    <iframe
+                      src={movement.tadDocumentUrl}
+                      title="Documento Oficial Guía Aprobada TAD ARICCAME"
+                      className="w-full h-[500px]"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="p-10 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700 text-center space-y-3">
+                  <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center mx-auto">
+                    <FileText size={24} />
+                  </div>
+                  <div className="text-sm font-black text-slate-800 dark:text-slate-200 uppercase">
+                    Guía Pendiente de Documento PDF TAD (ARICCAME)
+                  </div>
+                  <p className="text-xs text-slate-500 max-w-md mx-auto">
+                    {canManageAdmin
+                      ? 'Suba el archivo PDF emitido por la plataforma TAD (Trámites a Distancia — ARICCAME) que aprueba el tránsito y oficializa esta guía.'
+                      : 'Solo los usuarios Super Admin y Administradores pueden cargar el archivo PDF de aprobación TAD (ARICCAME). Una vez cargado, podrá visualizarlo y descargarlo desde aquí.'}
+                  </p>
+                  {canManageAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => tadFileInputRef.current?.click()}
+                      className="px-5 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase inline-flex items-center gap-2 shadow cursor-pointer"
+                    >
+                      <Upload size={15} />
+                      <span>Subir Archivo PDF ARICCAME Ahora</span>
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {modalTab === 'sign' && canManageAdmin && (
             /* CENTRO DE FIRMA ELECTRÓNICA (PAD MANUSCRITO TÁCTIL/MOUSE + SELLO CALIGRÁFICO) */
             <form
               onSubmit={handleSaveSignature}
@@ -1600,27 +2020,36 @@ export const TransitGuideModal: React.FC<TransitGuideModalProps> = ({
                 ))}
               </div>
 
-              {/* AGREGAR HITO / CONTROL DE RUTA AL HISTORIAL */}
-              <form
-                onSubmit={handleAddAuditNote}
-                className="pt-3 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row gap-2"
-              >
-                <input
-                  type="text"
-                  value={newAuditNote}
-                  onChange={e => setNewAuditNote(e.target.value)}
-                  placeholder="Registrar control de ruta, verificación de precinto o novedad en el historial de esta guía..."
-                  className="flex-1 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-xs"
-                />
-                <button
-                  type="submit"
-                  disabled={isSaving || !newAuditNote.trim()}
-                  className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-xs font-black uppercase flex items-center justify-center gap-1.5 cursor-pointer"
+              {/* AGREGAR HITO / CONTROL DE RUTA AL HISTORIAL (SOLO SUPER ADMIN Y ADMIN) */}
+              {canManageAdmin ? (
+                <form
+                  onSubmit={handleAddAuditNote}
+                  className="pt-3 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row gap-2"
                 >
-                  <Plus size={14} />
-                  <span>Anexar al Historial</span>
-                </button>
-              </form>
+                  <input
+                    type="text"
+                    value={newAuditNote}
+                    onChange={e => setNewAuditNote(e.target.value)}
+                    placeholder="Registrar control de ruta, verificación de precinto o novedad en el historial de esta guía..."
+                    className="flex-1 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-xs"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isSaving || !newAuditNote.trim()}
+                    className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-xs font-black uppercase flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Plus size={14} />
+                    <span>Anexar al Historial</span>
+                  </button>
+                </form>
+              ) : (
+                <div className="pt-3 border-t border-slate-200 dark:border-slate-800 text-[11px] text-slate-500 flex items-center gap-2">
+                  <Lock size={13} className="text-slate-400 shrink-0" />
+                  <span>
+                    Registro histórico inmutable en modo lectura y descarga para su campo y estructura.
+                  </span>
+                </div>
+              )}
             </div>
           )}
         </div>
