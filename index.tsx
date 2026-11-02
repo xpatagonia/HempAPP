@@ -3,8 +3,8 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
 
-// V7.30.0-STABLE - PRODUCTION PROTOCOL
-const version = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'V7.30.0-STABLE';
+// V7.31.0-STABLE - PRODUCTION PROTOCOL
+const version = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'V7.31.0-STABLE';
 const buildTime = typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : new Date().toISOString();
 
 console.log(`%c NUCLEUS APP ${version} `, 'background: #006633; color: #fff; font-weight: bold; padding: 10px; font-size: 20px; border: 2px solid #DDDB00;');
@@ -17,7 +17,7 @@ if (typeof window !== 'undefined') {
     if ('caches' in window) {
       caches.keys().then((keys) => {
         keys.forEach((k) => {
-          if (k !== 'hempc-nucleus-v7.30.0') {
+          if (k !== 'hempc-nucleus-v7.31.0') {
             caches.delete(k).catch(() => {});
           }
         });
