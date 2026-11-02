@@ -9,11 +9,20 @@ import {
   Building, User, Calendar, FileText, Globe, ClipboardList, ShieldCheck, Warehouse,
   Plus, CheckCircle2, Navigation, Smartphone, UserCheck, Barcode, FlaskConical, Scale, ClipboardCheck,
   Map as MapIcon, Route, Compass, Weight, LayoutGrid, List, Droplets, Sparkles, Sprout,
-  FileCheck, ShieldAlert, Layers, QrCode, Users, ChevronRight, Dna, Award
+  FileCheck, ShieldAlert, Layers, QrCode, Users, ChevronRight, Dna, Award, PenTool, History
 } from 'lucide-react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { TraceabilityLabelModal } from '../components/TraceabilityLabelModal';
 import { BarcodeScannerModal } from '../components/BarcodeScannerModal';
+import {
+  TransitGuideModal,
+  printSingleTransitGuidePDF,
+  printMovementsHistoryLedgerPDF,
+  SignatureRoleKey,
+  TransitGuideContextData,
+  generateSignatureHash,
+  generateCalligraphicSignatureDataUrl
+} from '../components/TransitGuideModal';
 import { DateInputAr } from '../src/components/DateInputAr';
 import { formatDateAr } from '../src/utils/dateFormat';
 
@@ -203,9 +212,17 @@ export default function SeedBatches() {
 
   const [moveFormData, setMoveFormData] = useState<any>({
     batchId: '', clientId: '', targetLocationId: '', quantity: 0, inputValue: 0, date: new Date().toISOString().split('T')[0], status: 'En Tránsito', transportType: 'Propio',
-    transportGuideNumber: '', driverName: '', driverDni: '', vehiclePlate: '', transportCompany: '', recipientName: '', recipientDni: '',
-    routeItinerary: '', estimatedDistanceKm: 0, routeGoogleLink: '', dispatchTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
+    transportGuideNumber: '', remitoNumber: '', precintoNumber: '', driverName: '', driverDni: '', vehiclePlate: '', vehicleModel: '', transportCompany: '', recipientName: '', recipientDni: '',
+    routeItinerary: '', estimatedDistanceKm: 0, routeGoogleLink: '', notes: '', signOnIssue: true, dispatchTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
   });
+
+  // Estados para el Visor PDF, Firma Electrónica e Historial de Guías de Tránsito & Remitos
+  const [selectedGuideId, setSelectedGuideId] = useState<string | null>(null);
+  const [guideModalTab, setGuideModalTab] = useState<'preview' | 'sign' | 'history'>('preview');
+  const [guideModalRole, setGuideModalRole] = useState<SignatureRoleKey>('receiver');
+  const [movDestFilter, setMovDestFilter] = useState<string>('all');
+  const [movVarietyFilter, setMovVarietyFilter] = useState<string>('all');
+  const [movSigFilter, setMovSigFilter] = useState<string>('all');
 
   const isSuperAdmin = currentUser?.role === 'super_admin';
   const isAdmin = currentUser?.role === 'admin' || isSuperAdmin;
@@ -276,6 +293,28 @@ export default function SeedBatches() {
       return Object.values(grouped);
   }, [filteredBatches, storagePoints, varieties]);
 
+  const resolveMovementContext = (m: SeedMovement): TransitGuideContextData => {
+      const batch = seedBatches.find(b => b.id === m.batchId);
+      const variety = batch ? varieties.find(v => v.id === batch.varietyId) : undefined;
+      const supplier = batch?.supplierId
+          ? suppliers.find(s => s.id === batch.supplierId)
+          : variety?.supplierId
+          ? suppliers.find(s => s.id === variety.supplierId)
+          : undefined;
+      const originStorage = storagePoints.find(s => s.id === (m.originStorageId || batch?.storagePointId));
+      const targetStorage = storagePoints.find(s => s.id === m.targetLocationId);
+      const client = clients.find(c => c.id === (m.clientId || targetStorage?.clientId));
+      return {
+          batch,
+          variety,
+          supplier,
+          originStorage,
+          targetStorage,
+          client,
+          currentUserName: currentUser?.name || 'Gastón Barea Moreno'
+      };
+  };
+
   const filteredMovements = useMemo(() => seedMovements.filter(m => {
       if (isClient && currentUser?.clientId) {
           if (m.clientId !== currentUser.clientId) return false;
@@ -285,11 +324,45 @@ export default function SeedBatches() {
           if (sp?.responsibleUserId !== currentUser?.id) return false;
       }
 
-      const term = searchTerm.toLowerCase();
-      const matchesSearch = (m.recipientName || '').toLowerCase().includes(term) || (m.transportGuideNumber || '').toLowerCase().includes(term);
+      const batch = seedBatches.find(b => b.id === m.batchId);
+      const variety = batch ? varieties.find(v => v.id === batch.varietyId) : undefined;
+
+      if (movDestFilter !== 'all' && m.targetLocationId !== movDestFilter) return false;
+      if (movVarietyFilter !== 'all' && batch?.varietyId !== movVarietyFilter) return false;
+
+      const hasAll3Sigs = Boolean(m.issuerSignature && m.carrierSignature && m.receiverSignature);
+      if (movSigFilter === 'signed_3' && !hasAll3Sigs) return false;
+      if (movSigFilter === 'pending_sig' && hasAll3Sigs) return false;
+      if (movSigFilter === 'Recibido' && m.status !== 'Recibido') return false;
+      if (movSigFilter === 'En Tránsito' && m.status !== 'En Tránsito') return false;
+
+      const term = searchTerm.toLowerCase().trim();
+      if (term) {
+          const matchesSearch =
+              (m.recipientName || '').toLowerCase().includes(term) ||
+              (m.transportGuideNumber || '').toLowerCase().includes(term) ||
+              (m.remitoNumber || '').toLowerCase().includes(term) ||
+              (m.precintoNumber || '').toLowerCase().includes(term) ||
+              (m.driverName || '').toLowerCase().includes(term) ||
+              (m.vehiclePlate || '').toLowerCase().includes(term) ||
+              (m.routeItinerary || '').toLowerCase().includes(term) ||
+              (batch?.batchCode || '').toLowerCase().includes(term) ||
+              (variety?.name || '').toLowerCase().includes(term);
+          if (!matchesSearch) return false;
+      }
+
       const matchesStatus = !filterStatus || m.status === filterStatus;
-      return matchesSearch && matchesStatus;
-  }).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()), [seedMovements, searchTerm, filterStatus, isClient, isTech, currentUser, storagePoints]);
+      return matchesStatus;
+  }).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()), [seedMovements, seedBatches, varieties, searchTerm, filterStatus, movDestFilter, movVarietyFilter, movSigFilter, isClient, isTech, currentUser, storagePoints]);
+
+  const movementSummaryStats = useMemo(() => {
+      const totalGuides = filteredMovements.length;
+      const totalKg = Number(filteredMovements.reduce((s, m) => s + (m.quantity || 0), 0).toFixed(3));
+      const receivedGuides = filteredMovements.filter(m => m.status === 'Recibido').length;
+      const inTransitGuides = filteredMovements.filter(m => m.status === 'En Tránsito').length;
+      const fullySignedGuides = filteredMovements.filter(m => m.issuerSignature && m.carrierSignature && m.receiverSignature).length;
+      return { totalGuides, totalKg, receivedGuides, inTransitGuides, fullySignedGuides };
+  }, [filteredMovements]);
 
   // Filtros dinámicos y estado de visualización para la Matriz de Balance de Semillas
   const [balanceNodeFilter, setBalanceNodeFilter] = useState<string>('all');
@@ -709,10 +782,14 @@ export default function SeedBatches() {
   };
 
   const handleOpenDispatch = () => {
+    const nextIdx = seedMovements.length + 1;
     setMoveFormData({
       batchId: '', clientId: '', targetLocationId: '', quantity: 0, inputValue: 0, date: new Date().toISOString().split('T')[0], status: 'En Tránsito', transportType: 'Propio',
-      transportGuideNumber: '', driverName: '', driverDni: '', vehiclePlate: '', vehicleModel: '', transportCompany: '', recipientName: '', recipientDni: '',
-      routeItinerary: '', estimatedDistanceKm: 0, routeGoogleLink: '', dispatchTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
+      transportGuideNumber: `RE-2026-0410${String(4588 + nextIdx)}-APN-ARICCAME`,
+      remitoNumber: `R-0001-00025${String(nextIdx).padStart(3, '0')}`,
+      precintoNumber: `PREC-SENASA-26${String(nextIdx).padStart(3, '0')}`,
+      driverName: '', driverDni: '', vehiclePlate: '', vehicleModel: '', transportCompany: 'Cooperativa PatagonianC LTDA', recipientName: '', recipientDni: '',
+      routeItinerary: '', estimatedDistanceKm: 0, routeGoogleLink: '', notes: '', signOnIssue: true, dispatchTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
     });
     setMoveUnit('kg');
     setIsMoveModalOpen(true);
@@ -1038,10 +1115,21 @@ export default function SeedBatches() {
   };
 
   const handleConfirmMovementReception = async (mov: SeedMovement) => {
-      const nextStatus = mov.status === 'En Tránsito' ? 'Recibido' : 'En Tránsito';
-      const ok = await updateSeedMovement({ ...mov, status: nextStatus });
-      if (ok && nextStatus === 'Recibido') {
-          await syncDestinationBatchOnReception(mov);
+      if (mov.status === 'En Tránsito') {
+          // Abrir directamente el modal en la pestaña de Firma Electrónica del Receptor para certificar la recepción
+          setSelectedGuideId(mov.id);
+          setGuideModalRole('receiver');
+          setGuideModalTab('sign');
+          return;
+      }
+      setSelectedGuideId(mov.id);
+      setGuideModalTab('preview');
+  };
+
+  const handleSaveSignedMovement = async (updatedMov: SeedMovement, shouldSyncDestinationBatch = false) => {
+      const ok = await updateSeedMovement(updatedMov);
+      if (ok && shouldSyncDestinationBatch) {
+          await syncDestinationBatchOnReception(updatedMov);
       }
   };
 
@@ -1068,13 +1156,77 @@ export default function SeedBatches() {
               moveFormData.clientId && moveFormData.clientId !== 'INTERNAL'
                   ? moveFormData.clientId
                   : targetSp?.clientId || undefined;
+          const newId = generateId();
+          const dispDate = moveFormData.date || new Date().toISOString().split('T')[0];
+          const dispTime = moveFormData.dispatchTime || '08:00';
+          const timestamp = `${dispDate} ${dispTime}`;
+          const issuerName = currentUser?.name || 'Gastón Barea Moreno';
+          const issuerHash = generateSignatureHash(`ISSUER-${newId}-${timestamp}`);
+          const issuerSig = moveFormData.signOnIssue !== false ? {
+              signedBy: issuerName,
+              dniOrMatricula: '21.820.534 / Dir. Custodia BioC #1',
+              role: 'Emisor & Custodia Central (Planta BioC Warehousing 1#)',
+              signedAt: timestamp,
+              signatureMode: 'digital_seal' as const,
+              verificationHash: issuerHash,
+              signatureDataUrl: generateCalligraphicSignatureDataUrl(issuerName, 'DESPACHO PLANTA CENTRAL', issuerHash),
+              observations: 'Despacho certificado electrónicamente en origen.'
+          } : undefined;
+
+          const carrierName = moveFormData.driverName || moveFormData.transportCompany || 'Transportista Oficial';
+          const carrierHash = generateSignatureHash(`CARRIER-${newId}-${carrierName}`);
+          const carrierSig = moveFormData.signOnIssue !== false ? {
+              signedBy: carrierName,
+              dniOrMatricula: moveFormData.driverDni || moveFormData.vehiclePlate || 'Hab. ARICCAME',
+              role: `Transportista (${moveFormData.transportCompany || 'Logística Oficial'})`,
+              signedAt: timestamp,
+              signatureMode: 'digital_seal' as const,
+              verificationHash: carrierHash,
+              signatureDataUrl: generateCalligraphicSignatureDataUrl(carrierName, 'CONFORMIDAD DE PORTE', carrierHash),
+              observations: 'Conformidad de porte al retiro de Planta Central.'
+          } : undefined;
+
+          const isReceived = moveFormData.status === 'Recibido';
+          const receiverName = moveFormData.recipientName || 'Responsable de Recepción';
+          const receiverHash = generateSignatureHash(`RECEIVER-${newId}-${receiverName}`);
+          const receiverSig = isReceived ? {
+              signedBy: receiverName,
+              dniOrMatricula: moveFormData.recipientDni || 'Verificado en Destino',
+              role: 'Responsable de Recepción en Establecimiento Destino',
+              signedAt: timestamp,
+              signatureMode: 'digital_seal' as const,
+              verificationHash: receiverHash,
+              signatureDataUrl: generateCalligraphicSignatureDataUrl(receiverName, 'RECEPCIÓN CONFORME DESTINO', receiverHash),
+              receivedQuantityKg: Number(usage.toFixed(3)),
+              conformityStatus: 'CONFORME' as const,
+              observations: `Recepción directa de ${usage.toFixed(3)} kg (${Math.round(usage * 1000)} gr).`
+          } : undefined;
+
+          const { signOnIssue, inputValue, ...cleanFormData } = moveFormData;
+
           const movePayload: SeedMovement = {
-              ...moveFormData,
-              id: generateId(),
+              ...cleanFormData,
+              id: newId,
               clientId: resolvedClientId,
               quantity: Number(usage.toFixed(3)),
               originStorageId: sourceBatch.storagePointId,
-              status: moveFormData.status || 'En Tránsito'
+              status: moveFormData.status || 'En Tránsito',
+              campaign: '2025/2026',
+              issuerSignature: issuerSig,
+              carrierSignature: carrierSig,
+              receiverSignature: receiverSig,
+              archivedAt: isReceived ? timestamp : undefined,
+              auditHistory: [
+                  {
+                      id: `aud-emit-${newId}`,
+                      timestamp,
+                      action: 'EMISIÓN DE GUÍA DE TRÁNSITO Y FIRMA DE DESPACHO',
+                      actorName: issuerName,
+                      actorRole: 'Emisor Planta Central',
+                      details: `Guía ${moveFormData.transportGuideNumber} (${moveFormData.remitoNumber || 'Remito Oficial'}) emitida por ${usage.toFixed(3)} kg (${Math.round(usage * 1000)} gr) hacia ${targetSp?.name || 'Destino'}.`,
+                      verificationHash: issuerHash
+                  }
+              ]
           };
 
           const moveSuccess = await addSeedMovement(movePayload);
@@ -1088,6 +1240,8 @@ export default function SeedBatches() {
                   await syncDestinationBatchOnReception(movePayload, sourceBatch);
               }
               setIsMoveModalOpen(false);
+              setSelectedGuideId(movePayload.id);
+              setGuideModalTab('preview');
           }
       } catch (err) {
           alert("Error de comunicación logística.");
@@ -2007,114 +2161,382 @@ export default function SeedBatches() {
               )}
           </div>
       ) : activeTab === 'logistics' ? (
-          /* CONTENIDO TAB 2: LOGÍSTICA & HOJA DE REMITOS */
-          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-sm border border-slate-200/80 dark:border-slate-800 overflow-hidden font-mono">
-              <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center text-xs">
-                  <span className="font-bold text-slate-700 dark:text-slate-300">
-                    Guías Oficiales de Transporte ARICCAME & SENASA ({filteredMovements.length})
-                  </span>
-                  <span className="text-[10px] text-slate-400">
-                    Cadena de custodia de materiales biológicos en tránsito
-                  </span>
+          /* CONTENIDO TAB 2: CENTRO INTEGRAL DE GUÍAS DE TRÁNSITO, REMITOS, FIRMA ELECTRÓNICA & ARCHIVO HISTÓRICO */
+          <div className="space-y-4 font-mono">
+              {/* TARJETAS KPI DEL LIBRO HISTÓRICO DE GUÍAS Y REMITOS */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
+                      <span className="text-[9px] font-black uppercase text-slate-400 block">Guías en Libro Histórico</span>
+                      <div className="text-lg font-black text-slate-900 dark:text-white mt-0.5">
+                          {movementSummaryStats.totalGuides} Guías Oficiales
+                      </div>
+                      <span className="text-[10px] text-sky-600 dark:text-sky-400 font-bold">
+                          Volumen: {movementSummaryStats.totalKg.toFixed(3)} kg ({Math.round(movementSummaryStats.totalKg * 1000).toLocaleString('es-AR')} gr)
+                      </span>
+                  </div>
+                  <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-emerald-200/80 dark:border-emerald-900/50 shadow-xs">
+                      <span className="text-[9px] font-black uppercase text-emerald-600 block">Triple Firma Electrónica (3/3)</span>
+                      <div className="text-lg font-black text-emerald-700 dark:text-emerald-400 mt-0.5">
+                          {movementSummaryStats.fullySignedGuides} de {movementSummaryStats.totalGuides} Firmadas
+                      </div>
+                      <span className="text-[10px] text-slate-500">
+                          1. Emisor · 2. Transportista · 3. Receptor
+                      </span>
+                  </div>
+                  <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
+                      <span className="text-[9px] font-black uppercase text-slate-400 block">Recibidas en Establecimiento</span>
+                      <div className="text-lg font-black text-slate-900 dark:text-white mt-0.5">
+                          {movementSummaryStats.receivedGuides} Entregadas
+                      </div>
+                      <span className="text-[10px] text-emerald-600 font-bold">
+                          Stock impactado y archivado en destino
+                      </span>
+                  </div>
+                  <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
+                      <span className="text-[9px] font-black uppercase text-amber-600 block">En Tránsito / Pendientes</span>
+                      <div className="text-lg font-black text-amber-600 dark:text-amber-400 mt-0.5">
+                          {movementSummaryStats.inTransitGuides} En Ruta
+                      </div>
+                      <span className="text-[10px] text-slate-400">
+                          Aguardando firma de recepción en campo
+                      </span>
+                  </div>
               </div>
-              <div className="overflow-x-auto">
-                  <table className="min-w-full text-xs text-left">
-                      <thead className="bg-slate-50 dark:bg-slate-950/50 text-slate-400 uppercase text-[9px] font-black tracking-wider border-b border-slate-100 dark:border-slate-800">
-                          <tr>
-                              <th className="px-6 py-4">Guía / Remito</th>
-                              <th className="px-6 py-4">Fecha y Hora</th>
-                              <th className="px-6 py-4">Carga Despachada</th>
-                              <th className="px-6 py-4">Itinerario & Destino</th>
-                              <th className="px-6 py-4">Transportista & Patente</th>
-                              <th className="px-6 py-4 text-center">Estado</th>
-                              <th className="px-6 py-4 text-right">Acción</th>
-                          </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                          {filteredMovements.length === 0 ? (
-                              <tr><td colSpan={7} className="p-12 text-center text-slate-400 italic">No hay guías de tránsito registradas.</td></tr>
-                          ) : filteredMovements.map(m => (
-                              <tr key={m.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition">
-                                  <td className="px-6 py-4 font-bold text-slate-900 dark:text-white">
-                                      {m.transportGuideNumber}
-                                  </td>
-                                  <td className="px-6 py-4 text-slate-500">
-                                      {formatDateAr(m.date)} {m.dispatchTime && `· ${m.dispatchTime} hs`}
-                                  </td>
-                                  <td className="px-6 py-4 font-bold text-sky-600 dark:text-sky-400">
-                                      {m.quantity.toLocaleString()} kg
-                                  </td>
-                                  <td className="px-6 py-4 text-slate-600 dark:text-slate-400 max-w-xs truncate">
-                                      {m.routeItinerary || 'Tránsito directo'}
-                                  </td>
-                                  <td className="px-6 py-4 text-slate-600 dark:text-slate-400">
-                                      <div>{m.driverName || 'Chofer Asignado'}</div>
-                                      <div className="text-[9px] text-slate-400">Pat: {m.vehiclePlate || 'S/D'} · {m.vehicleModel || ''}</div>
-                                  </td>
-                                  <td className="px-6 py-4 text-center">
-                                      <button
-                                        type="button"
-                                        onClick={() => handleConfirmMovementReception(m)}
-                                        title="Clic para confirmar recepción y sincronizar lote en depósito destino"
-                                        className={`px-2.5 py-1 rounded-xl text-[10px] font-bold transition ${
-                                          m.status === 'En Tránsito' 
-                                            ? 'bg-amber-100 text-amber-800 hover:bg-amber-200 dark:bg-amber-950/60 dark:text-amber-300' 
-                                            : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300'
-                                        }`}
-                                      >
-                                        {m.status}
-                                      </button>
-                                  </td>
-                                  <td className="px-6 py-4 text-right">
-                                      <div className="flex justify-end items-center gap-1.5">
-                                          {m.status === 'En Tránsito' && (
-                                              <button
-                                                type="button"
-                                                onClick={() => handleConfirmMovementReception(m)}
-                                                className="px-2 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 text-[9px] font-black uppercase hover:bg-emerald-100 transition"
-                                                title="Confirmar Recepción en Destino y Dar de Alta en Almacén"
-                                              >
-                                                Recibir
-                                              </button>
-                                          )}
-                                          {isAdmin && (
-                                              confirmDeleteMoveId === m.id ? (
-                                                <div className="inline-flex items-center gap-1 bg-red-50 dark:bg-red-950/60 px-2 py-0.5 rounded-lg border border-red-200 dark:border-red-800">
-                                                  <button
-                                                    type="button"
-                                                    onClick={async () => {
-                                                      await deleteSeedMovement(m.id);
-                                                      setConfirmDeleteMoveId(null);
-                                                    }}
-                                                    className="text-[9px] font-black uppercase text-red-600 hover:underline"
-                                                  >
-                                                    Borrar
-                                                  </button>
-                                                  <button
-                                                    type="button"
-                                                    onClick={() => setConfirmDeleteMoveId(null)}
-                                                    className="text-[9px] font-bold text-slate-400 hover:text-slate-600"
-                                                  >
-                                                    No
-                                                  </button>
-                                                </div>
-                                              ) : (
-                                                <button
-                                                  type="button"
-                                                  onClick={() => setConfirmDeleteMoveId(m.id)}
-                                                  className="p-1.5 text-slate-400 hover:text-red-600 bg-slate-100 dark:bg-slate-800 rounded-lg transition"
-                                                  title="Anular Remito"
-                                                >
-                                                  <Trash2 size={13} />
-                                                </button>
-                                              )
-                                          )}
-                                      </div>
-                                  </td>
-                              </tr>
+
+              {/* TABLA Y BARRA DE HERRAMIENTAS DE GUÍAS DE TRÁNSITO & REMITOS */}
+              <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-sm border border-slate-200/80 dark:border-slate-800 overflow-hidden">
+                  {/* CABECERA Y BOTONES DE ACCIÓN GLOBAL */}
+                  <div className="p-4 border-b border-slate-100 dark:border-slate-800 bg-sky-50/40 dark:bg-sky-950/20 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 text-xs">
+                      <div>
+                          <span className="font-black text-sky-800 dark:text-sky-300 uppercase flex items-center gap-1.5">
+                              <Truck size={15} className="text-sky-600" />
+                              <span>Libro Histórico de Guías Oficiales de Tránsito ARICCAME, Remitos & Firma Electrónica ({filteredMovements.length})</span>
+                          </span>
+                          <p className="text-[10px] text-slate-500 mt-0.5">
+                              Visualice cada guía en formato A4 oficial, estampe las 3 firmas electrónicas (Emisor, Transportista y Receptor), descargue los PDFs y audite su historial inmutable.
+                          </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                          <button
+                              type="button"
+                              onClick={() => {
+                                  const destLabel = movDestFilter === 'all'
+                                      ? 'Todos los Establecimientos'
+                                      : storagePoints.find(s => s.id === movDestFilter)?.name || 'Destino';
+                                  const varLabel = movVarietyFilter === 'all'
+                                      ? 'Todas las Variedades'
+                                      : varieties.find(v => v.id === movVarietyFilter)?.name || 'Variedad';
+                                  printMovementsHistoryLedgerPDF(
+                                      filteredMovements,
+                                      resolveMovementContext,
+                                      `${destLabel} · ${varLabel}`
+                                  );
+                              }}
+                              className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow transition cursor-pointer"
+                              title="Descargar o Imprimir el Libro Histórico Completo de Guías de Tránsito y Remitos en PDF"
+                          >
+                              <Printer size={13} />
+                              <span>Descargar Historial de Guías (PDF)</span>
+                          </button>
+                          {isAdmin && (
+                              <button
+                                  type="button"
+                                  onClick={handleOpenDispatch}
+                                  className="px-3.5 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow transition cursor-pointer"
+                              >
+                                  <Plus size={13} />
+                                  <span>Emitir Nueva Guía / Remito</span>
+                              </button>
+                          )}
+                      </div>
+                  </div>
+
+                  {/* FILTROS DEL LIBRO HISTÓRICO DE GUÍAS */}
+                  <div className="px-4 py-3 bg-slate-50/80 dark:bg-slate-950/50 border-b border-slate-100 dark:border-slate-800 flex flex-wrap items-center gap-2.5 text-[11px]">
+                      <div className="flex items-center gap-1 text-slate-500 font-black uppercase text-[10px]">
+                          <Filter size={12} className="text-sky-600" />
+                          <span>Filtrar Guías:</span>
+                      </div>
+
+                      <select
+                          value={movDestFilter}
+                          onChange={e => setMovDestFilter(e.target.value)}
+                          className="px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 font-bold text-[11px] outline-none"
+                      >
+                          <option value="all">📍 Todos los Establecimientos Destino</option>
+                          {storagePoints.filter(sp => sp.id !== '5ceffc58-8219-4774-a340-9e1ac2c8458d').map(sp => (
+                              <option key={sp.id} value={sp.id}>{sp.name} ({sp.city})</option>
                           ))}
-                      </tbody>
-                  </table>
+                      </select>
+
+                      <select
+                          value={movVarietyFilter}
+                          onChange={e => setMovVarietyFilter(e.target.value)}
+                          className="px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 font-bold text-[11px] outline-none"
+                      >
+                          <option value="all">🧬 Todas las Variedades</option>
+                          {varieties.map(v => (
+                              <option key={v.id} value={v.id}>{v.name}</option>
+                          ))}
+                      </select>
+
+                      <select
+                          value={movSigFilter}
+                          onChange={e => setMovSigFilter(e.target.value)}
+                          className="px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 font-bold text-[11px] outline-none"
+                      >
+                          <option value="all">✍️ Todos los Estados de Firma y Tránsito</option>
+                          <option value="signed_3">✅ Firmado Completo y Archivado (3/3 Firmas)</option>
+                          <option value="pending_sig">⏳ Con Firma Pendiente</option>
+                          <option value="Recibido">📦 Recibido en Destino</option>
+                          <option value="En Tránsito">🚚 En Tránsito Activo</option>
+                      </select>
+
+                      {(movDestFilter !== 'all' || movVarietyFilter !== 'all' || movSigFilter !== 'all') && (
+                          <button
+                              type="button"
+                              onClick={() => {
+                                  setMovDestFilter('all');
+                                  setMovVarietyFilter('all');
+                                  setMovSigFilter('all');
+                              }}
+                              className="px-2.5 py-1 rounded-xl bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-300 border border-red-200 dark:border-red-800 text-[10px] font-black uppercase flex items-center gap-1 hover:bg-red-100 transition"
+                          >
+                              <FilterX size={12} />
+                              <span>Limpiar</span>
+                          </button>
+                      )}
+                  </div>
+
+                  {/* TABLA PRINCIPAL DE GUÍAS Y REMITOS */}
+                  <div className="overflow-x-auto">
+                      <table className="min-w-full text-xs text-left">
+                          <thead className="bg-slate-50 dark:bg-slate-950/50 text-slate-400 uppercase text-[9px] font-black tracking-wider border-b border-slate-100 dark:border-slate-800">
+                              <tr>
+                                  <th className="px-4 py-3.5">Guía ARICCAME / Remito</th>
+                                  <th className="px-4 py-3.5">Fecha y Hora</th>
+                                  <th className="px-4 py-3.5">Variedad, Lote & Carga</th>
+                                  <th className="px-4 py-3.5">Establecimiento Destino & Transporte</th>
+                                  <th className="px-4 py-3.5 text-center">Firmas Electrónicas (1·2·3)</th>
+                                  <th className="px-4 py-3.5 text-center">Estado & Archivo</th>
+                                  <th className="px-4 py-3.5 text-right">Visor PDF, Firma & Descarga</th>
+                              </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                              {filteredMovements.length === 0 ? (
+                                  <tr>
+                                      <td colSpan={7} className="p-12 text-center text-slate-400 italic">
+                                          No hay guías de tránsito que coincidan con el filtro seleccionado.
+                                      </td>
+                                  </tr>
+                              ) : filteredMovements.map(m => {
+                                  const ctx = resolveMovementContext(m);
+                                  const qtyKg = Number((m.quantity || 0).toFixed(3));
+                                  const qtyGr = Math.round(qtyKg * 1000);
+                                  const sigCount = [m.issuerSignature, m.carrierSignature, m.receiverSignature].filter(Boolean).length;
+
+                                  return (
+                                      <tr key={m.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition">
+                                          <td className="px-4 py-3.5">
+                                              <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                      setSelectedGuideId(m.id);
+                                                      setGuideModalTab('preview');
+                                                  }}
+                                                  className="font-black text-slate-900 dark:text-white hover:text-sky-600 dark:hover:text-sky-400 text-left block transition cursor-pointer"
+                                              >
+                                                  {m.transportGuideNumber}
+                                              </button>
+                                              <div className="text-[10px] text-slate-400 mt-0.5">
+                                                  Remito: <strong className="text-slate-600 dark:text-slate-300">{m.remitoNumber || 'Oficial'}</strong> · Precinto: {m.precintoNumber || 'SENASA'}
+                                              </div>
+                                          </td>
+                                          <td className="px-4 py-3.5 text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                                              <div className="font-bold">{formatDateAr(m.date)}</div>
+                                              <div className="text-[10px] text-slate-400">{m.dispatchTime ? `${m.dispatchTime} hs` : '08:00 hs'}</div>
+                                          </td>
+                                          <td className="px-4 py-3.5">
+                                              <div className="flex items-center gap-1.5">
+                                                  <span className="px-2 py-0.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 font-black text-[10px]">
+                                                      {ctx.variety?.name || 'Semilla'}
+                                                  </span>
+                                                  <span className="font-black text-sky-700 dark:text-sky-300 tabular-nums">
+                                                      {qtyKg.toFixed(3)} kg ({qtyGr.toLocaleString('es-AR')} gr)
+                                                  </span>
+                                              </div>
+                                              <div className="text-[10px] text-slate-400 mt-0.5">
+                                                  Lote: <strong className="text-slate-600 dark:text-slate-300">{ctx.batch?.batchCode || 'S/D'}</strong> · {ctx.supplier?.name || ''}
+                                              </div>
+                                          </td>
+                                          <td className="px-4 py-3.5 text-slate-600 dark:text-slate-400 max-w-xs">
+                                              <div className="font-bold text-slate-900 dark:text-white truncate">
+                                                  {ctx.client?.name || ctx.targetStorage?.name || 'Establecimiento Destino'}
+                                              </div>
+                                              <div className="text-[10px] text-slate-500 truncate">
+                                                  Recibe: <strong>{m.recipientName || m.receiverSignature?.signedBy || 'Resp. Campo'}</strong>
+                                              </div>
+                                              <div className="text-[9px] text-slate-400 truncate">
+                                                  Chofer: {m.driverName || 'Asignado'} ({m.transportCompany || 'Logística'} · Pat: {m.vehiclePlate || 'S/D'})
+                                              </div>
+                                          </td>
+                                          <td className="px-4 py-3.5 text-center">
+                                              <div className="inline-flex flex-col gap-1 items-center">
+                                                  <div className="flex items-center gap-1">
+                                                      <button
+                                                          type="button"
+                                                          onClick={() => {
+                                                              setSelectedGuideId(m.id);
+                                                              setGuideModalRole('issuer');
+                                                              setGuideModalTab('sign');
+                                                          }}
+                                                          title={`1° Firma Emisor (Origen): ${m.issuerSignature?.signedBy || 'Pendiente'}`}
+                                                          className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase cursor-pointer transition ${
+                                                              m.issuerSignature
+                                                                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
+                                                                  : 'bg-amber-100 text-amber-800'
+                                                          }`}
+                                                      >
+                                                          {m.issuerSignature ? '✓ 1.Origen' : '⏳ 1.Origen'}
+                                                      </button>
+                                                      <button
+                                                          type="button"
+                                                          onClick={() => {
+                                                              setSelectedGuideId(m.id);
+                                                              setGuideModalRole('carrier');
+                                                              setGuideModalTab('sign');
+                                                          }}
+                                                          title={`2° Firma Transportista (Porte): ${m.carrierSignature?.signedBy || 'Pendiente'}`}
+                                                          className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase cursor-pointer transition ${
+                                                              m.carrierSignature
+                                                                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
+                                                                  : 'bg-amber-100 text-amber-800'
+                                                          }`}
+                                                      >
+                                                          {m.carrierSignature ? '✓ 2.Porte' : '⏳ 2.Porte'}
+                                                      </button>
+                                                      <button
+                                                          type="button"
+                                                          onClick={() => {
+                                                              setSelectedGuideId(m.id);
+                                                              setGuideModalRole('receiver');
+                                                              setGuideModalTab('sign');
+                                                          }}
+                                                          title={`3° Firma Receptor (Destino): ${m.receiverSignature?.signedBy || 'Clic para firmar recepción'}`}
+                                                          className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase cursor-pointer transition ${
+                                                              m.receiverSignature
+                                                                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
+                                                                  : 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                                                          }`}
+                                                      >
+                                                          {m.receiverSignature ? '✓ 3.Destino' : '✍️ 3.Firmar'}
+                                                      </button>
+                                                  </div>
+                                                  <span className="text-[8.5px] text-slate-400">
+                                                      {sigCount}/3 Firmas · {(m.auditHistory || []).length} hitos
+                                                  </span>
+                                              </div>
+                                          </td>
+                                          <td className="px-4 py-3.5 text-center">
+                                              <button
+                                                  type="button"
+                                                  onClick={() => handleConfirmMovementReception(m)}
+                                                  className={`px-2.5 py-1 rounded-xl text-[10px] font-black uppercase transition cursor-pointer ${
+                                                      m.status === 'En Tránsito'
+                                                          ? 'bg-amber-100 text-amber-800 hover:bg-amber-200 dark:bg-amber-950/60 dark:text-amber-300'
+                                                          : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300'
+                                                  }`}
+                                              >
+                                                  {m.status === 'Recibido' ? '✓ Recibido y Archivado' : '🚚 En Tránsito'}
+                                              </button>
+                                          </td>
+                                          <td className="px-4 py-3.5 text-right">
+                                              <div className="flex justify-end items-center gap-1.5">
+                                                  <button
+                                                      type="button"
+                                                      onClick={() => {
+                                                          setSelectedGuideId(m.id);
+                                                          setGuideModalTab('preview');
+                                                      }}
+                                                      className="px-2.5 py-1.5 rounded-xl bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800 text-[10px] font-black uppercase hover:bg-sky-100 transition flex items-center gap-1 cursor-pointer"
+                                                      title="Visualizar Guía Oficial y Remito en formato A4"
+                                                  >
+                                                      <Eye size={12} />
+                                                      <span>Ver PDF</span>
+                                                  </button>
+                                                  <button
+                                                      type="button"
+                                                      onClick={() => {
+                                                          setSelectedGuideId(m.id);
+                                                          setGuideModalRole(m.receiverSignature ? 'receiver' : 'receiver');
+                                                          setGuideModalTab('sign');
+                                                      }}
+                                                      className="px-2.5 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-[10px] font-black uppercase hover:bg-emerald-100 transition flex items-center gap-1 cursor-pointer"
+                                                      title="Firmar Electrónicamente (Emisor, Transportista o Receptor)"
+                                                  >
+                                                      <PenTool size={12} />
+                                                      <span>Firmar</span>
+                                                  </button>
+                                                  <button
+                                                      type="button"
+                                                      onClick={() => printSingleTransitGuidePDF(m, ctx)}
+                                                      className="px-2.5 py-1.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-[10px] font-black uppercase hover:opacity-90 transition flex items-center gap-1 cursor-pointer"
+                                                      title="Descargar / Imprimir PDF Oficial A4 de esta Guía"
+                                                  >
+                                                      <Printer size={12} />
+                                                      <span>PDF</span>
+                                                  </button>
+                                                  <button
+                                                      type="button"
+                                                      onClick={() => {
+                                                          setSelectedGuideId(m.id);
+                                                          setGuideModalTab('history');
+                                                      }}
+                                                      className="p-1.5 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-300 border border-purple-200 dark:border-purple-800 hover:bg-purple-100 transition cursor-pointer"
+                                                      title="Ver Bitácora e Historial Inmutable de la Guía"
+                                                  >
+                                                      <History size={13} />
+                                                  </button>
+                                                  {isAdmin && (
+                                                      confirmDeleteMoveId === m.id ? (
+                                                          <div className="inline-flex items-center gap-1 bg-red-50 dark:bg-red-950/60 px-2 py-1 rounded-lg border border-red-200 dark:border-red-800">
+                                                              <button
+                                                                  type="button"
+                                                                  onClick={async () => {
+                                                                      await deleteSeedMovement(m.id);
+                                                                      setConfirmDeleteMoveId(null);
+                                                                  }}
+                                                                  className="text-[9px] font-black uppercase text-red-600 hover:underline"
+                                                              >
+                                                                  Borrar
+                                                              </button>
+                                                              <button
+                                                                  type="button"
+                                                                  onClick={() => setConfirmDeleteMoveId(null)}
+                                                                  className="text-[9px] font-bold text-slate-400 hover:text-slate-600"
+                                                              >
+                                                                  No
+                                                              </button>
+                                                          </div>
+                                                      ) : (
+                                                          <button
+                                                              type="button"
+                                                              onClick={() => setConfirmDeleteMoveId(m.id)}
+                                                              className="p-1.5 text-slate-400 hover:text-red-600 bg-slate-100 dark:bg-slate-800 rounded-lg transition"
+                                                              title="Anular Remito"
+                                                          >
+                                                              <Trash2 size={13} />
+                                                          </button>
+                                                      )
+                                                  )}
+                                              </div>
+                                          </td>
+                                      </tr>
+                                  );
+                              })}
+                          </tbody>
+                      </table>
+                  </div>
               </div>
           </div>
       ) : (
@@ -3372,10 +3794,41 @@ export default function SeedBatches() {
                                     <input type="text" className={inputClass} value={moveFormData.vehicleModel || ''} onChange={e => setMoveFormData({...moveFormData, vehicleModel: e.target.value})} placeholder="Hilux / Renault" />
                                 </div>
                             </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label className={labelClass}>N° Remito Oficial Interno</label>
+                                    <input
+                                        type="text"
+                                        className={inputClass}
+                                        value={moveFormData.remitoNumber || ''}
+                                        onChange={e => setMoveFormData({ ...moveFormData, remitoNumber: e.target.value.toUpperCase() })}
+                                        placeholder="R-0001-0002513"
+                                    />
+                                </div>
+                                <div>
+                                    <label className={labelClass}>N° Precinto SENASA / INASE</label>
+                                    <input
+                                        type="text"
+                                        className={inputClass}
+                                        value={moveFormData.precintoNumber || ''}
+                                        onChange={e => setMoveFormData({ ...moveFormData, precintoNumber: e.target.value.toUpperCase() })}
+                                        placeholder="PREC-SENASA-2026"
+                                    />
+                                </div>
+                            </div>
                             <div>
                                 <label className={labelClass}>Itinerario de Ruta</label>
                                 <input type="text" className={inputClass} value={moveFormData.routeItinerary} onChange={e => setMoveFormData({...moveFormData, routeItinerary: e.target.value})} placeholder="Planta Central Trelew -> Destino" />
                             </div>
+                            <label className="flex items-center gap-2 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 pt-1 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={moveFormData.signOnIssue !== false}
+                                    onChange={e => setMoveFormData({ ...moveFormData, signOnIssue: e.target.checked })}
+                                    className="rounded text-emerald-600 focus:ring-emerald-500"
+                                />
+                                <span>Estampar Firma Electrónica de Despacho (Emisor) y Conformidad de Porte al emitir</span>
+                            </label>
                         </div>
                     </div>
 
@@ -3383,13 +3836,30 @@ export default function SeedBatches() {
                         <button type="button" onClick={() => setIsMoveModalOpen(false)} className="px-4 py-2 text-slate-400 font-bold uppercase text-xs">Cancelar</button>
                         <button type="submit" disabled={isSubmitting} className="bg-sky-600 text-white px-6 py-2.5 rounded-2xl font-bold text-xs uppercase tracking-wider shadow flex items-center hover:bg-sky-500 transition">
                             {isSubmitting ? <Loader2 className="animate-spin mr-2" size={15}/> : <Truck className="mr-2" size={15}/>}
-                            Emitir Guía y Despachar
+                            Emitir Guía, Firmar y Abrir PDF
                         </button>
                     </div>
                 </form>
             </div>
         </div>
       )}
+
+      {/* MODAL VISOR PDF OFICIAL, FIRMA ELECTRÓNICA E HISTORIAL DE GUÍA DE TRÁNSITO */}
+      {selectedGuideId && (() => {
+        const activeGuide = seedMovements.find(m => m.id === selectedGuideId);
+        if (!activeGuide) return null;
+        return (
+          <TransitGuideModal
+            isOpen={Boolean(selectedGuideId)}
+            onClose={() => setSelectedGuideId(null)}
+            movement={activeGuide}
+            initialTab={guideModalTab}
+            initialRole={guideModalRole}
+            contextData={resolveMovementContext(activeGuide)}
+            onSaveMovement={handleSaveSignedMovement}
+          />
+        );
+      })()}
 
       {/* MODAL EMISIÓN DE RÓTULO CON CÓDIGO DE BARRAS & QR */}
       {labelBatch && (

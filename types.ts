@@ -521,6 +521,29 @@ export interface SeedBatch {
   germinationExpiryDate?: string; // Límite de vigencia del análisis INASE
 }
 
+export interface ElectronicSignatureRecord {
+  signedBy: string;
+  dniOrMatricula?: string;
+  role?: string;
+  signedAt: string; // YYYY-MM-DD HH:mm
+  signatureDataUrl?: string; // Base64/SVG data URL del trazo o sello electrónico
+  signatureMode?: 'handwritten' | 'digital_seal';
+  verificationHash: string; // Ej: SHA256-HEMPC-...
+  observations?: string;
+  receivedQuantityKg?: number;
+  conformityStatus?: 'CONFORME' | 'CON_OBSERVACIONES';
+}
+
+export interface MovementAuditEvent {
+  id: string;
+  timestamp: string; // YYYY-MM-DD HH:mm
+  action: string;
+  actorName: string;
+  actorRole?: string;
+  details?: string;
+  verificationHash?: string;
+}
+
 export interface SeedMovement {
   id: string;
   batchId: string;
@@ -530,6 +553,10 @@ export interface SeedMovement {
   date: string;
   dispatchTime?: string;
   transportGuideNumber?: string;
+  remitoNumber?: string;
+  precintoNumber?: string;
+  campaign?: string;
+  notes?: string;
   transportType?: 'Propio' | 'Tercerizado';
   driverName?: string;
   driverDni?: string;
@@ -543,6 +570,12 @@ export interface SeedMovement {
   originStorageId?: string;
   routeGoogleLink?: string;
   estimatedDistanceKm?: number;
+  // FIRMA ELECTRÓNICA TRIPLE & HISTORIAL DE AUDITORÍA DE LA GUÍA
+  issuerSignature?: ElectronicSignatureRecord;
+  carrierSignature?: ElectronicSignatureRecord;
+  receiverSignature?: ElectronicSignatureRecord;
+  auditHistory?: MovementAuditEvent[];
+  archivedAt?: string;
 }
 
 export interface TrialRecord {
