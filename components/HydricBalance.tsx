@@ -5,6 +5,7 @@ import {
   TrendingUp, Waves, Sparkles, Save, ArrowUp, ArrowDown, Calendar, Clock, MapPin, CheckCircle2, Database
 } from 'lucide-react';
 import { HydricRecord } from '../types';
+import { DateInputAr } from '../src/components/DateInputAr';
 
 interface HydricBalanceProps {
   locationId: string;
@@ -1185,10 +1186,9 @@ export default function HydricBalance({ locationId, plotId, startDate, waterNeed
                   </div>
                   <div className="col-span-2">
                     <label className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-wider mb-1 block">
-                      Fecha del Riego
+                      Fecha del Riego (DD/MM/AAAA)
                     </label>
-                    <input
-                      type="date"
+                    <DateInputAr
                       required
                       className="w-full border dark:border-slate-700 border-slate-200 p-2.5 rounded-xl text-xs font-mono font-bold bg-slate-50 dark:bg-slate-800 dark:text-white"
                       value={formData.date}
@@ -1200,10 +1200,9 @@ export default function HydricBalance({ locationId, plotId, startDate, waterNeed
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-wider mb-1 block">
-                      Fecha
+                      Fecha (DD/MM/AAAA)
                     </label>
-                    <input
-                      type="date"
+                    <DateInputAr
                       required
                       className="w-full border dark:border-slate-700 border-slate-200 p-2.5 rounded-xl text-xs font-mono font-bold bg-slate-50 dark:bg-slate-800 dark:text-white"
                       value={formData.date}

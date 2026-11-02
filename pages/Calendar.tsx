@@ -19,6 +19,7 @@ import {
   Maximize2, Minimize2, CheckCheck
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
+import { DateInputAr } from '../src/components/DateInputAr';
 
 export default function CalendarPage() {
   const { plots, tasks, varieties, updatePlotPhenology, addTask, currentUser, switchUserRole } = useAppContext();
@@ -1294,10 +1295,9 @@ export default function CalendarPage() {
 
               <div>
                 <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Fecha de la Inspección / Certificación:
+                  Fecha de la Inspección / Certificación (DD/MM/AAAA):
                 </label>
-                <input 
-                  type="date"
+                <DateInputAr 
                   className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 outline-none font-mono"
                   value={certifyDate}
                   onChange={(e) => setCertifyDate(e.target.value)}
@@ -1368,10 +1368,9 @@ export default function CalendarPage() {
 
               <div>
                 <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Fecha de Ejecución Programada:
+                  Fecha de Ejecución Programada (DD/MM/AAAA):
                 </label>
-                <input 
-                  type="date"
+                <DateInputAr 
                   className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 outline-none font-mono"
                   value={quickLaborDate}
                   onChange={(e) => setQuickLaborDate(e.target.value)}

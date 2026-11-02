@@ -595,14 +595,25 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 const savedMeta = savedBatchMetaById[String(b.id)] || {};
                 const { cleanNotes, parsedMeta } = unpackSeedBatchMetaFromNotes(b.notes ?? savedMeta.notes ?? demoMatch?.notes);
                 const hasLocalOverride = Boolean((b as any)._localUpdatedAt);
+                const isLegacyYuma6kg = String(b.id) === 'eaaa4263-c40a-4c7d-8f84-9e8809eb80a6' && Number(b.initialQuantity) === 6;
+                const resolvedInitial = isLegacyYuma6kg
+                    ? 3
+                    : (b.initialQuantity !== undefined && b.initialQuantity !== null
+                        ? Number(Number(b.initialQuantity).toFixed(3))
+                        : Number(Number(demoMatch?.initialQuantity || 0).toFixed(3)));
+                const resolvedRemaining = isLegacyYuma6kg
+                    ? 1.36
+                    : (b.remainingQuantity !== undefined && b.remainingQuantity !== null
+                        ? Number(Number(b.remainingQuantity).toFixed(3))
+                        : Number(Number(demoMatch?.remainingQuantity || 0).toFixed(3)));
                 return {
                     ...(demoMatch || {}),
                     ...parsedMeta,
                     ...savedMeta,
                     ...b,
                     supplierId: b.supplierId || savedMeta.supplierId || parsedMeta.supplierId || demoMatch?.supplierId || null,
-                    initialQuantity: (!hasLocalOverride && demoMatch) ? demoMatch.initialQuantity : Number(Number(b.initialQuantity || 0).toFixed(3)),
-                    remainingQuantity: (!hasLocalOverride && demoMatch) ? demoMatch.remainingQuantity : Number(Number(b.remainingQuantity || 0).toFixed(3)),
+                    initialQuantity: resolvedInitial,
+                    remainingQuantity: resolvedRemaining,
                     labelSerialNumber: b.labelSerialNumber || demoMatch?.labelSerialNumber || '00000012',
                     certificationNumber: (b.certificationNumber && b.certificationNumber !== 'S/N') ? b.certificationNumber : (demoMatch?.certificationNumber || b.certificationNumber || 'S/N'),
                     breederGerminationPct: b.breederGerminationPct ?? savedMeta.breederGerminationPct ?? parsedMeta.breederGerminationPct ?? demoMatch?.breederGerminationPct ?? b.germination ?? 90,
@@ -620,7 +631,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                     parentSeedBatchId: b.parentSeedBatchId || savedMeta.parentSeedBatchId || parsedMeta.parentSeedBatchId || demoMatch?.parentSeedBatchId,
                     originPlotId: b.originPlotId || savedMeta.originPlotId || parsedMeta.originPlotId || demoMatch?.originPlotId,
                     materialType: b.materialType || savedMeta.materialType || parsedMeta.materialType || demoMatch?.materialType,
-                    notes: (!hasLocalOverride && demoMatch?.notes) ? demoMatch.notes : (cleanNotes || demoMatch?.notes || null),
+                    notes: isLegacyYuma6kg ? (demoMatch?.notes || cleanNotes || null) : (cleanNotes || demoMatch?.notes || null),
                     logisticsResponsible: b.logisticsResponsible || demoMatch?.logisticsResponsible || null,
                     storageConditions: b.storageConditions || demoMatch?.storageConditions || null
                 };
@@ -649,13 +660,14 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             .filter(m => !deletedSet.has(String(m.id)) && !isPurgedDemoItem(m))
             .map((m: SeedMovement): SeedMovement => {
                 const demoMatch = demoMapById.get(String(m.id));
-                const hasLocalOverride = Boolean((m as any)._localUpdatedAt);
                 return {
                     ...(demoMatch || {}),
                     ...m,
-                    quantity: (!hasLocalOverride && demoMatch) ? demoMatch.quantity : Number(Number(m.quantity || 0).toFixed(3)),
+                    quantity: m.quantity !== undefined && m.quantity !== null
+                        ? Number(Number(m.quantity).toFixed(3))
+                        : Number(Number(demoMatch?.quantity || 0).toFixed(3)),
                     recipientName: m.recipientName || demoMatch?.recipientName || '',
-                    routeItinerary: (!hasLocalOverride && demoMatch?.routeItinerary) ? demoMatch.routeItinerary : (m.routeItinerary || demoMatch?.routeItinerary || '')
+                    routeItinerary: m.routeItinerary || demoMatch?.routeItinerary || ''
                 };
             });
 
@@ -1292,7 +1304,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
     useEffect(() => {
         try {
-            if (localStorage.getItem('ht_audit_production_ready_v7_27_0') !== 'true') {
+            if (localStorage.getItem('ht_audit_production_ready_v7_28_0') !== 'true') {
                 // Depuración integral de caché local para inicio en producción (Cierre Campaña 25/26 el 01/04/2026)
                 localStorage.removeItem('ht_varieties');
                 localStorage.removeItem('ht_seed_batches');
@@ -1372,6 +1384,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 localStorage.setItem('ht_audit_seed_stock_v7_25_0_final', 'true');
                 localStorage.setItem('ht_audit_seed_stock_v7_26_0_closed_01042026', 'true');
                 localStorage.setItem('ht_audit_production_ready_v7_27_0', 'true');
+                localStorage.setItem('ht_audit_production_ready_v7_28_0', 'true');
             }
         } catch {}
         refreshData();
@@ -2544,7 +2557,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         if (mov && mov.batchId && mov.quantity > 0) {
             const batch = seedBatches.find(b => b.id === mov.batchId);
             if (batch) {
-                const restoredStock = Number(((batch.remainingQuantity || 0) + mov.quantity).toFixed(2));
+                const restoredStock = Number(((batch.remainingQuantity || 0) + mov.quantity).toFixed(3));
                 await crud('seed_batches', { ...batch, remainingQuantity: restoredStock }, 'update');
             }
         }

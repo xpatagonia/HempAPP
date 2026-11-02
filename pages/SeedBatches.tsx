@@ -291,6 +291,24 @@ export default function SeedBatches() {
       return matchesSearch && matchesStatus;
   }).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()), [seedMovements, searchTerm, filterStatus, isClient, isTech, currentUser, storagePoints]);
 
+  // Filtros dinámicos y estado de visualización para la Matriz de Balance de Semillas
+  const [balanceNodeFilter, setBalanceNodeFilter] = useState<string>('all');
+  const [balanceSupplierFilter, setBalanceSupplierFilter] = useState<string>('all');
+  const [balanceVarietyFilter, setBalanceVarietyFilter] = useState<string>('all');
+  const [balanceUnitMode, setBalanceUnitMode] = useState<'both' | 'kg' | 'gr'>('both');
+  const [expandedBalanceRows, setExpandedBalanceRows] = useState<Record<string, boolean>>({});
+  const [expandAllBalanceNodes, setExpandAllBalanceNodes] = useState<boolean>(false);
+
+  const formatMassDisplay = (kgVal: number, mode: 'both' | 'kg' | 'gr' = balanceUnitMode) => {
+    const cleanKg = Number((kgVal || 0).toFixed(3));
+    const grams = Math.round(cleanKg * 1000);
+    const kgStr = cleanKg.toLocaleString('es-AR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+    const grStr = grams.toLocaleString('es-AR');
+    if (mode === 'kg') return `${kgStr} kg`;
+    if (mode === 'gr') return `${grStr} gr`;
+    return `${kgStr} kg (${grStr} gr)`;
+  };
+
   // Desglose de Métricas de Stock por Tipo Biológico y Matriz de Conciliación por Variedad
   const stats = useMemo(() => {
       const totalKg = Number(filteredBatches.reduce((sum, b) => sum + (b.remainingQuantity || 0), 0).toFixed(3));
@@ -309,38 +327,73 @@ export default function SeedBatches() {
       const MADRYN_STORAGE_ID = 'f9235100-cd67-4f65-9ba1-303e7cc5a063'; // CAP Centro Medioambiental
 
       const seedOnlyBatches = seedBatches.filter(b => !b.materialType || b.materialType === 'seed');
+      const fieldStoragePoints = storagePoints.filter(sp => sp.id !== CENTRAL_STORAGE_ID);
 
       const rows = varieties.map(v => {
-          const sup = suppliers.find(s => s.id === v.supplierId);
           const centralBatches = seedOnlyBatches.filter(b => b.varietyId === v.id && b.storagePointId === CENTRAL_STORAGE_ID);
-          const hilarioBatches = seedOnlyBatches.filter(b => b.varietyId === v.id && b.storagePointId === HILARIO_STORAGE_ID);
-          const lareginaBatches = seedOnlyBatches.filter(b => b.varietyId === v.id && b.storagePointId === LAREGINA_STORAGE_ID);
-          const madrynBatches = seedOnlyBatches.filter(b => b.varietyId === v.id && b.storagePointId === MADRYN_STORAGE_ID);
+          const resolvedSupId = centralBatches[0]?.supplierId || v.supplierId || '';
+          const sup = suppliers.find(s => s.id === resolvedSupId);
 
           const purchasedKg = Number(centralBatches.reduce((s, b) => s + (b.initialQuantity || 0), 0).toFixed(3));
           const centralRemKg = Number(centralBatches.reduce((s, b) => s + (b.remainingQuantity || 0), 0).toFixed(3));
+          const motherBatchCode = centralBatches[0]?.batchCode || 'S/C';
+          const certNumber = centralBatches[0]?.certificationNumber || 'INASE';
 
-          const hilarioSentKg = Number(hilarioBatches.reduce((s, b) => s + (b.initialQuantity || 0), 0).toFixed(3));
-          const hilarioRemKg = Number(hilarioBatches.reduce((s, b) => s + (b.remainingQuantity || 0), 0).toFixed(3));
-          const hilarioUsedKg = Number(Math.max(0, hilarioSentKg - hilarioRemKg).toFixed(3));
+          const nodes = fieldStoragePoints.map(sp => {
+              const spBatches = seedOnlyBatches.filter(b => b.varietyId === v.id && b.storagePointId === sp.id);
+              const sentKg = Number(spBatches.reduce((s, b) => s + (b.initialQuantity || 0), 0).toFixed(3));
+              const remKg = Number(spBatches.reduce((s, b) => s + (b.remainingQuantity || 0), 0).toFixed(3));
+              const usedKg = Number(Math.max(0, sentKg - remKg).toFixed(3));
+              const spBatchIds = new Set(spBatches.map(b => b.id));
+              const linkedPlots = plots.filter(p => p.varietyId === v.id && (
+                  (p.seedBatchId && spBatchIds.has(p.seedBatchId)) ||
+                  (sp.clientId && clients.find(c => c.id === sp.clientId)?.locationId === p.locationId)
+              ));
+              const cli = clients.find(c => c.id === sp.clientId);
+              return {
+                  storageId: sp.id,
+                  storageName: sp.name,
+                  establishmentName: cli?.name || sp.name,
+                  city: sp.city || '',
+                  sentKg,
+                  usedKg,
+                  remKg,
+                  plotsCount: linkedPlots.length,
+                  batchCodes: spBatches.map(b => b.batchCode)
+              };
+          }).filter(n => n.sentKg > 0 || n.remKg > 0 || n.plotsCount > 0);
 
-          const lareginaSentKg = Number(lareginaBatches.reduce((s, b) => s + (b.initialQuantity || 0), 0).toFixed(3));
-          const lareginaRemKg = Number(lareginaBatches.reduce((s, b) => s + (b.remainingQuantity || 0), 0).toFixed(3));
-          const lareginaUsedKg = Number(Math.max(0, lareginaSentKg - lareginaRemKg).toFixed(3));
+          const hilarioNode = nodes.find(n => n.storageId === HILARIO_STORAGE_ID);
+          const lareginaNode = nodes.find(n => n.storageId === LAREGINA_STORAGE_ID);
+          const madrynNode = nodes.find(n => n.storageId === MADRYN_STORAGE_ID);
 
-          const madrynSentKg = Number(madrynBatches.reduce((s, b) => s + (b.initialQuantity || 0), 0).toFixed(3));
-          const madrynRemKg = Number(madrynBatches.reduce((s, b) => s + (b.remainingQuantity || 0), 0).toFixed(3));
-          const madrynUsedKg = Number(Math.max(0, madrynSentKg - madrynRemKg).toFixed(3));
+          const hilarioSentKg = hilarioNode?.sentKg || 0;
+          const hilarioUsedKg = hilarioNode?.usedKg || 0;
+          const hilarioRemKg = hilarioNode?.remKg || 0;
 
-          const totalDispatchedKg = Number((hilarioSentKg + lareginaSentKg + madrynSentKg).toFixed(3));
-          const totalUsedFieldKg = Number((hilarioUsedKg + lareginaUsedKg + madrynUsedKg).toFixed(3));
-          const totalFieldRemKg = Number((hilarioRemKg + lareginaRemKg + madrynRemKg).toFixed(3));
+          const lareginaSentKg = lareginaNode?.sentKg || 0;
+          const lareginaUsedKg = lareginaNode?.usedKg || 0;
+          const lareginaRemKg = lareginaNode?.remKg || 0;
+
+          const madrynSentKg = madrynNode?.sentKg || 0;
+          const madrynUsedKg = madrynNode?.usedKg || 0;
+          const madrynRemKg = madrynNode?.remKg || 0;
+
+          const totalDispatchedKg = Number(nodes.reduce((s, n) => s + n.sentKg, 0).toFixed(3));
+          const totalUsedFieldKg = Number(nodes.reduce((s, n) => s + n.usedKg, 0).toFixed(3));
+          const totalFieldRemKg = Number(nodes.reduce((s, n) => s + n.remKg, 0).toFixed(3));
           const totalAvailableKg = Number((centralRemKg + totalFieldRemKg).toFixed(3));
+          const centralBatchIds = new Set(centralBatches.map(b => b.id));
+          const remitosCount = seedMovements.filter(m => centralBatchIds.has(m.batchId)).length;
 
           return {
               varietyId: v.id,
               varietyName: v.name,
+              supplierId: resolvedSupId,
               supplierName: sup?.name || (v.name === 'Yuma' ? 'Ananda Pampa' : 'HEMPIT France'),
+              motherBatchCode,
+              certNumber,
+              remitosCount,
               purchasedKg,
               totalDispatchedKg,
               centralRemKg,
@@ -355,11 +408,22 @@ export default function SeedBatches() {
               madrynRemKg,
               totalUsedFieldKg,
               totalFieldRemKg,
-              totalAvailableKg
+              totalAvailableKg,
+              nodes
           };
       }).filter(r => r.purchasedKg > 0 || r.totalAvailableKg > 0 || r.totalDispatchedKg > 0);
 
-      const totals = rows.reduce((acc, r) => ({
+      const filteredRows = rows.filter(r => {
+          if (balanceSupplierFilter !== 'all' && r.supplierId !== balanceSupplierFilter && r.supplierName !== balanceSupplierFilter) return false;
+          if (balanceVarietyFilter !== 'all' && r.varietyId !== balanceVarietyFilter) return false;
+          if (balanceNodeFilter !== 'all' && balanceNodeFilter !== 'central') {
+              const hasNode = r.nodes.some(n => n.storageId === balanceNodeFilter && (n.sentKg > 0 || n.remKg > 0));
+              if (!hasNode) return false;
+          }
+          return true;
+      });
+
+      const computeTotals = (sourceRows: typeof rows) => sourceRows.reduce((acc, r) => ({
           purchasedKg: Number((acc.purchasedKg + r.purchasedKg).toFixed(3)),
           totalDispatchedKg: Number((acc.totalDispatchedKg + r.totalDispatchedKg).toFixed(3)),
           centralRemKg: Number((acc.centralRemKg + r.centralRemKg).toFixed(3)),
@@ -375,21 +439,279 @@ export default function SeedBatches() {
           totalUsedFieldKg: Number((acc.totalUsedFieldKg + r.totalUsedFieldKg).toFixed(3)),
           totalFieldRemKg: Number((acc.totalFieldRemKg + r.totalFieldRemKg).toFixed(3)),
           totalAvailableKg: Number((acc.totalAvailableKg + r.totalAvailableKg).toFixed(3)),
+          remitosCount: acc.remitosCount + r.remitosCount
       }), {
           purchasedKg: 0, totalDispatchedKg: 0, centralRemKg: 0,
           hilarioSentKg: 0, hilarioUsedKg: 0, hilarioRemKg: 0,
           lareginaSentKg: 0, lareginaUsedKg: 0, lareginaRemKg: 0,
           madrynSentKg: 0, madrynUsedKg: 0, madrynRemKg: 0,
-          totalUsedFieldKg: 0, totalFieldRemKg: 0, totalAvailableKg: 0
+          totalUsedFieldKg: 0, totalFieldRemKg: 0, totalAvailableKg: 0,
+          remitosCount: 0
       });
 
-      return { rows, totals };
-  }, [seedBatches, varieties, suppliers]);
+      return {
+          rows,
+          filteredRows,
+          totals: computeTotals(rows),
+          filteredTotals: computeTotals(filteredRows),
+          fieldStoragePoints
+      };
+  }, [seedBatches, varieties, suppliers, storagePoints, plots, clients, seedMovements, balanceSupplierFilter, balanceVarietyFilter, balanceNodeFilter]);
+
+  const handleDownloadBalancePDF = () => {
+      const activeRows = varietyReconciliation.filteredRows;
+      const activeTotals = varietyReconciliation.filteredTotals;
+      const selectedNodeObj = varietyReconciliation.fieldStoragePoints.find(s => s.id === balanceNodeFilter);
+      const nodeLabel =
+          balanceNodeFilter === 'all'
+              ? 'Consolidado Red Completa (Planta Central + 3 Establecimientos)'
+              : balanceNodeFilter === 'central'
+              ? 'Planta Central (BioC Warehousing 1# - Trelew)'
+              : `${selectedNodeObj?.name || 'Establecimiento'} (${selectedNodeObj?.city || ''})`;
+      const supLabel =
+          balanceSupplierFilter === 'all'
+              ? 'Todos los Proveedores Homologados'
+              : suppliers.find(s => s.id === balanceSupplierFilter)?.name || balanceSupplierFilter;
+      const varLabel =
+          balanceVarietyFilter === 'all'
+              ? 'Todas las Variedades (Campaña 2025/2026)'
+              : varieties.find(v => v.id === balanceVarietyFilter)?.name || 'Variedad Seleccionada';
+      const issueDateAr = formatDateAr(new Date().toISOString().split('T')[0]);
+
+      const rowsHtml = activeRows.map(r => {
+          if (balanceNodeFilter !== 'all' && balanceNodeFilter !== 'central') {
+              const nd = r.nodes.find(n => n.storageId === balanceNodeFilter);
+              const sent = nd?.sentKg || 0;
+              const used = nd?.usedKg || 0;
+              const rem = nd?.remKg || 0;
+              const pct = sent > 0 ? Math.round((used / sent) * 100) : 0;
+              return `
+                <tr>
+                  <td><strong>${r.varietyName}</strong><br/><span class="sub">${r.supplierName} · Lote Madre: ${r.motherBatchCode}</span></td>
+                  <td class="num">${sent.toFixed(3)} kg<br/><span class="sub">${Math.round(sent * 1000)} gr</span></td>
+                  <td class="num">${used.toFixed(3)} kg (${pct}%)<br/><span class="sub">${Math.round(used * 1000)} gr · ${nd?.plotsCount || 0} parc.</span></td>
+                  <td class="num"><strong>${rem.toFixed(3)} kg</strong><br/><span class="sub">${Math.round(rem * 1000)} gr</span></td>
+                </tr>
+              `;
+          }
+          return `
+            <tr>
+              <td><strong>${r.varietyName}</strong><br/><span class="sub">${r.supplierName} · Lote: ${r.motherBatchCode} (Cert. ${r.certNumber})</span></td>
+              <td class="num">${r.purchasedKg.toFixed(3)} kg<br/><span class="sub">${Math.round(r.purchasedKg * 1000)} gr</span></td>
+              <td class="num">${r.totalDispatchedKg.toFixed(3)} kg<br/><span class="sub">${Math.round(r.totalDispatchedKg * 1000)} gr (${r.remitosCount} rem.)</span></td>
+              <td class="num">${r.totalUsedFieldKg.toFixed(3)} kg<br/><span class="sub">${Math.round(r.totalUsedFieldKg * 1000)} gr</span></td>
+              <td class="num"><strong>${r.centralRemKg.toFixed(3)} kg</strong><br/><span class="sub">${Math.round(r.centralRemKg * 1000)} gr en BioC #1</span></td>
+              <td class="num">${r.totalFieldRemKg.toFixed(3)} kg<br/><span class="sub">${Math.round(r.totalFieldRemKg * 1000)} gr en campo</span></td>
+              <td class="num"><strong>${r.totalAvailableKg.toFixed(3)} kg</strong><br/><span class="sub">${Math.round(r.totalAvailableKg * 1000)} gr totales</span></td>
+            </tr>
+          `;
+      }).join('');
+
+      const nodesBreakdownHtml = activeRows.map(r => {
+          const filteredNodes = balanceNodeFilter !== 'all' && balanceNodeFilter !== 'central'
+              ? r.nodes.filter(n => n.storageId === balanceNodeFilter)
+              : r.nodes;
+          return filteredNodes.map(n => `
+            <tr>
+              <td><strong>${n.establishmentName}</strong><br/><span class="sub">Depósito: ${n.storageName} (${n.city})</span></td>
+              <td><strong>${r.varietyName}</strong> (${r.supplierName})</td>
+              <td class="num">${n.sentKg.toFixed(3)} kg (${Math.round(n.sentKg * 1000)} gr)</td>
+              <td class="num">${n.usedKg.toFixed(3)} kg (${Math.round(n.usedKg * 1000)} gr · ${n.plotsCount} parc.)</td>
+              <td class="num"><strong>${n.remKg.toFixed(3)} kg (${Math.round(n.remKg * 1000)} gr)</strong></td>
+            </tr>
+          `).join('');
+      }).join('');
+
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html lang="es">
+        <head>
+          <meta charset="UTF-8" />
+          <title>Balance_Auditoria_Semillas_Campana_2025_2026_${issueDateAr.replace(/\//g, '-')}</title>
+          <style>
+            @page { size: A4 landscape; margin: 12mm; }
+            body { font-family: 'Courier New', Courier, monospace; color: #0f172a; margin: 0; padding: 16px; font-size: 11px; }
+            .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #059669; padding-bottom: 10px; margin-bottom: 14px; }
+            .title { font-size: 16px; font-weight: 900; text-transform: uppercase; margin: 2px 0; }
+            .badge { display: inline-block; background: #ecfdf5; color: #047857; border: 1px solid #6ee7b7; padding: 2px 8px; border-radius: 4px; font-size: 9px; font-weight: bold; text-transform: uppercase; }
+            .meta { text-align: right; font-size: 10px; line-height: 1.5; }
+            .kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 14px; }
+            .kpi { border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 10px; background: #f8fafc; }
+            .kpi-label { font-size: 8px; text-transform: uppercase; color: #64748b; font-weight: bold; }
+            .kpi-val { font-size: 13px; font-weight: 900; color: #0f172a; margin-top: 2px; }
+            .kpi-sub { font-size: 9px; color: #475569; }
+            h3 { font-size: 11px; text-transform: uppercase; margin: 12px 0 6px 0; color: #065f46; border-left: 3px solid #059669; padding-left: 6px; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 14px; font-size: 10px; }
+            th { background: #0f172a; color: #ffffff; text-transform: uppercase; font-size: 8.5px; padding: 6px 8px; text-align: left; }
+            th.num, td.num { text-align: right; }
+            td { padding: 6px 8px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+            tfoot td { background: #f1f5f9; font-weight: 900; border-top: 2px solid #0f172a; }
+            .sub { font-size: 8.5px; color: #64748b; font-weight: normal; }
+            .signatures { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 28px; padding-top: 16px; page-break-inside: avoid; }
+            .sig-box { border-top: 1px solid #334155; text-align: center; padding-top: 6px; font-size: 9px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div>
+              <span class="badge">Auditoría Oficial INASE / ISTA / ARICCAME · Ciclo Cerrado 01/04/2026</span>
+              <div class="title">Balance de Semillas por Variedad, Proveedor y Establecimiento</div>
+              <div>Red Cooperativa PatagonianC LTDA · Sistema de Trazabilidad Biológica Nucleus Trace</div>
+            </div>
+            <div class="meta">
+              <div><strong>Fecha de Emisión:</strong> ${issueDateAr}</div>
+              <div><strong>Alcance Nodo:</strong> ${nodeLabel}</div>
+              <div><strong>Filtro Proveedor:</strong> ${supLabel}</div>
+              <div><strong>Filtro Genética:</strong> ${varLabel}</div>
+            </div>
+          </div>
+
+          <div class="kpis">
+            <div class="kpi">
+              <div class="kpi-label">Compra Inicial Total</div>
+              <div class="kpi-val">${activeTotals.purchasedKg.toFixed(3)} kg</div>
+              <div class="kpi-sub">${Math.round(activeTotals.purchasedKg * 1000)} gr ingresados</div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">Total Despachado a Campo</div>
+              <div class="kpi-val">${activeTotals.totalDispatchedKg.toFixed(3)} kg</div>
+              <div class="kpi-sub">${Math.round(activeTotals.totalDispatchedKg * 1000)} gr (${activeTotals.remitosCount} remitos)</div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">Total Sembrado en Parcelas</div>
+              <div class="kpi-val">${activeTotals.totalUsedFieldKg.toFixed(3)} kg</div>
+              <div class="kpi-sub">${Math.round(activeTotals.totalUsedFieldKg * 1000)} gr implantados</div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">Stock Final Planta Central</div>
+              <div class="kpi-val">${activeTotals.centralRemKg.toFixed(3)} kg</div>
+              <div class="kpi-sub">${Math.round(activeTotals.centralRemKg * 1000)} gr en BioC #1</div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">Stock Total en la Red</div>
+              <div class="kpi-val">${activeTotals.totalAvailableKg.toFixed(3)} kg</div>
+              <div class="kpi-sub">Central ${activeTotals.centralRemKg.toFixed(3)} + Campo ${activeTotals.totalFieldRemKg.toFixed(3)} kg</div>
+            </div>
+          </div>
+
+          <h3>1. Matriz Consolidada por Variedad Genética y Proveedor</h3>
+          <table>
+            <thead>
+              ${balanceNodeFilter !== 'all' && balanceNodeFilter !== 'central' ? `
+                <tr>
+                  <th>Variedad & Proveedor</th>
+                  <th class="num">Enviado al Establecimiento</th>
+                  <th class="num">Sembrado en Parcelas</th>
+                  <th class="num">Stock Remanente en Depósito</th>
+                </tr>
+              ` : `
+                <tr>
+                  <th>Variedad & Proveedor</th>
+                  <th class="num">Compra Inicial</th>
+                  <th class="num">Despachado a Campo</th>
+                  <th class="num">Sembrado Efectivo</th>
+                  <th class="num">Stock Planta Central</th>
+                  <th class="num">Remanente en Campo</th>
+                  <th class="num">Stock Total Red</th>
+                </tr>
+              `}
+            </thead>
+            <tbody>
+              ${rowsHtml}
+            </tbody>
+            <tfoot>
+              ${balanceNodeFilter !== 'all' && balanceNodeFilter !== 'central' ? (() => {
+                  const nodeSent = activeRows.reduce((s, r) => s + (r.nodes.find(n => n.storageId === balanceNodeFilter)?.sentKg || 0), 0);
+                  const nodeUsed = activeRows.reduce((s, r) => s + (r.nodes.find(n => n.storageId === balanceNodeFilter)?.usedKg || 0), 0);
+                  const nodeRem = activeRows.reduce((s, r) => s + (r.nodes.find(n => n.storageId === balanceNodeFilter)?.remKg || 0), 0);
+                  return `
+                    <tr>
+                      <td>TOTAL ESTABLECIMIENTO (${nodeLabel})</td>
+                      <td class="num">${nodeSent.toFixed(3)} kg (${Math.round(nodeSent * 1000)} gr)</td>
+                      <td class="num">${nodeUsed.toFixed(3)} kg (${Math.round(nodeUsed * 1000)} gr)</td>
+                      <td class="num">${nodeRem.toFixed(3)} kg (${Math.round(nodeRem * 1000)} gr)</td>
+                    </tr>
+                  `;
+              })() : `
+                <tr>
+                  <td>TOTAL CONCILIADO CAMPAÑA 2025/2026</td>
+                  <td class="num">${activeTotals.purchasedKg.toFixed(3)} kg (${Math.round(activeTotals.purchasedKg * 1000)} gr)</td>
+                  <td class="num">${activeTotals.totalDispatchedKg.toFixed(3)} kg (${Math.round(activeTotals.totalDispatchedKg * 1000)} gr)</td>
+                  <td class="num">${activeTotals.totalUsedFieldKg.toFixed(3)} kg (${Math.round(activeTotals.totalUsedFieldKg * 1000)} gr)</td>
+                  <td class="num">${activeTotals.centralRemKg.toFixed(3)} kg (${Math.round(activeTotals.centralRemKg * 1000)} gr)</td>
+                  <td class="num">${activeTotals.totalFieldRemKg.toFixed(3)} kg (${Math.round(activeTotals.totalFieldRemKg * 1000)} gr)</td>
+                  <td class="num">${activeTotals.totalAvailableKg.toFixed(3)} kg (${Math.round(activeTotals.totalAvailableKg * 1000)} gr)</td>
+                </tr>
+              `}
+            </tfoot>
+          </table>
+
+          ${balanceNodeFilter !== 'central' && nodesBreakdownHtml ? `
+            <h3>2. Desglose Auditado por Establecimiento Productivo y Depósito de Campo</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Establecimiento & Depósito</th>
+                  <th>Variedad & Obtentor</th>
+                  <th class="num">Masa Enviada (Remito)</th>
+                  <th class="num">Masa Sembrada (Parcelas)</th>
+                  <th class="num">Stock Remanente en Campo</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${nodesBreakdownHtml}
+              </tbody>
+            </table>
+          ` : ''}
+
+          <div class="signatures">
+            <div class="sig-box">
+              <strong>Gastón BAREA M.</strong><br/>
+              Dirección Proyecto & Custodia Central BioC #1<br/>
+              HempC de PatagonianC LTDA
+            </div>
+            <div class="sig-box">
+              <strong>Ing. Agr. Julian PIZARRO</strong><br/>
+              Dirección Técnica & Certificación QA (MP-AGRO-1492 CH)<br/>
+              Auditoría Fitosanitaria INASE / ISTA
+            </div>
+            <div class="sig-box">
+              <strong>Matias QUINTANA</strong><br/>
+              Responsable de Muestreo & Gestión Operativa<br/>
+              Matrícula TEC-MUESTREO-ISTA-108
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      document.body.appendChild(iframe);
+      const doc = iframe.contentWindow?.document;
+      if (doc) {
+          doc.open();
+          doc.write(htmlContent);
+          doc.close();
+          setTimeout(() => {
+              iframe.contentWindow?.focus();
+              iframe.contentWindow?.print();
+              setTimeout(() => {
+                  if (document.body.contains(iframe)) document.body.removeChild(iframe);
+              }, 2000);
+          }, 350);
+      }
+  };
 
   const handleOpenDispatch = () => {
     setMoveFormData({
       batchId: '', clientId: '', targetLocationId: '', quantity: 0, inputValue: 0, date: new Date().toISOString().split('T')[0], status: 'En Tránsito', transportType: 'Propio',
-      transportGuideNumber: '', driverName: '', driverDni: '', vehiclePlate: '', transportCompany: '', recipientName: '', recipientDni: '',
+      transportGuideNumber: '', driverName: '', driverDni: '', vehiclePlate: '', vehicleModel: '', transportCompany: '', recipientName: '', recipientDni: '',
       routeItinerary: '', estimatedDistanceKm: 0, routeGoogleLink: '', dispatchTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
     });
     setMoveUnit('kg');
@@ -641,6 +963,11 @@ export default function SeedBatches() {
               : !isSeedMaterial || (batchFormData.originInspectionId && batchFormData.qaStatus === 'APROBADO_QA')
           );
 
+          const resolvedInitialKg = Number(calculatedEntryKg.toFixed(3));
+          const resolvedRemainingKg = editingBatchId
+              ? Number(Number(batchFormData.remainingQuantity !== undefined ? batchFormData.remainingQuantity : resolvedInitialKg).toFixed(3))
+              : resolvedInitialKg;
+
           const payload: SeedBatch = { 
             ...baseData, 
             id: editingBatchId || generateId(), 
@@ -649,17 +976,15 @@ export default function SeedBatches() {
             coopGerminationPct: isSeedMaterial ? batchFormData.coopGerminationPct : undefined,
             germination: isSeedMaterial ? Number(batchFormData.coopGerminationPct || breederPg) : Number(batchFormData.germination || 90),
             germinationExpiryDate: batchFormData.germinationExpiryDate || addOneYearIso(batchFormData.purchaseDate),
-            initialQuantity: Number(calculatedEntryKg.toFixed(3)),
-            remainingQuantity: editingBatchId 
-                ? Number(Number(batchFormData.remainingQuantity || 0).toFixed(3)) 
-                : Number(calculatedEntryKg.toFixed(3)), 
+            initialQuantity: resolvedInitialKg,
+            remainingQuantity: Math.max(0, resolvedRemainingKg), 
             pricePerKg: Number(batchFormData.pricePerKg || 0), 
             qaStatus: isSeedMaterial ? (hasCompletedCoopQa ? 'APROBADO_QA' : 'PENDIENTE_QA') : 'APROBADO_QA',
             isActive: hasCompletedCoopQa, 
             createdAt: batchFormData.createdAt || new Date().toISOString() 
           };
           
-          let success = editingBatchId ? await updateSeedBatch(payload) : await addSeedBatch(payload);
+          const success = editingBatchId ? await updateSeedBatch(payload) : await addSeedBatch(payload);
           if (success) { 
               setIsBatchModalOpen(false); 
               setEditingBatchId(null); 
@@ -670,10 +995,60 @@ export default function SeedBatches() {
       } finally { setIsSubmitting(false); }
   };
 
+  // Sincroniza el lote hijo recibido en el almacén de destino cuando se confirma recepción de un remito
+  const syncDestinationBatchOnReception = async (mov: SeedMovement, sourceBatch?: SeedBatch) => {
+      const origin = sourceBatch || seedBatches.find(b => b.id === mov.batchId);
+      if (!origin || !mov.targetLocationId) return;
+      const targetSp = storagePoints.find(s => s.id === mov.targetLocationId);
+      const expectedCodePrefix = `${origin.batchCode}-REC-`;
+      const existingDestBatch = seedBatches.find(b =>
+          b.storagePointId === mov.targetLocationId &&
+          b.varietyId === origin.varietyId &&
+          (b.parentSeedBatchId === origin.id || b.batchCode.startsWith(expectedCodePrefix))
+      );
+
+      if (existingDestBatch) {
+          // Si el lote destino fue creado por otro remito anterior, incrementar su stock ingresado y disponible
+          const alreadyHasGuide = existingDestBatch.batchCode.includes(mov.transportGuideNumber) || (existingDestBatch.notes || '').includes(mov.transportGuideNumber);
+          if (!alreadyHasGuide) {
+              await updateSeedBatch({
+                  ...existingDestBatch,
+                  initialQuantity: Number(((existingDestBatch.initialQuantity || 0) + mov.quantity).toFixed(3)),
+                  remainingQuantity: Number(((existingDestBatch.remainingQuantity || 0) + mov.quantity).toFixed(3)),
+                  notes: `${existingDestBatch.notes || ''} | Recepción adicional Guía ${mov.transportGuideNumber}: +${mov.quantity.toFixed(3)} kg.`.trim()
+              });
+          }
+      } else {
+          const childBatch: SeedBatch = {
+              ...origin,
+              id: generateId(),
+              parentSeedBatchId: origin.id,
+              batchCode: `${origin.batchCode}-REC-${mov.transportGuideNumber}`,
+              storagePointId: mov.targetLocationId,
+              storageConditions: `Depósito ${targetSp?.name || 'Destino'} - Recepción Guía ${mov.transportGuideNumber}`,
+              initialQuantity: Number(mov.quantity.toFixed(3)),
+              remainingQuantity: Number(mov.quantity.toFixed(3)),
+              logisticsResponsible: mov.recipientName || origin.logisticsResponsible || 'Responsable de Campo',
+              notes: `Enviados ${mov.quantity.toFixed(3)} kg (${Math.round(mov.quantity * 1000)} gr) mediante Guía ${mov.transportGuideNumber}. Recibido en ${targetSp?.name || 'depósito destino'}.`,
+              isActive: true,
+              createdAt: new Date().toISOString()
+          };
+          await addSeedBatch(childBatch);
+      }
+  };
+
+  const handleConfirmMovementReception = async (mov: SeedMovement) => {
+      const nextStatus = mov.status === 'En Tránsito' ? 'Recibido' : 'En Tránsito';
+      const ok = await updateSeedMovement({ ...mov, status: nextStatus });
+      if (ok && nextStatus === 'Recibido') {
+          await syncDestinationBatchOnReception(mov);
+      }
+  };
+
   const handleMoveSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!moveFormData.batchId || !moveFormData.targetLocationId || calculatedMoveKg <= 0.000001 || isSubmitting) {
-          alert("Por favor complete los datos obligatorios del despacho.");
+          alert("Por favor complete los datos obligatorios del despacho (Lote Origen, Depósito Destino, Masa y N° de Guía).");
           return;
       }
 
@@ -682,18 +1057,24 @@ export default function SeedBatches() {
 
       const usage = calculatedMoveKg;
       if (sourceBatch.remainingQuantity < usage) {
-          alert(`Stock insuficiente en el lote de origen. Disponible: ${sourceBatch.remainingQuantity.toFixed(3)} kg.`);
+          alert(`Stock insuficiente en el lote de origen. Disponible: ${sourceBatch.remainingQuantity.toFixed(3)} kg (${Math.round(sourceBatch.remainingQuantity * 1000)} gr).`);
           return;
       }
 
       setIsSubmitting(true);
       try {
+          const targetSp = storagePoints.find(s => s.id === moveFormData.targetLocationId);
+          const resolvedClientId =
+              moveFormData.clientId && moveFormData.clientId !== 'INTERNAL'
+                  ? moveFormData.clientId
+                  : targetSp?.clientId || undefined;
           const movePayload: SeedMovement = {
               ...moveFormData,
               id: generateId(),
+              clientId: resolvedClientId,
               quantity: Number(usage.toFixed(3)),
               originStorageId: sourceBatch.storagePointId,
-              status: 'En Tránsito'
+              status: moveFormData.status || 'En Tránsito'
           };
 
           const moveSuccess = await addSeedMovement(movePayload);
@@ -703,9 +1084,10 @@ export default function SeedBatches() {
                   ...sourceBatch,
                   remainingQuantity: Math.max(0, updatedRemaining)
               });
-              
+              if (movePayload.status === 'Recibido') {
+                  await syncDestinationBatchOnReception(movePayload, sourceBatch);
+              }
               setIsMoveModalOpen(false);
-              alert(`✅ Despacho registrado con Guía oficial. Se han descontado ${usage.toFixed(3)} kg del lote.`);
           }
       } catch (err) {
           alert("Error de comunicación logística.");
@@ -824,7 +1206,7 @@ export default function SeedBatches() {
           <MetricCard 
             label="Semilla Disponible (Red)" 
             value={`${stats.seedKg.toLocaleString('es-AR', {minimumFractionDigits: 3, maximumFractionDigits: 3})} kg`} 
-            subtext={`Compra: ${varietyReconciliation.totals.purchasedKg.toFixed(1)} kg · Sembrado: ${varietyReconciliation.totals.totalUsedFieldKg.toFixed(3)} kg`}
+            subtext={`Central: ${varietyReconciliation.totals.centralRemKg.toFixed(3)} kg · Campo: ${varietyReconciliation.totals.totalFieldRemKg.toFixed(3)} kg · Sembrado: ${varietyReconciliation.totals.totalUsedFieldKg.toFixed(3)} kg`}
             icon={Sprout} 
             colorClass="bg-blue-500" 
           />
@@ -959,17 +1341,18 @@ export default function SeedBatches() {
       {/* CONTENIDO TAB 1: INVENTARIO BIOLÓGICO */}
       {activeTab === 'inventory' ? (
           <div className="space-y-5 font-mono">
-              {/* MATRIZ DE CONCILIACIÓN AUDITADA POR VARIEDAD Y ESTABLECIMIENTO (CAMPAÑA 25/26) */}
+              {/* MATRIZ DE CONCILIACIÓN AUDITADA POR VARIEDAD Y ESTABLECIMIENTO (CAMPAÑA 25/26) - DISEÑO ESCALABLE CON FILTROS Y PDF */}
               {!isClient && varietyReconciliation.rows.length > 0 && (
                 <div className="bg-white dark:bg-slate-900 rounded-3xl border border-emerald-200/80 dark:border-emerald-900/50 shadow-sm overflow-hidden">
-                  <div className="px-6 py-4 bg-emerald-50/70 dark:bg-emerald-950/30 border-b border-emerald-100 dark:border-emerald-900/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
+                  {/* CABECERA Y KPIs DE BALANCE */}
+                  <div className="px-6 py-4 bg-emerald-50/70 dark:bg-emerald-950/30 border-b border-emerald-100 dark:border-emerald-900/50 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-3">
                     <div>
                       <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5">
                         <ShieldCheck size={14} className="text-emerald-600" />
                         <span>Auditoría & Conciliación Real de Semillas · Campaña 2025/2026 (Cerrada 01/04/2026)</span>
                       </span>
                       <h2 className="text-sm md:text-base font-black text-slate-900 dark:text-white uppercase tracking-tight mt-0.5">
-                        Balance por Variedad, Proveedor y Establecimiento (6,000 kg Comprados vs. 4,400 kg Despachados vs. 1,600 kg Stock Final)
+                        Balance por Variedad, Proveedor y Establecimiento ({varietyReconciliation.totals.purchasedKg.toFixed(3)} kg Comprados vs. {varietyReconciliation.totals.totalDispatchedKg.toFixed(3)} kg Despachados vs. {varietyReconciliation.totals.centralRemKg.toFixed(3)} kg Stock Final Central)
                       </h2>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold">
@@ -977,105 +1360,369 @@ export default function SeedBatches() {
                         Compra Total: <strong>{varietyReconciliation.totals.purchasedKg.toFixed(3)} kg</strong> (3 kg Ananda Pampa + 3 kg HEMPIT)
                       </span>
                       <span className="px-2.5 py-1 rounded-xl bg-sky-50 dark:bg-sky-950/60 border border-sky-200 dark:border-sky-800 text-sky-700 dark:text-sky-300">
-                        Despachado (12 Remitos): <strong>{varietyReconciliation.totals.totalDispatchedKg.toFixed(3)} kg</strong> (1,8 HA + 0,6 LR + 2,0 CAP)
+                        Despachado ({varietyReconciliation.totals.remitosCount} Remitos): <strong>{varietyReconciliation.totals.totalDispatchedKg.toFixed(3)} kg</strong>
                       </span>
                       <span className="px-2.5 py-1 rounded-xl bg-emerald-600 text-white shadow-xs">
-                        Stock Final Planta Central: <strong>{varietyReconciliation.totals.centralRemKg.toFixed(3)} kg</strong> (1.600 gr)
+                        Stock Planta Central: <strong>{varietyReconciliation.totals.centralRemKg.toFixed(3)} kg</strong> ({Math.round(varietyReconciliation.totals.centralRemKg * 1000)} gr)
                       </span>
+                      <span className="px-2.5 py-1 rounded-xl bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300">
+                        Remanente Campo: <strong>{varietyReconciliation.totals.totalFieldRemKg.toFixed(3)} kg</strong> ({Math.round(varietyReconciliation.totals.totalFieldRemKg * 1000)} gr)
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleDownloadBalancePDF}
+                        className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 font-black uppercase tracking-wider flex items-center gap-1.5 shadow transition cursor-pointer"
+                        title="Descargar o Imprimir el Balance Oficial en PDF (respeta los filtros activos)"
+                      >
+                        <Printer size={13} />
+                        <span>Descargar Balance PDF</span>
+                      </button>
                     </div>
                   </div>
 
+                  {/* BARRA DE FILTROS DINÁMICOS DEL BALANCE */}
+                  <div className="px-6 py-3 bg-slate-50/90 dark:bg-slate-950/50 border-b border-slate-200/80 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 text-[11px]">
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <div className="flex items-center gap-1.5 text-slate-500 font-black uppercase text-[10px]">
+                        <Filter size={13} className="text-emerald-600" />
+                        <span>Filtros Balance:</span>
+                      </div>
+
+                      {/* FILTRO ESTABLECIMIENTO / NODO */}
+                      <select
+                        value={balanceNodeFilter}
+                        onChange={e => setBalanceNodeFilter(e.target.value)}
+                        className="px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 font-bold text-[11px] outline-none focus:ring-2 focus:ring-emerald-500"
+                      >
+                        <option value="all">📍 Todos los Nodos (Consolidado Red)</option>
+                        <option value="central">🏢 Solo Planta Central (BioC Warehousing 1#)</option>
+                        {varietyReconciliation.fieldStoragePoints.map(sp => (
+                          <option key={sp.id} value={sp.id}>
+                            🌾 {sp.name} ({sp.city})
+                          </option>
+                        ))}
+                      </select>
+
+                      {/* FILTRO PROVEEDOR */}
+                      <select
+                        value={balanceSupplierFilter}
+                        onChange={e => setBalanceSupplierFilter(e.target.value)}
+                        className="px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 font-bold text-[11px] outline-none focus:ring-2 focus:ring-emerald-500"
+                      >
+                        <option value="all">🤝 Todos los Proveedores</option>
+                        {suppliers.map(s => (
+                          <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
+                      </select>
+
+                      {/* FILTRO VARIEDAD */}
+                      <select
+                        value={balanceVarietyFilter}
+                        onChange={e => setBalanceVarietyFilter(e.target.value)}
+                        className="px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 font-bold text-[11px] outline-none focus:ring-2 focus:ring-emerald-500"
+                      >
+                        <option value="all">🧬 Todas las Variedades ({varietyReconciliation.rows.length})</option>
+                        {varietyReconciliation.rows.map(r => (
+                          <option key={r.varietyId} value={r.varietyId}>{r.varietyName} ({r.supplierName})</option>
+                        ))}
+                      </select>
+
+                      {(balanceNodeFilter !== 'all' || balanceSupplierFilter !== 'all' || balanceVarietyFilter !== 'all') && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setBalanceNodeFilter('all');
+                            setBalanceSupplierFilter('all');
+                            setBalanceVarietyFilter('all');
+                          }}
+                          className="px-2.5 py-1 rounded-xl bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-300 border border-red-200 dark:border-red-800 text-[10px] font-black uppercase flex items-center gap-1 hover:bg-red-100 transition"
+                        >
+                          <FilterX size={12} />
+                          <span>Limpiar</span>
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      {/* SELECTOR DE UNIDAD VISUAL */}
+                      <div className="inline-flex rounded-xl bg-slate-200/70 dark:bg-slate-800 p-0.5 text-[10px] font-black uppercase">
+                        <button
+                          type="button"
+                          onClick={() => setBalanceUnitMode('both')}
+                          className={`px-2 py-1 rounded-lg transition ${balanceUnitMode === 'both' ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-xs' : 'text-slate-500'}`}
+                        >
+                          Kg + Gr
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBalanceUnitMode('kg')}
+                          className={`px-2 py-1 rounded-lg transition ${balanceUnitMode === 'kg' ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-xs' : 'text-slate-500'}`}
+                        >
+                          Solo Kg
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBalanceUnitMode('gr')}
+                          className={`px-2 py-1 rounded-lg transition ${balanceUnitMode === 'gr' ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-xs' : 'text-slate-500'}`}
+                        >
+                          Solo Gr
+                        </button>
+                      </div>
+
+                      {balanceNodeFilter === 'all' && (
+                        <button
+                          type="button"
+                          onClick={() => setExpandAllBalanceNodes(prev => !prev)}
+                          className={`px-2.5 py-1 rounded-xl border text-[10px] font-black uppercase transition flex items-center gap-1 ${
+                            expandAllBalanceNodes
+                              ? 'bg-emerald-600 text-white border-emerald-600'
+                              : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
+                          }`}
+                        >
+                          <Layers size={12} />
+                          <span>{expandAllBalanceNodes ? 'Contraer Establecimientos' : 'Desplegar Establecimientos'}</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* TABLA DE BALANCE CON ENCOLUMNADO COMPACTO Y ESCALABLE (SIN DESBORDE HORIZONTAL) */}
                   <div className="overflow-x-auto">
-                    <table className="min-w-full text-[11px] text-left tabular-nums">
-                      <thead className="bg-slate-50 dark:bg-slate-950/60 text-slate-500 uppercase text-[9px] font-black border-b border-slate-200 dark:border-slate-800">
-                        <tr>
-                          <th className="px-4 py-3">Variedad & Proveedor</th>
-                          <th className="px-3 py-3 text-right">Compra Inicial</th>
-                          <th className="px-3 py-3 text-right bg-slate-100/70 dark:bg-slate-800/40">Stock Final (Planta Central)</th>
-                          <th className="px-3 py-3 text-right bg-amber-50/50 dark:bg-amber-950/20">INTA Hilario Ascasubi (12 Parc.)</th>
-                          <th className="px-3 py-3 text-right bg-purple-50/50 dark:bg-purple-950/20">Chacra La Regina (12 Parc.)</th>
-                          <th className="px-3 py-3 text-right bg-sky-50/50 dark:bg-sky-950/20">CAP Puerto Madryn (20 Parc.)</th>
-                          <th className="px-3 py-3 text-right">Total Sembrado</th>
-                          <th className="px-4 py-3 text-right bg-emerald-50/60 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300">Stock Disponible Hoy</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-bold">
-                        {varietyReconciliation.rows.map(row => (
-                          <tr key={row.varietyId} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40">
-                            <td className="px-4 py-3">
-                              <div className="font-black text-slate-900 dark:text-white uppercase">{row.varietyName}</div>
-                              <div className="text-[9px] text-slate-400 font-normal">{row.supplierName}</div>
+                    {balanceNodeFilter !== 'all' && balanceNodeFilter !== 'central' ? (
+                      /* VISTA EXCLUSIVA DE UN ESTABLECIMIENTO DE CAMPO */
+                      <table className="min-w-full text-[11px] text-left tabular-nums">
+                        <thead className="bg-slate-50 dark:bg-slate-950/60 text-slate-500 uppercase text-[9px] font-black border-b border-slate-200 dark:border-slate-800">
+                          <tr>
+                            <th className="px-5 py-3">Variedad & Proveedor Obtentor</th>
+                            <th className="px-4 py-3">Lote Recibido en Establecimiento</th>
+                            <th className="px-4 py-3 text-right bg-sky-50/50 dark:bg-sky-950/20">Enviado por Remito</th>
+                            <th className="px-4 py-3 text-right bg-purple-50/50 dark:bg-purple-950/20">Sembrado en Parcelas</th>
+                            <th className="px-5 py-3 text-right bg-emerald-50/60 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300">Stock Remanente en Depósito</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-bold">
+                          {varietyReconciliation.filteredRows.map(row => {
+                            const nd = row.nodes.find(n => n.storageId === balanceNodeFilter);
+                            const sent = nd?.sentKg || 0;
+                            const used = nd?.usedKg || 0;
+                            const rem = nd?.remKg || 0;
+                            const pctUsed = sent > 0 ? Math.round((used / sent) * 100) : 0;
+                            return (
+                              <tr key={row.varietyId} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40">
+                                <td className="px-5 py-3">
+                                  <div className="font-black text-slate-900 dark:text-white uppercase">{row.varietyName}</div>
+                                  <div className="text-[9px] text-slate-400 font-normal">{row.supplierName} · Cert. {row.certNumber}</div>
+                                </td>
+                                <td className="px-4 py-3 text-[10px] text-slate-600 dark:text-slate-300">
+                                  <div className="font-bold truncate max-w-[260px]">{nd?.batchCodes.join(', ') || row.motherBatchCode}</div>
+                                  <div className="text-[9px] text-slate-400 font-normal">{nd?.establishmentName} ({nd?.city})</div>
+                                </td>
+                                <td className="px-4 py-3 text-right bg-sky-50/20 dark:bg-sky-950/10 text-sky-700 dark:text-sky-300">
+                                  <div className="font-black">{formatMassDisplay(sent)}</div>
+                                  <div className="text-[9px] text-slate-400 font-normal">Guía ARICCAME Recibida</div>
+                                </td>
+                                <td className="px-4 py-3 text-right bg-purple-50/20 dark:bg-purple-950/10 text-purple-700 dark:text-purple-300">
+                                  <div className="font-black">{formatMassDisplay(used)} ({pctUsed}%)</div>
+                                  <div className="text-[9px] text-slate-400 font-normal">{nd?.plotsCount || 0} parcelas sembradas</div>
+                                </td>
+                                <td className="px-5 py-3 text-right bg-emerald-50/40 dark:bg-emerald-950/20">
+                                  <div className="text-emerald-700 dark:text-emerald-300 font-black text-xs">
+                                    {formatMassDisplay(rem)}
+                                  </div>
+                                  <div className="text-[9px] text-emerald-600/80 font-normal">
+                                    {rem > 0 ? 'Disponible en depósito de campo' : 'Consumido 100% en ensayo'}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                        <tfoot className="bg-slate-900 text-white text-[10px] font-black uppercase">
+                          {(() => {
+                            const nodeSent = Number(varietyReconciliation.filteredRows.reduce((s, r) => s + (r.nodes.find(n => n.storageId === balanceNodeFilter)?.sentKg || 0), 0).toFixed(3));
+                            const nodeUsed = Number(varietyReconciliation.filteredRows.reduce((s, r) => s + (r.nodes.find(n => n.storageId === balanceNodeFilter)?.usedKg || 0), 0).toFixed(3));
+                            const nodeRem = Number(varietyReconciliation.filteredRows.reduce((s, r) => s + (r.nodes.find(n => n.storageId === balanceNodeFilter)?.remKg || 0), 0).toFixed(3));
+                            const nodePlots = varietyReconciliation.filteredRows.reduce((s, r) => s + (r.nodes.find(n => n.storageId === balanceNodeFilter)?.plotsCount || 0), 0);
+                            return (
+                              <tr>
+                                <td className="px-5 py-3" colSpan={2}>TOTAL CONCILIADO EN ESTABLECIMIENTO SELECCIONADO</td>
+                                <td className="px-4 py-3 text-right text-sky-300">{formatMassDisplay(nodeSent)}</td>
+                                <td className="px-4 py-3 text-right text-purple-300">{formatMassDisplay(nodeUsed)} ({nodePlots} parc.)</td>
+                                <td className="px-5 py-3 text-right text-emerald-400 text-xs">{formatMassDisplay(nodeRem)}</td>
+                              </tr>
+                            );
+                          })()}
+                        </tfoot>
+                      </table>
+                    ) : (
+                      /* VISTA CONSOLIDADA DE 6 COLUMNAS FIJAS + DESGLOSE EXPANDIBLE POR ESTABLECIMIENTO */
+                      <table className="min-w-full text-[11px] text-left tabular-nums">
+                        <thead className="bg-slate-50 dark:bg-slate-950/60 text-slate-500 uppercase text-[9px] font-black border-b border-slate-200 dark:border-slate-800">
+                          <tr>
+                            <th className="px-5 py-3">Variedad, Proveedor & Lote Madre</th>
+                            <th className="px-4 py-3 text-right">Compra Inicial (Ingreso)</th>
+                            <th className="px-4 py-3 text-right bg-sky-50/50 dark:bg-sky-950/20">Despachado a Campo</th>
+                            <th className="px-4 py-3 text-right bg-purple-50/50 dark:bg-purple-950/20">Total Sembrado (Parcelas)</th>
+                            <th className="px-4 py-3 text-right bg-slate-100/70 dark:bg-slate-800/40">Stock Planta Central (BioC #1)</th>
+                            <th className="px-5 py-3 text-right bg-emerald-50/60 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300">Stock Disponible Hoy & Nodos</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-bold">
+                          {varietyReconciliation.filteredRows.map(row => {
+                            const isRowExpanded = expandAllBalanceNodes || Boolean(expandedBalanceRows[row.varietyId]);
+                            const totalPlotsForVar = row.nodes.reduce((s, n) => s + n.plotsCount, 0);
+                            return (
+                              <React.Fragment key={row.varietyId}>
+                                <tr className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
+                                  <td className="px-5 py-3">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-black text-slate-900 dark:text-white uppercase text-xs">{row.varietyName}</span>
+                                      <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[9px] text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                                        {row.motherBatchCode}
+                                      </span>
+                                    </div>
+                                    <div className="text-[9px] text-slate-400 font-normal mt-0.5">
+                                      Obtentor: <strong className="text-slate-600 dark:text-slate-300">{row.supplierName}</strong> · Cert. INASE #{row.certNumber}
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3 text-right text-slate-800 dark:text-slate-200">
+                                    <div className="font-black text-xs">{formatMassDisplay(row.purchasedKg)}</div>
+                                    <div className="text-[9px] text-slate-400 font-normal">100% homologado QA</div>
+                                  </td>
+                                  <td className="px-4 py-3 text-right bg-sky-50/20 dark:bg-sky-950/10">
+                                    <div className="text-sky-700 dark:text-sky-300 font-black">{formatMassDisplay(row.totalDispatchedKg)}</div>
+                                    <div className="text-[9px] text-slate-400 font-normal">
+                                      {row.remitosCount} remitos a {row.nodes.length} establecimientos
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3 text-right bg-purple-50/20 dark:bg-purple-950/10">
+                                    <div className="text-purple-700 dark:text-purple-300 font-black">{formatMassDisplay(row.totalUsedFieldKg)}</div>
+                                    <div className="text-[9px] text-slate-400 font-normal">
+                                      Implantado en {totalPlotsForVar} parcelas
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3 text-right bg-slate-50/60 dark:bg-slate-800/20">
+                                    <div className="text-slate-900 dark:text-white font-black">{formatMassDisplay(row.centralRemKg)}</div>
+                                    <div className="text-[9px] text-slate-400 font-normal">
+                                      Custodia BioC #1 Trelew
+                                    </div>
+                                  </td>
+                                  <td className="px-5 py-3 text-right bg-emerald-50/40 dark:bg-emerald-950/20">
+                                    <div className="flex flex-col items-end gap-1">
+                                      <div className="text-emerald-700 dark:text-emerald-300 font-black text-xs">
+                                        {formatMassDisplay(row.totalAvailableKg)}
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-[9px] text-emerald-700/80 dark:text-emerald-400/80 font-normal">
+                                          Central {row.centralRemKg.toFixed(3)} + Campo {row.totalFieldRemKg.toFixed(3)} kg
+                                        </span>
+                                        {balanceNodeFilter === 'all' && row.nodes.length > 0 && (
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setExpandedBalanceRows(prev => ({
+                                                ...prev,
+                                                [row.varietyId]: !prev[row.varietyId]
+                                              }))
+                                            }
+                                            className="px-2 py-0.5 rounded-lg bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-700 text-[9px] font-black uppercase text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 transition cursor-pointer"
+                                          >
+                                            {isRowExpanded ? 'Ocultar Nodos ▲' : `Ver ${row.nodes.length} Nodos ▼`}
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </td>
+                                </tr>
+
+                                {/* FILA DESPLEGABLE DE ESTABLECIMIENTOS (DISEÑO EN GRILLA ADAPTABLE QUE NUNCA DESBORDA LA PANTALLA) */}
+                                {balanceNodeFilter === 'all' && isRowExpanded && row.nodes.length > 0 && (
+                                  <tr className="bg-slate-50/90 dark:bg-slate-950/60">
+                                    <td colSpan={6} className="px-6 py-3.5">
+                                      <div className="text-[9px] font-black uppercase text-slate-500 mb-2 flex items-center justify-between">
+                                        <span>Distribución en Establecimientos Productivos — {row.varietyName} ({row.supplierName})</span>
+                                        <span>Total Enviado a Campo: {formatMassDisplay(row.totalDispatchedKg)} · Remanente en Campo: {formatMassDisplay(row.totalFieldRemKg)}</span>
+                                      </div>
+                                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                        {row.nodes.map(nd => {
+                                          const usePct = nd.sentKg > 0 ? Math.round((nd.usedKg / nd.sentKg) * 100) : 0;
+                                          return (
+                                            <div
+                                              key={nd.storageId}
+                                              className="bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs flex flex-col justify-between gap-2"
+                                            >
+                                              <div className="flex justify-between items-start gap-2 border-b border-slate-100 dark:border-slate-800 pb-2">
+                                                <div>
+                                                  <div className="font-black text-slate-900 dark:text-white uppercase text-[10px]">
+                                                    {nd.establishmentName}
+                                                  </div>
+                                                  <div className="text-[9px] text-slate-400 font-normal">
+                                                    Depósito: {nd.storageName} ({nd.city}) · {nd.plotsCount} Parcelas
+                                                  </div>
+                                                </div>
+                                                <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase ${
+                                                  nd.remKg > 0.0001
+                                                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
+                                                    : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
+                                                }`}>
+                                                  {nd.remKg > 0.0001 ? `Quedan ${Math.round(nd.remKg * 1000)} gr` : '100% Sembrado'}
+                                                </span>
+                                              </div>
+                                              <div className="grid grid-cols-3 gap-2 text-[10px]">
+                                                <div>
+                                                  <span className="text-[8px] text-slate-400 uppercase block">Enviado</span>
+                                                  <strong className="text-sky-700 dark:text-sky-300">{nd.sentKg.toFixed(3)} kg</strong>
+                                                  <span className="text-[8px] text-slate-400 block">{Math.round(nd.sentKg * 1000)} gr</span>
+                                                </div>
+                                                <div>
+                                                  <span className="text-[8px] text-slate-400 uppercase block">Sembrado ({usePct}%)</span>
+                                                  <strong className="text-purple-700 dark:text-purple-300">{nd.usedKg.toFixed(3)} kg</strong>
+                                                  <span className="text-[8px] text-slate-400 block">{Math.round(nd.usedKg * 1000)} gr</span>
+                                                </div>
+                                                <div className="text-right">
+                                                  <span className="text-[8px] text-slate-400 uppercase block">Disponible</span>
+                                                  <strong className="text-emerald-700 dark:text-emerald-300">{nd.remKg.toFixed(3)} kg</strong>
+                                                  <span className="text-[8px] text-slate-400 block">{Math.round(nd.remKg * 1000)} gr</span>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </React.Fragment>
+                            );
+                          })}
+                        </tbody>
+                        <tfoot className="bg-slate-900 text-white text-[10px] font-black uppercase">
+                          <tr>
+                            <td className="px-5 py-3">
+                              TOTAL CONCILIADO ({varietyReconciliation.filteredRows.length} VARIEDADES)
                             </td>
-                            <td className="px-3 py-3 text-right text-slate-800 dark:text-slate-200">
-                              <div>{row.purchasedKg.toFixed(3)} kg</div>
-                              <div className="text-[9px] text-slate-400 font-normal">{Math.round(row.purchasedKg * 1000)} gr</div>
+                            <td className="px-4 py-3 text-right">
+                              {formatMassDisplay(varietyReconciliation.filteredTotals.purchasedKg)}
                             </td>
-                            <td className="px-3 py-3 text-right bg-slate-50/60 dark:bg-slate-800/20">
-                              <div className="text-slate-900 dark:text-white font-black">{row.centralRemKg.toFixed(3)} kg</div>
-                              <div className="text-[9px] text-slate-400 font-normal">
-                                {Math.round(row.centralRemKg * 1000)} gr en BioC #1
-                              </div>
+                            <td className="px-4 py-3 text-right text-sky-300">
+                              {formatMassDisplay(varietyReconciliation.filteredTotals.totalDispatchedKg)}
                             </td>
-                            <td className="px-3 py-3 text-right bg-amber-50/20 dark:bg-amber-950/10">
-                              <div className="text-amber-700 dark:text-amber-300 font-black">
-                                Quedan {row.hilarioRemKg.toFixed(3)} kg ({Math.round(row.hilarioRemKg * 1000)} gr)
-                              </div>
-                              <div className="text-[9px] text-slate-500 font-normal">
-                                Env: {row.hilarioSentKg.toFixed(3)} kg · Usado: {row.hilarioUsedKg.toFixed(3)} kg
-                              </div>
+                            <td className="px-4 py-3 text-right text-purple-300">
+                              {formatMassDisplay(varietyReconciliation.filteredTotals.totalUsedFieldKg)}
                             </td>
-                            <td className="px-3 py-3 text-right bg-purple-50/20 dark:bg-purple-950/10">
-                              <div className="text-purple-700 dark:text-purple-300 font-black">
-                                Quedan {row.lareginaRemKg.toFixed(3)} kg (0 gr)
-                              </div>
-                              <div className="text-[9px] text-slate-500 font-normal">
-                                Env: {row.lareginaSentKg.toFixed(3)} kg · Usado: 100% ({Math.round(row.lareginaUsedKg * 1000)} gr)
-                              </div>
+                            <td className="px-4 py-3 text-right text-emerald-300">
+                              {formatMassDisplay(varietyReconciliation.filteredTotals.centralRemKg)}
                             </td>
-                            <td className="px-3 py-3 text-right bg-sky-50/20 dark:bg-sky-950/10">
-                              <div className="text-sky-700 dark:text-sky-300 font-black">
-                                Quedan {row.madrynRemKg.toFixed(3)} kg ({Math.round(row.madrynRemKg * 1000)} gr)
-                              </div>
-                              <div className="text-[9px] text-slate-500 font-normal">
-                                Env: {row.madrynSentKg.toFixed(3)} kg · Usado: {row.madrynUsedKg.toFixed(3)} kg
-                              </div>
-                            </td>
-                            <td className="px-3 py-3 text-right text-slate-700 dark:text-slate-300">
-                              <div>{row.totalUsedFieldKg.toFixed(3)} kg</div>
-                              <div className="text-[9px] text-slate-400 font-normal">{Math.round(row.totalUsedFieldKg * 1000)} gr</div>
-                            </td>
-                            <td className="px-4 py-3 text-right bg-emerald-50/40 dark:bg-emerald-950/20">
-                              <div className="text-emerald-700 dark:text-emerald-300 font-black text-xs">
-                                {row.totalAvailableKg.toFixed(3)} kg ({Math.round(row.totalAvailableKg * 1000)} gr)
-                              </div>
-                              <div className="text-[9px] text-emerald-600/80 font-normal">
-                                Central {row.centralRemKg.toFixed(3)} + Campos {row.totalFieldRemKg.toFixed(3)}
+                            <td className="px-5 py-3 text-right text-emerald-400 text-xs">
+                              <div>{formatMassDisplay(varietyReconciliation.filteredTotals.totalAvailableKg)}</div>
+                              <div className="text-[9px] text-slate-300 font-normal">
+                                Central: {varietyReconciliation.filteredTotals.centralRemKg.toFixed(3)} kg + Campo: {varietyReconciliation.filteredTotals.totalFieldRemKg.toFixed(3)} kg
                               </div>
                             </td>
                           </tr>
-                        ))}
-                      </tbody>
-                      <tfoot className="bg-slate-900 text-white text-[10px] font-black uppercase">
-                        <tr>
-                          <td className="px-4 py-3">TOTAL CONCILIADO CAMPAÑA 25/26</td>
-                          <td className="px-3 py-3 text-right">{varietyReconciliation.totals.purchasedKg.toFixed(3)} kg</td>
-                          <td className="px-3 py-3 text-right text-emerald-300">{varietyReconciliation.totals.centralRemKg.toFixed(3)} kg</td>
-                          <td className="px-3 py-3 text-right text-amber-300">
-                            {varietyReconciliation.totals.hilarioRemKg.toFixed(3)} kg (Env: {varietyReconciliation.totals.hilarioSentKg.toFixed(3)} / Uso: {varietyReconciliation.totals.hilarioUsedKg.toFixed(3)})
-                          </td>
-                          <td className="px-3 py-3 text-right text-purple-300">
-                            {varietyReconciliation.totals.lareginaRemKg.toFixed(3)} kg (Env: {varietyReconciliation.totals.lareginaSentKg.toFixed(3)} / Uso: {varietyReconciliation.totals.lareginaUsedKg.toFixed(3)})
-                          </td>
-                          <td className="px-3 py-3 text-right text-sky-300">
-                            {varietyReconciliation.totals.madrynRemKg.toFixed(3)} kg (Env: {varietyReconciliation.totals.madrynSentKg.toFixed(3)} / Uso: {varietyReconciliation.totals.madrynUsedKg.toFixed(3)})
-                          </td>
-                          <td className="px-3 py-3 text-right">{varietyReconciliation.totals.totalUsedFieldKg.toFixed(3)} kg</td>
-                          <td className="px-4 py-3 text-right text-emerald-400 text-xs">
-                            {varietyReconciliation.totals.totalAvailableKg.toFixed(3)} kg ({Math.round(varietyReconciliation.totals.totalAvailableKg * 1000)} gr)
-                          </td>
-                        </tr>
-                      </tfoot>
-                    </table>
+                        </tfoot>
+                      </table>
+                    )}
                   </div>
                 </div>
               )}
@@ -1407,11 +2054,8 @@ export default function SeedBatches() {
                                   <td className="px-6 py-4 text-center">
                                       <button
                                         type="button"
-                                        onClick={() => updateSeedMovement({
-                                          ...m,
-                                          status: m.status === 'En Tránsito' ? 'Recibido' : 'En Tránsito'
-                                        })}
-                                        title="Clic para alternar recepción"
+                                        onClick={() => handleConfirmMovementReception(m)}
+                                        title="Clic para confirmar recepción y sincronizar lote en depósito destino"
                                         className={`px-2.5 py-1 rounded-xl text-[10px] font-bold transition ${
                                           m.status === 'En Tránsito' 
                                             ? 'bg-amber-100 text-amber-800 hover:bg-amber-200 dark:bg-amber-950/60 dark:text-amber-300' 
@@ -1426,9 +2070,9 @@ export default function SeedBatches() {
                                           {m.status === 'En Tránsito' && (
                                               <button
                                                 type="button"
-                                                onClick={() => updateSeedMovement({ ...m, status: 'Recibido' })}
+                                                onClick={() => handleConfirmMovementReception(m)}
                                                 className="px-2 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 text-[9px] font-black uppercase hover:bg-emerald-100 transition"
-                                                title="Confirmar Recepción en Destino"
+                                                title="Confirmar Recepción en Destino y Dar de Alta en Almacén"
                                               >
                                                 Recibir
                                               </button>
@@ -1927,9 +2571,9 @@ export default function SeedBatches() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                    <div className={`grid grid-cols-1 ${editingBatchId ? 'sm:grid-cols-4' : 'sm:grid-cols-3'} gap-3 pt-1`}>
                       <div>
-                        <label className={labelClass}>2.4 Masa a Ingresar al Galpón *</label>
+                        <label className={labelClass}>2.4 Masa Inicial Ingresada *</label>
                         <div className="flex gap-2">
                           <input
                             required
@@ -1954,6 +2598,24 @@ export default function SeedBatches() {
                           Masa Equivalente: {calculatedEntryKg.toFixed(3)} kg ({Math.round(calculatedEntryKg * 1000)} gr)
                         </span>
                       </div>
+
+                      {editingBatchId && (
+                        <div>
+                          <label className={labelClass}>2.5 Stock Remanente Actual (KG) *</label>
+                          <input
+                            required
+                            type="number"
+                            step="0.001"
+                            min="0"
+                            className={`${inputClass} text-lg font-black border-emerald-400 dark:border-emerald-700`}
+                            value={batchFormData.remainingQuantity ?? 0}
+                            onChange={e => setBatchFormData({ ...batchFormData, remainingQuantity: Number(e.target.value) })}
+                          />
+                          <span className="text-[10px] text-sky-700 dark:text-sky-300 font-bold block mt-1">
+                            Disponible: {Number(batchFormData.remainingQuantity || 0).toFixed(3)} kg ({Math.round(Number(batchFormData.remainingQuantity || 0) * 1000)} gr)
+                          </span>
+                        </div>
+                      )}
 
                       <div>
                         <label className={labelClass}>Categoría Fiscal INASE</label>
@@ -2348,7 +3010,16 @@ export default function SeedBatches() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                  <div>
+                    <label className={labelClass}>Fecha Acta QA (DD/MM/AAAA) *</label>
+                    <DateInputAr
+                      required
+                      className={inputClass}
+                      value={qaFormDraft.date || ''}
+                      onChange={e => setQaFormDraft({ ...qaFormDraft, date: e.target.value })}
+                    />
+                  </div>
                   <div>
                     <label className={labelClass}>Código de Muestra ISTA</label>
                     <input
@@ -2556,58 +3227,154 @@ export default function SeedBatches() {
                 <form onSubmit={handleMoveSubmit} className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3">
-                            <h3 className="text-[10px] font-bold uppercase text-slate-500">1. Material y Carga</h3>
+                            <h3 className="text-[10px] font-bold uppercase text-slate-500">1. Material, Origen y Destino</h3>
                             <div>
-                                <label className={labelClass}>Lote de Origen *</label>
+                                <label className={labelClass}>Lote de Origen (Con Stock Disponible) *</label>
                                 <select required className={inputClass} value={moveFormData.batchId} onChange={e => setMoveFormData({...moveFormData, batchId: e.target.value})}>
                                     <option value="">Seleccione lote disponible...</option>
-                                    {seedBatches.filter(b => b.remainingQuantity > 0.001).map(b => (
+                                    {seedBatches.filter(b => b.remainingQuantity > 0.0005).map(b => (
                                         <option key={b.id} value={b.id}>
-                                            {b.batchCode} ({Number(b.remainingQuantity.toFixed(2))} kg) - {storagePoints.find(s => s.id === b.storagePointId)?.name}
+                                            {b.batchCode} ({Number(b.remainingQuantity.toFixed(3))} kg / {Math.round(b.remainingQuantity * 1000)} gr) — {storagePoints.find(s => s.id === b.storagePointId)?.name}
                                         </option>
                                     ))}
                                 </select>
                             </div>
-                            <div>
-                                <label className={labelClass}>Masa a Despachar *</label>
-                                <div className="flex gap-2">
-                                    <input required type="number" step="any" min="0" className={`${inputClass} text-lg font-bold`} value={moveFormData.inputValue} onChange={e => setMoveFormData({...moveFormData, inputValue: Number(e.target.value)})} />
-                                    <select className="w-24 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold uppercase text-center" value={moveUnit} onChange={e => setMoveUnit(e.target.value as MassUnit)}>
-                                        <option value="kg">KG</option>
-                                        <option value="tn">TN</option>
-                                        <option value="gr">GR</option>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label className={labelClass}>Masa a Despachar *</label>
+                                    <div className="flex gap-2">
+                                        <input required type="number" step="any" min="0" className={`${inputClass} text-base font-bold`} value={moveFormData.inputValue} onChange={e => setMoveFormData({...moveFormData, inputValue: Number(e.target.value)})} />
+                                        <select className="w-20 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold uppercase text-center" value={moveUnit} onChange={e => setMoveUnit(e.target.value as MassUnit)}>
+                                            <option value="kg">KG</option>
+                                            <option value="gr">GR</option>
+                                            <option value="tn">TN</option>
+                                        </select>
+                                    </div>
+                                    <span className="text-[10px] text-sky-600 font-bold block mt-1">
+                                      Carga Neta: {calculatedMoveKg.toFixed(3)} kg ({Math.round(calculatedMoveKg * 1000)} gr)
+                                    </span>
+                                </div>
+                                <div>
+                                    <label className={labelClass}>Estado Inicial del Envío *</label>
+                                    <select
+                                        className={inputClass}
+                                        value={moveFormData.status || 'En Tránsito'}
+                                        onChange={e => setMoveFormData({ ...moveFormData, status: e.target.value })}
+                                    >
+                                        <option value="En Tránsito">🚚 En Tránsito (Pendiente Recepción)</option>
+                                        <option value="Recibido">✅ Recibido en Destino (Impacta Almacén)</option>
                                     </select>
                                 </div>
-                                <span className="text-[10px] text-sky-600 font-bold block mt-1">Carga Neta: {calculatedMoveKg.toLocaleString()} kg</span>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label className={labelClass}>Socio / Establecimiento Destino</label>
+                                    <select
+                                        className={inputClass}
+                                        value={moveFormData.clientId || ''}
+                                        onChange={e => {
+                                            const cid = e.target.value;
+                                            const matchingSp = storagePoints.find(sp => sp.clientId === cid);
+                                            const cli = clients.find(c => c.id === cid);
+                                            setMoveFormData({
+                                                ...moveFormData,
+                                                clientId: cid,
+                                                targetLocationId: matchingSp?.id || moveFormData.targetLocationId,
+                                                recipientName: cli?.contactName || moveFormData.recipientName
+                                            });
+                                        }}
+                                    >
+                                        <option value="">Todos los Depósitos / Interno</option>
+                                        {clients.map(c => (
+                                            <option key={c.id} value={c.id}>{c.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className={labelClass}>Depósito de Recepción Destino *</label>
+                                    <select
+                                        required
+                                        className={inputClass}
+                                        value={moveFormData.targetLocationId}
+                                        onChange={e => {
+                                            const sp = storagePoints.find(s => s.id === e.target.value);
+                                            const cli = sp?.clientId ? clients.find(c => c.id === sp.clientId) : undefined;
+                                            setMoveFormData({
+                                                ...moveFormData,
+                                                targetLocationId: e.target.value,
+                                                clientId: sp?.clientId || moveFormData.clientId,
+                                                recipientName: moveFormData.recipientName || cli?.contactName || ''
+                                            });
+                                        }}
+                                    >
+                                        <option value="">Seleccione depósito destino...</option>
+                                        {storagePoints.map(sp => (
+                                            <option key={sp.id} value={sp.id}>{sp.name} ({sp.city})</option>
+                                        ))}
+                                    </select>
+                                </div>
                             </div>
                             <div>
-                                <label className={labelClass}>Destino de Recepción *</label>
-                                <select required className={inputClass} value={moveFormData.targetLocationId} onChange={e => setMoveFormData({...moveFormData, targetLocationId: e.target.value})}>
-                                    <option value="">Seleccione depósito destino...</option>
-                                    {storagePoints.map(sp => <option key={sp.id} value={sp.id}>{sp.name} ({sp.city})</option>)}
-                                </select>
+                                <label className={labelClass}>Responsable de Recepción en Destino</label>
+                                <input
+                                    type="text"
+                                    className={inputClass}
+                                    value={moveFormData.recipientName || ''}
+                                    onChange={e => setMoveFormData({ ...moveFormData, recipientName: e.target.value })}
+                                    placeholder="Ej: Matias QUINTANA / Ricardo La Regina / Joaquin AREZO"
+                                />
                             </div>
                         </div>
 
                         <div className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3">
-                            <h3 className="text-[10px] font-bold uppercase text-slate-500">2. Transporte & Custodia</h3>
-                            <div>
-                                <label className={labelClass}>N° Guía de Tránsito ARICCAME / Remito *</label>
-                                <input required type="text" className={inputClass} value={moveFormData.transportGuideNumber} onChange={e => setMoveFormData({...moveFormData, transportGuideNumber: e.target.value.toUpperCase()})} placeholder="GT-ARICCAME-2026-0099" />
+                            <h3 className="text-[10px] font-bold uppercase text-slate-500">2. Transporte, Fecha & Custodia ARICCAME</h3>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label className={labelClass}>N° Guía de Tránsito ARICCAME / Remito *</label>
+                                    <input required type="text" className={inputClass} value={moveFormData.transportGuideNumber} onChange={e => setMoveFormData({...moveFormData, transportGuideNumber: e.target.value.toUpperCase()})} placeholder="RE-2026-04104588-APN-ARICCAME" />
+                                </div>
+                                <div>
+                                    <label className={labelClass}>Empresa Transportista</label>
+                                    <input type="text" className={inputClass} value={moveFormData.transportCompany || ''} onChange={e => setMoveFormData({...moveFormData, transportCompany: e.target.value})} placeholder="Ej: PATAGONIANC LTDA / CORREO ARGENTINO" />
+                                </div>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className={labelClass}>Fecha de Despacho (DD/MM/AAAA) *</label>
+                                    <DateInputAr
+                                        required
+                                        className={inputClass}
+                                        value={moveFormData.date || ''}
+                                        onChange={e => setMoveFormData({ ...moveFormData, date: e.target.value })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className={labelClass}>Hora de Salida (24 hs)</label>
+                                    <input
+                                        type="time"
+                                        className={inputClass}
+                                        value={moveFormData.dispatchTime || '08:00'}
+                                        onChange={e => setMoveFormData({ ...moveFormData, dispatchTime: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-3 gap-2">
                                 <div>
                                     <label className={labelClass}>Chofer / Conductor</label>
                                     <input type="text" className={inputClass} value={moveFormData.driverName} onChange={e => setMoveFormData({...moveFormData, driverName: e.target.value})} placeholder="Nombre completo" />
                                 </div>
                                 <div>
-                                    <label className={labelClass}>Patente Vehicular</label>
+                                    <label className={labelClass}>Patente</label>
                                     <input type="text" className={inputClass} value={moveFormData.vehiclePlate} onChange={e => setMoveFormData({...moveFormData, vehiclePlate: e.target.value.toUpperCase()})} placeholder="AA 123 BB" />
+                                </div>
+                                <div>
+                                    <label className={labelClass}>Vehículo / Modelo</label>
+                                    <input type="text" className={inputClass} value={moveFormData.vehicleModel || ''} onChange={e => setMoveFormData({...moveFormData, vehicleModel: e.target.value})} placeholder="Hilux / Renault" />
                                 </div>
                             </div>
                             <div>
                                 <label className={labelClass}>Itinerario de Ruta</label>
-                                <input type="text" className={inputClass} value={moveFormData.routeItinerary} onChange={e => setMoveFormData({...moveFormData, routeItinerary: e.target.value})} placeholder="Ruta Nacional y paradas intermedias" />
+                                <input type="text" className={inputClass} value={moveFormData.routeItinerary} onChange={e => setMoveFormData({...moveFormData, routeItinerary: e.target.value})} placeholder="Planta Central Trelew -> Destino" />
                             </div>
                         </div>
                     </div>

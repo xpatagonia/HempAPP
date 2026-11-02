@@ -20,6 +20,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { BarcodeRenderer } from '../components/BarcodeRenderer';
 import { sendUserProfileWelcomeEmail } from '../src/services/emailNotificationService';
+import { DateInputAr } from '../src/components/DateInputAr';
 import {
   SUPPLIER_ACTOR_ROLES,
   SUPPLIER_ACTOR_ROLES_INFO,
@@ -2166,9 +2167,8 @@ export default function Suppliers() {
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Fecha de Recepción / Ensayo</label>
-                    <input
-                      type="date"
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Fecha de Recepción / Ensayo (DD/MM/AAAA)</label>
+                    <DateInputAr
                       className={inputClass}
                       value={newInspectionData.date}
                       onChange={e => setNewInspectionData({ ...newInspectionData, date: e.target.value })}

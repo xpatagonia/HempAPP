@@ -7,6 +7,7 @@ import {
   Search, AlertTriangle, CheckCircle2, X, FlaskConical, Sprout, Check,
   ShieldCheck, Building2, Layers, ArrowUpRight
 } from 'lucide-react';
+import { DateInputAr } from '../src/components/DateInputAr';
 
 const AGRO_CATEGORIES: AgrochemicalCategory[] = [
   'Mejorador de Suelo',
@@ -706,10 +707,9 @@ export default function Resources() {
 
                       <div>
                         <label className="block text-[10px] font-black uppercase text-slate-500 mb-1">
-                          Vencimiento Lote
+                          Vencimiento Lote (DD/MM/AAAA)
                         </label>
-                        <input
-                          type="date"
+                        <DateInputAr
                           className={inputClass}
                           value={formData.expirationDate || '2027-12-31'}
                           onChange={e => setFormData({ ...formData, expirationDate: e.target.value })}

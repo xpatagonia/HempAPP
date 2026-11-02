@@ -16,6 +16,7 @@ import { getActiveGeminiApiKey } from '../src/services/geminiService';
 import { getPlotAgrochemicalApplications } from '../src/services/agro40Service';
 import { AgrochemicalApplication } from '../types';
 import SenasaPDFExporterModal from '../components/SenasaPDFExporterModal';
+import { DateInputAr } from '../src/components/DateInputAr';
 
 export default function AgronomicIntelligence() {
     const { plots, projects, locations, varieties, trialRecords, appName, appLogo, hydricRecords } = useAppContext();
@@ -953,9 +954,8 @@ Sé riguroso, técnico, conciso y en español.`;
                                 </div>
 
                                 <div className="space-y-1">
-                                    <label className="text-[11px] font-black text-slate-400 uppercase">Fecha de Vencimiento *</label>
-                                    <input
-                                        type="date"
+                                    <label className="text-[11px] font-black text-slate-400 uppercase">Fecha de Vencimiento (DD/MM/AAAA) *</label>
+                                    <DateInputAr
                                         required
                                         value={newInputForm.expirationDate}
                                         onChange={e => setNewInputForm({...newInputForm, expirationDate: e.target.value})}

@@ -2513,9 +2513,8 @@ export default function PlotDetails() {
                     />
                   </div>
                   <div>
-                    <label className={labelClass}>Fecha del Registro</label>
-                    <input
-                      type="date"
+                    <label className={labelClass}>Fecha del Registro (DD/MM/AAAA)</label>
+                    <DateInputAr
                       value={newLogDate}
                       onChange={e => setNewLogDate(e.target.value)}
                       className={inputStyle}
@@ -3698,9 +3697,8 @@ export default function PlotDetails() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Fecha de Ejecución *</label>
-                  <input
-                    type="date"
+                  <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Fecha de Ejecución (DD/MM/AAAA) *</label>
+                  <DateInputAr
                     required
                     value={laborForm.executionDate}
                     onChange={e => setLaborForm({ ...laborForm, executionDate: e.target.value })}

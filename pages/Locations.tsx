@@ -23,6 +23,7 @@ import {
   resolveLocationStructureRoster,
   STRUCTURE_ROLES_INFO
 } from '../src/utils/structurePermissions';
+import { DateInputAr } from '../src/components/DateInputAr';
 
 const ARG_GEO: Record<string, string[]> = {
     "Buenos Aires": ["La Plata", "Mar del Plata", "Bahía Blanca", "Tandil", "Pergamino", "Junín", "Olavarría", "San Nicolás", "Balcarce", "Castelar", "CABA", "San Pedro", "Trenque Lauquen", "Pehuajó", "9 de Julio", "Bolívar", "Saladillo", "Lobos", "Chascomús", "Necochea", "Tres Arroyos", "General Villegas", "Lincoln", "Chivilcoy", "Chacabuco", "Bragado", "25 de Mayo", "Azul", "Coronel Suárez", "Pigüé", "Carhué", "San Antonio de Areco", "Arrecifes", "Salto", "Rojas", "Mercedes", "Luján", "Cañuelas", "Las Flores"],
@@ -2295,10 +2296,9 @@ export default function Locations() {
 
                     <div>
                       <label className="text-[10px] font-mono font-bold uppercase text-emerald-800 dark:text-emerald-300 block mb-1">
-                        Fecha Presentación DDJJ
+                        Fecha Presentación DDJJ (DD/MM/AAAA)
                       </label>
-                      <input 
-                        type="date" 
+                      <DateInputAr 
                         className={inputClass} 
                         value={formData.sowingDeclarationDate || ''} 
                         onChange={e => setFormData({ ...formData, sowingDeclarationDate: e.target.value })} 

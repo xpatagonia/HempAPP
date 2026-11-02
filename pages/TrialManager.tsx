@@ -16,6 +16,7 @@ import {
 } from '../types';
 import { PlotCycleClosureModal } from '../components/PlotCycleClosureModal';
 import { resolveLocationStructureRoster } from '../src/utils/structurePermissions';
+import { DateInputAr } from '../src/components/DateInputAr';
 import {
   FlaskConical,
   Save,
@@ -2780,9 +2781,8 @@ export default function TrialManager() {
                           {/* Fila de Fecha, Hora y Clima (sin desbordes en ninguna resolución) */}
                           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 min-w-0">
                             <div className="min-w-0">
-                              <label className={labelClass}>Fecha de Visita</label>
-                              <input
-                                type="date"
+                              <label className={labelClass}>Fecha de Visita (DD/MM/AAAA)</label>
+                              <DateInputAr
                                 required
                                 className="w-full min-w-0 h-10 px-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 font-mono font-bold text-xs dark:text-white outline-none focus:ring-2 focus:ring-emerald-500"
                                 value={formData.date}
@@ -4416,9 +4416,8 @@ export default function TrialManager() {
                                 <label className="text-[9px] uppercase font-black text-slate-400 block mb-1 truncate">
                                   Plena Floración (50%)
                                 </label>
-                                <input
-                                  type="date"
-                                  className="w-full min-w-0 bg-slate-900 border border-white/15 p-2.5 rounded-xl text-xs font-mono outline-none focus:border-emerald-500"
+                                <DateInputAr
+                                  className="w-full min-w-0 bg-slate-900 border border-white/15 p-2.5 rounded-xl text-xs font-mono text-white outline-none focus:border-emerald-500"
                                   value={formData.floweringDate}
                                   onChange={e => setFormData({ ...formData, floweringDate: e.target.value })}
                                 />
@@ -4473,10 +4472,9 @@ export default function TrialManager() {
                             <div className="pt-2 border-t border-white/10 flex flex-col sm:flex-row items-stretch sm:items-end justify-between gap-2.5 min-w-0">
                               <div className="flex-1 min-w-0">
                                 <label className="text-[9px] uppercase font-black text-emerald-400 block mb-1">
-                                  Fecha Programada de Cosecha / Compromiso Comercial
+                                  Fecha Programada de Cosecha / Compromiso Comercial (DD/MM/AAAA)
                                 </label>
-                                <input
-                                  type="date"
+                                <DateInputAr
                                   value={scheduleHarvestDateInput}
                                   onChange={e => setScheduleHarvestDateInput(e.target.value)}
                                   className="w-full min-w-0 bg-slate-900 border border-emerald-500/40 p-2.5 rounded-xl text-xs font-mono font-bold text-white outline-none focus:border-emerald-400"

@@ -12,6 +12,7 @@ import {
   SlidersHorizontal, Key, ExternalLink, ThermometerSnowflake, Radio
 } from 'lucide-react';
 import LiveTelemetryPanel from '../components/LiveTelemetryPanel';
+import { DateInputAr } from '../src/components/DateInputAr';
 import { 
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, 
   CartesianGrid, Tooltip, BarChart, Bar, Legend, Cell 
@@ -4701,9 +4702,8 @@ export default function Agriculture40() {
             <form onSubmit={handleSaveDrone} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-[11px] font-black text-slate-400 uppercase">Fecha del Vuelo</label>
-                  <input
-                    type="date"
+                  <label className="text-[11px] font-black text-slate-400 uppercase">Fecha del Vuelo (DD/MM/AAAA)</label>
+                  <DateInputAr
                     required
                     value={droneDate}
                     onChange={e => setDroneDate(e.target.value)}

@@ -6916,8 +6916,8 @@ export const DEMO_SUPPLIERS: Supplier[] = [
 export const DEMO_SEED_BATCHES: SeedBatch[] = [
   // =========================================================================
   // 1. LOTES MATRIZ EN PLANTA CENTRAL (BioC Warehousing 1# - Trelew)
-  // Compras Auditadas Campaña 25/26:
-  // - Yuma (Ananda Pampa): 6,000 kg comprados | 1,640 kg despachados (0,300 HA + 0,150 LR + 1,190 PM) -> 4,360 kg en Planta Central
+  // Compras Auditadas Campaña 25/26 (Total Red: 6,000 kg):
+  // - Yuma (Ananda Pampa): 3,000 kg comprados | 1,640 kg despachados (0,300 HA + 0,150 LR + 1,190 PM) -> 1,360 kg en Planta Central
   // - Muka 76 (HEMPIT France): 1,000 kg comprados | 0,920 kg despachados (0,500 HA + 0,150 LR + 0,270 PM) -> 0,080 kg en Planta Central
   // - Futura 83 (HEMPIT France): 1,000 kg comprados | 0,920 kg despachados (0,500 HA + 0,150 LR + 0,270 PM) -> 0,080 kg en Planta Central
   // - Futura 75 (HEMPIT France): 1,000 kg comprados | 0,920 kg despachados (0,500 HA + 0,150 LR + 0,270 PM) -> 0,080 kg en Planta Central
@@ -6941,12 +6941,12 @@ export const DEMO_SEED_BATCHES: SeedBatch[] = [
     "purchaseOrder": "OC-ANANDA-2025-01",
     "purchaseDate": "2025-12-30",
     "pricePerKg": 0,
-    "initialQuantity": 6,
-    "remainingQuantity": 4.36,
+    "initialQuantity": 3,
+    "remainingQuantity": 1.36,
     "storageConditions": "Ambiente seco controlado - Nodo Central Trelew",
     "storagePointId": "5ceffc58-8219-4774-a340-9e1ac2c8458d",
     "logisticsResponsible": "Gastón BAREA M.",
-    "notes": "Compra total Ananda Pampa: 6,000 kg. Despachados: 0,300 kg a INTA Hilario Ascasubi, 0,150 kg a Chacra La Regina y 1,190 kg a CAP Puerto Madryn. Remanente en Planta Central: 4,360 kg.",
+    "notes": "Compra inicial Ananda Pampa (Yuma): 3,000 kg (Campaña 25/26 Total Red: 6,000 kg). Despachados: 0,300 kg a INTA Hilario Ascasubi, 0,150 kg a Chacra La Regina y 1,190 kg a CAP Puerto Madryn (Total despachado: 1,640 kg). Remanente en Planta Central: 1,360 kg (1.360 gr).",
     "isActive": true,
     "createdAt": "2025-12-30T18:49:25.857+00:00",
     "originInspectionId": "insp-ananda-yuma501-2025",

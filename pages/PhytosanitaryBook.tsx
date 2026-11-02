@@ -17,6 +17,7 @@ import {
   resolveLocationStructureRoster,
   STRUCTURE_ROLES_INFO
 } from '../src/utils/structurePermissions';
+import { DateInputAr } from '../src/components/DateInputAr';
 
 // Insumos homologados y lotes recepcionados preconfigurados para vinculación rápida
 const RECEIVEABLE_INPUT_PRESETS = [
@@ -883,10 +884,9 @@ export default function PhytosanitaryBook() {
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Fecha de Aplicación *</label>
-                  <input
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Fecha de Aplicación (DD/MM/AAAA) *</label>
+                  <DateInputAr
                     required
-                    type="date"
                     className="w-full border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white p-2.5 rounded-xl font-mono text-xs focus:ring-2 focus:ring-emerald-500 outline-none"
                     value={formData.date}
                     onChange={e => setFormData({ ...formData, date: e.target.value })}
