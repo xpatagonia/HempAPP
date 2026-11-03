@@ -21,6 +21,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { BarcodeRenderer } from '../components/BarcodeRenderer';
 import { sendUserProfileWelcomeEmail } from '../src/services/emailNotificationService';
 import { DateInputAr } from '../src/components/DateInputAr';
+import { getCanonicalPublicBaseUrl } from '../src/utils/qrBarcodeService';
 import {
   SUPPLIER_ACTOR_ROLES,
   SUPPLIER_ACTOR_ROLES_INFO,
@@ -432,14 +433,15 @@ export default function Suppliers() {
   };
 
   const buildTraceUrl = (id: string, params: Record<string, string | number | undefined>) => {
-    const baseUrl = typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}` : '';
+    const baseUrl = getCanonicalPublicBaseUrl();
     const sp = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {
       if (v !== undefined && v !== null && String(v).trim() !== '') {
         sp.set(k, String(v));
       }
     });
-    return `${baseUrl}#/trace/${encodeURIComponent(id)}?${sp.toString()}`;
+    const qs = sp.toString();
+    return `${baseUrl}/#/trace/${encodeURIComponent(id)}${qs ? `?${qs}` : ''}`;
   };
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
@@ -2652,7 +2654,7 @@ export default function Suppliers() {
                   </div>
 
                   <div className="flex flex-col items-center justify-center bg-slate-50 p-2.5 rounded-xl border border-slate-200">
-                    <QRCodeSVG value={qrUrl} size={78} level="M" includeMargin={false} />
+                    <QRCodeSVG value={qrUrl} size={88} level="M" includeMargin={true} />
                     <span className="text-[8px] font-black uppercase text-slate-600 mt-1">
                       QR Activo · Escaneo Público
                     </span>
@@ -2996,8 +2998,9 @@ export default function Suppliers() {
                       agro: selectedSupplierForAudit.audit?.technicalAgronomistName || 'Ing. Agr. Julian PIZARRO',
                       sampler: selectedSupplierForAudit.audit?.samplerName || 'Matias QUINTANA'
                     })}
-                    size={70}
+                    size={84}
                     level="M"
+                    includeMargin={true}
                   />
                   <div className="text-[9px] text-slate-600">
                     <strong className="text-slate-900 uppercase block">QR Homologación</strong>

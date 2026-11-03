@@ -9,6 +9,7 @@ import {
 import { Plot, Location, Variety, Client, SeedBatch } from '../types';
 import { BarcodeSVG } from './BarcodeSVG';
 import { formatPlotSeedLoad } from '../src/utils/seedTraceability';
+import { buildPlotCanonicalTraceUrl } from '../src/utils/qrBarcodeService';
 
 interface PlotIdentificationModalProps {
   isOpen: boolean;
@@ -59,45 +60,8 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
   const actCode = plot.closureActCode || `ACTA-SIEMBRA-${(plot.campaign || '2526').replace('/', '')}-${plot.id.slice(-5).toUpperCase()}`;
   const barcodeCode = plot.closureBarcode || `7798394${plot.id.replace(/[^0-9A-Za-z]/g, '').toUpperCase().slice(0, 6)}2026`;
 
-  // Construir URL pública con parámetros de respaldo para garantizar trazabilidad instantánea en cualquier celular
-  const traceUrl = (() => {
-    const params = new URLSearchParams();
-    if (plot.name) params.set('name', plot.name);
-    if (location?.name) params.set('loc', location.name);
-    if (location?.province) params.set('prov', location.province);
-    if (plot.coordinates?.lat) params.set('lat', String(plot.coordinates.lat));
-    if (plot.coordinates?.lng) params.set('lng', String(plot.coordinates.lng));
-    if (variety?.name) params.set('var', variety.name);
-    if (plot.surfaceArea) params.set('ha', String(plot.surfaceArea));
-    if (campaignDisplay) params.set('camp', campaignDisplay);
-    if (plot.status) params.set('status', plot.status);
-    if (plot.sowingDate) params.set('sowing', plot.sowingDate);
-    if (plot.seedBatchId || seedBatch?.id) params.set('batchId', plot.seedBatchId || seedBatch?.id || '');
-    params.set('seedLot', seedLotCode);
-    params.set('seedCert', seedMotherLot);
-    params.set('seedRotulo', seedRotuloInase);
-    params.set('seedLoadVal', String(seedLoad.rawValue));
-    params.set('seedLoadUnit', seedLoad.unit);
-    params.set('seedLoadKg', seedLoad.kg.toFixed(3));
-    params.set('seedLoadGr', String(seedLoad.gr));
-    params.set('seedLoadTn', seedLoad.tn.toFixed(6));
-    if (plot.samplingResponsibleName || seedBatch?.samplerName) params.set('sampler', plot.samplingResponsibleName || seedBatch?.samplerName || '');
-    if (plot.sowingResponsibleName) params.set('sower', plot.sowingResponsibleName);
-    if (plot.technicalResponsibleName || seedBatch?.inspectorName) params.set('inspector', plot.technicalResponsibleName || seedBatch?.inspectorName || '');
-    if (isCycleClosed) {
-      params.set('closed', '1');
-      if (plot.closedDate) params.set('closedAt', plot.closedDate);
-      if (plot.closedTime) params.set('closedTime', plot.closedTime);
-      params.set('actCode', actCode);
-      params.set('barcode', barcodeCode);
-      if (plot.harvestYieldKg) params.set('yieldKg', String(plot.harvestYieldKg));
-    } else if (plot.isHarvestScheduled && plot.scheduledHarvestDate) {
-      params.set('scheduledAt', `${plot.scheduledHarvestDate}${plot.scheduledHarvestTime ? ` ${plot.scheduledHarvestTime}` : ''}`);
-    }
-
-    const queryStr = params.toString();
-    return `${publicBaseUrl}/#/trace/${encodeURIComponent(plot.id)}${queryStr ? `?${queryStr}` : ''}`;
-  })();
+  // URL pública canónica ultra-optimizada (~75 caracteres) para escaneo óptico veloz en celular
+  const traceUrl = buildPlotCanonicalTraceUrl(plot.id, plot.name);
 
   const handleCopyLink = () => {
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
@@ -687,22 +651,29 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                       </div>
 
                       {/* FOOTER PÁGINA 1 CON N° DE LOTE DE SEMILLA JUNTO AL QR */}
-                      <div className="flex flex-col sm:flex-row justify-between items-center text-[10px] font-mono text-slate-500 border-t-2 border-slate-300 pt-2 gap-2">
-                        <div className="flex items-center gap-2.5">
-                          <div className="p-1 bg-white rounded-lg border border-slate-300 shrink-0">
-                            <QRCodeSVG value={traceUrl} size={48} level="M" />
+                      <div className="flex flex-col sm:flex-row justify-between items-center text-[10px] font-mono text-slate-600 border-t-2 border-slate-300 pt-2.5 gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="p-1.5 bg-white rounded-xl border-2 border-slate-900 shadow-sm shrink-0">
+                            <QRCodeSVG value={traceUrl} size={82} level="M" includeMargin={true} />
                           </div>
                           <div>
-                            <span className="font-black text-slate-800 block text-xs">PatagonianC LTDA · CUIT: 30-71816113-0 · HempC</span>
-                            <span className="text-[9.5px] text-emerald-800 font-black block">
-                              Lote Semilla: {seedMotherLot} · Carga Parcela: {seedLoad.fullTriUnitDisplay}
+                            <span className="font-black text-slate-950 block text-xs tracking-tight">
+                              PatagonianC LTDA · CUIT: 30-71816113-0 · Red HempC
                             </span>
-                            <span className="text-[8.5px] text-slate-500 block">Escanear QR para trazabilidad del lote, carga (T/kg/gr) y verificación digital</span>
+                            <span className="text-[10px] text-emerald-800 font-black block">
+                              Lote Semilla: {seedMotherLot} · Carga: {seedLoad.fullTriUnitDisplay}
+                            </span>
+                            <span className="text-[9px] text-slate-600 block">
+                              Escaneo móvil directo: verificación legal Ley 27.669 y trazabilidad
+                            </span>
+                            <span className="text-[8.5px] font-mono text-slate-400 block truncate max-w-xs">
+                              {traceUrl}
+                            </span>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <span className="font-bold text-slate-700 block">Página 1 de 2 · Cartel Exterior de Tranquera</span>
-                          <span className="text-[9px] text-slate-400">Emisión: {new Date().toLocaleDateString('es-AR')} · red.hempc.com.ar</span>
+                        <div className="text-right shrink-0">
+                          <span className="font-black text-slate-900 block text-[11px]">Página 1 de 2 · Cartel Exterior</span>
+                          <span className="text-[9.5px] text-slate-500">Emisión: {new Date().toLocaleDateString('es-AR')} · red.hempc.com.ar</span>
                         </div>
                       </div>
                     </div>
@@ -845,7 +816,7 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                       <div className="p2-sec4-grid grid grid-cols-3 gap-2.5 items-stretch border-t-2 border-slate-300 pt-2.5">
                         <div className="flex items-center gap-2.5 p-2 bg-slate-50 rounded-xl border border-slate-200">
                           <div className="bg-white p-1 rounded-lg border border-slate-200 shrink-0">
-                            <QRCodeSVG value={traceUrl} size={56} level="M" />
+                            <QRCodeSVG value={traceUrl} size={78} level="M" includeMargin={true} />
                           </div>
                           <div className="text-[9px] font-mono space-y-0.5 min-w-0">
                             <strong className="font-black text-slate-900 block truncate text-[10px]">QR Trazabilidad Lote</strong>
@@ -865,7 +836,7 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                               {isCycleClosed ? 'CICLO HOMOLOGADO' : 'CICLO ACTIVO'}
                             </span>
                           </div>
-                          <BarcodeSVG value={barcodeCode} height={30} barWidth={1.15} fontSize={8} />
+                          <BarcodeSVG value={barcodeCode} height={32} barWidth={1.25} fontSize={8.5} />
                           <span className="text-[7.5px] font-bold text-slate-500 truncate w-full text-center">
                             {actCode}
                           </span>
@@ -1055,9 +1026,9 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                     <div className="p-2 bg-white rounded-2xl border-2 border-slate-300 shadow-sm shrink-0">
                       <QRCodeSVG
                         value={traceUrl}
-                        size={labelFormat === 'thermal' ? 88 : 104}
-                        level="H"
-                        includeMargin={false}
+                        size={labelFormat === 'thermal' ? 96 : 110}
+                        level="M"
+                        includeMargin={true}
                       />
                     </div>
                     <div className="space-y-1 text-xs font-mono">

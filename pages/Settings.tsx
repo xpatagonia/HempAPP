@@ -471,11 +471,14 @@ export default function Settings() {
                               </button>
                           </div>
                       </div>
-                      <ol className="list-decimal pl-5 space-y-1 text-[11px] leading-relaxed">
+                      <ol className="list-decimal pl-5 space-y-1.5 text-[11px] leading-relaxed">
                           <li>En cualquier navegador donde tengas abierto <strong>{driveConfig.targetEmail}</strong>, entra a <strong>script.google.com</strong> y crea un <strong>Nuevo proyecto</strong>.</li>
-                          <li>Pega el código copiado con el botón de arriba y haz clic en <strong>Implementar &rarr; Nueva implementación &rarr; Aplicación web</strong>.</li>
-                          <li>Elige <strong>Ejecutar como: Yo ({driveConfig.targetEmail})</strong> y <strong>Quién tiene acceso: Cualquier persona</strong>.</li>
-                          <li>Copia la <strong>URL de la aplicación web</strong> generada y pégala abajo en <strong>URL del Conector Google Apps Script</strong>. ¡Así todos los DNI, fotos de muestras y guías TAD se guardarán siempre en el Drive de <strong>{driveConfig.targetEmail}</strong> sin pedir inicio de sesión a cada usuario!</li>
+                          <li>Pega el código copiado con el botón de arriba y presiona <strong>Guardar (Ctrl+S)</strong>.</li>
+                          <li><strong>¡IMPORTANTE! No presiones "▶ Ejecutar"</strong>: En la esquina superior derecha, haz clic en el botón azul <strong>Implementar &rarr; Nueva implementación</strong>.</li>
+                          <li>Haz clic en el engranaje ⚙️ y selecciona tipo: <strong>Aplicación web</strong>.</li>
+                          <li>En <strong>Ejecutar como</strong> elige: <strong>Yo ({driveConfig.targetEmail})</strong>, y en <strong>Quién tiene acceso</strong> elige: <strong>Cualquier persona</strong>.</li>
+                          <li>Haz clic en <strong>Implementar</strong> (si te pide autorizar permisos, dale a 'Avanzado' y 'Permitir'). Al finalizar, Google te mostrará una ventana con la <strong>"URL de la aplicación web"</strong> (termina en <code>/exec</code>).</li>
+                          <li>Copia esa URL y pégala abajo en <strong>URL del Conector Google Apps Script</strong>. ¡Listo! Todos los DNI, fotos de muestras de bitácora y documentos se guardarán siempre en el Drive de <strong>{driveConfig.targetEmail}</strong>.</li>
                       </ol>
 
                       {showDriveScriptModal && (

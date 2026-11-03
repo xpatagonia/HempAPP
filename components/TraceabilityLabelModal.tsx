@@ -8,6 +8,7 @@ import {
 import { SeedBatch, Variety, StoragePoint } from '../types';
 import { useAppContext } from '../context/AppContext';
 import { formatBatchMassKg, convertSeedMassToKg } from '../src/utils/seedTraceability';
+import { buildBatchCanonicalTraceUrl } from '../src/utils/qrBarcodeService';
 
 interface TraceabilityLabelModalProps {
   isOpen: boolean;
@@ -53,25 +54,8 @@ export const TraceabilityLabelModal: React.FC<TraceabilityLabelModalProps> = ({
   const usedMass = formatBatchMassKg(usedInPlotsKg);
   const remainingMass = formatBatchMassKg(batch.remainingQuantity);
 
-  // URL de trazabilidad directa al Lote (Semilla o Material Obtenido) con parámetros de respaldo
-  const traceUrl = (() => {
-    const params = new URLSearchParams();
-    params.set('type', batch.materialType || 'seed');
-    if (batch.batchCode) params.set('code', batch.batchCode);
-    params.set('seedLot', motherSeedLot);
-    params.set('seedRotulo', officialRotulo);
-    if (variety?.name) params.set('var', variety.name);
-    if (batch.qualityGrade) params.set('grade', batch.qualityGrade);
-    if (batch.samplerName) params.set('sampler', batch.samplerName);
-    if (batch.inspectorName) params.set('inspector', batch.inspectorName);
-    if (batch.originPlotId) params.set('plotId', batch.originPlotId);
-    if (batch.originInspectionId) params.set('inspId', batch.originInspectionId);
-    params.set('initKg', initialMass.kg.toFixed(3));
-    params.set('remKg', remainingMass.kg.toFixed(3));
-    params.set('usedKg', usedMass.kg.toFixed(3));
-    params.set('usedGr', String(usedMass.gr));
-    return `${baseUrl}/#/trace/${encodeURIComponent(batch.id)}?${params.toString()}`;
-  })();
+  // URL de trazabilidad canónica ultra-optimizada para escaneo veloz
+  const traceUrl = buildBatchCanonicalTraceUrl(batch.id, batch.batchCode);
 
   // Código para el código de barras (Rótulo oficial o batch code)
   const barcodeValue = (batch.labelSerialNumber || motherSeedLot || batch.batchCode).replace(/[^A-Z0-9-]/gi, '').toUpperCase();
@@ -392,9 +376,9 @@ export const TraceabilityLabelModal: React.FC<TraceabilityLabelModalProps> = ({
             <div className="p-1.5 bg-white rounded-xl border border-slate-300 shadow-sm shrink-0">
               <QRCodeSVG 
                 value={traceUrl} 
-                size={84}
+                size={92}
                 level="M"
-                includeMargin={false}
+                includeMargin={true}
               />
             </div>
           </div>

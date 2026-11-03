@@ -12,6 +12,7 @@ import { BarcodeSVG } from './BarcodeSVG';
 import { formatPlotSeedLoad } from '../src/utils/seedTraceability';
 import { DateInputAr } from '../src/components/DateInputAr';
 import { formatDateAr, CAMPAIGN_2526_CLOSE_DATE_ISO } from '../src/utils/dateFormat';
+import { buildPlotCanonicalTraceUrl } from '../src/utils/qrBarcodeService';
 
 interface PlotCycleClosureModalProps {
   isOpen: boolean;
@@ -183,39 +184,8 @@ export const PlotCycleClosureModal: React.FC<PlotCycleClosureModalProps> = ({
     return Number((mm * 10).toFixed(1));
   })();
 
-  // URL pública de trazabilidad enriquecida con datos de cierre y código de barras
-  const publicBaseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://hemp-app-alpha.vercel.app';
-  const traceUrl = (() => {
-    const params = new URLSearchParams();
-    params.set('name', plot.name);
-    if (location?.name) params.set('loc', location.name);
-    if (location?.province) params.set('prov', location.province);
-    if (plot.coordinates?.lat) params.set('lat', String(plot.coordinates.lat));
-    if (plot.coordinates?.lng) params.set('lng', String(plot.coordinates.lng));
-    if (variety?.name) params.set('var', variety.name);
-    if (plot.surfaceArea) params.set('ha', String(plot.surfaceArea));
-    params.set('camp', campaignDisplay);
-    params.set('status', plot.status);
-    params.set('seedLot', seedLotCode);
-    params.set('seedCert', seedMotherLot);
-    params.set('seedRotulo', seedRotuloInase);
-    params.set('seedLoadVal', String(seedLoad.rawValue));
-    params.set('seedLoadUnit', seedLoad.unit);
-    params.set('seedLoadKg', seedLoad.kg.toFixed(3));
-    params.set('seedLoadGr', String(seedLoad.gr));
-    params.set('seedLoadTn', seedLoad.tn.toFixed(6));
-    params.set('actCode', computedCodes.actCode);
-    params.set('barcode', computedCodes.barcode);
-    if (plot.closedAt || closedDate) params.set('closedAt', plot.closedAt || closedDate);
-    if (plot.closedTime || closedTime) params.set('closedTime', plot.closedTime || closedTime);
-    if (plot.actualHarvestYieldKg || harvestYieldKg) {
-      params.set('yieldKg', String(plot.actualHarvestYieldKg || harvestYieldKg));
-    }
-    if (plot.samplingResponsibleName) params.set('sampler', plot.samplingResponsibleName);
-    if (plot.sowingResponsibleName) params.set('sower', plot.sowingResponsibleName);
-    if (plot.technicalResponsibleName) params.set('inspector', plot.technicalResponsibleName);
-    return `${publicBaseUrl}/#/trace/${encodeURIComponent(plot.id)}?${params.toString()}`;
-  })();
+  // URL pública de trazabilidad canónica ultra-optimizada para escaneo móvil veloz
+  const traceUrl = buildPlotCanonicalTraceUrl(plot.id, plot.name);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -963,7 +933,7 @@ export const PlotCycleClosureModal: React.FC<PlotCycleClosureModalProps> = ({
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center pt-3 border-t-2 border-slate-900">
                   <div className="md:col-span-3 flex items-center gap-3">
                     <div className="p-1.5 bg-white rounded-xl border-2 border-slate-900 shrink-0">
-                      <QRCodeSVG value={traceUrl} size={76} level="M" />
+                      <QRCodeSVG value={traceUrl} size={80} level="M" includeMargin={true} />
                     </div>
                     <div className="text-[9.5px] space-y-0.5">
                       <strong className="text-slate-950 font-black block uppercase">QR Trazabilidad</strong>

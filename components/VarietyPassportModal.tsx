@@ -252,9 +252,9 @@ export const VarietyPassportModal: React.FC<VarietyPassportModalProps> = ({
             <div className="p-1.5 bg-white rounded-xl border border-slate-300 shadow-sm shrink-0">
               <QRCodeSVG 
                 value={traceUrl} 
-                size={84}
+                size={92}
                 level="M"
-                includeMargin={false}
+                includeMargin={true}
               />
             </div>
           </div>
