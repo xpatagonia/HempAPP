@@ -1088,9 +1088,14 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                     estRespIds = ['1766442369713', '1792513420994'];
                 }
 
-                const isForeignDefaultSampler = p.samplingResponsibleName === 'Matías QUINTANA' && locIdStr !== '1766450631873';
-                const isForeignDefaultSower = p.sowingResponsibleName === 'Joaquín AREZO' && locIdStr !== '1766471895190';
-                const isForeignDefaultTech = (p.technicalResponsibleName === 'Ing. Agr. Julián PIZARRO' || p.technicalResponsibleName === 'Julian PIZARRO') && locIdStr !== '1766450631873';
+                const sowerLower = (p.sowingResponsibleName || '').toLowerCase();
+                const isForeignDefaultSower = (sowerLower.includes('arezo') || sowerLower.includes('joaquin')) && locIdStr !== '1766471895190';
+                const samplerLower = (p.samplingResponsibleName || '').toLowerCase();
+                const isForeignDefaultSampler = samplerLower.includes('quintana') && locIdStr !== '1766450631873';
+                const techLower = (p.technicalResponsibleName || '').toLowerCase();
+                const isForeignDefaultTech = techLower.includes('pizarro') && locIdStr !== '1766450631873';
+                const harvesterLower = (p.harvestOperator || '').toLowerCase();
+                const isForeignHarvestOperator = (harvesterLower.includes('arezo') || harvesterLower.includes('joaquin')) && locIdStr !== '1766471895190';
 
                 const resolvedSampler = (!p.samplingResponsibleName || isForeignDefaultSampler)
                     ? estSampler
@@ -1101,6 +1106,9 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 const resolvedTech = (!p.technicalResponsibleName || isForeignDefaultTech)
                     ? estTech
                     : p.technicalResponsibleName;
+                const resolvedHarvester = (!p.harvestOperator || isForeignHarvestOperator)
+                    ? (locIdStr === '1766450631873' ? 'Matias QUINTANA' : estSower)
+                    : p.harvestOperator;
                 const resolvedRespIds = (p.responsibleIds && p.responsibleIds.length > 0)
                     ? p.responsibleIds
                     : estRespIds;
@@ -1155,6 +1163,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                     samplingResponsibleName: resolvedSampler,
                     sowingResponsibleName: resolvedSower,
                     technicalResponsibleName: resolvedTech,
+                    harvestOperator: resolvedHarvester,
                     status: (isCamp2526 && !isReopenedLocally) ? 'Cosechada' : p.status,
                     campaignStatuses: (isCamp2526 && !isReopenedLocally)
                         ? { ...(p.campaignStatuses || {}), '2025/2026': 'Cosechada' }
@@ -2948,12 +2957,21 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         // Vincular o crear automáticamente la Labor Agrícola de Cosecha / Cierre de Ciclo
         const laborId = options?.linkedLaborId || target.linkedClosureLaborId || `task-close-${target.id}`;
         const existingLabor = tasks.find(t => t.id === laborId);
-        const operatorDisplay =
+        let operatorDisplay =
             options?.operatorName ||
             target.harvestOperator ||
             target.sowingResponsibleName ||
             currentUser?.name ||
             'Jefe Operativo de Cosecha';
+
+        // Auditoría estricta de aislamiento: Joaquin Arezo SOLO puede ser asignado en CAP Puerto Madryn (1766471895190)
+        if (target.locationId !== '1766471895190' && operatorDisplay.toLowerCase().includes('arezo')) {
+            operatorDisplay = target.locationId === '1766450631873'
+                ? 'Matias QUINTANA'
+                : target.locationId === '1766444697119'
+                ? 'Ricardo La Regina'
+                : 'Gastón BAREA M.';
+        }
         const machineryDisplay =
             options?.machinery ||
             target.harvestMachinery ||

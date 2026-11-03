@@ -10,6 +10,7 @@ import { Plot, Location, Variety, Client, SeedBatch } from '../types';
 import { BarcodeSVG } from './BarcodeSVG';
 import { formatPlotSeedLoad } from '../src/utils/seedTraceability';
 import { buildPlotCanonicalTraceUrl } from '../src/utils/qrBarcodeService';
+import { resolveSanitizedPlotRoster } from '../src/utils/establishmentRoster';
 
 interface PlotIdentificationModalProps {
   isOpen: boolean;
@@ -59,6 +60,8 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
   const isCycleClosed = Boolean(plot.closureConfirmed || plot.status === 'Cosechada');
   const actCode = plot.closureActCode || `ACTA-SIEMBRA-${(plot.campaign || '2526').replace('/', '')}-${plot.id.slice(-5).toUpperCase()}`;
   const barcodeCode = plot.closureBarcode || `7798394${plot.id.replace(/[^0-9A-Za-z]/g, '').toUpperCase().slice(0, 6)}2026`;
+
+  const sanitizedRoster = resolveSanitizedPlotRoster(plot, location);
 
   // URL pública canónica ultra-optimizada (~75 caracteres) para escaneo óptico veloz en celular
   const traceUrl = buildPlotCanonicalTraceUrl(plot.id, plot.name);
@@ -807,7 +810,7 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                             Código Trazabilidad / Remito: <strong>{seedLotCode}</strong> · Rótulo: {seedRotuloInase}
                           </span>
                           <span className="text-[9.5px] text-indigo-800 font-bold block truncate">
-                            Muestreo: {plot.samplingResponsibleName || seedBatch?.samplerName || 'Matias QUINTANA'} · DT: {plot.technicalResponsibleName || seedBatch?.inspectorName || 'Ing. Agr. Julian PIZARRO'}
+                            Muestreo: {sanitizedRoster.sampler} · DT: {sanitizedRoster.tech}
                           </span>
                         </div>
                       </div>
@@ -1009,12 +1012,12 @@ export const PlotIdentificationModal: React.FC<PlotIdentificationModalProps> = (
                     </div>
                     <div className="bg-white p-2 rounded-xl border border-indigo-100">
                       <span className="text-[8px] text-indigo-700 uppercase font-black block">Toma de Muestras & Dirección Técnica:</span>
-                      <strong className="text-slate-950 block truncate">{plot.samplingResponsibleName || seedBatch?.samplerName || 'Matias QUINTANA'}</strong>
+                      <strong className="text-slate-950 block truncate">{sanitizedRoster.sampler}</strong>
                       <span className="text-[8.5px] text-indigo-700 font-bold block truncate">
-                        DT: {plot.technicalResponsibleName || seedBatch?.inspectorName || 'Ing. Agr. Julian PIZARRO'}
+                        DT: {sanitizedRoster.tech}
                       </span>
                       <span className="text-[8.5px] text-slate-600 block truncate">
-                        Siembra: {plot.sowingResponsibleName || 'Joaquin AREZO'}
+                        Siembra: {sanitizedRoster.sower}
                       </span>
                     </div>
                   </div>

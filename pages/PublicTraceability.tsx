@@ -11,6 +11,7 @@ import { getPlotAgrochemicalApplications } from '../src/services/agro40Service';
 import { AgrochemicalApplication, Plot, Location, Variety, Supplier, SupplierLotInspection, SeedBatch } from '../types';
 import { BarcodeSVG } from '../components/BarcodeSVG';
 import { formatPlotSeedLoad, formatBatchMassKg } from '../src/utils/seedTraceability';
+import { resolveSanitizedPlotRoster } from '../src/utils/establishmentRoster';
 import { DEMO_PLOTS as HISTORICAL_PLOTS, DEMO_LOCATIONS as HISTORICAL_LOCATIONS, DEMO_VARIETIES as HISTORICAL_VARIETIES, DEMO_SEED_BATCHES as HISTORICAL_BATCHES } from '../src/data/historicalCampaignSeed';
 import { 
     DEMO_PLOTS as INITIAL_PLOTS, 
@@ -184,7 +185,7 @@ export default function PublicTraceability() {
             sowingDate: '2025-11-05',
             coordinates: { lat: latParam, lng: lngParam },
             samplingResponsibleName: urlParams.get('sampler') || 'Matias QUINTANA',
-            sowingResponsibleName: urlParams.get('sower') || 'Joaquin AREZO',
+            sowingResponsibleName: urlParams.get('sower') || (latParam < -41 ? 'Ricardo La Regina' : 'Matias QUINTANA'),
             technicalResponsibleName: urlParams.get('inspector') || 'Ing. Agr. Julian PIZARRO',
             closureConfirmed: urlParams.get('closed') === '1',
             closedDate: urlParams.get('closedAt') || undefined,
@@ -424,16 +425,18 @@ export default function PublicTraceability() {
         return matched;
     }, [sowingBatch, allPlots, resolvedPlot]);
 
-    // Personal interviniente consolidado
-    const samplerName = directBatch?.samplerName || resolvedInspection?.samplerName || resolvedPlot?.samplingResponsibleName || sowingBatch?.samplerName || urlParams.get('sampler') || 'Matias QUINTANA';
+    // Personal interviniente consolidado auditado por establecimiento
+    const sanitizedPlotRoster = resolveSanitizedPlotRoster(resolvedPlot, resolvedLocation);
+
+    const samplerName = directBatch?.samplerName || resolvedInspection?.samplerName || sanitizedPlotRoster.sampler || sowingBatch?.samplerName || urlParams.get('sampler') || 'Matias QUINTANA';
     const samplerRole = directBatch?.samplerRole || resolvedInspection?.samplerRole || 'Responsable Oficial de Muestreo de Lotes (ISTA / INASE)';
-    const samplerMatricula = directBatch?.samplerDniOrMatricula || resolvedInspection?.samplerDniOrMatricula || 'Muestreador Habilitado INASE #408';
+    const samplerMatricula = directBatch?.samplerDniOrMatricula || resolvedInspection?.samplerDniOrMatricula || sanitizedPlotRoster.samplerMatricula;
     const sampleCode = directBatch?.sampleCode || resolvedInspection?.sampleCode || sowingBatch?.sampleCode || 'MUE-ISTA-2025-001';
     const samplingMethod = directBatch?.samplingMethod || resolvedInspection?.samplingMethod || 'Calador Cilíndrico Compuesto ISTA (Triple Sondeo Precintado)';
-    const inspectorName = directBatch?.inspectorName || resolvedInspection?.agronomistName || resolvedPlot?.technicalResponsibleName || urlParams.get('inspector') || 'Ing. Agr. Julian PIZARRO';
-    const inspectorMatricula = directBatch?.inspectorMatricula || resolvedInspection?.agronomistMatricula || resolvedPlot?.technicalResponsibleMatricula || 'MP CIAFBA 14.892 · CPIA 18.204';
-    const sowingResponsible = resolvedPlot?.sowingResponsibleName || urlParams.get('sower') || 'Joaquin AREZO';
-    const harvestResponsible = (isObtainedMaterial ? directBatch?.harvestResponsibleName : obtainedMaterials[0]?.harvestResponsibleName) || 'Joaquin AREZO · Matias QUINTANA';
+    const inspectorName = directBatch?.inspectorName || resolvedInspection?.agronomistName || sanitizedPlotRoster.tech || urlParams.get('inspector') || 'Ing. Agr. Julian PIZARRO';
+    const inspectorMatricula = directBatch?.inspectorMatricula || resolvedInspection?.agronomistMatricula || sanitizedPlotRoster.techMatricula;
+    const sowingResponsible = sanitizedPlotRoster.sower;
+    const harvestResponsible = (isObtainedMaterial ? directBatch?.harvestResponsibleName : obtainedMaterials[0]?.harvestResponsibleName) || sanitizedPlotRoster.harvester;
 
     return (
         <div className="min-h-screen bg-[#020617] text-white font-mono selection:bg-emerald-500 pb-20">

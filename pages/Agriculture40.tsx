@@ -40,6 +40,8 @@ import {
 } from '../src/services/agro40Service';
 import { sendAgronomicAlertEmail } from '../src/services/emailNotificationService';
 import { SoilHealthData, WaterEfficiencyMetrics, NDVISample, SatellitePass, DroneFlight, CarbonFootprintData, CatastropheRiskAlert, CatastropheType, RiskLevel, AgrochemicalApplication, ToxicologicalBand } from '../types';
+import CarbonCertificateModal from '../components/CarbonCertificateModal';
+import { resolveSanitizedPlotRoster } from '../src/utils/establishmentRoster';
 
 const MapResizer = () => {
   const map = useMap();
@@ -157,7 +159,7 @@ const CatastropheMapController = ({
 };
 
 export default function Agriculture40() {
-  const { plots, locations, varieties, trialRecords, hydricRecords, clients, usersList, currentUser } = useAppContext();
+  const { plots, locations, varieties, trialRecords, hydricRecords, clients, usersList, currentUser, tasks } = useAppContext();
   const [searchParams, setSearchParams] = useSearchParams();
   const urlPlotId = searchParams.get('plotId');
 
@@ -274,6 +276,7 @@ export default function Agriculture40() {
 
   // Modal explicativo de matemática de carbono
   const [showCarbonFormulaModal, setShowCarbonFormulaModal] = useState(false);
+  const [showCarbonCertModal, setShowCarbonCertModal] = useState(false);
 
   // Modal de registro de nuevo insumo/aplicación
   const [showAgroModal, setShowAgroModal] = useState(false);
@@ -1036,8 +1039,8 @@ export default function Agriculture40() {
         lastCalculated: new Date().toISOString()
       };
     }
-    return calculateCarbonFootprint(selectedPlot, selectedVariety, plotTrials);
-  }, [selectedPlot, selectedVariety, plotTrials]);
+    return calculateCarbonFootprint(selectedPlot, selectedVariety, plotTrials, tasks, hydricRecords);
+  }, [selectedPlot, selectedVariety, plotTrials, tasks, hydricRecords]);
 
   // Alertas de Catástrofes & Riesgo Agroclimático (Incendio, Sequía, Inundación, Helada, Viento)
   const [liveWeatherMap, setLiveWeatherMap] = useState<Record<string, PlotLiveWeather>>({});
@@ -1077,7 +1080,8 @@ export default function Agriculture40() {
   // Descargar Dictamen Oficial de Captura de Carbono (PDF)
   const handleDownloadCarbonPdf = () => {
     if (!selectedPlot) return;
-    exportCarbonAuditPDF(selectedPlot, selectedVariety, carbonData);
+    const roster = resolveSanitizedPlotRoster(selectedPlot, selectedLocation);
+    exportCarbonAuditPDF(selectedPlot, selectedVariety, carbonData, selectedLocation, roster.tech);
   };
 
   // Lista de Aplicaciones Fitosanitarias, Fertilizantes e Insumos con Trazabilidad SENASA
@@ -3785,13 +3789,20 @@ export default function Agriculture40() {
               </p>
             </div>
 
-            <div className="flex items-center gap-3 relative z-10">
+            <div className="flex items-center gap-3 relative z-10 flex-wrap">
+              <button
+                onClick={() => setShowCarbonCertModal(true)}
+                className="px-6 py-3.5 bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-black text-xs uppercase tracking-wider rounded-2xl shadow-xl transition active:scale-95 flex items-center gap-2 border border-emerald-300 cursor-pointer"
+              >
+                <Award size={16} />
+                <span>Ver & Firmar Certificado CO₂ (A4 & Digital)</span>
+              </button>
               <button
                 onClick={handleDownloadCarbonPdf}
-                className="px-6 py-3.5 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black text-xs uppercase tracking-wider rounded-2xl shadow-lg transition active:scale-95 flex items-center gap-2"
+                className="px-5 py-3.5 bg-white/10 hover:bg-white/20 text-white font-black text-xs uppercase tracking-wider rounded-2xl border border-white/20 transition active:scale-95 flex items-center gap-2 cursor-pointer"
               >
-                <Download size={16} />
-                <span>Exportar Certificado de Carbono (PDF)</span>
+                <Download size={15} />
+                <span>Exportar Dictamen PDF</span>
               </button>
             </div>
           </div>
@@ -3917,13 +3928,22 @@ export default function Agriculture40() {
                 </div>
               </div>
 
-              <button
-                onClick={handleDownloadCarbonPdf}
-                className="w-full py-4 bg-slate-900 dark:bg-emerald-600 hover:bg-black dark:hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition shadow-lg flex items-center justify-center gap-2"
-              >
-                <Download size={14} />
-                <span>Descargar Dictamen Oficial de Carbono</span>
-              </button>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                <button
+                  onClick={() => setShowCarbonCertModal(true)}
+                  className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Award size={15} />
+                  <span>Certificado Digital con Firma (A4)</span>
+                </button>
+                <button
+                  onClick={handleDownloadCarbonPdf}
+                  className="w-full py-4 bg-slate-900 dark:bg-slate-800 hover:bg-black text-white font-black text-xs uppercase tracking-wider rounded-2xl transition shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Download size={14} />
+                  <span>Descargar Dictamen Oficial</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -3949,7 +3969,7 @@ export default function Agriculture40() {
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-bold">
                   {plots.map(p => {
                     const v = varieties.find(vr => vr.id === p.varietyId);
-                    const c = calculateCarbonFootprint(p, v, trialRecords.filter(t => t.plotId === p.id));
+                    const c = calculateCarbonFootprint(p, v, trialRecords.filter(t => t.plotId === p.id), tasks, hydricRecords);
                     return (
                       <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
                         <td className="py-3 px-4 uppercase text-slate-900 dark:text-white">{p.name}</td>
@@ -5300,6 +5320,21 @@ export default function Agriculture40() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* MODAL CERTIFICADO OFICIAL DE CAPTURA NETA DE CO2 & PROTOCOLO MRV */}
+      {selectedPlot && (
+        <CarbonCertificateModal
+          isOpen={showCarbonCertModal}
+          onClose={() => setShowCarbonCertModal(false)}
+          plot={selectedPlot}
+          location={selectedLocation}
+          variety={selectedVariety}
+          client={clients?.find(c => c.id === selectedLocation?.clientId) || null}
+          carbonData={carbonData}
+          tasks={tasks}
+          hydricRecords={hydricRecords}
+        />
       )}
 
     </div>
