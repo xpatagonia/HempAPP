@@ -268,11 +268,11 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
             {!isCollapsed && (
               <div className="min-w-0">
                 <span className="text-sm font-black tracking-tight text-slate-900 truncate uppercase italic block leading-tight">
-                  {appName && appName.toUpperCase() !== 'HEMPC' ? `Nucleus ${appName}` : 'Nucleus Cooperativa'}
+                  NUCLEUS
                 </span>
                 <span className="text-[9px] font-mono font-bold text-emerald-950/80 uppercase tracking-wider block mt-0.5 truncate">
                   {/* @ts-ignore */}
-                  {typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'V7.34.0-STABLE'}
+                  {typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'V7.35.0-STABLE'}
                 </span>
               </div>
             )}
