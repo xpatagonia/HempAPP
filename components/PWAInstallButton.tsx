@@ -488,29 +488,29 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
   if (variant === 'login') {
     return (
       <>
-        <div className="bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-2xl p-3.5 space-y-2.5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-500 dark:text-slate-400">
+        <div className="bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-xl p-2.5 space-y-1.5 shadow-sm">
+          <div className="flex items-center justify-between px-0.5">
+            <span className="text-[9px] font-black uppercase tracking-[0.15em] text-slate-500 dark:text-slate-400">
               Instalación Directa en Dispositivos
             </span>
             {isInstalled && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                <Check size={12} /> App Instalada
+              <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400">
+                <Check size={11} /> App Instalada
               </span>
             )}
           </div>
-          <div className="grid grid-cols-2 gap-2.5">
+          <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
               onClick={() => handleTriggerInstall('android')}
-              className="flex items-center justify-center gap-2.5 px-3.5 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-emerald-950/80 dark:hover:bg-emerald-900/80 text-white border border-[#3DDC84]/40 transition-all shadow-sm active:scale-95 cursor-pointer group"
+              className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-emerald-950/80 dark:hover:bg-emerald-900/80 text-white border border-[#3DDC84]/40 transition-all shadow-sm active:scale-95 cursor-pointer group"
             >
-              <AndroidLogo size={20} className="text-[#3DDC84] group-hover:scale-110 transition-transform shrink-0" />
+              <AndroidLogo size={17} className="text-[#3DDC84] group-hover:scale-110 transition-transform shrink-0" />
               <div className="text-left">
-                <span className="block text-[9px] font-mono uppercase tracking-wider text-[#3DDC84] font-bold leading-none">
+                <span className="block text-[8px] font-mono uppercase tracking-wider text-[#3DDC84] font-bold leading-none">
                   Instalar App
                 </span>
-                <span className="block text-xs font-black tracking-tight mt-0.5">
+                <span className="block text-[11px] font-black tracking-tight mt-0.5">
                   Android APK / PWA
                 </span>
               </div>
@@ -519,14 +519,14 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
             <button
               type="button"
               onClick={() => handleTriggerInstall('windows')}
-              className="flex items-center justify-center gap-2.5 px-3.5 py-3 rounded-xl bg-[#0078D4] hover:bg-sky-600 text-white border border-sky-400/30 transition-all shadow-sm active:scale-95 cursor-pointer group"
+              className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-[#0078D4] hover:bg-sky-600 text-white border border-sky-400/30 transition-all shadow-sm active:scale-95 cursor-pointer group"
             >
-              <WindowsLogo size={17} className="text-white group-hover:scale-110 transition-transform shrink-0" />
+              <WindowsLogo size={15} className="text-white group-hover:scale-110 transition-transform shrink-0" />
               <div className="text-left">
-                <span className="block text-[9px] font-mono uppercase tracking-wider text-sky-100 font-bold leading-none">
+                <span className="block text-[8px] font-mono uppercase tracking-wider text-sky-100 font-bold leading-none">
                   Descargar PC
                 </span>
-                <span className="block text-xs font-black tracking-tight mt-0.5">
+                <span className="block text-[11px] font-black tracking-tight mt-0.5">
                   App Windows
                 </span>
               </div>

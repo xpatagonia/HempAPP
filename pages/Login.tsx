@@ -194,108 +194,129 @@ export default function Login() {
     }
   };
 
+  // @ts-ignore
+  const activeVersion = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "V7.35.0-STABLE";
+
   return (
-    <div className="min-h-screen flex flex-col md:flex-row items-stretch overflow-hidden font-sans bg-white dark:bg-slate-950">
+    <div className="min-h-dvh lg:h-dvh flex flex-col lg:flex-row items-stretch overflow-x-hidden lg:overflow-hidden font-sans bg-white dark:bg-slate-950">
       
-      {/* Lado Izquierdo: Branding Corporativo */}
-      <div className="hidden lg:flex lg:w-3/5 bg-[#DDDB00] relative p-20 flex-col justify-between overflow-hidden border-r border-yellow-500/20 shadow-inner">
-        <div className="relative z-10 flex flex-col h-full justify-center">
+      {/* Lado Izquierdo: Branding Corporativo Equilibrado Sin Scroll */}
+      <div className="hidden lg:flex lg:w-7/12 xl:w-3/5 bg-[#DDDB00] relative px-12 py-8 xl:px-16 xl:py-10 flex-col justify-between overflow-hidden border-r border-yellow-500/20 shadow-inner">
+        <div className="relative z-10 flex flex-col my-auto space-y-5 xl:space-y-6">
           
           {/* LOGO OFICIAL DE MARCA HEMPC */}
-          <div className="mb-10">
-            <div className="inline-flex items-center bg-[#DDDB00] py-2 pr-4 rounded-3xl mb-4">
+          <div>
+            <div className="inline-flex items-center bg-[#DDDB00] py-1 pr-3 rounded-2xl">
               <img 
                 src={appLogo || "/hempc-logo-cropped.png?v=7.18.2"} 
                 alt="HempC" 
-                className="h-28 xl:h-32 w-auto object-contain drop-shadow-sm" 
+                className="h-20 xl:h-24 w-auto object-contain drop-shadow-sm" 
               />
             </div>
           </div>
 
-          <div className="space-y-8">
-            <p className="text-[#006633] text-3xl font-black tracking-tight leading-tight max-w-lg border-l-8 border-[#006633] pl-8 italic">
+          <div className="space-y-4 xl:space-y-5">
+            <p className="text-[#006633] text-xl xl:text-2xl font-black tracking-tight leading-snug max-w-md border-l-4 border-[#006633] pl-5 italic">
               Red Cooperativa de Agricultores de Cáñamo Industrial Argentina
             </p>
             
-            <div className="h-1 w-48 bg-[#006633] opacity-30 rounded-full"></div>
+            <div className="h-1 w-32 bg-[#006633] opacity-30 rounded-full"></div>
 
-            <h2 className="text-5xl font-black text-[#006633] leading-tight tracking-tighter uppercase italic opacity-90">
-              Plataforma Inteligente <br />
-              de trazabilidad y gestión
-            </h2>
-            
-            <p className="text-[#006633]/70 text-2xl font-bold leading-relaxed max-w-md">
-              de la bioeconomía del Cáñamo Industrial & Agro 4.0
-            </p>
+            <div className="space-y-1.5">
+              <div className="flex items-baseline gap-3 flex-wrap">
+                <h2 className="text-3xl xl:text-4xl font-black text-[#006633] tracking-tighter uppercase italic leading-none">
+                  NUCLEUS
+                </h2>
+                <span className="text-xs xl:text-sm font-mono font-black tracking-widest text-[#006633]/80 uppercase">
+                  {activeVersion}
+                </span>
+              </div>
+              <p className="text-sm xl:text-base font-bold text-[#006633]/85 leading-snug max-w-md">
+                Plataforma Inteligente de trazabilidad y gestión agro industrial
+              </p>
+            </div>
           </div>
         </div>
 
         {/* ACCESO MÓVIL POR CÓDIGO QR & APPS */}
-        <div className="absolute bottom-12 left-20 z-20 animate-in slide-in-from-bottom-6 duration-1000">
-          <div className="bg-white/25 backdrop-blur-md border border-white/50 p-4 rounded-3xl flex items-center gap-5 shadow-xl max-w-md">
-            <div className="bg-white p-2 rounded-2xl shadow-inner shrink-0">
+        <div className="relative z-20 pt-2">
+          <div className="bg-white/25 backdrop-blur-md border border-white/50 p-3 xl:p-3.5 rounded-2xl flex items-center gap-4 shadow-lg max-w-md">
+            <div className="bg-white p-1.5 rounded-xl shadow-inner shrink-0">
               <img 
                 src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(currentUrl)}`} 
                 alt="Mobile Login QR" 
-                className="w-20 h-20 mix-blend-multiply opacity-90"
+                className="w-14 h-14 xl:w-16 xl:h-16 mix-blend-multiply opacity-90"
               />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <div className="flex items-center gap-2 text-[#006633]">
-                <AndroidLogo size={18} className="text-[#006633]" />
-                <WindowsLogo size={15} className="text-[#006633]" />
-                <p className="font-black text-xs uppercase tracking-widest">App Android & Windows</p>
+                <AndroidLogo size={15} className="text-[#006633]" />
+                <WindowsLogo size={13} className="text-[#006633]" />
+                <p className="font-black text-[11px] uppercase tracking-widest">App Android & Windows</p>
               </div>
-              <p className="text-[#006633] text-[11px] font-bold leading-tight">
+              <p className="text-[#006633] text-[10px] xl:text-[11px] font-bold leading-tight">
                 Escanea el código QR con tu celular Android o descarga la aplicación de escritorio para Windows.
               </p>
             </div>
           </div>
         </div>
         
-        <div className="absolute -right-20 -bottom-20 w-[600px] h-[600px] bg-white/20 rounded-full blur-[120px] opacity-60 pointer-events-none"></div>
+        <div className="absolute -right-20 -bottom-20 w-[500px] h-[500px] bg-white/20 rounded-full blur-[120px] opacity-60 pointer-events-none"></div>
       </div>
 
-      {/* Lado Derecho: Formulario de Autenticación */}
-      <div className="flex-1 flex flex-col items-center justify-center p-8 md:p-16 bg-white dark:bg-slate-950 transition-colors duration-500 relative">
-        <div className="w-full max-w-md space-y-8">
+      {/* Lado Derecho: Formulario de Autenticación Compacto y Equilibrado */}
+      <div className="flex-1 flex flex-col items-center justify-center px-5 py-4 sm:px-8 sm:py-6 lg:px-10 lg:py-4 bg-white dark:bg-slate-950 transition-colors duration-500 relative">
+        <div className="w-full max-w-md space-y-3 xl:space-y-3.5">
           
-          {/* Header en Pantalla Móvil */}
-          <div className="lg:hidden text-center mb-8">
-            <div className="inline-flex items-center justify-center bg-[#DDDB00] px-6 py-4 rounded-3xl mb-3 shadow-xl border border-[#b8b600]/60">
+          {/* Header en Pantalla Móvil / Tablet */}
+          <div className="lg:hidden text-center mb-2">
+            <div className="inline-flex items-center justify-center bg-[#DDDB00] px-5 py-2.5 rounded-2xl mb-2 shadow-lg border border-[#b8b600]/60">
               <img
                 src={appLogo || "/hempc-logo-cropped.png?v=7.18.2"}
                 alt="HempC"
-                className="h-14 w-auto object-contain"
+                className="h-11 w-auto object-contain"
               />
             </div>
-            <p className="text-[#006633] dark:text-emerald-400 font-black text-xs uppercase tracking-[0.25em]">
-              Red Cooperativa Argentina
+            <div className="flex items-center justify-center gap-2">
+              <span className="text-[#006633] dark:text-emerald-400 font-black text-sm uppercase tracking-tight italic">
+                NUCLEUS
+              </span>
+              <span className="text-[10px] font-mono font-bold text-slate-400 uppercase">
+                {activeVersion}
+              </span>
+            </div>
+            <p className="text-slate-500 dark:text-slate-400 font-semibold text-[11px] leading-tight mt-0.5">
+              Plataforma Inteligente de trazabilidad y gestión agro industrial
             </p>
           </div>
 
           {/* Encabezado del Formulario */}
-          <div className="border-b-2 border-slate-100 dark:border-slate-800 pb-5">
-            <h2 className="text-4xl font-black text-slate-900 dark:text-white uppercase tracking-tighter italic leading-none">
-              Iniciar Sesión
-            </h2>
-            <p className="text-slate-400 font-bold uppercase text-xs tracking-[0.2em] flex items-center gap-2 mt-2">
-              <ShieldCheck size={16} className="text-[#006633]"/> Nodo Nucleus Autenticado
-            </p>
+          <div className="border-b border-slate-100 dark:border-slate-800 pb-2.5 flex items-baseline justify-between gap-2">
+            <div>
+              <h2 className="text-2xl xl:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter italic leading-none">
+                Iniciar Sesión
+              </h2>
+              <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.18em] flex items-center gap-1.5 mt-1">
+                <ShieldCheck size={13} className="text-[#006633]"/> Nodo Nucleus Autenticado
+              </p>
+            </div>
+            <span className="hidden lg:inline-block text-[10px] font-mono font-bold text-slate-400 uppercase">
+              {activeVersion}
+            </span>
           </div>
 
           {/* Formulario */}
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-2.5 xl:space-y-3">
             {error && (
-              <div className="bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 p-4 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center border border-red-200 dark:border-red-900/60 animate-in slide-in-from-top-2 shadow-sm">
-                <AlertCircle size={18} className="mr-3 flex-shrink-0"/>
+              <div className="bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 p-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider flex items-center border border-red-200 dark:border-red-900/60 animate-in slide-in-from-top-2 shadow-sm">
+                <AlertCircle size={15} className="mr-2 flex-shrink-0"/>
                 <span>{error}</span>
               </div>
             )}
             
-            <div className="space-y-2 group">
-              <label className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest ml-1 group-focus-within:text-[#006633] dark:group-focus-within:text-emerald-400 transition-colors flex items-center gap-2">
-                <Mail size={14} /> Correo Electrónico o Usuario
+            <div className="space-y-1 group">
+              <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest ml-1 group-focus-within:text-[#006633] dark:group-focus-within:text-emerald-400 transition-colors flex items-center gap-1.5">
+                <Mail size={12} /> Correo Electrónico o Usuario
               </label>
               <input 
                 required 
@@ -303,23 +324,23 @@ export default function Login() {
                 autoComplete="username email"
                 autoCapitalize="none"
                 spellCheck="false"
-                className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-2xl focus:ring-4 focus:ring-[#006633]/10 focus:border-[#006633] dark:focus:border-emerald-500 outline-none transition-all text-slate-900 dark:text-white font-bold placeholder-slate-400 text-sm shadow-sm" 
+                className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-[#006633]/15 focus:border-[#006633] dark:focus:border-emerald-500 outline-none transition-all text-slate-900 dark:text-white font-bold placeholder-slate-400 text-xs sm:text-sm shadow-sm" 
                 placeholder="usuario@hempc.com.ar" 
                 value={email} 
                 onChange={e => setEmail(e.target.value)} 
               />
             </div>
 
-            <div className="space-y-2 group">
-              <label className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest ml-1 group-focus-within:text-[#006633] dark:group-focus-within:text-emerald-400 transition-colors flex items-center gap-2">
-                <Lock size={14} /> Contraseña
+            <div className="space-y-1 group">
+              <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest ml-1 group-focus-within:text-[#006633] dark:group-focus-within:text-emerald-400 transition-colors flex items-center gap-1.5">
+                <Lock size={12} /> Contraseña
               </label>
               <div className="relative">
                 <input 
                   required 
                   type={showPassword ? "text" : "password"} 
                   autoComplete="current-password"
-                  className="w-full px-5 py-4 pr-12 bg-slate-50 dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-2xl focus:ring-4 focus:ring-[#006633]/10 focus:border-[#006633] dark:focus:border-emerald-500 outline-none transition-all text-slate-900 dark:text-white font-bold placeholder-slate-400 text-sm shadow-sm" 
+                  className="w-full px-4 py-2.5 pr-11 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-[#006633]/15 focus:border-[#006633] dark:focus:border-emerald-500 outline-none transition-all text-slate-900 dark:text-white font-bold placeholder-slate-400 text-xs sm:text-sm shadow-sm" 
                   placeholder="••••••••••••" 
                   value={password} 
                   onChange={e => setPassword(e.target.value)} 
@@ -327,18 +348,18 @@ export default function Login() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition"
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition"
                   title={showPassword ? "Ocultar contraseña" : "Ver contraseña"}
                 >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
             </div>
 
             {/* Enlace de recuperación de contraseña */}
-            <div className="flex justify-between items-center px-1 pt-1">
-              <span className="text-[11px] text-slate-400 font-medium flex items-center gap-1">
-                <Lock size={12} className="text-[#006633] dark:text-emerald-400" /> Acceso Restringido
+            <div className="flex justify-between items-center px-1">
+              <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
+                <Lock size={11} className="text-[#006633] dark:text-emerald-400" /> Acceso Restringido
               </span>
               <button
                 type="button"
@@ -347,7 +368,7 @@ export default function Login() {
                   setForgotEmail(email);
                   setForgotStatus(null);
                 }}
-                className="text-xs font-bold text-[#006633] dark:text-emerald-400 hover:underline transition-colors cursor-pointer"
+                className="text-[11px] font-bold text-[#006633] dark:text-emerald-400 hover:underline transition-colors cursor-pointer"
               >
                 ¿Olvidaste tu contraseña?
               </button>
@@ -356,59 +377,59 @@ export default function Login() {
             <button 
               type="submit" 
               disabled={isLoading} 
-              className="w-full bg-[#006633] hover:bg-[#004d26] text-white py-4 rounded-2xl font-black text-xs uppercase tracking-[0.25em] active:scale-[0.98] transition-all shadow-xl shadow-green-900/20 disabled:opacity-50 flex items-center justify-center group cursor-pointer"
+              className="w-full bg-[#006633] hover:bg-[#004d26] text-white py-2.5 xl:py-3 rounded-xl font-black text-[11px] uppercase tracking-[0.2em] active:scale-[0.98] transition-all shadow-lg shadow-green-900/20 disabled:opacity-50 flex items-center justify-center group cursor-pointer"
             >
               {isLoading ? (
                 <div className="flex items-center space-x-2">
-                  <Loader2 className="animate-spin" size={18} />
+                  <Loader2 className="animate-spin" size={16} />
                   <span>Verificando Credenciales...</span>
                 </div>
               ) : (
                 <>
                   <span>Ingresar al Sistema</span> 
-                  <ArrowRight size={18} className="ml-3 group-hover:translate-x-2 transition-transform" />
+                  <ArrowRight size={16} className="ml-2.5 group-hover:translate-x-1.5 transition-transform" />
                 </>
               )}
             </button>
           </form>
 
           {/* TARJETA OFICIAL DE EVENTO: "UN DÍA DE SIEMBRA" (SÁBADO 21 DE NOVIEMBRE) & ALTA AUTOGESTIVA */}
-          <div className="bg-[#0c2d1e] rounded-2xl sm:rounded-3xl p-4 sm:p-5 text-white border-l-4 border-amber-500 border border-emerald-800/80 shadow-xl space-y-3 relative overflow-hidden">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#DDDB00] text-slate-950 text-[9px] font-black uppercase tracking-widest">
+          <div className="bg-[#0c2d1e] rounded-2xl p-3 xl:p-3.5 text-white border-l-4 border-amber-500 border border-emerald-800/80 shadow-lg space-y-2 relative overflow-hidden">
+            <div className="flex flex-wrap items-center justify-between gap-1.5 text-[9px] font-black uppercase tracking-wider">
+              <span className="inline-flex items-center gap-1 text-[#DDDB00]">
                 <Calendar size={11} />
-                Sábado 21 de Noviembre • 08:30 a 15:30 hs
+                Sáb. 21 Nov • 08:30 a 15:30 hs
               </span>
-              <span className="text-[9px] font-black uppercase tracking-wider text-amber-300">
+              <span className="text-amber-300">
                 PatagonianC & UATRE
               </span>
             </div>
 
             <div>
-              <p className="text-[9px] font-black uppercase tracking-widest text-[#DDDB00] mb-0.5">
+              <p className="text-[8px] font-black uppercase tracking-widest text-[#DDDB00]/90">
                 Diplomatura Universitaria en Cáñamo Industrial • UNLZ – UATRE
               </p>
-              <h3 className="text-base sm:text-lg font-black uppercase tracking-tight text-white">
+              <h3 className="text-xs sm:text-sm font-black uppercase tracking-tight text-white leading-snug">
                 JORNADA OFICIAL: “UN DÍA DE SIEMBRA”
               </h3>
-              <p className="text-[11px] text-emerald-100/90 leading-relaxed mt-1">
-                Sede Práctica Patagonia: Chacra Experimental PatagonianC LTDA (VIRCH – Trelew, Chubut). Recibí confirmación desde{' '}
-                <strong className="text-[#DDDB00]">notificaciones@hempc.com.ar</strong> y descargá el{' '}
-                <strong>Programa Oficial (PDF)</strong> <span className="italic opacity-80">(sujeto a actualización)</span>.
+              <p className="text-[10px] text-emerald-100/90 leading-snug mt-0.5">
+                Chacra Experimental PatagonianC LTDA (VIRCH – Trelew). Confirmación vía{' '}
+                <strong className="text-[#DDDB00]">notificaciones@hempc.com.ar</strong> y descarga de{' '}
+                <strong>Programa Oficial PDF</strong> <span className="italic opacity-80">(sujeto a actualización)</span>.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+            <div className="grid grid-cols-2 gap-2 pt-0.5">
               <button
                 type="button"
                 onClick={() => {
                   setRegistrationModalMode("event");
                   setShowRegistrationModal(true);
                 }}
-                className="w-full py-3 px-3.5 bg-[#DDDB00] hover:bg-[#e8e638] text-slate-950 rounded-xl font-black text-[10px] uppercase tracking-wider shadow-lg flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer"
+                className="w-full py-2 px-2.5 bg-[#DDDB00] hover:bg-[#e8e638] text-slate-950 rounded-lg font-black text-[9px] sm:text-[10px] uppercase tracking-wider shadow flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer"
               >
-                <Download size={14} />
-                <span>Inscribirme & Programa</span>
+                <Download size={12} />
+                <span className="truncate">Inscribirme & Programa</span>
               </button>
 
               <button
@@ -417,43 +438,33 @@ export default function Login() {
                   setRegistrationModalMode("platform");
                   setShowRegistrationModal(true);
                 }}
-                className="w-full py-3 px-3.5 bg-white/15 hover:bg-white/25 text-white border border-white/25 rounded-xl font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer"
+                className="w-full py-2 px-2.5 bg-white/15 hover:bg-white/25 text-white border border-white/25 rounded-lg font-black text-[9px] sm:text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer"
               >
-                <UserCheck size={14} />
-                <span>Solicitar Alta Usuario</span>
+                <UserCheck size={12} />
+                <span className="truncate">Solicitar Alta Usuario</span>
               </button>
             </div>
-
-            <p className="text-[10px] text-emerald-200/80 leading-tight pt-1.5 border-t border-white/10 flex items-center gap-1.5">
-              <ShieldCheck size={13} className="text-[#DDDB00] flex-shrink-0" />
-              <span>
-                Alta autogestiva sujeta a aprobación de los Administradores como <strong>Productor</strong> o <strong>Visitante</strong>.
-              </span>
-            </p>
           </div>
 
           {/* DESCARGA E INSTALACIÓN DE APP ANDROID Y WINDOWS ESCRITORIO */}
           <PWAInstallButton variant="login" />
 
-          {/* Estado del Sistema */}
-          <div className="pt-2 text-center space-y-3">
-            <div className={`inline-flex items-center px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all ${
-              connectionStatus === "connected" ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800" :
-              "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800"
+          {/* Estado del Sistema Compacto */}
+          <div className="pt-0.5 flex flex-wrap items-center justify-between gap-2 text-[9px] font-bold uppercase tracking-wider text-slate-400 border-t border-slate-100 dark:border-slate-800/80">
+            <span className={`inline-flex items-center gap-1.5 ${
+              connectionStatus === "connected" ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"
             }`}>
-              {connectionStatus === "checking" && <Loader2 size={12} className="mr-2 animate-spin"/>}
-              {connectionStatus === "connected" && <Wifi size={12} className="mr-2 text-emerald-600"/>}
-              {connectionStatus === "disconnected" && <WifiOff size={12} className="mr-2 text-amber-600"/>}
-              
+              {connectionStatus === "checking" && <Loader2 size={11} className="animate-spin"/>}
+              {connectionStatus === "connected" && <Wifi size={11} />}
+              {connectionStatus === "disconnected" && <WifiOff size={11} />}
               {connectionStatus === "checking" && "Verificando Red..."}
               {connectionStatus === "connected" && "Supabase Cloud Conectado"}
               {connectionStatus === "disconnected" && "Modo Autónomo / Local"}
-            </div>
+            </span>
 
-            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">
-              {/* @ts-ignore */}
-              &copy; 2026 HempC Nucleus {typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'V7.35.0-STABLE'} | Red de Cáñamo Industrial Argentina
-            </p>
+            <span>
+              &copy; 2026 HempC Nucleus {activeVersion}
+            </span>
           </div>
         </div>
       </div>
