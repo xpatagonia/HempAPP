@@ -12,7 +12,7 @@ export interface EventProgramParticipant {
 }
 
 export const OFFICIAL_PROGRAM_STATIC_PDF_PATH =
-  '/assets/aistudio/Programa_Oficial_Un_Dia_de_Siembra_PatagonianC_dac02709.pdf';
+  '/assets/aistudio/Programa_Oficial_Un_Dia_de_Siembra_PatagonianC_ad224782.pdf';
 
 export const EVENT_METADATA = {
   diplomatura: 'DIPLOMATURA UNIVERSITARIA EN CÁÑAMO INDUSTRIAL • UNLZ – UATRE',
@@ -473,13 +473,13 @@ export function downloadUnDiaDeSiembraProgramPDF(participant?: EventProgramParti
   doc.setFontSize(8.5);
   doc.setTextColor(51, 65, 85);
   doc.text(
-    'Portal oficial de la Red para registrar asistencia a la jornada práctica, acceder al material técnico y activar cobertura de seguro:',
+    'Escaneá el código QR con tu celular o ingresá al enlace para registrar tu asistencia a la jornada práctica, acceder al material técnico y activar cobertura de seguro:',
     18,
     142.5
   );
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(4, 120, 87);
-  doc.text('https://red.hempc.com.ar', 18, 148.5);
+  doc.text('https://red.hempc.com.ar/#/evento', 18, 148.5);
 
   if (participant) {
     doc.setFontSize(8);
