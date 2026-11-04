@@ -216,7 +216,7 @@ export default function EventAndSelfRegistrationModal({
       id: 'visitante' as const,
       title: 'Visitante / Invitado General',
       desc: isEventSelected
-        ? 'Acreditación prioritaria a la jornada y cobertura de seguro en campo'
+        ? 'Acreditación oficial a la jornada y acceso al Programa Oficial PDF'
         : 'Acceso general de consulta y seguimiento en plataforma NUCLEUS',
       recommended: true
     },
@@ -310,7 +310,7 @@ export default function EventAndSelfRegistrationModal({
               </h2>
 
               <p className="text-[11px] sm:text-xs text-slate-300 mt-1">
-                Registro autogestivo sujeto a aprobación de los Administradores. Una vez aprobado tu perfil, recibirás por correo el enlace seguro para definir tu contraseña.
+                Registro autogestivo sujeto a aprobación de los Administradores. Una vez aprobado tu perfil, recibirás por correo el enlace de activación para definir tu contraseña.
               </p>
             </div>
           </div>
@@ -428,7 +428,7 @@ export default function EventAndSelfRegistrationModal({
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5">
-                      Pase de asistencia a la Jornada Oficial “Un Día de Siembra”, cobertura de seguro en campo y descarga del Programa Oficial PDF.
+                      Pase de asistencia a la Jornada Oficial “Un Día de Siembra” y descarga del Programa Oficial PDF.
                     </p>
                   </div>
                 </div>
@@ -523,7 +523,7 @@ export default function EventAndSelfRegistrationModal({
 
               <div>
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1">
-                  DNI / CUIT {isEventSelected ? '(Seguro Mercantil Andina)' : '(Identificación)'} *
+                  DNI / CUIT (Identificación) *
                 </label>
                 <input
                   required

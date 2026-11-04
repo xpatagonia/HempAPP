@@ -337,7 +337,7 @@ export function downloadUnDiaDeSiembraProgramPDF(participant?: EventProgramParti
     margin: { left: 14, right: 14 }
   });
 
-  // Recuadro BPA y Seguro
+  // Recuadro BPA y Normas de Seguridad en Campo
   doc.setFillColor(240, 253, 244);
   doc.setDrawColor(22, 163, 74);
   doc.rect(14, 65, 182, 20, 'FD');
@@ -354,7 +354,7 @@ export function downloadUnDiaDeSiembraProgramPDF(participant?: EventProgramParti
     76.5
   );
   doc.text(
-    '(Módulo 7 UATRE – UNLZ), contando los asistentes registrados con seguro operativo del evento (Mercantil Andina).',
+    '(Módulo 7 UATRE – UNLZ). En caso de mal tiempo, la jornada se reprogramará.',
     18,
     81.5
   );
@@ -473,7 +473,7 @@ export function downloadUnDiaDeSiembraProgramPDF(participant?: EventProgramParti
   doc.setFontSize(8.5);
   doc.setTextColor(51, 65, 85);
   doc.text(
-    'Escaneá el código QR con tu celular o ingresá al enlace para registrar tu asistencia a la jornada práctica, acceder al material técnico y activar cobertura de seguro:',
+    'Escaneá el código QR con tu celular o ingresá al enlace para registrar tu asistencia a la jornada práctica y acceder al material técnico:',
     18,
     142.5
   );
