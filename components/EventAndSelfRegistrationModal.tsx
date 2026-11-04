@@ -92,7 +92,11 @@ export default function EventAndSelfRegistrationModal({
     }
 
     const existing = usersList.find(u => u.email?.toLowerCase() === cleanEmail);
-    if (existing && existing.accountStatus === 'active' && !existing.passwordPendingSetup) {
+    const isAlreadyActiveAccount = Boolean(
+      existing && existing.accountStatus === 'active' && !existing.passwordPendingSetup
+    );
+
+    if (!isEventSelected && isAlreadyActiveAccount) {
       setFormError('Este correo electrónico ya tiene una cuenta activa en la plataforma. Podés iniciar sesión directamente.');
       return;
     }
@@ -111,34 +115,52 @@ export default function EventAndSelfRegistrationModal({
       const profileText = isEventSelected ? 'Visitante al Evento / Invitado General' : PROFILE_LABELS[effectiveProfile];
 
       const newUserObj: User = {
+        ...(existing || {}),
         id: existing?.id || `usr-self-${Date.now()}`,
         name: cleanName,
         email: cleanEmail,
-        // La contraseña NO se define en el registro: queda bloqueada hasta que el Admin apruebe y el usuario use el link de activación
-        password: `__PENDING_APPROVAL_LOCKED_${activationToken}__`,
-        passwordPendingSetup: true,
+        // Si ya tenía cuenta activa y solo se inscribe al evento, conservar su clave y estado activo; si es alta nueva, bloquear clave hasta aprobación Admin
+        password: isAlreadyActiveAccount
+          ? existing!.password
+          : `__PENDING_APPROVAL_LOCKED_${activationToken}__`,
+        passwordPendingSetup: isAlreadyActiveAccount ? false : true,
         activationToken,
-        phone: phone.trim(),
-        dniNumber: dniNumber.trim() || undefined,
-        role: effectiveProfile === 'productor' ? 'client' : 'viewer',
-        jobTitle: `${profileText}${isEventSelected ? ' • Acreditado Un Día de Siembra (21/11)' : ''}`,
+        phone: phone.trim() || existing?.phone,
+        dniNumber: dniNumber.trim() || existing?.dniNumber || undefined,
+        role: isAlreadyActiveAccount
+          ? existing!.role
+          : effectiveProfile === 'productor'
+          ? 'client'
+          : 'viewer',
+        jobTitle: isAlreadyActiveAccount && existing?.jobTitle
+          ? `${existing.jobTitle.replace(/\s*•\s*Acreditado Un Día de Siembra \(21\/11\)/g, '')}${isEventSelected ? ' • Acreditado Un Día de Siembra (21/11)' : ''}`
+          : `${profileText}${isEventSelected ? ' • Acreditado Un Día de Siembra (21/11)' : ''}`,
         organizationName:
           organizationName.trim() ||
+          existing?.organizationName ||
           (effectiveProfile === 'productor' ? 'Establecimiento en Incorporación' : 'Visitante / Invitado General'),
-        isNetworkMember: false,
-        memberType: effectiveProfile === 'productor' ? 'Socio_Productor' : undefined,
-        accountStatus: 'pending_approval',
+        isNetworkMember: isAlreadyActiveAccount ? Boolean(existing?.isNetworkMember) : false,
+        memberType: isAlreadyActiveAccount
+          ? existing?.memberType
+          : effectiveProfile === 'productor'
+          ? 'Socio_Productor'
+          : undefined,
+        accountStatus: isAlreadyActiveAccount ? 'active' : 'pending_approval',
         registrationSource: isEventSelected ? 'event_un_dia_de_siembra' : 'self_service_platform',
-        requestedProfileType: effectiveProfile,
+        requestedProfileType: isAlreadyActiveAccount
+          ? existing?.requestedProfileType || effectiveProfile
+          : effectiveProfile,
         eventRegistered: isEventSelected ? true : existing?.eventRegistered,
         eventName: isEventSelected ? 'Jornada Oficial: "Un Día de Siembra" (Sáb. 21 Nov)' : existing?.eventName,
         eventTicketCode: isEventSelected ? finalTicket : existing?.eventTicketCode,
         eventConfirmedByEmail: false,
         eventProgramDownloaded: false,
-        localityOrProvince: locality.trim() || 'VIRCH – Trelew, Chubut',
-        estimatedHectares: !isEventSelected && estimatedHa ? Number(estimatedHa) : undefined,
-        invitedAt: new Date().toISOString().split('T')[0],
-        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(cleanName)}&backgroundColor=b6e3f4`
+        localityOrProvince: locality.trim() || existing?.localityOrProvince || 'VIRCH – Trelew, Chubut',
+        estimatedHectares: !isEventSelected && estimatedHa ? Number(estimatedHa) : existing?.estimatedHectares,
+        invitedAt: existing?.invitedAt || new Date().toISOString().split('T')[0],
+        avatar:
+          existing?.avatar ||
+          `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(cleanName)}&backgroundColor=b6e3f4`
       };
 
       if (existing) {
@@ -179,6 +201,11 @@ export default function EventAndSelfRegistrationModal({
   const handleConfirmEmailStep = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!createdUser) return;
+    if (enteredPin.trim() && generatedPin && enteredPin.trim() !== generatedPin.trim()) {
+      setFormError(`El código ingresado no coincide con el PIN enviado (${generatedPin}). Verificalo e intentá nuevamente.`);
+      return;
+    }
+    setFormError('');
 
     const updated: User = {
       ...createdUser,
@@ -659,6 +686,11 @@ export default function EventAndSelfRegistrationModal({
             </div>
 
             <form onSubmit={handleConfirmEmailStep} className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-5 space-y-4">
+              {formError && (
+                <div className="bg-red-50 dark:bg-red-950/60 border border-red-300 dark:border-red-800 text-red-700 dark:text-red-300 p-3 rounded-xl text-xs font-bold">
+                  {formError}
+                </div>
+              )}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
                   Ingresá el Código del Mail o Confirmá Recepción para Descargar el Programa
@@ -672,7 +704,10 @@ export default function EventAndSelfRegistrationModal({
                 <input
                   type="text"
                   value={enteredPin}
-                  onChange={e => setEnteredPin(e.target.value)}
+                  onChange={e => {
+                    setEnteredPin(e.target.value);
+                    if (formError) setFormError('');
+                  }}
                   placeholder={`Código de 6 dígitos (ej: ${generatedPin})`}
                   className="flex-1 px-4 py-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-mono font-black text-center tracking-widest text-slate-900 dark:text-white outline-none focus:border-[#006633]"
                 />
@@ -731,9 +766,15 @@ export default function EventAndSelfRegistrationModal({
                       PASE VISITANTE: {createdUser.eventTicketCode || ticketCode}
                     </span>
                   )}
-                  <span className="px-3 py-1 rounded-lg bg-amber-500/20 text-amber-300 text-[10px] font-black uppercase flex items-center gap-1">
-                    <Clock size={12} /> Pendiente de Aprobación Admin (Enlace de Contraseña por Email)
-                  </span>
+                  {createdUser.accountStatus === 'active' && !createdUser.passwordPendingSetup ? (
+                    <span className="px-3 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 text-[10px] font-black uppercase flex items-center gap-1">
+                      <CheckCircle2 size={12} /> Cuenta Activa en NUCLEUS
+                    </span>
+                  ) : (
+                    <span className="px-3 py-1 rounded-lg bg-amber-500/20 text-amber-300 text-[10px] font-black uppercase flex items-center gap-1">
+                      <Clock size={12} /> Pendiente de Aprobación Admin (Enlace de Contraseña por Email)
+                    </span>
+                  )}
                 </div>
               </div>
             </div>

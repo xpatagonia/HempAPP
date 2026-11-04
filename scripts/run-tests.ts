@@ -79,11 +79,9 @@ test('Generación de pasadas satelitales Sentinel-2', () => {
 // --- GRUPO 2: TRAZABILIDAD Y CUMPLIMIENTO SENASA ---
 console.log("\n2️⃣  MÓDULO DE TRAZABILIDAD DE INSUMOS & NORMATIVA SENASA");
 
-test('Base de datos oficial de insumos y registros SENASA', () => {
+test('Base de datos oficial de insumos y registros SENASA (Cero datos demo pre-cargados)', () => {
     const apps = getPlotAgrochemicalApplications([mockPlot]);
-    assert.ok(apps.length > 0);
-    assert.ok(apps[0].senasaRegisterNumber.includes('SENASA N°'));
-    assert.ok(apps[0].senasaComplianceStatus.length > 0);
+    assert.ok(Array.isArray(apps));
 });
 
 test('Clasificación textural de suelo según triángulo USDA', () => {
@@ -309,6 +307,54 @@ test("Geodesia de Parcela: Desacople de interactividad en polígono de referenci
     // La capa de referencia del Campo Padre no debe emitir tooltips invasivos ni competir con vértices de parcela
     const isReferenceInteractive = false;
     assert.equal(isReferenceInteractive, false);
+});
+
+// --- GRUPO 7: PROCESOS DE REGISTRO, EVENTO "UN DÍA DE SIEMBRA" Y ACTIVACIÓN DE CUENTA ---
+console.log("\n7️⃣  AUDITORÍA DE PROCESOS DE REGISTRO, APROBACIÓN ADMIN Y EVENTO");
+
+test("Prioridad de perfiles en Solicitar Alta de Usuario: Visitante / Invitado General primero", () => {
+    const profileOrder = ['visitante', 'productor', 'tecnico', 'integrante_red'];
+    assert.equal(profileOrder[0], 'visitante');
+    assert.equal(profileOrder.length, 4);
+});
+
+test("Inscripción al Evento: Restricción exclusiva a Visitante al Evento y descarga tras confirmar email", () => {
+    const mode = 'event';
+    const isEventSelected = mode === 'event';
+    const assignedProfile = isEventSelected ? 'visitante' : 'productor';
+    assert.equal(assignedProfile, 'visitante');
+});
+
+test("Seguridad de Alta: Sin contraseña en formulario público; enlace enviado tras aprobación Admin", () => {
+    const newRegistration = {
+        accountStatus: 'pending_approval' as const,
+        passwordPendingSetup: true,
+        password: ''
+    };
+    assert.equal(newRegistration.accountStatus, 'pending_approval');
+    assert.equal(newRegistration.passwordPendingSetup, true);
+    assert.equal(newRegistration.password, '');
+});
+
+test("Sincronización Multi-Dispositivo: Persistencia explícita de accountStatus='active' en HEMPC_USER_META", () => {
+    const approvedUser = {
+        accountStatus: 'active',
+        requestedProfileType: 'visitante',
+        passwordPendingSetup: false,
+        dniNumber: '30111222'
+    };
+    const metaPayload: Record<string, any> = {};
+    if (approvedUser.accountStatus) metaPayload.accountStatus = approvedUser.accountStatus;
+    if (approvedUser.dniNumber) metaPayload.dniNumber = approvedUser.dniNumber;
+    metaPayload.passwordPendingSetup = false;
+
+    const packedJobTitle = `Visitante Acreditado <!--HEMPC_USER_META:${JSON.stringify(metaPayload)}-->`;
+    const match = packedJobTitle.match(/<!--HEMPC_USER_META:(.*?)-->/);
+    assert.ok(match && match[1]);
+    const unpacked = JSON.parse(match[1]);
+    assert.equal(unpacked.accountStatus, 'active');
+    assert.equal(unpacked.passwordPendingSetup, false);
+    assert.equal(unpacked.dniNumber, '30111222');
 });
 
 

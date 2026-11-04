@@ -17,10 +17,11 @@ const generateId = () => {
 };
 
 export default function PublicRegistration() {
-    const { addClient, appName } = useAppContext();
+    const { addClient, addUser, usersList, appName } = useAppContext();
     const navigate = useNavigate();
     const [isSaving, setIsSaving] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
+    const [errorMsg, setErrorMsg] = useState('');
 
     const [formData, setFormData] = useState({
         name: '',
@@ -42,22 +43,42 @@ export default function PublicRegistration() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setErrorMsg('');
         setIsSaving(true);
         try {
+            const clientId = generateId();
+            const cleanEmail = formData.email.trim().toLowerCase();
             const success = await addClient({
-                id: generateId(),
-                name: formData.name,
-                contactName: formData.contactName,
-                contactPhone: formData.phone,
-                email: formData.email,
+                id: clientId,
+                name: formData.name.trim(),
+                contactName: formData.contactName.trim(),
+                contactPhone: formData.phone.trim(),
+                email: cleanEmail,
                 type: formData.type as any,
                 isNetworkMember: false,
                 membershipLevel: 'En Observación',
                 notes: `REGISTRO PÚBLICO - Intereses: ${formData.interest.join(', ')}`
             });
+            const existingUser = usersList.find(u => u.email.trim().toLowerCase() === cleanEmail);
+            if (!existingUser) {
+                await addUser({
+                    id: generateId(),
+                    name: formData.contactName.trim(),
+                    email: cleanEmail,
+                    role: 'client',
+                    clientId,
+                    phone: formData.phone.trim(),
+                    organizationName: formData.name.trim(),
+                    jobTitle: 'Productor Postulante',
+                    isNetworkMember: false,
+                    accountStatus: 'pending_approval',
+                    requestedProfileType: 'productor',
+                    passwordPendingSetup: true
+                });
+            }
             if (success) setIsSuccess(true);
         } catch (err) {
-            alert("Error al enviar solicitud.");
+            setErrorMsg("No se pudo enviar la solicitud. Por favor, verifique su conexión e intente nuevamente.");
         } finally {
             setIsSaving(false);
         }
@@ -189,6 +210,11 @@ export default function PublicRegistration() {
                         </div>
 
                         <div className="md:col-span-2 pt-8">
+                            {errorMsg && (
+                                <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-bold text-center">
+                                    {errorMsg}
+                                </div>
+                            )}
                             <button 
                                 type="submit" 
                                 disabled={isSaving}

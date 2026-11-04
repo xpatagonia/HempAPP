@@ -172,26 +172,47 @@ export default function Login() {
 
     setIsActivating(true);
     try {
-      let targetUser = usersList.find(u => u.email?.toLowerCase() === cleanMail);
+      const localMatch = usersList.find(u => u.email?.toLowerCase() === cleanMail);
+      let remoteMatch: any = null;
 
-      if (!targetUser) {
-        try {
-          const { data } = await supabase.from("users").select("*").ilike("email", cleanMail).maybeSingle();
-          if (data) {
-            targetUser = {
-              id: data.id,
-              name: data.name || "Usuario Acreditado",
-              email: data.email,
-              role: data.role || "viewer",
-              password: data.password,
-              jobTitle: data.job_title,
-              organizationName: data.organization_name,
-              isNetworkMember: Boolean(data.is_network_member),
-              accountStatus: "active"
-            };
+      try {
+        const { data } = await supabase.from("users").select("*").ilike("email", cleanMail).maybeSingle();
+        if (data) {
+          const rawJob = String(data.job_title || "");
+          const markerStart = "<!--HEMPC_USER_META:";
+          const markerEnd = ":END_USER_META-->";
+          const sIdx = rawJob.indexOf(markerStart);
+          const eIdx = rawJob.indexOf(markerEnd);
+          let parsedMeta: Record<string, any> = {};
+          let cleanJobTitle = rawJob;
+          if (sIdx !== -1 && eIdx !== -1 && eIdx > sIdx) {
+            cleanJobTitle = rawJob.slice(0, sIdx).trim();
+            try {
+              parsedMeta = JSON.parse(rawJob.slice(sIdx + markerStart.length, eIdx)) || {};
+            } catch {}
           }
-        } catch {}
-      }
+          remoteMatch = {
+            ...(localMatch || {}),
+            ...parsedMeta,
+            id: data.id,
+            name: data.name || localMatch?.name || "Usuario Acreditado",
+            email: data.email || cleanMail,
+            role: data.role || parsedMeta.role || localMatch?.role || "viewer",
+            password: data.password,
+            jobTitle: cleanJobTitle || localMatch?.jobTitle,
+            organizationName: data.organization_name || parsedMeta.organizationName || localMatch?.organizationName,
+            isNetworkMember: Boolean(data.is_network_member ?? localMatch?.isNetworkMember),
+            accountStatus: parsedMeta.accountStatus || localMatch?.accountStatus || "active",
+            activationToken: parsedMeta.activationToken || localMatch?.activationToken,
+            passwordPendingSetup:
+              parsedMeta.passwordPendingSetup !== undefined
+                ? parsedMeta.passwordPendingSetup
+                : localMatch?.passwordPendingSetup
+          };
+        }
+      } catch {}
+
+      const targetUser = remoteMatch || localMatch;
 
       if (!targetUser) {
         setActivateStatus({
@@ -274,26 +295,46 @@ export default function Login() {
     setForgotStatus(null);
     const targetEmail = forgotEmail.trim().toLowerCase();
 
-    // 1. Buscar en lista local de usuarios
-    let userFound = usersList.find(u => u.email.toLowerCase() === targetEmail);
+    // 1. Buscar en lista local de usuarios y en Supabase (extrayendo metadatos HEMPC_USER_META)
+    const localMatch = usersList.find(u => u.email.toLowerCase() === targetEmail);
+    let userFound = localMatch;
 
-    // 2. Si no está en memoria, consultar directamente a Supabase
-    if (!userFound) {
-      try {
-        const { data } = await supabase.from("users").select("*").ilike("email", targetEmail).maybeSingle();
-        if (data) {
-          userFound = {
-            id: data.id,
-            name: data.name || "Usuario de Cooperativa",
-            email: data.email,
-            role: data.role || "technician",
-            password: data.password,
-            isNetworkMember: Boolean(data.is_network_member)
-          };
+    try {
+      const { data } = await supabase.from("users").select("*").ilike("email", targetEmail).maybeSingle();
+      if (data) {
+        let parsedMeta: Record<string, any> = {};
+        let rawJobTitle = data.job_title || "";
+        const match = rawJobTitle.match(/<!--HEMPC_USER_META:(.*?)-->/);
+        if (match && match[1]) {
+          try {
+            parsedMeta = JSON.parse(match[1]);
+          } catch {}
+          rawJobTitle = rawJobTitle.replace(/\s*<!--HEMPC_USER_META:.*?-->/, "").trim();
         }
-      } catch (e) {
-        // Modo offline
+        userFound = {
+          ...(localMatch || {}),
+          id: data.id,
+          name: data.name || localMatch?.name || "Usuario de Cooperativa",
+          email: data.email || targetEmail,
+          role: data.role || localMatch?.role || "viewer",
+          password: data.password ?? localMatch?.password,
+          clientId: data.client_id ?? localMatch?.clientId,
+          phone: data.phone || localMatch?.phone,
+          jobTitle: rawJobTitle || localMatch?.jobTitle,
+          isNetworkMember: Boolean(data.is_network_member ?? localMatch?.isNetworkMember),
+          memberType: data.member_type || localMatch?.memberType,
+          organizationName: data.organization_name || localMatch?.organizationName,
+          accountStatus: parsedMeta.accountStatus || localMatch?.accountStatus || "active",
+          requestedProfileType: parsedMeta.requestedProfileType || localMatch?.requestedProfileType,
+          eventRegistered: parsedMeta.eventRegistered ?? localMatch?.eventRegistered,
+          eventTicketCode: parsedMeta.eventTicketCode || localMatch?.eventTicketCode,
+          passwordPendingSetup: parsedMeta.passwordPendingSetup ?? localMatch?.passwordPendingSetup,
+          activationToken: parsedMeta.activationToken || localMatch?.activationToken,
+          dniNumber: parsedMeta.dniNumber || localMatch?.dniNumber
+        };
       }
+    } catch (e) {
+      // Modo offline: se mantiene localMatch
     }
 
     // Si es la cuenta principal admin@hempc.com.ar o gaston.barea.moreno@gmail.com y no estuviera en memoria local previa
@@ -306,7 +347,8 @@ export default function Login() {
         password: "admin",
         isNetworkMember: true,
         memberType: "Cooperativa_Central",
-        organizationName: "Red Cooperativa Nucleus"
+        organizationName: "Red Cooperativa Nucleus",
+        accountStatus: "active"
       };
       await addUser(userFound);
     }
@@ -315,6 +357,25 @@ export default function Login() {
       setForgotStatus({
         type: "not_found",
         message: `El correo "${targetEmail}" no se encuentra registrado en el padrón de la cooperativa. Si aún no tenés cuenta, utilizá el botón "Solicitar Alta de Usuario" en la parte superior.`
+      });
+      setIsRecovering(false);
+      return;
+    }
+
+    // 2. Validar estado de aprobación antes de emitir clave provisoria
+    if (userFound.accountStatus === "pending_approval") {
+      setForgotStatus({
+        type: "error",
+        message: `Tu solicitud para "${targetEmail}" aún se encuentra PENDIENTE DE APROBACIÓN por Administración. Una vez aprobada tu alta, recibirás automáticamente desde notificaciones@hempc.com.ar el enlace para definir tu contraseña.`
+      });
+      setIsRecovering(false);
+      return;
+    }
+
+    if (userFound.accountStatus === "rejected") {
+      setForgotStatus({
+        type: "error",
+        message: `La solicitud asociada a "${targetEmail}" fue rechazada o deshabilitada por Administración.`
       });
       setIsRecovering(false);
       return;
@@ -331,6 +392,7 @@ export default function Login() {
     try {
       await updateUser({
         ...userFound,
+        accountStatus: "active",
         password: tempPassword,
         passwordPendingSetup: false
       });

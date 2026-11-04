@@ -311,10 +311,10 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     const packUserMetaIntoJobTitle = (u: User): string => {
         const { cleanJobTitle } = unpackUserMetaFromJobTitle(u.jobTitle);
         const meta: Partial<User> = {};
-        if (u.accountStatus && u.accountStatus !== 'active') meta.accountStatus = u.accountStatus;
+        if (u.accountStatus) meta.accountStatus = u.accountStatus;
         if (u.registrationSource) meta.registrationSource = u.registrationSource;
         if (u.requestedProfileType) meta.requestedProfileType = u.requestedProfileType;
-        if (u.eventRegistered) meta.eventRegistered = u.eventRegistered;
+        if (u.eventRegistered !== undefined) meta.eventRegistered = u.eventRegistered;
         if (u.eventName) meta.eventName = u.eventName;
         if (u.eventTicketCode) meta.eventTicketCode = u.eventTicketCode;
         if (u.eventConfirmedByEmail !== undefined) meta.eventConfirmedByEmail = u.eventConfirmedByEmail;
@@ -326,6 +326,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         if (u.approvedAt) meta.approvedAt = u.approvedAt;
         if (u.activationToken) meta.activationToken = u.activationToken;
         if (u.passwordPendingSetup !== undefined) meta.passwordPendingSetup = u.passwordPendingSetup;
+        if (u.dniNumber) meta.dniNumber = u.dniNumber;
         if (Object.keys(meta).length === 0) return cleanJobTitle;
         return `${cleanJobTitle} ${USER_META_MARKER_START}${JSON.stringify(meta)}${USER_META_MARKER_END}`.trim();
     };
@@ -349,7 +350,19 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         const demoById = DEMO_USERS_LIST.find(d => String(d.id) === String(u.id));
         const demoByEmail = u.email ? DEMO_USERS_LIST.find(d => d.email?.toLowerCase() === u.email.toLowerCase()) : undefined;
         const demoMatch = demoById || demoByEmail;
-        const mergedMeta = { ...parsedMeta, ...savedUserMeta };
+        // Priorizar parsedMeta (proveniente de Supabase job_title) por sobre caché local antiguo
+        const mergedMeta = { ...savedUserMeta, ...parsedMeta };
+        const resolvedAccountStatus =
+            parsedMeta.accountStatus ||
+            u.accountStatus ||
+            savedUserMeta.accountStatus ||
+            'active';
+        const resolvedPasswordPending =
+            parsedMeta.passwordPendingSetup !== undefined
+                ? parsedMeta.passwordPendingSetup
+                : u.passwordPendingSetup !== undefined
+                ? u.passwordPendingSetup
+                : savedUserMeta.passwordPendingSetup;
         return {
             ...(demoMatch || {}),
             ...mergedMeta,
@@ -368,20 +381,20 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             dniDorsoUrl: u.dniDorsoUrl !== undefined ? u.dniDorsoUrl : mergedMeta.dniDorsoUrl,
             dniUpdatedAt: u.dniUpdatedAt || mergedMeta.dniUpdatedAt,
             dniVerified: u.dniVerified !== undefined ? u.dniVerified : mergedMeta.dniVerified,
-            accountStatus: u.accountStatus || mergedMeta.accountStatus || 'active',
-            registrationSource: u.registrationSource || mergedMeta.registrationSource,
-            requestedProfileType: u.requestedProfileType || mergedMeta.requestedProfileType,
-            eventRegistered: u.eventRegistered !== undefined ? u.eventRegistered : mergedMeta.eventRegistered,
-            eventName: u.eventName || mergedMeta.eventName,
-            eventTicketCode: u.eventTicketCode || mergedMeta.eventTicketCode,
-            eventConfirmedByEmail: u.eventConfirmedByEmail !== undefined ? u.eventConfirmedByEmail : mergedMeta.eventConfirmedByEmail,
-            eventProgramDownloaded: u.eventProgramDownloaded !== undefined ? u.eventProgramDownloaded : mergedMeta.eventProgramDownloaded,
-            localityOrProvince: u.localityOrProvince || mergedMeta.localityOrProvince,
-            estimatedHectares: u.estimatedHectares !== undefined ? u.estimatedHectares : mergedMeta.estimatedHectares,
-            approvedBy: u.approvedBy || mergedMeta.approvedBy,
-            approvedAt: u.approvedAt || mergedMeta.approvedAt,
-            activationToken: u.activationToken ?? mergedMeta.activationToken,
-            passwordPendingSetup: u.passwordPendingSetup !== undefined ? u.passwordPendingSetup : mergedMeta.passwordPendingSetup
+            accountStatus: resolvedAccountStatus,
+            registrationSource: parsedMeta.registrationSource || u.registrationSource || mergedMeta.registrationSource,
+            requestedProfileType: parsedMeta.requestedProfileType || u.requestedProfileType || mergedMeta.requestedProfileType,
+            eventRegistered: parsedMeta.eventRegistered !== undefined ? parsedMeta.eventRegistered : (u.eventRegistered !== undefined ? u.eventRegistered : mergedMeta.eventRegistered),
+            eventName: parsedMeta.eventName || u.eventName || mergedMeta.eventName,
+            eventTicketCode: parsedMeta.eventTicketCode || u.eventTicketCode || mergedMeta.eventTicketCode,
+            eventConfirmedByEmail: parsedMeta.eventConfirmedByEmail !== undefined ? parsedMeta.eventConfirmedByEmail : (u.eventConfirmedByEmail !== undefined ? u.eventConfirmedByEmail : mergedMeta.eventConfirmedByEmail),
+            eventProgramDownloaded: parsedMeta.eventProgramDownloaded !== undefined ? parsedMeta.eventProgramDownloaded : (u.eventProgramDownloaded !== undefined ? u.eventProgramDownloaded : mergedMeta.eventProgramDownloaded),
+            localityOrProvince: parsedMeta.localityOrProvince || u.localityOrProvince || mergedMeta.localityOrProvince,
+            estimatedHectares: parsedMeta.estimatedHectares !== undefined ? parsedMeta.estimatedHectares : (u.estimatedHectares !== undefined ? u.estimatedHectares : mergedMeta.estimatedHectares),
+            approvedBy: parsedMeta.approvedBy || u.approvedBy || mergedMeta.approvedBy,
+            approvedAt: parsedMeta.approvedAt || u.approvedAt || mergedMeta.approvedAt,
+            activationToken: parsedMeta.activationToken ?? u.activationToken ?? mergedMeta.activationToken,
+            passwordPendingSetup: resolvedPasswordPending
         };
     };
 
@@ -1783,8 +1796,8 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                               merged[k] = remoteItem[k];
                             }
                           });
-                          // Si el registro fue editado localmente en esta sesión, preservar sus campos enriquecidos
-                          if (localItem._localUpdatedAt) {
+                          // Si el registro fue editado localmente en esta sesión (salvo usuarios donde prima el estado remoto de aprobación/clave), preservar sus campos enriquecidos
+                          if (localItem._localUpdatedAt && table !== 'users') {
                             return { ...merged, ...localItem };
                           }
                           return merged;
