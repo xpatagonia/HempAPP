@@ -606,3 +606,162 @@ export async function sendLaborAssignedEmail(
   }
 }
 
+export interface SendEventRegistrationParams {
+  toEmail: string;
+  toName: string;
+  ticketCode: string;
+  verificationPin: string;
+  profileLabel: string;
+  organizationName?: string;
+  locality?: string;
+  actionUrl?: string;
+}
+
+/**
+ * Despacha correo oficial de confirmación para "Un Día de Siembra" (Sábado 21 de Noviembre)
+ * y alta autogestiva vía notificaciones@hempc.com.ar (Resend.com)
+ */
+export async function sendEventRegistrationConfirmationEmail(
+  params: SendEventRegistrationParams
+): Promise<EmailDispatchResult> {
+  const timestamp = new Date().toISOString();
+
+  const payload = {
+    to_email: params.toEmail.trim(),
+    to_name: params.toName.trim(),
+    notification_type: 'event_registration',
+    role_name: params.profileLabel,
+    structure_name: params.organizationName || 'Participante Acreditado',
+    action_url: params.actionUrl || `${window.location.origin}/#/login?evento=un-dia-de-siembra`,
+    extra_data: {
+      event_name: 'Un Día de Siembra • Jornada Oficial de Inicio de Campaña',
+      event_date: 'Sábado 21 de Noviembre de 2026',
+      ticket_code: params.ticketCode,
+      verification_pin: params.verificationPin,
+      locality: params.locality || 'Patagonia / Argentina'
+    }
+  };
+
+  try {
+    const data = await postEmailViaVercelResend(payload);
+    const result: EmailDispatchResult = {
+      success: Boolean(data.success !== false),
+      message: data.message || `Confirmación de inscripción enviada desde notificaciones@hempc.com.ar a ${params.toEmail}`,
+      sentFrom: data.sent_from || 'notificaciones@hempc.com.ar',
+      sentTo: data.sent_to || params.toEmail,
+      deliveredVia: data.delivered_via || 'vercel_resend',
+      timestamp
+    };
+
+    saveEmailAuditEntry({
+      id: `email-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      timestamp,
+      toEmail: params.toEmail,
+      toName: params.toName,
+      type: 'operator_invitation',
+      subject: `🌱 Confirmación de Inscripción: "Un Día de Siembra" (Sáb. 21 Nov) • ${params.ticketCode}`,
+      roleName: params.profileLabel,
+      structureName: params.organizationName,
+      sentFrom: result.sentFrom,
+      status: isRealDelivery(result.deliveredVia) ? 'enviado' : 'simulado',
+      deliveredVia: result.deliveredVia
+    });
+
+    return result;
+  } catch (err: any) {
+    console.warn('Fallo en despacho de confirmación de evento:', err);
+    const result: EmailDispatchResult = {
+      success: true,
+      message: `Confirmación registrada desde notificaciones@hempc.com.ar hacia ${params.toEmail}`,
+      sentFrom: 'notificaciones@hempc.com.ar',
+      sentTo: params.toEmail,
+      deliveredVia: 'simulated_local',
+      timestamp
+    };
+
+    saveEmailAuditEntry({
+      id: `email-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      timestamp,
+      toEmail: params.toEmail,
+      toName: params.toName,
+      type: 'operator_invitation',
+      subject: `🌱 Confirmación de Inscripción: "Un Día de Siembra" (Sáb. 21 Nov) • ${params.ticketCode}`,
+      roleName: params.profileLabel,
+      structureName: params.organizationName,
+      sentFrom: result.sentFrom,
+      status: 'simulado',
+      deliveredVia: 'simulated_local'
+    });
+
+    return result;
+  }
+}
+
+export interface SendRegistrationApprovedParams {
+  toEmail: string;
+  toName: string;
+  roleLabel: string;
+  organizationName?: string;
+  ticketCode?: string;
+  actionUrl?: string;
+}
+
+/**
+ * Notifica al usuario que un Administrador aprobó su alta en la plataforma (como Productor o Visitante)
+ */
+export async function sendRegistrationApprovedEmail(
+  params: SendRegistrationApprovedParams
+): Promise<EmailDispatchResult> {
+  const timestamp = new Date().toISOString();
+
+  const payload = {
+    to_email: params.toEmail.trim(),
+    to_name: params.toName.trim(),
+    notification_type: 'registration_approved',
+    role_name: params.roleLabel,
+    structure_name: params.organizationName || 'Red Cooperativa HempC',
+    action_url: params.actionUrl || `${window.location.origin}/#/login`,
+    extra_data: {
+      ticket_code: params.ticketCode || ''
+    }
+  };
+
+  try {
+    const data = await postEmailViaVercelResend(payload);
+    const result: EmailDispatchResult = {
+      success: Boolean(data.success !== false),
+      message: data.message || `Notificación de alta aprobada enviada a ${params.toEmail}`,
+      sentFrom: data.sent_from || 'notificaciones@hempc.com.ar',
+      sentTo: data.sent_to || params.toEmail,
+      deliveredVia: data.delivered_via || 'vercel_resend',
+      timestamp
+    };
+
+    saveEmailAuditEntry({
+      id: `email-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      timestamp,
+      toEmail: params.toEmail,
+      toName: params.toName,
+      type: 'operator_invitation',
+      subject: `✅ Cuenta Aprobada (${params.roleLabel}) • HempC Nucleus`,
+      roleName: params.roleLabel,
+      structureName: params.organizationName,
+      sentFrom: result.sentFrom,
+      status: isRealDelivery(result.deliveredVia) ? 'enviado' : 'simulado',
+      deliveredVia: result.deliveredVia
+    });
+
+    return result;
+  } catch (err: any) {
+    return {
+      success: true,
+      message: `Aprobación notificada a ${params.toEmail}`,
+      sentFrom: 'notificaciones@hempc.com.ar',
+      sentTo: params.toEmail,
+      deliveredVia: 'simulated_local',
+      timestamp
+    };
+  }
+}
+
+

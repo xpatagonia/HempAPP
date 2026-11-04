@@ -12,9 +12,11 @@ import {
 import jsPDF from "jspdf";
 import { 
   sendUserProfileWelcomeEmail, 
-  sendPasswordResetEmail, 
+  sendPasswordResetEmail,
+  sendRegistrationApprovedEmail,
   EmailDispatchResult 
 } from "../src/services/emailNotificationService";
+import { downloadUnDiaDeSiembraProgramPDF } from "../src/services/eventProgramPdfService";
 import {
   getUserAccessAudit,
   STRUCTURE_ROLES,
@@ -554,7 +556,83 @@ export default function Users() {
     setUserToReset(user);
   };
 
+  // Aprobar alta autogestiva como Productor o como Visitante y despachar mail por notificaciones@hempc.com.ar
+  const handleApproveSelfRegistration = async (
+    targetUser: User,
+    approveAs: "productor" | "visitante"
+  ) => {
+    setActionLoadingId(targetUser.id);
+    try {
+      const roleAssigned: UserRole = approveAs === "productor" ? "client" : "viewer";
+      const roleLabel =
+        approveAs === "productor"
+          ? "Productor Asociado (Red Cooperativa)"
+          : "Visitante Acreditado (Un Día de Siembra)";
 
+      const updated: User = {
+        ...targetUser,
+        role: roleAssigned,
+        isNetworkMember: approveAs === "productor",
+        memberType: approveAs === "productor" ? "Socio_Productor" : undefined,
+        accountStatus: "active",
+        approvedBy: currentUser?.name || "Administración Central HempC",
+        approvedAt: new Date().toISOString().split("T")[0]
+      };
+
+      await updateUser(updated);
+
+      const dispatch = await sendRegistrationApprovedEmail({
+        toEmail: updated.email,
+        toName: updated.name,
+        roleLabel,
+        organizationName: updated.organizationName || "Red Cooperativa HempC",
+        ticketCode: updated.eventTicketCode
+      });
+
+      setEmailToast({
+        show: true,
+        success: dispatch.success,
+        message: `Alta aprobada como ${roleLabel}. Notificación enviada a ${updated.email}.`,
+        sentTo: updated.email,
+        via: dispatch.deliveredVia
+      });
+    } catch (err: any) {
+      setUserActionToast({
+        show: true,
+        success: false,
+        message: `Error al aprobar solicitud: ${err.message || "Fallo desconocido"}`
+      });
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleRejectSelfRegistration = async (targetUser: User) => {
+    setActionLoadingId(targetUser.id);
+    try {
+      await updateUser({
+        ...targetUser,
+        accountStatus: "rejected"
+      });
+      setUserActionToast({
+        show: true,
+        success: true,
+        message: `Solicitud de "${targetUser.name}" marcada como rechazada.`
+      });
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const pendingApprovals = useMemo(
+    () => usersList.filter(u => u.accountStatus === "pending_approval"),
+    [usersList]
+  );
+
+  const eventRegisteredUsers = useMemo(
+    () => usersList.filter(u => Boolean(u.eventRegistered || u.eventTicketCode)),
+    [usersList]
+  );
 
   const inputClass = "w-full border border-gray-300 dark:border-slate-800 bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 p-3 rounded-2xl focus:ring-2 focus:ring-hemp-500 outline-none transition-all text-sm font-medium";
 
@@ -568,11 +646,11 @@ export default function Users() {
               Equipos & <span className="text-hemp-600">Accesos</span>
             </h1>
             <span className="bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
-              Alta Centralizada
+              Alta Centralizada & Autogestiva
             </span>
           </div>
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            Gestión institucional de personal, técnicos de campo y productores asociados.
+            Gestión institucional de personal, técnicos, productores y acreditaciones al evento "Un Día de Siembra".
           </p>
         </div>
 
@@ -600,25 +678,141 @@ export default function Users() {
         </button>
       </div>
 
-      {/* AVISO INSTITUCIONAL DE REGISTRO RESTRINGIDO */}
-      <div className="mb-6 p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-200 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-amber-500 text-white rounded-xl flex-shrink-0">
-            <Lock size={18} />
+      {/* PANEL DE APROBACIÓN DE ALTAS AUTOGESTIVAS Y EVENTO "UN DÍA DE SIEMBRA" (SÁB. 21 NOVIEMBRE) */}
+      {isAdmin && (
+        <div className="mb-8 bg-gradient-to-br from-[#022c22] via-slate-900 to-slate-950 rounded-[32px] p-6 sm:p-8 text-white border-2 border-[#DDDB00]/60 shadow-2xl space-y-6">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-white/10 pb-5">
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2">
+                <span className="px-3 py-1 rounded-full bg-[#DDDB00] text-slate-950 text-[10px] font-black uppercase tracking-widest">
+                  Sábado 21 de Noviembre
+                </span>
+                <span className="text-xs font-black uppercase tracking-wider text-emerald-400">
+                  Autoridad de Admisión Administrativa
+                </span>
+              </div>
+              <h2 className="text-xl sm:text-2xl font-black uppercase tracking-tight">
+                🌱 Evento "Un Día de Siembra" & Solicitudes de Alta Autogestiva
+              </h2>
+              <p className="text-xs text-slate-300 max-w-2xl">
+                Los inscriptos reciben confirmación previa por <strong className="text-[#DDDB00]">notificaciones@hempc.com.ar</strong> (Resend.com) para descargar el Programa Oficial. Desde aquí podés aprobar su alta definitiva como <strong>Productor Asociado</strong> o como <strong>Visitante</strong>.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="px-4 py-2.5 rounded-2xl bg-white/10 border border-white/15 text-center">
+                <span className="text-[10px] uppercase font-black text-amber-300 block">Pendientes de Aprobación</span>
+                <span className="text-xl font-black text-white">{pendingApprovals.length}</span>
+              </div>
+              <div className="px-4 py-2.5 rounded-2xl bg-white/10 border border-white/15 text-center">
+                <span className="text-[10px] uppercase font-black text-emerald-300 block">Acreditados 21/11</span>
+                <span className="text-xl font-black text-[#DDDB00]">{eventRegisteredUsers.length}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  downloadUnDiaDeSiembraProgramPDF({
+                    name: currentUser?.name || "Administración Central HempC",
+                    email: currentUser?.email || "notificaciones@hempc.com.ar",
+                    ticketCode: "SIEMBRA-21N-OFICIAL",
+                    profileLabel: "Dirección & Coordinación General",
+                    organizationName: "PatagonianC LTDA • HempC Nucleus",
+                    locality: "Patagonia Argentina"
+                  })
+                }
+                className="px-5 py-3.5 bg-[#DDDB00] hover:bg-[#e5e326] text-slate-950 rounded-2xl font-black text-xs uppercase tracking-wider shadow-lg flex items-center gap-2 transition cursor-pointer"
+              >
+                <Download size={16} />
+                <span>Descargar Programa Oficial 21/11 (PDF)</span>
+              </button>
+            </div>
           </div>
-          <div>
-            <p className="text-xs font-black uppercase tracking-wider">
-              Seguridad Institucional: Sin Auto-Registro Público
-            </p>
-            <p className="text-xs opacity-90">
-              Los usuarios no pueden registrarse por su cuenta en la plataforma pública. Todas las altas de perfil, asignación de roles y credenciales son gestionadas exclusivamente desde este panel por los administradores de la cooperativa.
-            </p>
-          </div>
+
+          {pendingApprovals.length > 0 ? (
+            <div className="space-y-3">
+              <h3 className="text-xs font-black uppercase tracking-widest text-amber-300 flex items-center gap-2">
+                <AlertCircle size={15} />
+                Solicitudes en Sala de Espera ({pendingApprovals.length}) — Requieren tu Aprobación:
+              </h3>
+              <div className="grid grid-cols-1 gap-3">
+                {pendingApprovals.map(u => (
+                  <div
+                    key={u.id}
+                    className="bg-white/5 hover:bg-white/10 border border-white/15 rounded-2xl p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4 transition"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-black text-sm uppercase text-white">{u.name}</span>
+                        {u.eventTicketCode && (
+                          <span className="px-2.5 py-0.5 rounded-md bg-[#DDDB00]/20 border border-[#DDDB00]/40 text-[#DDDB00] font-mono text-[11px] font-black">
+                            {u.eventTicketCode}
+                          </span>
+                        )}
+                        <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-black uppercase">
+                          Solicita: {u.requestedProfileType === "productor" ? "Productor" : u.requestedProfileType || "Visitante"}
+                        </span>
+                        {u.eventConfirmedByEmail && (
+                          <span className="px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 text-[10px] font-bold">
+                            ✓ Email Confirmado
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-300">
+                        <strong>Email:</strong> {u.email} • <strong>Tel:</strong> {u.phone || "S/D"} •{" "}
+                        <strong>Entidad:</strong> {u.organizationName || "Independiente"} ({u.localityOrProvince || "S/D"})
+                        {u.estimatedHectares ? ` • Superficie estimada: ${u.estimatedHectares} ha` : ""}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={actionLoadingId === u.id}
+                        onClick={() => handleApproveSelfRegistration(u, "productor")}
+                        className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl font-black text-[11px] uppercase tracking-wider flex items-center gap-1.5 transition cursor-pointer"
+                      >
+                        <CheckCircle2 size={14} />
+                        <span>Aprobar como Productor</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={actionLoadingId === u.id}
+                        onClick={() => handleApproveSelfRegistration(u, "visitante")}
+                        className="px-4 py-2.5 bg-sky-500 hover:bg-sky-400 text-slate-950 rounded-xl font-black text-[11px] uppercase tracking-wider flex items-center gap-1.5 transition cursor-pointer"
+                      >
+                        <UserCheck size={14} />
+                        <span>Aprobar como Visitante</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={actionLoadingId === u.id}
+                        onClick={() => handleRejectSelfRegistration(u)}
+                        className="px-3.5 py-2.5 bg-rose-500/20 hover:bg-rose-500/40 text-rose-300 border border-rose-500/30 rounded-xl font-black text-[11px] uppercase tracking-wider transition cursor-pointer"
+                      >
+                        Rechazar
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-300">
+              <div className="flex items-center gap-2.5">
+                <ShieldCheck size={18} className="text-emerald-400 flex-shrink-0" />
+                <span>
+                  No hay solicitudes pendientes de aprobación en este momento. Link directo para compartir en WhatsApp o QR del evento:{' '}
+                  <code className="text-[#DDDB00] font-mono font-bold">
+                    https://red.hempc.com.ar/#/login?evento=un-dia-de-siembra
+                  </code>
+                </span>
+              </div>
+            </div>
+          )}
         </div>
-        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700 text-[10px] font-mono font-bold text-amber-800 dark:text-amber-300 flex-shrink-0">
-          <ShieldCheck size={14} className="text-emerald-600" /> Control de Acceso Activo
-        </div>
-      </div>
+      )}
 
       {/* TOAST DE FEEDBACK DE ENVÍO DE EMAIL */}
       {emailToast && (() => {

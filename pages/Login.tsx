@@ -1,18 +1,21 @@
 import React, { useState, useEffect } from "react";
 import { useAppContext } from "../context/AppContext";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { 
   ArrowRight, AlertCircle, Loader2, ShieldCheck, 
   Leaf, Smartphone, Wifi, WifiOff, Eye, EyeOff, Lock, Mail,
-  Key, CheckCircle2, AlertTriangle, X
+  Key, CheckCircle2, AlertTriangle, X, Calendar, Sprout, UserCheck, Download
 } from "lucide-react";
 import { checkConnection, supabase } from "../supabaseClient";
 import { sendPasswordResetEmail } from "../src/services/emailNotificationService";
 import { PWAInstallButton, AndroidLogo, WindowsLogo } from "../components/PWAInstallButton";
+import EventAndSelfRegistrationModal from "../components/EventAndSelfRegistrationModal";
+import { downloadUnDiaDeSiembraProgramPDF } from "../src/services/eventProgramPdfService";
 
 export default function Login() {
   const { currentUser, login, appName, appLogo, usersList, updateUser, addUser } = useAppContext();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -20,6 +23,10 @@ export default function Login() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<"checking" | "connected" | "disconnected">("checking");
+
+  // Modal de Inscripción al Evento "Un Día de Siembra" (Sáb. 21 Nov) & Alta Autogestiva
+  const [showRegistrationModal, setShowRegistrationModal] = useState(false);
+  const [registrationModalMode, setRegistrationModalMode] = useState<"event" | "platform">("event");
 
   // Estado del modal de recuperación de contraseña
   const [showForgotModal, setShowForgotModal] = useState(false);
@@ -32,6 +39,18 @@ export default function Login() {
   } | null>(null);
 
   const currentUrl = typeof window !== "undefined" ? window.location.origin : "";
+
+  useEffect(() => {
+    const eventoParam = searchParams.get("evento");
+    const registroParam = searchParams.get("registro");
+    if (eventoParam === "un-dia-de-siembra" || eventoParam === "21nov") {
+      setRegistrationModalMode("event");
+      setShowRegistrationModal(true);
+    } else if (registroParam === "alta") {
+      setRegistrationModalMode("platform");
+      setShowRegistrationModal(true);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (currentUser) {
@@ -54,6 +73,22 @@ export default function Login() {
       setError("Por favor ingrese su correo y contraseña.");
       return;
     }
+
+    const cleanMail = email.trim().toLowerCase();
+    const matchedUser = usersList.find(u => u.email?.toLowerCase() === cleanMail);
+    if (matchedUser?.accountStatus === "pending_approval") {
+      setError(
+        `Tu solicitud de alta (${matchedUser.eventTicketCode ? `Pase ${matchedUser.eventTicketCode} • ` : ""}Perfil: ${
+          matchedUser.requestedProfileType === "productor" ? "Productor" : "Visitante"
+        }) se encuentra PENDIENTE DE APROBACIÓN por la Administración de HempC. Recibirás un correo desde notificaciones@hempc.com.ar apenas sea habilitada.`
+      );
+      return;
+    }
+    if (matchedUser?.accountStatus === "rejected") {
+      setError("Tu solicitud de acceso no ha sido aprobada por la administración cooperativa.");
+      return;
+    }
+
     setIsLoading(true);
     try {
       const success = await login(email, password);
@@ -337,24 +372,69 @@ export default function Login() {
             </button>
           </form>
 
+          {/* TARJETA OFICIAL DE EVENTO: "UN DÍA DE SIEMBRA" (SÁBADO 21 DE NOVIEMBRE) & ALTA AUTOGESTIVA */}
+          <div className="bg-gradient-to-br from-[#022c22] via-[#064e3b] to-[#006633] rounded-3xl p-5 text-white border-2 border-[#DDDB00]/80 shadow-xl space-y-3.5 relative overflow-hidden">
+            <div className="flex items-center justify-between gap-2">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#DDDB00] text-slate-950 text-[9px] font-black uppercase tracking-widest">
+                <Calendar size={11} />
+                Sábado 21 de Noviembre
+              </span>
+              <span className="text-[10px] font-black uppercase tracking-wider text-emerald-300">
+                Apertura de Campaña
+              </span>
+            </div>
+
+            <div>
+              <h3 className="text-base font-black uppercase tracking-tight text-white flex items-center gap-1.5">
+                <Sprout size={17} className="text-[#DDDB00]" />
+                <span>Evento: "Un Día de Siembra"</span>
+              </h3>
+              <p className="text-[11px] text-emerald-100/90 leading-relaxed mt-1">
+                Inscribite a la jornada de inicio de siembra, recibí tu mail de confirmación oficial desde{' '}
+                <strong className="text-[#DDDB00]">notificaciones@hempc.com.ar</strong> y descargá el{' '}
+                <strong>Programa Oficial (PDF)</strong>.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setRegistrationModalMode("event");
+                  setShowRegistrationModal(true);
+                }}
+                className="w-full py-3 px-3.5 bg-[#DDDB00] hover:bg-[#e8e638] text-slate-950 rounded-xl font-black text-[10px] uppercase tracking-wider shadow-lg flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer"
+              >
+                <Download size={14} />
+                <span>Inscribirme & Programa</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setRegistrationModalMode("platform");
+                  setShowRegistrationModal(true);
+                }}
+                className="w-full py-3 px-3.5 bg-white/15 hover:bg-white/25 text-white border border-white/25 rounded-xl font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer"
+              >
+                <UserCheck size={14} />
+                <span>Solicitar Alta Usuario</span>
+              </button>
+            </div>
+
+            <p className="text-[10px] text-emerald-200/80 leading-tight pt-1 border-t border-white/10 flex items-center gap-1.5">
+              <ShieldCheck size={13} className="text-[#DDDB00] flex-shrink-0" />
+              <span>
+                Alta autogestiva sujeta a aprobación de los Administradores como <strong>Productor</strong> o <strong>Visitante</strong>.
+              </span>
+            </p>
+          </div>
+
           {/* DESCARGA E INSTALACIÓN DE APP ANDROID Y WINDOWS ESCRITORIO */}
           <PWAInstallButton variant="login" />
 
-          {/* AVISO INSTITUCIONAL DE REGISTRO CERRADO */}
-          <div className="bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 text-[11px] text-slate-500 dark:text-slate-400 flex items-start gap-3">
-            <ShieldCheck size={18} className="text-[#006633] dark:text-emerald-400 mt-0.5 flex-shrink-0" />
-            <div>
-              <p className="font-bold text-slate-700 dark:text-slate-300 uppercase text-[10px] tracking-wider mb-0.5">
-                Plataforma de Acceso Cerrado (Sin Auto-Registro)
-              </p>
-              <p className="leading-relaxed">
-                Por normativas de trazabilidad legal de cáñamo industrial (ARICCAME / INASE), <strong>los usuarios no pueden registrarse por su cuenta</strong>. Todas las cuentas son dadas de alta exclusivamente por la administración cooperativa.
-              </p>
-            </div>
-          </div>
-
           {/* Estado del Sistema */}
-          <div className="pt-4 text-center space-y-3">
+          <div className="pt-2 text-center space-y-3">
             <div className={`inline-flex items-center px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all ${
               connectionStatus === "connected" ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800" :
               "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800"
@@ -370,11 +450,21 @@ export default function Login() {
 
             <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">
               {/* @ts-ignore */}
-              &copy; 2026 HempC Nucleus {typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'V7.30.0-STABLE'} | Red de Cáñamo Industrial Argentina
+              &copy; 2026 HempC Nucleus {typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'V7.35.0-STABLE'} | Red de Cáñamo Industrial Argentina
             </p>
           </div>
         </div>
       </div>
+
+      {/* MODAL DE INSCRIPCIÓN A "UN DÍA DE SIEMBRA" (21/11) & ALTA AUTOGESTIVA */}
+      <EventAndSelfRegistrationModal
+        isOpen={showRegistrationModal}
+        initialMode={registrationModalMode}
+        onClose={() => setShowRegistrationModal(false)}
+        usersList={usersList}
+        addUser={addUser}
+        updateUser={updateUser}
+      />
 
       {/* MODAL DE RECUPERACIÓN DE CONTRASEÑA */}
       {showForgotModal && (

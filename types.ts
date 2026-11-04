@@ -152,6 +152,19 @@ export interface User {
   dniDorsoUrl?: string;
   dniUpdatedAt?: string;
   dniVerified?: boolean;
+  // AUTOGESTIÓN DE ALTA Y ACREDITACIÓN EVENTO "UN DÍA DE SIEMBRA" (SÁB 21 NOV)
+  accountStatus?: 'active' | 'pending_approval' | 'rejected';
+  registrationSource?: 'admin_created' | 'self_service_platform' | 'event_un_dia_de_siembra';
+  requestedProfileType?: 'productor' | 'visitante' | 'tecnico_institucion' | 'inversor_cadena';
+  eventRegistered?: boolean;
+  eventName?: string;
+  eventTicketCode?: string;
+  eventConfirmedByEmail?: boolean;
+  eventProgramDownloaded?: boolean;
+  localityOrProvince?: string;
+  estimatedHectares?: number;
+  approvedBy?: string;
+  approvedAt?: string;
 }
 
 export type HempLicenseCategory = 

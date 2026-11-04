@@ -287,8 +287,50 @@ const unmarkIdDeleted = (table: string, id: string) => {
 
 
 export const AppProvider = ({ children }: { children?: ReactNode }) => {
+    const USER_META_MARKER_START = '<!--HEMPC_USER_META:';
+    const USER_META_MARKER_END = ':END_USER_META-->';
+
+    const unpackUserMetaFromJobTitle = (rawJobTitle?: string | null): { cleanJobTitle: string; parsedMeta: Partial<User> } => {
+        const str = String(rawJobTitle || '');
+        const sIdx = str.indexOf(USER_META_MARKER_START);
+        const eIdx = str.indexOf(USER_META_MARKER_END);
+        if (sIdx !== -1 && eIdx !== -1 && eIdx > sIdx) {
+            const cleanJobTitle = str.slice(0, sIdx).trim();
+            const jsonPart = str.slice(sIdx + USER_META_MARKER_START.length, eIdx);
+            try {
+                const parsed = JSON.parse(jsonPart);
+                if (parsed && typeof parsed === 'object') {
+                    return { cleanJobTitle, parsedMeta: parsed };
+                }
+            } catch {}
+            return { cleanJobTitle, parsedMeta: {} };
+        }
+        return { cleanJobTitle: str, parsedMeta: {} };
+    };
+
+    const packUserMetaIntoJobTitle = (u: User): string => {
+        const { cleanJobTitle } = unpackUserMetaFromJobTitle(u.jobTitle);
+        const meta: Partial<User> = {};
+        if (u.accountStatus && u.accountStatus !== 'active') meta.accountStatus = u.accountStatus;
+        if (u.registrationSource) meta.registrationSource = u.registrationSource;
+        if (u.requestedProfileType) meta.requestedProfileType = u.requestedProfileType;
+        if (u.eventRegistered) meta.eventRegistered = u.eventRegistered;
+        if (u.eventName) meta.eventName = u.eventName;
+        if (u.eventTicketCode) meta.eventTicketCode = u.eventTicketCode;
+        if (u.eventConfirmedByEmail !== undefined) meta.eventConfirmedByEmail = u.eventConfirmedByEmail;
+        if (u.eventProgramDownloaded !== undefined) meta.eventProgramDownloaded = u.eventProgramDownloaded;
+        if (u.localityOrProvince) meta.localityOrProvince = u.localityOrProvince;
+        if (u.estimatedHectares !== undefined) meta.estimatedHectares = u.estimatedHectares;
+        if (u.organizationName) meta.organizationName = u.organizationName;
+        if (u.approvedBy) meta.approvedBy = u.approvedBy;
+        if (u.approvedAt) meta.approvedAt = u.approvedAt;
+        if (Object.keys(meta).length === 0) return cleanJobTitle;
+        return `${cleanJobTitle} ${USER_META_MARKER_START}${JSON.stringify(meta)}${USER_META_MARKER_END}`.trim();
+    };
+
     const healSingleUser = (u: User): User => {
         if (!u) return u;
+        const { cleanJobTitle, parsedMeta } = unpackUserMetaFromJobTitle(u.jobTitle);
         let savedUserMeta: Partial<User> = {};
         if (typeof window !== 'undefined') {
             try {
@@ -305,24 +347,37 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         const demoById = DEMO_USERS_LIST.find(d => String(d.id) === String(u.id));
         const demoByEmail = u.email ? DEMO_USERS_LIST.find(d => d.email?.toLowerCase() === u.email.toLowerCase()) : undefined;
         const demoMatch = demoById || demoByEmail;
-        if (!demoMatch && Object.keys(savedUserMeta).length === 0) return u;
+        const mergedMeta = { ...parsedMeta, ...savedUserMeta };
         return {
             ...(demoMatch || {}),
-            ...savedUserMeta,
+            ...mergedMeta,
             ...u,
-            role: u.role || savedUserMeta.role || demoMatch?.role || 'viewer',
-            structureRole: u.structureRole || savedUserMeta.structureRole || demoMatch?.structureRole,
-            supplierId: u.supplierId !== undefined ? u.supplierId : (savedUserMeta.supplierId !== undefined ? savedUserMeta.supplierId : demoMatch?.supplierId),
-            supplierActorRole: u.supplierActorRole || savedUserMeta.supplierActorRole || demoMatch?.supplierActorRole,
-            memberType: u.memberType || savedUserMeta.memberType || demoMatch?.memberType,
-            organizationName: u.organizationName || savedUserMeta.organizationName || demoMatch?.organizationName,
-            clientId: u.clientId !== undefined ? u.clientId : (savedUserMeta.clientId !== undefined ? savedUserMeta.clientId : demoMatch?.clientId),
-            isNetworkMember: u.isNetworkMember !== undefined ? u.isNetworkMember : (savedUserMeta.isNetworkMember ?? demoMatch?.isNetworkMember ?? false),
-            dniNumber: u.dniNumber || savedUserMeta.dniNumber,
-            dniFrenteUrl: u.dniFrenteUrl !== undefined ? u.dniFrenteUrl : savedUserMeta.dniFrenteUrl,
-            dniDorsoUrl: u.dniDorsoUrl !== undefined ? u.dniDorsoUrl : savedUserMeta.dniDorsoUrl,
-            dniUpdatedAt: u.dniUpdatedAt || savedUserMeta.dniUpdatedAt,
-            dniVerified: u.dniVerified !== undefined ? u.dniVerified : savedUserMeta.dniVerified
+            jobTitle: cleanJobTitle || mergedMeta.jobTitle || demoMatch?.jobTitle,
+            role: u.role || mergedMeta.role || demoMatch?.role || 'viewer',
+            structureRole: u.structureRole || mergedMeta.structureRole || demoMatch?.structureRole,
+            supplierId: u.supplierId !== undefined ? u.supplierId : (mergedMeta.supplierId !== undefined ? mergedMeta.supplierId : demoMatch?.supplierId),
+            supplierActorRole: u.supplierActorRole || mergedMeta.supplierActorRole || demoMatch?.supplierActorRole,
+            memberType: u.memberType || mergedMeta.memberType || demoMatch?.memberType,
+            organizationName: u.organizationName || mergedMeta.organizationName || demoMatch?.organizationName,
+            clientId: u.clientId !== undefined ? u.clientId : (mergedMeta.clientId !== undefined ? mergedMeta.clientId : demoMatch?.clientId),
+            isNetworkMember: u.isNetworkMember !== undefined ? u.isNetworkMember : (mergedMeta.isNetworkMember ?? demoMatch?.isNetworkMember ?? false),
+            dniNumber: u.dniNumber || mergedMeta.dniNumber,
+            dniFrenteUrl: u.dniFrenteUrl !== undefined ? u.dniFrenteUrl : mergedMeta.dniFrenteUrl,
+            dniDorsoUrl: u.dniDorsoUrl !== undefined ? u.dniDorsoUrl : mergedMeta.dniDorsoUrl,
+            dniUpdatedAt: u.dniUpdatedAt || mergedMeta.dniUpdatedAt,
+            dniVerified: u.dniVerified !== undefined ? u.dniVerified : mergedMeta.dniVerified,
+            accountStatus: u.accountStatus || mergedMeta.accountStatus || 'active',
+            registrationSource: u.registrationSource || mergedMeta.registrationSource,
+            requestedProfileType: u.requestedProfileType || mergedMeta.requestedProfileType,
+            eventRegistered: u.eventRegistered !== undefined ? u.eventRegistered : mergedMeta.eventRegistered,
+            eventName: u.eventName || mergedMeta.eventName,
+            eventTicketCode: u.eventTicketCode || mergedMeta.eventTicketCode,
+            eventConfirmedByEmail: u.eventConfirmedByEmail !== undefined ? u.eventConfirmedByEmail : mergedMeta.eventConfirmedByEmail,
+            eventProgramDownloaded: u.eventProgramDownloaded !== undefined ? u.eventProgramDownloaded : mergedMeta.eventProgramDownloaded,
+            localityOrProvince: u.localityOrProvince || mergedMeta.localityOrProvince,
+            estimatedHectares: u.estimatedHectares !== undefined ? u.estimatedHectares : mergedMeta.estimatedHectares,
+            approvedBy: u.approvedBy || mergedMeta.approvedBy,
+            approvedAt: u.approvedAt || mergedMeta.approvedAt
         };
     };
 
@@ -1926,6 +1981,9 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
                     if (isPasswordValid) {
                         const mappedUser = healSingleUser(toCamelCase(data) as User);
+                        if (mappedUser.accountStatus === 'pending_approval' || mappedUser.accountStatus === 'rejected') {
+                            return false;
+                        }
                         setImpersonatingAdmin(null);
                         try { sessionStorage.removeItem('ht_impersonating_admin'); } catch {}
                         setCurrentUser(mappedUser); 
@@ -1957,6 +2015,9 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
             if (matchesPassword) {
                 const healedLocal = healSingleUser(localUser);
+                if (healedLocal.accountStatus === 'pending_approval' || healedLocal.accountStatus === 'rejected') {
+                    return false;
+                }
                 setImpersonatingAdmin(null);
                 try { sessionStorage.removeItem('ht_impersonating_admin'); } catch {}
                 setCurrentUser(healedLocal);
@@ -2628,6 +2689,8 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                     delete cleanItem._localUpdatedAt;
                     if (table === 'clients') {
                         cleanItem.notes = packClientContractsIntoNotes(cleanItem.notes, cleanItem.contractDocuments);
+                    } else if (table === 'users') {
+                        cleanItem.jobTitle = packUserMetaIntoJobTitle(cleanItem as User);
                     } else if (table === 'suppliers') {
                         cleanItem.notes = packSupplierMetaIntoNotes(cleanItem);
                     } else if (table === 'seed_batches') {

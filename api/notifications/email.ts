@@ -2,7 +2,14 @@ interface EmailNotificationPayload {
   to_email: string;
   to_name: string;
   subject?: string;
-  notification_type?: 'operator_invitation' | 'agronomic_alert' | 'labor_assigned' | 'password_reset' | 'user_welcome';
+  notification_type?:
+    | 'operator_invitation'
+    | 'agronomic_alert'
+    | 'labor_assigned'
+    | 'password_reset'
+    | 'user_welcome'
+    | 'event_registration'
+    | 'registration_approved';
   structure_name?: string;
   field_name?: string;
   role_name?: string;
@@ -316,6 +323,148 @@ function buildLaborAssignedHtml(req: EmailNotificationPayload): string {
   </html>`;
 }
 
+function buildEventRegistrationHtml(req: EmailNotificationPayload): string {
+  const extra = req.extra_data || {};
+  const eventName = extra.event_name || 'Un Día de Siembra • Jornada Oficial de Inicio de Campaña';
+  const eventDate = extra.event_date || 'Sábado 21 de Noviembre de 2026';
+  const ticketCode = extra.ticket_code || 'SIEMBRA-21N-0001';
+  const verificationPin = extra.verification_pin || '';
+  const profileLabel = req.role_name || 'Acreditado / Participante';
+  const organization = req.structure_name || 'Participante Independiente';
+  const locality = extra.locality || 'Patagonia / Argentina';
+  const programUrl = req.action_url || 'https://red.hempc.com.ar/#/login?evento=un-dia-de-siembra';
+
+  const pinBlock = verificationPin
+    ? `
+      <div style="background: #f0fdf4; border: 2px dashed #059669; border-radius: 16px; padding: 16px; text-align: center; margin: 18px 0;">
+        <span style="font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 1.5px; color: #065f46; display: block; margin-bottom: 4px;">
+          Código de Confirmación para Descarga del Programa Oficial
+        </span>
+        <span style="font-family: monospace; font-size: 24px; font-weight: 900; letter-spacing: 4px; color: #047857;">${verificationPin}</span>
+      </div>
+    `
+    : '';
+
+  return `
+  <!DOCTYPE html>
+  <html>
+  <head>
+    <meta charset="utf-8">
+    <style>
+      body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 24px; }
+      .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 24px; border: 1px solid #d1fae5; overflow: hidden; box-shadow: 0 8px 30px rgba(0,0,0,0.06); }
+      .header { background: linear-gradient(135deg, #022c22 0%, #064e3b 100%); padding: 30px 32px; color: #ffffff; border-bottom: 4px solid #DDDB00; }
+      .content { padding: 32px; color: #334155; line-height: 1.6; }
+      .badge { display: inline-block; background: #ecfdf5; color: #047857; border: 1px solid #6ee7b7; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 800; text-transform: uppercase; }
+      .btn { display: inline-block; background: #006633; color: #ffffff !important; padding: 14px 28px; border-radius: 14px; font-weight: 900; text-decoration: none; font-size: 13px; text-transform: uppercase; letter-spacing: 0.8px; }
+      .schedule-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px; padding: 18px; margin: 20px 0; font-size: 12px; }
+      .footer { background: #f8fafc; padding: 20px 32px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #94a3b8; text-align: center; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <div style="font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #DDDB00; font-weight: 900; margin-bottom: 4px;">
+          Acreditación Oficial & Alta Autogestiva • Sábado 21 de Noviembre
+        </div>
+        <h1 style="margin: 4px 0 4px 0; font-size: 24px; font-weight: 900; letter-spacing: -0.5px;">🌱 ${eventName}</h1>
+        <div style="font-size: 12px; color: #a7f3d0; font-weight: 700;">PatagonianC LTDA Cooperativa de Trabajo · HempC Nucleus</div>
+      </div>
+      <div class="content">
+        <p style="font-size: 15px; color: #0f172a; margin-top: 0;">Hola <strong>${req.to_name}</strong>,</p>
+        <p style="font-size: 13px; color: #475569;">
+          ¡Confirmamos la recepción de tu pre-inscripción al evento <strong>"${eventName}"</strong> (${eventDate}) y tu solicitud de alta en la plataforma <strong>HempC Nucleus</strong>!
+        </p>
+
+        <div style="background: #064e3b; color: #ffffff; border-radius: 16px; padding: 18px 22px; margin: 20px 0;">
+          <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: #6ee7b7; font-weight: 800;">Pase Oficial de Acreditación</div>
+          <div style="font-size: 20px; font-weight: 900; font-family: monospace; letter-spacing: 1.5px; color: #DDDB00; margin: 4px 0;">${ticketCode}</div>
+          <div style="font-size: 12px; color: #ecfdf5; margin-top: 6px;">
+            <strong>Perfil Solicitado:</strong> ${profileLabel} • <strong>Entidad:</strong> ${organization} (${locality})
+          </div>
+        </div>
+
+        ${pinBlock}
+
+        <div class="schedule-box">
+          <div style="font-size: 11px; font-weight: 900; text-transform: uppercase; color: #064e3b; letter-spacing: 1px; margin-bottom: 10px;">
+            📋 Resumen del Programa Oficial — Sábado 21 de Noviembre
+          </div>
+          <p style="margin: 0 0 6px 0;"><strong>08:30 hs:</strong> Acreditación digital QR, recepción institucional y bienvenida cooperativa.</p>
+          <p style="margin: 0 0 6px 0;"><strong>09:30 hs:</strong> Apertura Técnica: Marco Regulatorio ARICCAME / INASE y Trazabilidad Satelital Agro 4.0.</p>
+          <p style="margin: 0 0 6px 0;"><strong>11:00 hs:</strong> Demostración en Campo: Calibración de Sembradora, Densidad y Apertura Oficial de Surco.</p>
+          <p style="margin: 0 0 6px 0;"><strong>13:00 hs:</strong> Almuerzo de Camaradería y Rueda de Vinculación de Productores e Inversores.</p>
+          <p style="margin: 0;"><strong>15:00 hs:</strong> Bloque Captura Neta de CO₂ (Protocolo MRV), Bioconstrucción (Hempcrete) y Cierre.</p>
+        </div>
+
+        <p style="font-size: 12px; color: #64748b; background: #fffbeb; border-left: 4px solid #f59e0b; padding: 10px 14px; border-radius: 8px;">
+          <strong>Estado de tu cuenta en la plataforma:</strong> Tu perfil quedó registrado en estado <em>Pendiente de Aprobación Administrativa</em>. Un administrador de HempC validará tu solicitud para otorgarte acceso como <strong>Productor Asociado</strong> o <strong>Visitante Acreditado</strong>.
+        </p>
+
+        <div style="text-align: center; margin: 26px 0 12px 0;">
+          <a href="${programUrl}" class="btn">Confirmar Correo y Descargar Programa PDF</a>
+        </div>
+      </div>
+      <div class="footer">
+        <div style="margin-bottom: 6px; font-weight: 800; color: #334155; font-size: 12px;">PatagonianC LTDA Cooperativa de Trabajo · CUIT: 30-71816113-0 · HempC (Unidad de Negocios)</div>
+        <div style="font-size: 11px; color: #64748b;">Enviado por <strong>notificaciones@hempc.com.ar</strong> (Vercel + Resend HTTPS)</div>
+      </div>
+    </div>
+  </body>
+  </html>`;
+}
+
+function buildRegistrationApprovedHtml(req: EmailNotificationPayload): string {
+  const roleLabel = req.role_name || 'Visitante Acreditado';
+  const structure = req.structure_name || 'Red Cooperativa HempC';
+  const actionUrl = req.action_url || 'https://red.hempc.com.ar/#/login';
+  const extra = req.extra_data || {};
+  const ticketCode = extra.ticket_code || '';
+
+  return `
+  <!DOCTYPE html>
+  <html>
+  <head>
+    <meta charset="utf-8">
+    <style>
+      body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 24px; }
+      .container { max-width: 580px; margin: 0 auto; background: #ffffff; border-radius: 24px; border: 1px solid #d1fae5; overflow: hidden; }
+      .header { background: #064e3b; padding: 28px 32px; color: #ffffff; border-bottom: 4px solid #10b981; }
+      .content { padding: 32px; color: #334155; line-height: 1.6; }
+      .badge { display: inline-block; background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 800; text-transform: uppercase; }
+      .btn { display: inline-block; background: #006633; color: #ffffff !important; padding: 14px 30px; border-radius: 14px; font-weight: 800; text-decoration: none; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; }
+      .footer { background: #f8fafc; padding: 20px 32px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #94a3b8; text-align: center; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <div style="font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: #a7f3d0; font-weight: 800; margin-bottom: 2px;">PatagonianC LTDA Cooperativa de Trabajo</div>
+        <h1 style="margin: 6px 0 0 0; font-size: 22px; font-weight: 900;">✅ Solicitud de Alta Aprobada</h1>
+      </div>
+      <div class="content">
+        <p style="font-size: 15px; color: #0f172a;">Hola <strong>${req.to_name}</strong>,</p>
+        <p>La Administración Central de <strong>HempC Nucleus</strong> ha aprobado tu solicitud de ingreso a la plataforma.</p>
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px; padding: 18px; margin: 20px 0;">
+          <p style="margin: 0 0 8px 0; font-size: 13px;"><strong>Perfil Habilitado:</strong> <span class="badge">${roleLabel}</span></p>
+          <p style="margin: 0 0 8px 0; font-size: 13px;"><strong>Organización / Establecimiento:</strong> ${structure}</p>
+          <p style="margin: 0; font-size: 13px;"><strong>Usuario de Acceso:</strong> <code style="font-family: monospace;">${req.to_email}</code></p>
+          ${ticketCode ? `<p style="margin: 8px 0 0 0; font-size: 12px; color: #047857;"><strong>Credencial Evento 21/11:</strong> ${ticketCode} (Confirmada)</p>` : ''}
+        </div>
+        <p>Ya podés iniciar sesión con tu correo electrónico y la contraseña que configuraste al registrarte:</p>
+        <div style="text-align: center; margin: 26px 0 10px 0;">
+          <a href="${actionUrl}" class="btn">Ingresar a HempC Nucleus</a>
+        </div>
+      </div>
+      <div class="footer">
+        <div style="margin-bottom: 6px; font-weight: 800; color: #334155; font-size: 12px;">PatagonianC LTDA Cooperativa de Trabajo · CUIT: 30-71816113-0 · HempC (Unidad de Negocios)</div>
+        <div style="font-size: 11px; color: #64748b;">Enviado por <strong>notificaciones@hempc.com.ar</strong> (Vercel + Resend HTTPS)</div>
+      </div>
+    </div>
+  </body>
+  </html>`;
+}
+
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -352,6 +501,10 @@ export default async function handler(req: any, res: any) {
   if (!subject) {
     if (body.notification_type === 'password_reset') {
       subject = '🔐 Restablecimiento de Contraseña • HempC Nucleus';
+    } else if (body.notification_type === 'event_registration') {
+      subject = '🌱 Confirmación de Inscripción: "Un Día de Siembra" (Sáb. 21 Nov) & Programa Oficial • HempC';
+    } else if (body.notification_type === 'registration_approved') {
+      subject = `✅ Cuenta Aprobada (${body.role_name || 'Miembro'}) • HempC Nucleus`;
     } else if (body.notification_type === 'user_welcome') {
       subject = `🌿 Alta de Perfil y Credenciales • ${body.structure_name || 'HempC Nucleus'}`;
     } else if (body.notification_type === 'operator_invitation') {
@@ -368,6 +521,10 @@ export default async function handler(req: any, res: any) {
   let htmlBody = '';
   if (body.notification_type === 'password_reset') {
     htmlBody = buildPasswordResetHtml(body);
+  } else if (body.notification_type === 'event_registration') {
+    htmlBody = buildEventRegistrationHtml(body);
+  } else if (body.notification_type === 'registration_approved') {
+    htmlBody = buildRegistrationApprovedHtml(body);
   } else if (body.notification_type === 'user_welcome') {
     htmlBody = buildUserWelcomeHtml(body);
   } else if (body.notification_type === 'agronomic_alert') {
