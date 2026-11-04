@@ -241,7 +241,7 @@ const isPurgedDemoItem = (item: any): boolean => {
         id.startsWith('exp-demo-') ||
         id.startsWith('exp-coop-central-') ||
         id.startsWith('demo-alert-') ||
-        id.startsWith('senasa-res-') ||
+        id.startsWith('senasa-res-0') ||
         id.startsWith('app-2026-00') ||
         id.startsWith('labor-pergamino-') ||
         id.startsWith('labor-cordoba-') ||
@@ -1548,6 +1548,8 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             if (rawMeta) metaById = JSON.parse(rawMeta) || {};
         } catch {}
 
+        const defaultActiveSup = DEMO_SUPPLIERS[0] || { id: '3bfc9bcd-4ab1-4149-b46a-1a5d1e3392cd', name: 'HEMPIT France' };
+
         const healed: Resource[] = (resList || [])
             .filter(r => !deletedSet.has(String(r.id)) && !isPurgedDemoItem(r))
             .map((r: Resource) => {
@@ -1565,8 +1567,8 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                     dosageUnit: r.dosageUnit || savedMeta.dosageUnit || demoMatch?.dosageUnit || (base.unit === 'kg' ? 'kg/ha' : 'L/ha'),
                     safetyPeriodDays: r.safetyPeriodDays ?? savedMeta.safetyPeriodDays ?? demoMatch?.safetyPeriodDays ?? 0,
                     applicationMethod: r.applicationMethod || savedMeta.applicationMethod || demoMatch?.applicationMethod || 'Fertirriego',
-                    supplierId: r.supplierId || savedMeta.supplierId || demoMatch?.supplierId || 'sup-biofabrica-patagonia-01',
-                    supplierName: r.supplierName || savedMeta.supplierName || demoMatch?.supplierName || 'BioFábrica & Insumos Agrícolas Red HempC',
+                    supplierId: r.supplierId || savedMeta.supplierId || demoMatch?.supplierId || defaultActiveSup.id,
+                    supplierName: r.supplierName || savedMeta.supplierName || demoMatch?.supplierName || defaultActiveSup.name,
                     manufacturer: r.manufacturer || savedMeta.manufacturer || demoMatch?.manufacturer || 'Laboratorio Homologado GACP',
                     batchNumber: r.batchNumber || savedMeta.batchNumber || demoMatch?.batchNumber || 'LOT-SENASA-2026',
                     targetPestOrDisease: r.targetPestOrDisease || savedMeta.targetPestOrDisease || demoMatch?.targetPestOrDisease,
@@ -1586,7 +1588,96 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         return healed;
     };
 
-    const healAgrochemicalApplications = (appList: AgrochemicalApplication[]): AgrochemicalApplication[] => {
+    const TASK_META_MARKER_START = '<!--HEMPC_TASK_META:';
+    const TASK_META_MARKER_END = ':END_TASK_META-->';
+
+    const unpackTaskMetaFromDescription = (rawDesc?: string | null): { cleanDescription: string; parsedMeta: Partial<Task> } => {
+        const str = String(rawDesc || '');
+        const sIdx = str.indexOf(TASK_META_MARKER_START);
+        const eIdx = str.indexOf(TASK_META_MARKER_END);
+        if (sIdx !== -1 && eIdx !== -1 && eIdx > sIdx) {
+            const cleanDescription = str.slice(0, sIdx).trim();
+            const jsonPart = str.slice(sIdx + TASK_META_MARKER_START.length, eIdx);
+            try {
+                const parsed = JSON.parse(jsonPart);
+                if (parsed && typeof parsed === 'object') {
+                    return { cleanDescription, parsedMeta: parsed };
+                }
+            } catch {}
+            return { cleanDescription, parsedMeta: {} };
+        }
+        return { cleanDescription: str, parsedMeta: {} };
+    };
+
+    const packTaskMetaIntoDescription = (t: Task): string => {
+        const { cleanDescription } = unpackTaskMetaFromDescription(t.description);
+        const meta: Partial<Task> = {};
+        if (t.laborType) meta.laborType = t.laborType;
+        if (t.targetStage) meta.targetStage = t.targetStage;
+        if (t.advancesPhenologicalStage !== undefined) meta.advancesPhenologicalStage = t.advancesPhenologicalStage;
+        if (t.newPhenologicalStage) meta.newPhenologicalStage = t.newPhenologicalStage;
+        if (t.machinery) meta.machinery = t.machinery;
+        if (t.operator) meta.operator = t.operator;
+        if (t.weather) meta.weather = t.weather;
+        if (t.appliedInputs && t.appliedInputs.length > 0) meta.appliedInputs = t.appliedInputs;
+        if (t.directCostUsd !== undefined) meta.directCostUsd = t.directCostUsd;
+        if (t.syncWithPhytosanitary !== undefined) meta.syncWithPhytosanitary = t.syncWithPhytosanitary;
+        if (t.syncWithExpenses !== undefined) meta.syncWithExpenses = t.syncWithExpenses;
+        if (t.linkedAgroAppId) meta.linkedAgroAppId = t.linkedAgroAppId;
+        if (t.executionDate) meta.executionDate = t.executionDate;
+        if (t.notes) meta.notes = t.notes;
+        if (t.homologatedBy) meta.homologatedBy = t.homologatedBy;
+        if (t.homologatedAt) meta.homologatedAt = t.homologatedAt;
+        if (t.homologationNotes) meta.homologationNotes = t.homologationNotes;
+        if (Object.keys(meta).length === 0) return cleanDescription;
+        return `${cleanDescription} ${TASK_META_MARKER_START}${JSON.stringify(meta)}${TASK_META_MARKER_END}`;
+    };
+
+    const healTasks = (taskList: Task[]): Task[] => {
+        const deletedMap = getDeletedIdsMap();
+        const deletedSet = new Set(deletedMap['tasks'] || []);
+        let savedTaskMeta: Record<string, Partial<Task>> = {};
+        try {
+            const rawMeta = typeof window !== 'undefined' ? localStorage.getItem('ht_tasks_meta_v1') : null;
+            if (rawMeta) savedTaskMeta = JSON.parse(rawMeta) || {};
+        } catch {}
+
+        return (taskList || [])
+            .filter(t => t && t.id && !deletedSet.has(String(t.id)) && !isPurgedDemoItem(t))
+            .map((t: Task) => {
+                const { cleanDescription, parsedMeta } = unpackTaskMetaFromDescription(t.description);
+                const localMeta = savedTaskMeta[String(t.id)] || {};
+                return {
+                    ...localMeta,
+                    ...parsedMeta,
+                    ...t,
+                    description: cleanDescription,
+                    laborType: t.laborType || parsedMeta.laborType || localMeta.laborType,
+                    targetStage: t.targetStage || parsedMeta.targetStage || localMeta.targetStage,
+                    advancesPhenologicalStage: t.advancesPhenologicalStage ?? parsedMeta.advancesPhenologicalStage ?? localMeta.advancesPhenologicalStage,
+                    newPhenologicalStage: t.newPhenologicalStage || parsedMeta.newPhenologicalStage || localMeta.newPhenologicalStage,
+                    machinery: t.machinery || parsedMeta.machinery || localMeta.machinery,
+                    operator: t.operator || parsedMeta.operator || localMeta.operator,
+                    weather: t.weather || parsedMeta.weather || localMeta.weather,
+                    appliedInputs: (t.appliedInputs && t.appliedInputs.length > 0)
+                        ? t.appliedInputs
+                        : (parsedMeta.appliedInputs && parsedMeta.appliedInputs.length > 0)
+                        ? parsedMeta.appliedInputs
+                        : localMeta.appliedInputs,
+                    directCostUsd: t.directCostUsd ?? parsedMeta.directCostUsd ?? localMeta.directCostUsd,
+                    syncWithPhytosanitary: t.syncWithPhytosanitary ?? parsedMeta.syncWithPhytosanitary ?? localMeta.syncWithPhytosanitary,
+                    syncWithExpenses: t.syncWithExpenses ?? parsedMeta.syncWithExpenses ?? localMeta.syncWithExpenses,
+                    linkedAgroAppId: t.linkedAgroAppId || parsedMeta.linkedAgroAppId || localMeta.linkedAgroAppId,
+                    executionDate: t.executionDate || parsedMeta.executionDate || localMeta.executionDate,
+                    notes: t.notes || parsedMeta.notes || localMeta.notes,
+                    homologatedBy: t.homologatedBy || parsedMeta.homologatedBy || localMeta.homologatedBy,
+                    homologatedAt: t.homologatedAt || parsedMeta.homologatedAt || localMeta.homologatedAt,
+                    homologationNotes: t.homologationNotes || parsedMeta.homologationNotes || localMeta.homologationNotes
+                };
+            });
+    };
+
+    const healAgrochemicalApplications = (appList: AgrochemicalApplication[], currentTasksList?: Task[], currentPlotsList?: Plot[], currentResourcesList?: Resource[]): AgrochemicalApplication[] => {
         const deletedMap = getDeletedIdsMap();
         const deletedSet = new Set(deletedMap['agrochemical_apps'] || []);
         const demoById = new Map(DEMO_AGROCHEMICAL_APPLICATIONS.map(a => [String(a.id), a]));
@@ -1600,6 +1691,71 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                     ...a
                 };
             });
+
+        // Reconstruir automáticamente entradas del Cuaderno Fitosanitario a partir de Labores de Campo ejecutadas/homologadas con insumos fitosanitarios
+        const sourceTasks = currentTasksList || [];
+        const sourcePlots = currentPlotsList || DEMO_PLOTS;
+        const sourceResources = currentResourcesList || [];
+
+        sourceTasks.forEach(t => {
+            const isPhytoLabor = t.syncWithPhytosanitary || t.laborType === 'FITOSANITARIO' || t.laborType === 'FERTIRRIEGO';
+            const isExecuted = t.status === 'Ejecutada' || t.status === 'Homologada' || t.status === 'Completada';
+            if (isPhytoLabor && isExecuted && t.plotId && t.appliedInputs && t.appliedInputs.length > 0) {
+                t.appliedInputs.forEach((input, idx) => {
+                    const agroAppId = idx === 0 && t.linkedAgroAppId ? t.linkedAgroAppId : `agro-task-${t.id}${idx > 0 ? `-${idx}` : ''}`;
+                    if (deletedSet.has(agroAppId)) return;
+                    if (healed.some(a => a.id === agroAppId || (a.linkedTaskId === t.id && a.productName.toLowerCase() === input.name.toLowerCase()))) {
+                        return;
+                    }
+                    const targetPlot = sourcePlots.find(p => String(p.id) === String(t.plotId));
+                    const matchedRes = sourceResources.find(
+                        r => (input.resourceId && String(r.id) === String(input.resourceId)) || r.name.trim().toLowerCase() === input.name.trim().toLowerCase()
+                    );
+                    const appDate = t.executionDate || t.dueDate || new Date().toISOString().split('T')[0];
+                    const safetyDays = Number(input.safetyPeriodDays ?? matchedRes?.safetyPeriodDays ?? 0);
+                    const harvestSafetyDate = new Date(new Date(`${appDate}T12:00:00`).getTime() + safetyDays * 86400000).toISOString().split('T')[0];
+
+                    healed.unshift({
+                        id: agroAppId,
+                        plotId: t.plotId!,
+                        plotName: targetPlot?.name || 'Unidad de Producción',
+                        date: appDate,
+                        time: '09:00',
+                        category: input.category || matchedRes?.agroCategory || (t.laborType === 'FERTIRRIEGO' ? 'Fertilizante Foliar' : 'Bioestimulante'),
+                        resourceId: input.resourceId || matchedRes?.id,
+                        productName: input.name,
+                        activeIngredient: input.activeIngredient || matchedRes?.activeIngredient || 'Insumo Agrícola Homologado GACP',
+                        manufacturer: input.manufacturer || matchedRes?.manufacturer || 'Laboratorio Homologado GACP',
+                        supplierId: input.supplierId || matchedRes?.supplierId,
+                        supplierName: input.supplierName || matchedRes?.supplierName || 'Proveedor Homologado Red HempC',
+                        senasaRegisterNumber: input.senasaRegisterNumber || matchedRes?.senasaRegisterNumber || 'SENASA-OFICIAL',
+                        toxicologicalClass: input.toxicologicalClass || matchedRes?.toxicologicalClass || 'Biológico / Orgánico Certificado',
+                        dosagePerHa: Number(input.dosagePerHa || matchedRes?.recommendedDosagePerHa || 1),
+                        dosageUnit: input.dosageUnit || matchedRes?.dosageUnit || (input.unit === 'kg' ? 'kg/ha' : 'L/ha'),
+                        totalAppliedAmount: Number(input.quantity) || 1,
+                        applicationMethod: input.applicationMethod || matchedRes?.applicationMethod || (t.laborType === 'FERTIRRIEGO' ? 'Fertirriego' : 'Pulverización Terrestre'),
+                        batchNumber: input.batchNumber || matchedRes?.batchNumber || 'LOT-SENASA-2026',
+                        expirationDate: matchedRes?.expirationDate || '2027-12-31',
+                        senasaComplianceStatus: 'Conforme SENASA (Normativa VIGENTE)',
+                        safetyPeriodDays: safetyDays,
+                        harvestSafetyDate,
+                        responsibleAgronomist: input.responsibleAgronomist || t.homologatedBy || targetPlot?.technicalResponsibleName || t.operator || 'Dirección Técnica',
+                        agronomistLicense: input.agronomistLicense || targetPlot?.technicalResponsibleMatricula || 'MP-AGRO-1492 CH',
+                        weatherCondition: {
+                            temperatureC: t.weather?.tempC ?? 22,
+                            windSpeedKmH: t.weather?.windSpeedKmh ?? 8,
+                            relativeHumidityPct: t.weather?.humidityPct ?? 60
+                        },
+                        targetPestOrDisease: input.targetPestOrDisease || matchedRes?.targetPestOrDisease,
+                        phenologicalStage: t.targetStage || targetPlot?.currentPhenologicalStage,
+                        linkedTaskId: t.id,
+                        linkedTaskTitle: t.title,
+                        notes: t.notes || t.description,
+                        status: new Date() < new Date(harvestSafetyDate) ? 'En Carencia' : 'Apto Cosecha'
+                    });
+                });
+            }
+        });
 
         DEMO_AGROCHEMICAL_APPLICATIONS.forEach(da => {
             if (!deletedSet.has(String(da.id)) && !healed.some(a => String(a.id) === String(da.id))) {
@@ -1623,7 +1779,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         healTrialRecords(getStoredCollection('ht_trial_records', DEMO_TRIALS))
     );
     const [tasks, setTasks] = useState<Task[]>(() => 
-        getStoredCollection('ht_tasks', DEMO_TASKS)
+        healTasks(getStoredCollection('ht_tasks', DEMO_TASKS))
     );
     const [projects, setProjects] = useState<Project[]>(() => 
         getStoredCollection('ht_projects', DEMO_PROJECTS)
@@ -1870,7 +2026,16 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                         setTrialRecords(healed);
                         try { localStorage.setItem('ht_trial_records', JSON.stringify(healed)); } catch (e) {}
                     }, DEMO_TRIALS),
-                    fetchTable('tasks', setTasks, DEMO_TASKS),
+                    fetchTable('tasks', (data: any[]) => {
+                        const healed = healTasks(data || []);
+                        setTasks(healed);
+                        try { localStorage.setItem('ht_tasks', JSON.stringify(healed)); } catch (e) {}
+                        setAgrochemicalApplications(prev => {
+                            const healedApps = healAgrochemicalApplications(prev, healed, plots, resources);
+                            try { localStorage.setItem('ht_agrochemical_apps', JSON.stringify(healedApps)); } catch (e) {}
+                            return healedApps;
+                        });
+                    }, DEMO_TASKS),
                     fetchTable('projects', setProjects, DEMO_PROJECTS),
                     fetchTable('clients', (data: any[]) => {
                         const healed = healClients(data || []);
@@ -1940,13 +2105,18 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                     try { localStorage.setItem('ht_plots', JSON.stringify(healed)); } catch (e) {}
                     return healed;
                 });
+                setTasks(prev => {
+                    const healed = healTasks(prev);
+                    try { localStorage.setItem('ht_tasks', JSON.stringify(healed)); } catch (e) {}
+                    return healed;
+                });
                 setResources(prev => {
                     const healed = healResources(prev);
                     try { localStorage.setItem('ht_resources', JSON.stringify(healed)); } catch (e) {}
                     return healed;
                 });
                 setAgrochemicalApplications(prev => {
-                    const healed = healAgrochemicalApplications(prev);
+                    const healed = healAgrochemicalApplications(prev, tasks, plots, resources);
                     try { localStorage.setItem('ht_agrochemical_apps', JSON.stringify(healed)); } catch (e) {}
                     return healed;
                 });
@@ -2257,8 +2427,16 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 return next;
             });
         } else if (table === 'tasks') {
+            if (action !== 'delete' && item && typeof item === 'object' && item.id) {
+                try {
+                    const rawMeta = localStorage.getItem('ht_tasks_meta_v1');
+                    const metaMap = rawMeta ? JSON.parse(rawMeta) : {};
+                    metaMap[String(item.id)] = item;
+                    localStorage.setItem('ht_tasks_meta_v1', JSON.stringify(metaMap));
+                } catch {}
+            }
             setTasks(prev => {
-                const next = updateList(prev);
+                const next = healTasks(updateList(prev));
                 try { localStorage.setItem('ht_tasks', JSON.stringify(next)); } catch (e) {}
                 return next;
             });
@@ -2546,19 +2724,143 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             await crud('operational_expenses', expensePayload, exists ? 'update' : 'insert');
         }
 
-        // 3. Sincronizar con Cuaderno Fitosanitario si aplica
-        if (task.syncWithPhytosanitary && task.plotId && task.appliedInputs && task.appliedInputs.length > 0) {
-            for (const input of task.appliedInputs) {
+        // 3. Sincronizar con Cuaderno Fitosanitario Oficial, Inventario de Insumos (descuento de stock) y Bitácora si aplica
+        const isPhytoOrFertLabor =
+            task.syncWithPhytosanitary ||
+            task.laborType === 'FITOSANITARIO' ||
+            task.laborType === 'FERTIRRIEGO';
+
+        if (isPhytoOrFertLabor && task.plotId && task.appliedInputs && task.appliedInputs.length > 0) {
+            const targetPlot = plots.find(p => p.id === task.plotId);
+            const isExecuted = task.status === 'Ejecutada' || task.status === 'Homologada' || task.status === 'Completada';
+            const appDate = task.executionDate || task.dueDate || new Date().toISOString().split('T')[0];
+
+            for (let idx = 0; idx < task.appliedInputs.length; idx++) {
+                const input = task.appliedInputs[idx];
                 const logId = `flog-${task.id}-${input.name.slice(0, 10).replace(/\s+/g, '')}`;
-                const exists = logs.some(l => l.id === logId);
-                const targetPlot = plots.find(p => p.id === task.plotId);
+                const logExists = logs.some(l => l.id === logId);
+
+                const matchedRes = resources.find(
+                    r =>
+                        (input.resourceId && String(r.id) === String(input.resourceId)) ||
+                        r.name.trim().toLowerCase() === input.name.trim().toLowerCase()
+                );
+                const matchedSupplier = suppliers.find(
+                    s => String(s.id) === String(input.supplierId || matchedRes?.supplierId || '')
+                );
+
                 const newLog: FieldLog = {
                     id: logId,
                     plotId: task.plotId,
-                    date: task.executionDate || new Date().toISOString().split('T')[0],
-                    note: `Tratamiento Fitosanitario: ${input.name} (${input.quantity} ${input.unit}) aplicado en ${targetPlot?.name || 'lote'}. Maquinaria: ${task.machinery?.tractor || 'Pulverizadora'}. Operario: ${task.operator || 'Técnico'}. Labor: ${task.title}.`
+                    date: appDate,
+                    note: `Tratamiento Fitosanitario [${input.senasaRegisterNumber || matchedRes?.senasaRegisterNumber || 'SENASA'} | Lote: ${input.batchNumber || matchedRes?.batchNumber || 'S/N'}]: ${input.name} (${input.quantity} ${input.unit}) provisto por ${input.supplierName || matchedSupplier?.name || matchedRes?.supplierName || 'Proveedor Homologado'}, aplicado en ${targetPlot?.name || 'lote'}. Clima: ${task.weather?.tempC ?? 22}°C, HR ${task.weather?.humidityPct ?? 60}%, Viento ${task.weather?.windSpeedKmh ?? 8} km/h. Maquinaria: ${task.machinery?.tractor || 'Pulverizadora'}. Operario: ${task.operator || 'Técnico'}. Labor: ${task.title}.`
                 };
-                await crud('field_logs', newLog, exists ? 'update' : 'insert');
+                await crud('field_logs', newLog, logExists ? 'update' : 'insert');
+
+                // Generar / Actualizar Folio Oficial en el Cuaderno Fitosanitario SENASA
+                const agroAppId = idx === 0 && task.linkedAgroAppId ? task.linkedAgroAppId : `agro-task-${task.id}${idx > 0 ? `-${idx}` : ''}`;
+                const existingAgroApp = agrochemicalApplications.find(
+                    a => a.id === agroAppId || (a.linkedTaskId === task.id && a.productName.trim().toLowerCase() === input.name.trim().toLowerCase())
+                );
+
+                if (isExecuted || task.syncWithPhytosanitary) {
+                    const safetyDays = Math.max(0, Number(input.safetyPeriodDays ?? matchedRes?.safetyPeriodDays ?? 0));
+                    const harvestSafetyDate = new Date(new Date(`${appDate}T12:00:00`).getTime() + safetyDays * 86400000)
+                        .toISOString()
+                        .split('T')[0];
+
+                    const agroAppPayload: AgrochemicalApplication = {
+                        id: existingAgroApp?.id || agroAppId,
+                        plotId: task.plotId,
+                        plotName: targetPlot?.name || 'Unidad de Producción',
+                        date: appDate,
+                        time: existingAgroApp?.time || '09:00',
+                        category:
+                            input.category ||
+                            matchedRes?.agroCategory ||
+                            (task.laborType === 'FERTIRRIEGO' ? 'Fertilizante Foliar' : 'Bioestimulante'),
+                        resourceId: input.resourceId || matchedRes?.id,
+                        productName: input.name.trim(),
+                        activeIngredient:
+                            input.activeIngredient ||
+                            matchedRes?.activeIngredient ||
+                            'Insumo Agrícola Homologado GACP',
+                        manufacturer:
+                            input.manufacturer ||
+                            matchedRes?.manufacturer ||
+                            'Laboratorio Homologado GACP',
+                        supplierId: input.supplierId || matchedRes?.supplierId || matchedSupplier?.id,
+                        supplierName:
+                            input.supplierName ||
+                            matchedSupplier?.name ||
+                            matchedRes?.supplierName ||
+                            'Proveedor Homologado Red HempC',
+                        senasaRegisterNumber:
+                            input.senasaRegisterNumber ||
+                            matchedRes?.senasaRegisterNumber ||
+                            'SENASA-OFICIAL',
+                        toxicologicalClass:
+                            input.toxicologicalClass ||
+                            matchedRes?.toxicologicalClass ||
+                            'Biológico / Orgánico Certificado',
+                        dosagePerHa: Number(input.dosagePerHa || matchedRes?.recommendedDosagePerHa || 1),
+                        dosageUnit:
+                            input.dosageUnit ||
+                            matchedRes?.dosageUnit ||
+                            (input.unit === 'kg' ? 'kg/ha' : 'L/ha'),
+                        totalAppliedAmount: Math.max(0.01, Number(input.quantity) || 1),
+                        applicationMethod:
+                            input.applicationMethod ||
+                            matchedRes?.applicationMethod ||
+                            (task.laborType === 'FERTIRRIEGO' ? 'Fertirriego' : 'Pulverización Terrestre'),
+                        batchNumber:
+                            input.batchNumber ||
+                            matchedRes?.batchNumber ||
+                            'LOT-SENASA-2026',
+                        expirationDate: matchedRes?.expirationDate || '2027-12-31',
+                        senasaComplianceStatus: 'Conforme SENASA (Normativa VIGENTE)',
+                        safetyPeriodDays: safetyDays,
+                        harvestSafetyDate,
+                        responsibleAgronomist:
+                            input.responsibleAgronomist ||
+                            task.homologatedBy ||
+                            targetPlot?.technicalResponsibleName ||
+                            task.operator ||
+                            currentUser?.name ||
+                            'Dirección Técnica',
+                        agronomistLicense:
+                            input.agronomistLicense ||
+                            targetPlot?.technicalResponsibleMatricula ||
+                            'MP-AGRO-1492 CH',
+                        weatherCondition: {
+                            temperatureC: Number(task.weather?.tempC ?? 22),
+                            windSpeedKmH: Number(task.weather?.windSpeedKmh ?? 8),
+                            relativeHumidityPct: Number(task.weather?.humidityPct ?? 60)
+                        },
+                        targetPestOrDisease: input.targetPestOrDisease || matchedRes?.targetPestOrDisease,
+                        phenologicalStage: task.targetStage || targetPlot?.currentPhenologicalStage,
+                        linkedTaskId: task.id,
+                        linkedTaskTitle: task.title,
+                        notes: task.notes || task.description,
+                        status: new Date() < new Date(harvestSafetyDate) ? 'En Carencia' : 'Apto Cosecha'
+                    };
+
+                    await crud('agrochemical_apps', agroAppPayload, existingAgroApp ? 'update' : 'insert');
+
+                    // Si el insumo pertenece al Inventario (resources) y es la primera vez que se asienta en el Cuaderno (al ejecutarse), descontar stock real
+                    if (!existingAgroApp && isExecuted && matchedRes) {
+                        const appliedQty = Math.max(0, Number(input.quantity) || 0);
+                        const nextStock = Math.max(0, Number(((matchedRes.stock || 0) - appliedQty).toFixed(2)));
+                        await crud(
+                            'resources',
+                            {
+                                ...matchedRes,
+                                stock: nextStock
+                            },
+                            'update'
+                        );
+                    }
+                }
             }
         }
     };
@@ -2723,6 +3025,8 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                         cleanItem.notes = packSeedBatchMetaIntoNotes(cleanItem);
                     } else if (table === 'seed_movements') {
                         cleanItem.routeGoogleLink = packSeedMovementMetaIntoLink(cleanItem);
+                    } else if (table === 'tasks') {
+                        cleanItem.description = packTaskMetaIntoDescription(cleanItem as Task);
                     }
                     const rawPayload = toSnakeCase(cleanItem);
 
@@ -3607,58 +3911,204 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             logs: scopedLogs, addLog: (l) => crud('field_logs', l, 'insert'), updateLog: (l) => crud('field_logs', l, 'update'), deleteLog: (id) => crud('field_logs', id, 'delete'),
             agrochemicalApplications: scopedAgrochemicalApplications,
             addAgrochemicalApplication: async (app) => {
-                const ok = await crud('agrochemical_apps', app, 'insert');
-                // Buscar si el producto comercial existe en el catálogo de recursos (public.resources)
+                // 1. Resolver el Insumo previamente dado de alta en Insumos e Inventario (resources) y su Proveedor (suppliers)
                 const matchedRes = resources.find(
-                    r => r.name.trim().toLowerCase() === app.productName.trim().toLowerCase()
+                    r =>
+                        (app.resourceId && String(r.id) === String(app.resourceId)) ||
+                        r.name.trim().toLowerCase() === app.productName.trim().toLowerCase()
                 );
-                if (matchedRes) {
-                    // Descontar automáticamente del stock de galpón el volumen/peso total aplicado en la parcela
-                    const appliedQty = Math.max(0, Number(app.totalAppliedAmount) || 0);
+                const matchedSup = suppliers.find(
+                    s => String(s.id) === String(app.supplierId || matchedRes?.supplierId || '')
+                );
+
+                // 2. Vincular o generar la Orden de Labor de Campo (tasks) obligatoria para que toda aplicación esté respaldada en Tareas de Campo
+                const existingLinkedTask = app.linkedTaskId
+                    ? tasks.find(t => String(t.id) === String(app.linkedTaskId))
+                    : tasks.find(
+                          t =>
+                              String(t.plotId) === String(app.plotId) &&
+                              t.linkedAgroAppId === app.id
+                      );
+
+                const resolvedTaskId = existingLinkedTask?.id || app.linkedTaskId || `labor-fit-${app.id}`;
+                const resolvedTaskTitle =
+                    existingLinkedTask?.title ||
+                    app.linkedTaskTitle ||
+                    `Aplicación ${app.category}: ${app.productName} - ${app.plotName}`;
+
+                const enrichedApp: AgrochemicalApplication = {
+                    ...app,
+                    resourceId: app.resourceId || matchedRes?.id,
+                    supplierId: app.supplierId || matchedRes?.supplierId || matchedSup?.id,
+                    supplierName: app.supplierName || matchedSup?.name || matchedRes?.supplierName || 'Proveedor Homologado Red HempC',
+                    senasaRegisterNumber: app.senasaRegisterNumber || matchedRes?.senasaRegisterNumber || 'SENASA-OFICIAL',
+                    batchNumber: app.batchNumber || matchedRes?.batchNumber || 'LOT-SENASA-2026',
+                    linkedTaskId: resolvedTaskId,
+                    linkedTaskTitle: resolvedTaskTitle
+                };
+
+                const alreadyExistedInBook = agrochemicalApplications.some(
+                    a => a.id === enrichedApp.id || (a.linkedTaskId && a.linkedTaskId === resolvedTaskId)
+                );
+
+                const ok = await crud('agrochemical_apps', enrichedApp, 'insert');
+
+                // 3. Descontar del stock real del Inventario de Insumos (resources) si no fue descontado previamente por la labor
+                if (matchedRes && !alreadyExistedInBook) {
+                    const appliedQty = Math.max(0, Number(enrichedApp.totalAppliedAmount) || 0);
                     const nextStock = Math.max(0, Number(((matchedRes.stock || 0) - appliedQty).toFixed(2)));
                     const updatedCatalogResource: Resource = {
                         ...matchedRes,
                         stock: nextStock,
-                        agroCategory: matchedRes.agroCategory || app.category,
-                        activeIngredient: app.activeIngredient || matchedRes.activeIngredient,
-                        senasaRegisterNumber: app.senasaRegisterNumber || matchedRes.senasaRegisterNumber,
-                        batchNumber: app.batchNumber || matchedRes.batchNumber,
-                        supplierName: app.supplierName || matchedRes.supplierName
+                        agroCategory: matchedRes.agroCategory || enrichedApp.category,
+                        activeIngredient: enrichedApp.activeIngredient || matchedRes.activeIngredient,
+                        senasaRegisterNumber: enrichedApp.senasaRegisterNumber || matchedRes.senasaRegisterNumber,
+                        batchNumber: enrichedApp.batchNumber || matchedRes.batchNumber,
+                        supplierId: enrichedApp.supplierId || matchedRes.supplierId,
+                        supplierName: enrichedApp.supplierName || matchedRes.supplierName
                     };
                     await crud('resources', updatedCatalogResource, 'update');
-                } else if (app.productName.trim()) {
-                    // Si es un producto comercial nuevo cargado desde Monitoreo Rápido o Cuaderno SENASA, darlo de alta en `resources`
-                    const isFert =
-                        app.category === 'Fertilizante Edáfico' ||
-                        app.category === 'Fertilizante Foliar' ||
-                        app.category === 'Mejorador de Suelo' ||
-                        app.category === 'Enmienda Orgánica';
-                    const newCatalogResource: Resource = {
-                        id: `senasa-custom-${Date.now()}`,
-                        name: app.productName.trim(),
-                        type: isFert ? 'Fertilizante' : 'Fitosanitario',
-                        agroCategory: app.category,
-                        activeIngredient: app.activeIngredient,
-                        senasaRegisterNumber: app.senasaRegisterNumber,
-                        toxicologicalClass: app.toxicologicalClass,
-                        recommendedDosagePerHa: app.dosagePerHa,
-                        dosageUnit: app.dosageUnit,
-                        safetyPeriodDays: app.safetyPeriodDays,
-                        applicationMethod: app.applicationMethod,
-                        supplierId: app.supplierId || 'sup-biofabrica-patagonia-01',
-                        supplierName: app.supplierName || 'BioFábrica & Insumos Agrícolas Red HempC',
-                        manufacturer: app.manufacturer || 'Elaborador Homologado GACP',
-                        batchNumber: app.batchNumber,
-                        targetPestOrDisease: app.targetPestOrDisease,
-                        unit: app.dosageUnit?.includes('kg') || app.dosageUnit?.includes('g') ? 'kg' : 'lts',
-                        costPerUnit: 18,
-                        stock: 100
-                    };
-                    await crud('resources', newCatalogResource, 'insert');
+                }
+
+                // 4. Sincronizar / Actualizar la Orden de Labor de Campo (tasks) como Ejecutada con los datos de Insumo y Clima
+                const unitShort = enrichedApp.dosageUnit?.includes('kg') || enrichedApp.dosageUnit?.includes('g') ? 'kg' : 'L';
+                const appliedInputEntry = {
+                    resourceId: enrichedApp.resourceId,
+                    name: enrichedApp.productName,
+                    quantity: enrichedApp.totalAppliedAmount,
+                    unit: unitShort,
+                    costPerUnit: matchedRes?.costPerUnit || 18,
+                    category: enrichedApp.category,
+                    activeIngredient: enrichedApp.activeIngredient,
+                    senasaRegisterNumber: enrichedApp.senasaRegisterNumber,
+                    batchNumber: enrichedApp.batchNumber,
+                    supplierId: enrichedApp.supplierId,
+                    supplierName: enrichedApp.supplierName,
+                    manufacturer: enrichedApp.manufacturer,
+                    toxicologicalClass: enrichedApp.toxicologicalClass,
+                    dosagePerHa: enrichedApp.dosagePerHa,
+                    dosageUnit: enrichedApp.dosageUnit,
+                    safetyPeriodDays: enrichedApp.safetyPeriodDays,
+                    applicationMethod: enrichedApp.applicationMethod,
+                    targetPestOrDisease: enrichedApp.targetPestOrDisease,
+                    responsibleAgronomist: enrichedApp.responsibleAgronomist,
+                    agronomistLicense: enrichedApp.agronomistLicense
+                };
+
+                const taskPayload: Task = existingLinkedTask
+                    ? {
+                          ...existingLinkedTask,
+                          status:
+                              existingLinkedTask.status === 'Homologada'
+                                  ? 'Homologada'
+                                  : 'Ejecutada',
+                          executionDate: enrichedApp.date,
+                          linkedAgroAppId: enrichedApp.id,
+                          syncWithPhytosanitary: true,
+                          weather: {
+                              tempC: enrichedApp.weatherCondition?.temperatureC ?? existingLinkedTask.weather?.tempC ?? 22,
+                              humidityPct: enrichedApp.weatherCondition?.relativeHumidityPct ?? existingLinkedTask.weather?.humidityPct ?? 60,
+                              windSpeedKmh: enrichedApp.weatherCondition?.windSpeedKmH ?? existingLinkedTask.weather?.windSpeedKmh ?? 8,
+                              windDirection: existingLinkedTask.weather?.windDirection || 'NE',
+                              suitableForSpraying: (enrichedApp.weatherCondition?.windSpeedKmH ?? 8) <= 15
+                          },
+                          appliedInputs: [appliedInputEntry]
+                      }
+                    : {
+                          id: resolvedTaskId,
+                          title: resolvedTaskTitle,
+                          description:
+                              enrichedApp.notes ||
+                              `Aplicación fitosanitaria de ${enrichedApp.productName} (${enrichedApp.dosagePerHa} ${enrichedApp.dosageUnit}) ejecutada en ${enrichedApp.plotName}.`,
+                          status: 'Ejecutada',
+                          priority: 'Alta',
+                          assignedToIds: [currentUser?.id || '1'],
+                          dueDate: enrichedApp.date,
+                          executionDate: enrichedApp.date,
+                          plotId: enrichedApp.plotId,
+                          createdBy: currentUser?.id || 'system',
+                          laborType:
+                              enrichedApp.category === 'Fertilizante Edáfico' ||
+                              enrichedApp.category === 'Fertilizante Foliar' ||
+                              enrichedApp.category === 'Mejorador de Suelo' ||
+                              enrichedApp.category === 'Enmienda Orgánica'
+                                  ? 'FERTIRRIEGO'
+                                  : 'FITOSANITARIO',
+                          operator: enrichedApp.responsibleAgronomist || currentUser?.name || 'Operario de Campo',
+                          machinery: {
+                              tractor: 'Equipo Aplicador Homologado',
+                              implement: enrichedApp.applicationMethod,
+                              fuelConsumptionLiters: 12,
+                              machineHours: 1.5
+                          },
+                          weather: {
+                              tempC: enrichedApp.weatherCondition?.temperatureC ?? 22,
+                              humidityPct: enrichedApp.weatherCondition?.relativeHumidityPct ?? 60,
+                              windSpeedKmh: enrichedApp.weatherCondition?.windSpeedKmH ?? 8,
+                              windDirection: 'NE',
+                              suitableForSpraying: (enrichedApp.weatherCondition?.windSpeedKmH ?? 8) <= 15
+                          },
+                          appliedInputs: [appliedInputEntry],
+                          directCostUsd: Math.round(
+                              (enrichedApp.totalAppliedAmount || 1) * (matchedRes?.costPerUnit || 18)
+                          ),
+                          syncWithExpenses: true,
+                          syncWithPhytosanitary: true,
+                          linkedAgroAppId: enrichedApp.id,
+                          notes: enrichedApp.notes
+                      };
+
+                await crud('tasks', taskPayload, existingLinkedTask ? 'update' : 'insert');
+                return ok;
+            },
+            updateAgrochemicalApplication: async (app) => {
+                const ok = await crud('agrochemical_apps', app, 'update');
+                if (app.linkedTaskId) {
+                    const existingTask = tasks.find(t => String(t.id) === String(app.linkedTaskId));
+                    if (existingTask) {
+                        const unitShort = app.dosageUnit?.includes('kg') || app.dosageUnit?.includes('g') ? 'kg' : 'L';
+                        await crud(
+                            'tasks',
+                            {
+                                ...existingTask,
+                                executionDate: app.date,
+                                weather: {
+                                    ...existingTask.weather,
+                                    tempC: app.weatherCondition?.temperatureC ?? existingTask.weather?.tempC ?? 22,
+                                    humidityPct: app.weatherCondition?.relativeHumidityPct ?? existingTask.weather?.humidityPct ?? 60,
+                                    windSpeedKmh: app.weatherCondition?.windSpeedKmH ?? existingTask.weather?.windSpeedKmh ?? 8
+                                },
+                                appliedInputs: [
+                                    {
+                                        ...(existingTask.appliedInputs?.[0] || {}),
+                                        resourceId: app.resourceId,
+                                        name: app.productName,
+                                        quantity: app.totalAppliedAmount,
+                                        unit: unitShort,
+                                        category: app.category,
+                                        activeIngredient: app.activeIngredient,
+                                        senasaRegisterNumber: app.senasaRegisterNumber,
+                                        batchNumber: app.batchNumber,
+                                        supplierId: app.supplierId,
+                                        supplierName: app.supplierName,
+                                        manufacturer: app.manufacturer,
+                                        toxicologicalClass: app.toxicologicalClass,
+                                        dosagePerHa: app.dosagePerHa,
+                                        dosageUnit: app.dosageUnit,
+                                        safetyPeriodDays: app.safetyPeriodDays,
+                                        applicationMethod: app.applicationMethod,
+                                        targetPestOrDisease: app.targetPestOrDisease,
+                                        responsibleAgronomist: app.responsibleAgronomist,
+                                        agronomistLicense: app.agronomistLicense
+                                    }
+                                ]
+                            },
+                            'update'
+                        );
+                    }
                 }
                 return ok;
             },
-            updateAgrochemicalApplication: (app) => crud('agrochemical_apps', app, 'update'),
             deleteAgrochemicalApplication: (id) => crud('agrochemical_apps', id, 'delete'),
             vaultDocuments,
             addVaultDocument: async (doc: VaultDocument) => {

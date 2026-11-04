@@ -1,6 +1,14 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Task, AgriculturalLaborType, LaborStatus, HempStageId } from '../types';
+import {
+  Task,
+  AgriculturalLaborType,
+  LaborStatus,
+  HempStageId,
+  AgrochemicalCategory,
+  ToxicologicalBand,
+  Resource
+} from '../types';
 import { 
   HEMP_PHENOLOGICAL_STAGES, 
   AGRICULTURAL_LABOR_INFO 
@@ -10,7 +18,7 @@ import {
   Tractor, Sprout, Droplets, ShieldAlert, Waves, Wrench, Search, Scissors,
   Package, Filter, Check, X, FileText, ChevronRight, UserCheck, Fuel,
   Gauge, Wind, Thermometer, MapPin, Building2, User, DollarSign, ShieldCheck,
-  Sparkles, ExternalLink, BellRing, Bell, Mail
+  Sparkles, ExternalLink, BellRing, Bell, Mail, FlaskConical, ArrowUpRight, AlertTriangle
 } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { 
@@ -26,10 +34,11 @@ export default function Tasks() {
   const { 
     tasks, addTask, updateTask, deleteTask, homologateLabor, 
     currentUser, usersList, plots, varieties, switchUserRole,
-    locations, clients
+    locations, clients, resources, suppliers, agrochemicalApplications
   } = useAppContext();
 
   const [pushFeedback, setPushFeedback] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const [searchParams] = useSearchParams();
   // Filters & Views
@@ -52,6 +61,7 @@ export default function Tasks() {
   const [selectedLaborForHomologate, setSelectedLaborForHomologate] = useState<Task | null>(null);
   const [homologationNotes, setHomologationNotes] = useState('');
   const [activeFormTab, setActiveFormTab] = useState<'general' | 'machinery' | 'inputs' | 'phenology'>('general');
+  const [inputCategoryFilter, setInputCategoryFilter] = useState<string>('all');
 
   // Form State
   const [formData, setFormData] = useState<{
@@ -76,7 +86,23 @@ export default function Tasks() {
     humidityPct: number;
     windSpeedKmh: number;
     windDirection: string;
+    resourceId: string;
+    inputCategory: AgrochemicalCategory;
     inputName: string;
+    activeIngredient: string;
+    senasaRegisterNumber: string;
+    batchNumber: string;
+    supplierId: string;
+    supplierName: string;
+    manufacturer: string;
+    toxicologicalClass: ToxicologicalBand;
+    dosagePerHa: number;
+    dosageUnit: 'L/ha' | 'kg/ha' | 'ml/ha' | 'g/ha' | 'cc/ha' | 't/ha';
+    safetyPeriodDays: number;
+    applicationMethod: 'Pulverización Terrestre' | 'Pulverización Aérea' | 'Fertirriego' | 'Incorporación Edáfica' | 'Manual / Follaje' | 'Mochila Manual' | 'Dron Agrícola';
+    targetPestOrDisease: string;
+    responsibleAgronomist: string;
+    agronomistLicense: string;
     inputQuantity: number;
     inputUnit: string;
     inputCostPerUnit: number;
@@ -105,9 +131,25 @@ export default function Tasks() {
     humidityPct: 52,
     windSpeedKmh: 10,
     windDirection: 'NE',
+    resourceId: '',
+    inputCategory: 'Bioestimulante',
     inputName: '',
+    activeIngredient: '',
+    senasaRegisterNumber: '',
+    batchNumber: '',
+    supplierId: '',
+    supplierName: '',
+    manufacturer: '',
+    toxicologicalClass: 'Biológico / Orgánico Certificado',
+    dosagePerHa: 0,
+    dosageUnit: 'L/ha',
+    safetyPeriodDays: 0,
+    applicationMethod: 'Pulverización Terrestre',
+    targetPestOrDisease: '',
+    responsibleAgronomist: currentUser?.name || 'Dirección Técnica Cooperativa',
+    agronomistLicense: 'MP-CIAFBA',
     inputQuantity: 0,
-    inputUnit: 'kg',
+    inputUnit: 'L',
     inputCostPerUnit: 0,
     directCostUsd: 180,
     syncWithExpenses: true,
@@ -179,10 +221,98 @@ export default function Tasks() {
     return plots.find(p => p.id === formData.plotId);
   }, [plots, formData.plotId]);
 
+  const currentPlotAreaHa = useMemo(() => {
+    if (!currentSelectedPlot) return 1;
+    let area = currentSelectedPlot.surfaceArea || 1;
+    if (currentSelectedPlot.surfaceUnit === 'm2') area = area / 10000;
+    else if (currentSelectedPlot.surfaceUnit === 'ac') area = area * 0.404686;
+    return Math.max(0.1, Number(area.toFixed(2)));
+  }, [currentSelectedPlot]);
+
+  // Catálogo de Insumos homologados en Inventario (excluyendo servicios de maquinaria 'Labor')
+  const catalogInputResources = useMemo(() => {
+    return resources.filter(r => r.type !== 'Labor');
+  }, [resources]);
+
+  const filteredCatalogResources = useMemo(() => {
+    if (inputCategoryFilter === 'all') return catalogInputResources;
+    return catalogInputResources.filter(r => r.agroCategory === inputCategoryFilter);
+  }, [catalogInputResources, inputCategoryFilter]);
+
+  const selectedResourceObj = useMemo(() => {
+    if (!formData.resourceId) return undefined;
+    return resources.find(r => r.id === formData.resourceId);
+  }, [resources, formData.resourceId]);
+
+  const applyResourceToTaskForm = (res: Resource | undefined, targetPlotId?: string) => {
+    const plotObj = plots.find(p => p.id === (targetPlotId || formData.plotId));
+    let areaHa = plotObj?.surfaceArea || 1;
+    if (plotObj?.surfaceUnit === 'm2') areaHa = areaHa / 10000;
+    else if (plotObj?.surfaceUnit === 'ac') areaHa = areaHa * 0.404686;
+    areaHa = Math.max(0.1, Number(areaHa.toFixed(2)));
+
+    if (!res) {
+      setFormData(prev => ({
+        ...prev,
+        resourceId: '',
+        inputName: '',
+        activeIngredient: '',
+        senasaRegisterNumber: '',
+        batchNumber: '',
+        supplierId: '',
+        supplierName: '',
+        manufacturer: '',
+        dosagePerHa: 0,
+        inputQuantity: 0,
+        inputCostPerUnit: 0
+      }));
+      return;
+    }
+
+    const linkedSupplier = suppliers.find(
+      s => s.id === res.supplierId || (res.supplierName && s.name.toLowerCase() === res.supplierName.toLowerCase())
+    );
+    const dosage = res.recommendedDosagePerHa ?? 2;
+    const totalQty = Number((dosage * areaHa).toFixed(2));
+    const unitCost = res.costPerUnit || 0;
+    const laborInfo = AGRICULTURAL_LABOR_INFO[formData.laborType];
+    const baseLaborCost = Math.round(areaHa * (laborInfo?.defaultCostPerHa || 18));
+    const totalInputCost = Math.round(totalQty * unitCost);
+
+    setFormData(prev => ({
+      ...prev,
+      resourceId: res.id,
+      inputCategory: res.agroCategory || prev.inputCategory || 'Bioestimulante',
+      inputName: res.name,
+      activeIngredient: res.activeIngredient || 'Insumo Agrícola Homologado',
+      senasaRegisterNumber: res.senasaRegisterNumber || 'SENASA-OFICIAL',
+      batchNumber: res.batchNumber || 'LOT-OFICIAL',
+      supplierId: linkedSupplier?.id || res.supplierId || '',
+      supplierName: linkedSupplier?.name || res.supplierName || 'Proveedor Homologado en BD',
+      manufacturer: res.manufacturer || linkedSupplier?.name || 'Elaborador Homologado',
+      toxicologicalClass: res.toxicologicalClass || 'Biológico / Orgánico Certificado',
+      dosagePerHa: dosage,
+      dosageUnit: res.dosageUnit || (res.unit === 'kg' ? 'kg/ha' : 'L/ha'),
+      safetyPeriodDays: res.safetyPeriodDays ?? 0,
+      applicationMethod: res.applicationMethod || (prev.laborType === 'FERTIRRIEGO' ? 'Fertirriego' : 'Pulverización Terrestre'),
+      targetPestOrDisease: res.targetPestOrDisease || prev.targetPestOrDisease || '',
+      inputQuantity: totalQty,
+      inputUnit: res.unit === 'lts' ? 'L' : res.unit,
+      inputCostPerUnit: unitCost,
+      directCostUsd: baseLaborCost + totalInputCost,
+      syncWithPhytosanitary:
+        prev.laborType === 'FITOSANITARIO' ||
+        prev.laborType === 'FERTIRRIEGO' ||
+        res.type === 'Fitosanitario' ||
+        res.type === 'Fertilizante' ||
+        Boolean(res.agroCategory)
+    }));
+  };
+
   // KPI calculations
   const kpis = useMemo(() => {
     const total = tasks.length;
-    const pending = tasks.filter(t => t.status === 'Pendiente' || t.status === 'En_Curso').length;
+    const pending = tasks.filter(t => t.status === 'Pendiente' || t.status === 'En_Curso' || t.status === 'Planificada').length;
     const executed = tasks.filter(t => t.status === 'Ejecutada').length;
     const homologated = tasks.filter(t => t.status === 'Homologada' || t.status === 'Completada').length;
     const totalFuel = tasks.reduce((sum, t) => sum + (t.machinery?.fuelConsumptionLiters || 0), 0);
@@ -197,7 +327,7 @@ export default function Tasks() {
     return tasks.filter(t => {
       // Status
       if (filterStatus !== 'all') {
-        if (filterStatus === 'pending' && !(t.status === 'Pendiente' || t.status === 'En_Curso')) return false;
+        if (filterStatus === 'pending' && !(t.status === 'Pendiente' || t.status === 'En_Curso' || t.status === 'Planificada')) return false;
         if (filterStatus === 'executed' && t.status !== 'Ejecutada') return false;
         if (filterStatus === 'homologated' && !(t.status === 'Homologada' || t.status === 'Completada')) return false;
       }
@@ -221,15 +351,17 @@ export default function Tasks() {
         const operatorMatch = (t.operator || '').toLowerCase().includes(query);
         const tractorMatch = (t.machinery?.tractor || '').toLowerCase().includes(query);
         const plotMatch = (plots.find(p => p.id === t.plotId)?.name || '').toLowerCase().includes(query);
-        if (!titleMatch && !descMatch && !operatorMatch && !tractorMatch && !plotMatch) return false;
+        const inputMatch = (t.appliedInputs?.[0]?.name || '').toLowerCase().includes(query);
+        if (!titleMatch && !descMatch && !operatorMatch && !tractorMatch && !plotMatch && !inputMatch) return false;
       }
 
       return true;
     }).sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime());
-  }, [tasks, filterStatus, filterType, filterPlotId, searchTerm, isSocio, currentUser, plots]);
+  }, [tasks, filterStatus, filterType, filterPlotId, searchTerm, isSocio, currentUser, plots, locations, clients]);
 
   // Form handlers
   const handleOpenNewModal = (prefillPlotId?: string, prefillLaborType?: AgriculturalLaborType) => {
+    setFormError(null);
     const targetPlot = plots.find(p => p.id === (prefillPlotId || availablePlots[0]?.id));
     const plotStage = targetPlot?.currentPhenologicalStage || 'BBCH_10_19';
     
@@ -241,6 +373,16 @@ export default function Tasks() {
 
     const labor = prefillLaborType || 'LABOR_CULTURAL';
     const laborInfo = AGRICULTURAL_LABOR_INFO[labor];
+    const isPhytoOrFert = labor === 'FITOSANITARIO' || labor === 'FERTIRRIEGO';
+    const defaultRes = isPhytoOrFert ? catalogInputResources[0] : undefined;
+
+    let areaHa = targetPlot?.surfaceArea || 1;
+    if (targetPlot?.surfaceUnit === 'm2') areaHa = areaHa / 10000;
+    else if (targetPlot?.surfaceUnit === 'ac') areaHa = areaHa * 0.404686;
+    areaHa = Math.max(0.1, Number(areaHa.toFixed(2)));
+
+    const dosage = defaultRes ? (defaultRes.recommendedDosagePerHa ?? 2) : 0;
+    const totalQty = defaultRes ? Number((dosage * areaHa).toFixed(2)) : 0;
 
     setFormData({
       title: `${laborInfo.name} - ${targetPlot?.name || 'Lote'}`,
@@ -257,19 +399,35 @@ export default function Tasks() {
       newPhenologicalStage: nextStage,
       tractor: laborInfo.typicalMachinery.split('+')[0]?.trim() || 'Tractor Estándar',
       implement: laborInfo.typicalMachinery.split('+')[1]?.trim() || 'Implemento Agrícola',
-      fuelLiters: Math.round((targetPlot?.surfaceArea || 10) * 8),
-      machineHours: Math.round((targetPlot?.surfaceArea || 10) * 0.7),
+      fuelLiters: Math.round(areaHa * 8),
+      machineHours: Math.round(areaHa * 0.7 * 10) / 10,
       tempC: 23,
       humidityPct: 55,
       windSpeedKmh: 10,
       windDirection: 'NE',
-      inputName: '',
-      inputQuantity: 0,
-      inputUnit: 'kg',
-      inputCostPerUnit: 0,
-      directCostUsd: Math.round((targetPlot?.surfaceArea || 10) * laborInfo.defaultCostPerHa),
+      resourceId: defaultRes?.id || '',
+      inputCategory: defaultRes?.agroCategory || 'Bioestimulante',
+      inputName: defaultRes?.name || '',
+      activeIngredient: defaultRes?.activeIngredient || '',
+      senasaRegisterNumber: defaultRes?.senasaRegisterNumber || '',
+      batchNumber: defaultRes?.batchNumber || '',
+      supplierId: defaultRes?.supplierId || '',
+      supplierName: defaultRes?.supplierName || '',
+      manufacturer: defaultRes?.manufacturer || '',
+      toxicologicalClass: defaultRes?.toxicologicalClass || 'Biológico / Orgánico Certificado',
+      dosagePerHa: dosage,
+      dosageUnit: defaultRes?.dosageUnit || 'L/ha',
+      safetyPeriodDays: defaultRes?.safetyPeriodDays ?? 0,
+      applicationMethod: defaultRes?.applicationMethod || (labor === 'FERTIRRIEGO' ? 'Fertirriego' : 'Pulverización Terrestre'),
+      targetPestOrDisease: defaultRes?.targetPestOrDisease || '',
+      responsibleAgronomist: targetPlot?.technicalResponsibleName || currentUser?.name || 'Dirección Técnica Cooperativa',
+      agronomistLicense: 'MP-CIAFBA',
+      inputQuantity: totalQty,
+      inputUnit: defaultRes ? (defaultRes.unit === 'lts' ? 'L' : defaultRes.unit) : 'L',
+      inputCostPerUnit: defaultRes?.costPerUnit || 0,
+      directCostUsd: Math.round(areaHa * laborInfo.defaultCostPerHa + totalQty * (defaultRes?.costPerUnit || 0)),
       syncWithExpenses: true,
-      syncWithPhytosanitary: labor === 'FITOSANITARIO',
+      syncWithPhytosanitary: isPhytoOrFert,
       notes: ''
     });
     setActiveFormTab('general');
@@ -278,7 +436,46 @@ export default function Tasks() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
     if (!formData.title || !formData.plotId) return;
+
+    const requiresCatalogInput =
+      formData.laborType === 'FITOSANITARIO' ||
+      formData.laborType === 'FERTIRRIEGO' ||
+      formData.syncWithPhytosanitary;
+
+    const matchedResource =
+      resources.find(r => r.id === formData.resourceId) ||
+      resources.find(r => formData.inputName && r.name.toLowerCase() === formData.inputName.toLowerCase());
+
+    if (requiresCatalogInput && !matchedResource) {
+      setActiveFormTab('inputs');
+      setFormError(
+        'Normativa SENASA / Trazabilidad: Para registrar una labor Fitosanitaria, de Fertirriego o vinculada al Cuaderno Fitosanitario es obligatorio seleccionar un Insumo previamente dado de alta en Insumos e Inventario y vinculado a un Proveedor Homologado.'
+      );
+      return;
+    }
+
+    const isExecuting =
+      formData.status === 'Ejecutada' ||
+      formData.status === 'Homologada' ||
+      formData.status === 'Completada';
+
+    if (matchedResource && isExecuting && Number(formData.inputQuantity) > (matchedResource.stock ?? 0) && !formData.id) {
+      setActiveFormTab('inputs');
+      setFormError(
+        `Stock insuficiente en Insumos e Inventario para "${matchedResource.name}": requerido ${formData.inputQuantity} ${formData.inputUnit}, disponible en galpón ${matchedResource.stock ?? 0} ${matchedResource.unit}. Actualice el stock en Insumos e Inventario o ajuste la dosis.`
+      );
+      return;
+    }
+
+    const linkedSupplier = matchedResource
+      ? suppliers.find(
+          s =>
+            s.id === matchedResource.supplierId ||
+            (matchedResource.supplierName && s.name.toLowerCase() === matchedResource.supplierName.toLowerCase())
+        )
+      : undefined;
 
     const taskPayload: Task = {
       id: formData.id || `labor-${Date.now()}`,
@@ -288,7 +485,7 @@ export default function Tasks() {
       priority: formData.priority,
       assignedToIds: [currentUser?.id || 'unknown'],
       dueDate: formData.dueDate,
-      executionDate: formData.executionDate,
+      executionDate: formData.executionDate || formData.dueDate,
       plotId: formData.plotId,
       createdBy: currentUser?.id || 'system',
       laborType: formData.laborType,
@@ -309,17 +506,35 @@ export default function Tasks() {
         windDirection: formData.windDirection,
         suitableForSpraying: Number(formData.windSpeedKmh) <= 15
       },
-      appliedInputs: formData.inputName ? [
-        {
-          name: formData.inputName,
-          quantity: Number(formData.inputQuantity) || 0,
-          unit: formData.inputUnit,
-          costPerUnit: Number(formData.inputCostPerUnit) || 0
-        }
-      ] : [],
+      appliedInputs: matchedResource
+        ? [
+            {
+              resourceId: matchedResource.id,
+              name: matchedResource.name,
+              category: matchedResource.agroCategory || formData.inputCategory,
+              activeIngredient: matchedResource.activeIngredient || formData.activeIngredient,
+              senasaRegisterNumber: matchedResource.senasaRegisterNumber || formData.senasaRegisterNumber,
+              batchNumber: matchedResource.batchNumber || formData.batchNumber,
+              supplierId: linkedSupplier?.id || matchedResource.supplierId || formData.supplierId,
+              supplierName: linkedSupplier?.name || matchedResource.supplierName || formData.supplierName,
+              manufacturer: matchedResource.manufacturer || formData.manufacturer,
+              toxicologicalClass: matchedResource.toxicologicalClass || formData.toxicologicalClass,
+              dosagePerHa: Number(formData.dosagePerHa) || matchedResource.recommendedDosagePerHa || 1,
+              dosageUnit: formData.dosageUnit || matchedResource.dosageUnit || 'L/ha',
+              safetyPeriodDays: Number(formData.safetyPeriodDays ?? matchedResource.safetyPeriodDays ?? 0),
+              applicationMethod: formData.applicationMethod || matchedResource.applicationMethod || 'Pulverización Terrestre',
+              targetPestOrDisease: formData.targetPestOrDisease || matchedResource.targetPestOrDisease,
+              responsibleAgronomist: formData.responsibleAgronomist,
+              agronomistLicense: formData.agronomistLicense,
+              quantity: Number(formData.inputQuantity) || 0,
+              unit: formData.inputUnit || (matchedResource.unit === 'lts' ? 'L' : matchedResource.unit),
+              costPerUnit: Number(formData.inputCostPerUnit) || matchedResource.costPerUnit || 0
+            }
+          ]
+        : [],
       directCostUsd: Number(formData.directCostUsd) || 0,
       syncWithExpenses: formData.syncWithExpenses,
-      syncWithPhytosanitary: formData.syncWithPhytosanitary,
+      syncWithPhytosanitary: requiresCatalogInput || Boolean(matchedResource),
       notes: formData.notes
     };
 
@@ -715,6 +930,36 @@ export default function Tasks() {
                     </div>
                   )}
 
+                  {/* INSUMO HOMOLOGADO APLICADO & TRAZABILIDAD SENASA */}
+                  {labor.appliedInputs && labor.appliedInputs.length > 0 && (
+                    <div className="mt-2.5 p-2.5 rounded-xl bg-teal-50/70 dark:bg-teal-950/30 border border-teal-200 dark:border-teal-800/80 text-[11px] space-y-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-black text-teal-800 dark:text-teal-300 flex items-center gap-1 truncate">
+                          <FlaskConical size={12} className="text-teal-600 shrink-0" />
+                          <span className="truncate">{labor.appliedInputs[0].name}</span>
+                        </span>
+                        <span className="font-mono font-bold text-teal-700 dark:text-teal-300 bg-white dark:bg-slate-900 px-1.5 py-0.5 rounded border border-teal-200 dark:border-teal-800 text-[10px] shrink-0">
+                          {labor.appliedInputs[0].quantity} {labor.appliedInputs[0].unit}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap items-center justify-between gap-1 text-[10px] text-slate-500 dark:text-slate-400 font-mono">
+                        <span>
+                          {labor.appliedInputs[0].senasaRegisterNumber || 'SENASA'} • Lote: {labor.appliedInputs[0].batchNumber || 'Oficial'}
+                        </span>
+                        {labor.appliedInputs[0].dosagePerHa ? (
+                          <span className="font-bold text-slate-700 dark:text-slate-300">
+                            {labor.appliedInputs[0].dosagePerHa} {labor.appliedInputs[0].dosageUnit || 'L/ha'}
+                          </span>
+                        ) : null}
+                      </div>
+                      {labor.appliedInputs[0].supplierName && (
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
+                          Proveedor: <strong className="text-slate-700 dark:text-slate-300">{labor.appliedInputs[0].supplierName}</strong>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* DATOS DE OPERACIÓN: MAQUINARIA & OPERARIO */}
                   <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 text-[11px]">
                     <div>
@@ -736,7 +981,7 @@ export default function Tasks() {
                       </span>
                       {labor.weather?.tempC ? (
                         <span className="text-[10px] text-slate-400 block">
-                          🌤️ {labor.weather.tempC}°C • Viento {labor.weather.windSpeedKmh} km/h
+                          🌤️ {labor.weather.tempC}°C • HR {labor.weather.humidityPct ?? 55}% • {labor.weather.windSpeedKmh} km/h
                         </span>
                       ) : null}
                     </div>
@@ -755,10 +1000,14 @@ export default function Tasks() {
                           ✓ Costos
                         </span>
                       )}
-                      {labor.syncWithPhytosanitary && (
-                        <span className="text-[10px] text-blue-600 dark:text-blue-400 font-bold bg-blue-50 dark:bg-blue-950/60 px-1.5 py-0.5 rounded border border-blue-200 dark:border-blue-800" title="Imputado a Cuaderno Fitosanitario">
-                          ✓ Fitosanitario
-                        </span>
+                      {(labor.syncWithPhytosanitary || labor.linkedAgroAppId || labor.laborType === 'FITOSANITARIO' || labor.laborType === 'FERTIRRIEGO') && (
+                        <Link
+                          to="/phytosanitary"
+                          className="text-[10px] text-teal-700 dark:text-teal-300 font-bold bg-teal-50 dark:bg-teal-950/60 hover:bg-teal-100 px-2 py-0.5 rounded border border-teal-200 dark:border-teal-800 flex items-center gap-1 transition"
+                          title="Ver folio en Cuaderno Fitosanitario Oficial SENASA"
+                        >
+                          <ShieldCheck size={11} /> Cuaderno SENASA
+                        </Link>
                       )}
                     </div>
                   </div>
@@ -774,7 +1023,7 @@ export default function Tasks() {
                 {/* BOTONERA DE ACCIÓN POR ROL */}
                 <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
                   {/* ACCIONES SOCIO */}
-                  {labor.status === 'Pendiente' || labor.status === 'En_Curso' ? (
+                  {labor.status === 'Pendiente' || labor.status === 'En_Curso' || labor.status === 'Planificada' ? (
                     <button 
                       onClick={() => handleQuickStatusChange(labor, 'Ejecutada')}
                       className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-sm"
@@ -797,6 +1046,11 @@ export default function Tasks() {
                   <div className="ml-auto flex items-center gap-1">
                     <button 
                       onClick={() => {
+                        setFormError(null);
+                        const firstIn = labor.appliedInputs?.[0];
+                        const matchedRes =
+                          resources.find(r => r.id === firstIn?.resourceId) ||
+                          resources.find(r => firstIn?.name && r.name.toLowerCase() === firstIn.name.toLowerCase());
                         setFormData({
                           id: labor.id,
                           title: labor.title,
@@ -819,10 +1073,26 @@ export default function Tasks() {
                           humidityPct: labor.weather?.humidityPct || 50,
                           windSpeedKmh: labor.weather?.windSpeedKmh || 10,
                           windDirection: labor.weather?.windDirection || 'NE',
-                          inputName: labor.appliedInputs?.[0]?.name || '',
-                          inputQuantity: labor.appliedInputs?.[0]?.quantity || 0,
-                          inputUnit: labor.appliedInputs?.[0]?.unit || 'kg',
-                          inputCostPerUnit: labor.appliedInputs?.[0]?.costPerUnit || 0,
+                          resourceId: firstIn?.resourceId || matchedRes?.id || '',
+                          inputCategory: firstIn?.category || matchedRes?.agroCategory || 'Bioestimulante',
+                          inputName: firstIn?.name || matchedRes?.name || '',
+                          activeIngredient: firstIn?.activeIngredient || matchedRes?.activeIngredient || '',
+                          senasaRegisterNumber: firstIn?.senasaRegisterNumber || matchedRes?.senasaRegisterNumber || '',
+                          batchNumber: firstIn?.batchNumber || matchedRes?.batchNumber || '',
+                          supplierId: firstIn?.supplierId || matchedRes?.supplierId || '',
+                          supplierName: firstIn?.supplierName || matchedRes?.supplierName || '',
+                          manufacturer: firstIn?.manufacturer || matchedRes?.manufacturer || '',
+                          toxicologicalClass: firstIn?.toxicologicalClass || matchedRes?.toxicologicalClass || 'Biológico / Orgánico Certificado',
+                          dosagePerHa: firstIn?.dosagePerHa || matchedRes?.recommendedDosagePerHa || 0,
+                          dosageUnit: firstIn?.dosageUnit || matchedRes?.dosageUnit || 'L/ha',
+                          safetyPeriodDays: firstIn?.safetyPeriodDays ?? matchedRes?.safetyPeriodDays ?? 0,
+                          applicationMethod: firstIn?.applicationMethod || matchedRes?.applicationMethod || 'Pulverización Terrestre',
+                          targetPestOrDisease: firstIn?.targetPestOrDisease || matchedRes?.targetPestOrDisease || '',
+                          responsibleAgronomist: firstIn?.responsibleAgronomist || currentUser?.name || 'Dirección Técnica Cooperativa',
+                          agronomistLicense: firstIn?.agronomistLicense || 'MP-CIAFBA',
+                          inputQuantity: firstIn?.quantity || 0,
+                          inputUnit: firstIn?.unit || 'L',
+                          inputCostPerUnit: firstIn?.costPerUnit || matchedRes?.costPerUnit || 0,
                           directCostUsd: labor.directCostUsd || 0,
                           syncWithExpenses: labor.syncWithExpenses ?? true,
                           syncWithPhytosanitary: labor.syncWithPhytosanitary ?? false,
@@ -882,7 +1152,7 @@ export default function Tasks() {
                   <th className="py-3 px-4">Labor & Tipo</th>
                   <th className="py-3 px-4">Parcela / Socio</th>
                   <th className="py-3 px-4">Fecha & Operario</th>
-                  <th className="py-3 px-4">Maquinaria & Consumos</th>
+                  <th className="py-3 px-4">Insumo Homologado / Maquinaria</th>
                   <th className="py-3 px-4">Impacto Biológico</th>
                   <th className="py-3 px-4">Costo USD</th>
                   <th className="py-3 px-4">Estado</th>
@@ -893,6 +1163,7 @@ export default function Tasks() {
                 {filteredTasks.map(labor => {
                   const plot = plots.find(p => p.id === labor.plotId);
                   const newStage = HEMP_PHENOLOGICAL_STAGES.find(s => s.id === labor.newPhenologicalStage);
+                  const firstIn = labor.appliedInputs?.[0];
 
                   return (
                     <tr key={labor.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition">
@@ -917,10 +1188,23 @@ export default function Tasks() {
                       </td>
 
                       <td className="py-3 px-4">
-                        <div className="text-slate-700 dark:text-slate-300 truncate max-w-[140px]">{labor.machinery?.tractor || '-'}</div>
-                        <div className="text-[10px] text-amber-600 font-bold">
-                          {labor.machinery?.fuelConsumptionLiters ? `${labor.machinery.fuelConsumptionLiters} L / ${labor.machinery.machineHours} h` : '-'}
-                        </div>
+                        {firstIn ? (
+                          <div>
+                            <div className="font-bold text-teal-700 dark:text-teal-300 truncate max-w-[180px]" title={firstIn.name}>
+                              🧪 {firstIn.name} ({firstIn.quantity} {firstIn.unit})
+                            </div>
+                            <div className="text-[10px] text-slate-400 truncate max-w-[180px]">
+                              {firstIn.senasaRegisterNumber || 'SENASA'} • {firstIn.supplierName || 'Proveedor BD'}
+                            </div>
+                          </div>
+                        ) : (
+                          <div>
+                            <div className="text-slate-700 dark:text-slate-300 truncate max-w-[140px]">{labor.machinery?.tractor || '-'}</div>
+                            <div className="text-[10px] text-amber-600 font-bold">
+                              {labor.machinery?.fuelConsumptionLiters ? `${labor.machinery.fuelConsumptionLiters} L / ${labor.machinery.machineHours} h` : '-'}
+                            </div>
+                          </div>
+                        )}
                       </td>
 
                       <td className="py-3 px-4">
@@ -949,7 +1233,7 @@ export default function Tasks() {
                           >
                             Homologar
                           </button>
-                        ) : labor.status === 'Pendiente' ? (
+                        ) : labor.status === 'Pendiente' || labor.status === 'Planificada' ? (
                           <button 
                             onClick={() => handleQuickStatusChange(labor, 'Ejecutada')}
                             className="px-2.5 py-1 bg-blue-600 text-white rounded text-[11px] font-bold hover:bg-blue-700 transition"
@@ -972,7 +1256,7 @@ export default function Tasks() {
       {/* MODAL CREAR / EDITAR ORDEN DE LABOR AGRONÓMICA */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-2xl w-full border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden my-8">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-3xl w-full border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden my-8">
             <div className="bg-slate-900 text-white p-5 flex items-center justify-between border-b border-slate-800">
               <div className="flex items-center gap-2">
                 <Tractor size={20} className="text-emerald-400" />
@@ -981,7 +1265,7 @@ export default function Tasks() {
                     {formData.id ? 'Editar Orden de Labor Agronómica' : 'Nueva Orden de Labor & Parte de Campo'}
                   </h3>
                   <p className="text-xs text-slate-400">
-                    Registro de tareas mecánicas, insumos, maquinaria y avance fenológico
+                    Trazabilidad Integrada: Proveedores → Insumos e Inventario → Parte de Campo → Cuaderno Fitosanitario
                   </p>
                 </div>
               </div>
@@ -1022,8 +1306,20 @@ export default function Tasks() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              
+            <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+              {formError && (
+                <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/60 border border-rose-300 dark:border-rose-800 text-xs text-rose-800 dark:text-rose-200 flex items-start gap-2.5">
+                  <AlertTriangle size={16} className="text-rose-600 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <strong className="font-black block uppercase text-[10px] tracking-wider">Bloqueo Normativo SENASA / Trazabilidad</strong>
+                    <span>{formError}</span>
+                  </div>
+                  <button type="button" onClick={() => setFormError(null)} className="text-rose-400 hover:text-rose-700">
+                    <X size={14} />
+                  </button>
+                </div>
+              )}
+
               {/* TAB 1: DATOS & PARCELA */}
               {activeFormTab === 'general' && (
                 <div className="space-y-4">
@@ -1034,7 +1330,7 @@ export default function Tasks() {
                     <input 
                       type="text"
                       required
-                      placeholder="Ej: Siembra neumática de precisión, Desmalezado mecánico interfilas..."
+                      placeholder="Ej: Siembra neumática de precisión, Aplicación preventiva bioinsumos..."
                       className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none"
                       value={formData.title}
                       onChange={(e) => setFormData({ ...formData, title: e.target.value })}
@@ -1050,10 +1346,23 @@ export default function Tasks() {
                         required
                         className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none"
                         value={formData.plotId}
-                        onChange={(e) => setFormData({ ...formData, plotId: e.target.value })}
+                        onChange={(e) => {
+                          const nextPlotId = e.target.value;
+                          const nextPlot = plots.find(p => p.id === nextPlotId);
+                          let areaHa = nextPlot?.surfaceArea || 1;
+                          if (nextPlot?.surfaceUnit === 'm2') areaHa = areaHa / 10000;
+                          else if (nextPlot?.surfaceUnit === 'ac') areaHa = areaHa * 0.404686;
+                          areaHa = Math.max(0.1, Number(areaHa.toFixed(2)));
+                          const nextQty = formData.dosagePerHa > 0 ? Number((formData.dosagePerHa * areaHa).toFixed(2)) : formData.inputQuantity;
+                          setFormData(prev => ({
+                            ...prev,
+                            plotId: nextPlotId,
+                            inputQuantity: nextQty
+                          }));
+                        }}
                       >
                         {availablePlots.map(p => (
-                          <option key={p.id} value={p.id}>{p.name} ({p.surfaceArea} ha)</option>
+                          <option key={p.id} value={p.id}>{p.name} ({p.surfaceArea} {p.surfaceUnit || 'ha'})</option>
                         ))}
                       </select>
                     </div>
@@ -1069,17 +1378,29 @@ export default function Tasks() {
                         onChange={(e) => {
                           const type = e.target.value as AgriculturalLaborType;
                           const info = AGRICULTURAL_LABOR_INFO[type];
-                          setFormData({ 
-                            ...formData, 
-                            laborType: type,
-                            directCostUsd: Math.round((currentSelectedPlot?.surfaceArea || 10) * info.defaultCostPerHa)
-                          });
+                          const isPhytoOrFert = type === 'FITOSANITARIO' || type === 'FERTIRRIEGO';
+                          const fallbackRes = isPhytoOrFert && !formData.resourceId ? catalogInputResources[0] : selectedResourceObj;
+                          if (isPhytoOrFert && fallbackRes && !formData.resourceId) {
+                            setFormData(prev => ({
+                              ...prev,
+                              laborType: type,
+                              syncWithPhytosanitary: true
+                            }));
+                            applyResourceToTaskForm(fallbackRes, formData.plotId);
+                          } else {
+                            setFormData(prev => ({ 
+                              ...prev, 
+                              laborType: type,
+                              syncWithPhytosanitary: isPhytoOrFert ? true : prev.syncWithPhytosanitary,
+                              directCostUsd: Math.round(currentPlotAreaHa * info.defaultCostPerHa + (prev.inputQuantity * prev.inputCostPerUnit))
+                            }));
+                          }
                         }}
                       >
                         <option value="PREPARACION_SUELO">Preparación de Suelo & Cama de Siembra</option>
                         <option value="SIEMBRA">Siembra & Calibración Mecánica</option>
-                        <option value="FERTIRRIEGO">Fertirriego & Nutrición Foliar</option>
-                        <option value="FITOSANITARIO">Tratamiento Fitosanitario / Bioinsumos</option>
+                        <option value="FERTIRRIEGO">Fertirriego & Nutrición Foliar (Vincula Insumo SENASA)</option>
+                        <option value="FITOSANITARIO">Tratamiento Fitosanitario / Bioinsumos (Vincula Insumo SENASA)</option>
                         <option value="MANEJO_HIDRICO">Manejo Hídrico & Turno de Riego</option>
                         <option value="LABOR_CULTURAL">Labor Cultural / Desmalezado Mecánico</option>
                         <option value="MONITOREO">Monitoreo Agronómico & Sexado</option>
@@ -1125,7 +1446,7 @@ export default function Tasks() {
                       >
                         <option value="Planificada">Planificada</option>
                         <option value="En_Curso">En Curso</option>
-                        <option value="Ejecutada">Ejecutada (Enviar Parte)</option>
+                        <option value="Ejecutada">Ejecutada (Enviar Parte y Descontar Stock)</option>
                         {isAdmin && <option value="Homologada">Homologada por Cooperativa</option>}
                       </select>
                     </div>
@@ -1137,7 +1458,7 @@ export default function Tasks() {
                     </label>
                     <textarea 
                       rows={2}
-                      placeholder="Detalles operativos, velocidad de avance, lote a intervenir..."
+                      placeholder="Detalles operativos, velocidad de avance, calibración de picos, lote a intervenir..."
                       className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none"
                       value={formData.description}
                       onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -1170,11 +1491,11 @@ export default function Tasks() {
 
                     <div>
                       <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                        Implemento Enganchado
+                        Implemento Enganchado / Pulverizadora
                       </label>
                       <input 
                         type="text"
-                        placeholder="Ej: Rastra de discos, Sembradora Crucianelli, Yomel 7..."
+                        placeholder="Ej: Pulverizadora Botalón 24m, Sistema Venturi Fertirriego..."
                         className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none"
                         value={formData.implement}
                         onChange={(e) => setFormData({ ...formData, implement: e.target.value })}
@@ -1214,114 +1535,379 @@ export default function Tasks() {
                 </div>
               )}
 
-              {/* TAB 3: INSUMOS & CLIMA */}
+              {/* TAB 3: INSUMOS & CLIMA (TRAZABILIDAD CERRADA PROVEEDORES -> INVENTARIO -> LABOR -> CUADERNO FITOSANITARIO) */}
               {activeFormTab === 'inputs' && (
                 <div className="space-y-4">
-                  <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-3">
-                    <div className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1">
-                      <Droplets size={14} className="text-blue-600" /> Insumo / Semilla / Fertilizante Aplicado
+                  {/* CABECERA DE TRAZABILIDAD OBLIGATORIA */}
+                  <div className="p-3.5 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/80 space-y-2.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <ShieldCheck size={16} className="text-emerald-600 shrink-0" />
+                        <span className="text-[11px] font-black uppercase tracking-wider text-emerald-900 dark:text-emerald-200">
+                          Circuito Fitosanitario Obligatorio SENASA • Prohibido Aplicar Insumos No Catalogados
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Link
+                          to="/suppliers"
+                          className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-700 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 flex items-center gap-1"
+                        >
+                          <Building2 size={11} /> 1. Proveedores ({suppliers.length})
+                        </Link>
+                        <Link
+                          to="/resources"
+                          className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[10px] font-bold hover:bg-emerald-700 flex items-center gap-1"
+                        >
+                          <Package size={11} /> 2. Insumos e Inventario ({catalogInputResources.length})
+                          <ArrowUpRight size={11} />
+                        </Link>
+                      </div>
                     </div>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
+                      Todo producto fitosanitario, bioinsumo o fertilizante aplicado en campo debe seleccionarse del <strong>Catálogo de Insumos e Inventario</strong> (vinculado a un <strong>Proveedor Homologado</strong>). Al ejecutar la labor, se descuenta del stock de galpón y se asienta automáticamente en el <strong>Cuaderno Fitosanitario Oficial</strong>.
+                    </p>
+                  </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">Nombre Comercial / Principio Activo</label>
-                        <input 
-                          type="text"
-                          placeholder="Ej: Semilla Santhica 27 C1, UAN 32%, Bioestimulante..."
-                          className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-xs text-slate-900 dark:text-white outline-none"
-                          value={formData.inputName}
-                          onChange={(e) => setFormData({ ...formData, inputName: e.target.value })}
-                        />
+                  {/* SELECTOR DE INSUMO HOMOLOGADO EN INVENTARIO */}
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-3.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                        <FlaskConical size={15} className="text-emerald-600" />
+                        <span>Seleccionar Insumo Homologado en Inventario BD</span>
                       </div>
 
-                      <div className="grid grid-cols-3 gap-2">
-                        <div className="col-span-1">
-                          <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">Cantidad</label>
-                          <input 
-                            type="number"
-                            min="0"
-                            step="0.1"
-                            className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-xs text-slate-900 dark:text-white outline-none font-mono"
-                            value={formData.inputQuantity}
-                            onChange={(e) => setFormData({ ...formData, inputQuantity: Number(e.target.value) })}
-                          />
+                      {/* FILTRO POR CATEGORÍA SENASA */}
+                      <select
+                        value={inputCategoryFilter}
+                        onChange={(e) => setInputCategoryFilter(e.target.value)}
+                        className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1 text-[11px] font-bold text-slate-700 dark:text-slate-200 outline-none"
+                      >
+                        <option value="all">Todas las Categorías SENASA ({catalogInputResources.length})</option>
+                        <option value="Bioestimulante">⚡ Bioestimulante</option>
+                        <option value="Mejorador de Suelo">🌱 Mejorador de Suelo</option>
+                        <option value="Fertilizante Foliar">🍃 Fertilizante Foliar</option>
+                        <option value="Fertilizante Edáfico">🧪 Fertilizante Edáfico</option>
+                        <option value="Insecticida">🐛 Insecticida / Biocontrol</option>
+                        <option value="Fungicida">🍄 Fungicida / Biofungicida</option>
+                        <option value="Enmienda Orgánica">♻️ Enmienda Orgánica</option>
+                        <option value="Herbicida">🌾 Herbicida</option>
+                      </select>
+                    </div>
+
+                    {catalogInputResources.length === 0 ? (
+                      <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-200 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <AlertTriangle size={18} className="text-amber-600 shrink-0" />
+                          <span>No hay insumos dados de alta en Insumos e Inventario. Primero registre el Proveedor y el Insumo con su N° SENASA y Lote.</span>
                         </div>
-                        <div className="col-span-1">
-                          <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">Unidad</label>
-                          <select 
-                            className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-xs text-slate-900 dark:text-white outline-none"
-                            value={formData.inputUnit}
-                            onChange={(e) => setFormData({ ...formData, inputUnit: e.target.value })}
+                        <Link
+                          to="/resources"
+                          className="px-3 py-1.5 bg-amber-600 text-white rounded-lg font-bold text-[11px] shrink-0 hover:bg-amber-700"
+                        >
+                          Ir a Insumos e Inventario
+                        </Link>
+                      </div>
+                    ) : (
+                      <>
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
+                            Producto Comercial Prescripto (Insumos e Inventario) {(formData.laborType === 'FITOSANITARIO' || formData.laborType === 'FERTIRRIEGO' || formData.syncWithPhytosanitary) ? '*' : '(Opcional para labor mecánica)'}
+                          </label>
+                          <select
+                            className="w-full bg-white dark:bg-slate-900 border border-emerald-500/50 dark:border-emerald-600/50 rounded-xl p-2.5 text-xs font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500"
+                            value={formData.resourceId}
+                            onChange={(e) => {
+                              const resId = e.target.value;
+                              if (!resId) {
+                                applyResourceToTaskForm(undefined);
+                              } else {
+                                const found = resources.find(r => r.id === resId);
+                                applyResourceToTaskForm(found);
+                              }
+                            }}
                           >
-                            <option value="kg">kg</option>
-                            <option value="L">L</option>
-                            <option value="tn">tn</option>
-                            <option value="bolsas">bolsas</option>
+                            <option value="">-- Sin aplicación de insumo (Solo labor mecánica) --</option>
+                            {filteredCatalogResources.map(res => (
+                              <option key={res.id} value={res.id}>
+                                {res.name} — [{res.agroCategory || res.type}] • {res.senasaRegisterNumber || 'SENASA'} • Lote: {res.batchNumber || 'S/L'} • Prov: {res.supplierName || 'Homologado'} (Stock: {res.stock ?? 0} {res.unit})
+                              </option>
+                            ))}
                           </select>
                         </div>
-                        <div className="col-span-1">
-                          <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">USD/Unidad</label>
-                          <input 
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-xs text-slate-900 dark:text-white outline-none font-mono"
-                            value={formData.inputCostPerUnit}
-                            onChange={(e) => setFormData({ ...formData, inputCostPerUnit: Number(e.target.value) })}
-                          />
+
+                        {/* TARJETAS RÁPIDAS DE INSUMOS DISPONIBLES */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-36 overflow-y-auto pr-1">
+                          {filteredCatalogResources.map(res => {
+                            const isSelected = formData.resourceId === res.id;
+                            return (
+                              <button
+                                key={res.id}
+                                type="button"
+                                onClick={() => applyResourceToTaskForm(res)}
+                                className={`p-2.5 rounded-xl border text-left transition cursor-pointer ${
+                                  isSelected
+                                    ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm'
+                                    : 'bg-white dark:bg-slate-900 hover:bg-emerald-50 dark:hover:bg-slate-800 border-slate-200 dark:border-slate-700'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between gap-1">
+                                  <strong className={`text-[11px] font-bold truncate ${isSelected ? 'text-white' : 'text-slate-900 dark:text-white'}`}>
+                                    {res.name}
+                                  </strong>
+                                  <span className={`text-[10px] font-mono font-bold shrink-0 ${isSelected ? 'text-emerald-100' : 'text-emerald-600'}`}>
+                                    {res.stock ?? 0} {res.unit}
+                                  </span>
+                                </div>
+                                <div className={`text-[9.5px] font-mono mt-0.5 truncate ${isSelected ? 'text-emerald-100' : 'text-slate-500'}`}>
+                                  {res.senasaRegisterNumber || 'SENASA'} • Lote {res.batchNumber || 'Oficial'} • {res.recommendedDosagePerHa ?? 2} {res.dosageUnit || 'L/ha'}
+                                </div>
+                                <div className={`text-[9.5px] truncate ${isSelected ? 'text-white/90' : 'text-slate-400'}`}>
+                                  Prov: {res.supplierName || 'Proveedor Homologado'}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
+
+                    {/* FICHA DE TRAZABILIDAD DEL INSUMO SELECCIONADO Y CÁLCULO DE DOSIS X SUPERFICIE */}
+                    {selectedResourceObj && (
+                      <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800/80 space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-2">
+                          <div>
+                            <span className="text-[10px] font-black uppercase text-emerald-600 block">
+                              Ficha Técnica Homologada en Inventario & Proveedores
+                            </span>
+                            <strong className="text-xs font-black text-slate-900 dark:text-white">
+                              {selectedResourceObj.name} ({selectedResourceObj.activeIngredient || 'Principio Activo Certificado'})
+                            </strong>
+                          </div>
+                          <span className="px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-mono text-[10px] font-bold border border-emerald-200 dark:border-emerald-800">
+                            {selectedResourceObj.senasaRegisterNumber || 'SENASA OFICIAL'}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] font-mono bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-lg">
+                          <div>
+                            <span className="text-slate-400 block uppercase">Proveedor Homologado</span>
+                            <strong className="text-slate-800 dark:text-slate-200 truncate block" title={formData.supplierName}>
+                              {formData.supplierName || selectedResourceObj.supplierName}
+                            </strong>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block uppercase">Lote Recepcionado</span>
+                            <strong className="text-slate-800 dark:text-slate-200 block">
+                              {formData.batchNumber || selectedResourceObj.batchNumber}
+                            </strong>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block uppercase">Carencia LMR</span>
+                            <strong className="text-amber-600 dark:text-amber-400 block">
+                              {formData.safetyPeriodDays} días
+                            </strong>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block uppercase">Stock en Galpón</span>
+                            <strong className={`${(selectedResourceObj.stock ?? 0) < formData.inputQuantity ? 'text-rose-600' : 'text-emerald-600'} block`}>
+                              {selectedResourceObj.stock ?? 0} {selectedResourceObj.unit}
+                            </strong>
+                          </div>
+                        </div>
+
+                        {/* DOSIS POR HA, VOLUMEN TOTAL PARA EL LOTE Y MÉTODO DE APLICACIÓN */}
+                        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1">
+                              Dosis Aplicada ({formData.dosageUnit}) *
+                            </label>
+                            <input
+                              type="number"
+                              min="0.05"
+                              step="0.1"
+                              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-xs text-slate-900 dark:text-white font-mono font-bold outline-none"
+                              value={formData.dosagePerHa}
+                              onChange={(e) => {
+                                const nextDosage = Number(e.target.value) || 0;
+                                const nextTotalQty = Number((nextDosage * currentPlotAreaHa).toFixed(2));
+                                const laborInfo = AGRICULTURAL_LABOR_INFO[formData.laborType];
+                                const baseCost = Math.round(currentPlotAreaHa * (laborInfo?.defaultCostPerHa || 18));
+                                setFormData(prev => ({
+                                  ...prev,
+                                  dosagePerHa: nextDosage,
+                                  inputQuantity: nextTotalQty,
+                                  directCostUsd: baseCost + Math.round(nextTotalQty * prev.inputCostPerUnit)
+                                }));
+                              }}
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1">
+                              Total Lote ({currentPlotAreaHa} ha)
+                            </label>
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="number"
+                                min="0.1"
+                                step="0.1"
+                                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-xs text-slate-900 dark:text-white font-mono font-bold outline-none"
+                                value={formData.inputQuantity}
+                                onChange={(e) => {
+                                  const nextQty = Number(e.target.value) || 0;
+                                  setFormData(prev => ({
+                                    ...prev,
+                                    inputQuantity: nextQty
+                                  }));
+                                }}
+                              />
+                              <span className="text-xs font-mono font-bold text-slate-500 px-1">{formData.inputUnit}</span>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1">
+                              Método de Aplicación
+                            </label>
+                            <select
+                              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-xs text-slate-900 dark:text-white outline-none"
+                              value={formData.applicationMethod}
+                              onChange={(e) => setFormData({ ...formData, applicationMethod: e.target.value as any })}
+                            >
+                              <option value="Pulverización Terrestre">Pulverización Terrestre</option>
+                              <option value="Fertirriego">Fertirriego</option>
+                              <option value="Incorporación Edáfica">Incorporación Edáfica</option>
+                              <option value="Manual / Follaje">Manual / Follaje</option>
+                              <option value="Mochila Manual">Mochila Manual</option>
+                              <option value="Dron Agrícola">Dron Agrícola</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1">
+                              Blanco MIP / Objetivo
+                            </label>
+                            <input
+                              type="text"
+                              placeholder="Ej: Control trips / Bioestimulación"
+                              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-xs text-slate-900 dark:text-white outline-none"
+                              value={formData.targetPestOrDisease}
+                              onChange={(e) => setFormData({ ...formData, targetPestOrDisease: e.target.value })}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1">
+                              Ing. Agrónomo Responsable (Cuaderno SENASA)
+                            </label>
+                            <input
+                              type="text"
+                              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-xs text-slate-900 dark:text-white outline-none"
+                              value={formData.responsibleAgronomist}
+                              onChange={(e) => setFormData({ ...formData, responsibleAgronomist: e.target.value })}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1">
+                              Matrícula Profesional (MP)
+                            </label>
+                            <input
+                              type="text"
+                              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-xs text-slate-900 dark:text-white font-mono outline-none"
+                              value={formData.agronomistLicense}
+                              onChange={(e) => setFormData({ ...formData, agronomistLicense: e.target.value })}
+                            />
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    )}
                   </div>
 
-                  {/* CONDICIONES CLIMÁTICAS */}
-                  <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-3">
-                    <div className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1">
-                      <Wind size={14} className="text-cyan-600" /> Condiciones Meteorológicas al Momento de Labor
-                    </div>
+                  {/* CONDICIONES CLIMÁTICAS Y VENTANA DE PULVERIZACIÓN SENASA */}
+                  {(() => {
+                    // Cálculo psicrométrico aproximado de Delta T (Depresión de Bulbo Húmedo)
+                    const T = Number(formData.tempC) || 22;
+                    const RH = Math.min(100, Math.max(5, Number(formData.humidityPct) || 55));
+                    const wind = Number(formData.windSpeedKmh) || 10;
+                    const wetBulb =
+                      T * Math.atan(0.151977 * Math.pow(RH + 8.313659, 0.5)) +
+                      Math.atan(T + RH) -
+                      Math.atan(RH - 1.676331) +
+                      0.00391838 * Math.pow(RH, 1.5) * Math.atan(0.023101 * RH) -
+                      4.686035;
+                    const deltaT = Number(Math.max(0.5, T - wetBulb).toFixed(1));
+                    const isSpraySafe = wind <= 15 && deltaT >= 2 && deltaT <= 8 && T <= 32;
 
-                    <div className="grid grid-cols-4 gap-2">
-                      <div>
-                        <label className="block text-[10px] text-slate-500 font-bold mb-1">Temperatura (°C)</label>
-                        <input 
-                          type="number"
-                          className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-xs text-slate-900 dark:text-white font-mono outline-none"
-                          value={formData.tempC}
-                          onChange={(e) => setFormData({ ...formData, tempC: Number(e.target.value) })}
-                        />
-                      </div>
+                    return (
+                      <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                            <Wind size={15} className="text-cyan-600" />
+                            <span>Condiciones Meteorológicas & Ventana de Pulverización SENASA</span>
+                          </div>
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                              isSpraySafe
+                                ? 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/70 dark:text-emerald-300'
+                                : 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/70 dark:text-amber-300'
+                            }`}
+                          >
+                            Delta T: {deltaT}°C • {isSpraySafe ? '✓ Ventana Óptima Antideriva' : '⚠️ Riesgo de Deriva / Evaporación'}
+                          </span>
+                        </div>
 
-                      <div>
-                        <label className="block text-[10px] text-slate-500 font-bold mb-1">Humedad (%)</label>
-                        <input 
-                          type="number"
-                          className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-xs text-slate-900 dark:text-white font-mono outline-none"
-                          value={formData.humidityPct}
-                          onChange={(e) => setFormData({ ...formData, humidityPct: Number(e.target.value) })}
-                        />
-                      </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          <div>
+                            <label className="block text-[10px] text-slate-500 font-bold mb-1">Temperatura (°C)</label>
+                            <input 
+                              type="number"
+                              step="0.5"
+                              className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-xs text-slate-900 dark:text-white font-mono outline-none"
+                              value={formData.tempC}
+                              onChange={(e) => setFormData({ ...formData, tempC: Number(e.target.value) })}
+                            />
+                          </div>
 
-                      <div>
-                        <label className="block text-[10px] text-slate-500 font-bold mb-1">Viento (km/h)</label>
-                        <input 
-                          type="number"
-                          className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-xs text-slate-900 dark:text-white font-mono outline-none"
-                          value={formData.windSpeedKmh}
-                          onChange={(e) => setFormData({ ...formData, windSpeedKmh: Number(e.target.value) })}
-                        />
-                      </div>
+                          <div>
+                            <label className="block text-[10px] text-slate-500 font-bold mb-1">Humedad Relativa (%)</label>
+                            <input 
+                              type="number"
+                              min="5"
+                              max="100"
+                              className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-xs text-slate-900 dark:text-white font-mono outline-none"
+                              value={formData.humidityPct}
+                              onChange={(e) => setFormData({ ...formData, humidityPct: Number(e.target.value) })}
+                            />
+                          </div>
 
-                      <div>
-                        <label className="block text-[10px] text-slate-500 font-bold mb-1">Dirección</label>
-                        <input 
-                          type="text"
-                          className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-xs text-slate-900 dark:text-white font-mono outline-none"
-                          value={formData.windDirection}
-                          onChange={(e) => setFormData({ ...formData, windDirection: e.target.value })}
-                        />
+                          <div>
+                            <label className="block text-[10px] text-slate-500 font-bold mb-1">Viento (km/h - Máx 15)</label>
+                            <input 
+                              type="number"
+                              step="0.5"
+                              className={`w-full bg-white dark:bg-slate-900 border rounded-lg p-2 text-xs font-mono outline-none ${
+                                wind > 15 ? 'border-rose-500 text-rose-600 font-bold' : 'border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white'
+                              }`}
+                              value={formData.windSpeedKmh}
+                              onChange={(e) => setFormData({ ...formData, windSpeedKmh: Number(e.target.value) })}
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] text-slate-500 font-bold mb-1">Dirección Viento</label>
+                            <input 
+                              type="text"
+                              className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-xs text-slate-900 dark:text-white font-mono outline-none"
+                              value={formData.windDirection}
+                              onChange={(e) => setFormData({ ...formData, windDirection: e.target.value })}
+                            />
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
+                    );
+                  })()}
                 </div>
               )}
 

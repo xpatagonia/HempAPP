@@ -4245,46 +4245,40 @@ export default function PlotDetails() {
                   />
                 </div>
                 <div className="sm:col-span-2 space-y-1.5">
-                  <label className={labelClass}>
-                    Producto Comercial Prescripto * ({prescribedPlotResources.length} en Base de Datos)
-                  </label>
+                  <div className="flex items-center justify-between gap-2">
+                    <label className={labelClass}>
+                      Producto Comercial Prescripto en Inventario BD * ({prescribedPlotResources.length} disponibles)
+                    </label>
+                    <Link
+                      to="/resources"
+                      className="text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400 hover:underline"
+                    >
+                      + Alta en Insumos e Inventario →
+                    </Link>
+                  </div>
                   <select
+                    required
                     value={
-                      isCustomAgroProduct
-                        ? '__CUSTOM__'
-                        : prescribedPlotResources.some(r => r.name === agroForm.productName)
+                      prescribedPlotResources.some(r => r.name === agroForm.productName)
                         ? agroForm.productName
-                        : prescribedPlotResources[0]?.name || '__CUSTOM__'
+                        : prescribedPlotResources[0]?.name || ''
                     }
                     onChange={e => {
                       const val = e.target.value;
-                      if (val === '__CUSTOM__') {
-                        setIsCustomAgroProduct(true);
-                        setAgroForm({ ...agroForm, productName: '' });
-                      } else {
-                        const found = prescribedPlotResources.find(r => r.name === val);
-                        if (found) applyCatalogResourceToPlotAgro(found);
-                      }
+                      const found = prescribedPlotResources.find(r => r.name === val);
+                      if (found) applyCatalogResourceToPlotAgro(found);
                     }}
                     className={inputStyle}
                   >
+                    {prescribedPlotResources.length === 0 && (
+                      <option value="">-- Sin insumos en esta categoría (Dar de alta en Inventario) --</option>
+                    )}
                     {prescribedPlotResources.map(res => (
                       <option key={res.id} value={res.name}>
-                        {res.name} — {res.recommendedDosagePerHa ?? 2} {res.dosageUnit || 'L/ha'} ({res.senasaRegisterNumber || 'SENASA'}) [Stock: {res.stock ?? 0} {res.unit}]
+                        {res.name} — {res.recommendedDosagePerHa ?? 2} {res.dosageUnit || 'L/ha'} ({res.senasaRegisterNumber || 'SENASA'}) • Prov: {res.supplierName || 'Homologado'} [Stock: {res.stock ?? 0} {res.unit}]
                       </option>
                     ))}
-                    <option value="__CUSTOM__">+ Otro Producto Comercial (Guardar en Base de Datos)</option>
                   </select>
-                  {isCustomAgroProduct && (
-                    <input
-                      type="text"
-                      required
-                      value={agroForm.productName}
-                      onChange={e => setAgroForm({ ...agroForm, productName: e.target.value })}
-                      className={inputStyle}
-                      placeholder="Escribir nombre del nuevo producto comercial..."
-                    />
-                  )}
                 </div>
                 <div className="sm:col-span-2">
                   <label className={labelClass}>Principio Activo / Composición</label>

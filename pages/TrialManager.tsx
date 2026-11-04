@@ -3941,56 +3941,39 @@ export default function TrialManager() {
                                 <div className="sm:col-span-2 min-w-0 space-y-1.5">
                                   <div className="flex items-center justify-between gap-2">
                                     <label className="text-[9px] font-black uppercase text-slate-400 block">
-                                      Producto Comercial Aplicado / Prescripto * ({prescribedProductsByCategory.length} en BD)
+                                      Producto Comercial Homologado en Inventario BD * ({prescribedProductsByCategory.length} disponibles)
                                     </label>
                                     <Link
                                       to="/resources"
                                       className="text-[9px] font-mono font-bold text-teal-600 dark:text-teal-400 hover:underline"
                                     >
-                                      Ver Catálogo BD →
+                                      + Alta en Insumos e Inventario →
                                     </Link>
                                   </div>
                                   <select
                                     value={
-                                      isCustomAgroProduct
-                                        ? '__CUSTOM__'
-                                        : prescribedProductsByCategory.some(r => r.name === quickAgroProduct)
+                                      prescribedProductsByCategory.some(r => r.name === quickAgroProduct)
                                         ? quickAgroProduct
-                                        : prescribedProductsByCategory[0]?.name || '__CUSTOM__'
+                                        : prescribedProductsByCategory[0]?.name || ''
                                     }
                                     onChange={e => {
                                       const val = e.target.value;
-                                      if (val === '__CUSTOM__') {
-                                        setIsCustomAgroProduct(true);
-                                        setQuickAgroProduct('');
-                                      } else {
-                                        const found = prescribedProductsByCategory.find(r => r.name === val);
-                                        if (found) {
-                                          applyCatalogResourceToQuickAgro(found);
-                                        }
+                                      const found = prescribedProductsByCategory.find(r => r.name === val);
+                                      if (found) {
+                                        applyCatalogResourceToQuickAgro(found);
                                       }
                                     }}
                                     className="w-full min-w-0 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-teal-500/40 dark:border-teal-500/40 text-xs font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500 outline-none"
                                   >
+                                    {prescribedProductsByCategory.length === 0 && (
+                                      <option value="">-- Sin insumos en esta categoría (Registrar en Inventario) --</option>
+                                    )}
                                     {prescribedProductsByCategory.map(res => (
                                       <option key={res.id} value={res.name}>
-                                        {res.name} — {res.recommendedDosagePerHa ?? 2} {res.dosageUnit || 'L/ha'} ({res.senasaRegisterNumber || 'SENASA'}) [Stock: {res.stock ?? 0} {res.unit}]
+                                        {res.name} — {res.recommendedDosagePerHa ?? 2} {res.dosageUnit || 'L/ha'} ({res.senasaRegisterNumber || 'SENASA'}) • Prov: {res.supplierName || 'Homologado'} [Stock: {res.stock ?? 0} {res.unit}]
                                       </option>
                                     ))}
-                                    <option value="__CUSTOM__">
-                                      + Otro Producto Comercial (Registrar en Base de Datos)
-                                    </option>
                                   </select>
-
-                                  {isCustomAgroProduct && (
-                                    <input
-                                      type="text"
-                                      value={quickAgroProduct}
-                                      onChange={e => setQuickAgroProduct(e.target.value)}
-                                      placeholder="Escribir nombre del nuevo producto comercial (se vinculará a la BD)..."
-                                      className="w-full min-w-0 p-2.5 rounded-xl bg-teal-50/50 dark:bg-slate-950 border border-teal-500/50 text-xs font-bold text-slate-900 dark:text-white"
-                                    />
-                                  )}
                                 </div>
                               </div>
 

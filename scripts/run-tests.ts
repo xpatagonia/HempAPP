@@ -357,6 +357,103 @@ test("Sincronización Multi-Dispositivo: Persistencia explícita de accountStatu
     assert.equal(unpacked.dniNumber, '30111222');
 });
 
+// --- GRUPO 8: RE-INGENIERÍA FITOSANITARIA (PROVEEDOR → INVENTARIO → ORDEN DE LABOR → CUADERNO SENASA) ---
+console.log("\n8️⃣  RE-INGENIERÍA FITOSANITARIA: PROVEEDORES → INVENTARIO → ORDEN DE LABOR → CUADERNO SENASA");
+
+test("Trazabilidad obligatoria: Todo insumo en Orden de Labor referencia un Insumo Homologado en Inventario y su Proveedor", () => {
+    const supplier = {
+        id: 'sup-bio-01',
+        name: 'BioInsumos Patagonia S.A.',
+        cuit: '30-71554433-9',
+        category: 'Bioinsumos / Fitosanitarios'
+    };
+    const resource = {
+        id: 'res-tricho-01',
+        name: 'Trichoderma harzianum WP',
+        category: 'Bioinsumo / Control Biológico' as const,
+        stock: 150,
+        unit: 'L',
+        activeIngredient: 'Trichoderma harzianum cepa T22 (1x10^9 UFC/ml)',
+        senasaRegisterNumber: 'SENASA-BIO-39481',
+        batchNumber: 'LOTE-2025-TH09',
+        supplierId: supplier.id,
+        toxicologicalClass: 'IV - Verde (Normalmente no ofrece peligro)' as const,
+        safetyPeriodDays: 0,
+        recommendedDosagePerHa: 2.5
+    };
+    const plotAreaHa = 12;
+    const totalVolume = Number((resource.recommendedDosagePerHa * plotAreaHa).toFixed(2));
+    assert.equal(totalVolume, 30);
+    assert.ok(totalVolume <= resource.stock, "El volumen requerido no puede superar el stock disponible en galpón");
+    assert.equal(resource.supplierId, supplier.id);
+    assert.ok(resource.senasaRegisterNumber.startsWith('SENASA-'));
+});
+
+test("Persistencia Multi-Dispositivo: Empaquetado y desempaquetado de HEMPC_TASK_META en Orden de Labor (Insumos y Clima)", () => {
+    const taskMeta = {
+        laborType: 'Pulverización Fitosanitaria / Biológica',
+        syncWithPhytosanitary: true,
+        linkedAgroAppId: 'agro-task-t-900',
+        weather: {
+            tempC: 23.5,
+            humidityPct: 58,
+            windSpeedKmh: 11,
+            windDirection: 'NE',
+            rainMm: 0,
+            soilCondition: 'Húmedo Óptimo'
+        },
+        appliedInputs: [{
+            resourceId: 'res-tricho-01',
+            resourceName: 'Trichoderma harzianum WP',
+            category: 'Bioinsumo / Control Biológico',
+            quantity: 30,
+            unit: 'L',
+            dosagePerHa: 2.5,
+            dosageUnit: 'L/ha',
+            activeIngredient: 'Trichoderma harzianum cepa T22',
+            senasaRegisterNumber: 'SENASA-BIO-39481',
+            batchNumber: 'LOTE-2025-TH09',
+            supplierId: 'sup-bio-01',
+            supplierName: 'BioInsumos Patagonia S.A.',
+            toxicologicalClass: 'IV - Verde (Normalmente no ofrece peligro)',
+            safetyPeriodDays: 0,
+            applicationMethod: 'Pulverización Terrestre (Botalón)',
+            targetPestOrDisease: 'Fusarium spp. / Damping-off',
+            responsibleAgronomist: 'Ing. Agr. Martín Gómez',
+            agronomistLicense: 'MP-8841'
+        }]
+    };
+    const packedDescription = `Aplicación preventiva en pre-floración\n<!--HEMPC_TASK_META:${JSON.stringify(taskMeta)}-->`;
+    const match = packedDescription.match(/\n?<!--HEMPC_TASK_META:(.*?)-->\s*$/s);
+    assert.ok(match && match[1]);
+    const cleanText = packedDescription.replace(/\n?<!--HEMPC_TASK_META:.*?-->\s*$/s, '').trim();
+    const unpacked = JSON.parse(match[1]);
+    assert.equal(cleanText, 'Aplicación preventiva en pre-floración');
+    assert.equal(unpacked.syncWithPhytosanitary, true);
+    assert.equal(unpacked.appliedInputs[0].resourceId, 'res-tricho-01');
+    assert.equal(unpacked.appliedInputs[0].supplierId, 'sup-bio-01');
+    assert.equal(unpacked.weather.windSpeedKmh, 11);
+});
+
+test("Regla de Negocio Estricta: El Productor no puede aplicar ningún insumo que no figure en la Lista de Tareas de Campo", () => {
+    const canProducerApplyTreatment = (role: string, linkedTaskId: string, plotTasks: { id: string; resourceId: string }[], selectedResourceId: string) => {
+        const isProducer = role === 'client' || role === 'Socio_Productor' || role === 'technician';
+        if (isProducer && !linkedTaskId) return false;
+        const matchedTask = plotTasks.find(t => t.id === linkedTaskId);
+        if (isProducer && !matchedTask) return false;
+        if (matchedTask && matchedTask.resourceId !== selectedResourceId) return false;
+        return true;
+    };
+
+    const authorizedTasks = [{ id: 'task-fit-101', resourceId: 'res-tricho-01' }];
+    // Caso 1: Productor intenta aplicar sin Orden de Labor -> BLOQUEADO
+    assert.equal(canProducerApplyTreatment('Socio_Productor', '', authorizedTasks, 'res-tricho-01'), false);
+    // Caso 2: Productor intenta aplicar un insumo distinto al de la Orden de Labor -> BLOQUEADO
+    assert.equal(canProducerApplyTreatment('Socio_Productor', 'task-fit-101', authorizedTasks, 'res-otro-999'), false);
+    // Caso 3: Productor aplica el insumo prescripto en su Orden de Labor -> PERMITIDO
+    assert.equal(canProducerApplyTreatment('Socio_Productor', 'task-fit-101', authorizedTasks, 'res-tricho-01'), true);
+});
+
 
 console.log("\n=================================================");
 console.log(`📊 RESUMEN DE PRUEBAS: ${passed} Exitosas, ${failed} Fallidas`);
@@ -367,3 +464,4 @@ if (failed > 0) {
 } else {
     process.exit(0);
 }
+

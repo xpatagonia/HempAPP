@@ -811,6 +811,22 @@ export interface LaborAppliedInput {
   quantity: number;
   unit: string;
   costPerUnit?: number;
+  // Trazabilidad Fitosanitaria SENASA / Insumos e Inventario / Proveedores
+  category?: AgrochemicalCategory;
+  activeIngredient?: string;
+  senasaRegisterNumber?: string;
+  batchNumber?: string;
+  supplierId?: string;
+  supplierName?: string;
+  manufacturer?: string;
+  toxicologicalClass?: ToxicologicalBand;
+  dosagePerHa?: number;
+  dosageUnit?: 'L/ha' | 'kg/ha' | 'ml/ha' | 'cc/ha' | 'g/ha' | 't/ha';
+  safetyPeriodDays?: number;
+  applicationMethod?: AgrochemicalApplication['applicationMethod'];
+  targetPestOrDisease?: string;
+  responsibleAgronomist?: string;
+  agronomistLicense?: string;
 }
 
 export interface Task {
@@ -835,6 +851,7 @@ export interface Task {
   directCostUsd?: number;
   syncWithPhytosanitary?: boolean;
   syncWithExpenses?: boolean;
+  linkedAgroAppId?: string;
   executionDate?: string;
   notes?: string;
   evidenceUrl?: string;
@@ -1068,6 +1085,7 @@ export interface AgrochemicalApplication {
   date: string;
   time?: string;
   category: AgrochemicalCategory;
+  resourceId?: string; // ID del Insumo en Inventario (Resources)
   productName: string; // Marca comercial
   activeIngredient: string; // Principio activo o composición NPK/Biológica
   manufacturer: string; // Fabricante / Marca / Laboratorio
@@ -1095,6 +1113,8 @@ export interface AgrochemicalApplication {
   pestIncidenceScore?: number; // Escala 1-9 de incidencia al momento del tratamiento
   phenologicalStage?: string; // Fase fenológica del cultivo al momento de aplicación
   linkedTrialRecordId?: string; // Informe de Monitoreo Rápido que originó la aplicación
+  linkedTaskId?: string; // ID de la Orden de Labor / Tarea de Campo vinculada
+  linkedTaskTitle?: string; // Título de la Orden de Labor vinculada
   notes?: string;
   status: 'Aplicado' | 'En Carencia' | 'Apto Cosecha';
 }

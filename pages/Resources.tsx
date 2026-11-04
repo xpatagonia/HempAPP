@@ -5,7 +5,7 @@ import { Resource, AgrochemicalCategory, ToxicologicalBand, AgrochemicalApplicat
 import {
   Plus, Trash2, Edit2, Package, Wrench, DollarSign, Archive,
   Search, AlertTriangle, CheckCircle2, X, FlaskConical, Sprout, Check,
-  ShieldCheck, Building2, Layers, ArrowUpRight
+  ShieldCheck, Building2, Layers, ArrowUpRight, Tractor
 } from 'lucide-react';
 import { DateInputAr } from '../src/components/DateInputAr';
 
@@ -21,7 +21,16 @@ const AGRO_CATEGORIES: AgrochemicalCategory[] = [
 ];
 
 export default function Resources() {
-  const { resources, suppliers, addResource, updateResource, deleteResource, currentUser } = useAppContext();
+  const {
+    resources,
+    suppliers,
+    tasks,
+    agrochemicalApplications,
+    addResource,
+    updateResource,
+    deleteResource,
+    currentUser
+  } = useAppContext();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -183,7 +192,7 @@ export default function Resources() {
     const selectedSup = suppliers.find(s => s.id === formData.supplierId);
 
     const payload: Resource = {
-      id: editingId || `senasa-res-${Date.now()}`,
+      id: editingId || `res-${Date.now()}`,
       name: formData.name.trim(),
       type: (formData.type as Resource['type']) || 'Fertilizante',
       agroCategory: isLabor ? undefined : (formData.agroCategory as AgrochemicalCategory) || 'Mejorador de Suelo',
@@ -250,18 +259,25 @@ export default function Resources() {
 
         <div className="flex flex-wrap items-center gap-2">
           <Link
-            to="/trials-lite"
+            to="/suppliers"
             className="px-3.5 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 transition"
           >
-            <span>Ir a Monitoreo Rápido</span>
-            <ArrowUpRight size={14} />
+            <Building2 size={14} />
+            <span>1. Proveedores ({suppliers.length})</span>
+          </Link>
+          <Link
+            to="/tasks"
+            className="px-3.5 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 transition"
+          >
+            <Tractor size={14} />
+            <span>3. Órdenes de Labor</span>
           </Link>
           <Link
             to="/phytosanitary"
             className="px-3.5 py-2.5 bg-teal-50 dark:bg-teal-950/60 hover:bg-teal-100 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 transition"
           >
             <ShieldCheck size={14} />
-            <span>Cuaderno SENASA</span>
+            <span>4. Cuaderno SENASA</span>
           </Link>
           {canManage && (
             <button
@@ -514,9 +530,15 @@ export default function Resources() {
                       </span>
                     </div>
                     {r.supplierName && (
-                      <div className="text-[10px] text-slate-500 flex items-center gap-1 truncate pt-0.5">
-                        <Building2 size={10} className="text-slate-400 shrink-0" />
-                        <span className="truncate">Prov: <strong className="text-slate-700 dark:text-slate-300">{r.supplierName}</strong></span>
+                      <div className="text-[10px] text-slate-500 flex items-center justify-between gap-1 pt-0.5">
+                        <span className="flex items-center gap-1 truncate">
+                          <Building2 size={10} className="text-emerald-600 shrink-0" />
+                          <span className="truncate">Prov: <strong className="text-slate-700 dark:text-slate-300">{r.supplierName}</strong></span>
+                        </span>
+                        <span className="text-[9px] font-bold text-teal-600 dark:text-teal-400 shrink-0">
+                          {tasks.filter(t => t.appliedInputs?.some(i => i.resourceId === r.id || i.name.toLowerCase() === r.name.toLowerCase())).length} Labores •{' '}
+                          {agrochemicalApplications.filter(a => a.resourceId === r.id || a.productName.toLowerCase() === r.name.toLowerCase()).length} Folios
+                        </span>
                       </div>
                     )}
                   </div>

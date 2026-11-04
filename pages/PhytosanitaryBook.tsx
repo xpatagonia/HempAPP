@@ -1,16 +1,14 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
-import { AgrochemicalApplication, AgrochemicalCategory, ToxicologicalBand, Plot, SupplierLotInspection, Resource } from '../types';
-import { getPlotAgrochemicalApplications } from '../src/services/agro40Service';
-import { DEMO_SUPPLIER_INSPECTIONS } from '../src/data/initialDemoData';
+import { AgrochemicalApplication, AgrochemicalCategory, ToxicologicalBand, Resource, Task } from '../types';
 import { 
-  ShieldCheck, Plus, Search, Filter, Printer, Download, 
-  Calendar, Clock, AlertTriangle, CheckCircle2, AlertCircle,
-  FlaskConical, Sprout, Wind, Thermometer, Droplets, User, 
-  FileText, X, Save, ChevronRight, HelpCircle, ArrowUpRight,
-  Package, MapPin, Building2, Check, Scale, Layers, Trash2, Edit2
+  ShieldCheck, Plus, Search, Printer, 
+  Clock, CheckCircle2, AlertTriangle,
+  FlaskConical, Sprout, 
+  X, Save, ArrowUpRight,
+  Package, Building2, Trash2, Edit2, Tractor
 } from 'lucide-react';
-import { QRCodeSVG } from 'qrcode.react';
 import { BarcodeRenderer } from '../components/BarcodeRenderer';
 import {
   canAccessPlot,
@@ -19,123 +17,15 @@ import {
 } from '../src/utils/structurePermissions';
 import { DateInputAr } from '../src/components/DateInputAr';
 
-// Insumos homologados y lotes recepcionados preconfigurados para vinculación rápida
-const RECEIVEABLE_INPUT_PRESETS = [
-  {
-    lotNumber: 'LOT-BIO-TRICHO-25B',
-    productName: 'Trichoderma harzianum TH-35 Líquido',
-    category: 'Bioestimulante' as const,
-    activeIngredient: 'Trichoderma harzianum 1x10^9 UFC/ml',
-    manufacturer: 'Biológicos del Litoral S.A.',
-    supplierName: 'AgroInsumos Biológicos del Litoral',
-    senasaRegisterNumber: 'SENASA-REG-BIO-4491-SF',
-    toxicologicalClass: 'Biológico / Orgánico Certificado' as ToxicologicalBand,
-    dosagePerHa: 1.5,
-    dosageUnit: 'L/ha' as const,
-    safetyPeriodDays: 0,
-    applicationMethod: 'Fertirriego' as const,
-    notes: 'Lote de insumo inspeccionado y aprobado para campo (Apto GACP).'
-  },
-  {
-    lotNumber: 'LOT-BIO-GLOMUS-2025',
-    productName: 'Glomus intraradices Micorrizas VAM',
-    category: 'Bioestimulante' as const,
-    activeIngredient: 'Esporas viables 1.5x10^4 / g + Ácidos Húmicos',
-    manufacturer: 'Biológicos del Litoral S.A.',
-    supplierName: 'AgroInsumos Biológicos del Litoral',
-    senasaRegisterNumber: 'SENASA-REG-BIO-3820-BA',
-    toxicologicalClass: 'Biológico / Orgánico Certificado' as ToxicologicalBand,
-    dosagePerHa: 2.0,
-    dosageUnit: 'kg/ha' as const,
-    safetyPeriodDays: 0,
-    applicationMethod: 'Incorporación Edáfica' as const,
-    notes: 'Inoculación de siembra para desarrollo radicular.'
-  },
-  {
-    lotNumber: 'LOT-BIO-2026-081',
-    productName: 'Bio-Hemp Root Optimizer',
-    category: 'Bioestimulante' as const,
-    activeIngredient: 'Ácidos Húmicos 15% + Ácidos Fúlvicos 3% + Micorrizas VAM',
-    manufacturer: 'Bioagro Argentina S.A.',
-    supplierName: 'Insumos Agrícolas del Centro S.R.L.',
-    senasaRegisterNumber: 'SENASA N° 18.420/2022',
-    toxicologicalClass: 'Biológico / Orgánico Certificado' as ToxicologicalBand,
-    dosagePerHa: 5.0,
-    dosageUnit: 'L/ha' as const,
-    safetyPeriodDays: 0,
-    applicationMethod: 'Fertirriego' as const,
-    notes: 'Bioestimulación radicular en fase vegetativa inicial.'
-  },
-  {
-    lotNumber: 'NEEM-2026-004',
-    productName: 'Dipromite Bio-Neem EC (Azadiractina)',
-    category: 'Insecticida' as const,
-    activeIngredient: 'Azadiractina 1.2% EC (Extracto de neem puro)',
-    manufacturer: 'Biocontrol Technologies Arg',
-    supplierName: 'AgroInsumos Biológicos del Litoral',
-    senasaRegisterNumber: 'SENASA N° 21.045/2024',
-    toxicologicalClass: 'Banda Verde (Banda IV - Poco Peligroso)' as ToxicologicalBand,
-    dosagePerHa: 0.8,
-    dosageUnit: 'L/ha' as const,
-    safetyPeriodDays: 3,
-    applicationMethod: 'Pulverización Terrestre' as const,
-    notes: 'Control preventivo de trips y pulgones. Pulverizar al atardecer.'
-  },
-  {
-    lotNumber: 'BTK-BIO-2025-09',
-    productName: 'Bacillus thuringiensis var. kurstaki',
-    category: 'Insecticida' as const,
-    activeIngredient: 'Delta-endotoxinas proteicas 32.000 UI/mg',
-    manufacturer: 'BioInsumos Santa Fe S.A.',
-    supplierName: 'AgroInsumos Biológicos del Litoral',
-    senasaRegisterNumber: 'SENASA N° 11.204/2021',
-    toxicologicalClass: 'Biológico / Orgánico Certificado' as ToxicologicalBand,
-    dosagePerHa: 1.0,
-    dosageUnit: 'kg/ha' as const,
-    safetyPeriodDays: 3,
-    applicationMethod: 'Pulverización Terrestre' as const,
-    notes: 'Control selectivo de isocas defoliadoras sin residuo químico.'
-  },
-  {
-    lotNumber: 'YARA-8821-X',
-    productName: 'YaraVita CropBoost',
-    category: 'Fertilizante Foliar' as const,
-    activeIngredient: 'Fósforo soluble 20% + Magnesio 4% + Cinc 3% + Boro 1%',
-    manufacturer: 'Yara International ASA',
-    supplierName: 'Nutrientes del Sur S.A.',
-    senasaRegisterNumber: 'SENASA N° 15.892/2019',
-    toxicologicalClass: 'Banda Verde (Banda IV - Poco Peligroso)' as ToxicologicalBand,
-    dosagePerHa: 2.5,
-    dosageUnit: 'L/ha' as const,
-    safetyPeriodDays: 7,
-    applicationMethod: 'Pulverización Terrestre' as const,
-    notes: 'Corrector micronutricional pre-floración.'
-  },
-  {
-    lotNumber: 'HUMI-SOIL-26A',
-    productName: 'HumiFulvic Complex + Glomus intraradices',
-    category: 'Mejorador de Suelo' as const,
-    activeIngredient: 'Ácidos Húmicos 15% + Ácidos Fúlvicos 8% + Micorrizas Arbusculares',
-    manufacturer: 'Edafología Regenerativa S.A.',
-    supplierName: 'BioSuelos Patagonia S.R.L.',
-    senasaRegisterNumber: 'SENASA-ENM-9042-AR',
-    toxicologicalClass: 'Biológico / Orgánico Certificado' as ToxicologicalBand,
-    dosagePerHa: 5.0,
-    dosageUnit: 'L/ha' as const,
-    safetyPeriodDays: 0,
-    applicationMethod: 'Fertirriego' as const,
-    notes: 'Mejorador físico-biológico de estructura edáfica, CIC y floculación radicular.'
-  }
-];
-
 export default function PhytosanitaryBook() {
   const {
     plots,
     currentUser,
     locations,
-    varieties,
     clients,
     resources,
+    suppliers,
+    tasks,
     usersList,
     agrochemicalApplications: applications,
     addAgrochemicalApplication,
@@ -155,7 +45,12 @@ export default function PhytosanitaryBook() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [selectedAppForPrint, setSelectedAppForPrint] = useState<AgrochemicalApplication | null>(null);
-  const [isCustomProduct, setIsCustomProduct] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const isProducerOnly =
+    currentUser?.role === 'client' ||
+    currentUser?.role === 'technician' ||
+    currentUser?.memberType === 'Socio_Productor';
 
   // Parcelas accesibles según el aislamiento de estructura
   const availablePlots = useMemo(() => {
@@ -166,15 +61,23 @@ export default function PhytosanitaryBook() {
   const defaultPlotLoc = locations.find(l => l.id === defaultPlotObj?.locationId);
   const defaultPlotRoster = resolveLocationStructureRoster(defaultPlotLoc, clients, usersList);
 
+  const catalogResources = useMemo(() => {
+    return resources.filter(r => r.type !== 'Labor');
+  }, [resources]);
+
   // Formulario de Nueva Aplicación
   const [formData, setFormData] = useState<Partial<AgrochemicalApplication>>({
     plotId: defaultPlotObj?.id || '',
     date: new Date().toISOString().split('T')[0],
     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
-    category: 'Bioestimulante',
+    category: 'Mejorador de Suelo',
+    resourceId: '',
+    linkedTaskId: '',
+    linkedTaskTitle: '',
     productName: '',
     activeIngredient: '',
     manufacturer: '',
+    supplierId: '',
     supplierName: '',
     senasaRegisterNumber: '',
     toxicologicalClass: 'Biológico / Orgánico Certificado',
@@ -187,7 +90,7 @@ export default function PhytosanitaryBook() {
       defaultPlotObj?.technicalResponsibleName ||
       defaultPlotRoster.technicalDisplayName ||
       currentUser?.name ||
-      'Gastón BAREA M.',
+      'Dirección Técnica Cooperativa',
     agronomistLicense: 'MP-AGRO-3321 CIAF',
     weatherCondition: {
       temperatureC: 22.0,
@@ -196,6 +99,19 @@ export default function PhytosanitaryBook() {
     },
     notes: ''
   });
+
+  // Órdenes de Labor / Tareas de Campo de la parcela seleccionada que tienen insumo fitosanitario/fertilizante
+  const plotCandidateTasks = useMemo(() => {
+    if (!formData.plotId) return [];
+    return tasks.filter(
+      t =>
+        t.plotId === formData.plotId &&
+        ((t.appliedInputs && t.appliedInputs.length > 0) ||
+          t.laborType === 'FITOSANITARIO' ||
+          t.laborType === 'FERTIRRIEGO' ||
+          t.syncWithPhytosanitary)
+    );
+  }, [tasks, formData.plotId]);
 
   // Cálculo de KPIs Fitosanitarios
   const kpis = useMemo(() => {
@@ -239,11 +155,14 @@ export default function PhytosanitaryBook() {
         return false;
       }
 
-      const matchSearch = app.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          app.activeIngredient.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          app.senasaRegisterNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          app.plotName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          app.batchNumber.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchSearch =
+        app.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        app.activeIngredient.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        app.senasaRegisterNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        app.plotName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        app.batchNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (app.supplierName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (app.linkedTaskTitle || '').toLowerCase().includes(searchTerm.toLowerCase());
       
       const matchPlot = filterPlotId === 'all' || app.plotId === filterPlotId;
       const matchCategory = filterCategory === 'all' || app.category === filterCategory;
@@ -261,7 +180,7 @@ export default function PhytosanitaryBook() {
   // Productos comerciales prescriptos en la Base de Datos (`resources`) filtrados por la Categoría seleccionada
   const prescribedResourcesForCategory = useMemo(() => {
     const cat = formData.category || 'Mejorador de Suelo';
-    return resources.filter(r => {
+    const byCat = catalogResources.filter(r => {
       if (r.agroCategory) return r.agroCategory === cat;
       if (
         cat === 'Fertilizante Edáfico' ||
@@ -273,18 +192,23 @@ export default function PhytosanitaryBook() {
       }
       return r.type === 'Fitosanitario';
     });
-  }, [resources, formData.category]);
+    return byCat.length > 0 ? byCat : catalogResources;
+  }, [catalogResources, formData.category]);
 
   const applyCatalogResourceToForm = (res: Resource) => {
-    setIsCustomProduct(false);
+    setFormError(null);
+    const linkedSupplier = suppliers.find(
+      s => s.id === res.supplierId || (res.supplierName && s.name.toLowerCase() === res.supplierName.toLowerCase())
+    );
     setFormData(prev => ({
       ...prev,
+      resourceId: res.id,
       category: res.agroCategory || prev.category || 'Mejorador de Suelo',
       productName: res.name,
       activeIngredient: res.activeIngredient || 'Insumo Agrícola Homologado',
-      manufacturer: res.manufacturer || 'Elaborador Homologado GACP',
-      supplierId: res.supplierId || 'sup-biofabrica-patagonia-01',
-      supplierName: res.supplierName || 'BioFábrica & Insumos Agrícolas Red HempC',
+      manufacturer: res.manufacturer || linkedSupplier?.name || 'Elaborador Homologado GACP',
+      supplierId: linkedSupplier?.id || res.supplierId || '',
+      supplierName: linkedSupplier?.name || res.supplierName || 'Proveedor Homologado en BD',
       senasaRegisterNumber: res.senasaRegisterNumber || 'SENASA-OFICIAL',
       toxicologicalClass: res.toxicologicalClass || 'Biológico / Orgánico Certificado',
       dosagePerHa: res.recommendedDosagePerHa ?? 2.0,
@@ -296,73 +220,162 @@ export default function PhytosanitaryBook() {
     }));
   };
 
-  // Al seleccionar un insumo preconfigurado / recepcionado
-  const handleSelectPresetInput = (preset: typeof RECEIVEABLE_INPUT_PRESETS[0]) => {
-    setIsCustomProduct(false);
+  // Al seleccionar una Orden de Labor / Tarea de Campo de la parcela
+  const applyTaskToForm = (task: Task) => {
+    setFormError(null);
+    const firstIn = task.appliedInputs?.[0];
+    const matchedRes =
+      catalogResources.find(r => r.id === firstIn?.resourceId) ||
+      catalogResources.find(r => firstIn?.name && r.name.toLowerCase() === firstIn.name.toLowerCase()) ||
+      catalogResources[0];
+
+    const linkedSupplier = suppliers.find(
+      s =>
+        s.id === (firstIn?.supplierId || matchedRes?.supplierId) ||
+        ((firstIn?.supplierName || matchedRes?.supplierName) &&
+          s.name.toLowerCase() === (firstIn?.supplierName || matchedRes?.supplierName || '').toLowerCase())
+    );
+
     setFormData(prev => ({
       ...prev,
-      productName: preset.productName,
-      category: preset.category,
-      activeIngredient: preset.activeIngredient,
-      manufacturer: preset.manufacturer,
-      supplierName: preset.supplierName,
-      senasaRegisterNumber: preset.senasaRegisterNumber,
-      toxicologicalClass: preset.toxicologicalClass,
-      dosagePerHa: preset.dosagePerHa,
-      dosageUnit: preset.dosageUnit,
-      batchNumber: preset.lotNumber,
-      safetyPeriodDays: preset.safetyPeriodDays,
-      applicationMethod: preset.applicationMethod,
-      notes: preset.notes
+      plotId: task.plotId || prev.plotId,
+      date: task.executionDate || task.dueDate || prev.date,
+      linkedTaskId: task.id,
+      linkedTaskTitle: task.title,
+      resourceId: matchedRes?.id || firstIn?.resourceId || '',
+      category: firstIn?.category || matchedRes?.agroCategory || prev.category || 'Mejorador de Suelo',
+      productName: matchedRes?.name || firstIn?.name || '',
+      activeIngredient: firstIn?.activeIngredient || matchedRes?.activeIngredient || 'Insumo Agrícola Homologado',
+      manufacturer: firstIn?.manufacturer || matchedRes?.manufacturer || linkedSupplier?.name || 'Elaborador Homologado',
+      supplierId: linkedSupplier?.id || firstIn?.supplierId || matchedRes?.supplierId || '',
+      supplierName: linkedSupplier?.name || firstIn?.supplierName || matchedRes?.supplierName || 'Proveedor Homologado',
+      senasaRegisterNumber: firstIn?.senasaRegisterNumber || matchedRes?.senasaRegisterNumber || 'SENASA-OFICIAL',
+      toxicologicalClass:
+        firstIn?.toxicologicalClass || matchedRes?.toxicologicalClass || 'Biológico / Orgánico Certificado',
+      dosagePerHa: firstIn?.dosagePerHa || matchedRes?.recommendedDosagePerHa || 2.0,
+      dosageUnit: firstIn?.dosageUnit || matchedRes?.dosageUnit || 'L/ha',
+      batchNumber: firstIn?.batchNumber || matchedRes?.batchNumber || 'LOT-OFICIAL',
+      safetyPeriodDays: firstIn?.safetyPeriodDays ?? matchedRes?.safetyPeriodDays ?? 0,
+      applicationMethod:
+        firstIn?.applicationMethod ||
+        matchedRes?.applicationMethod ||
+        (task.laborType === 'FERTIRRIEGO' ? 'Fertirriego' : 'Pulverización Terrestre'),
+      targetPestOrDisease: firstIn?.targetPestOrDisease || matchedRes?.targetPestOrDisease || prev.targetPestOrDisease,
+      responsibleAgronomist:
+        firstIn?.responsibleAgronomist || prev.responsibleAgronomist || currentUser?.name || 'Dirección Técnica',
+      agronomistLicense: firstIn?.agronomistLicense || prev.agronomistLicense || 'MP-CIAFBA',
+      weatherCondition: task.weather
+        ? {
+            temperatureC: task.weather.tempC ?? 22,
+            windSpeedKmH: task.weather.windSpeedKmh ?? 8.5,
+            relativeHumidityPct: task.weather.humidityPct ?? 60
+          }
+        : prev.weatherCondition,
+      notes: task.description || prev.notes || ''
     }));
   };
 
   const resetForm = () => {
     setEditingAppId(null);
-    setIsCustomProduct(false);
-    const defaultCategory: AgrochemicalCategory = 'Mejorador de Suelo';
-    const firstRes = resources.find(r => r.agroCategory === defaultCategory) || resources[0];
+    setFormError(null);
+    const initialPlotId = availablePlots[0]?.id || plots[0]?.id || '';
+    const initialPlotTasks = tasks.filter(
+      t =>
+        t.plotId === initialPlotId &&
+        ((t.appliedInputs && t.appliedInputs.length > 0) ||
+          t.laborType === 'FITOSANITARIO' ||
+          t.laborType === 'FERTIRRIEGO' ||
+          t.syncWithPhytosanitary)
+    );
+    const firstTask = initialPlotTasks[0];
+    const firstTaskInput = firstTask?.appliedInputs?.[0];
+    const firstRes =
+      (firstTaskInput &&
+        (catalogResources.find(r => r.id === firstTaskInput.resourceId) ||
+          catalogResources.find(r => r.name.toLowerCase() === firstTaskInput.name.toLowerCase()))) ||
+      catalogResources[0];
+
     setFormData({
-      plotId: availablePlots[0]?.id || plots[0]?.id || '',
-      date: new Date().toISOString().split('T')[0],
+      plotId: initialPlotId,
+      date: firstTask?.executionDate || firstTask?.dueDate || new Date().toISOString().split('T')[0],
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
-      category: firstRes?.agroCategory || defaultCategory,
-      productName: firstRes?.name || 'HumiFulvic Complex + Glomus intraradices',
-      activeIngredient: firstRes?.activeIngredient || 'Ácidos Húmicos 15% + Ácidos Fúlvicos 8% + Endomicorrizas',
-      manufacturer: firstRes?.manufacturer || 'BioTerra Patagonia Labs',
-      supplierId: firstRes?.supplierId || 'sup-biofabrica-patagonia-01',
-      supplierName: firstRes?.supplierName || 'BioFábrica & Insumos Agrícolas Red HempC',
-      senasaRegisterNumber: firstRes?.senasaRegisterNumber || 'SENASA-ENM-9042-AR',
-      toxicologicalClass: firstRes?.toxicologicalClass || 'Biológico / Orgánico Certificado',
-      dosagePerHa: firstRes?.recommendedDosagePerHa ?? 5.0,
-      dosageUnit: firstRes?.dosageUnit || 'L/ha',
-      applicationMethod: firstRes?.applicationMethod || 'Fertirriego',
-      batchNumber: firstRes?.batchNumber || 'HUMI-SOIL-26A',
-      safetyPeriodDays: firstRes?.safetyPeriodDays ?? 0,
-      targetPestOrDisease: firstRes?.targetPestOrDisease || '',
-      responsibleAgronomist: currentUser?.name || 'Ing. Agr. Gastón Barea',
+      linkedTaskId: firstTask?.id || '',
+      linkedTaskTitle: firstTask?.title || '',
+      resourceId: firstRes?.id || '',
+      category: firstTaskInput?.category || firstRes?.agroCategory || 'Mejorador de Suelo',
+      productName: firstRes?.name || firstTaskInput?.name || '',
+      activeIngredient: firstTaskInput?.activeIngredient || firstRes?.activeIngredient || '',
+      manufacturer: firstTaskInput?.manufacturer || firstRes?.manufacturer || '',
+      supplierId: firstTaskInput?.supplierId || firstRes?.supplierId || '',
+      supplierName: firstTaskInput?.supplierName || firstRes?.supplierName || '',
+      senasaRegisterNumber: firstTaskInput?.senasaRegisterNumber || firstRes?.senasaRegisterNumber || '',
+      toxicologicalClass:
+        firstTaskInput?.toxicologicalClass || firstRes?.toxicologicalClass || 'Biológico / Orgánico Certificado',
+      dosagePerHa: firstTaskInput?.dosagePerHa ?? firstRes?.recommendedDosagePerHa ?? 2.0,
+      dosageUnit: firstTaskInput?.dosageUnit || firstRes?.dosageUnit || 'L/ha',
+      applicationMethod: firstTaskInput?.applicationMethod || firstRes?.applicationMethod || 'Fertirriego',
+      batchNumber: firstTaskInput?.batchNumber || firstRes?.batchNumber || '',
+      safetyPeriodDays: firstTaskInput?.safetyPeriodDays ?? firstRes?.safetyPeriodDays ?? 0,
+      targetPestOrDisease: firstTaskInput?.targetPestOrDisease || firstRes?.targetPestOrDisease || '',
+      responsibleAgronomist: currentUser?.name || 'Dirección Técnica Cooperativa',
       agronomistLicense: 'MP-4821-CIAFBA',
-      weatherCondition: {
-        temperatureC: 22.0,
-        windSpeedKmH: 8.5,
-        relativeHumidityPct: 60
-      },
-      notes: ''
+      weatherCondition: firstTask?.weather
+        ? {
+            temperatureC: firstTask.weather.tempC ?? 22,
+            windSpeedKmH: firstTask.weather.windSpeedKmh ?? 8.5,
+            relativeHumidityPct: firstTask.weather.humidityPct ?? 60
+          }
+        : {
+            temperatureC: 22.0,
+            windSpeedKmH: 8.5,
+            relativeHumidityPct: 60
+          },
+      notes: firstTask?.description || ''
     });
   };
 
   const handleOpenEditApplication = (app: AgrochemicalApplication) => {
     setEditingAppId(app.id);
-    setIsCustomProduct(false);
+    setFormError(null);
     setFormData({ ...app });
     setIsAddModalOpen(true);
   };
 
   const handleAddApplication = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.plotId || !formData.productName || !formData.activeIngredient) {
+    setFormError(null);
+
+    if (!formData.plotId) {
+      setFormError('Seleccione una parcela de destino.');
       return;
     }
+
+    // Regla estricta: El productor no puede aplicar ningún insumo que no figure en la lista de tarea de campo
+    if (isProducerOnly && !formData.linkedTaskId && !editingAppId) {
+      setFormError(
+        'Normativa Operativa: El productor no puede aplicar ningún insumo que no figure en su Lista de Tareas de Campo (Orden de Labor). Seleccione una Orden de Labor autorizada para esta parcela.'
+      );
+      return;
+    }
+
+    // Validar que el insumo exista en Insumos e Inventario (resources)
+    const matchedResource =
+      catalogResources.find(r => r.id === formData.resourceId) ||
+      catalogResources.find(r => formData.productName && r.name.toLowerCase() === formData.productName.toLowerCase());
+
+    if (!matchedResource) {
+      setFormError(
+        'Normativa SENASA: Todo insumo aplicado debe estar previamente dado de alta en Insumos e Inventario y vinculado a un Proveedor Homologado.'
+      );
+      return;
+    }
+
+    const linkedSupplier = suppliers.find(
+      s =>
+        s.id === (formData.supplierId || matchedResource.supplierId) ||
+        ((formData.supplierName || matchedResource.supplierName) &&
+          s.name.toLowerCase() === (formData.supplierName || matchedResource.supplierName || '').toLowerCase())
+    );
 
     const selectedPlot = plots.find(p => p.id === formData.plotId);
     let areaHa = selectedPlot?.surfaceArea || 1.0;
@@ -371,45 +384,58 @@ export default function PhytosanitaryBook() {
     areaHa = Math.max(0.1, Number(areaHa.toFixed(2)));
 
     const appDate = formData.date || new Date().toISOString().split('T')[0];
-    const safetyDays = Number(formData.safetyPeriodDays) || 0;
+    const safetyDays = Number(formData.safetyPeriodDays ?? matchedResource.safetyPeriodDays ?? 0);
     const safetyDateObj = new Date(new Date(appDate).getTime() + safetyDays * 86400000);
     const harvestSafetyDate = safetyDateObj.toISOString().split('T')[0];
 
-    const dosage = Number(formData.dosagePerHa) || 1;
+    const dosage = Number(formData.dosagePerHa) || matchedResource.recommendedDosagePerHa || 1;
     const totalApplied = Number((dosage * areaHa).toFixed(2));
 
+    if (!editingAppId && totalApplied > (matchedResource.stock ?? 0)) {
+      setFormError(
+        `Stock insuficiente en Insumos e Inventario para "${matchedResource.name}": requerido ${totalApplied} ${matchedResource.unit}, disponible en galpón ${matchedResource.stock ?? 0} ${matchedResource.unit}.`
+      );
+      return;
+    }
+
+    const linkedTaskObj = tasks.find(t => t.id === formData.linkedTaskId);
+
     const newApp: AgrochemicalApplication = {
-      id: editingAppId || `app-${Date.now()}`,
+      id: editingAppId || (linkedTaskObj ? `agro-task-${linkedTaskObj.id}` : `app-${Date.now()}`),
       plotId: formData.plotId!,
       plotName: selectedPlot?.name || 'Unidad de Producción',
       date: appDate,
       time: formData.time || '08:00',
-      category: formData.category as any,
-      productName: formData.productName!.trim(),
-      activeIngredient: formData.activeIngredient!.trim(),
-      manufacturer: formData.manufacturer?.trim() || 'Laboratorio Homologado',
-      supplierName: formData.supplierName?.trim() || 'Proveedor Certificado',
-      senasaRegisterNumber: formData.senasaRegisterNumber?.trim() || 'SENASA N° OFICIAL',
-      toxicologicalClass: formData.toxicologicalClass as ToxicologicalBand,
+      category: (matchedResource.agroCategory || formData.category || 'Mejorador de Suelo') as AgrochemicalCategory,
+      resourceId: matchedResource.id,
+      linkedTaskId: linkedTaskObj?.id || formData.linkedTaskId || undefined,
+      linkedTaskTitle: linkedTaskObj?.title || formData.linkedTaskTitle || undefined,
+      productName: matchedResource.name,
+      activeIngredient: matchedResource.activeIngredient || formData.activeIngredient || 'Insumo Homologado',
+      manufacturer: matchedResource.manufacturer || formData.manufacturer || linkedSupplier?.name || 'Laboratorio Homologado',
+      supplierId: linkedSupplier?.id || matchedResource.supplierId || formData.supplierId,
+      supplierName: linkedSupplier?.name || matchedResource.supplierName || formData.supplierName || 'Proveedor Certificado',
+      senasaRegisterNumber: matchedResource.senasaRegisterNumber || formData.senasaRegisterNumber || 'SENASA N° OFICIAL',
+      toxicologicalClass: (matchedResource.toxicologicalClass || formData.toxicologicalClass || 'Biológico / Orgánico Certificado') as ToxicologicalBand,
       dosagePerHa: dosage,
-      dosageUnit: (formData.dosageUnit as any) || 'L/ha',
+      dosageUnit: (formData.dosageUnit || matchedResource.dosageUnit || 'L/ha') as any,
       totalAppliedAmount: totalApplied,
-      applicationMethod: (formData.applicationMethod as any) || 'Pulverización Terrestre',
-      batchNumber: formData.batchNumber?.trim().toUpperCase() || `LOT-${Date.now().toString().slice(-6)}`,
-      expirationDate: formData.expirationDate || '2027-12-31',
+      applicationMethod: (formData.applicationMethod || matchedResource.applicationMethod || 'Pulverización Terrestre') as any,
+      batchNumber: matchedResource.batchNumber || formData.batchNumber?.trim().toUpperCase() || `LOT-OFICIAL`,
+      expirationDate: matchedResource.expirationDate || formData.expirationDate || '2027-12-31',
       senasaComplianceStatus: 'Conforme SENASA (Normativa VIGENTE)',
       safetyPeriodDays: safetyDays,
       harvestSafetyDate: harvestSafetyDate,
-      responsibleAgronomist: formData.responsibleAgronomist?.trim() || 'Ing. Agr. Lucas Berardi',
-      agronomistLicense: formData.agronomistLicense?.trim() || 'MP-AGRO-3321 MZA',
+      responsibleAgronomist: formData.responsibleAgronomist?.trim() || 'Dirección Técnica Cooperativa',
+      agronomistLicense: formData.agronomistLicense?.trim() || 'MP-AGRO-3321 CIAF',
       weatherCondition: formData.weatherCondition || {
         temperatureC: 22,
         windSpeedKmH: 8,
         relativeHumidityPct: 60
       },
-      targetPestOrDisease: formData.targetPestOrDisease?.trim() || undefined,
+      targetPestOrDisease: formData.targetPestOrDisease?.trim() || matchedResource.targetPestOrDisease || undefined,
       pestIncidenceScore: formData.pestIncidenceScore,
-      phenologicalStage: formData.phenologicalStage || undefined,
+      phenologicalStage: formData.phenologicalStage || selectedPlot?.currentPhenologicalStage || undefined,
       linkedTrialRecordId: formData.linkedTrialRecordId || undefined,
       notes: formData.notes?.trim() || undefined,
       status: new Date() >= safetyDateObj ? 'Apto Cosecha' : 'En Carencia'
@@ -440,7 +466,7 @@ export default function PhytosanitaryBook() {
               <ShieldCheck size={12} className="text-emerald-500" />
               <span>Registro Fitosanitario Digital Obligatorio SENASA</span>
             </span>
-            <span className="text-xs text-slate-400">· Res. 369/2013 · BPA & GACP</span>
+            <span className="text-xs text-slate-400">· Res. 369/2013 · Proveedores → Inventario → Orden de Labor → Cuaderno</span>
           </div>
 
           <h1 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight mt-1 flex items-center gap-2.5">
@@ -449,11 +475,19 @@ export default function PhytosanitaryBook() {
           </h1>
 
           <p className="text-xs text-slate-500 mt-1">
-            Trazabilidad punto a punto de insumos recepcionados, dosis por hectárea, períodos de carencia y calibración de boquillas.
+            Trazabilidad cerrada: cada tratamiento proviene de una <strong>Orden de Labor (Tareas de Campo)</strong> con insumos catalogados en <strong>Insumos e Inventario</strong> y <strong>Proveedores Homologados</strong>.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          <Link
+            to="/tasks"
+            className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-3.5 py-2.5 rounded-2xl flex items-center justify-center transition shadow-sm font-bold text-xs uppercase tracking-wider gap-1.5"
+          >
+            <Tractor size={15} />
+            <span>Órdenes de Labor</span>
+          </Link>
+
           <button
             type="button"
             onClick={() => {
@@ -537,7 +571,7 @@ export default function PhytosanitaryBook() {
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16}/>
           <input 
             type="text" 
-            placeholder="Buscar por insumo, principio activo, N° SENASA, lote o parcela..." 
+            placeholder="Buscar por insumo, principio activo, N° SENASA, proveedor, orden de labor o parcela..." 
             className="w-full pl-10 pr-4 py-3 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-2xl border border-slate-200 dark:border-slate-800 text-xs outline-none focus:ring-2 focus:ring-emerald-500 shadow-sm"
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
@@ -604,9 +638,9 @@ export default function PhytosanitaryBook() {
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-800/60 text-[10px] font-black uppercase text-slate-500 border-b border-slate-100 dark:border-slate-800">
-                <th className="py-3 px-4">Fecha / Parcela</th>
+                <th className="py-3 px-4">Fecha / Parcela / Orden Labor</th>
                 <th className="py-3 px-4">Insumo & Principio Activo</th>
-                <th className="py-3 px-4">Registro SENASA & Lote</th>
+                <th className="py-3 px-4">Registro SENASA, Lote & Proveedor</th>
                 <th className="py-3 px-4 text-center">Dosis & Volumen</th>
                 <th className="py-3 px-4 text-center">Carencia & Cosecha</th>
                 <th className="py-3 px-4">Responsable Técnico</th>
@@ -619,6 +653,9 @@ export default function PhytosanitaryBook() {
                 const harvestDate = new Date(app.harvestSafetyDate);
                 const isUnderSafety = today < harvestDate;
                 const daysRemaining = Math.max(0, Math.ceil((harvestDate.getTime() - today.getTime()) / 86400000));
+                const linkedTask = tasks.find(
+                  t => t.id === app.linkedTaskId || t.linkedAgroAppId === app.id || `agro-task-${t.id}` === app.id
+                );
 
                 return (
                   <tr key={app.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition">
@@ -632,6 +669,16 @@ export default function PhytosanitaryBook() {
                       <span className="text-[9px] text-emerald-600 font-bold block uppercase">
                         {app.applicationMethod}
                       </span>
+                      <Link
+                        to={`/tasks?plotId=${app.plotId}`}
+                        className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 text-[9px] font-bold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
+                        title="Ver Orden de Labor en Lista de Tareas de Campo"
+                      >
+                        <Tractor size={10} className="text-emerald-600" />
+                        <span className="truncate max-w-[150px]">
+                          {app.linkedTaskTitle || linkedTask?.title || 'Orden de Labor Vinculada'}
+                        </span>
+                      </Link>
                     </td>
 
                     <td className="py-3.5 px-4">
@@ -667,8 +714,8 @@ export default function PhytosanitaryBook() {
                       <span className="text-[10px] font-mono text-slate-400 block">
                         Lote: <strong>{app.batchNumber}</strong>
                       </span>
-                      <span className="text-[9px] text-slate-500 block truncate max-w-[160px]" title={app.supplierName}>
-                        Prov: {app.supplierName}
+                      <span className="text-[9px] text-slate-500 block truncate max-w-[180px]" title={app.supplierName}>
+                        Prov: <strong className="text-slate-700 dark:text-slate-300">{app.supplierName}</strong>
                       </span>
                     </td>
 
@@ -779,110 +826,205 @@ export default function PhytosanitaryBook() {
         </div>
       </div>
 
-      {/* MODAL 1: REGISTRAR NUEVO TRATAMIENTO CON VINCULACIÓN DE INSUMOS */}
+      {/* MODAL 1: REGISTRAR NUEVO TRATAMIENTO CON VINCULACIÓN DE ORDEN DE LABOR E INSUMOS */}
       {isAddModalOpen && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-[80] p-4 font-mono">
           <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-3xl w-full p-6 md:p-8 shadow-2xl border border-slate-200 dark:border-slate-800 max-h-[92vh] overflow-y-auto">
             
-            <div className="flex justify-between items-center mb-6 border-b border-slate-100 dark:border-slate-800 pb-3">
+            <div className="flex justify-between items-center mb-5 border-b border-slate-100 dark:border-slate-800 pb-3">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
                   <FlaskConical size={22} />
                 </div>
                 <div>
                   <span className="text-[10px] font-bold uppercase text-emerald-600 tracking-wider">
-                    Cuaderno Fitosanitario Digital SENASA
+                    Cuaderno Fitosanitario Digital SENASA • Trazabilidad Cerrada
                   </span>
                   <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
-                    {editingAppId ? 'Editar Tratamiento Agronómico' : 'Cargar Tratamiento Agronómico en Parcela'}
+                    {editingAppId ? 'Editar Tratamiento Agronómico' : 'Asentar Tratamiento desde Orden de Labor'}
                   </h2>
                 </div>
               </div>
               <button onClick={() => { setIsAddModalOpen(false); resetForm(); }} className="text-slate-400 hover:text-slate-600 cursor-pointer"><X size={22}/></button>
             </div>
 
-            {/* BARRA DE ACCIÓN RÁPIDA: VINCULAR INSUMO RECEPCIONADO DE PROVEEDOR HOMOLOGADO (EN VIVO DESDE BASE DE DATOS) */}
-            <div className="mb-6 p-4 bg-emerald-50/60 dark:bg-emerald-950/30 rounded-2xl border border-emerald-200 dark:border-emerald-800/80 space-y-2.5">
-              <div className="flex flex-wrap justify-between items-center gap-2">
-                <span className="text-[10px] font-black uppercase text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
-                  <Package size={14} />
-                  <span>
-                    Vincular Insumo Recepcionado de Proveedor Homologado ({prescribedResourcesForCategory.length} disponibles en {formData.category}):
-                  </span>
-                </span>
-                <a
-                  href="#/resources"
-                  className="text-[10px] font-mono font-bold text-emerald-700 dark:text-emerald-300 hover:underline flex items-center gap-1"
-                >
-                  <span>+ Cargar Nuevo Insumo en Inventario BD</span>
-                  <ArrowUpRight size={12} />
-                </a>
+            {formError && (
+              <div className="mb-4 p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/60 border border-rose-300 dark:border-rose-800 text-xs text-rose-800 dark:text-rose-200 flex items-start gap-2.5">
+                <AlertTriangle size={16} className="text-rose-600 shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <strong className="font-black block uppercase text-[10px]">Regla Normativa SENASA / Trazabilidad</strong>
+                  <span>{formError}</span>
+                </div>
+                <button type="button" onClick={() => setFormError(null)} className="text-rose-400 hover:text-rose-700">
+                  <X size={14} />
+                </button>
               </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-40 overflow-y-auto pr-1">
-                {prescribedResourcesForCategory.map(res => {
-                  const isSelected = formData.productName === res.name && !isCustomProduct;
-                  return (
-                    <button
-                      key={res.id}
-                      type="button"
-                      onClick={() => applyCatalogResourceToForm(res)}
-                      className={`p-2.5 text-left rounded-xl border text-xs transition group cursor-pointer ${
-                        isSelected
-                          ? 'bg-emerald-600 text-white border-emerald-500 shadow-xs'
-                          : 'bg-white dark:bg-slate-900 hover:bg-emerald-100/70 dark:hover:bg-emerald-900/40 border-slate-200 dark:border-slate-700'
-                      }`}
-                    >
-                      <strong
-                        className={`block text-[11px] font-bold truncate ${
-                          isSelected ? 'text-white' : 'text-slate-900 dark:text-white group-hover:text-emerald-600'
-                        }`}
-                      >
-                        {res.name}
-                      </strong>
-                      <div
-                        className={`flex justify-between items-center text-[9px] mt-0.5 font-mono ${
-                          isSelected ? 'text-emerald-100' : 'text-slate-400'
-                        }`}
-                      >
-                        <span>{res.batchNumber || res.senasaRegisterNumber || 'SENASA'}</span>
-                        <span className={isSelected ? 'font-bold text-white' : 'font-bold text-emerald-600'}>
-                          Stock: {res.stock ?? 0} {res.unit} · {res.safetyPeriodDays ?? 0}d
-                        </span>
-                      </div>
-                      {res.supplierName && (
-                        <span
-                          className={`block text-[9px] truncate mt-0.5 ${
-                            isSelected ? 'text-emerald-100/90' : 'text-slate-400'
-                          }`}
-                        >
-                          Prov: {res.supplierName}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+            )}
 
             <form onSubmit={handleAddApplication} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Parcela de Destino *</label>
-                  <select
-                    required
-                    className="w-full border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white p-2.5 rounded-xl font-mono text-xs focus:ring-2 focus:ring-emerald-500 outline-none"
-                    value={formData.plotId}
-                    onChange={e => setFormData({ ...formData, plotId: e.target.value })}
+              {/* PASO 1: PARCELA Y ORDEN DE LABOR DE LA LISTA DE TAREAS DE CAMPO */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-[10px] font-black uppercase text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                    <Tractor size={14} className="text-emerald-600" />
+                    <span>1. Parcela y Orden de Labor (Lista de Tareas de Campo)</span>
+                  </span>
+                  <Link
+                    to={`/tasks?plotId=${formData.plotId || ''}`}
+                    className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 hover:underline flex items-center gap-1"
                   >
-                    {plots.map(p => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} ({p.surfaceArea || 1} ha)
-                      </option>
-                    ))}
-                  </select>
+                    <span>Ver / Crear Orden de Labor en Tareas de Campo</span>
+                    <ArrowUpRight size={12} />
+                  </Link>
                 </div>
 
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Parcela de Destino *</label>
+                    <select
+                      required
+                      className="w-full border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white p-2.5 rounded-xl font-mono text-xs focus:ring-2 focus:ring-emerald-500 outline-none"
+                      value={formData.plotId}
+                      onChange={e => {
+                        const nextPlotId = e.target.value;
+                        const nextPlotTasks = tasks.filter(
+                          t =>
+                            t.plotId === nextPlotId &&
+                            ((t.appliedInputs && t.appliedInputs.length > 0) ||
+                              t.laborType === 'FITOSANITARIO' ||
+                              t.laborType === 'FERTIRRIEGO' ||
+                              t.syncWithPhytosanitary)
+                        );
+                        if (nextPlotTasks.length > 0) {
+                          applyTaskToForm(nextPlotTasks[0]);
+                        } else {
+                          setFormData({ ...formData, plotId: nextPlotId, linkedTaskId: '', linkedTaskTitle: '' });
+                        }
+                      }}
+                    >
+                      {availablePlots.map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} ({p.surfaceArea || 1} ha)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
+                      Orden de Labor / Tarea de Campo Prescripta {isProducerOnly ? '*' : '(Sincronización Automática)'}
+                    </label>
+                    <select
+                      required={isProducerOnly && !editingAppId}
+                      className="w-full border border-emerald-500/50 bg-white dark:bg-slate-900 text-slate-900 dark:text-white p-2.5 rounded-xl font-mono text-xs font-bold focus:ring-2 focus:ring-emerald-500 outline-none"
+                      value={formData.linkedTaskId || ''}
+                      onChange={e => {
+                        const tkId = e.target.value;
+                        if (!tkId) {
+                          setFormData({ ...formData, linkedTaskId: '', linkedTaskTitle: '' });
+                        } else {
+                          const foundTask = tasks.find(t => t.id === tkId);
+                          if (foundTask) applyTaskToForm(foundTask);
+                        }
+                      }}
+                    >
+                      {!isProducerOnly && (
+                        <option value="">
+                          -- Generar Nueva Orden de Labor Ejecutada automáticamente al guardar --
+                        </option>
+                      )}
+                      {isProducerOnly && plotCandidateTasks.length === 0 && (
+                        <option value="">
+                          -- Sin Órdenes de Labor Fitosanitarias asignadas en esta parcela --
+                        </option>
+                      )}
+                      {plotCandidateTasks.map(tk => {
+                        const tkInput = tk.appliedInputs?.[0];
+                        return (
+                          <option key={tk.id} value={tk.id}>
+                            [{tk.status}] {tk.title} ({tk.executionDate || tk.dueDate}) {tkInput ? `→ ${tkInput.name} (${tkInput.quantity} ${tkInput.unit})` : ''}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* PASO 2: VINCULAR INSUMO HOMOLOGADO DE INVENTARIO Y PROVEEDORES */}
+              <div className="p-4 bg-emerald-50/60 dark:bg-emerald-950/30 rounded-2xl border border-emerald-200 dark:border-emerald-800/80 space-y-2.5">
+                <div className="flex flex-wrap justify-between items-center gap-2">
+                  <span className="text-[10px] font-black uppercase text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                    <Package size={14} />
+                    <span>
+                      2. Insumo Recepcionado de Proveedor Homologado ({prescribedResourcesForCategory.length} en catálogo):
+                    </span>
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Link
+                      to="/suppliers"
+                      className="text-[10px] font-mono font-bold text-slate-600 dark:text-slate-300 hover:underline flex items-center gap-1"
+                    >
+                      <Building2 size={11} />
+                      <span>Proveedores ({suppliers.length})</span>
+                    </Link>
+                    <Link
+                      to="/resources"
+                      className="text-[10px] font-mono font-bold text-emerald-700 dark:text-emerald-300 hover:underline flex items-center gap-1"
+                    >
+                      <span>+ Alta en Insumos e Inventario</span>
+                      <ArrowUpRight size={12} />
+                    </Link>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-36 overflow-y-auto pr-1">
+                  {prescribedResourcesForCategory.map(res => {
+                    const isSelected = formData.resourceId === res.id || formData.productName === res.name;
+                    return (
+                      <button
+                        key={res.id}
+                        type="button"
+                        onClick={() => applyCatalogResourceToForm(res)}
+                        className={`p-2.5 text-left rounded-xl border text-xs transition group cursor-pointer ${
+                          isSelected
+                            ? 'bg-emerald-600 text-white border-emerald-500 shadow-xs'
+                            : 'bg-white dark:bg-slate-900 hover:bg-emerald-100/70 dark:hover:bg-emerald-900/40 border-slate-200 dark:border-slate-700'
+                        }`}
+                      >
+                        <strong
+                          className={`block text-[11px] font-bold truncate ${
+                            isSelected ? 'text-white' : 'text-slate-900 dark:text-white group-hover:text-emerald-600'
+                          }`}
+                        >
+                          {res.name}
+                        </strong>
+                        <div
+                          className={`flex justify-between items-center text-[9px] mt-0.5 font-mono ${
+                            isSelected ? 'text-emerald-100' : 'text-slate-400'
+                          }`}
+                        >
+                          <span>{res.batchNumber || res.senasaRegisterNumber || 'SENASA'}</span>
+                          <span className={isSelected ? 'font-bold text-white' : 'font-bold text-emerald-600'}>
+                            Stock: {res.stock ?? 0} {res.unit} · {res.safetyPeriodDays ?? 0}d
+                          </span>
+                        </div>
+                        {res.supplierName && (
+                          <span
+                            className={`block text-[9px] truncate mt-0.5 ${
+                              isSelected ? 'text-emerald-100/90' : 'text-slate-400'
+                            }`}
+                          >
+                            Prov: {res.supplierName}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Fecha de Aplicación (DD/MM/AAAA) *</label>
                   <DateInputAr
@@ -913,7 +1055,7 @@ export default function PhytosanitaryBook() {
                     value={formData.category || 'Mejorador de Suelo'}
                     onChange={e => {
                       const nextCat = e.target.value as AgrochemicalCategory;
-                      const catProducts = resources.filter(r => r.agroCategory === nextCat);
+                      const catProducts = catalogResources.filter(r => r.agroCategory === nextCat);
                       if (catProducts.length > 0) {
                         applyCatalogResourceToForm(catProducts[0]);
                       } else {
@@ -934,58 +1076,39 @@ export default function PhytosanitaryBook() {
 
                 <div className="md:col-span-2 space-y-1.5">
                   <label className="block text-[10px] font-bold text-slate-500 uppercase">
-                    Producto Comercial Prescripto * ({prescribedResourcesForCategory.length} en Base de Datos)
+                    Producto Comercial Homologado en Inventario BD * ({prescribedResourcesForCategory.length} disponibles)
                   </label>
                   <select
+                    required
                     className="w-full border border-emerald-500/40 bg-white dark:bg-slate-900 text-slate-900 dark:text-white p-2.5 rounded-xl font-mono text-xs font-bold focus:ring-2 focus:ring-emerald-500 outline-none"
                     value={
-                      isCustomProduct
-                        ? '__CUSTOM__'
-                        : prescribedResourcesForCategory.some(r => r.name === formData.productName)
+                      prescribedResourcesForCategory.some(r => r.name === formData.productName)
                         ? formData.productName
-                        : prescribedResourcesForCategory[0]?.name || '__CUSTOM__'
+                        : prescribedResourcesForCategory[0]?.name || ''
                     }
                     onChange={e => {
                       const val = e.target.value;
-                      if (val === '__CUSTOM__') {
-                        setIsCustomProduct(true);
-                        setFormData({ ...formData, productName: '' });
-                      } else {
-                        const found = prescribedResourcesForCategory.find(r => r.name === val);
-                        if (found) applyCatalogResourceToForm(found);
-                      }
+                      const found = prescribedResourcesForCategory.find(r => r.name === val);
+                      if (found) applyCatalogResourceToForm(found);
                     }}
                   >
                     {prescribedResourcesForCategory.map(res => (
                       <option key={res.id} value={res.name}>
-                        {res.name} — {res.recommendedDosagePerHa ?? 2} {res.dosageUnit || 'L/ha'} ({res.senasaRegisterNumber || 'SENASA'}) [Stock: {res.stock ?? 0} {res.unit}]
+                        {res.name} — {res.recommendedDosagePerHa ?? 2} {res.dosageUnit || 'L/ha'} ({res.senasaRegisterNumber || 'SENASA'}) • Prov: {res.supplierName || 'Homologado'} [Stock: {res.stock ?? 0} {res.unit}]
                       </option>
                     ))}
-                    <option value="__CUSTOM__">+ Otro Producto Comercial (Guardar en Base de Datos)</option>
                   </select>
-                  {isCustomProduct && (
-                    <input
-                      required
-                      type="text"
-                      placeholder="Escribir nombre del nuevo producto comercial..."
-                      className="w-full border border-emerald-500/50 bg-emerald-50/40 dark:bg-slate-950 text-slate-900 dark:text-white p-2.5 rounded-xl font-mono text-xs font-bold focus:ring-2 focus:ring-emerald-500 outline-none"
-                      value={formData.productName}
-                      onChange={e => setFormData({ ...formData, productName: e.target.value })}
-                    />
-                  )}
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Principio Activo / Composición *</label>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Principio Activo / Composición (Inventario BD)</label>
                   <input
-                    required
+                    readOnly
                     type="text"
-                    placeholder="Ej: Trichoderma harzianum 1x10^9 UFC/ml"
-                    className="w-full border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white p-2.5 rounded-xl font-mono text-xs focus:ring-2 focus:ring-emerald-500 outline-none"
+                    className="w-full border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 p-2.5 rounded-xl font-mono text-xs outline-none"
                     value={formData.activeIngredient}
-                    onChange={e => setFormData({ ...formData, activeIngredient: e.target.value })}
                   />
                 </div>
 
@@ -1001,28 +1124,34 @@ export default function PhytosanitaryBook() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Registro Oficial SENASA *</label>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Registro SENASA (BD)</label>
                   <input
-                    required
+                    readOnly
                     type="text"
-                    placeholder="Ej: SENASA N° 18.420/2022"
-                    className="w-full border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white p-2.5 rounded-xl font-mono text-xs focus:ring-2 focus:ring-emerald-500 outline-none"
+                    className="w-full border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800/80 text-emerald-700 dark:text-emerald-300 font-bold p-2.5 rounded-xl font-mono text-xs outline-none"
                     value={formData.senasaRegisterNumber}
-                    onChange={e => setFormData({ ...formData, senasaRegisterNumber: e.target.value })}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">N° Lote de Fabricación *</label>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">N° Lote Recepcionado</label>
                   <input
-                    required
+                    readOnly
                     type="text"
-                    placeholder="Ej: LOT-BIO-2026-081"
-                    className="w-full border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white p-2.5 rounded-xl font-mono text-xs focus:ring-2 focus:ring-emerald-500 outline-none"
+                    className="w-full border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 font-bold p-2.5 rounded-xl font-mono text-xs outline-none"
                     value={formData.batchNumber}
-                    onChange={e => setFormData({ ...formData, batchNumber: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Proveedor Homologado</label>
+                  <input
+                    readOnly
+                    type="text"
+                    className="w-full border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 font-bold p-2.5 rounded-xl font-mono text-xs outline-none"
+                    value={formData.supplierName || ''}
                   />
                 </div>
 
@@ -1031,7 +1160,6 @@ export default function PhytosanitaryBook() {
                   <input
                     type="number"
                     min="0"
-                    placeholder="Ej: 0 para biológicos, 7 para foliar"
                     className="w-full border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white p-2.5 rounded-xl font-mono text-xs focus:ring-2 focus:ring-emerald-500 outline-none"
                     value={formData.safetyPeriodDays}
                     onChange={e => setFormData({ ...formData, safetyPeriodDays: Number(e.target.value) })}
