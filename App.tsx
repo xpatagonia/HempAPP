@@ -52,6 +52,8 @@ export default function App() {
           {/* Rutas Públicas */}
           <Route path="/trace/:id" element={<PublicTraceability />} />
           <Route path="/register-producer" element={<PublicRegistration />} />
+          <Route path="/evento" element={<Navigate to="/login?evento=un-dia-de-siembra" replace />} />
+          <Route path="/un-dia-de-siembra" element={<Navigate to="/login?evento=un-dia-de-siembra" replace />} />
           <Route path="/login" element={<Login />} />
           
           <Route path="/*" element={

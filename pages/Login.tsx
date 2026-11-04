@@ -54,17 +54,18 @@ export default function Login() {
   const currentUrl = typeof window !== "undefined" ? window.location.origin : "";
 
   useEffect(() => {
-    const eventoParam = searchParams.get("evento");
-    const registroParam = searchParams.get("registro");
-    const activarParam = searchParams.get("activar");
-    const tokenParam = searchParams.get("token");
+    const rootParams = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+    const eventoParam = searchParams.get("evento") || rootParams.get("evento");
+    const registroParam = searchParams.get("registro") || rootParams.get("registro");
+    const activarParam = searchParams.get("activar") || rootParams.get("activar");
+    const tokenParam = searchParams.get("token") || rootParams.get("token");
 
     if (activarParam) {
       setActivateEmail(activarParam.trim().toLowerCase());
       if (tokenParam) setActivateToken(tokenParam.trim());
       setActivateStatus(null);
       setShowActivateModal(true);
-    } else if (eventoParam === "un-dia-de-siembra" || eventoParam === "21nov") {
+    } else if (eventoParam === "un-dia-de-siembra" || eventoParam === "21nov" || eventoParam === "siembra") {
       setRegistrationModalMode("event");
       setShowRegistrationModal(true);
     } else if (registroParam === "alta") {
@@ -74,10 +75,19 @@ export default function Login() {
   }, [searchParams]);
 
   useEffect(() => {
-    if (currentUser) {
+    const rootParams = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+    const hasDirectModalParam =
+      searchParams.get("evento") ||
+      rootParams.get("evento") ||
+      searchParams.get("registro") ||
+      rootParams.get("registro") ||
+      searchParams.get("activar") ||
+      rootParams.get("activar");
+
+    if (currentUser && !hasDirectModalParam) {
       navigate("/", { replace: true });
     }
-  }, [currentUser, navigate]);
+  }, [currentUser, navigate, searchParams]);
 
   useEffect(() => {
     const verify = async () => {
