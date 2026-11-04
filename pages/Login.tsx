@@ -373,26 +373,28 @@ export default function Login() {
           </form>
 
           {/* TARJETA OFICIAL DE EVENTO: "UN DÍA DE SIEMBRA" (SÁBADO 21 DE NOVIEMBRE) & ALTA AUTOGESTIVA */}
-          <div className="bg-gradient-to-br from-[#022c22] via-[#064e3b] to-[#006633] rounded-3xl p-5 text-white border-2 border-[#DDDB00]/80 shadow-xl space-y-3.5 relative overflow-hidden">
-            <div className="flex items-center justify-between gap-2">
+          <div className="bg-[#0c2d1e] rounded-2xl sm:rounded-3xl p-4 sm:p-5 text-white border-l-4 border-amber-500 border border-emerald-800/80 shadow-xl space-y-3 relative overflow-hidden">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#DDDB00] text-slate-950 text-[9px] font-black uppercase tracking-widest">
                 <Calendar size={11} />
-                Sábado 21 de Noviembre
+                Sábado 21 de Noviembre • 08:30 a 15:30 hs
               </span>
-              <span className="text-[10px] font-black uppercase tracking-wider text-emerald-300">
-                Apertura de Campaña
+              <span className="text-[9px] font-black uppercase tracking-wider text-amber-300">
+                PatagonianC & UATRE
               </span>
             </div>
 
             <div>
-              <h3 className="text-base font-black uppercase tracking-tight text-white flex items-center gap-1.5">
-                <Sprout size={17} className="text-[#DDDB00]" />
-                <span>Evento: "Un Día de Siembra"</span>
+              <p className="text-[9px] font-black uppercase tracking-widest text-[#DDDB00] mb-0.5">
+                Diplomatura Universitaria en Cáñamo Industrial • UNLZ – UATRE
+              </p>
+              <h3 className="text-base sm:text-lg font-black uppercase tracking-tight text-white">
+                JORNADA OFICIAL: “UN DÍA DE SIEMBRA”
               </h3>
               <p className="text-[11px] text-emerald-100/90 leading-relaxed mt-1">
-                Inscribite a la jornada de inicio de siembra, recibí tu mail de confirmación oficial desde{' '}
+                Sede Práctica Patagonia: Chacra Experimental PatagonianC LTDA (VIRCH – Trelew, Chubut). Recibí confirmación desde{' '}
                 <strong className="text-[#DDDB00]">notificaciones@hempc.com.ar</strong> y descargá el{' '}
-                <strong>Programa Oficial (PDF)</strong>.
+                <strong>Programa Oficial (PDF)</strong> <span className="italic opacity-80">(sujeto a actualización)</span>.
               </p>
             </div>
 
@@ -422,7 +424,7 @@ export default function Login() {
               </button>
             </div>
 
-            <p className="text-[10px] text-emerald-200/80 leading-tight pt-1 border-t border-white/10 flex items-center gap-1.5">
+            <p className="text-[10px] text-emerald-200/80 leading-tight pt-1.5 border-t border-white/10 flex items-center gap-1.5">
               <ShieldCheck size={13} className="text-[#DDDB00] flex-shrink-0" />
               <span>
                 Alta autogestiva sujeta a aprobación de los Administradores como <strong>Productor</strong> o <strong>Visitante</strong>.

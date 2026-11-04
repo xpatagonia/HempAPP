@@ -634,11 +634,11 @@ export async function sendEventRegistrationConfirmationEmail(
     structure_name: params.organizationName || 'Participante Acreditado',
     action_url: params.actionUrl || `${window.location.origin}/#/login?evento=un-dia-de-siembra`,
     extra_data: {
-      event_name: 'Un Día de Siembra • Jornada Oficial de Inicio de Campaña',
+      event_name: 'JORNADA OFICIAL: “UN DÍA DE SIEMBRA”',
       event_date: 'Sábado 21 de Noviembre de 2026',
       ticket_code: params.ticketCode,
       verification_pin: params.verificationPin,
-      locality: params.locality || 'Patagonia / Argentina'
+      locality: params.locality || 'VIRCH – Trelew, Chubut'
     }
   };
 
@@ -659,7 +659,7 @@ export async function sendEventRegistrationConfirmationEmail(
       toEmail: params.toEmail,
       toName: params.toName,
       type: 'operator_invitation',
-      subject: `🌱 Confirmación de Inscripción: "Un Día de Siembra" (Sáb. 21 Nov) • ${params.ticketCode}`,
+      subject: `Confirmación de Inscripción: JORNADA OFICIAL “UN DÍA DE SIEMBRA” (Sáb. 21 Nov) • ${params.ticketCode}`,
       roleName: params.profileLabel,
       structureName: params.organizationName,
       sentFrom: result.sentFrom,
@@ -685,7 +685,7 @@ export async function sendEventRegistrationConfirmationEmail(
       toEmail: params.toEmail,
       toName: params.toName,
       type: 'operator_invitation',
-      subject: `🌱 Confirmación de Inscripción: "Un Día de Siembra" (Sáb. 21 Nov) • ${params.ticketCode}`,
+      subject: `Confirmación de Inscripción: JORNADA OFICIAL “UN DÍA DE SIEMBRA” (Sáb. 21 Nov) • ${params.ticketCode}`,
       roleName: params.profileLabel,
       structureName: params.organizationName,
       sentFrom: result.sentFrom,

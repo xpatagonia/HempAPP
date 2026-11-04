@@ -680,22 +680,22 @@ export default function Users() {
 
       {/* PANEL DE APROBACIÓN DE ALTAS AUTOGESTIVAS Y EVENTO "UN DÍA DE SIEMBRA" (SÁB. 21 NOVIEMBRE) */}
       {isAdmin && (
-        <div className="mb-8 bg-gradient-to-br from-[#022c22] via-slate-900 to-slate-950 rounded-[32px] p-6 sm:p-8 text-white border-2 border-[#DDDB00]/60 shadow-2xl space-y-6">
+        <div className="mb-8 bg-[#0c2d1e] rounded-2xl sm:rounded-[32px] p-4 sm:p-8 text-white border-l-4 border-amber-500 border border-emerald-800/70 shadow-2xl space-y-5">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-white/10 pb-5">
             <div className="space-y-1.5">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="px-3 py-1 rounded-full bg-[#DDDB00] text-slate-950 text-[10px] font-black uppercase tracking-widest">
-                  Sábado 21 de Noviembre
+                  Sábado 21 de Noviembre • 08:30 a 15:30 hs
                 </span>
-                <span className="text-xs font-black uppercase tracking-wider text-emerald-400">
-                  Autoridad de Admisión Administrativa
+                <span className="text-[10px] font-black uppercase tracking-wider text-amber-300">
+                  Diplomatura UNLZ – UATRE • PatagonianC LTDA
                 </span>
               </div>
-              <h2 className="text-xl sm:text-2xl font-black uppercase tracking-tight">
-                🌱 Evento "Un Día de Siembra" & Solicitudes de Alta Autogestiva
+              <h2 className="text-lg sm:text-2xl font-black uppercase tracking-tight text-white">
+                JORNADA OFICIAL: “UN DÍA DE SIEMBRA” & ALTA AUTOGESTIVA
               </h2>
               <p className="text-xs text-slate-300 max-w-2xl">
-                Los inscriptos reciben confirmación previa por <strong className="text-[#DDDB00]">notificaciones@hempc.com.ar</strong> (Resend.com) para descargar el Programa Oficial. Desde aquí podés aprobar su alta definitiva como <strong>Productor Asociado</strong> o como <strong>Visitante</strong>.
+                Sede Práctica Patagonia: Chacra Experimental PatagonianC LTDA (VIRCH – Trelew, Chubut). Los inscriptos reciben confirmación previa por <strong className="text-[#DDDB00]">notificaciones@hempc.com.ar</strong> (Resend.com) para descargar el Programa Oficial (sujeto a actualización). Desde aquí podés aprobar su alta como <strong>Productor Asociado</strong> o como <strong>Visitante</strong>.
               </p>
             </div>
 

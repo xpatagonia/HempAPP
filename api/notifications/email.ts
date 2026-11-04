@@ -325,13 +325,13 @@ function buildLaborAssignedHtml(req: EmailNotificationPayload): string {
 
 function buildEventRegistrationHtml(req: EmailNotificationPayload): string {
   const extra = req.extra_data || {};
-  const eventName = extra.event_name || 'Un Día de Siembra • Jornada Oficial de Inicio de Campaña';
-  const eventDate = extra.event_date || 'Sábado 21 de Noviembre de 2026';
+  const eventName = extra.event_name || 'JORNADA OFICIAL: “UN DÍA DE SIEMBRA”';
+  const eventDate = extra.event_date || 'Sábado 21 de Noviembre • 08:30 a 15:30 hs';
   const ticketCode = extra.ticket_code || 'SIEMBRA-21N-0001';
   const verificationPin = extra.verification_pin || '';
   const profileLabel = req.role_name || 'Acreditado / Participante';
   const organization = req.structure_name || 'Participante Independiente';
-  const locality = extra.locality || 'Patagonia / Argentina';
+  const locality = extra.locality || 'VIRCH – Trelew, Chubut';
   const programUrl = req.action_url || 'https://red.hempc.com.ar/#/login?evento=un-dia-de-siembra';
 
   const pinBlock = verificationPin
@@ -351,32 +351,35 @@ function buildEventRegistrationHtml(req: EmailNotificationPayload): string {
   <head>
     <meta charset="utf-8">
     <style>
-      body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 24px; }
-      .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 24px; border: 1px solid #d1fae5; overflow: hidden; box-shadow: 0 8px 30px rgba(0,0,0,0.06); }
-      .header { background: linear-gradient(135deg, #022c22 0%, #064e3b 100%); padding: 30px 32px; color: #ffffff; border-bottom: 4px solid #DDDB00; }
-      .content { padding: 32px; color: #334155; line-height: 1.6; }
-      .badge { display: inline-block; background: #ecfdf5; color: #047857; border: 1px solid #6ee7b7; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 800; text-transform: uppercase; }
-      .btn { display: inline-block; background: #006633; color: #ffffff !important; padding: 14px 28px; border-radius: 14px; font-weight: 900; text-decoration: none; font-size: 13px; text-transform: uppercase; letter-spacing: 0.8px; }
+      body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 20px; }
+      .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 20px; border: 1px solid #d1fae5; overflow: hidden; box-shadow: 0 8px 30px rgba(0,0,0,0.06); }
+      .header { background: #0c2d1e; padding: 28px 30px; color: #ffffff; border-left: 5px solid #d97706; }
+      .content { padding: 28px 30px; color: #334155; line-height: 1.6; }
+      .btn { display: inline-block; background: #006633; color: #ffffff !important; padding: 14px 28px; border-radius: 12px; font-weight: 900; text-decoration: none; font-size: 13px; text-transform: uppercase; letter-spacing: 0.8px; }
       .schedule-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px; padding: 18px; margin: 20px 0; font-size: 12px; }
-      .footer { background: #f8fafc; padding: 20px 32px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #94a3b8; text-align: center; }
+      .footer { background: #f8fafc; padding: 20px 30px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #94a3b8; text-align: center; }
     </style>
   </head>
   <body>
     <div class="container">
       <div class="header">
-        <div style="font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #DDDB00; font-weight: 900; margin-bottom: 4px;">
-          Acreditación Oficial & Alta Autogestiva • Sábado 21 de Noviembre
+        <div style="font-size: 10px; letter-spacing: 1.8px; text-transform: uppercase; color: #DDDB00; font-weight: 900; margin-bottom: 4px;">
+          DIPLOMATURA UNIVERSITARIA EN CÁÑAMO INDUSTRIAL • UNLZ – UATRE
         </div>
-        <h1 style="margin: 4px 0 4px 0; font-size: 24px; font-weight: 900; letter-spacing: -0.5px;">🌱 ${eventName}</h1>
-        <div style="font-size: 12px; color: #a7f3d0; font-weight: 700;">PatagonianC LTDA Cooperativa de Trabajo · HempC Nucleus</div>
+        <h1 style="margin: 4px 0 6px 0; font-size: 22px; font-weight: 900; letter-spacing: -0.3px;">${eventName}</h1>
+        <div style="font-size: 12px; color: #e2e8f0; font-weight: 600;">Sede Práctica Patagonia: Chacra Experimental PatagonianC LTDA • Ubicación: VIRCH – Trelew, Chubut</div>
       </div>
       <div class="content">
         <p style="font-size: 15px; color: #0f172a; margin-top: 0;">Hola <strong>${req.to_name}</strong>,</p>
         <p style="font-size: 13px; color: #475569;">
-          ¡Confirmamos la recepción de tu pre-inscripción al evento <strong>"${eventName}"</strong> (${eventDate}) y tu solicitud de alta en la plataforma <strong>HempC Nucleus</strong>!
+          Confirmamos la recepción de tu pre-inscripción a la <strong>${eventName}</strong> (${eventDate}) organizada por <strong>PatagonianC & UATRE</strong>, y tu solicitud de alta en la plataforma <strong>HempC Nucleus</strong>.
         </p>
 
-        <div style="background: #064e3b; color: #ffffff; border-radius: 16px; padding: 18px 22px; margin: 20px 0;">
+        <div style="background: #fffbeb; border: 1px solid #f59e0b; border-radius: 12px; padding: 12px 16px; margin: 16px 0; font-size: 11px; color: #b45309; font-weight: 700;">
+          ⚠ AVISO IMPORTANTE: Por tratarse de una actividad de campo a cielo abierto, LA JORNADA SE REPROGRAMA EN CASO DE MAL TIEMPO (Aviso 24 hs antes). El programa de actividades se encuentra sujeto a actualización.
+        </div>
+
+        <div style="background: #0c2d1e; color: #ffffff; border-radius: 16px; padding: 18px 22px; margin: 20px 0;">
           <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: #6ee7b7; font-weight: 800;">Pase Oficial de Acreditación</div>
           <div style="font-size: 20px; font-weight: 900; font-family: monospace; letter-spacing: 1.5px; color: #DDDB00; margin: 4px 0;">${ticketCode}</div>
           <div style="font-size: 12px; color: #ecfdf5; margin-top: 6px;">
@@ -387,26 +390,29 @@ function buildEventRegistrationHtml(req: EmailNotificationPayload): string {
         ${pinBlock}
 
         <div class="schedule-box">
-          <div style="font-size: 11px; font-weight: 900; text-transform: uppercase; color: #064e3b; letter-spacing: 1px; margin-bottom: 10px;">
-            📋 Resumen del Programa Oficial — Sábado 21 de Noviembre
+          <div style="font-size: 11px; font-weight: 900; text-transform: uppercase; color: #0c2d1e; letter-spacing: 1px; margin-bottom: 10px;">
+            1. CRONOGRAMA GENERAL DE ACTIVIDADES (08:30 a 15:30 hs — Sujeto a actualización)
           </div>
-          <p style="margin: 0 0 6px 0;"><strong>08:30 hs:</strong> Acreditación digital QR, recepción institucional y bienvenida cooperativa.</p>
-          <p style="margin: 0 0 6px 0;"><strong>09:30 hs:</strong> Apertura Técnica: Marco Regulatorio ARICCAME / INASE y Trazabilidad Satelital Agro 4.0.</p>
-          <p style="margin: 0 0 6px 0;"><strong>11:00 hs:</strong> Demostración en Campo: Calibración de Sembradora, Densidad y Apertura Oficial de Surco.</p>
-          <p style="margin: 0 0 6px 0;"><strong>13:00 hs:</strong> Almuerzo de Camaradería y Rueda de Vinculación de Productores e Inversores.</p>
-          <p style="margin: 0;"><strong>15:00 hs:</strong> Bloque Captura Neta de CO₂ (Protocolo MRV), Bioconstrucción (Hempcrete) y Cierre.</p>
+          <p style="margin: 0 0 6px 0;"><strong>08:30 – 09:15:</strong> Acreditación y Recepción (Café de bienvenida, entrega de credenciales y carpeta técnica).</p>
+          <p style="margin: 0 0 6px 0;"><strong>09:15 – 10:00:</strong> Apertura Institucional (Gastón Barea y Carlos Reyes - PatagonianC LTDA, Sebastián Tosolini, Demian Gomez - UATRE Buenos Aires - Chubut y Autoridades Provinciales).</p>
+          <p style="margin: 0 0 6px 0;"><strong>10:00 – 10:45:</strong> Bloque de Campo 1: Propósitos en 3 Lotes (Grano, Cañamiza y Fibra Textil) y Mecanización.</p>
+          <p style="margin: 0 0 6px 0;"><strong>10:45 – 11:45:</strong> Bloque de Campo 2: Protocolo Propio, BPA, Red y NUCLEUS (Siembra en vivo en los 3 lotes).</p>
+          <p style="margin: 0 0 6px 0;"><strong>11:45 – 12:30:</strong> Bloque de Campo 3: Sistema de Riego en el VIRCH (Manejo hídrico por canal principal).</p>
+          <p style="margin: 0 0 6px 0;"><strong>12:30 – 14:15:</strong> Break - Charla: Showroom de Materiales y Plantas Vivas (Hempcrete, fibra textil, cañamiza y grano).</p>
+          <p style="margin: 0 0 6px 0;"><strong>14:15 – 15:00:</strong> Charla Técnica Central: Protocolo de Siembra - Trazabilidad 360 y monitoreo satelital en NUCLEUS.</p>
+          <p style="margin: 0;"><strong>15:00 – 15:30:</strong> Cierre y Certificados (Entrega de certificados de asistencia práctica junto a UATRE).</p>
         </div>
 
-        <p style="font-size: 12px; color: #64748b; background: #fffbeb; border-left: 4px solid #f59e0b; padding: 10px 14px; border-radius: 8px;">
+        <p style="font-size: 12px; color: #64748b; background: #f1f5f9; border-left: 4px solid #0c2d1e; padding: 10px 14px; border-radius: 8px;">
           <strong>Estado de tu cuenta en la plataforma:</strong> Tu perfil quedó registrado en estado <em>Pendiente de Aprobación Administrativa</em>. Un administrador de HempC validará tu solicitud para otorgarte acceso como <strong>Productor Asociado</strong> o <strong>Visitante Acreditado</strong>.
         </p>
 
         <div style="text-align: center; margin: 26px 0 12px 0;">
-          <a href="${programUrl}" class="btn">Confirmar Correo y Descargar Programa PDF</a>
+          <a href="${programUrl}" class="btn">Confirmar Correo y Descargar Programa Oficial PDF</a>
         </div>
       </div>
       <div class="footer">
-        <div style="margin-bottom: 6px; font-weight: 800; color: #334155; font-size: 12px;">PatagonianC LTDA Cooperativa de Trabajo · CUIT: 30-71816113-0 · HempC (Unidad de Negocios)</div>
+        <div style="margin-bottom: 6px; font-weight: 800; color: #334155; font-size: 12px;">PatagonianC LTDA Cooperativa de Trabajo · Mat. INAES 68218 · CUIT: 30-71816113-0 · HempC</div>
         <div style="font-size: 11px; color: #64748b;">Enviado por <strong>notificaciones@hempc.com.ar</strong> (Vercel + Resend HTTPS)</div>
       </div>
     </div>
@@ -502,7 +508,7 @@ export default async function handler(req: any, res: any) {
     if (body.notification_type === 'password_reset') {
       subject = '🔐 Restablecimiento de Contraseña • HempC Nucleus';
     } else if (body.notification_type === 'event_registration') {
-      subject = '🌱 Confirmación de Inscripción: "Un Día de Siembra" (Sáb. 21 Nov) & Programa Oficial • HempC';
+      subject = 'Confirmación de Inscripción: Jornada Oficial "Un Día de Siembra" (Sáb. 21 Nov) • PatagonianC & UATRE';
     } else if (body.notification_type === 'registration_approved') {
       subject = `✅ Cuenta Aprobada (${body.role_name || 'Miembro'}) • HempC Nucleus`;
     } else if (body.notification_type === 'user_welcome') {
