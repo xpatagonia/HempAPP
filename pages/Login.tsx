@@ -444,31 +444,17 @@ export default function Login() {
             </p>
           </div>
 
-          {/* Encabezado Superior: Iniciar Sesión + Botón Independiente "Solicitar Alta de Usuario" */}
-          <div className="border-b border-slate-100 dark:border-slate-800 pb-2.5 flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h2 className="text-2xl xl:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter italic leading-none">
-                Iniciar Sesión
-              </h2>
-              <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.16em] flex items-center gap-1.5 mt-1">
-                <ShieldCheck size={13} className="text-[#006633]"/> Nodo Nucleus Autenticado
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                setRegistrationModalMode("platform");
-                setShowRegistrationModal(true);
-              }}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/70 dark:hover:bg-emerald-900/70 text-[#006633] dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 font-black text-[10px] uppercase tracking-wider transition shadow-xs active:scale-95 cursor-pointer"
-            >
-              <UserCheck size={13} />
-              <span>Solicitar Alta de Usuario</span>
-            </button>
+          {/* Encabezado Superior: Iniciar Sesión */}
+          <div className="border-b border-slate-100 dark:border-slate-800 pb-2">
+            <h2 className="text-2xl xl:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter italic leading-none">
+              Iniciar Sesión
+            </h2>
+            <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.16em] flex items-center gap-1.5 mt-1">
+              <ShieldCheck size={13} className="text-[#006633]"/> Nodo Nucleus Autenticado
+            </p>
           </div>
 
-          {/* Formulario */}
+          {/* Formulario de Acceso y Solicitud de Alta en Plataforma */}
           <form onSubmit={handleSubmit} className="space-y-2.5">
             {error && (
               <div className="bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 p-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider flex items-center border border-red-200 dark:border-red-900/60 animate-in slide-in-from-top-2 shadow-sm">
@@ -546,26 +532,56 @@ export default function Login() {
               </button>
             </div>
 
-            <button 
-              type="submit" 
-              disabled={isLoading} 
-              className="w-full bg-[#006633] hover:bg-[#004d26] text-white py-2.5 xl:py-3 rounded-xl font-black text-[11px] uppercase tracking-[0.2em] active:scale-[0.98] transition-all shadow-lg shadow-green-900/20 disabled:opacity-50 flex items-center justify-center group cursor-pointer"
-            >
-              {isLoading ? (
-                <div className="flex items-center space-x-2">
-                  <Loader2 className="animate-spin" size={16} />
-                  <span>Verificando Credenciales...</span>
+            <div className="space-y-2 pt-0.5">
+              <button 
+                type="submit" 
+                disabled={isLoading} 
+                className="w-full bg-[#006633] hover:bg-[#004d26] text-white py-2.5 xl:py-3 rounded-xl font-black text-[11px] uppercase tracking-[0.2em] active:scale-[0.98] transition-all shadow-lg shadow-green-900/20 disabled:opacity-50 flex items-center justify-center group cursor-pointer"
+              >
+                {isLoading ? (
+                  <div className="flex items-center space-x-2">
+                    <Loader2 className="animate-spin" size={16} />
+                    <span>Verificando Credenciales...</span>
+                  </div>
+                ) : (
+                  <>
+                    <span>Ingresar al Sistema</span> 
+                    <ArrowRight size={16} className="ml-2.5 group-hover:translate-x-1.5 transition-transform" />
+                  </>
+                )}
+              </button>
+
+              {/* BOTÓN DESTACADO DE ALTA DE USUARIO EN PLATAFORMA (UBICACIÓN PRINCIPAL BAJO LOGIN) */}
+              <button
+                type="button"
+                onClick={() => {
+                  setRegistrationModalMode("platform");
+                  setShowRegistrationModal(true);
+                }}
+                className="w-full py-2.5 px-3.5 rounded-xl bg-slate-900 hover:bg-[#006633] dark:bg-slate-900 dark:hover:bg-[#006633] text-white border border-slate-800 border-l-4 border-l-[#006633] hover:border-l-[#DDDB00] transition-all shadow-md flex items-center justify-between gap-2 group active:scale-[0.99] cursor-pointer"
+              >
+                <div className="flex items-center gap-2.5 text-left">
+                  <div className="w-7 h-7 rounded-lg bg-[#006633] group-hover:bg-white/15 text-[#DDDB00] flex items-center justify-center shrink-0 transition-colors">
+                    <UserCheck size={15} />
+                  </div>
+                  <div>
+                    <span className="block font-black text-[11px] uppercase tracking-wider text-white leading-tight">
+                      Solicitar Alta de Usuario
+                    </span>
+                    <span className="block text-[9px] font-semibold text-slate-300 group-hover:text-emerald-100 leading-tight">
+                      Visitantes, Productores y Técnicos • Aprobación Admin
+                    </span>
+                  </div>
                 </div>
-              ) : (
-                <>
-                  <span>Ingresar al Sistema</span> 
-                  <ArrowRight size={16} className="ml-2.5 group-hover:translate-x-1.5 transition-transform" />
-                </>
-              )}
-            </button>
+                <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider text-[#DDDB00] shrink-0">
+                  <span>Registrarse</span>
+                  <ArrowRight size={13} className="group-hover:translate-x-1 transition-transform" />
+                </span>
+              </button>
+            </div>
           </form>
 
-          {/* TARJETA EXCLUSIVA DEL EVENTO: JORNADA OFICIAL “UN DÍA DE SIEMBRA” (SÁBADO 21 DE NOVIEMBRE) */}
+          {/* TARJETA EXCLUSIVA DEL EVENTO: JORNADA OFICIAL “UN DÍA DE SIEMBRA” (SOLO VISITANTE AL EVENTO) */}
           <div className="bg-[#0c2d1e] rounded-2xl p-3 xl:p-3.5 text-white border-l-4 border-amber-500 border border-emerald-800/80 shadow-lg space-y-2 relative overflow-hidden">
             <div className="flex flex-wrap items-center justify-between gap-1.5 text-[9px] font-black uppercase tracking-wider">
               <span className="inline-flex items-center gap-1 text-[#DDDB00]">
@@ -573,7 +589,7 @@ export default function Login() {
                 Sáb. 21 Nov • 08:30 a 15:30 hs
               </span>
               <span className="text-amber-300">
-                PatagonianC & UATRE
+                Exclusivo Visitante al Evento
               </span>
             </div>
 
@@ -585,9 +601,9 @@ export default function Login() {
                 JORNADA OFICIAL: “UN DÍA DE SIEMBRA”
               </h3>
               <p className="text-[10px] text-emerald-100/90 leading-snug mt-0.5">
-                Chacra Experimental PatagonianC LTDA (VIRCH – Trelew). Confirmación vía{' '}
+                Chacra Experimental PatagonianC LTDA (VIRCH – Trelew). Acreditación de <strong>Visitante al Evento</strong> vía{' '}
                 <strong className="text-[#DDDB00]">notificaciones@hempc.com.ar</strong> y descarga de{' '}
-                <strong>Programa Oficial PDF</strong> <span className="italic opacity-80">(sujeto a actualización)</span>.
+                <strong>Programa Oficial PDF</strong>.
               </p>
             </div>
 

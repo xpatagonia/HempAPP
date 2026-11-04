@@ -107,7 +107,8 @@ export default function EventAndSelfRegistrationModal({
         `ACT-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
 
       const finalTicket = existing?.eventTicketCode || `SIEMBRA-21N-${String(Date.now()).slice(-4)}`;
-      const profileText = PROFILE_LABELS[requestedProfile];
+      const effectiveProfile: NonNullable<User['requestedProfileType']> = isEventSelected ? 'visitante' : requestedProfile;
+      const profileText = isEventSelected ? 'Visitante al Evento / Invitado General' : PROFILE_LABELS[effectiveProfile];
 
       const newUserObj: User = {
         id: existing?.id || `usr-self-${Date.now()}`,
@@ -119,23 +120,23 @@ export default function EventAndSelfRegistrationModal({
         activationToken,
         phone: phone.trim(),
         dniNumber: dniNumber.trim() || undefined,
-        role: requestedProfile === 'productor' ? 'client' : 'viewer',
+        role: effectiveProfile === 'productor' ? 'client' : 'viewer',
         jobTitle: `${profileText}${isEventSelected ? ' • Acreditado Un Día de Siembra (21/11)' : ''}`,
         organizationName:
           organizationName.trim() ||
-          (requestedProfile === 'productor' ? 'Establecimiento en Incorporación' : 'Visitante / Invitado General'),
+          (effectiveProfile === 'productor' ? 'Establecimiento en Incorporación' : 'Visitante / Invitado General'),
         isNetworkMember: false,
-        memberType: requestedProfile === 'productor' ? 'Socio_Productor' : undefined,
+        memberType: effectiveProfile === 'productor' ? 'Socio_Productor' : undefined,
         accountStatus: 'pending_approval',
         registrationSource: isEventSelected ? 'event_un_dia_de_siembra' : 'self_service_platform',
-        requestedProfileType: requestedProfile,
+        requestedProfileType: effectiveProfile,
         eventRegistered: isEventSelected ? true : existing?.eventRegistered,
         eventName: isEventSelected ? 'Jornada Oficial: "Un Día de Siembra" (Sáb. 21 Nov)' : existing?.eventName,
         eventTicketCode: isEventSelected ? finalTicket : existing?.eventTicketCode,
         eventConfirmedByEmail: false,
         eventProgramDownloaded: false,
         localityOrProvince: locality.trim() || 'VIRCH – Trelew, Chubut',
-        estimatedHectares: estimatedHa ? Number(estimatedHa) : undefined,
+        estimatedHectares: !isEventSelected && estimatedHa ? Number(estimatedHa) : undefined,
         invitedAt: new Date().toISOString().split('T')[0],
         avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(cleanName)}&backgroundColor=b6e3f4`
       };
@@ -410,41 +411,65 @@ export default function EventAndSelfRegistrationModal({
               </>
             )}
 
-            {/* 1. Selección de Perfil Solicitado (VISITANTE / INVITADO GENERAL PRIORIZADO PRIMERO) */}
-            <div>
-              <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 block mb-2">
-                1. Seleccioná tu Perfil (Prioridad: Visitante / Invitado General) *
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {profileOptions.map(opt => (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() => setRequestedProfile(opt.id)}
-                    className={`p-3 rounded-xl border text-left transition cursor-pointer ${
-                      requestedProfile === opt.id
-                        ? 'bg-emerald-50 dark:bg-emerald-950/60 border-[#006633] dark:border-emerald-500 ring-2 ring-[#006633]/20'
-                        : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-800 hover:border-slate-300'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-black uppercase text-slate-900 dark:text-white flex items-center gap-1.5">
-                        <span>{opt.title}</span>
-                        {opt.recommended && (
-                          <span className="text-[9px] font-mono font-bold text-[#006633] dark:text-emerald-400">
-                            • PRINCIPAL
-                          </span>
-                        )}
+            {/* 1. Perfil de Registro: En Evento SOLO aparece Visitante al Evento; en Solicitud de Alta aparecen todos priorizando Visitante */}
+            {isEventSelected ? (
+              <div className="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border-2 border-[#006633] dark:border-emerald-500 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-[#006633] text-[#DDDB00] flex items-center justify-center flex-shrink-0 shadow-sm">
+                    <UserCheck size={18} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-black uppercase text-slate-900 dark:text-white">
+                        Perfil de Inscripción: Visitante al Evento
                       </span>
-                      {requestedProfile === opt.id && (
-                        <CheckCircle2 size={16} className="text-[#006633] dark:text-emerald-400 flex-shrink-0" />
-                      )}
+                      <span className="px-2 py-0.5 rounded bg-[#006633] text-[#DDDB00] text-[9px] font-mono font-black uppercase">
+                        ACREDITACIÓN OFICIAL
+                      </span>
                     </div>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">{opt.desc}</p>
-                  </button>
-                ))}
+                    <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5">
+                      Pase de asistencia a la Jornada Oficial “Un Día de Siembra”, cobertura de seguro en campo y descarga del Programa Oficial PDF.
+                    </p>
+                  </div>
+                </div>
+                <CheckCircle2 size={18} className="text-[#006633] dark:text-emerald-400 flex-shrink-0" />
               </div>
-            </div>
+            ) : (
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 block mb-2">
+                  1. Seleccioná tu Perfil (Prioridad: Visitante / Invitado General) *
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {profileOptions.map(opt => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setRequestedProfile(opt.id)}
+                      className={`p-3 rounded-xl border text-left transition cursor-pointer ${
+                        requestedProfile === opt.id
+                          ? 'bg-emerald-50 dark:bg-emerald-950/60 border-[#006633] dark:border-emerald-500 ring-2 ring-[#006633]/20'
+                          : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-800 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-black uppercase text-slate-900 dark:text-white flex items-center gap-1.5">
+                          <span>{opt.title}</span>
+                          {opt.recommended && (
+                            <span className="text-[9px] font-mono font-bold text-[#006633] dark:text-emerald-400">
+                              • PRINCIPAL
+                            </span>
+                          )}
+                        </span>
+                        {requestedProfile === opt.id && (
+                          <CheckCircle2 size={16} className="text-[#006633] dark:text-emerald-400 flex-shrink-0" />
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">{opt.desc}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* 2. Datos Personales y de Contacto (SIN DEFINIR CONTRASEÑA) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
@@ -512,7 +537,7 @@ export default function EventAndSelfRegistrationModal({
 
               <div>
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1">
-                  Establecimiento / Delegación / Institución
+                  {isEventSelected ? 'Institución / Procedencia (Opcional)' : 'Establecimiento / Delegación / Institución'}
                 </label>
                 <div className="relative">
                   <Building2 size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -520,7 +545,13 @@ export default function EventAndSelfRegistrationModal({
                     type="text"
                     value={organizationName}
                     onChange={e => setOrganizationName(e.target.value)}
-                    placeholder={requestedProfile === 'productor' ? 'Nombre de Chacra / Campo' : 'Delegación, Univ. o Invitado'}
+                    placeholder={
+                      isEventSelected
+                        ? 'Visitante / Invitado General o Institución'
+                        : requestedProfile === 'productor'
+                        ? 'Nombre de Chacra / Campo'
+                        : 'Delegación, Univ. o Invitado'
+                    }
                     className="w-full pl-9 pr-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white outline-none focus:border-[#006633]"
                   />
                 </div>
@@ -543,7 +574,7 @@ export default function EventAndSelfRegistrationModal({
                 </div>
               </div>
 
-              {requestedProfile === 'productor' && (
+              {!isEventSelected && requestedProfile === 'productor' && (
                 <div className="sm:col-span-2">
                   <label className="text-[10px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-400 block mb-1">
                     Superficie Estimada Disponible para Siembra (Hectáreas)
@@ -565,7 +596,7 @@ export default function EventAndSelfRegistrationModal({
             <div className="bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/70 rounded-xl p-3.5 text-[11px] text-slate-700 dark:text-slate-200 flex items-start gap-2.5">
               <KeyRound size={16} className="text-[#006633] dark:text-emerald-400 flex-shrink-0 mt-0.5" />
               <div>
-                <strong className="text-slate-900 dark:text-white">Seguridad de Contraseña tras Aprobación:</strong> No necesitás definir una clave ahora. Una vez que un Administrador apruebe tu alta como <strong>Visitante</strong> o <strong>Productor</strong>, la plataforma te enviará desde <strong>notificaciones@hempc.com.ar</strong> el enlace directo para ingresar tu contraseña y confirmar el acceso.
+                <strong className="text-slate-900 dark:text-white">Seguridad de Contraseña tras Aprobación:</strong> No necesitás definir una clave ahora. Una vez que un Administrador apruebe tu alta{isEventSelected ? ' como Visitante' : ''}, la plataforma te enviará desde <strong>notificaciones@hempc.com.ar</strong> el enlace directo para ingresar tu contraseña y confirmar el acceso.
               </div>
             </div>
 
@@ -664,7 +695,7 @@ export default function EventAndSelfRegistrationModal({
         {step === 'confirmed' && createdUser && (
           <div className="p-4 sm:p-8 space-y-5 overflow-y-auto flex-1 animate-in zoom-in-95">
             <div className="bg-[#0c2d1e] text-white p-5 sm:p-6 rounded-2xl sm:rounded-3xl border-2 border-[#DDDB00] shadow-xl flex flex-col sm:flex-row items-center gap-5">
-              {createdUser.eventRegistered && (
+              {isEventSelected && createdUser.eventRegistered && (
                 <div className="bg-white p-3 rounded-2xl shadow-md flex-shrink-0">
                   <QRCodeSVG
                     value={`https://red.hempc.com.ar/#/login?ticket=${encodeURIComponent(
@@ -680,21 +711,24 @@ export default function EventAndSelfRegistrationModal({
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-[#DDDB00] text-[10px] font-black uppercase tracking-widest">
                   <CheckCircle2 size={13} />
                   <span>
-                    {createdUser.eventRegistered
-                      ? 'Email Confirmado • Acreditación Registrada'
-                      : 'Solicitud de Alta Recibida'}
+                    {isEventSelected && createdUser.eventRegistered
+                      ? 'Email Confirmado • Visitante al Evento Acreditado'
+                      : 'Solicitud de Alta de Usuario Recibida'}
                   </span>
                 </div>
                 <h3 className="text-lg sm:text-xl font-black uppercase tracking-tight truncate">
                   {createdUser.name}
                 </h3>
                 <p className="text-xs text-emerald-200 font-medium">
-                  {PROFILE_LABELS[createdUser.requestedProfileType || 'visitante']} • {createdUser.organizationName}
+                  {isEventSelected
+                    ? 'Visitante al Evento / Invitado General'
+                    : PROFILE_LABELS[createdUser.requestedProfileType || 'visitante']}{' '}
+                  • {createdUser.organizationName}
                 </p>
                 <div className="pt-1 flex flex-wrap items-center justify-center sm:justify-start gap-2">
-                  {createdUser.eventRegistered && (
+                  {isEventSelected && createdUser.eventRegistered && (
                     <span className="px-3 py-1 rounded-lg bg-black/40 font-mono text-xs font-black text-[#DDDB00]">
-                      PASE: {createdUser.eventTicketCode || ticketCode}
+                      PASE VISITANTE: {createdUser.eventTicketCode || ticketCode}
                     </span>
                   )}
                   <span className="px-3 py-1 rounded-lg bg-amber-500/20 text-amber-300 text-[10px] font-black uppercase flex items-center gap-1">
@@ -704,12 +738,12 @@ export default function EventAndSelfRegistrationModal({
               </div>
             </div>
 
-            {/* Botón Principal de Descarga del Programa Oficial */}
-            {createdUser.eventRegistered && (
+            {/* Botón Principal de Descarga del Programa Oficial (SOLO PARA EL VISITANTE AL EVENTO) */}
+            {isEventSelected && createdUser.eventRegistered && (
               <div className="bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/50 dark:to-slate-900 p-5 sm:p-6 rounded-2xl sm:rounded-3xl border-2 border-emerald-500/40 flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div className="space-y-1 text-center sm:text-left">
                   <span className="text-[10px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-400">
-                    Documento Oficial PatagonianC & UATRE (Sujeto a actualización)
+                    Exclusivo Visitante al Evento • PatagonianC & UATRE (Sujeto a actualización)
                   </span>
                   <h4 className="text-sm sm:text-base font-black text-slate-900 dark:text-white uppercase">
                     JORNADA OFICIAL: “UN DÍA DE SIEMBRA” (PDF)
