@@ -404,7 +404,7 @@ function buildEventRegistrationHtml(req: EmailNotificationPayload): string {
         </div>
 
         <p style="font-size: 12px; color: #64748b; background: #f1f5f9; border-left: 4px solid #0c2d1e; padding: 10px 14px; border-radius: 8px;">
-          <strong>Estado de tu cuenta en la plataforma:</strong> Tu perfil quedó registrado en estado <em>Pendiente de Aprobación Administrativa</em>. Un administrador de HempC validará tu solicitud para otorgarte acceso como <strong>Productor Asociado</strong> o <strong>Visitante Acreditado</strong>.
+          <strong>Seguridad y Aprobación Administrativa:</strong> Tu solicitud quedó registrada en estado <em>Pendiente de Aprobación</em>. Una vez que un Administrador apruebe tu alta como <strong>Visitante</strong> o <strong>Productor</strong>, recibirás un correo oficial con el <strong>enlace directo para ingresar tu contraseña y confirmar el acceso</strong>.
         </p>
 
         <div style="text-align: center; margin: 26px 0 12px 0;">
@@ -421,11 +421,16 @@ function buildEventRegistrationHtml(req: EmailNotificationPayload): string {
 }
 
 function buildRegistrationApprovedHtml(req: EmailNotificationPayload): string {
-  const roleLabel = req.role_name || 'Visitante Acreditado';
+  const roleLabel = req.role_name || 'Visitante / Invitado General';
   const structure = req.structure_name || 'Red Cooperativa HempC';
-  const actionUrl = req.action_url || 'https://red.hempc.com.ar/#/login';
   const extra = req.extra_data || {};
   const ticketCode = extra.ticket_code || '';
+  const activationToken = extra.activation_token || '';
+  const actionUrl =
+    req.action_url ||
+    `https://red.hempc.com.ar/#/login?activar=${encodeURIComponent(req.to_email)}${
+      activationToken ? `&token=${encodeURIComponent(activationToken)}` : ''
+    }`;
 
   return `
   <!DOCTYPE html>
@@ -445,22 +450,27 @@ function buildRegistrationApprovedHtml(req: EmailNotificationPayload): string {
   <body>
     <div class="container">
       <div class="header">
-        <div style="font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: #a7f3d0; font-weight: 800; margin-bottom: 2px;">PatagonianC LTDA Cooperativa de Trabajo</div>
-        <h1 style="margin: 6px 0 0 0; font-size: 22px; font-weight: 900;">✅ Solicitud de Alta Aprobada</h1>
+        <div style="font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: #a7f3d0; font-weight: 800; margin-bottom: 2px;">PatagonianC LTDA Cooperativa de Trabajo · NUCLEUS</div>
+        <h1 style="margin: 6px 0 0 0; font-size: 22px; font-weight: 900;">Solicitud de Alta Aprobada • Activá tu Contraseña</h1>
       </div>
       <div class="content">
         <p style="font-size: 15px; color: #0f172a;">Hola <strong>${req.to_name}</strong>,</p>
-        <p>La Administración Central de <strong>HempC Nucleus</strong> ha aprobado tu solicitud de ingreso a la plataforma.</p>
+        <p>La Administración Central de <strong>NUCLEUS</strong> ha aprobado tu solicitud de alta en la plataforma.</p>
         <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px; padding: 18px; margin: 20px 0;">
           <p style="margin: 0 0 8px 0; font-size: 13px;"><strong>Perfil Habilitado:</strong> <span class="badge">${roleLabel}</span></p>
           <p style="margin: 0 0 8px 0; font-size: 13px;"><strong>Organización / Establecimiento:</strong> ${structure}</p>
           <p style="margin: 0; font-size: 13px;"><strong>Usuario de Acceso:</strong> <code style="font-family: monospace;">${req.to_email}</code></p>
           ${ticketCode ? `<p style="margin: 8px 0 0 0; font-size: 12px; color: #047857;"><strong>Credencial Evento 21/11:</strong> ${ticketCode} (Confirmada)</p>` : ''}
+          ${activationToken ? `<p style="margin: 8px 0 0 0; font-size: 12px; color: #0f172a;"><strong>Código de Activación:</strong> <code style="font-family: monospace; font-weight: 900; color: #006633;">${activationToken}</code></p>` : ''}
         </div>
-        <p>Ya podés iniciar sesión con tu correo electrónico y la contraseña que configuraste al registrarte:</p>
-        <div style="text-align: center; margin: 26px 0 10px 0;">
-          <a href="${actionUrl}" class="btn">Ingresar a HempC Nucleus</a>
+        <p>Para completar el proceso de seguridad, hacé clic en el siguiente botón para <strong>ingresar tu contraseña personal y confirmar tu acceso</strong>:</p>
+        <div style="text-align: center; margin: 26px 0 14px 0;">
+          <a href="${actionUrl}" class="btn">Ingresar Contraseña y Confirmar Acceso</a>
         </div>
+        <p style="font-size: 11px; color: #64748b; text-align: center;">
+          Si el botón no abre automáticamente, copiá y pegá este enlace en tu navegador:<br/>
+          <a href="${actionUrl}" style="color: #006633; word-break: break-all;">${actionUrl}</a>
+        </p>
       </div>
       <div class="footer">
         <div style="margin-bottom: 6px; font-weight: 800; color: #334155; font-size: 12px;">PatagonianC LTDA Cooperativa de Trabajo · CUIT: 30-71816113-0 · HempC (Unidad de Negocios)</div>
@@ -510,7 +520,7 @@ export default async function handler(req: any, res: any) {
     } else if (body.notification_type === 'event_registration') {
       subject = 'Confirmación de Inscripción: Jornada Oficial "Un Día de Siembra" (Sáb. 21 Nov) • PatagonianC & UATRE';
     } else if (body.notification_type === 'registration_approved') {
-      subject = `✅ Cuenta Aprobada (${body.role_name || 'Miembro'}) • HempC Nucleus`;
+      subject = `Solicitud de Alta Aprobada (${body.role_name || 'Miembro'}) • Activá tu Contraseña en NUCLEUS`;
     } else if (body.notification_type === 'user_welcome') {
       subject = `🌿 Alta de Perfil y Credenciales • ${body.structure_name || 'HempC Nucleus'}`;
     } else if (body.notification_type === 'operator_invitation') {

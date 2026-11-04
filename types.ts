@@ -165,6 +165,8 @@ export interface User {
   estimatedHectares?: number;
   approvedBy?: string;
   approvedAt?: string;
+  activationToken?: string;
+  passwordPendingSetup?: boolean;
 }
 
 export type HempLicenseCategory = 

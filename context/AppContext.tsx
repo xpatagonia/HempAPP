@@ -324,6 +324,8 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         if (u.organizationName) meta.organizationName = u.organizationName;
         if (u.approvedBy) meta.approvedBy = u.approvedBy;
         if (u.approvedAt) meta.approvedAt = u.approvedAt;
+        if (u.activationToken) meta.activationToken = u.activationToken;
+        if (u.passwordPendingSetup !== undefined) meta.passwordPendingSetup = u.passwordPendingSetup;
         if (Object.keys(meta).length === 0) return cleanJobTitle;
         return `${cleanJobTitle} ${USER_META_MARKER_START}${JSON.stringify(meta)}${USER_META_MARKER_END}`.trim();
     };
@@ -377,7 +379,9 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             localityOrProvince: u.localityOrProvince || mergedMeta.localityOrProvince,
             estimatedHectares: u.estimatedHectares !== undefined ? u.estimatedHectares : mergedMeta.estimatedHectares,
             approvedBy: u.approvedBy || mergedMeta.approvedBy,
-            approvedAt: u.approvedAt || mergedMeta.approvedAt
+            approvedAt: u.approvedAt || mergedMeta.approvedAt,
+            activationToken: u.activationToken ?? mergedMeta.activationToken,
+            passwordPendingSetup: u.passwordPendingSetup !== undefined ? u.passwordPendingSetup : mergedMeta.passwordPendingSetup
         };
     };
 
@@ -1974,16 +1978,21 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                     .maybeSingle();
 
                 if (!error && data) {
+                    const mappedUser = healSingleUser(toCamelCase(data) as User);
+                    if (
+                        mappedUser.accountStatus === 'pending_approval' ||
+                        mappedUser.accountStatus === 'rejected' ||
+                        mappedUser.passwordPendingSetup === true ||
+                        String(mappedUser.password || '').startsWith('__PENDING_')
+                    ) {
+                        return false;
+                    }
                     const isPasswordValid = 
-                        data.password === trimmedPassword || 
+                        (data.password && !String(data.password).startsWith('__PENDING_') && data.password === trimmedPassword) || 
                         (trimmedPassword === "admin" && (data.role === "admin" || data.role === "super_admin" || tEmail === "admin@hempc.com.ar")) ||
                         (trimmedPassword === "@Admin130126@" && tEmail === "admin@hempc.com.ar");
 
                     if (isPasswordValid) {
-                        const mappedUser = healSingleUser(toCamelCase(data) as User);
-                        if (mappedUser.accountStatus === 'pending_approval' || mappedUser.accountStatus === 'rejected') {
-                            return false;
-                        }
                         setImpersonatingAdmin(null);
                         try { sessionStorage.removeItem('ht_impersonating_admin'); } catch {}
                         setCurrentUser(mappedUser); 
@@ -2000,24 +2009,28 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         // 2. Validar contra el padrón local de usuarios (usersList / localStorage)
         const localUser = usersList.find(u => targetEmails.includes(u.email?.toLowerCase() || ''));
         if (localUser) {
+            const healedLocal = healSingleUser(localUser);
+            if (
+                healedLocal.accountStatus === 'pending_approval' ||
+                healedLocal.accountStatus === 'rejected' ||
+                healedLocal.passwordPendingSetup === true ||
+                String(healedLocal.password || '').startsWith('__PENDING_')
+            ) {
+                return false;
+            }
             const matchesPassword = 
-                (localUser.password && localUser.password === trimmedPassword) ||
+                (healedLocal.password && !String(healedLocal.password).startsWith('__PENDING_') && healedLocal.password === trimmedPassword) ||
                 (trimmedPassword === "admin" && (
-                    localUser.role === "admin" || 
-                    localUser.role === "super_admin" || 
+                    healedLocal.role === "admin" || 
+                    healedLocal.role === "super_admin" || 
                     targetEmails.includes("admin@hempc.com.ar") ||
                     targetEmails.includes("xpatagonia.com@gmail.com") ||
                     targetEmails.includes("gaston.barea.moreno@gmail.com") ||
                     targetEmails.includes("gaston@hempc.com.ar")
                 )) ||
-                (trimmedPassword === "@Admin130126@" && targetEmails.includes("admin@hempc.com.ar")) ||
-                (!localUser.password && (trimmedPassword === "admin" || trimmedPassword === "123456"));
+                (trimmedPassword === "@Admin130126@" && targetEmails.includes("admin@hempc.com.ar"));
 
             if (matchesPassword) {
-                const healedLocal = healSingleUser(localUser);
-                if (healedLocal.accountStatus === 'pending_approval' || healedLocal.accountStatus === 'rejected') {
-                    return false;
-                }
                 setImpersonatingAdmin(null);
                 try { sessionStorage.removeItem('ht_impersonating_admin'); } catch {}
                 setCurrentUser(healedLocal);

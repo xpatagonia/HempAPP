@@ -556,10 +556,10 @@ export default function Users() {
     setUserToReset(user);
   };
 
-  // Aprobar alta autogestiva como Productor o como Visitante y despachar mail por notificaciones@hempc.com.ar
+  // Aprobar alta autogestiva (priorizando Visitante o Productor) y despachar enlace para crear contraseña por notificaciones@hempc.com.ar
   const handleApproveSelfRegistration = async (
     targetUser: User,
-    approveAs: "productor" | "visitante"
+    approveAs: "visitante" | "productor"
   ) => {
     setActionLoadingId(targetUser.id);
     try {
@@ -567,7 +567,16 @@ export default function Users() {
       const roleLabel =
         approveAs === "productor"
           ? "Productor Asociado (Red Cooperativa)"
-          : "Visitante Acreditado (Un Día de Siembra)";
+          : "Visitante / Invitado General";
+
+      const activationToken =
+        targetUser.activationToken ||
+        `ACT-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+
+      const hasValidCustomPassword =
+        Boolean(targetUser.password) &&
+        !String(targetUser.password).startsWith("__PENDING_") &&
+        targetUser.passwordPendingSetup !== true;
 
       const updated: User = {
         ...targetUser,
@@ -575,24 +584,35 @@ export default function Users() {
         isNetworkMember: approveAs === "productor",
         memberType: approveAs === "productor" ? "Socio_Productor" : undefined,
         accountStatus: "active",
+        activationToken,
+        passwordPendingSetup: !hasValidCustomPassword,
+        password: hasValidCustomPassword
+          ? targetUser.password
+          : `__PENDING_APPROVAL_LOCKED_${activationToken}__`,
         approvedBy: currentUser?.name || "Administración Central HempC",
         approvedAt: new Date().toISOString().split("T")[0]
       };
 
       await updateUser(updated);
 
+      const activationUrl = `${window.location.origin}/#/login?activar=${encodeURIComponent(
+        updated.email
+      )}&token=${encodeURIComponent(activationToken)}`;
+
       const dispatch = await sendRegistrationApprovedEmail({
         toEmail: updated.email,
         toName: updated.name,
         roleLabel,
         organizationName: updated.organizationName || "Red Cooperativa HempC",
-        ticketCode: updated.eventTicketCode
+        ticketCode: updated.eventTicketCode,
+        activationToken,
+        actionUrl: activationUrl
       });
 
       setEmailToast({
         show: true,
         success: dispatch.success,
-        message: `Alta aprobada como ${roleLabel}. Notificación enviada a ${updated.email}.`,
+        message: `Alta aprobada como ${roleLabel}. Enlace para crear contraseña enviado a ${updated.email}.`,
         sentTo: updated.email,
         via: dispatch.deliveredVia
       });
@@ -768,21 +788,21 @@ export default function Users() {
                       <button
                         type="button"
                         disabled={actionLoadingId === u.id}
-                        onClick={() => handleApproveSelfRegistration(u, "productor")}
-                        className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl font-black text-[11px] uppercase tracking-wider flex items-center gap-1.5 transition cursor-pointer"
+                        onClick={() => handleApproveSelfRegistration(u, "visitante")}
+                        className="px-4 py-2.5 bg-[#DDDB00] hover:bg-[#e8e638] text-slate-950 rounded-xl font-black text-[11px] uppercase tracking-wider flex items-center gap-1.5 transition cursor-pointer shadow"
                       >
-                        <CheckCircle2 size={14} />
-                        <span>Aprobar como Productor</span>
+                        <UserCheck size={14} />
+                        <span>Aprobar Visitante (Enviar Link Clave)</span>
                       </button>
 
                       <button
                         type="button"
                         disabled={actionLoadingId === u.id}
-                        onClick={() => handleApproveSelfRegistration(u, "visitante")}
-                        className="px-4 py-2.5 bg-sky-500 hover:bg-sky-400 text-slate-950 rounded-xl font-black text-[11px] uppercase tracking-wider flex items-center gap-1.5 transition cursor-pointer"
+                        onClick={() => handleApproveSelfRegistration(u, "productor")}
+                        className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl font-black text-[11px] uppercase tracking-wider flex items-center gap-1.5 transition cursor-pointer"
                       >
-                        <UserCheck size={14} />
-                        <span>Aprobar como Visitante</span>
+                        <CheckCircle2 size={14} />
+                        <span>Aprobar Productor (Enviar Link Clave)</span>
                       </button>
 
                       <button

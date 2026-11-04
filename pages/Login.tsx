@@ -38,12 +38,33 @@ export default function Login() {
     tempPassword?: string;
   } | null>(null);
 
+  // Modal de Activación de Cuenta y Definición de Contraseña tras Aprobación Admin
+  const [showActivateModal, setShowActivateModal] = useState(false);
+  const [activateEmail, setActivateEmail] = useState("");
+  const [activateToken, setActivateToken] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [isActivating, setIsActivating] = useState(false);
+  const [activateStatus, setActivateStatus] = useState<{
+    type: "error" | "success";
+    message: string;
+  } | null>(null);
+
   const currentUrl = typeof window !== "undefined" ? window.location.origin : "";
 
   useEffect(() => {
     const eventoParam = searchParams.get("evento");
     const registroParam = searchParams.get("registro");
-    if (eventoParam === "un-dia-de-siembra" || eventoParam === "21nov") {
+    const activarParam = searchParams.get("activar");
+    const tokenParam = searchParams.get("token");
+
+    if (activarParam) {
+      setActivateEmail(activarParam.trim().toLowerCase());
+      if (tokenParam) setActivateToken(tokenParam.trim());
+      setActivateStatus(null);
+      setShowActivateModal(true);
+    } else if (eventoParam === "un-dia-de-siembra" || eventoParam === "21nov") {
       setRegistrationModalMode("event");
       setShowRegistrationModal(true);
     } else if (registroParam === "alta") {
@@ -80,12 +101,23 @@ export default function Login() {
       setError(
         `Tu solicitud de alta (${matchedUser.eventTicketCode ? `Pase ${matchedUser.eventTicketCode} • ` : ""}Perfil: ${
           matchedUser.requestedProfileType === "productor" ? "Productor" : "Visitante"
-        }) se encuentra PENDIENTE DE APROBACIÓN por la Administración de HempC. Recibirás un correo desde notificaciones@hempc.com.ar apenas sea habilitada.`
+        }) se encuentra PENDIENTE DE APROBACIÓN por la Administración. Una vez aprobada recibirás desde notificaciones@hempc.com.ar el enlace para crear tu contraseña.`
       );
       return;
     }
     if (matchedUser?.accountStatus === "rejected") {
       setError("Tu solicitud de acceso no ha sido aprobada por la administración cooperativa.");
+      return;
+    }
+    if (
+      matchedUser &&
+      matchedUser.accountStatus === "active" &&
+      (matchedUser.passwordPendingSetup === true || String(matchedUser.password || "").startsWith("__PENDING_"))
+    ) {
+      setActivateEmail(cleanMail);
+      setActivateToken(matchedUser.activationToken || "");
+      setActivateStatus(null);
+      setShowActivateModal(true);
       return;
     }
 
@@ -101,6 +133,127 @@ export default function Login() {
     } catch (err) {
       setError("Ocurrió un error al intentar iniciar sesión.");
       setIsLoading(false);
+    }
+  };
+
+  const handleActivateAccountPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setActivateStatus(null);
+
+    const cleanMail = activateEmail.trim().toLowerCase();
+    if (!cleanMail) {
+      setActivateStatus({ type: "error", message: "Ingresá tu correo electrónico aprobado." });
+      return;
+    }
+    if (newPassword.trim().length < 6) {
+      setActivateStatus({
+        type: "error",
+        message: "La contraseña debe tener al menos 6 caracteres por seguridad."
+      });
+      return;
+    }
+    if (newPassword.trim() !== confirmNewPassword.trim()) {
+      setActivateStatus({
+        type: "error",
+        message: "Las contraseñas ingresadas no coinciden. Verificalas e intentá nuevamente."
+      });
+      return;
+    }
+
+    setIsActivating(true);
+    try {
+      let targetUser = usersList.find(u => u.email?.toLowerCase() === cleanMail);
+
+      if (!targetUser) {
+        try {
+          const { data } = await supabase.from("users").select("*").ilike("email", cleanMail).maybeSingle();
+          if (data) {
+            targetUser = {
+              id: data.id,
+              name: data.name || "Usuario Acreditado",
+              email: data.email,
+              role: data.role || "viewer",
+              password: data.password,
+              jobTitle: data.job_title,
+              organizationName: data.organization_name,
+              isNetworkMember: Boolean(data.is_network_member),
+              accountStatus: "active"
+            };
+          }
+        } catch {}
+      }
+
+      if (!targetUser) {
+        setActivateStatus({
+          type: "error",
+          message: `No se encontró una solicitud aprobada para "${cleanMail}". Verificá el correo o aguardá la confirmación de Administración.`
+        });
+        setIsActivating(false);
+        return;
+      }
+
+      if (targetUser.accountStatus === "pending_approval") {
+        setActivateStatus({
+          type: "error",
+          message: "Tu solicitud aún figura Pendiente de Aprobación por los Administradores. Podrás definir tu contraseña apenas sea aprobada."
+        });
+        setIsActivating(false);
+        return;
+      }
+
+      if (targetUser.accountStatus === "rejected") {
+        setActivateStatus({
+          type: "error",
+          message: "Esta solicitud no se encuentra habilitada por la Administración."
+        });
+        setIsActivating(false);
+        return;
+      }
+
+      if (
+        targetUser.activationToken &&
+        activateToken.trim() &&
+        targetUser.activationToken.toUpperCase() !== activateToken.trim().toUpperCase()
+      ) {
+        setActivateStatus({
+          type: "error",
+          message: "El código de activación no coincide con el enviado en el correo de aprobación."
+        });
+        setIsActivating(false);
+        return;
+      }
+
+      const updatedUser = {
+        ...targetUser,
+        password: newPassword.trim(),
+        passwordPendingSetup: false,
+        accountStatus: "active" as const
+      };
+
+      await updateUser(updatedUser);
+
+      setActivateStatus({
+        type: "success",
+        message: "¡Contraseña configurada y confirmada con éxito! Ya podés ingresar al sistema."
+      });
+
+      setEmail(cleanMail);
+      setPassword(newPassword.trim());
+
+      setTimeout(async () => {
+        const logged = await login(cleanMail, newPassword.trim());
+        if (logged) {
+          setShowActivateModal(false);
+          navigate("/");
+        }
+      }, 900);
+    } catch (err: any) {
+      setActivateStatus({
+        type: "error",
+        message: "No se pudo guardar la contraseña. Intentá nuevamente."
+      });
+    } finally {
+      setIsActivating(false);
     }
   };
 
@@ -151,7 +304,7 @@ export default function Login() {
     if (!userFound) {
       setForgotStatus({
         type: "not_found",
-        message: `El correo "${targetEmail}" no se encuentra registrado en el padrón de la cooperativa. Por políticas de seguridad, no se admite el auto-registro público. Por favor solicita el alta a la administración de tu nodo.`
+        message: `El correo "${targetEmail}" no se encuentra registrado en el padrón de la cooperativa. Si aún no tenés cuenta, utilizá el botón "Solicitar Alta de Usuario" en la parte superior.`
       });
       setIsRecovering(false);
       return;
@@ -168,7 +321,8 @@ export default function Login() {
     try {
       await updateUser({
         ...userFound,
-        password: tempPassword
+        password: tempPassword,
+        passwordPendingSetup: false
       });
 
       const res = await sendPasswordResetEmail({
@@ -266,15 +420,15 @@ export default function Login() {
 
       {/* Lado Derecho: Formulario de Autenticación Compacto y Equilibrado */}
       <div className="flex-1 flex flex-col items-center justify-center px-5 py-4 sm:px-8 sm:py-6 lg:px-10 lg:py-4 bg-white dark:bg-slate-950 transition-colors duration-500 relative">
-        <div className="w-full max-w-md space-y-3 xl:space-y-3.5">
+        <div className="w-full max-w-md space-y-2.5 xl:space-y-3">
           
           {/* Header en Pantalla Móvil / Tablet */}
-          <div className="lg:hidden text-center mb-2">
-            <div className="inline-flex items-center justify-center bg-[#DDDB00] px-5 py-2.5 rounded-2xl mb-2 shadow-lg border border-[#b8b600]/60">
+          <div className="lg:hidden text-center mb-1">
+            <div className="inline-flex items-center justify-center bg-[#DDDB00] px-5 py-2 rounded-2xl mb-1.5 shadow-lg border border-[#b8b600]/60">
               <img
                 src={appLogo || "/hempc-logo-cropped.png?v=7.18.2"}
                 alt="HempC"
-                className="h-11 w-auto object-contain"
+                className="h-10 w-auto object-contain"
               />
             </div>
             <div className="flex items-center justify-center gap-2">
@@ -285,28 +439,37 @@ export default function Login() {
                 {activeVersion}
               </span>
             </div>
-            <p className="text-slate-500 dark:text-slate-400 font-semibold text-[11px] leading-tight mt-0.5">
+            <p className="text-slate-500 dark:text-slate-400 font-semibold text-[11px] leading-tight">
               Plataforma Inteligente de trazabilidad y gestión agro industrial
             </p>
           </div>
 
-          {/* Encabezado del Formulario */}
-          <div className="border-b border-slate-100 dark:border-slate-800 pb-2.5 flex items-baseline justify-between gap-2">
+          {/* Encabezado Superior: Iniciar Sesión + Botón Independiente "Solicitar Alta de Usuario" */}
+          <div className="border-b border-slate-100 dark:border-slate-800 pb-2.5 flex flex-wrap items-center justify-between gap-2">
             <div>
               <h2 className="text-2xl xl:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter italic leading-none">
                 Iniciar Sesión
               </h2>
-              <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.18em] flex items-center gap-1.5 mt-1">
+              <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.16em] flex items-center gap-1.5 mt-1">
                 <ShieldCheck size={13} className="text-[#006633]"/> Nodo Nucleus Autenticado
               </p>
             </div>
-            <span className="hidden lg:inline-block text-[10px] font-mono font-bold text-slate-400 uppercase">
-              {activeVersion}
-            </span>
+
+            <button
+              type="button"
+              onClick={() => {
+                setRegistrationModalMode("platform");
+                setShowRegistrationModal(true);
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/70 dark:hover:bg-emerald-900/70 text-[#006633] dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 font-black text-[10px] uppercase tracking-wider transition shadow-xs active:scale-95 cursor-pointer"
+            >
+              <UserCheck size={13} />
+              <span>Solicitar Alta de Usuario</span>
+            </button>
           </div>
 
           {/* Formulario */}
-          <form onSubmit={handleSubmit} className="space-y-2.5 xl:space-y-3">
+          <form onSubmit={handleSubmit} className="space-y-2.5">
             {error && (
               <div className="bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 p-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider flex items-center border border-red-200 dark:border-red-900/60 animate-in slide-in-from-top-2 shadow-sm">
                 <AlertCircle size={15} className="mr-2 flex-shrink-0"/>
@@ -356,11 +519,20 @@ export default function Login() {
               </div>
             </div>
 
-            {/* Enlace de recuperación de contraseña */}
-            <div className="flex justify-between items-center px-1">
-              <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
-                <Lock size={11} className="text-[#006633] dark:text-emerald-400" /> Acceso Restringido
-              </span>
+            {/* Enlaces de Activación tras Aprobación y Recuperación de Contraseña */}
+            <div className="flex flex-wrap justify-between items-center gap-2 px-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setActivateEmail(email);
+                  setActivateStatus(null);
+                  setShowActivateModal(true);
+                }}
+                className="text-[10px] font-bold text-slate-500 hover:text-[#006633] dark:text-slate-400 dark:hover:text-emerald-400 flex items-center gap-1 hover:underline transition-colors cursor-pointer"
+              >
+                <Key size={11} className="text-[#006633] dark:text-emerald-400" />
+                <span>¿Tu alta fue aprobada? Activá tu clave</span>
+              </button>
               <button
                 type="button"
                 onClick={() => {
@@ -393,7 +565,7 @@ export default function Login() {
             </button>
           </form>
 
-          {/* TARJETA OFICIAL DE EVENTO: "UN DÍA DE SIEMBRA" (SÁBADO 21 DE NOVIEMBRE) & ALTA AUTOGESTIVA */}
+          {/* TARJETA EXCLUSIVA DEL EVENTO: JORNADA OFICIAL “UN DÍA DE SIEMBRA” (SÁBADO 21 DE NOVIEMBRE) */}
           <div className="bg-[#0c2d1e] rounded-2xl p-3 xl:p-3.5 text-white border-l-4 border-amber-500 border border-emerald-800/80 shadow-lg space-y-2 relative overflow-hidden">
             <div className="flex flex-wrap items-center justify-between gap-1.5 text-[9px] font-black uppercase tracking-wider">
               <span className="inline-flex items-center gap-1 text-[#DDDB00]">
@@ -419,31 +591,17 @@ export default function Login() {
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 pt-0.5">
-              <button
-                type="button"
-                onClick={() => {
-                  setRegistrationModalMode("event");
-                  setShowRegistrationModal(true);
-                }}
-                className="w-full py-2 px-2.5 bg-[#DDDB00] hover:bg-[#e8e638] text-slate-950 rounded-lg font-black text-[9px] sm:text-[10px] uppercase tracking-wider shadow flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer"
-              >
-                <Download size={12} />
-                <span className="truncate">Inscribirme & Programa</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setRegistrationModalMode("platform");
-                  setShowRegistrationModal(true);
-                }}
-                className="w-full py-2 px-2.5 bg-white/15 hover:bg-white/25 text-white border border-white/25 rounded-lg font-black text-[9px] sm:text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer"
-              >
-                <UserCheck size={12} />
-                <span className="truncate">Solicitar Alta Usuario</span>
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setRegistrationModalMode("event");
+                setShowRegistrationModal(true);
+              }}
+              className="w-full py-2.5 px-3 bg-[#DDDB00] hover:bg-[#e8e638] text-slate-950 rounded-xl font-black text-[10px] uppercase tracking-wider shadow flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer"
+            >
+              <Download size={13} />
+              <span>Inscribirme al Evento & Descargar Programa Oficial</span>
+            </button>
           </div>
 
           {/* DESCARGA E INSTALACIÓN DE APP ANDROID Y WINDOWS ESCRITORIO */}
@@ -469,7 +627,7 @@ export default function Login() {
         </div>
       </div>
 
-      {/* MODAL DE INSCRIPCIÓN A "UN DÍA DE SIEMBRA" (21/11) & ALTA AUTOGESTIVA */}
+      {/* MODAL DE INSCRIPCIÓN A "UN DÍA DE SIEMBRA" (21/11) O ALTA AUTOGESTIVA */}
       <EventAndSelfRegistrationModal
         isOpen={showRegistrationModal}
         initialMode={registrationModalMode}
@@ -478,6 +636,148 @@ export default function Login() {
         addUser={addUser}
         updateUser={updateUser}
       />
+
+      {/* MODAL DE ACTIVACIÓN DE CUENTA Y DEFINICIÓN DE CONTRASEÑA TRAS APROBACIÓN ADMIN */}
+      {showActivateModal && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-7 relative animate-in zoom-in-95">
+            <button
+              onClick={() => setShowActivateModal(false)}
+              className="absolute top-5 right-5 p-2 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="flex items-center gap-3 mb-4">
+              <div className="bg-[#006633] text-white p-3 rounded-2xl shadow-lg shadow-green-900/20">
+                <Key size={20} />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight italic">
+                  Activar Contraseña y Confirmar
+                </h3>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  Habilitación de cuenta aprobada en NUCLEUS
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-2xl p-3 mb-4 text-[11px] text-emerald-900 dark:text-emerald-200 leading-relaxed">
+              Ingresá tu correo aprobado por la Administración y definí tu <strong>contraseña personal de acceso</strong> para activar tu cuenta.
+            </div>
+
+            {activateStatus && (
+              <div
+                className={`mb-4 p-3.5 rounded-2xl text-xs border flex items-start gap-2 ${
+                  activateStatus.type === "success"
+                    ? "bg-emerald-50 dark:bg-emerald-950/50 border-emerald-300 dark:border-emerald-700 text-emerald-900 dark:text-emerald-200"
+                    : "bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300"
+                }`}
+              >
+                {activateStatus.type === "success" ? (
+                  <CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" />
+                ) : (
+                  <AlertTriangle size={16} className="text-rose-600 shrink-0 mt-0.5" />
+                )}
+                <span className="font-bold">{activateStatus.message}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleActivateAccountPassword} className="space-y-3.5">
+              <div>
+                <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">
+                  Correo Electrónico Aprobado *
+                </label>
+                <input
+                  required
+                  type="email"
+                  value={activateEmail}
+                  onChange={e => setActivateEmail(e.target.value)}
+                  placeholder="correo@ejemplo.com.ar"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white outline-none focus:border-[#006633]"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">
+                  Código de Activación (Opcional si ingresaste desde el Link del Mail)
+                </label>
+                <input
+                  type="text"
+                  value={activateToken}
+                  onChange={e => setActivateToken(e.target.value)}
+                  placeholder="Ej: ACT-..."
+                  className="w-full px-3.5 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-mono font-bold text-slate-900 dark:text-white outline-none focus:border-[#006633]"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">
+                  Definí tu Nueva Contraseña *
+                </label>
+                <div className="relative">
+                  <input
+                    required
+                    type={showNewPassword ? "text" : "password"}
+                    value={newPassword}
+                    onChange={e => setNewPassword(e.target.value)}
+                    placeholder="Mínimo 6 caracteres"
+                    className="w-full px-3.5 py-2.5 pr-10 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white outline-none focus:border-[#006633]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    {showNewPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1">
+                  Confirmar Contraseña *
+                </label>
+                <input
+                  required
+                  type={showNewPassword ? "text" : "password"}
+                  value={confirmNewPassword}
+                  onChange={e => setConfirmNewPassword(e.target.value)}
+                  placeholder="Repetí tu contraseña"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white outline-none focus:border-[#006633]"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-200 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowActivateModal(false)}
+                  className="px-4 py-2.5 text-slate-400 font-bold uppercase text-xs hover:text-slate-600 transition cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isActivating}
+                  className="bg-[#006633] hover:bg-[#004d26] text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider shadow-lg flex items-center gap-2 transition disabled:opacity-50 cursor-pointer"
+                >
+                  {isActivating ? (
+                    <>
+                      <Loader2 size={15} className="animate-spin" />
+                      <span>Confirmando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 size={15} />
+                      <span>Confirmar Clave e Ingresar</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* MODAL DE RECUPERACIÓN DE CONTRASEÑA */}
       {showForgotModal && (

@@ -1,9 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   X, Calendar, UserCheck, Mail, Phone, Building2,
-  MapPin, Lock, Eye, EyeOff, CheckCircle2, Download,
-  Loader2, ShieldCheck, AlertCircle, Clock, AlertTriangle
+  MapPin, CheckCircle2, Download,
+  Loader2, ShieldCheck, AlertCircle, Clock, AlertTriangle, KeyRound
 } from 'lucide-react';
 import { User } from '../types';
 import { sendEventRegistrationConfirmationEmail } from '../src/services/emailNotificationService';
@@ -24,10 +24,10 @@ interface EventAndSelfRegistrationModalProps {
 }
 
 const PROFILE_LABELS: Record<NonNullable<User['requestedProfileType']>, string> = {
-  productor: 'Productor Agropecuario / Nuevo Socio',
-  visitante: 'Visitante / Asistente Acreditado',
+  visitante: 'Visitante / Invitado General',
+  productor: 'Productor Agropecuario / Socio Cooperativo',
   tecnico_institucion: 'Alumno Diplomatura / Técnico (UNLZ, UATRE, INTA)',
-  inversor_cadena: 'Inversor / Empresa de la Cadena Industrial'
+  inversor_cadena: 'Inversor / Cadena Industrial'
 };
 
 export default function EventAndSelfRegistrationModal({
@@ -41,18 +41,15 @@ export default function EventAndSelfRegistrationModal({
   const [mode, setMode] = useState<'event' | 'platform'>(initialMode);
   const [step, setStep] = useState<'form' | 'confirm_email' | 'confirmed'>('form');
 
-  // Datos del formulario
+  // Datos del formulario (Priorizando Visitante / Invitado General por defecto y sin pedir contraseña previa)
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [requestedProfile, setRequestedProfile] = useState<NonNullable<User['requestedProfileType']>>('productor');
+  const [requestedProfile, setRequestedProfile] = useState<NonNullable<User['requestedProfileType']>>('visitante');
   const [organizationName, setOrganizationName] = useState('');
   const [locality, setLocality] = useState('');
   const [estimatedHa, setEstimatedHa] = useState('');
   const [dniNumber, setDniNumber] = useState('');
-  const [alsoRegisterEvent, setAlsoRegisterEvent] = useState(true);
 
   // Estados de envío y verificación
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -63,7 +60,17 @@ export default function EventAndSelfRegistrationModal({
   const [emailResultInfo, setEmailResultInfo] = useState<{ sentFrom: string; via: string } | null>(null);
   const [showSchedulePreview, setShowSchedulePreview] = useState(false);
 
-  const isEventSelected = mode === 'event' || alsoRegisterEvent;
+  useEffect(() => {
+    if (isOpen) {
+      setMode(initialMode);
+      setRequestedProfile('visitante');
+      setStep('form');
+      setFormError('');
+      setEnteredPin('');
+    }
+  }, [initialMode, isOpen]);
+
+  const isEventSelected = mode === 'event';
 
   const ticketCode = useMemo(() => {
     if (createdUser?.eventTicketCode) return createdUser.eventTicketCode;
@@ -79,13 +86,13 @@ export default function EventAndSelfRegistrationModal({
 
     const cleanEmail = email.trim().toLowerCase();
     const cleanName = name.trim();
-    if (!cleanName || !cleanEmail || !password.trim()) {
-      setFormError('Por favor completá Nombre, Correo Electrónico y Contraseña.');
+    if (!cleanName || !cleanEmail) {
+      setFormError('Por favor completá tu Nombre y Apellido y tu Correo Electrónico.');
       return;
     }
 
     const existing = usersList.find(u => u.email?.toLowerCase() === cleanEmail);
-    if (existing && existing.accountStatus !== 'pending_approval') {
+    if (existing && existing.accountStatus === 'active' && !existing.passwordPendingSetup) {
       setFormError('Este correo electrónico ya tiene una cuenta activa en la plataforma. Podés iniciar sesión directamente.');
       return;
     }
@@ -95,6 +102,10 @@ export default function EventAndSelfRegistrationModal({
       const pin = String(Math.floor(100000 + Math.random() * 900000));
       setGeneratedPin(pin);
 
+      const activationToken =
+        existing?.activationToken ||
+        `ACT-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+
       const finalTicket = existing?.eventTicketCode || `SIEMBRA-21N-${String(Date.now()).slice(-4)}`;
       const profileText = PROFILE_LABELS[requestedProfile];
 
@@ -102,22 +113,25 @@ export default function EventAndSelfRegistrationModal({
         id: existing?.id || `usr-self-${Date.now()}`,
         name: cleanName,
         email: cleanEmail,
-        password: password.trim(),
+        // La contraseña NO se define en el registro: queda bloqueada hasta que el Admin apruebe y el usuario use el link de activación
+        password: `__PENDING_APPROVAL_LOCKED_${activationToken}__`,
+        passwordPendingSetup: true,
+        activationToken,
         phone: phone.trim(),
         dniNumber: dniNumber.trim() || undefined,
         role: requestedProfile === 'productor' ? 'client' : 'viewer',
         jobTitle: `${profileText}${isEventSelected ? ' • Acreditado Un Día de Siembra (21/11)' : ''}`,
         organizationName:
           organizationName.trim() ||
-          (requestedProfile === 'productor' ? 'Establecimiento en Incorporación' : 'Participante Acreditado'),
+          (requestedProfile === 'productor' ? 'Establecimiento en Incorporación' : 'Visitante / Invitado General'),
         isNetworkMember: false,
         memberType: requestedProfile === 'productor' ? 'Socio_Productor' : undefined,
         accountStatus: 'pending_approval',
         registrationSource: isEventSelected ? 'event_un_dia_de_siembra' : 'self_service_platform',
         requestedProfileType: requestedProfile,
-        eventRegistered: isEventSelected,
-        eventName: isEventSelected ? 'Jornada Oficial: "Un Día de Siembra" (Sáb. 21 Nov)' : undefined,
-        eventTicketCode: isEventSelected ? finalTicket : undefined,
+        eventRegistered: isEventSelected ? true : existing?.eventRegistered,
+        eventName: isEventSelected ? 'Jornada Oficial: "Un Día de Siembra" (Sáb. 21 Nov)' : existing?.eventName,
+        eventTicketCode: isEventSelected ? finalTicket : existing?.eventTicketCode,
         eventConfirmedByEmail: false,
         eventProgramDownloaded: false,
         localityOrProvince: locality.trim() || 'VIRCH – Trelew, Chubut',
@@ -136,7 +150,7 @@ export default function EventAndSelfRegistrationModal({
       const emailDispatch = await sendEventRegistrationConfirmationEmail({
         toEmail: cleanEmail,
         toName: cleanName,
-        ticketCode: finalTicket,
+        ticketCode: isEventSelected ? finalTicket : `ALTA-NUCLEUS-${String(Date.now()).slice(-4)}`,
         verificationPin: pin,
         profileLabel: profileText,
         organizationName: newUserObj.organizationName,
@@ -148,9 +162,14 @@ export default function EventAndSelfRegistrationModal({
         via: emailDispatch.deliveredVia
       });
       setCreatedUser(newUserObj);
-      setStep('confirm_email');
+
+      if (isEventSelected) {
+        setStep('confirm_email');
+      } else {
+        setStep('confirmed');
+      }
     } catch (err: any) {
-      setFormError('No se pudo procesar el registro. Verificá tu conexión e intentá nuevamente.');
+      setFormError('No se pudo procesar la solicitud. Verificá tu conexión e intentá nuevamente.');
     } finally {
       setIsSubmitting(false);
     }
@@ -190,94 +209,115 @@ export default function EventAndSelfRegistrationModal({
     setCreatedUser(updated);
   };
 
+  // Orden de perfiles priorizando VISITANTE / INVITADO GENERAL primero
+  const profileOptions = [
+    {
+      id: 'visitante' as const,
+      title: 'Visitante / Invitado General',
+      desc: isEventSelected
+        ? 'Acreditación prioritaria a la jornada y cobertura de seguro en campo'
+        : 'Acceso general de consulta y seguimiento en plataforma NUCLEUS',
+      recommended: true
+    },
+    {
+      id: 'productor' as const,
+      title: 'Productor Agropecuario / Socio',
+      desc: 'Incorporación como Socio Productor de la Red Cooperativa',
+      recommended: false
+    },
+    {
+      id: 'tecnico_institucion' as const,
+      title: 'Alumno Diplomatura / UATRE / UNLZ',
+      desc: 'Práctica presencial Módulo 7, INTA, Técnicos y Autoridades',
+      recommended: false
+    },
+    {
+      id: 'inversor_cadena' as const,
+      title: 'Inversor / Cadena Industrial',
+      desc: 'Grano, Cañamiza (Hempcrete) y Fibra Textil',
+      recommended: false
+    }
+  ];
+
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-start sm:items-center justify-center p-2 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-[32px] shadow-2xl max-w-3xl w-full overflow-hidden relative my-2 sm:my-6 animate-in zoom-in-95 flex flex-col max-h-[95dvh] sm:max-h-[90vh]">
-        {/* Encabezado Institucional Exacto (Sin ícono gráfico junto a UN DÍA DE SIEMBRA) */}
-        <div className="bg-[#0c2d1e] p-4 sm:p-7 text-white relative border-l-4 border-amber-500 border-b border-emerald-800/60 flex-shrink-0">
-          <button
-            onClick={onClose}
-            className="absolute top-3.5 right-3.5 sm:top-5 sm:right-5 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition cursor-pointer"
-            aria-label="Cerrar"
-          >
-            <X size={18} />
-          </button>
+        {/* Encabezado Diferenciado según sea Evento o Solicitud de Alta en Plataforma */}
+        {isEventSelected ? (
+          <div className="bg-[#0c2d1e] p-4 sm:p-6 text-white relative border-l-4 border-amber-500 border-b border-emerald-800/60 flex-shrink-0">
+            <button
+              onClick={onClose}
+              className="absolute top-3.5 right-3.5 sm:top-5 sm:right-5 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition cursor-pointer"
+              aria-label="Cerrar"
+            >
+              <X size={18} />
+            </button>
 
-          <div className="pr-8">
-            <p className="text-[#DDDB00] text-[9px] sm:text-[10px] font-black uppercase tracking-[0.15em] mb-1">
-              {EVENT_METADATA.diplomatura}
-            </p>
+            <div className="pr-8">
+              <p className="text-[#DDDB00] text-[9px] sm:text-[10px] font-black uppercase tracking-[0.15em] mb-1">
+                {EVENT_METADATA.diplomatura}
+              </p>
 
-            <h2 className="text-lg sm:text-2xl md:text-3xl font-black uppercase tracking-tight text-white leading-tight">
-              {mode === 'event'
-                ? 'JORNADA OFICIAL: “UN DÍA DE SIEMBRA”'
-                : 'SOLICITUD DE ALTA AUTOGESTIVA EN PLATAFORMA'}
-            </h2>
+              <h2 className="text-lg sm:text-2xl font-black uppercase tracking-tight text-white leading-tight">
+                JORNADA OFICIAL: “UN DÍA DE SIEMBRA”
+              </h2>
 
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] sm:text-xs text-emerald-100/90 mt-1.5 font-medium">
-              <span>{EVENT_METADATA.sede}</span>
-              <span className="hidden sm:inline">•</span>
-              <span>{EVENT_METADATA.ubicacion}</span>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] sm:text-xs text-emerald-100/90 mt-1 font-medium">
+                <span>{EVENT_METADATA.sede}</span>
+                <span className="hidden sm:inline">•</span>
+                <span>{EVENT_METADATA.ubicacion}</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3.5 pt-3 border-t border-white/10 text-[10px]">
+              <div className="bg-black/25 px-2.5 py-1.5 rounded-lg border-l-2 border-[#DDDB00]">
+                <span className="text-slate-400 font-bold uppercase block text-[8px]">ORGANIZAN</span>
+                <span className="font-black text-white">{EVENT_METADATA.organizan}</span>
+              </div>
+              <div className="bg-black/25 px-2.5 py-1.5 rounded-lg border-l-2 border-[#DDDB00]">
+                <span className="text-slate-400 font-bold uppercase block text-[8px]">HORARIO GENERAL</span>
+                <span className="font-black text-white">{EVENT_METADATA.horarioGeneral}</span>
+              </div>
+              <div className="bg-black/25 px-2.5 py-1.5 rounded-lg border-l-2 border-[#DDDB00]">
+                <span className="text-slate-400 font-bold uppercase block text-[8px]">ESQUEMA DE CAMPO</span>
+                <span className="font-black text-white">{EVENT_METADATA.esquemaCampo}</span>
+              </div>
+              <div className="bg-black/25 px-2.5 py-1.5 rounded-lg border-l-2 border-[#DDDB00]">
+                <span className="text-slate-400 font-bold uppercase block text-[8px]">METODOLOGÍA</span>
+                <span className="font-black text-white">{EVENT_METADATA.metodologia}</span>
+              </div>
             </div>
           </div>
+        ) : (
+          <div className="bg-slate-900 p-4 sm:p-6 text-white relative border-l-4 border-[#006633] border-b border-slate-800 flex-shrink-0">
+            <button
+              onClick={onClose}
+              className="absolute top-3.5 right-3.5 sm:top-5 sm:right-5 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition cursor-pointer"
+              aria-label="Cerrar"
+            >
+              <X size={18} />
+            </button>
 
-          {/* 4 Indicadores Institucionales en grilla adaptable a celular y tablet */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4 pt-3 border-t border-white/10 text-[10px]">
-            <div className="bg-black/25 px-2.5 py-1.5 rounded-lg border-l-2 border-[#DDDB00]">
-              <span className="text-slate-400 font-bold uppercase block text-[8px]">ORGANIZAN</span>
-              <span className="font-black text-white">{EVENT_METADATA.organizan}</span>
-            </div>
-            <div className="bg-black/25 px-2.5 py-1.5 rounded-lg border-l-2 border-[#DDDB00]">
-              <span className="text-slate-400 font-bold uppercase block text-[8px]">HORARIO GENERAL</span>
-              <span className="font-black text-white">{EVENT_METADATA.horarioGeneral}</span>
-            </div>
-            <div className="bg-black/25 px-2.5 py-1.5 rounded-lg border-l-2 border-[#DDDB00]">
-              <span className="text-slate-400 font-bold uppercase block text-[8px]">ESQUEMA DE CAMPO</span>
-              <span className="font-black text-white">{EVENT_METADATA.esquemaCampo}</span>
-            </div>
-            <div className="bg-black/25 px-2.5 py-1.5 rounded-lg border-l-2 border-[#DDDB00]">
-              <span className="text-slate-400 font-bold uppercase block text-[8px]">METODOLOGÍA</span>
-              <span className="font-black text-white">{EVENT_METADATA.metodologia}</span>
+            <div className="pr-8">
+              <p className="text-[#DDDB00] text-[9px] sm:text-[10px] font-black uppercase tracking-[0.18em] mb-1">
+                NUCLEUS • PLATAFORMA INTELIGENTE DE TRAZABILIDAD Y GESTIÓN AGRO INDUSTRIAL
+              </p>
+
+              <h2 className="text-lg sm:text-2xl font-black uppercase tracking-tight text-white leading-tight flex items-center gap-2">
+                <UserCheck size={22} className="text-[#DDDB00] flex-shrink-0" />
+                <span>SOLICITUD DE ALTA DE USUARIO</span>
+              </h2>
+
+              <p className="text-[11px] sm:text-xs text-slate-300 mt-1">
+                Registro autogestivo sujeto a aprobación de los Administradores. Una vez aprobado tu perfil, recibirás por correo el enlace seguro para definir tu contraseña.
+              </p>
             </div>
           </div>
+        )}
 
-          {/* Selector de modalidad adaptable a móvil */}
-          {step === 'form' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 mt-4 bg-black/30 p-1.5 rounded-xl border border-white/10">
-              <button
-                type="button"
-                onClick={() => {
-                  setMode('event');
-                  setAlsoRegisterEvent(true);
-                }}
-                className={`py-2.5 px-3 rounded-lg text-[11px] font-black uppercase tracking-wider transition flex items-center justify-center gap-2 cursor-pointer ${
-                  mode === 'event'
-                    ? 'bg-[#DDDB00] text-slate-950 shadow-md'
-                    : 'text-emerald-100 hover:bg-white/10'
-                }`}
-              >
-                <Calendar size={14} />
-                <span>Inscripción “Un Día de Siembra” (21/11)</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setMode('platform')}
-                className={`py-2.5 px-3 rounded-lg text-[11px] font-black uppercase tracking-wider transition flex items-center justify-center gap-2 cursor-pointer ${
-                  mode === 'platform'
-                    ? 'bg-white text-slate-950 shadow-md'
-                    : 'text-emerald-100 hover:bg-white/10'
-                }`}
-              >
-                <UserCheck size={14} />
-                <span>Alta en Plataforma (Productor / Visitante)</span>
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* PASO 1: FORMULARIO DE INSCRIPCIÓN Y ALTA AUTOGESTIVA */}
+        {/* PASO 1: FORMULARIO DE INSCRIPCIÓN O ALTA DE USUARIO (SIN CAMPO DE CONTRASEÑA) */}
         {step === 'form' && (
-          <form onSubmit={handleSubmitRegistration} className="p-4 sm:p-7 space-y-4 overflow-y-auto flex-1">
+          <form onSubmit={handleSubmitRegistration} className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
             {formError && (
               <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs font-bold flex items-center gap-2.5">
                 <AlertCircle size={18} className="flex-shrink-0" />
@@ -285,118 +325,98 @@ export default function EventAndSelfRegistrationModal({
               </div>
             )}
 
-            {/* Aviso Oficial de Reprogramación por Mal Tiempo y Programa Sujeto a Actualización */}
-            <div className="bg-amber-50 dark:bg-amber-950/40 border-l-4 border-amber-500 border border-amber-200 dark:border-amber-800/70 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="space-y-0.5">
-                <div className="flex items-center gap-1.5 text-amber-800 dark:text-amber-300 font-black text-[11px] uppercase tracking-wider">
-                  <AlertTriangle size={14} className="text-amber-600 flex-shrink-0" />
-                  <span>AVISO IMPORTANTE: SE REPROGRAMA EN CASO DE MAL TIEMPO (Aviso 24 hs antes)</span>
-                </div>
-                <p className="text-[11px] text-amber-900/90 dark:text-amber-200/90">
-                  El programa de actividades se encuentra <strong>sujeto a actualización</strong>. Al registrarte recibirás confirmación previa por <strong>notificaciones@hempc.com.ar</strong> para descargar el Programa Oficial en PDF.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowSchedulePreview(!showSchedulePreview)}
-                className="px-3.5 py-2 rounded-lg bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 text-[10px] font-black uppercase tracking-wider whitespace-nowrap hover:bg-amber-100 transition cursor-pointer self-start sm:self-center"
-              >
-                {showSchedulePreview ? 'Ocultar Programa' : 'Ver Programa Oficial'}
-              </button>
-            </div>
-
-            {/* Vista Previa Exacta del Programa Oficial (Páginas 1, 2 y 3) */}
-            {showSchedulePreview && (
-              <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 space-y-4 text-xs animate-in fade-in">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-amber-500/40 pb-2">
-                  <span className="text-[11px] font-black uppercase tracking-wider text-[#0c2d1e] dark:text-emerald-400">
-                    1. CRONOGRAMA GENERAL DE ACTIVIDADES (08:30 a 15:30 hs)
-                  </span>
-                  <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase">
-                    * Sujeto a actualización
-                  </span>
+            {/* Aviso Oficial de Reprogramación y Vista Previa del Programa (Solo en modo Evento) */}
+            {isEventSelected && (
+              <>
+                <div className="bg-amber-50 dark:bg-amber-950/40 border-l-4 border-amber-500 border border-amber-200 dark:border-amber-800/70 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-1.5 text-amber-800 dark:text-amber-300 font-black text-[11px] uppercase tracking-wider">
+                      <AlertTriangle size={14} className="text-amber-600 flex-shrink-0" />
+                      <span>AVISO IMPORTANTE: SE REPROGRAMA EN CASO DE MAL TIEMPO (Aviso 24 hs antes)</span>
+                    </div>
+                    <p className="text-[11px] text-amber-900/90 dark:text-amber-200/90">
+                      El programa de actividades se encuentra <strong>sujeto a actualización</strong>. Al registrarte recibirás confirmación previa desde <strong>notificaciones@hempc.com.ar</strong> para descargar el Programa Oficial en PDF.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowSchedulePreview(!showSchedulePreview)}
+                    className="px-3.5 py-2 rounded-lg bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 text-[10px] font-black uppercase tracking-wider whitespace-nowrap hover:bg-amber-100 transition cursor-pointer self-start sm:self-center"
+                  >
+                    {showSchedulePreview ? 'Ocultar Programa' : 'Ver Programa Oficial'}
+                  </button>
                 </div>
 
-                <div className="divide-y divide-slate-200/70 dark:divide-slate-800">
-                  {EVENT_SCHEDULE_ITEMS.map((item, idx) => (
-                    <div key={idx} className="py-2.5 flex flex-col sm:flex-row sm:items-start gap-1.5 sm:gap-3">
-                      <div className="sm:w-28 flex-shrink-0 flex items-center justify-between sm:block">
-                        <span className="font-mono font-black text-[11px] text-slate-900 dark:text-white">
-                          {item.time}
-                        </span>
-                        <span className="inline-block sm:mt-1 px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 text-[9px] font-black uppercase">
-                          {item.audience}
-                        </span>
-                      </div>
-                      <div className="flex-1">
-                        <div className="font-black text-slate-900 dark:text-white text-xs">
-                          {item.block}{' '}
-                          <span className="font-normal text-slate-500 dark:text-slate-400">• {item.subBlock}</span>
+                {showSchedulePreview && (
+                  <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 space-y-4 text-xs animate-in fade-in">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-amber-500/40 pb-2">
+                      <span className="text-[11px] font-black uppercase tracking-wider text-[#0c2d1e] dark:text-emerald-400">
+                        1. CRONOGRAMA GENERAL DE ACTIVIDADES (08:30 a 15:30 hs)
+                      </span>
+                      <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase">
+                        * Sujeto a actualización
+                      </span>
+                    </div>
+
+                    <div className="divide-y divide-slate-200/70 dark:divide-slate-800">
+                      {EVENT_SCHEDULE_ITEMS.map((item, idx) => (
+                        <div key={idx} className="py-2.5 flex flex-col sm:flex-row sm:items-start gap-1.5 sm:gap-3">
+                          <div className="sm:w-28 flex-shrink-0 flex items-center justify-between sm:block">
+                            <span className="font-mono font-black text-[11px] text-slate-900 dark:text-white">
+                              {item.time}
+                            </span>
+                            <span className="inline-block sm:mt-1 px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 text-[9px] font-black uppercase">
+                              {item.audience}
+                            </span>
+                          </div>
+                          <div className="flex-1">
+                            <div className="font-black text-slate-900 dark:text-white text-xs">
+                              {item.block}{' '}
+                              <span className="font-normal text-slate-500 dark:text-slate-400">• {item.subBlock}</span>
+                            </div>
+                            <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5 leading-relaxed">
+                              {item.description}
+                            </p>
+                          </div>
                         </div>
-                        <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5 leading-relaxed">
-                          {item.description}
-                        </p>
+                      ))}
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
+                      <p className="text-[11px] font-black uppercase tracking-wider text-[#0c2d1e] dark:text-emerald-400 mb-2">
+                        2. ESQUEMA DE SIEMBRA EN 3 LOTES DIFERENCIADOS POR PROPÓSITO
+                      </p>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+                        {EVENT_LOT_SCHEMES.map((lot, i) => (
+                          <div
+                            key={i}
+                            className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1"
+                          >
+                            <div className="font-black text-[11px] text-emerald-800 dark:text-emerald-400 uppercase">
+                              {lot.unit.replace('\n', ' • ')}
+                            </div>
+                            <div className="font-bold text-slate-800 dark:text-slate-200 text-[11px]">
+                              {lot.purpose.replace('\n', ' ')}
+                            </div>
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400 whitespace-pre-line">
+                              {lot.parameters}
+                            </p>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  ))}
-                </div>
-
-                <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
-                  <p className="text-[11px] font-black uppercase tracking-wider text-[#0c2d1e] dark:text-emerald-400 mb-2">
-                    2. ESQUEMA DE SIEMBRA EN 3 LOTES DIFERENCIADOS POR PROPÓSITO
-                  </p>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
-                    {EVENT_LOT_SCHEMES.map((lot, i) => (
-                      <div
-                        key={i}
-                        className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1"
-                      >
-                        <div className="font-black text-[11px] text-emerald-800 dark:text-emerald-400 uppercase">
-                          {lot.unit.replace('\n', ' • ')}
-                        </div>
-                        <div className="font-bold text-slate-800 dark:text-slate-200 text-[11px]">
-                          {lot.purpose.replace('\n', ' ')}
-                        </div>
-                        <p className="text-[10px] text-slate-500 dark:text-slate-400 whitespace-pre-line">
-                          {lot.parameters}
-                        </p>
-                      </div>
-                    ))}
                   </div>
-                </div>
-              </div>
+                )}
+              </>
             )}
 
-            {/* Selección de Perfil Solicitado */}
+            {/* 1. Selección de Perfil Solicitado (VISITANTE / INVITADO GENERAL PRIORIZADO PRIMERO) */}
             <div>
               <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 block mb-2">
-                1. Seleccioná tu Perfil de Ingreso (Sujeto a Aprobación de Administración) *
+                1. Seleccioná tu Perfil (Prioridad: Visitante / Invitado General) *
               </label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {(
-                  [
-                    {
-                      id: 'productor',
-                      title: 'Productor Agropecuario',
-                      desc: 'Solicitar alta como Socio Productor de la Red'
-                    },
-                    {
-                      id: 'visitante',
-                      title: 'Visitante / Invitado General',
-                      desc: 'Acreditación a la jornada y seguro en campo'
-                    },
-                    {
-                      id: 'tecnico_institucion',
-                      title: 'Alumno Diplomatura / UATRE / UNLZ',
-                      desc: 'Práctica presencial Módulo 7, INTA, Autoridades'
-                    },
-                    {
-                      id: 'inversor_cadena',
-                      title: 'Inversor / Cadena Industrial',
-                      desc: 'Grano, Cañamiza (Hempcrete) y Fibra Textil'
-                    }
-                  ] as const
-                ).map(opt => (
+                {profileOptions.map(opt => (
                   <button
                     key={opt.id}
                     type="button"
@@ -407,9 +427,14 @@ export default function EventAndSelfRegistrationModal({
                         : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-800 hover:border-slate-300'
                     }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-black uppercase text-slate-900 dark:text-white">
-                        {opt.title}
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-black uppercase text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <span>{opt.title}</span>
+                        {opt.recommended && (
+                          <span className="text-[9px] font-mono font-bold text-[#006633] dark:text-emerald-400">
+                            • PRINCIPAL
+                          </span>
+                        )}
                       </span>
                       {requestedProfile === opt.id && (
                         <CheckCircle2 size={16} className="text-[#006633] dark:text-emerald-400 flex-shrink-0" />
@@ -421,7 +446,7 @@ export default function EventAndSelfRegistrationModal({
               </div>
             </div>
 
-            {/* Datos Personales y de Cuenta */}
+            {/* 2. Datos Personales y de Contacto (SIN DEFINIR CONTRASEÑA) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               <div>
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1">
@@ -433,13 +458,13 @@ export default function EventAndSelfRegistrationModal({
                   value={name}
                   onChange={e => setName(e.target.value)}
                   placeholder="Ej: Martín Gómez"
-                  className="w-full px-3.5 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white outline-none focus:border-[#006633]"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white outline-none focus:border-[#006633]"
                 />
               </div>
 
               <div>
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1">
-                  Correo Electrónico (Recibirás Confirmación) *
+                  Correo Electrónico Oficial *
                 </label>
                 <div className="relative">
                   <Mail size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -449,7 +474,7 @@ export default function EventAndSelfRegistrationModal({
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                     placeholder="correo@ejemplo.com.ar"
-                    className="w-full pl-9 pr-3.5 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white outline-none focus:border-[#006633]"
+                    className="w-full pl-9 pr-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white outline-none focus:border-[#006633]"
                   />
                 </div>
               </div>
@@ -466,14 +491,14 @@ export default function EventAndSelfRegistrationModal({
                     value={phone}
                     onChange={e => setPhone(e.target.value)}
                     placeholder="+54 9 280 4..."
-                    className="w-full pl-9 pr-3.5 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white outline-none focus:border-[#006633]"
+                    className="w-full pl-9 pr-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white outline-none focus:border-[#006633]"
                   />
                 </div>
               </div>
 
               <div>
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1">
-                  DNI / CUIT (Para Seguro Mercantil Andina) *
+                  DNI / CUIT {isEventSelected ? '(Seguro Mercantil Andina)' : '(Identificación)'} *
                 </label>
                 <input
                   required
@@ -481,7 +506,7 @@ export default function EventAndSelfRegistrationModal({
                   value={dniNumber}
                   onChange={e => setDniNumber(e.target.value)}
                   placeholder="Ej: 28.450.123"
-                  className="w-full px-3.5 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white outline-none focus:border-[#006633]"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white outline-none focus:border-[#006633]"
                 />
               </div>
 
@@ -495,8 +520,8 @@ export default function EventAndSelfRegistrationModal({
                     type="text"
                     value={organizationName}
                     onChange={e => setOrganizationName(e.target.value)}
-                    placeholder={requestedProfile === 'productor' ? 'Nombre de Chacra / Campo' : 'Delegación, Univ. o Empresa'}
-                    className="w-full pl-9 pr-3.5 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white outline-none focus:border-[#006633]"
+                    placeholder={requestedProfile === 'productor' ? 'Nombre de Chacra / Campo' : 'Delegación, Univ. o Invitado'}
+                    className="w-full pl-9 pr-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white outline-none focus:border-[#006633]"
                   />
                 </div>
               </div>
@@ -513,7 +538,7 @@ export default function EventAndSelfRegistrationModal({
                     value={locality}
                     onChange={e => setLocality(e.target.value)}
                     placeholder="Ej: Trelew, Chubut"
-                    className="w-full pl-9 pr-3.5 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white outline-none focus:border-[#006633]"
+                    className="w-full pl-9 pr-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white outline-none focus:border-[#006633]"
                   />
                 </div>
               </div>
@@ -530,74 +555,37 @@ export default function EventAndSelfRegistrationModal({
                     value={estimatedHa}
                     onChange={e => setEstimatedHa(e.target.value)}
                     placeholder="Ej: 5 ha"
-                    className="w-full px-3.5 py-3 bg-emerald-50/50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800 rounded-xl text-xs font-bold text-slate-900 dark:text-white outline-none focus:border-[#006633]"
+                    className="w-full px-3.5 py-2.5 bg-emerald-50/50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800 rounded-xl text-xs font-bold text-slate-900 dark:text-white outline-none focus:border-[#006633]"
                   />
                 </div>
               )}
-
-              <div className="sm:col-span-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1">
-                  Definí tu Contraseña de Acceso a HempC Nucleus *
-                </label>
-                <div className="relative">
-                  <Lock size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    required
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    placeholder="Contraseña para ingresar cuando la Administración apruebe tu alta"
-                    className="w-full pl-9 pr-11 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white outline-none focus:border-[#006633]"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                  >
-                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
-                </div>
-              </div>
             </div>
 
-            {mode === 'platform' && (
-              <label className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={alsoRegisterEvent}
-                  onChange={e => setAlsoRegisterEvent(e.target.checked)}
-                  className="w-4 h-4 accent-[#006633] rounded flex-shrink-0"
-                />
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
-                  También quiero acreditarme a la <strong>Jornada Oficial: “Un Día de Siembra” (Sábado 21 de Noviembre)</strong> y descargar el Programa Oficial.
-                </span>
-              </label>
-            )}
-
-            <div className="bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-[11px] text-slate-600 dark:text-slate-300 flex items-start gap-2.5">
-              <ShieldCheck size={16} className="text-[#006633] dark:text-emerald-400 flex-shrink-0 mt-0.5" />
+            {/* Aviso de Seguridad: Enlace de Contraseña tras Aprobación */}
+            <div className="bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/70 rounded-xl p-3.5 text-[11px] text-slate-700 dark:text-slate-200 flex items-start gap-2.5">
+              <KeyRound size={16} className="text-[#006633] dark:text-emerald-400 flex-shrink-0 mt-0.5" />
               <div>
-                <strong>Aprobación Administrativa y Seguro en Campo:</strong> Tu inscripción activa la cobertura del seguro operativo en campo (Mercantil Andina) y deja tu usuario en espera de validación por los Administradores como <strong>Productor</strong> o <strong>Visitante</strong>.
+                <strong className="text-slate-900 dark:text-white">Seguridad de Contraseña tras Aprobación:</strong> No necesitás definir una clave ahora. Una vez que un Administrador apruebe tu alta como <strong>Visitante</strong> o <strong>Productor</strong>, la plataforma te enviará desde <strong>notificaciones@hempc.com.ar</strong> el enlace directo para ingresar tu contraseña y confirmar el acceso.
               </div>
             </div>
 
-            <div className="flex flex-col-reverse sm:flex-row justify-end gap-2.5 pt-3 border-t border-slate-200 dark:border-slate-800">
+            <div className="flex flex-col-reverse sm:flex-row justify-end gap-2.5 pt-2 border-t border-slate-200 dark:border-slate-800">
               <button
                 type="button"
                 onClick={onClose}
-                className="w-full sm:w-auto px-5 py-3 rounded-xl text-xs font-black uppercase text-slate-500 hover:text-slate-700 transition cursor-pointer"
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-black uppercase text-slate-500 hover:text-slate-700 transition cursor-pointer"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full sm:w-auto px-6 py-3.5 bg-[#006633] hover:bg-[#004d26] text-white rounded-xl font-black text-xs uppercase tracking-wider shadow-xl flex items-center justify-center gap-2 transition disabled:opacity-50 cursor-pointer"
+                className="w-full sm:w-auto px-6 py-3 bg-[#006633] hover:bg-[#004d26] text-white rounded-xl font-black text-xs uppercase tracking-wider shadow-xl flex items-center justify-center gap-2 transition disabled:opacity-50 cursor-pointer"
               >
                 {isSubmitting ? (
                   <>
                     <Loader2 size={16} className="animate-spin" />
-                    <span>Enviando Confirmación...</span>
+                    <span>Enviando Solicitud...</span>
                   </>
                 ) : (
                   <>
@@ -605,7 +593,7 @@ export default function EventAndSelfRegistrationModal({
                     <span>
                       {isEventSelected
                         ? 'Registrarme y Recibir Mail de Confirmación'
-                        : 'Solicitar Alta en la Plataforma'}
+                        : 'Enviar Solicitud de Alta a Administración'}
                     </span>
                   </>
                 )}
@@ -672,24 +660,30 @@ export default function EventAndSelfRegistrationModal({
           </div>
         )}
 
-        {/* PASO 3: EMAIL CONFIRMADO -> DESCARGA DEL PROGRAMA OFICIAL PDF Y CREDENCIAL QR */}
+        {/* PASO 3: SOLICITUD / ACREDITACIÓN CONFIRMADA */}
         {step === 'confirmed' && createdUser && (
           <div className="p-4 sm:p-8 space-y-5 overflow-y-auto flex-1 animate-in zoom-in-95">
             <div className="bg-[#0c2d1e] text-white p-5 sm:p-6 rounded-2xl sm:rounded-3xl border-2 border-[#DDDB00] shadow-xl flex flex-col sm:flex-row items-center gap-5">
-              <div className="bg-white p-3 rounded-2xl shadow-md flex-shrink-0">
-                <QRCodeSVG
-                  value={`https://red.hempc.com.ar/#/login?ticket=${encodeURIComponent(
-                    createdUser.eventTicketCode || ticketCode
-                  )}&email=${encodeURIComponent(createdUser.email)}`}
-                  size={108}
-                  level="M"
-                />
-              </div>
+              {createdUser.eventRegistered && (
+                <div className="bg-white p-3 rounded-2xl shadow-md flex-shrink-0">
+                  <QRCodeSVG
+                    value={`https://red.hempc.com.ar/#/login?ticket=${encodeURIComponent(
+                      createdUser.eventTicketCode || ticketCode
+                    )}&email=${encodeURIComponent(createdUser.email)}`}
+                    size={104}
+                    level="M"
+                  />
+                </div>
+              )}
 
               <div className="space-y-2 text-center sm:text-left flex-1 min-w-0">
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-[#DDDB00] text-[10px] font-black uppercase tracking-widest">
                   <CheckCircle2 size={13} />
-                  <span>Email Confirmado • Acreditación Registrada</span>
+                  <span>
+                    {createdUser.eventRegistered
+                      ? 'Email Confirmado • Acreditación Registrada'
+                      : 'Solicitud de Alta Recibida'}
+                  </span>
                 </div>
                 <h3 className="text-lg sm:text-xl font-black uppercase tracking-tight truncate">
                   {createdUser.name}
@@ -698,11 +692,13 @@ export default function EventAndSelfRegistrationModal({
                   {PROFILE_LABELS[createdUser.requestedProfileType || 'visitante']} • {createdUser.organizationName}
                 </p>
                 <div className="pt-1 flex flex-wrap items-center justify-center sm:justify-start gap-2">
-                  <span className="px-3 py-1 rounded-lg bg-black/40 font-mono text-xs font-black text-[#DDDB00]">
-                    PASE: {createdUser.eventTicketCode || ticketCode}
-                  </span>
+                  {createdUser.eventRegistered && (
+                    <span className="px-3 py-1 rounded-lg bg-black/40 font-mono text-xs font-black text-[#DDDB00]">
+                      PASE: {createdUser.eventTicketCode || ticketCode}
+                    </span>
+                  )}
                   <span className="px-3 py-1 rounded-lg bg-amber-500/20 text-amber-300 text-[10px] font-black uppercase flex items-center gap-1">
-                    <Clock size={12} /> Alta en Plataforma: Pendiente Aprobación Admin
+                    <Clock size={12} /> Pendiente de Aprobación Admin (Enlace de Contraseña por Email)
                   </span>
                 </div>
               </div>
@@ -737,10 +733,10 @@ export default function EventAndSelfRegistrationModal({
             <div className="bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 text-xs text-slate-600 dark:text-slate-300 space-y-1.5">
               <p className="font-black text-slate-900 dark:text-white uppercase text-[11px] flex items-center gap-1.5">
                 <ShieldCheck size={15} className="text-[#006633] dark:text-emerald-400 flex-shrink-0" />
-                <span>¿Cómo continúa tu acceso a la plataforma HempC Nucleus?</span>
+                <span>¿Cómo recibirás tu acceso y contraseña en NUCLEUS?</span>
               </p>
               <p>
-                Los Administradores de la Red ya recibieron tu solicitud. En cuanto aprueben tu perfil como <strong>Productor Asociado</strong> o <strong>Visitante</strong>, recibirás un correo de confirmación desde <strong>notificaciones@hempc.com.ar</strong>.
+                Los Administradores ya recibieron tu solicitud. Una vez que aprueben tu perfil como <strong>Visitante / Invitado General</strong> o <strong>Productor</strong>, recibirás un correo oficial desde <strong>notificaciones@hempc.com.ar</strong> con el <strong>enlace de activación para ingresar tu contraseña y confirmar tu cuenta</strong>.
               </p>
             </div>
 

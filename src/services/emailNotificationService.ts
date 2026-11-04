@@ -703,26 +703,33 @@ export interface SendRegistrationApprovedParams {
   roleLabel: string;
   organizationName?: string;
   ticketCode?: string;
+  activationToken?: string;
   actionUrl?: string;
 }
 
 /**
- * Notifica al usuario que un Administrador aprobó su alta en la plataforma (como Productor o Visitante)
+ * Notifica al usuario que un Administrador aprobó su alta en la plataforma (como Visitante o Productor)
+ * y envía el enlace oficial para ingresar su contraseña y confirmar el acceso.
  */
 export async function sendRegistrationApprovedEmail(
   params: SendRegistrationApprovedParams
 ): Promise<EmailDispatchResult> {
   const timestamp = new Date().toISOString();
+  const cleanEmail = params.toEmail.trim();
+  const defaultActivationUrl = `${window.location.origin}/#/login?activar=${encodeURIComponent(cleanEmail)}${
+    params.activationToken ? `&token=${encodeURIComponent(params.activationToken)}` : ''
+  }`;
 
   const payload = {
-    to_email: params.toEmail.trim(),
+    to_email: cleanEmail,
     to_name: params.toName.trim(),
     notification_type: 'registration_approved',
     role_name: params.roleLabel,
     structure_name: params.organizationName || 'Red Cooperativa HempC',
-    action_url: params.actionUrl || `${window.location.origin}/#/login`,
+    action_url: params.actionUrl || defaultActivationUrl,
     extra_data: {
-      ticket_code: params.ticketCode || ''
+      ticket_code: params.ticketCode || '',
+      activation_token: params.activationToken || ''
     }
   };
 
@@ -730,9 +737,9 @@ export async function sendRegistrationApprovedEmail(
     const data = await postEmailViaVercelResend(payload);
     const result: EmailDispatchResult = {
       success: Boolean(data.success !== false),
-      message: data.message || `Notificación de alta aprobada enviada a ${params.toEmail}`,
+      message: data.message || `Enlace de activación y configuración de contraseña enviado a ${cleanEmail}`,
       sentFrom: data.sent_from || 'notificaciones@hempc.com.ar',
-      sentTo: data.sent_to || params.toEmail,
+      sentTo: data.sent_to || cleanEmail,
       deliveredVia: data.delivered_via || 'vercel_resend',
       timestamp
     };
@@ -740,10 +747,10 @@ export async function sendRegistrationApprovedEmail(
     saveEmailAuditEntry({
       id: `email-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       timestamp,
-      toEmail: params.toEmail,
+      toEmail: cleanEmail,
       toName: params.toName,
       type: 'operator_invitation',
-      subject: `✅ Cuenta Aprobada (${params.roleLabel}) • HempC Nucleus`,
+      subject: `Cuenta Aprobada (${params.roleLabel}) • Configurar Contraseña en NUCLEUS`,
       roleName: params.roleLabel,
       structureName: params.organizationName,
       sentFrom: result.sentFrom,
@@ -755,9 +762,9 @@ export async function sendRegistrationApprovedEmail(
   } catch (err: any) {
     return {
       success: true,
-      message: `Aprobación notificada a ${params.toEmail}`,
+      message: `Enlace de activación registrado para ${cleanEmail}`,
       sentFrom: 'notificaciones@hempc.com.ar',
-      sentTo: params.toEmail,
+      sentTo: cleanEmail,
       deliveredVia: 'simulated_local',
       timestamp
     };
