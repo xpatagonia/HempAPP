@@ -498,8 +498,17 @@ export default function TrialManager() {
   const [quickLaborApplyBlock, setQuickLaborApplyBlock] = useState<boolean>(false);
   const [isSavingQuickLabor, setIsSavingQuickLabor] = useState(false);
 
+  const isProducerOnly =
+    currentUser?.role === 'client' ||
+    currentUser?.requestedProfileType === 'productor' ||
+    currentUser?.role === 'technician';
+
   // Atajo 4: Cuaderno Fitosanitario SENASA (Fertilizantes, Mejoradores de Suelo e Insecticidas/Fungicidas vinculados a Base de Datos)
   const [quickAgroCategory, setQuickAgroCategory] = useState<AgrochemicalCategory>('Mejorador de Suelo');
+  const [quickAgroResourceId, setQuickAgroResourceId] = useState<string>('');
+  const [quickAgroSupplierId, setQuickAgroSupplierId] = useState<string>('');
+  const [quickAgroLinkedTaskId, setQuickAgroLinkedTaskId] = useState<string>('');
+  const [quickAgroLinkedTaskTitle, setQuickAgroLinkedTaskTitle] = useState<string>('');
   const [quickAgroProduct, setQuickAgroProduct] = useState<string>('HumiFulvic Complex + Glomus intraradices');
   const [isCustomAgroProduct, setIsCustomAgroProduct] = useState<boolean>(false);
   const [quickAgroActiveIngredient, setQuickAgroActiveIngredient] = useState<string>(
@@ -525,6 +534,7 @@ export default function TrialManager() {
   // Catálogo relacional de Productos Comerciales Prescriptos desde la Base de Datos (`resources`) filtrado por Categoría Insumo
   const prescribedProductsByCategory = useMemo(() => {
     const matched = resources.filter(r => {
+      if (r.type === 'Labor') return false;
       if (r.agroCategory) return r.agroCategory === quickAgroCategory;
       if (
         quickAgroCategory === 'Fertilizante Edáfico' ||
@@ -541,6 +551,8 @@ export default function TrialManager() {
 
   const applyCatalogResourceToQuickAgro = (res: Resource) => {
     setIsCustomAgroProduct(false);
+    setQuickAgroResourceId(res.id);
+    setQuickAgroSupplierId(res.supplierId || '');
     setQuickAgroProduct(res.name);
     if (res.agroCategory) setQuickAgroCategory(res.agroCategory);
     setQuickAgroActiveIngredient(res.activeIngredient || 'Insumo Agrícola Homologado');
@@ -558,27 +570,13 @@ export default function TrialManager() {
 
   const handleQuickAgroCategoryChange = (newCategory: AgrochemicalCategory) => {
     setQuickAgroCategory(newCategory);
-    const categoryProducts = resources.filter(r => r.agroCategory === newCategory);
+    const categoryProducts = resources.filter(r => r.type !== 'Labor' && r.agroCategory === newCategory);
     if (categoryProducts.length > 0) {
       applyCatalogResourceToQuickAgro(categoryProducts[0]);
     } else {
-      const presetMatch = QUICK_AGRO_PRESETS.find(p => p.category === newCategory);
-      if (presetMatch) {
-        setIsCustomAgroProduct(false);
-        setQuickAgroProduct(presetMatch.productName);
-        setQuickAgroActiveIngredient(presetMatch.activeIngredient);
-        setQuickAgroDosage(String(presetMatch.dosagePerHa));
-        setQuickAgroUnit(presetMatch.dosageUnit);
-        setQuickAgroMethod(presetMatch.applicationMethod);
-        setQuickAgroSafetyDays(String(presetMatch.safetyPeriodDays));
-        setQuickAgroSenasa(presetMatch.senasaRegisterNumber);
-        setQuickAgroBatch(presetMatch.batchNumber);
-        setQuickAgroToxClass(presetMatch.toxicologicalClass);
-        setQuickAgroTarget(presetMatch.targetPestOrDisease);
-      } else {
-        setIsCustomAgroProduct(true);
-        setQuickAgroProduct('');
-      }
+      setIsCustomAgroProduct(false);
+      setQuickAgroResourceId('');
+      setQuickAgroProduct('');
     }
   };
 
@@ -1397,6 +1395,19 @@ export default function TrialManager() {
   // Guardado directo independiente en el Cuaderno Fitosanitario SENASA (Fertilizante / Mejorador de Suelo / Insecticida)
   const handleQuickSaveAgroOnly = async () => {
     if (!currentPlotData?.plot.id || !quickAgroProduct.trim()) return;
+    if (isProducerOnly && !quickAgroLinkedTaskId) {
+      setSaveSummaryBanner('⚠️ Restricción Productor: Seleccione primero la Orden de Labor autorizada en la Lista de Tareas de Campo.');
+      setTimeout(() => setSaveSummaryBanner(null), 4500);
+      return;
+    }
+    const matchedRes =
+      resources.find(r => r.id === quickAgroResourceId) ||
+      resources.find(r => r.name.trim().toLowerCase() === quickAgroProduct.trim().toLowerCase());
+    if (!matchedRes) {
+      setSaveSummaryBanner('⚠️ El insumo debe estar dado de alta previamente en Insumos e Inventario.');
+      setTimeout(() => setSaveSummaryBanner(null), 4500);
+      return;
+    }
 
     setIsSavingQuickAgro(true);
     try {
@@ -1413,19 +1424,21 @@ export default function TrialManager() {
         plotName: currentPlotData.plot.name,
         date: appDate,
         time: formData.time || '09:00',
-        category: quickAgroCategory,
-        productName: quickAgroProduct.trim(),
-        activeIngredient: quickAgroActiveIngredient.trim() || 'Insumo Agrícola Homologado',
-        manufacturer: quickAgroManufacturer || 'Elaborador Homologado GACP',
-        supplierName: quickAgroSupplierName || 'BioFábrica & Insumos Agrícolas Red HempC',
-        senasaRegisterNumber: quickAgroSenasa.trim() || 'SENASA-OFICIAL',
-        toxicologicalClass: quickAgroToxClass,
+        category: matchedRes.agroCategory || quickAgroCategory,
+        resourceId: matchedRes.id,
+        productName: matchedRes.name,
+        activeIngredient: matchedRes.activeIngredient || quickAgroActiveIngredient.trim() || 'Insumo Agrícola Homologado',
+        manufacturer: matchedRes.manufacturer || quickAgroManufacturer || 'Elaborador Homologado GACP',
+        supplierId: matchedRes.supplierId || quickAgroSupplierId || undefined,
+        supplierName: matchedRes.supplierName || quickAgroSupplierName || 'BioFábrica & Insumos Agrícolas Red HempC',
+        senasaRegisterNumber: matchedRes.senasaRegisterNumber || quickAgroSenasa.trim() || 'SENASA-OFICIAL',
+        toxicologicalClass: matchedRes.toxicologicalClass || quickAgroToxClass,
         dosagePerHa: dosage,
         dosageUnit: quickAgroUnit,
         totalAppliedAmount: totalApplied,
         applicationMethod: quickAgroMethod,
-        batchNumber: quickAgroBatch.trim().toUpperCase() || `LOT-${Date.now().toString().slice(-5)}`,
-        expirationDate: '2027-12-31',
+        batchNumber: matchedRes.batchNumber || quickAgroBatch.trim().toUpperCase() || `LOT-${Date.now().toString().slice(-5)}`,
+        expirationDate: matchedRes.expirationDate || '2027-12-31',
         senasaComplianceStatus: 'Conforme SENASA (Normativa VIGENTE)',
         safetyPeriodDays: safetyDays,
         harvestSafetyDate,
@@ -1447,6 +1460,8 @@ export default function TrialManager() {
           undefined,
         pestIncidenceScore: Math.max(Number(formData.pestsScore || 1), Number(formData.diseasesScore || 1)),
         phenologicalStage: formData.stage,
+        linkedTaskId: quickAgroLinkedTaskId || undefined,
+        linkedTaskTitle: quickAgroLinkedTaskTitle || undefined,
         notes:
           quickAgroNotes.trim() ||
           `Registrado desde Monitoreo Rápido (${formData.stage || 'Vegetativo'} · ${currentPlotData.dds} DDS).`,
@@ -1569,10 +1584,14 @@ export default function TrialManager() {
       }
 
       // 4. Si el técnico está en la pestaña Fitosanitario (o ingresó notas/producto personalizado), asentarlo en Cuaderno Fitosanitario SENASA
+      const matchedCatalogRes =
+        resources.find(r => r.id === quickAgroResourceId) ||
+        resources.find(r => r.name.trim().toLowerCase() === quickAgroProduct.trim().toLowerCase());
       if (
         success &&
-        quickAgroProduct.trim() &&
-        (activeShortcutTab === 'phytosanitary' || isCustomAgroProduct || Boolean(quickAgroNotes.trim()))
+        matchedCatalogRes &&
+        (!isProducerOnly || Boolean(quickAgroLinkedTaskId)) &&
+        (activeShortcutTab === 'phytosanitary' || Boolean(quickAgroNotes.trim()))
       ) {
         const appDate = formData.date || new Date().toISOString().split('T')[0];
         const safetyDays = Math.max(0, Number(quickAgroSafetyDays) || 0);
@@ -1587,19 +1606,21 @@ export default function TrialManager() {
           plotName: currentPlotData.plot.name,
           date: appDate,
           time: formData.time || '09:00',
-          category: quickAgroCategory,
-          productName: quickAgroProduct.trim(),
-          activeIngredient: quickAgroActiveIngredient.trim() || 'Insumo Agrícola Homologado',
-          manufacturer: quickAgroManufacturer || 'Elaborador Homologado GACP',
-          supplierName: quickAgroSupplierName || 'BioFábrica & Insumos Agrícolas Red HempC',
-          senasaRegisterNumber: quickAgroSenasa.trim() || 'SENASA-OFICIAL',
-          toxicologicalClass: quickAgroToxClass,
+          category: matchedCatalogRes.agroCategory || quickAgroCategory,
+          resourceId: matchedCatalogRes.id,
+          productName: matchedCatalogRes.name,
+          activeIngredient: matchedCatalogRes.activeIngredient || quickAgroActiveIngredient.trim() || 'Insumo Agrícola Homologado',
+          manufacturer: matchedCatalogRes.manufacturer || quickAgroManufacturer || 'Elaborador Homologado GACP',
+          supplierId: matchedCatalogRes.supplierId || quickAgroSupplierId || undefined,
+          supplierName: matchedCatalogRes.supplierName || quickAgroSupplierName || 'BioFábrica & Insumos Agrícolas Red HempC',
+          senasaRegisterNumber: matchedCatalogRes.senasaRegisterNumber || quickAgroSenasa.trim() || 'SENASA-OFICIAL',
+          toxicologicalClass: matchedCatalogRes.toxicologicalClass || quickAgroToxClass,
           dosagePerHa: dosage,
           dosageUnit: quickAgroUnit,
           totalAppliedAmount: totalApplied,
           applicationMethod: quickAgroMethod,
-          batchNumber: quickAgroBatch.trim().toUpperCase() || `LOT-${Date.now().toString().slice(-5)}`,
-          expirationDate: '2027-12-31',
+          batchNumber: matchedCatalogRes.batchNumber || quickAgroBatch.trim().toUpperCase() || `LOT-${Date.now().toString().slice(-5)}`,
+          expirationDate: matchedCatalogRes.expirationDate || '2027-12-31',
           senasaComplianceStatus: 'Conforme SENASA (Normativa VIGENTE)',
           safetyPeriodDays: safetyDays,
           harvestSafetyDate,
@@ -1622,6 +1643,8 @@ export default function TrialManager() {
           pestIncidenceScore: maxSanityScore,
           phenologicalStage: formData.stage,
           linkedTrialRecordId: recordId,
+          linkedTaskId: quickAgroLinkedTaskId || undefined,
+          linkedTaskTitle: quickAgroLinkedTaskTitle || undefined,
           notes:
             quickAgroNotes.trim() ||
             `Sellado junto a Relevamiento Biométrico Nucleus Trace (${formData.stage || 'Vegetativo'}).`,
@@ -3872,13 +3895,92 @@ export default function TrialManager() {
                         {activeShortcutTab === 'phytosanitary' && (
                           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start min-w-0">
                             <div className="lg:col-span-7 space-y-3 min-w-0">
+                              {/* Selector de Orden de Labor de la Parcela (Lista de Tareas de Campo) */}
+                              {(() => {
+                                const plotAgroTasks = tasks.filter(
+                                  t =>
+                                    t.plotId === currentPlotData.plot.id &&
+                                    (t.laborType === 'FITOSANITARIO' ||
+                                      t.laborType === 'FERTIRRIEGO' ||
+                                      Boolean(t.syncWithPhytosanitary) ||
+                                      (t.appliedInputs && t.appliedInputs.length > 0))
+                                );
+                                return (
+                                  <div className="p-3 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/25 border border-indigo-200/80 dark:border-indigo-800/60 space-y-1.5">
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                      <label className="text-[9px] font-black uppercase tracking-widest text-indigo-700 dark:text-indigo-300 flex items-center gap-1.5">
+                                        <Tractor size={13} />
+                                        <span>
+                                          1. Orden de Labor Vinculada (Lista de Tareas de Campo) {isProducerOnly ? '*' : '(Recomendado)'}
+                                        </span>
+                                      </label>
+                                      <Link
+                                        to={`/tasks?plotId=${currentPlotData.plot.id}`}
+                                        className="text-[9px] font-mono font-bold text-indigo-700 dark:text-indigo-300 hover:underline"
+                                      >
+                                        Ir a Órdenes de Labor →
+                                      </Link>
+                                    </div>
+                                    <select
+                                      value={quickAgroLinkedTaskId}
+                                      onChange={e => {
+                                        const taskId = e.target.value;
+                                        const foundTask = plotAgroTasks.find(t => t.id === taskId);
+                                        if (!foundTask) {
+                                          setQuickAgroLinkedTaskId('');
+                                          setQuickAgroLinkedTaskTitle('');
+                                          return;
+                                        }
+                                        setQuickAgroLinkedTaskId(foundTask.id);
+                                        setQuickAgroLinkedTaskTitle(foundTask.title);
+                                        const primaryInput = foundTask.appliedInputs?.[0];
+                                        const matchedRes = primaryInput
+                                          ? resources.find(r => r.id === primaryInput.resourceId) ||
+                                            resources.find(r => r.name.toLowerCase() === primaryInput.name.toLowerCase())
+                                          : undefined;
+                                        if (matchedRes) {
+                                          applyCatalogResourceToQuickAgro(matchedRes);
+                                        }
+                                        if (primaryInput?.dosagePerHa) {
+                                          setQuickAgroDosage(String(primaryInput.dosagePerHa));
+                                        }
+                                        if (primaryInput?.dosageUnit) {
+                                          setQuickAgroUnit(primaryInput.dosageUnit);
+                                        }
+                                        if (primaryInput?.applicationMethod) {
+                                          setQuickAgroMethod(primaryInput.applicationMethod);
+                                        }
+                                        if (primaryInput?.targetPestOrDisease) {
+                                          setQuickAgroTarget(primaryInput.targetPestOrDisease);
+                                        }
+                                      }}
+                                      className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-indigo-300 dark:border-indigo-700 text-xs font-bold text-slate-900 dark:text-white"
+                                    >
+                                      <option value="">
+                                        {isProducerOnly
+                                          ? '-- Seleccione la Orden de Labor autorizada para aplicar --'
+                                          : '-- Generar Orden de Labor automáticamente al guardar --'}
+                                      </option>
+                                      {plotAgroTasks.map(t => {
+                                        const inp = t.appliedInputs?.[0];
+                                        return (
+                                          <option key={t.id} value={t.id}>
+                                            [{t.status}] {t.title} {inp ? `• Insumo: ${inp.name} (${inp.dosagePerHa || 1} ${inp.dosageUnit || 'L/ha'})` : ''}
+                                          </option>
+                                        );
+                                      })}
+                                    </select>
+                                  </div>
+                                );
+                              })()}
+
                               {/* Vincular Insumo Recepcionado de Proveedor Homologado (en vivo desde BD resources) */}
                               <div className="p-3 rounded-2xl bg-teal-50/60 dark:bg-teal-950/20 border border-teal-200/70 dark:border-teal-800/60 space-y-2">
                                 <div className="flex flex-wrap items-center justify-between gap-2">
                                   <span className="text-[9px] font-black uppercase tracking-widest text-teal-700 dark:text-teal-300 flex items-center gap-1.5">
                                     <ShieldCheck size={13} />
                                     <span>
-                                      Vincular Insumo Recepcionado de Proveedor Homologado ({prescribedProductsByCategory.length} en {quickAgroCategory})
+                                      2. Vincular Insumo Recepcionado de Proveedor Homologado ({prescribedProductsByCategory.length} en {quickAgroCategory})
                                     </span>
                                   </span>
                                   <Link

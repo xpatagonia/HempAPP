@@ -20,7 +20,7 @@ import { PlotIdentificationModal } from '../components/PlotIdentificationModal';
 import { PlotCycleClosureModal } from '../components/PlotCycleClosureModal';
 import SeedingProtocolModal from '../components/SeedingProtocolModal';
 import { LiveTelemetryPanel } from '../components/LiveTelemetryPanel';
-import { TrialRecord, AgrochemicalApplication, AgrochemicalCategory, HempStageId, FieldLog, Task, AgriculturalLaborType, Resource } from '../types';
+import { TrialRecord, AgrochemicalApplication, AgrochemicalCategory, ToxicologicalBand, HempStageId, FieldLog, Task, AgriculturalLaborType, Resource } from '../types';
 import { sendAgronomicAlertEmail } from '../src/services/emailNotificationService';
 import { formatPlotSeedLoad } from '../src/utils/seedTraceability';
 import { DateInputAr } from '../src/components/DateInputAr';
@@ -264,8 +264,21 @@ export default function PlotDetails() {
   const [isAgroModalOpen, setIsAgroModalOpen] = useState(false);
   const [editingAgroId, setEditingAgroId] = useState<string | null>(null);
   const [isCustomAgroProduct, setIsCustomAgroProduct] = useState(false);
+  const isProducerOnly =
+    currentUser?.role === 'client' ||
+    currentUser?.requestedProfileType === 'productor' ||
+    currentUser?.role === 'technician';
+
+  const [agroFormError, setAgroFormError] = useState<string | null>(null);
   const [agroForm, setAgroForm] = useState({
     date: new Date().toISOString().split('T')[0],
+    resourceId: '',
+    supplierId: '',
+    supplierName: 'BioFábrica & Insumos Agrícolas Red HempC',
+    manufacturer: 'Elaborador Homologado GACP',
+    toxicologicalClass: 'Biológico / Orgánico Certificado' as ToxicologicalBand,
+    linkedTaskId: '',
+    linkedTaskTitle: '',
     productName: 'HumiFulvic Complex + Glomus intraradices',
     activeIngredient: 'Ácidos Húmicos 15% + Ácidos Fúlvicos 8% + Endomicorrizas (1.5x10^4 esporas/ml)',
     senasaRegisterNumber: 'SENASA-ENM-9042-AR',
@@ -283,9 +296,22 @@ export default function PlotDetails() {
     notes: ''
   });
 
+  const plotAgroCandidateTasks = useMemo(() => {
+    if (!id) return [];
+    return tasks.filter(
+      t =>
+        t.plotId === id &&
+        (t.laborType === 'FITOSANITARIO' ||
+          t.laborType === 'FERTIRRIEGO' ||
+          Boolean(t.syncWithPhytosanitary) ||
+          (t.appliedInputs && t.appliedInputs.length > 0))
+    );
+  }, [tasks, id]);
+
   const prescribedPlotResources = useMemo(() => {
     const cat = agroForm.category || 'Mejorador de Suelo';
     return resources.filter(r => {
+      if (r.type === 'Labor') return false;
       if (r.agroCategory) return r.agroCategory === cat;
       if (
         cat === 'Fertilizante Edáfico' ||
@@ -301,15 +327,23 @@ export default function PlotDetails() {
 
   const applyCatalogResourceToPlotAgro = (res: Resource) => {
     setIsCustomAgroProduct(false);
+    const areaHa = Math.max(0.05, Number(plot?.surfaceArea) || 1);
+    const recDosage = res.recommendedDosagePerHa ?? 2.0;
     setAgroForm(prev => ({
       ...prev,
+      resourceId: res.id,
+      supplierId: res.supplierId || prev.supplierId,
+      supplierName: res.supplierName || prev.supplierName,
+      manufacturer: res.manufacturer || prev.manufacturer,
+      toxicologicalClass: res.toxicologicalClass || prev.toxicologicalClass,
       category: res.agroCategory || prev.category,
       productName: res.name,
       activeIngredient: res.activeIngredient || 'Bioinsumo Agrícola Homologado',
       senasaRegisterNumber: res.senasaRegisterNumber || 'SENASA-OFICIAL',
       batchNumber: res.batchNumber || 'LOT-2026-A',
-      dosagePerHa: res.recommendedDosagePerHa ?? 2.0,
+      dosagePerHa: recDosage,
       dosageUnit: res.dosageUnit || (res.unit === 'kg' ? 'kg/ha' : 'L/ha'),
+      totalAppliedAmount: Number((recDosage * areaHa).toFixed(2)),
       safetyPeriodDays: res.safetyPeriodDays ?? 0,
       applicationMethod: res.applicationMethod || 'Pulverización Terrestre',
       targetPestOrPurpose: res.targetPestOrDisease || prev.targetPestOrPurpose
@@ -3066,23 +3100,39 @@ export default function PlotDetails() {
                       onClick={() => {
                         setEditingAgroId(null);
                         setIsCustomAgroProduct(false);
-                        const defaultCat: AgrochemicalCategory = 'Mejorador de Suelo';
-                        const firstRes = resources.find(r => r.agroCategory === defaultCat) || resources[0];
+                        setAgroFormError(null);
+                        const firstTask = plotAgroCandidateTasks[0];
+                        const taskInput = firstTask?.appliedInputs?.[0];
+                        const defaultCat: AgrochemicalCategory = taskInput?.category || 'Mejorador de Suelo';
+                        const firstRes =
+                          (taskInput?.resourceId ? resources.find(r => r.id === taskInput.resourceId) : undefined) ||
+                          (taskInput?.name ? resources.find(r => r.name.toLowerCase() === taskInput.name.toLowerCase()) : undefined) ||
+                          resources.find(r => r.agroCategory === defaultCat) ||
+                          resources.find(r => r.type !== 'Labor');
+                        const areaHa = Math.max(0.05, Number(plot.surfaceArea) || 1);
+                        const initDosage = taskInput?.dosagePerHa ?? firstRes?.recommendedDosagePerHa ?? 5.0;
                         setAgroForm({
                           date: localClockData.dateIso,
-                          productName: firstRes?.name || 'HumiFulvic Complex + Glomus intraradices',
-                          activeIngredient: firstRes?.activeIngredient || 'Ácidos Húmicos 15% + Ácidos Fúlvicos 8% + Endomicorrizas',
-                          senasaRegisterNumber: firstRes?.senasaRegisterNumber || 'SENASA-ENM-9042-AR',
+                          resourceId: firstRes?.id || taskInput?.resourceId || '',
+                          supplierId: firstRes?.supplierId || taskInput?.supplierId || '',
+                          supplierName: firstRes?.supplierName || taskInput?.supplierName || 'BioFábrica & Insumos Agrícolas Red HempC',
+                          manufacturer: firstRes?.manufacturer || taskInput?.manufacturer || 'Elaborador Homologado GACP',
+                          toxicologicalClass: firstRes?.toxicologicalClass || taskInput?.toxicologicalClass || 'Biológico / Orgánico Certificado',
+                          linkedTaskId: firstTask?.id || '',
+                          linkedTaskTitle: firstTask?.title || '',
+                          productName: firstRes?.name || taskInput?.name || '',
+                          activeIngredient: firstRes?.activeIngredient || taskInput?.activeIngredient || 'Bioinsumo Agrícola Homologado',
+                          senasaRegisterNumber: firstRes?.senasaRegisterNumber || taskInput?.senasaRegisterNumber || 'SENASA-OFICIAL',
                           category: firstRes?.agroCategory || defaultCat,
-                          batchNumber: firstRes?.batchNumber || 'HUMI-SOIL-26A',
-                          dosagePerHa: firstRes?.recommendedDosagePerHa ?? 5.0,
-                          dosageUnit: firstRes?.dosageUnit || 'L/ha',
-                          totalAppliedAmount: 5,
-                          safetyPeriodDays: firstRes?.safetyPeriodDays ?? 0,
-                          applicationMethod: firstRes?.applicationMethod || 'Fertirriego',
-                          targetPestOrPurpose: firstRes?.targetPestOrDisease || 'Mejorador físico-biológico de estructura edáfica',
-                          responsibleAgronomist: currentUser?.name || 'Ing. Agr. Gastón Barea',
-                          agronomistLicense: 'MP-4821-CIAFBA',
+                          batchNumber: firstRes?.batchNumber || taskInput?.batchNumber || 'HUMI-SOIL-26A',
+                          dosagePerHa: initDosage,
+                          dosageUnit: taskInput?.dosageUnit || firstRes?.dosageUnit || 'L/ha',
+                          totalAppliedAmount: Number((initDosage * areaHa).toFixed(2)),
+                          safetyPeriodDays: taskInput?.safetyPeriodDays ?? firstRes?.safetyPeriodDays ?? 0,
+                          applicationMethod: taskInput?.applicationMethod || firstRes?.applicationMethod || 'Fertirriego',
+                          targetPestOrPurpose: taskInput?.targetPestOrDisease || firstRes?.targetPestOrDisease || 'Mejorador físico-biológico de estructura edáfica',
+                          responsibleAgronomist: taskInput?.responsibleAgronomist || currentUser?.name || 'Ing. Agr. Gastón Barea',
+                          agronomistLicense: taskInput?.agronomistLicense || 'MP-4821-CIAFBA',
                           weatherConditionsAtApp: `${stats.liveTemp}°C | Hum: ${stats.liveHum}% | Viento: ${stats.liveWind} km/h`,
                           notes: ''
                         });
@@ -3242,8 +3292,16 @@ export default function PlotDetails() {
                                   type="button"
                                   onClick={() => {
                                     setEditingAgroId(app.id);
+                                    setAgroFormError(null);
                                     setAgroForm({
                                       date: app.date,
+                                      resourceId: app.resourceId || '',
+                                      supplierId: app.supplierId || '',
+                                      supplierName: app.supplierName || 'BioFábrica & Insumos Agrícolas Red HempC',
+                                      manufacturer: app.manufacturer || 'Elaborador Homologado GACP',
+                                      toxicologicalClass: app.toxicologicalClass || 'Biológico / Orgánico Certificado',
+                                      linkedTaskId: app.linkedTaskId || '',
+                                      linkedTaskTitle: app.linkedTaskTitle || '',
                                       productName: app.productName,
                                       activeIngredient: app.activeIngredient,
                                       senasaRegisterNumber: app.senasaRegisterNumber,
@@ -4160,7 +4218,29 @@ export default function PlotDetails() {
             <form
               onSubmit={e => {
                 e.preventDefault();
-                if (!agroForm.productName.trim()) return;
+                setAgroFormError(null);
+                if (!agroForm.productName.trim()) {
+                  setAgroFormError('Debe seleccionar un insumo homologado en Insumos e Inventario.');
+                  return;
+                }
+                if (isProducerOnly && !agroForm.linkedTaskId) {
+                  setAgroFormError('Como Productor, no puede aplicar ningún insumo que no figure previamente en la Lista de Tareas de Campo de la parcela.');
+                  return;
+                }
+                const matchedRes =
+                  resources.find(r => r.id === agroForm.resourceId) ||
+                  resources.find(r => r.name.trim().toLowerCase() === agroForm.productName.trim().toLowerCase());
+                if (!matchedRes) {
+                  setAgroFormError('El insumo debe estar registrado previamente en Insumos e Inventario.');
+                  return;
+                }
+                const areaHa = Math.max(0.05, Number(plot.surfaceArea) || 1);
+                const dosage = Math.max(0.1, Number(agroForm.dosagePerHa) || 1);
+                const totalAmount = Number((dosage * areaHa).toFixed(2));
+                if (!editingAgroId && typeof matchedRes.stock === 'number' && totalAmount > matchedRes.stock) {
+                  setAgroFormError(`Stock insuficiente en galpón para "${matchedRes.name}": requiere ${totalAmount} ${matchedRes.unit} y hay ${matchedRes.stock} ${matchedRes.unit}.`);
+                  return;
+                }
                 const safetyDays = Number(agroForm.safetyPeriodDays) || 0;
                 const appDateObj = new Date(`${agroForm.date}T12:00:00`);
                 const harvestSafetyDate = new Date(appDateObj.getTime() + safetyDays * 86400000).toISOString().split('T')[0];
@@ -4170,19 +4250,21 @@ export default function PlotDetails() {
                   plotName: plot.name,
                   date: agroForm.date,
                   time: localClockData.shortTimeStr,
-                  category: agroForm.category,
-                  productName: agroForm.productName.trim(),
-                  activeIngredient: agroForm.activeIngredient.trim() || 'Bioinsumo Agrícola',
-                  manufacturer: 'Elaborador Homologado',
-                  supplierName: 'Insumos Red HempC',
-                  senasaRegisterNumber: agroForm.senasaRegisterNumber.trim() || 'SENASA S/N',
-                  toxicologicalClass: 'Biológico / Orgánico Certificado',
-                  dosagePerHa: Number(agroForm.dosagePerHa) || 1,
+                  category: matchedRes.agroCategory || agroForm.category,
+                  resourceId: matchedRes.id,
+                  productName: matchedRes.name,
+                  activeIngredient: matchedRes.activeIngredient || agroForm.activeIngredient.trim() || 'Bioinsumo Agrícola',
+                  manufacturer: matchedRes.manufacturer || agroForm.manufacturer || 'Elaborador Homologado',
+                  supplierId: matchedRes.supplierId || agroForm.supplierId,
+                  supplierName: matchedRes.supplierName || agroForm.supplierName || 'Insumos Red HempC',
+                  senasaRegisterNumber: matchedRes.senasaRegisterNumber || agroForm.senasaRegisterNumber.trim() || 'SENASA S/N',
+                  toxicologicalClass: matchedRes.toxicologicalClass || agroForm.toxicologicalClass || 'Biológico / Orgánico Certificado',
+                  dosagePerHa: dosage,
                   dosageUnit: agroForm.dosageUnit,
-                  totalAppliedAmount: Number(agroForm.totalAppliedAmount) || 1,
+                  totalAppliedAmount: totalAmount,
                   applicationMethod: agroForm.applicationMethod,
-                  batchNumber: agroForm.batchNumber.trim() || 'LOT-2026',
-                  expirationDate: '2027-12-31',
+                  batchNumber: matchedRes.batchNumber || agroForm.batchNumber.trim() || 'LOT-2026',
+                  expirationDate: matchedRes.expirationDate || '2027-12-31',
                   senasaComplianceStatus: 'Conforme SENASA (Normativa VIGENTE)',
                   safetyPeriodDays: safetyDays,
                   harvestSafetyDate,
@@ -4195,6 +4277,8 @@ export default function PlotDetails() {
                   },
                   targetPestOrDisease: agroForm.targetPestOrPurpose.trim() || undefined,
                   phenologicalStage: cycleSync.currentStage as any,
+                  linkedTaskId: agroForm.linkedTaskId || undefined,
+                  linkedTaskTitle: agroForm.linkedTaskTitle || undefined,
                   notes: agroForm.notes,
                   status: new Date() < new Date(harvestSafetyDate) ? 'En Carencia' : 'Apto Cosecha'
                 };
@@ -4208,7 +4292,81 @@ export default function PlotDetails() {
               }}
               className="space-y-3"
             >
+              {agroFormError && (
+                <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/60 border border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-200 text-xs font-mono font-bold">
+                  {agroFormError}
+                </div>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="sm:col-span-2">
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <label className={labelClass}>
+                      1. Orden de Labor Vinculada (Lista de Tareas de Campo) {isProducerOnly ? '*' : '(Recomendado)'}
+                    </label>
+                    <Link
+                      to={`/tasks?plotId=${plot.id}`}
+                      className="text-[10px] font-mono font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+                    >
+                      Ir a Órdenes de Labor →
+                    </Link>
+                  </div>
+                  <select
+                    required={isProducerOnly}
+                    value={agroForm.linkedTaskId}
+                    onChange={e => {
+                      const taskId = e.target.value;
+                      const foundTask = plotAgroCandidateTasks.find(t => t.id === taskId);
+                      if (!foundTask) {
+                        setAgroForm(prev => ({ ...prev, linkedTaskId: '', linkedTaskTitle: '' }));
+                        return;
+                      }
+                      const primaryInput = foundTask.appliedInputs?.[0];
+                      const matchedRes = primaryInput
+                        ? resources.find(r => r.id === primaryInput.resourceId) ||
+                          resources.find(r => r.name.toLowerCase() === primaryInput.name.toLowerCase())
+                        : undefined;
+                      const areaHa = Math.max(0.05, Number(plot.surfaceArea) || 1);
+                      const nextDosage = primaryInput?.dosagePerHa ?? matchedRes?.recommendedDosagePerHa ?? agroForm.dosagePerHa;
+                      setAgroForm(prev => ({
+                        ...prev,
+                        linkedTaskId: foundTask.id,
+                        linkedTaskTitle: foundTask.title,
+                        date: foundTask.executionDate || foundTask.dueDate || prev.date,
+                        resourceId: matchedRes?.id || primaryInput?.resourceId || prev.resourceId,
+                        supplierId: matchedRes?.supplierId || primaryInput?.supplierId || prev.supplierId,
+                        supplierName: matchedRes?.supplierName || primaryInput?.supplierName || prev.supplierName,
+                        manufacturer: matchedRes?.manufacturer || primaryInput?.manufacturer || prev.manufacturer,
+                        toxicologicalClass: matchedRes?.toxicologicalClass || primaryInput?.toxicologicalClass || prev.toxicologicalClass,
+                        category: matchedRes?.agroCategory || primaryInput?.category || prev.category,
+                        productName: matchedRes?.name || primaryInput?.name || prev.productName,
+                        activeIngredient: matchedRes?.activeIngredient || primaryInput?.activeIngredient || prev.activeIngredient,
+                        senasaRegisterNumber: matchedRes?.senasaRegisterNumber || primaryInput?.senasaRegisterNumber || prev.senasaRegisterNumber,
+                        batchNumber: matchedRes?.batchNumber || primaryInput?.batchNumber || prev.batchNumber,
+                        dosagePerHa: nextDosage,
+                        dosageUnit: primaryInput?.dosageUnit || matchedRes?.dosageUnit || prev.dosageUnit,
+                        totalAppliedAmount: Number((nextDosage * areaHa).toFixed(2)),
+                        safetyPeriodDays: primaryInput?.safetyPeriodDays ?? matchedRes?.safetyPeriodDays ?? prev.safetyPeriodDays,
+                        applicationMethod: primaryInput?.applicationMethod || matchedRes?.applicationMethod || prev.applicationMethod,
+                        targetPestOrPurpose: primaryInput?.targetPestOrDisease || foundTask.description || prev.targetPestOrPurpose
+                      }));
+                    }}
+                    className={inputStyle}
+                  >
+                    <option value="">
+                      {isProducerOnly
+                        ? '-- Seleccione la Orden de Labor autorizada para aplicar --'
+                        : '-- Generar Orden de Labor automáticamente al guardar --'}
+                    </option>
+                    {plotAgroCandidateTasks.map(t => {
+                      const inp = t.appliedInputs?.[0];
+                      return (
+                        <option key={t.id} value={t.id}>
+                          [{t.status}] {t.title} {inp ? `• Insumo: ${inp.name} (${inp.dosagePerHa || 1} ${inp.dosageUnit || 'L/ha'})` : ''}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
                 <div>
                   <label className={labelClass}>Categoría de Insumo *</label>
                   <select
