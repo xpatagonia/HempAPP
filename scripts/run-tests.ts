@@ -948,15 +948,20 @@ test("12.2 Opción 'OTRO' habilita locación externa personalizada, valida coord
     assert.equal(savedEvent.coordinates?.lat, -42.7692);
 });
 
-test("12.3 Ciclo Completo de Acreditación: Enlaces GPS Celular (Google Maps / Waze), Formato GMS y Blindaje de Seguridad Anti-Escalación", () => {
+test("12.3 Ciclo Completo de Acreditación: Captura de Mapa, Instructivo Paso a Paso, Enlaces GPS Celular y Blindaje Anti-Escalación", () => {
     const officialEvent = DEFAULT_FIELD_EVENTS[0];
     const gpsLinks = buildEventGpsNavigationLinks(officialEvent);
 
-    // Verificar formato Decimal, GMS y Deep Links para GPS del celular
+    // Verificar formato Decimal, GMS, Captura Estática de Mapa, 3 Tramos del Instructivo y Deep Links para GPS del celular
     assert.equal(gpsLinks.lat, -43.308362);
     assert.equal(gpsLinks.lng, -65.289033);
     assert.ok(gpsLinks.decimalLabel.includes("-43.308362"));
     assert.ok(gpsLinks.dmsLabel.includes("S") && gpsLinks.dmsLabel.includes("W"));
+    assert.ok(gpsLinks.staticMapImageUrl.includes("-65.289033,-43.308362"));
+    assert.equal(gpsLinks.routeSteps.length, 3, "El instructivo de cómo llegar debe incluir los 3 tramos viales georreferenciados");
+    assert.ok(gpsLinks.routeSteps[0].title.includes("Tramo 1"));
+    assert.ok(gpsLinks.routeSteps[1].title.includes("Tramo 2"));
+    assert.ok(gpsLinks.routeSteps[2].title.includes("Tramo 3"));
     assert.ok(gpsLinks.googleMapsDirectionsUrl.startsWith("https://www.google.com/maps/dir/?api=1&destination=-43.308362,-65.289033"));
     assert.ok(gpsLinks.wazeNavigateUrl.startsWith("https://waze.com/ul?ll=-43.308362,-65.289033&navigate=yes"));
     assert.ok(gpsLinks.googleCalendarUrl.startsWith("https://calendar.google.com/calendar/render?action=TEMPLATE"));

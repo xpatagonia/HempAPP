@@ -53,6 +53,8 @@ import {
   downloadEventAttendanceSheetPDF,
   downloadEventAttendanceCertificatePDF,
   downloadEventAccreditationPassPDF,
+  captureEventRouteMapSnapshotDataUrl,
+  downloadEventHowToArriveGuidePDF,
   svgElementToPngDataUrl,
   buildEnabledEstablishmentsOptions,
   resolveEventVenueFromSelection,
@@ -2077,12 +2079,33 @@ export default function Events() {
                     onClick={async () => {
                       if (!qrModalTarget.attendee) return;
                       const svgEl = document.getElementById('events-admin-qr-svg');
-                      const qrPng = await svgElementToPngDataUrl(svgEl, 420);
-                      downloadEventAccreditationPassPDF(qrModalTarget.event, qrModalTarget.attendee, qrPng);
+                      const [qrPng, mapSnap] = await Promise.all([
+                        svgElementToPngDataUrl(svgEl, 420),
+                        captureEventRouteMapSnapshotDataUrl(qrModalTarget.event, 'satellite')
+                      ]);
+                      downloadEventAccreditationPassPDF(
+                        qrModalTarget.event,
+                        qrModalTarget.attendee,
+                        qrPng,
+                        mapSnap
+                      );
                     }}
                     className="w-full py-3 rounded-xl bg-[#006633] hover:bg-[#004d26] text-white text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-md cursor-pointer"
                   >
-                    <Download size={15} /> Descargar Credencial / Pase QR + Croquis GPS (PDF)
+                    <Download size={15} /> Descargar Credencial QR + Captura Mapa e Instructivo (PDF)
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      downloadEventHowToArriveGuidePDF(
+                        qrModalTarget.event,
+                        qrModalTarget.attendee
+                      )
+                    }
+                    className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-[#DDDB00] text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow cursor-pointer"
+                  >
+                    <FileText size={15} /> Descargar Solo Instructivo de Cómo Llegar + Mapa (PDF)
                   </button>
 
                   <button

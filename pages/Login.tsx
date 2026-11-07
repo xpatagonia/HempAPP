@@ -15,6 +15,7 @@ import { downloadUnDiaDeSiembraProgramPDF } from "../src/services/eventProgramPd
 import {
   DEFAULT_FIELD_EVENTS,
   downloadEventAccreditationPassPDF,
+  captureEventRouteMapSnapshotDataUrl,
   svgElementToPngDataUrl
 } from "../src/services/eventsManagementService";
 import EventRouteMapPreview from "../components/EventRouteMapPreview";
@@ -204,8 +205,16 @@ export default function Login() {
 
     const timer = setTimeout(async () => {
       const svgEl = document.getElementById("accredited-pass-qr-svg");
-      const qrDataUrl = await svgElementToPngDataUrl(svgEl, 360);
-      downloadEventAccreditationPassPDF(activeEventForPass, accreditedPassUser, qrDataUrl);
+      const [qrDataUrl, mapSnapshotUrl] = await Promise.all([
+        svgElementToPngDataUrl(svgEl, 360),
+        captureEventRouteMapSnapshotDataUrl(activeEventForPass, "satellite")
+      ]);
+      downloadEventAccreditationPassPDF(
+        activeEventForPass,
+        accreditedPassUser,
+        qrDataUrl,
+        mapSnapshotUrl
+      );
       setAutoDownloadedTicket(code);
     }, 350);
 
@@ -909,13 +918,21 @@ export default function Login() {
                   type="button"
                   onClick={async () => {
                     const svgEl = document.getElementById("accredited-pass-qr-svg");
-                    const qrDataUrl = await svgElementToPngDataUrl(svgEl, 360);
-                    downloadEventAccreditationPassPDF(activeEventForPass, accreditedPassUser, qrDataUrl);
+                    const [qrDataUrl, mapSnapshotUrl] = await Promise.all([
+                      svgElementToPngDataUrl(svgEl, 360),
+                      captureEventRouteMapSnapshotDataUrl(activeEventForPass, "satellite")
+                    ]);
+                    downloadEventAccreditationPassPDF(
+                      activeEventForPass,
+                      accreditedPassUser,
+                      qrDataUrl,
+                      mapSnapshotUrl
+                    );
                   }}
                   className="w-full py-3.5 px-4 bg-[#006633] hover:bg-[#004d26] text-white rounded-xl font-black text-xs uppercase tracking-wider shadow-lg flex items-center justify-center gap-2 transition cursor-pointer"
                 >
                   <QrCode size={16} />
-                  <span>Descargar Credencial / Pase QR (PDF)</span>
+                  <span>Descargar Credencial QR + Mapa Cómo Llegar (PDF)</span>
                 </button>
 
                 <button

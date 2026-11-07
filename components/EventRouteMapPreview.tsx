@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Polyline, CircleMarker, Tooltip } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
@@ -9,12 +9,20 @@ import {
   Calendar,
   Compass,
   Phone,
-  ExternalLink
+  ExternalLink,
+  Camera,
+  FileText,
+  Download,
+  Loader2
 } from 'lucide-react';
 import { FieldEvent, User } from '../types';
 import {
   buildEventGpsNavigationLinks,
-  downloadEventCalendarICS
+  downloadEventCalendarICS,
+  captureEventRouteMapSnapshotDataUrl,
+  renderSyncEventMapSnapshotDataUrl,
+  downloadEventMapSnapshotPNG,
+  downloadEventHowToArriveGuidePDF
 } from '../src/services/eventsManagementService';
 
 interface EventRouteMapPreviewProps {
@@ -30,8 +38,38 @@ export default function EventRouteMapPreview({
 }: EventRouteMapPreviewProps) {
   const [copiedCoords, setCopiedCoords] = useState(false);
   const [mapMode, setMapMode] = useState<'satellite' | 'street'>('satellite');
+  const [capturedSnapshotUrl, setCapturedSnapshotUrl] = useState<string | undefined>(() =>
+    renderSyncEventMapSnapshotDataUrl(event)
+  );
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [showSnapshotPreview, setShowSnapshotPreview] = useState(!compact);
 
   const nav = buildEventGpsNavigationLinks(event);
+
+  useEffect(() => {
+    let active = true;
+    const syncPreview = renderSyncEventMapSnapshotDataUrl(event);
+    if (syncPreview) setCapturedSnapshotUrl(syncPreview);
+
+    captureEventRouteMapSnapshotDataUrl(event, mapMode).then(url => {
+      if (active && url) {
+        setCapturedSnapshotUrl(url);
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [
+    event.id,
+    event.venueName,
+    event.locality,
+    event.address,
+    event.routeInstructions,
+    nav.lat,
+    nav.lng,
+    mapMode
+  ]);
 
   const waypoints =
     event.routeWaypoints && event.routeWaypoints.length >= 2
@@ -62,6 +100,24 @@ export default function EventRouteMapPreview({
     setTimeout(() => setCopiedCoords(false), 2200);
   };
 
+  const handleDownloadMapPng = async () => {
+    setIsCapturing(true);
+    try {
+      await downloadEventMapSnapshotPNG(event, mapMode);
+    } finally {
+      setIsCapturing(false);
+    }
+  };
+
+  const handleDownloadHowToArrivePdf = async () => {
+    setIsCapturing(true);
+    try {
+      await downloadEventHowToArriveGuidePDF(event, attendee, capturedSnapshotUrl);
+    } finally {
+      setIsCapturing(false);
+    }
+  };
+
   const gatePhone = (event.gatekeeperPhone || '+5492804697193').replace(/[^0-9]/g, '');
   const whatsappGateUrl = `https://wa.me/${gatePhone}?text=${encodeURIComponent(
     `Hola Guardia de Evento HempC, soy ${
@@ -81,7 +137,7 @@ export default function EventRouteMapPreview({
           </div>
           <div>
             <span className="text-[10px] font-mono font-black uppercase tracking-wider text-[#006633] dark:text-emerald-400 block">
-              MAPA DE LOCACIÓN, RUTA DESTACADA Y GPS CELULAR
+              MAPA DE LOCACIÓN, CAPTURA DE RUTA E INSTRUCTIVO DE CÓMO LLEGAR
             </span>
             <h4 className="text-xs font-black uppercase text-slate-900 dark:text-white">
               {event.venueName || 'Establecimiento Oficial'} • {event.locality || 'VIRCH – Chubut'}
@@ -191,8 +247,8 @@ export default function EventRouteMapPreview({
         </MapContainer>
       </div>
 
-      {/* Coordenadas GPS y Ruta Destacada Paso a Paso */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl p-3 border border-slate-200 dark:border-slate-800 space-y-2">
+      {/* Coordenadas GPS e Instructivo Paso a Paso de Cómo Llegar */}
+      <div className="bg-white dark:bg-slate-900 rounded-xl p-3.5 border border-slate-200 dark:border-slate-800 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <span className="text-[9px] font-mono uppercase text-slate-400 block">
@@ -204,34 +260,115 @@ export default function EventRouteMapPreview({
             <span className="font-mono text-[10px] text-slate-500 ml-2">({nav.dmsLabel})</span>
           </div>
 
-          <button
-            type="button"
-            onClick={handleCopyCoords}
-            className="px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 text-[10px] font-black uppercase flex items-center gap-1 cursor-pointer"
-          >
-            {copiedCoords ? (
-              <>
-                <Check size={12} className="text-emerald-600" />
-                <span>GPS Copiado</span>
-              </>
-            ) : (
-              <>
-                <Copy size={12} />
-                <span>Copiar Coordenadas</span>
-              </>
-            )}
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setShowSnapshotPreview(v => !v)}
+              className="px-2.5 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 text-[#006633] dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-[10px] font-black uppercase flex items-center gap-1 cursor-pointer"
+            >
+              <Camera size={12} />
+              <span>{showSnapshotPreview ? 'Ocultar Captura' : 'Ver Captura Mapa'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleCopyCoords}
+              className="px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 text-[10px] font-black uppercase flex items-center gap-1 cursor-pointer"
+            >
+              {copiedCoords ? (
+                <>
+                  <Check size={12} className="text-emerald-600" />
+                  <span>GPS Copiado</span>
+                </>
+              ) : (
+                <>
+                  <Copy size={12} />
+                  <span>Copiar GPS</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
-        <div className="text-[11px] text-slate-700 dark:text-slate-300 leading-relaxed border-t border-slate-100 dark:border-slate-800 pt-2">
-          <strong className="text-[#006633] dark:text-emerald-400 uppercase text-[10px] block mb-0.5">
-            Ruta Destacada de Acceso ({nav.address}):
-          </strong>
-          {nav.routeInstructions}
+        {/* Vista Previa de la Captura Cartográfica Oficial que se adjunta al Instructivo */}
+        {showSnapshotPreview && capturedSnapshotUrl && (
+          <div className="rounded-xl overflow-hidden border-2 border-[#006633]/50 bg-slate-950 space-y-2 p-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+              <span className="text-[10px] font-mono font-black uppercase text-[#DDDB00] flex items-center gap-1.5">
+                <Camera size={12} />
+                <span>Captura Oficial del Mapa Incorporada al Instructivo de Cómo Llegar</span>
+              </span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  disabled={isCapturing}
+                  onClick={handleDownloadMapPng}
+                  className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-bold uppercase flex items-center gap-1 cursor-pointer"
+                >
+                  <Download size={11} />
+                  <span>Guardar PNG</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={isCapturing}
+                  onClick={handleDownloadHowToArrivePdf}
+                  className="px-2.5 py-1 rounded-lg bg-[#DDDB00] hover:bg-yellow-300 text-[#0c2d1e] text-[10px] font-black uppercase flex items-center gap-1 cursor-pointer"
+                >
+                  {isCapturing ? <Loader2 size={11} className="animate-spin" /> : <FileText size={11} />}
+                  <span>Instructivo PDF</span>
+                </button>
+              </div>
+            </div>
+            <img
+              src={capturedSnapshotUrl}
+              alt={`Captura del mapa de cómo llegar a ${event.venueName || 'la sede'}`}
+              className="w-full h-auto rounded-lg border border-slate-800 block"
+            />
+          </div>
+        )}
+
+        {/* Instructivo Paso a Paso de Cómo Llegar (3 Tramos Viales) */}
+        <div className="border-t border-slate-100 dark:border-slate-800 pt-2.5 space-y-2">
+          <div className="text-[10px] font-mono font-black uppercase tracking-wider text-[#006633] dark:text-emerald-400">
+            INSTRUCTIVO VIAL PASO A PASO DE CÓMO LLEGAR ({nav.address}):
+          </div>
+          <div className="grid grid-cols-1 gap-1.5">
+            {nav.routeSteps.map(step => (
+              <div
+                key={step.stepNumber}
+                className="flex items-start gap-2.5 p-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/70 text-[11px]"
+              >
+                <span
+                  className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black text-white shrink-0 mt-0.5 ${
+                    step.stepNumber === 3
+                      ? 'bg-[#006633]'
+                      : step.stepNumber === 1
+                        ? 'bg-sky-600'
+                        : 'bg-amber-600'
+                  }`}
+                >
+                  {step.stepNumber}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center justify-between gap-1">
+                    <strong className="text-slate-900 dark:text-white font-black text-[11px]">
+                      {step.title}
+                    </strong>
+                    <span className="font-mono text-[10px] font-bold text-[#006633] dark:text-emerald-400">
+                      GPS: {step.coordinatesLabel}
+                    </span>
+                  </div>
+                  <p className="text-slate-600 dark:text-slate-300 text-[11px] leading-snug mt-0.5">
+                    {step.description}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* Botonera Directa para Vincular el GPS del Celular + Herramientas de Viaje */}
+      {/* Botonera Directa para Vincular el GPS del Celular + Descargar Instructivo con Captura de Mapa */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <a
           href={nav.googleMapsDirectionsUrl}
@@ -254,6 +391,26 @@ export default function EventRouteMapPreview({
           <span>Iniciar Ruta en Waze GPS</span>
           <ExternalLink size={11} />
         </a>
+
+        <button
+          type="button"
+          disabled={isCapturing}
+          onClick={handleDownloadHowToArrivePdf}
+          className="py-2.5 px-3 rounded-xl bg-[#006633] hover:bg-[#004d26] text-white font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm cursor-pointer transition"
+        >
+          {isCapturing ? <Loader2 size={13} className="animate-spin" /> : <FileText size={13} />}
+          <span>Descargar Instructivo Cómo Llegar + Mapa (PDF)</span>
+        </button>
+
+        <button
+          type="button"
+          disabled={isCapturing}
+          onClick={handleDownloadMapPng}
+          className="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-[#DDDB00] font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm cursor-pointer transition"
+        >
+          <Camera size={13} />
+          <span>Descargar Captura del Mapa (PNG)</span>
+        </button>
 
         {!compact && (
           <>

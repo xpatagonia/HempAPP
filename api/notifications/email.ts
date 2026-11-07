@@ -538,6 +538,10 @@ function buildEventAccreditationApprovedHtml(req: EmailNotificationPayload): str
     googleMapsGpsUrl
   )}`;
 
+  const staticMapImageUrl = `https://static-maps.yandex.ru/1.x/?ll=${lng.toFixed(6)},${lat.toFixed(
+    6
+  )}&z=14&l=sat,skl&size=650,320&pt=${lng.toFixed(6)},${lat.toFixed(6)},pm2gnl`;
+
   return `
   <!DOCTYPE html>
   <html>
@@ -566,7 +570,7 @@ function buildEventAccreditationApprovedHtml(req: EmailNotificationPayload): str
       <div class="content">
         <p style="font-size: 15px; color: #0f172a; margin-top: 0;">Hola <strong>${toName}</strong>,</p>
         <p style="font-size: 13px; color: #475569;">
-          La Administración Central de <strong>HempC</strong> aprobó tu acreditación presencial para asistir a <strong>${eventName}</strong> (${eventDate}). A continuación encontrás tu <strong>Credencial Oficial con Código QR, los datos de tu registro, el Mapa con la Ruta Destacada y la conexión directa al GPS de tu celular</strong>:
+          La Administración Central de <strong>HempC</strong> aprobó tu acreditación presencial para asistir a <strong>${eventName}</strong> (${eventDate}). A continuación encontrás tu <strong>Credencial Oficial con Código QR, la Captura del Mapa Satelital/Vial, el Instructivo Paso a Paso de Cómo Llegar y la conexión directa al GPS de tu celular</strong>:
         </p>
 
         <!-- CREDENCIAL OFICIAL CON DATOS DEL REGISTRO Y QR ESCANEABLE -->
@@ -619,35 +623,48 @@ function buildEventAccreditationApprovedHtml(req: EmailNotificationPayload): str
         </div>
 
         <div style="text-align: center; margin: 20px 0 24px 0;">
-          <a href="${passDownloadUrl}" class="btn">Descargar Mi Credencial / Pase QR Oficial (PDF)</a>
+          <a href="${passDownloadUrl}" class="btn">Descargar Credencial QR + Captura de Mapa e Instructivo (PDF)</a>
           <div style="font-size: 11px; color: #64748b; margin-top: 6px;">
-            Al abrir este enlace también verás el <strong>Mapa Satelital Interactivo con la Ruta Destacada</strong> y se descargará tu Credencial en PDF.
+            Al abrir este enlace verás el <strong>Mapa Satelital Interactivo con la Ruta Destacada</strong> y se descargará tu Credencial Oficial de 2 páginas con la <strong>Captura Cartográfica del Mapa y el Instructivo de Cómo Llegar en PDF</strong>.
           </div>
         </div>
 
-        <!-- BLOQUE DE UBICACIÓN, MAPA DE RUTA DESTACADA Y CONEXIÓN A GPS DEL CELULAR -->
+        <!-- BLOQUE DE UBICACIÓN, CAPTURA DEL MAPA, INSTRUCTIVO DE CÓMO LLEGAR Y GPS CELULAR -->
         <div style="background: #f0fdf4; border: 2px solid #006633; border-radius: 18px; padding: 20px; margin: 22px 0;">
-          <div style="font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 1.2px; color: #006633; margin-bottom: 8px;">
-            📍 UBICACIÓN DEL ESTABLECIMIENTO, RUTA DESTACADA Y GPS DEL CELULAR
+          <div style="font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 1.2px; color: #006633; margin-bottom: 10px;">
+            🗺️ CAPTURA DEL MAPA, INSTRUCTIVO DE CÓMO LLEGAR Y CONEXIÓN AL GPS DEL CELULAR
           </div>
 
+          <!-- CAPTURA SATELITAL / VIAL ESTÁTICA CON ENLACE DIRECTO AL GPS -->
+          <div style="background: #0c2d1e; border-radius: 14px; overflow: hidden; border: 2px solid #006633; margin-bottom: 14px;">
+            <div style="padding: 10px 14px; background: #0c2d1e; color: #DDDB00; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px;">
+              📸 CAPTURA DE UBICACIÓN SATELITAL Y RED VIAL • ${venueName}
+            </div>
+            <a href="${googleMapsGpsUrl}" target="_blank" style="display: block; text-decoration: none;">
+              <img src="${staticMapImageUrl}" alt="Captura del Mapa de Cómo Llegar - ${venueName}" width="100%" style="display: block; width: 100%; max-height: 270px; object-fit: cover; border-top: 1px solid #006633; border-bottom: 1px solid #006633;" />
+            </a>
+            <div style="padding: 10px 14px; background: #0f291e; color: #ffffff; font-family: monospace; font-size: 11px;">
+              <strong style="color: #DDDB00;">🧭 COORDENADAS OFICIALES GPS:</strong> ${gpsDecimal} &nbsp;|&nbsp; <strong>GMS:</strong> ${gpsDms}
+            </div>
+          </div>
+
+          <!-- INSTRUCTIVO PASO A PASO DE CÓMO LLEGAR -->
           <div style="background: #0f291e; color: #ffffff; border-radius: 14px; padding: 16px; margin-bottom: 14px;">
-            <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #6ee7b7; font-weight: 800;">
-              ESQUEMA VIAL • RUTA DESTACADA HASTA TRANQUERA DE ACREDITACIÓN
+            <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #6ee7b7; font-weight: 800; margin-bottom: 8px;">
+              📋 INSTRUCTIVO VIAL PASO A PASO • RUTA DESTACADA HASTA TRANQUERA
             </div>
-            <div style="margin: 10px 0; padding: 10px; background: rgba(255,255,255,0.06); border-left: 3px solid #DDDB00; border-radius: 8px; font-size: 12px;">
-              <div style="color: #bae6fd; font-weight: 700;">1️⃣ Vía Principal / Ruta de Aproximación (${locality})</div>
-              <div style="color: #fde68a; font-weight: 700; margin: 4px 0;">2️⃣ Desvío Señalizado → ${address}</div>
-              <div style="color: #6ee7b7; font-weight: 900;">3️⃣ Puesto de Control QR → ${venueName}</div>
+            <div style="margin: 8px 0; padding: 10px 12px; background: rgba(255,255,255,0.06); border-left: 3px solid #38bdf8; border-radius: 8px; font-size: 12px;">
+              <div style="color: #bae6fd; font-weight: 800;">1️⃣ Tramo 1 — Aproximación por Vía Principal (${locality})</div>
+              <div style="color: #e2e8f0; font-size: 11px; margin-top: 2px;">Tomar la ruta troncal hacia ${locality} siguiendo la señalización vial hacia ${address}.</div>
             </div>
-            <div style="font-family: monospace; font-size: 12px; color: #DDDB00; font-weight: 900;">
-              🧭 COORDENADAS GPS: ${gpsDecimal} &nbsp;|&nbsp; GMS: ${gpsDms}
+            <div style="margin: 8px 0; padding: 10px 12px; background: rgba(255,255,255,0.06); border-left: 3px solid #DDDB00; border-radius: 8px; font-size: 12px;">
+              <div style="color: #fde68a; font-weight: 800;">2️⃣ Tramo 2 — Ruta Destacada y Desvío Señalizado (${address})</div>
+              <div style="color: #ffffff; font-size: 11px; margin-top: 2px;">${routeInstructions}</div>
             </div>
-          </div>
-
-          <div style="font-size: 12px; color: #1e293b; margin-bottom: 14px; background: #ffffff; padding: 12px 14px; border-radius: 12px; border: 1px solid #bbf7d0;">
-            <strong style="color: #006633; display: block; margin-bottom: 4px;">Indicaciones de la Ruta Destacada:</strong>
-            ${routeInstructions}
+            <div style="margin: 8px 0 0 0; padding: 10px 12px; background: rgba(16,185,129,0.14); border-left: 3px solid #10b981; border-radius: 8px; font-size: 12px;">
+              <div style="color: #6ee7b7; font-weight: 900;">3️⃣ Tramo 3 — Puesto de Control QR en Tranquera (${venueName})</div>
+              <div style="color: #ecfdf5; font-size: 11px; margin-top: 2px;">Arribo al punto GPS <code>${gpsDecimal}</code>. Presentar Pase QR (${ticketCode}) y DNI físico en recepción.</div>
+            </div>
           </div>
 
           <div style="text-align: center; margin-top: 14px;">
