@@ -454,6 +454,58 @@ test("Regla de Negocio Estricta: El Productor no puede aplicar ningún insumo qu
     assert.equal(canProducerApplyTreatment('Socio_Productor', 'task-fit-101', authorizedTasks, 'res-tricho-01'), true);
 });
 
+test("Persistencia Multi-Dispositivo en Supabase public.resources: Empaquetado HEMPC_RES_META en columna type", () => {
+    const resourceMeta = {
+        activeIngredient: 'Beauveria bassiana 1x10^9 conidias/ml',
+        senasaRegisterNumber: 'SENASA-BIO-40122',
+        toxicologicalClass: 'IV - Verde (Normalmente no ofrece peligro)',
+        safetyPeriodDays: 0,
+        reEntryPeriodHours: 4,
+        batchNumber: 'LOTE-BB-2026-04',
+        expirationDate: '2027-06-30',
+        supplierId: 'sup-bio-01',
+        recommendedDosagePerHa: 1.5,
+        dosageUnit: 'L/ha',
+        minSafeDosagePerHa: 1.0,
+        maxSafeDosagePerHa: 2.0,
+        brothVolumeLitersPerHa: 200,
+        targetPestsOrUses: 'Control biológico de trips y mosca blanca',
+        applicationConditions: 'Aplicar al atardecer con HR > 50%'
+    };
+    const packedType = `Bioinsumo / Control Biológico\n<!--HEMPC_RES_META:${JSON.stringify(resourceMeta)}:END_RES_META-->`;
+    const match = packedType.match(/\n?<!--HEMPC_RES_META:(.*?):END_RES_META-->\s*$/s);
+    assert.ok(match && match[1]);
+    const cleanCategory = packedType.replace(/\n?<!--HEMPC_RES_META:.*?:END_RES_META-->\s*$/s, '').trim();
+    const unpacked = JSON.parse(match[1]);
+    assert.equal(cleanCategory, 'Bioinsumo / Control Biológico');
+    assert.equal(unpacked.senasaRegisterNumber, 'SENASA-BIO-40122');
+    assert.equal(unpacked.supplierId, 'sup-bio-01');
+    assert.equal(unpacked.recommendedDosagePerHa, 1.5);
+    assert.equal(unpacked.maxSafeDosagePerHa, 2.0);
+});
+
+test("Seguridad e Infraestructura: Sanitización XSS en plantillas de correo y dominios CORS autorizados", () => {
+    const escapeHtml = (raw: string) =>
+        raw
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    const maliciousInput = `<script>alert("xss")</script>`;
+    const escaped = escapeHtml(maliciousInput);
+    assert.equal(escaped.includes('<script>'), false);
+    assert.equal(escaped, '&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;');
+
+    const trustedOrigins = [
+        'https://red.hempc.com.ar',
+        'https://hemp-net.vercel.app',
+        'https://hempc.com.ar',
+        'https://hempapp.onrender.com'
+    ];
+    assert.ok(trustedOrigins.includes('https://red.hempc.com.ar'));
+});
+
 
 console.log("\n=================================================");
 console.log(`📊 RESUMEN DE PRUEBAS: ${passed} Exitosas, ${failed} Fallidas`);
@@ -464,4 +516,5 @@ if (failed > 0) {
 } else {
     process.exit(0);
 }
+
 

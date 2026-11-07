@@ -22,17 +22,38 @@ interface EmailNotificationPayload {
   extra_data?: Record<string, any>;
 }
 
+function escapeHtml(raw?: any): string {
+  if (raw === null || raw === undefined) return '';
+  return String(raw)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function sanitizeActionUrl(rawUrl?: string, fallback: string = 'https://red.hempc.com.ar'): string {
+  if (!rawUrl || typeof rawUrl !== 'string') return fallback;
+  const trimmed = rawUrl.trim();
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed.replace(/"/g, '%22').replace(/</g, '%3C').replace(/>/g, '%3E');
+  }
+  return fallback;
+}
+
 function buildOperatorInvitationHtml(req: EmailNotificationPayload): string {
-  const roleLabel = req.role_name || 'Operario de Campo';
-  const structure = req.structure_name || 'Establecimiento Asociado';
-  const field = req.field_name || 'Campo Asignado';
-  const actionUrl = req.action_url || 'https://hemp-net.vercel.app';
+  const roleLabel = escapeHtml(req.role_name || 'Operario de Campo');
+  const structure = escapeHtml(req.structure_name || 'Establecimiento Asociado');
+  const field = escapeHtml(req.field_name || 'Campo Asignado');
+  const toName = escapeHtml(req.to_name);
+  const toEmail = escapeHtml(req.to_email);
+  const actionUrl = sanitizeActionUrl(req.action_url, 'https://red.hempc.com.ar');
   const passwordBlock = req.temp_password
     ? `
       <div style="background-color: #f1f5f9; border-radius: 12px; padding: 14px; margin: 18px 0; border-left: 4px solid #10b981;">
         <p style="margin: 0; font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: bold; letter-spacing: 1px;">Credenciales de Acceso</p>
-        <p style="margin: 6px 0 0 0; font-size: 14px; color: #0f172a; font-family: monospace;"><strong>Usuario:</strong> ${req.to_email}</p>
-        <p style="margin: 4px 0 0 0; font-size: 14px; color: #0f172a; font-family: monospace;"><strong>Contraseña provisoria:</strong> <span style="background: #e2e8f0; padding: 2px 6px; border-radius: 4px;">${req.temp_password}</span></p>
+        <p style="margin: 6px 0 0 0; font-size: 14px; color: #0f172a; font-family: monospace;"><strong>Usuario:</strong> ${toEmail}</p>
+        <p style="margin: 4px 0 0 0; font-size: 14px; color: #0f172a; font-family: monospace;"><strong>Contraseña provisoria:</strong> <span style="background: #e2e8f0; padding: 2px 6px; border-radius: 4px;">${escapeHtml(req.temp_password)}</span></p>
       </div>
     `
     : '';
@@ -60,7 +81,7 @@ function buildOperatorInvitationHtml(req: EmailNotificationPayload): string {
         <h1 style="margin: 6px 0 0 0; font-size: 22px; font-weight: 800;">Bienvenido al Equipo de Campo</h1>
       </div>
       <div class="content">
-        <p style="font-size: 15px; color: #0f172a;">Hola <strong>${req.to_name}</strong>,</p>
+        <p style="font-size: 15px; color: #0f172a;">Hola <strong>${toName}</strong>,</p>
         <p>Has sido dado de alta como miembro operativo de la estructura productiva <strong>${structure}</strong> dentro de la plataforma cooperativa HempC.</p>
         <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px; padding: 18px; margin: 20px 0;">
           <p style="margin: 0 0 8px 0; font-size: 13px;"><strong>Rol asignado:</strong> <span class="badge">${roleLabel}</span></p>
@@ -84,10 +105,12 @@ function buildOperatorInvitationHtml(req: EmailNotificationPayload): string {
 }
 
 function buildUserWelcomeHtml(req: EmailNotificationPayload): string {
-  const roleLabel = req.role_name || 'Miembro del Equipo';
-  const structure = req.structure_name || 'Red Cooperativa Central';
-  const tempPwd = req.temp_password || 'Configurada por el administrador';
-  const actionUrl = req.action_url || 'https://hemp-net.vercel.app';
+  const roleLabel = escapeHtml(req.role_name || 'Miembro del Equipo');
+  const structure = escapeHtml(req.structure_name || 'Red Cooperativa Central');
+  const tempPwd = escapeHtml(req.temp_password || 'Configurada por el administrador');
+  const toName = escapeHtml(req.to_name);
+  const toEmail = escapeHtml(req.to_email);
+  const actionUrl = sanitizeActionUrl(req.action_url, 'https://red.hempc.com.ar');
   return `
   <!DOCTYPE html>
   <html>
@@ -114,12 +137,12 @@ function buildUserWelcomeHtml(req: EmailNotificationPayload): string {
         <h1 style="margin: 6px 0 0 0; font-size: 22px; font-weight: 800;">Bienvenido a HempC Nucleus</h1>
       </div>
       <div class="content">
-        <p style="font-size: 15px; color: #0f172a;">Hola <strong>${req.to_name}</strong>,</p>
+        <p style="font-size: 15px; color: #0f172a;">Hola <strong>${toName}</strong>,</p>
         <p>La administración cooperativa ha creado tu perfil de acceso para la gestión de equipos, trazabilidad y labores en <strong>HempC Nucleus</strong>.</p>
         <div class="creds-box">
           <p style="margin: 0 0 8px 0; font-size: 13px;"><strong>Rol / Jerarquía:</strong> <span class="badge">${roleLabel}</span></p>
           <p style="margin: 0 0 8px 0; font-size: 13px;"><strong>Entidad Asignada:</strong> ${structure}</p>
-          <p style="margin: 0; font-size: 13px;"><strong>Usuario de Acceso:</strong> <code style="font-family: monospace; color: #0f172a;">${req.to_email}</code></p>
+          <p style="margin: 0; font-size: 13px;"><strong>Usuario de Acceso:</strong> <code style="font-family: monospace; color: #0f172a;">${toEmail}</code></p>
         </div>
         <div class="pwd-box">
           <span style="font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; color: #065f46; display: block; margin-bottom: 6px;">Contraseña Inicial Asignada</span>
@@ -139,14 +162,14 @@ function buildUserWelcomeHtml(req: EmailNotificationPayload): string {
 }
 
 function buildAgronomicAlertHtml(req: EmailNotificationPayload): string {
-  const title = req.alert_title || 'Alerta Agronómica Crítica';
-  const plot = req.plot_name || 'Parcela en Seguimiento';
-  const details = req.alert_details || 'Se ha detectado una desviación en los sensores de telemetría o condiciones climáticas.';
-  const actionUrl = req.action_url || 'https://hemp-net.vercel.app/#/agro40';
+  const title = escapeHtml(req.alert_title || 'Alerta Agronómica Crítica');
+  const plot = escapeHtml(req.plot_name || 'Parcela en Seguimiento');
+  const details = escapeHtml(req.alert_details || 'Se ha detectado una desviación en los sensores de telemetría o condiciones climáticas.');
+  const actionUrl = sanitizeActionUrl(req.action_url, 'https://red.hempc.com.ar/#/agro40');
   const extra = req.extra_data || {};
-  const severity = String(extra.severity || 'Crítica');
-  const isCritical = ['Crítica', 'Alto', 'Extremo'].includes(severity);
-  const isWarning = ['Advertencia', 'Moderado'].includes(severity);
+  const severity = escapeHtml(String(extra.severity || 'Crítica'));
+  const isCritical = ['Crítica', 'Alto', 'Extremo'].includes(String(extra.severity || 'Crítica'));
+  const isWarning = ['Advertencia', 'Moderado'].includes(String(extra.severity || 'Crítica'));
 
   const badgeBg = isCritical ? '#991b1b' : isWarning ? '#b45309' : '#1e40af';
   const headerColor = isCritical ? '#e11d48' : isWarning ? '#f59e0b' : '#3b82f6';
@@ -221,8 +244,9 @@ function buildAgronomicAlertHtml(req: EmailNotificationPayload): string {
 }
 
 function buildPasswordResetHtml(req: EmailNotificationPayload): string {
-  const tempPwd = req.temp_password || 'Consulte a su administrador';
-  const actionUrl = req.action_url || 'https://hemp-net.vercel.app';
+  const tempPwd = escapeHtml(req.temp_password || 'Consulte a su administrador');
+  const toName = escapeHtml(req.to_name);
+  const actionUrl = sanitizeActionUrl(req.action_url, 'https://red.hempc.com.ar');
   return `
   <!DOCTYPE html>
   <html>
@@ -247,7 +271,7 @@ function buildPasswordResetHtml(req: EmailNotificationPayload): string {
         <h1 style="margin: 6px 0 0 0; font-size: 22px; font-weight: 800;">Restablecimiento de Contraseña</h1>
       </div>
       <div class="content">
-        <p style="font-size: 15px; color: #0f172a;">Hola <strong>${req.to_name}</strong>,</p>
+        <p style="font-size: 15px; color: #0f172a;">Hola <strong>${toName}</strong>,</p>
         <p>Hemos recibido una solicitud para recuperar tus credenciales de acceso a la plataforma <strong>HempC Nucleus</strong>.</p>
         <div class="pwd-box">
           <span style="font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; color: #065f46; display: block; margin-bottom: 6px;">Tu Contraseña Provisoria de Ingreso</span>
@@ -267,15 +291,15 @@ function buildPasswordResetHtml(req: EmailNotificationPayload): string {
 }
 
 function buildLaborAssignedHtml(req: EmailNotificationPayload): string {
-  const taskTitle = req.task_title || req.alert_title || 'Orden de Labor Agrícola';
-  const plot = req.plot_name || 'Parcela Asignada';
-  const details = req.alert_details || 'Se ha emitido una nueva orden de trabajo técnico en campo.';
-  const actionUrl = req.action_url || 'https://hemp-net.vercel.app/#/tasks';
+  const taskTitle = escapeHtml(req.task_title || req.alert_title || 'Orden de Labor Agrícola');
+  const plot = escapeHtml(req.plot_name || 'Parcela Asignada');
+  const details = escapeHtml(req.alert_details || 'Se ha emitido una nueva orden de trabajo técnico en campo.');
+  const actionUrl = sanitizeActionUrl(req.action_url, 'https://red.hempc.com.ar/#/tasks');
   const extra = req.extra_data || {};
-  const dueDate = extra.due_date || 'Programada';
-  const priority = extra.priority || 'Alta';
-  const machinery = extra.machinery || 'Maquinaria Agrícola';
-  const operator = extra.operator || req.to_name;
+  const dueDate = escapeHtml(extra.due_date || 'Programada');
+  const priority = escapeHtml(extra.priority || 'Alta');
+  const machinery = escapeHtml(extra.machinery || 'Maquinaria Agrícola');
+  const operator = escapeHtml(extra.operator || req.to_name);
 
   return `
   <!DOCTYPE html>

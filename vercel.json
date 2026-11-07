@@ -4,6 +4,15 @@
   ],
   "headers": [
     {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "X-XSS-Protection", "value": "1; mode=block" },
+        { "key": "Permissions-Policy", "value": "camera=(self), geolocation=(self), microphone=()" }
+      ]
+    },
+    {
       "source": "/index.html",
       "headers": [
         { "key": "Cache-Control", "value": "private, no-cache, no-store, must-revalidate, max-age=0, s-maxage=0" },

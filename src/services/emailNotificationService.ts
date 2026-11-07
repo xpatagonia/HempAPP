@@ -132,10 +132,27 @@ async function postEmailViaVercelResend(payload: Record<string, any>): Promise<a
       return await vercelRes.json();
     }
   } catch (e) {
-    // Si se ejecuta en entorno local sin funciones de Vercel, usar el relay hacia https://hemp-net.vercel.app
+    // Si se ejecuta en entorno local sin funciones de Vercel, usar el relay hacia red.hempc.com.ar
   }
 
-  // 2. Respaldo directo hacia el endpoint oficial de producción en Vercel
+  // 2. Respaldo hacia dominio oficial de producción (https://red.hempc.com.ar)
+  try {
+    const redRes = await fetch('https://red.hempc.com.ar/api/notifications/email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+    if (redRes.ok) {
+      return await redRes.json();
+    }
+  } catch (e) {
+    // Fallback secundario a hemp-net.vercel.app
+  }
+
+  // 3. Respaldo secundario en Vercel
   const prodRes = await fetch('https://hemp-net.vercel.app/api/notifications/email', {
     method: 'POST',
     headers: {

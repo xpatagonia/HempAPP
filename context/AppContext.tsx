@@ -1537,6 +1537,55 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         return r.type === 'Fertilizante' ? 'Fertilizante Edáfico' : 'Bioestimulante';
     };
 
+    const RES_META_MARKER_START = '<!--HEMPC_RES_META:';
+    const RES_META_MARKER_END = ':END_RES_META-->';
+
+    const unpackResourceMetaFromType = (rawType?: string | null): { cleanType: Resource['type']; parsedMeta: Partial<Resource> } => {
+        const str = String(rawType || 'Fertilizante');
+        const sIdx = str.indexOf(RES_META_MARKER_START);
+        const eIdx = str.indexOf(RES_META_MARKER_END);
+        if (sIdx !== -1 && eIdx !== -1 && eIdx > sIdx) {
+            const cleanType = (str.slice(0, sIdx).trim() || 'Fertilizante') as Resource['type'];
+            const jsonPart = str.slice(sIdx + RES_META_MARKER_START.length, eIdx);
+            try {
+                const parsedMeta = JSON.parse(jsonPart);
+                if (parsedMeta && typeof parsedMeta === 'object') {
+                    return { cleanType, parsedMeta };
+                }
+            } catch {}
+            return { cleanType, parsedMeta: {} };
+        }
+        return { cleanType: str.trim() as Resource['type'], parsedMeta: {} };
+    };
+
+    const packResourceMetaIntoType = (res: Resource): string => {
+        const { cleanType, parsedMeta: existingMeta } = unpackResourceMetaFromType(res.type);
+        if (cleanType === 'Labor') return cleanType;
+        const metaPayload: Record<string, any> = { ...existingMeta };
+        if (res.agroCategory !== undefined) metaPayload.agroCategory = res.agroCategory;
+        if (res.activeIngredient !== undefined) metaPayload.activeIngredient = res.activeIngredient;
+        if (res.senasaRegisterNumber !== undefined) metaPayload.senasaRegisterNumber = res.senasaRegisterNumber;
+        if (res.toxicologicalClass !== undefined) metaPayload.toxicologicalClass = res.toxicologicalClass;
+        if (res.recommendedDosagePerHa !== undefined) metaPayload.recommendedDosagePerHa = res.recommendedDosagePerHa;
+        if (res.dosageUnit !== undefined) metaPayload.dosageUnit = res.dosageUnit;
+        if (res.safetyPeriodDays !== undefined) metaPayload.safetyPeriodDays = res.safetyPeriodDays;
+        if (res.applicationMethod !== undefined) metaPayload.applicationMethod = res.applicationMethod;
+        if (res.supplierId !== undefined) metaPayload.supplierId = res.supplierId;
+        if (res.supplierName !== undefined) metaPayload.supplierName = res.supplierName;
+        if (res.manufacturer !== undefined) metaPayload.manufacturer = res.manufacturer;
+        if (res.batchNumber !== undefined) metaPayload.batchNumber = res.batchNumber;
+        if (res.targetPestOrDisease !== undefined) metaPayload.targetPestOrDisease = res.targetPestOrDisease;
+        if (res.expirationDate !== undefined) metaPayload.expirationDate = res.expirationDate;
+        if (res.notes !== undefined) metaPayload.notes = res.notes;
+
+        if (Object.keys(metaPayload).length === 0) return cleanType;
+        try {
+            return `${cleanType} ${RES_META_MARKER_START}${JSON.stringify(metaPayload)}${RES_META_MARKER_END}`;
+        } catch {
+            return cleanType;
+        }
+    };
+
     const healResources = (resList: Resource[]): Resource[] => {
         const deletedMap = getDeletedIdsMap();
         const deletedSet = new Set(deletedMap['resources'] || []);
@@ -1553,26 +1602,28 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         const healed: Resource[] = (resList || [])
             .filter(r => !deletedSet.has(String(r.id)) && !isPurgedDemoItem(r))
             .map((r: Resource) => {
+                const { cleanType, parsedMeta } = unpackResourceMetaFromType(r.type);
                 const demoMatch = demoById.get(String(r.id)) || (r.name ? demoByName.get(r.name.trim().toLowerCase()) : undefined);
                 const savedMeta = metaById[String(r.id)] || (r.name ? metaById[r.name.trim().toLowerCase()] : undefined) || {};
-                const base = { ...(demoMatch || {}), ...savedMeta, ...r };
+                const base: Resource = { ...(demoMatch || {}), ...parsedMeta, ...savedMeta, ...r, type: cleanType };
                 if (base.type === 'Labor') return base;
                 return {
                     ...base,
-                    agroCategory: r.agroCategory || savedMeta.agroCategory || demoMatch?.agroCategory || inferAgroCategory(base),
-                    activeIngredient: r.activeIngredient || savedMeta.activeIngredient || demoMatch?.activeIngredient || 'Insumo Agrícola Homologado GACP',
-                    senasaRegisterNumber: r.senasaRegisterNumber || savedMeta.senasaRegisterNumber || demoMatch?.senasaRegisterNumber || 'SENASA-OFICIAL',
-                    toxicologicalClass: r.toxicologicalClass || savedMeta.toxicologicalClass || demoMatch?.toxicologicalClass || 'Biológico / Orgánico Certificado',
-                    recommendedDosagePerHa: r.recommendedDosagePerHa ?? savedMeta.recommendedDosagePerHa ?? demoMatch?.recommendedDosagePerHa ?? 2,
-                    dosageUnit: r.dosageUnit || savedMeta.dosageUnit || demoMatch?.dosageUnit || (base.unit === 'kg' ? 'kg/ha' : 'L/ha'),
-                    safetyPeriodDays: r.safetyPeriodDays ?? savedMeta.safetyPeriodDays ?? demoMatch?.safetyPeriodDays ?? 0,
-                    applicationMethod: r.applicationMethod || savedMeta.applicationMethod || demoMatch?.applicationMethod || 'Fertirriego',
-                    supplierId: r.supplierId || savedMeta.supplierId || demoMatch?.supplierId || defaultActiveSup.id,
-                    supplierName: r.supplierName || savedMeta.supplierName || demoMatch?.supplierName || defaultActiveSup.name,
-                    manufacturer: r.manufacturer || savedMeta.manufacturer || demoMatch?.manufacturer || 'Laboratorio Homologado GACP',
-                    batchNumber: r.batchNumber || savedMeta.batchNumber || demoMatch?.batchNumber || 'LOT-SENASA-2026',
-                    targetPestOrDisease: r.targetPestOrDisease || savedMeta.targetPestOrDisease || demoMatch?.targetPestOrDisease,
-                    expirationDate: r.expirationDate || savedMeta.expirationDate || demoMatch?.expirationDate || '2027-12-31'
+                    agroCategory: r.agroCategory || parsedMeta.agroCategory || savedMeta.agroCategory || demoMatch?.agroCategory || inferAgroCategory(base),
+                    activeIngredient: r.activeIngredient || parsedMeta.activeIngredient || savedMeta.activeIngredient || demoMatch?.activeIngredient || 'Insumo Agrícola Homologado GACP',
+                    senasaRegisterNumber: r.senasaRegisterNumber || parsedMeta.senasaRegisterNumber || savedMeta.senasaRegisterNumber || demoMatch?.senasaRegisterNumber || 'SENASA-OFICIAL',
+                    toxicologicalClass: r.toxicologicalClass || parsedMeta.toxicologicalClass || savedMeta.toxicologicalClass || demoMatch?.toxicologicalClass || 'Biológico / Orgánico Certificado',
+                    recommendedDosagePerHa: r.recommendedDosagePerHa ?? parsedMeta.recommendedDosagePerHa ?? savedMeta.recommendedDosagePerHa ?? demoMatch?.recommendedDosagePerHa ?? 2,
+                    dosageUnit: r.dosageUnit || parsedMeta.dosageUnit || savedMeta.dosageUnit || demoMatch?.dosageUnit || (base.unit === 'kg' ? 'kg/ha' : 'L/ha'),
+                    safetyPeriodDays: r.safetyPeriodDays ?? parsedMeta.safetyPeriodDays ?? savedMeta.safetyPeriodDays ?? demoMatch?.safetyPeriodDays ?? 0,
+                    applicationMethod: r.applicationMethod || parsedMeta.applicationMethod || savedMeta.applicationMethod || demoMatch?.applicationMethod || 'Fertirriego',
+                    supplierId: r.supplierId || parsedMeta.supplierId || savedMeta.supplierId || demoMatch?.supplierId || defaultActiveSup.id,
+                    supplierName: r.supplierName || parsedMeta.supplierName || savedMeta.supplierName || demoMatch?.supplierName || defaultActiveSup.name,
+                    manufacturer: r.manufacturer || parsedMeta.manufacturer || savedMeta.manufacturer || demoMatch?.manufacturer || 'Laboratorio Homologado GACP',
+                    batchNumber: r.batchNumber || parsedMeta.batchNumber || savedMeta.batchNumber || demoMatch?.batchNumber || 'LOT-SENASA-2026',
+                    targetPestOrDisease: r.targetPestOrDisease || parsedMeta.targetPestOrDisease || savedMeta.targetPestOrDisease || demoMatch?.targetPestOrDisease,
+                    expirationDate: r.expirationDate || parsedMeta.expirationDate || savedMeta.expirationDate || demoMatch?.expirationDate || '2027-12-31',
+                    notes: r.notes || parsedMeta.notes || savedMeta.notes || demoMatch?.notes
                 };
             });
 
@@ -3027,6 +3078,8 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                         cleanItem.routeGoogleLink = packSeedMovementMetaIntoLink(cleanItem);
                     } else if (table === 'tasks') {
                         cleanItem.description = packTaskMetaIntoDescription(cleanItem as Task);
+                    } else if (table === 'resources') {
+                        cleanItem.type = packResourceMetaIntoType(cleanItem as Resource) as any;
                     }
                     const rawPayload = toSnakeCase(cleanItem);
 

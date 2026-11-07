@@ -17,9 +17,9 @@ services:
       - key: SUPABASE_KEY
         sync: false
       - key: CORS_ORIGINS
-        value: "https://*.vercel.app,https://hemp-net.vercel.app,http://localhost:3000,http://127.0.0.1:3000"
+        value: "https://red.hempc.com.ar,https://hempc.com.ar,https://*.vercel.app,https://hemp-net.vercel.app,http://localhost:3000,http://127.0.0.1:3000"
       - key: VERCEL_EMAIL_WEBHOOK_URL
-        value: "https://hemp-net.vercel.app/api/notifications/email"
+        value: "https://red.hempc.com.ar/api/notifications/email"
       - key: RESEND_FROM_EMAIL
         value: "HempC Nucleus <notificaciones@hempc.com.ar>"
       - key: ALERT_RECIPIENT_EMAIL

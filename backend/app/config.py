@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     # Email Notification Settings (Delegated to Vercel Serverless + Resend.com HTTPS)
     VERCEL_EMAIL_WEBHOOK_URL: str = os.getenv(
         "VERCEL_EMAIL_WEBHOOK_URL",
-        "https://hemp-net.vercel.app/api/notifications/email"
+        "https://red.hempc.com.ar/api/notifications/email"
     )
     RESEND_API_KEY: str = os.getenv("RESEND_API_KEY", "")
     RESEND_FROM_EMAIL: str = os.getenv("RESEND_FROM_EMAIL", "HempC Nucleus <notificaciones@hempc.com.ar>")
@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     CORS_ORIGINS: List[str] = [
         origin.strip() for origin in os.getenv(
             "CORS_ORIGINS",
-            "http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,https://hempc.com.ar,https://hemp-net.vercel.app,https://hempapp.onrender.com"
+            "http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,https://red.hempc.com.ar,https://hempc.com.ar,https://hemp-net.vercel.app,https://hempapp.onrender.com"
         ).split(",") if origin.strip()
     ]
 
