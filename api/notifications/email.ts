@@ -473,8 +473,42 @@ function buildEventAccreditationApprovedHtml(req: EmailNotificationPayload): str
   const extra = req.extra_data || {};
   const eventName = escapeHtml(extra.event_name || 'JORNADA OFICIAL: “UN DÍA DE SIEMBRA”');
   const eventDate = escapeHtml(extra.event_date || 'Sábado 21 de Noviembre • 08:30 a 15:30 hs');
-  const venueName = escapeHtml(extra.venue_name || 'Chacra Experimental PatagonianC LTDA');
+  const venueName = escapeHtml(extra.venue_name || 'Establecimiento La Regina — Chacra La Regina');
   const locality = escapeHtml(extra.locality || 'VIRCH – Trelew, Chubut');
+  const address = escapeHtml(
+    extra.address || 'Chacra 23 Parcela 13, Ruta Nacional 3 Km 1462 (Acceso Sur Trelew)'
+  );
+  const routeInstructions = escapeHtml(
+    extra.route_instructions ||
+      'Ruta Destacada: Desde Rotonda de Acceso Sur de Trelew (RN 3 y RP 7), tomar Ruta Nacional 3 hacia el Sur hasta el Km 1462. Girar a mano izquierda (Este) por callejón rural señalizado "Chacra 23 / PatagonianC" y avanzar 650 m hasta Tranquera Principal.'
+  );
+  const rawLat = Number(extra.lat);
+  const rawLng = Number(extra.lng);
+  const lat = !isNaN(rawLat) && rawLat >= -90 && rawLat <= 90 && rawLat !== 0 ? rawLat : -43.308362;
+  const lng = !isNaN(rawLng) && rawLng >= -180 && rawLng <= 180 && rawLng !== 0 ? rawLng : -65.289033;
+  const gpsDecimal = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+
+  const toDMS = (deg: number, isLat: boolean) => {
+    const dir = isLat ? (deg >= 0 ? 'N' : 'S') : deg >= 0 ? 'E' : 'W';
+    const abs = Math.abs(deg);
+    const d = Math.floor(abs);
+    const minFloat = (abs - d) * 60;
+    const m = Math.floor(minFloat);
+    const s = ((minFloat - m) * 60).toFixed(1);
+    return `${d}°${String(m).padStart(2, '0')}'${String(s).padStart(4, '0')}"${dir}`;
+  };
+  const gpsDms = `${toDMS(lat, true)} ${toDMS(lng, false)}`;
+
+  const googleMapsGpsUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`;
+  const wazeGpsUrl = `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`;
+  const googleCalendarUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(
+    extra.event_name || 'Jornada Oficial HempC'
+  )}&location=${encodeURIComponent(
+    `${extra.venue_name || 'Chacra La Regina'} (${gpsDecimal})`
+  )}&details=${encodeURIComponent(
+    `Ruta Destacada: ${extra.route_instructions || ''}\nCoordenadas GPS: ${gpsDecimal}\nAbrir GPS Celular: ${googleMapsGpsUrl}`
+  )}`;
+
   const ticketCode = escapeHtml(extra.ticket_code || 'SIEMBRA-21N-OFICIAL');
   const dniNumber = escapeHtml(extra.dni_number || 'Presentar DNI en puerta');
   const phone = escapeHtml(extra.phone || 'Registrado');
@@ -493,11 +527,15 @@ function buildEventAccreditationApprovedHtml(req: EmailNotificationPayload): str
       extra.phone || ''
     )}&org=${encodeURIComponent(req.structure_name || '')}&loc=${encodeURIComponent(
       extra.locality || ''
-    )}`
+    )}&lat=${encodeURIComponent(String(lat))}&lng=${encodeURIComponent(String(lng))}`
   );
 
   const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(
     passDownloadUrl
+  )}`;
+
+  const gpsQrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(
+    googleMapsGpsUrl
   )}`;
 
   return `
@@ -510,7 +548,9 @@ function buildEventAccreditationApprovedHtml(req: EmailNotificationPayload): str
       .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 20px; border: 1px solid #d1fae5; overflow: hidden; box-shadow: 0 8px 30px rgba(0,0,0,0.06); }
       .header { background: #0c2d1e; padding: 28px 30px; color: #ffffff; border-left: 5px solid #DDDB00; }
       .content { padding: 28px 30px; color: #334155; line-height: 1.6; }
-      .btn { display: inline-block; background: #006633; color: #ffffff !important; padding: 15px 30px; border-radius: 12px; font-weight: 900; text-decoration: none; font-size: 13px; text-transform: uppercase; letter-spacing: 0.8px; }
+      .btn { display: inline-block; background: #006633; color: #ffffff !important; padding: 14px 26px; border-radius: 12px; font-weight: 900; text-decoration: none; font-size: 12px; text-transform: uppercase; letter-spacing: 0.7px; }
+      .btn-gps { display: inline-block; background: #0284c7; color: #ffffff !important; padding: 12px 20px; border-radius: 10px; font-weight: 900; text-decoration: none; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin: 4px; }
+      .btn-waze { display: inline-block; background: #0f172a; color: #DDDB00 !important; padding: 12px 20px; border-radius: 10px; font-weight: 900; text-decoration: none; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin: 4px; }
       .footer { background: #f8fafc; padding: 20px 30px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #94a3b8; text-align: center; }
     </style>
   </head>
@@ -526,7 +566,7 @@ function buildEventAccreditationApprovedHtml(req: EmailNotificationPayload): str
       <div class="content">
         <p style="font-size: 15px; color: #0f172a; margin-top: 0;">Hola <strong>${toName}</strong>,</p>
         <p style="font-size: 13px; color: #475569;">
-          La Administración Central de <strong>HempC</strong> aprobó tu acreditación presencial para asistir a <strong>${eventName}</strong> (${eventDate}). A continuación encontrás tu <strong>Credencial Oficial con Código QR y los datos de tu registro</strong>:
+          La Administración Central de <strong>HempC</strong> aprobó tu acreditación presencial para asistir a <strong>${eventName}</strong> (${eventDate}). A continuación encontrás tu <strong>Credencial Oficial con Código QR, los datos de tu registro, el Mapa con la Ruta Destacada y la conexión directa al GPS de tu celular</strong>:
         </p>
 
         <!-- CREDENCIAL OFICIAL CON DATOS DEL REGISTRO Y QR ESCANEABLE -->
@@ -562,7 +602,7 @@ function buildEventAccreditationApprovedHtml(req: EmailNotificationPayload): str
               <td style="padding: 4px 0; color: #ecfdf5;">${organization} (${locality})</td>
             </tr>
             <tr>
-              <td style="padding: 4px 0; color: #a7f3d0; font-weight: 700;">Sede y Horario:</td>
+              <td style="padding: 4px 0; color: #a7f3d0; font-weight: 700;">Establecimiento / Sede:</td>
               <td style="padding: 4px 0; color: #DDDB00; font-weight: 700;">${venueName} • ${eventDate}</td>
             </tr>
             <tr>
@@ -578,12 +618,61 @@ function buildEventAccreditationApprovedHtml(req: EmailNotificationPayload): str
           </div>
         </div>
 
-        <p style="font-size: 12px; color: #475569; background: #f8fafc; border: 1px solid #e2e8f0; padding: 12px 16px; border-radius: 12px;">
-          <strong>Descargá tu Credencial Oficial en PDF:</strong> Hacé clic en el siguiente botón para abrir tu credencial personalizada con los datos de tu registro y <strong>descargar automáticamente tu Pase QR Oficial en PDF</strong> junto con el Programa de la Jornada:
-        </p>
-
-        <div style="text-align: center; margin: 26px 0 12px 0;">
+        <div style="text-align: center; margin: 20px 0 24px 0;">
           <a href="${passDownloadUrl}" class="btn">Descargar Mi Credencial / Pase QR Oficial (PDF)</a>
+          <div style="font-size: 11px; color: #64748b; margin-top: 6px;">
+            Al abrir este enlace también verás el <strong>Mapa Satelital Interactivo con la Ruta Destacada</strong> y se descargará tu Credencial en PDF.
+          </div>
+        </div>
+
+        <!-- BLOQUE DE UBICACIÓN, MAPA DE RUTA DESTACADA Y CONEXIÓN A GPS DEL CELULAR -->
+        <div style="background: #f0fdf4; border: 2px solid #006633; border-radius: 18px; padding: 20px; margin: 22px 0;">
+          <div style="font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 1.2px; color: #006633; margin-bottom: 8px;">
+            📍 UBICACIÓN DEL ESTABLECIMIENTO, RUTA DESTACADA Y GPS DEL CELULAR
+          </div>
+
+          <div style="background: #0f291e; color: #ffffff; border-radius: 14px; padding: 16px; margin-bottom: 14px;">
+            <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #6ee7b7; font-weight: 800;">
+              ESQUEMA VIAL • RUTA DESTACADA HASTA TRANQUERA DE ACREDITACIÓN
+            </div>
+            <div style="margin: 10px 0; padding: 10px; background: rgba(255,255,255,0.06); border-left: 3px solid #DDDB00; border-radius: 8px; font-size: 12px;">
+              <div style="color: #bae6fd; font-weight: 700;">1️⃣ Vía Principal / Ruta de Aproximación (${locality})</div>
+              <div style="color: #fde68a; font-weight: 700; margin: 4px 0;">2️⃣ Desvío Señalizado → ${address}</div>
+              <div style="color: #6ee7b7; font-weight: 900;">3️⃣ Puesto de Control QR → ${venueName}</div>
+            </div>
+            <div style="font-family: monospace; font-size: 12px; color: #DDDB00; font-weight: 900;">
+              🧭 COORDENADAS GPS: ${gpsDecimal} &nbsp;|&nbsp; GMS: ${gpsDms}
+            </div>
+          </div>
+
+          <div style="font-size: 12px; color: #1e293b; margin-bottom: 14px; background: #ffffff; padding: 12px 14px; border-radius: 12px; border: 1px solid #bbf7d0;">
+            <strong style="color: #006633; display: block; margin-bottom: 4px;">Indicaciones de la Ruta Destacada:</strong>
+            ${routeInstructions}
+          </div>
+
+          <div style="text-align: center; margin-top: 14px;">
+            <div style="font-size: 11px; font-weight: 800; color: #065f46; text-transform: uppercase; margin-bottom: 8px;">
+              Tocá desde tu celular para abrir la ruta guiada por voz hasta la tranquera:
+            </div>
+            <a href="${googleMapsGpsUrl}" class="btn-gps">🚗 Abrir Ruta en Google Maps (GPS Celular)</a>
+            <a href="${wazeGpsUrl}" class="btn-waze">🧭 Iniciar Navegación en Waze GPS</a>
+          </div>
+
+          <table style="width: 100%; margin-top: 14px; border-top: 1px dashed #86efac; padding-top: 12px;">
+            <tr>
+              <td style="width: 110px; text-align: center; background: #ffffff; padding: 8px; border-radius: 10px; border: 1px solid #bbf7d0;">
+                <img src="${gpsQrImageUrl}" alt="QR GPS Ruta" width="95" height="95" style="display: block; margin: 0 auto;" />
+                <div style="font-size: 9px; font-weight: 800; color: #006633; margin-top: 3px;">QR RUTA GPS</div>
+              </td>
+              <td style="padding-left: 14px; font-size: 11px; color: #334155;">
+                <strong>¿Estás viendo este correo en tu computadora?</strong><br/>
+                Apuntá con la cámara de tu teléfono al <strong>QR RUTA GPS</strong> de la izquierda para enviar las coordenadas exactas (<code>${gpsDecimal}</code>) directamente al navegador GPS de tu celular, o agendá el evento con recordatorio:
+                <div style="margin-top: 8px;">
+                  <a href="${googleCalendarUrl}" style="color: #006633; font-weight: 900; text-decoration: underline;">📅 Agendar Evento y Ubicación GPS en Google Calendar</a>
+                </div>
+              </td>
+            </tr>
+          </table>
         </div>
       </div>
       <div class="footer">

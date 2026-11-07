@@ -808,10 +808,15 @@ export async function sendRegistrationApprovedEmail(
 export interface SendEventAccreditationApprovedParams {
   toEmail: string;
   toName: string;
+  eventId?: string;
   eventName: string;
   eventDateLabel: string;
   venueName: string;
   locality: string;
+  address?: string;
+  lat?: number;
+  lng?: number;
+  routeInstructions?: string;
   ticketCode: string;
   dniNumber?: string;
   phone?: string;
@@ -821,7 +826,8 @@ export interface SendEventAccreditationApprovedParams {
 }
 
 /**
- * Envía el Pase Oficial con Código QR y descarga de Credencial PDF (con los datos del registro)
+ * Envía el Pase Oficial con Código QR, descarga de Credencial PDF (con los datos del registro),
+ * Mapa de Locación, Ruta Destacada, Coordenadas GPS y enlace directo al GPS del celular
  * cuando un Administrador aprueba la acreditación del asistente en el módulo EVENTOS,
  * SIN otorgar clave de acceso al sistema.
  */
@@ -831,6 +837,20 @@ export async function sendEventAccreditationApprovedEmail(
   const timestamp = new Date().toISOString();
   const cleanEmail = params.toEmail.trim();
   const cleanName = params.toName.trim();
+  const lat =
+    typeof params.lat === 'number' && !isNaN(params.lat) && params.lat !== 0
+      ? params.lat
+      : -43.308362;
+  const lng =
+    typeof params.lng === 'number' && !isNaN(params.lng) && params.lng !== 0
+      ? params.lng
+      : -65.289033;
+  const address =
+    params.address || 'Chacra 23 Parcela 13, Ruta Nacional 3 Km 1462 (Acceso Sur Trelew)';
+  const routeInstructions =
+    params.routeInstructions ||
+    'Desde Rotonda de Acceso Sur de Trelew (RN 3 y RP 7), tomar Ruta Nacional 3 hacia el Sur hasta el Km 1462. Girar a mano izquierda (Este) por callejón rural señalizado "Chacra 23 / PatagonianC" y avanzar 650 m hasta Tranquera Principal.';
+
   const defaultActionUrl =
     params.actionUrl ||
     `${window.location.origin}/#/login?pase_qr=${encodeURIComponent(
@@ -841,7 +861,9 @@ export async function sendEventAccreditationApprovedEmail(
       params.phone || ''
     )}&org=${encodeURIComponent(
       params.organizationName || 'Visitante Acreditado'
-    )}&loc=${encodeURIComponent(params.locality || 'VIRCH – Trelew, Chubut')}`;
+    )}&loc=${encodeURIComponent(params.locality || 'VIRCH – Trelew, Chubut')}&evtid=${encodeURIComponent(
+      params.eventId || ''
+    )}&lat=${encodeURIComponent(String(lat))}&lng=${encodeURIComponent(String(lng))}`;
 
   const payload = {
     to_email: cleanEmail,
@@ -851,10 +873,15 @@ export async function sendEventAccreditationApprovedEmail(
     structure_name: params.organizationName || 'Visitante Acreditado',
     action_url: defaultActionUrl,
     extra_data: {
+      event_id: params.eventId || '',
       event_name: params.eventName,
       event_date: params.eventDateLabel,
       venue_name: params.venueName,
       locality: params.locality,
+      address,
+      lat: String(lat),
+      lng: String(lng),
+      route_instructions: routeInstructions,
       ticket_code: params.ticketCode,
       dni_number: params.dniNumber || '',
       phone: params.phone || '',
@@ -868,7 +895,7 @@ export async function sendEventAccreditationApprovedEmail(
       success: Boolean(data.success !== false),
       message:
         data.message ||
-        `Credencial Oficial QR (${params.ticketCode}) y Programa PDF enviados a ${cleanEmail} (Sin acceso al sistema)`,
+        `Credencial Oficial QR (${params.ticketCode}), Mapa GPS y Ruta enviados a ${cleanEmail} (Sin acceso al sistema)`,
       sentFrom: data.sent_from || 'notificaciones@hempc.com.ar',
       sentTo: data.sent_to || cleanEmail,
       deliveredVia: data.delivered_via || 'vercel_resend',
@@ -881,7 +908,7 @@ export async function sendEventAccreditationApprovedEmail(
       toEmail: cleanEmail,
       toName: params.toName,
       type: 'operator_invitation',
-      subject: `✅ Acreditación Oficial Aprobada (${params.ticketCode}) • ${params.eventName}`,
+      subject: `✅ Acreditación Oficial Aprobada (${params.ticketCode}) • Mapa y GPS • ${params.eventName}`,
       roleName: 'Asistente Acreditado (Sin Acceso a Sistema)',
       structureName: params.organizationName || 'Visitante de Jornada',
       sentFrom: result.sentFrom,
@@ -893,7 +920,7 @@ export async function sendEventAccreditationApprovedEmail(
   } catch (err: any) {
     return {
       success: true,
-      message: `Credencial Oficial QR (${params.ticketCode}) registrada para ${cleanEmail}`,
+      message: `Credencial Oficial QR (${params.ticketCode}) y Mapa GPS registrados para ${cleanEmail}`,
       sentFrom: 'notificaciones@hempc.com.ar',
       sentTo: cleanEmail,
       deliveredVia: 'simulated_local',

@@ -17,12 +17,13 @@ import {
   downloadEventAccreditationPassPDF,
   svgElementToPngDataUrl
 } from "../src/services/eventsManagementService";
+import EventRouteMapPreview from "../components/EventRouteMapPreview";
 import {
   unpackUserMetaFromJobTitle,
   activateApprovedAccountPassword,
   evaluateUserLoginGate
 } from "../src/services/producerOnboardingWorkflow";
-import { User } from "../types";
+import { User, FieldEvent } from "../types";
 
 export default function Login() {
   const { currentUser, login, appName, appLogo, usersList, updateUser, addUser, fieldEvents } = useAppContext();
@@ -69,7 +70,35 @@ export default function Login() {
   } | null>(null);
 
   const currentUrl = typeof window !== "undefined" ? window.location.origin : "";
-  const activeEventForPass = (fieldEvents && fieldEvents[0]) || DEFAULT_FIELD_EVENTS[0];
+  const rootSearch = typeof window !== "undefined" ? window.location.search : "";
+  const urlEventId =
+    searchParams.get("evtid") || new URLSearchParams(rootSearch).get("evtid") || "";
+  const urlLatRaw =
+    searchParams.get("lat") || new URLSearchParams(rootSearch).get("lat") || "";
+  const urlLngRaw =
+    searchParams.get("lng") || new URLSearchParams(rootSearch).get("lng") || "";
+
+  const baseEventForPass: FieldEvent =
+    (fieldEvents || []).find(
+      ev => ev.id === urlEventId || ev.id === accreditedPassUser?.eventId
+    ) ||
+    (fieldEvents && fieldEvents[0]) ||
+    DEFAULT_FIELD_EVENTS[0];
+
+  const parsedLat = Number(urlLatRaw);
+  const parsedLng = Number(urlLngRaw);
+  const activeEventForPass: FieldEvent =
+    urlLatRaw &&
+    urlLngRaw &&
+    Number.isFinite(parsedLat) &&
+    Number.isFinite(parsedLng) &&
+    Math.abs(parsedLat) <= 90 &&
+    Math.abs(parsedLng) <= 180
+      ? {
+          ...baseEventForPass,
+          coordinates: { lat: parsedLat, lng: parsedLng }
+        }
+      : baseEventForPass;
 
   useEffect(() => {
     const rootParams = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
@@ -82,6 +111,7 @@ export default function Login() {
     const ticketParam = getParam("ticket");
     const eventoParam = getParam("evento");
     const registroParam = getParam("registro");
+    const evtidParam = getParam("evtid").trim();
 
     const emailParam = getParam("email").trim().toLowerCase();
     const nameParam = getParam("name").trim();
@@ -109,12 +139,13 @@ export default function Login() {
 
       const resolvedAttendee: Partial<User> = {
         ...(matched || {}),
+        eventId: matched?.eventId || evtidParam || baseEventForPass.id,
         name: matched?.name || nameParam || "Visitante Acreditado",
         email: matched?.email || emailParam || "",
         dniNumber: matched?.dniNumber || dniParam || "Registrado en Padrón",
         phone: matched?.phone || phoneParam || "Registrado",
         organizationName: matched?.organizationName || orgParam || "Visitante Acreditado",
-        localityOrProvince: matched?.localityOrProvince || locParam || activeEventForPass.locality,
+        localityOrProvince: matched?.localityOrProvince || locParam || baseEventForPass.locality,
         eventTicketCode: matched?.eventTicketCode || code,
         eventRegistered: true,
         eventAccreditationStatus: "accredited",
@@ -866,6 +897,12 @@ export default function Login() {
                   </div>
                 </div>
               </div>
+
+              {/* MAPA INTERACTIVO, RUTA DESTACADA Y BOTONES GPS DEL CELULAR */}
+              <EventRouteMapPreview
+                event={activeEventForPass}
+                attendee={accreditedPassUser}
+              />
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <button

@@ -7,7 +7,7 @@ import {
     calculateWaterEfficiency,
     calculateCarbonFootprint
 } from '../src/services/agro40Service.js';
-import { DEMO_PLOTS, DEMO_LOCATIONS } from '../src/data/initialDemoData.js';
+import { DEMO_PLOTS, DEMO_LOCATIONS, DEMO_CLIENTS } from '../src/data/initialDemoData.js';
 import {
     createPendingPublicRegistration,
     evaluateUserLoginGate,
@@ -23,6 +23,11 @@ import {
     approveEventAttendeeByAdmin,
     checkInEventAttendeeByAdmin,
     createOrUpdateFieldEventByAdmin,
+    buildEnabledEstablishmentsOptions,
+    resolveEventVenueFromSelection,
+    formatCoordinatesDMS,
+    parseCoordinateString,
+    buildEventGpsNavigationLinks,
     DEFAULT_FIELD_EVENTS
 } from '../src/services/eventsManagementService.js';
 
@@ -854,6 +859,140 @@ test("11.3 Gobernanza Exclusiva de Administradores sobre EVENTOS (Creación de E
     assert.equal(checkedIn.eventAccreditationStatus, 'checked_in');
     assert.ok(checkedIn.eventCheckedInAt);
     assert.equal(checkedIn.eventCheckedInBy, 'Admin Master');
+});
+
+// ============================================================================
+// GRUPO 12: ESTABLECIMIENTO DEL EVENTO (RED + OTRO), RUTA GPS Y SEGURIDAD
+// ============================================================================
+console.log("\n📍 GRUPO 12: Establecimientos Habilitados, Opción OTRO, Ruta GPS y Blindaje de Seguridad");
+
+test("12.1 Selector 'Establecimiento del Evento' vincula Campos/Establecimientos habilitados en la red y autocompleta Ruta y GPS", () => {
+    const options = buildEnabledEstablishmentsOptions(DEMO_LOCATIONS as any, DEMO_CLIENTS as any);
+    assert.ok(options.length >= 4, "Debe listar los establecimientos habilitados de la red cooperativa");
+
+    // Verificar que 'Chacra La Regina' (Trelew, Chubut) esté vinculada con su socio 'Establecimiento La Regina'
+    const laRegina = options.find(o => o.locationId === "1766444697119");
+    assert.ok(laRegina, "Debe encontrar Chacra La Regina en el catálogo habilitado");
+    assert.ok(laRegina.displayLabel.includes("Establecimiento La Regina"));
+    assert.ok(laRegina.displayLabel.includes("Chacra La Regina"));
+    assert.equal(laRegina.coordinates.lat, -43.308362);
+    assert.equal(laRegina.coordinates.lng, -65.289033);
+
+    const resolvedFromNetwork = resolveEventVenueFromSelection({
+        selectionId: "1766444697119",
+        locations: DEMO_LOCATIONS as any,
+        clients: DEMO_CLIENTS as any
+    });
+    assert.equal(resolvedFromNetwork.isCustomLocation, false);
+    assert.equal(resolvedFromNetwork.locationId, "1766444697119");
+    assert.equal(resolvedFromNetwork.clientId, "2b9a277c-1035-4229-be01-e31d6aa871cb");
+    assert.ok(resolvedFromNetwork.venueName.includes("Chacra La Regina"));
+    assert.equal(resolvedFromNetwork.coordinates.lat, -43.308362);
+    assert.equal(resolvedFromNetwork.coordinates.lng, -65.289033);
+    assert.ok(resolvedFromNetwork.routeInstructions.length > 20);
+    assert.ok(resolvedFromNetwork.routeWaypoints.length >= 2);
+});
+
+test("12.2 Opción 'OTRO' habilita locación externa personalizada, valida coordenadas GPS y persiste en el Calendario de Eventos", () => {
+    const parsedCoords = parseCoordinateString("-42.769200, -65.038500");
+    assert.ok(parsedCoords);
+    assert.equal(parsedCoords.lat, -42.7692);
+    assert.equal(parsedCoords.lng, -65.0385);
+
+    // Coordenadas fuera de rango geográfico deben ser rechazadas (null)
+    assert.equal(parseCoordinateString("999.99, -250.00"), null);
+    assert.equal(parseCoordinateString("texto-invalido-xss"), null);
+
+    const resolvedCustom = resolveEventVenueFromSelection({
+        selectionId: "OTHER",
+        locations: DEMO_LOCATIONS as any,
+        clients: DEMO_CLIENTS as any,
+        customVenueName: "Predio Ferial Sociedad Rural del Valle",
+        customLocality: "Gaiman, Chubut",
+        customAddress: "Ruta Provincial N° 7 Km 38 — Bajada Gaiman",
+        customLat: parsedCoords.lat,
+        customLng: parsedCoords.lng,
+        customRouteInstructions: "Desde Trelew tomar RP 7 hacia Gaiman (18 km). Ingresar por rotonda principal mano derecha."
+    });
+
+    assert.equal(resolvedCustom.isCustomLocation, true);
+    assert.equal(resolvedCustom.locationId, "OTHER");
+    assert.equal(resolvedCustom.venueName, "Predio Ferial Sociedad Rural del Valle");
+    assert.equal(resolvedCustom.locality, "Gaiman, Chubut");
+    assert.equal(resolvedCustom.address, "Ruta Provincial N° 7 Km 38 — Bajada Gaiman");
+    assert.equal(resolvedCustom.coordinates.lat, -42.7692);
+    assert.equal(resolvedCustom.coordinates.lng, -65.0385);
+    assert.ok(resolvedCustom.routeWaypoints.length >= 2);
+
+    const { savedEvent } = createOrUpdateFieldEventByAdmin({
+        adminUser: { id: 'admin-1', name: 'Admin Master', email: 'gaston@patagonianc.com', role: 'admin' },
+        eventData: {
+            title: 'Jornada Regional en Predio Externo',
+            category: 'jornada_campo',
+            date: '2026-11-28',
+            locationId: resolvedCustom.locationId,
+            isCustomLocation: resolvedCustom.isCustomLocation,
+            venueName: resolvedCustom.venueName,
+            locality: resolvedCustom.locality,
+            address: resolvedCustom.address,
+            coordinates: resolvedCustom.coordinates,
+            routeInstructions: resolvedCustom.routeInstructions,
+            routeWaypoints: resolvedCustom.routeWaypoints
+        },
+        existingEvents: DEFAULT_FIELD_EVENTS
+    });
+
+    assert.equal(savedEvent.isCustomLocation, true);
+    assert.equal(savedEvent.locationId, "OTHER");
+    assert.equal(savedEvent.venueName, "Predio Ferial Sociedad Rural del Valle");
+    assert.equal(savedEvent.coordinates?.lat, -42.7692);
+});
+
+test("12.3 Ciclo Completo de Acreditación: Enlaces GPS Celular (Google Maps / Waze), Formato GMS y Blindaje de Seguridad Anti-Escalación", () => {
+    const officialEvent = DEFAULT_FIELD_EVENTS[0];
+    const gpsLinks = buildEventGpsNavigationLinks(officialEvent);
+
+    // Verificar formato Decimal, GMS y Deep Links para GPS del celular
+    assert.equal(gpsLinks.lat, -43.308362);
+    assert.equal(gpsLinks.lng, -65.289033);
+    assert.ok(gpsLinks.decimalLabel.includes("-43.308362"));
+    assert.ok(gpsLinks.dmsLabel.includes("S") && gpsLinks.dmsLabel.includes("W"));
+    assert.ok(gpsLinks.googleMapsDirectionsUrl.startsWith("https://www.google.com/maps/dir/?api=1&destination=-43.308362,-65.289033"));
+    assert.ok(gpsLinks.wazeNavigateUrl.startsWith("https://waze.com/ul?ll=-43.308362,-65.289033&navigate=yes"));
+    assert.ok(gpsLinks.googleCalendarUrl.startsWith("https://calendar.google.com/calendar/render?action=TEMPLATE"));
+    assert.ok(gpsLinks.geoUri.startsWith("geo:-43.308362,-65.289033"));
+
+    const dms = formatCoordinatesDMS(-43.308362, -65.289033);
+    assert.ok(dms.includes("43°") && dms.includes("65°"));
+
+    // Blindaje de seguridad: intento de inyección / escalación de privilegios por un asistente de evento
+    const maliciousAttempt = createEventRegistrationRecord({
+        name: '<script>alert("xss")</script> Visitante',
+        email: 'visitante.externo@evento.com',
+        phone: '+5492804001122',
+        dniNumber: '30999888',
+        localityOrProvince: 'Trelew, Chubut',
+        event: officialEvent,
+        // Ningún visitante nuevo debe obtener acceso al sistema
+        existingUser: undefined
+    });
+
+    assert.equal(isEventOnlyAttendee(maliciousAttempt), true);
+    assert.equal(maliciousAttempt.role, 'viewer');
+    assert.equal(maliciousAttempt.accessScope, 'event_attendee');
+
+    // Aun después de que el Administrador apruebe la Acreditación de la Jornada, el usuario NO puede iniciar sesión en la App
+    const accreditedVisitor = approveEventAttendeeByAdmin({
+        adminUser: { id: 'admin-1', name: 'Admin Master', email: 'gaston@patagonianc.com', role: 'admin' },
+        attendee: maliciousAttempt,
+        event: officialEvent
+    });
+
+    assert.equal(accreditedVisitor.eventAccreditationStatus, 'accredited');
+    assert.equal(accreditedVisitor.password, '__EVENT_VISITOR_NO_SYSTEM_LOGIN__');
+    const loginGateAfterAccreditation = evaluateUserLoginGate(accreditedVisitor);
+    assert.equal(loginGateAfterAccreditation.canProceedToPasswordCheck, false, "El visitante acreditado a un evento NUNCA debe poder iniciar sesión en la plataforma operativa");
+    assert.equal(loginGateAfterAccreditation.blockedReason, 'event_visitor_no_system_access');
 });
 
 console.log("\n=================================================");

@@ -210,6 +210,20 @@ export interface FieldEvent {
   locality: string;
   organizer: string;
   locationId?: string;
+  clientId?: string;
+  isCustomLocation?: boolean;
+  address?: string;
+  coordinates?: {
+    lat: number;
+    lng: number;
+  };
+  routeInstructions?: string;
+  routeWaypoints?: {
+    lat: number;
+    lng: number;
+    label?: string;
+  }[];
+  gatekeeperPhone?: string;
   maxCapacity: number;
   status: FieldEventStatus;
   weatherWarning?: string;

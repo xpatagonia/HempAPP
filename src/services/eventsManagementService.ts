@@ -1,5 +1,5 @@
 import jsPDF from 'jspdf';
-import { User, FieldEvent, FieldEventCategory, FieldEventStatus } from '../../types';
+import { User, FieldEvent, FieldEventCategory, FieldEventStatus, Location, Client } from '../../types';
 import { EVENT_SCHEDULE_ITEMS } from './eventProgramPdfService';
 
 export const OFFICIAL_SEMBRA_EVENT_ID = 'evt-un-dia-de-siembra-2026';
@@ -30,9 +30,25 @@ export const DEFAULT_FIELD_EVENTS: FieldEvent[] = [
     dateLabel: 'Sábado 21 de Noviembre • 08:30 a 15:30 hs',
     startTime: '08:30',
     endTime: '15:30',
-    venueName: 'Chacra Experimental PatagonianC LTDA',
+    venueName: 'Establecimiento La Regina — Chacra La Regina (PatagonianC)',
     locality: 'VIRCH – Trelew, Chubut',
     organizer: 'PatagonianC LTDA & UATRE • UNLZ',
+    locationId: '1766444697119',
+    clientId: '2b9a277c-1035-4229-be01-e31d6aa871cb',
+    isCustomLocation: false,
+    address: 'Chacra 23 Parcela 13, Ruta Nacional 3 Km 1462 (Acceso Sur Trelew)',
+    coordinates: {
+      lat: -43.308362,
+      lng: -65.289033
+    },
+    routeInstructions:
+      'Ruta Destacada: Desde la Rotonda de Acceso Sur de Trelew (intersección RN 3 y RP 7), tomar Ruta Nacional 3 hacia el Sur durante 2,8 km hasta el Km 1462. Girar a mano izquierda (Este) por callejón rural señalizado "Chacra 23 / PatagonianC" y avanzar 650 m hasta el Puesto de Acreditación en Tranquera Principal.',
+    routeWaypoints: [
+      { lat: -43.2855, lng: -65.3052, label: 'Rotonda Acceso Sur Trelew (RN 3)' },
+      { lat: -43.3061, lng: -65.2954, label: 'Desvío RN 3 Km 1462 (Acceso Chacra 23)' },
+      { lat: -43.308362, lng: -65.289033, label: 'Tranquera Principal • Chacra La Regina' }
+    ],
+    gatekeeperPhone: '+5492804697193',
     maxCapacity: 120,
     status: 'inscripcion_abierta',
     weatherWarning: 'Actividad a cielo abierto: Se reprograma en caso de mal tiempo (Aviso oficial 24 hs antes).',
@@ -53,9 +69,25 @@ export const DEFAULT_FIELD_EVENTS: FieldEvent[] = [
     dateLabel: 'Sábado 5 de Diciembre • 09:00 a 13:00 hs',
     startTime: '09:00',
     endTime: '13:00',
-    venueName: 'Chacra Experimental PatagonianC LTDA & Establecimiento La Regina',
-    locality: 'VIRCH – Trelew / Gaiman, Chubut',
+    venueName: 'HempC de PatagonianC LTDA — BIOC Parque Industrial TW',
+    locality: 'Trelew, Chubut',
     organizer: 'Dirección Técnica HempC & INTA Chubut',
+    locationId: '1767119987079',
+    clientId: '7503c132-5d7d-48f0-9c0f-7692b1bdf348',
+    isCustomLocation: false,
+    address: 'Puerto Argentino S/N, Parque Industrial Pesado de Trelew (RN 25)',
+    coordinates: {
+      lat: -43.25581,
+      lng: -65.376921
+    },
+    routeInstructions:
+      'Ruta Destacada: Desde Trelew tomar Ruta Nacional 25 sentido Oeste (hacia Gaiman) hasta el ingreso al Parque Industrial Pesado. Doblar por Av. Principal y continuar por Calle Puerto Argentino S/N hasta la Planta y Predio Experimental BIOC.',
+    routeWaypoints: [
+      { lat: -43.2512, lng: -65.362, label: 'Ingreso RN 25 Parque Industrial Trelew' },
+      { lat: -43.2542, lng: -65.3745, label: 'Acceso Calle Puerto Argentino' },
+      { lat: -43.25581, lng: -65.376921, label: 'Predio BIOC Parque Industrial TW' }
+    ],
+    gatekeeperPhone: '+5492804697193',
     maxCapacity: 45,
     status: 'inscripcion_abierta',
     weatherWarning: 'Concurrir con calzado de seguridad de campo. Acreditación obligatoria con DNI en tranquera.',
@@ -98,9 +130,25 @@ export const DEFAULT_FIELD_EVENTS: FieldEvent[] = [
     dateLabel: 'Sábado 16 de Enero • 08:30 a 14:00 hs',
     startTime: '08:30',
     endTime: '14:00',
-    venueName: 'INTA Estación Experimental Agropecuaria Chubut',
-    locality: 'Trelew, Chubut',
-    organizer: 'PatagonianC LTDA • INTA EEA Chubut',
+    venueName: 'INTA Estación Experimental — INTA Ensayo Experimental',
+    locality: 'Hilario Ascasubi, Buenos Aires',
+    organizer: 'PatagonianC LTDA • INTA EEA Chubut / Ascasubi',
+    locationId: '1766450631873',
+    clientId: '94f8da54-90dc-44e7-b9df-e9b6c2be5266',
+    isCustomLocation: false,
+    address: 'Ruta Nacional 3 Km 794, Hilario Ascasubi, Prov. de Buenos Aires',
+    coordinates: {
+      lat: -39.393075,
+      lng: -62.621037
+    },
+    routeInstructions:
+      'Ruta Destacada: Circular por Ruta Nacional 3 hasta el Km 794 (Pórtico de Ingreso a EEA INTA Hilario Ascasubi). Avanzar por el bulevar interno principal 1,1 km hacia el Este hasta el Cuadro de Ensayos de Cáñamo Industrial.',
+    routeWaypoints: [
+      { lat: -39.3895, lng: -62.632, label: 'RN 3 Km 794 Pórtico INTA Ascasubi' },
+      { lat: -39.392013, lng: -62.62907, label: 'Pabellón Central EEA INTA' },
+      { lat: -39.393075, lng: -62.621037, label: 'Lote Ensayo Experimental INTA' }
+    ],
+    gatekeeperPhone: '+5492804697193',
     maxCapacity: 60,
     status: 'inscripcion_abierta',
     weatherWarning: 'Cupos limitados sujetos a aprobación de la Administración de Plataforma.',
@@ -113,7 +161,7 @@ export const DEFAULT_FIELD_EVENTS: FieldEvent[] = [
         block: 'Acreditación de Delegaciones e Invitados',
         subBlock: 'Validación de código QR de acreditación',
         audience: 'Autoridades e Invitados',
-        description: 'Registro de ingreso en el predio experimental INTA EEA Chubut.'
+        description: 'Registro de ingreso en el predio experimental INTA EEA.'
       },
       {
         time: '09:15 – 12:00',
@@ -134,6 +182,341 @@ export const DEFAULT_FIELD_EVENTS: FieldEvent[] = [
     createdAt: '2026-11-05'
   }
 ];
+
+export interface EnabledEstablishmentOption {
+  locationId: string;
+  clientId?: string;
+  establishmentName: string;
+  fieldName: string;
+  displayLabel: string;
+  venueName: string;
+  locality: string;
+  address: string;
+  coordinates: { lat: number; lng: number };
+  routeInstructions: string;
+  routeWaypoints: { lat: number; lng: number; label?: string }[];
+}
+
+/**
+ * Construye el catálogo de Establecimientos y Campos Habilitados integrados en la Red
+ * para poblar el desplegable "ESTABLECIMIENTO DEL EVENTO" en el alta/edición de EVENTOS.
+ */
+export function buildEnabledEstablishmentsOptions(
+  locations: Location[] = [],
+  clients: Client[] = []
+): EnabledEstablishmentOption[] {
+  const clientById = new Map<string, Client>();
+  (clients || []).forEach(c => {
+    if (c && c.id) clientById.set(String(c.id), c);
+  });
+
+  const options: EnabledEstablishmentOption[] = [];
+  const seenLocIds = new Set<string>();
+
+  for (const loc of locations || []) {
+    if (!loc || !loc.id) continue;
+    const locId = String(loc.id);
+    if (seenLocIds.has(locId)) continue;
+    seenLocIds.add(locId);
+
+    const linkedClient = loc.clientId ? clientById.get(String(loc.clientId)) : undefined;
+    const establishmentName =
+      linkedClient?.name || loc.ownerLegalName || loc.ownerName || loc.name;
+    const fieldName = loc.name;
+    const cityProv = [loc.city, loc.province].filter(Boolean).join(', ') || 'Trelew, Chubut';
+    const address = loc.address || linkedClient?.address || `Acceso Rural ${cityProv}`;
+
+    const rawLat = Number(loc.coordinates?.lat ?? linkedClient?.coordinates?.lat ?? -43.308362);
+    const rawLng = Number(loc.coordinates?.lng ?? linkedClient?.coordinates?.lng ?? -65.289033);
+    const validLat = !isNaN(rawLat) && rawLat !== 0 ? rawLat : -43.308362;
+    const validLng = !isNaN(rawLng) && rawLng !== 0 ? rawLng : -65.289033;
+
+    const venueName =
+      establishmentName.toLowerCase() === fieldName.toLowerCase()
+        ? establishmentName
+        : `${establishmentName} — ${fieldName}`;
+
+    const defaultRoute = `Ruta Destacada hacia ${venueName}: Tomar vía principal hacia ${address} (${cityProv}). Ingresar por acceso principal del establecimiento hasta el Puesto de Control y Acreditación QR (GPS: ${validLat.toFixed(6)}, ${validLng.toFixed(6)}).`;
+
+    const approachPoint = {
+      lat: Number((validLat + 0.015).toFixed(6)),
+      lng: Number((validLng - 0.015).toFixed(6)),
+      label: `Acceso Vial Principal (${loc.city || 'Ruta'})`
+    };
+    const turnPoint = {
+      lat: Number((validLat + 0.004).toFixed(6)),
+      lng: Number((validLng - 0.005).toFixed(6)),
+      label: `Desvío Señalizado • ${address}`
+    };
+    const gatePoint = {
+      lat: validLat,
+      lng: validLng,
+      label: `Tranquera de Acreditación • ${fieldName}`
+    };
+
+    options.push({
+      locationId: locId,
+      clientId: linkedClient?.id || loc.clientId,
+      establishmentName,
+      fieldName,
+      displayLabel: `${establishmentName} • Campo: ${fieldName} (${cityProv})`,
+      venueName,
+      locality: cityProv,
+      address,
+      coordinates: { lat: validLat, lng: validLng },
+      routeInstructions: defaultRoute,
+      routeWaypoints: [approachPoint, turnPoint, gatePoint]
+    });
+  }
+
+  return options;
+}
+
+/**
+ * Convierte coordenadas decimales (lat, lng) a notación GPS Sexagesimal (GMS / DMS).
+ */
+export function formatCoordinatesDMS(lat: number, lng: number): string {
+  const toDMS = (deg: number, isLat: boolean) => {
+    const dir = isLat ? (deg >= 0 ? 'N' : 'S') : deg >= 0 ? 'E' : 'W';
+    const abs = Math.abs(deg);
+    const d = Math.floor(abs);
+    const minFloat = (abs - d) * 60;
+    const m = Math.floor(minFloat);
+    const s = ((minFloat - m) * 60).toFixed(1);
+    return `${d}°${String(m).padStart(2, '0')}'${String(s).padStart(4, '0')}"${dir}`;
+  };
+  return `${toDMS(lat, true)} ${toDMS(lng, false)}`;
+}
+
+/**
+ * Parsea un string de coordenadas tipo "-43.308362, -65.289033" y valida rango geográfico.
+ */
+export function parseCoordinateString(
+  raw: string
+): { lat: number; lng: number } | null {
+  if (!raw || typeof raw !== 'string') return null;
+  const parts = raw
+    .trim()
+    .split(/[,;\s]+/)
+    .map(s => Number(s.trim()))
+    .filter(n => !isNaN(n));
+  if (parts.length < 2) return null;
+  const [lat, lng] = parts;
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+  return { lat: Number(lat.toFixed(6)), lng: Number(lng.toFixed(6)) };
+}
+
+/**
+ * Resuelve la locación de un evento a partir de la selección del desplegable:
+ * - Si selectionId corresponde a un Establecimiento/Campo Habilitado de la red, vincula sus datos y GPS.
+ * - Si selectionId === 'OTHER' (OTRO), habilita la locación personalizada con sus coordenadas y ruta.
+ */
+export function resolveEventVenueFromSelection(params: {
+  selectionId: string;
+  locations: Location[];
+  clients: Client[];
+  customVenueName?: string;
+  customLocality?: string;
+  customAddress?: string;
+  customLat?: number;
+  customLng?: number;
+  customRouteInstructions?: string;
+}): {
+  locationId: string;
+  clientId?: string;
+  isCustomLocation: boolean;
+  venueName: string;
+  locality: string;
+  address: string;
+  coordinates: { lat: number; lng: number };
+  routeInstructions: string;
+  routeWaypoints: { lat: number; lng: number; label?: string }[];
+} {
+  const options = buildEnabledEstablishmentsOptions(params.locations, params.clients);
+
+  if (params.selectionId && params.selectionId !== 'OTHER') {
+    const matched = options.find(o => o.locationId === params.selectionId);
+    if (matched) {
+      return {
+        locationId: matched.locationId,
+        clientId: matched.clientId,
+        isCustomLocation: false,
+        venueName: matched.venueName,
+        locality: matched.locality,
+        address: matched.address,
+        coordinates: matched.coordinates,
+        routeInstructions: params.customRouteInstructions?.trim() || matched.routeInstructions,
+        routeWaypoints: matched.routeWaypoints
+      };
+    }
+  }
+
+  // Caso OTRO (Locación Externa a los campos pre-habilitados)
+  const lat =
+    typeof params.customLat === 'number' && !isNaN(params.customLat) && params.customLat !== 0
+      ? Number(params.customLat.toFixed(6))
+      : -43.308362;
+  const lng =
+    typeof params.customLng === 'number' && !isNaN(params.customLng) && params.customLng !== 0
+      ? Number(params.customLng.toFixed(6))
+      : -65.289033;
+  const venueName = (params.customVenueName || 'Locación Especial del Evento').trim();
+  const locality = (params.customLocality || 'VIRCH – Trelew, Chubut').trim();
+  const address = (params.customAddress || `Acceso Principal • ${locality}`).trim();
+  const routeInstructions = (
+    params.customRouteInstructions ||
+    `Ruta Destacada: Dirigirse hacia ${address} (${locality}) siguiendo las coordenadas GPS ${lat.toFixed(6)}, ${lng.toFixed(6)} hasta el puesto de acreditación del evento.`
+  ).trim();
+
+  return {
+    locationId: 'OTHER',
+    clientId: undefined,
+    isCustomLocation: true,
+    venueName,
+    locality,
+    address,
+    coordinates: { lat, lng },
+    routeInstructions,
+    routeWaypoints: [
+      {
+        lat: Number((lat + 0.012).toFixed(6)),
+        lng: Number((lng - 0.012).toFixed(6)),
+        label: `Acceso Ruta Principal (${locality})`
+      },
+      {
+        lat: Number((lat + 0.003).toFixed(6)),
+        lng: Number((lng - 0.004).toFixed(6)),
+        label: `Ingreso Vial • ${address}`
+      },
+      {
+        lat,
+        lng,
+        label: `Destino GPS • ${venueName}`
+      }
+    ]
+  };
+}
+
+export interface EventGpsNavigationBundle {
+  lat: number;
+  lng: number;
+  decimalLabel: string;
+  dmsLabel: string;
+  address: string;
+  routeInstructions: string;
+  googleMapsDirectionsUrl: string;
+  googleMapsSearchUrl: string;
+  wazeNavigateUrl: string;
+  appleMapsUrl: string;
+  geoUri: string;
+  googleCalendarUrl: string;
+}
+
+/**
+ * Construye el paquete completo de enlaces de navegación GPS para vincular el celular del visitante
+ * (Google Maps Turn-by-Turn, Waze GPS, Apple Maps, Geo URI y Google Calendar con georreferencia).
+ */
+export function buildEventGpsNavigationLinks(
+  event?: Partial<FieldEvent> | null
+): EventGpsNavigationBundle {
+  const defaultEvt = DEFAULT_FIELD_EVENTS[0];
+  const rawLat = Number(event?.coordinates?.lat ?? defaultEvt.coordinates!.lat);
+  const rawLng = Number(event?.coordinates?.lng ?? defaultEvt.coordinates!.lng);
+  const lat = !isNaN(rawLat) && rawLat >= -90 && rawLat <= 90 && rawLat !== 0 ? rawLat : -43.308362;
+  const lng = !isNaN(rawLng) && rawLng >= -180 && rawLng <= 180 && rawLng !== 0 ? rawLng : -65.289033;
+
+  const decimalLabel = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+  const dmsLabel = formatCoordinatesDMS(lat, lng);
+  const venueName = event?.venueName || defaultEvt.venueName;
+  const locality = event?.locality || defaultEvt.locality;
+  const address = event?.address || defaultEvt.address || `Ruta Nacional 3 Km 1462, ${locality}`;
+  const routeInstructions =
+    event?.routeInstructions ||
+    defaultEvt.routeInstructions ||
+    `Dirigirse por ruta principal hasta ${address} (${locality}). Coordenadas GPS: ${decimalLabel}.`;
+
+  const googleMapsDirectionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`;
+  const googleMapsSearchUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+  const wazeNavigateUrl = `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`;
+  const appleMapsUrl = `https://maps.apple.com/?daddr=${lat},${lng}&dirflg=d`;
+  const geoUri = `geo:${lat},${lng}?q=${lat},${lng}(${encodeURIComponent(venueName)})`;
+
+  // Fechas para Google Calendar (YYYYMMDDTHHMMSS)
+  const rawDate = (event?.date || defaultEvt.date || '2026-11-21').replace(/-/g, '');
+  const startHm = (event?.startTime || '08:30').replace(':', '') + '00';
+  const endHm = (event?.endTime || '15:30').replace(':', '') + '00';
+  const calTitle = encodeURIComponent(event?.title || defaultEvt.title);
+  const calLocation = encodeURIComponent(`${venueName} - ${address}, ${locality} (${decimalLabel})`);
+  const calDetails = encodeURIComponent(
+    `${event?.subtitle || 'Jornada Oficial HempC'}\n\n📍 CÓMO LLEGAR / RUTA DESTACADA:\n${routeInstructions}\n\n🧭 Coordenadas GPS: ${decimalLabel} (${dmsLabel})\n🚗 Abrir GPS Celular: ${googleMapsDirectionsUrl}`
+  );
+  const googleCalendarUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${calTitle}&dates=${rawDate}T${startHm}/${rawDate}T${endHm}&details=${calDetails}&location=${calLocation}`;
+
+  return {
+    lat,
+    lng,
+    decimalLabel,
+    dmsLabel,
+    address,
+    routeInstructions,
+    googleMapsDirectionsUrl,
+    googleMapsSearchUrl,
+    wazeNavigateUrl,
+    appleMapsUrl,
+    geoUri,
+    googleCalendarUrl
+  };
+}
+
+/**
+ * Descarga un archivo universal de agenda (.ICS) para el celular o computadora del visitante
+ * con alarma recordatoria 24 hs antes y enlace directo al GPS del establecimiento.
+ */
+export function downloadEventCalendarICS(
+  event: FieldEvent,
+  attendee?: Partial<User>
+): void {
+  if (typeof window === 'undefined') return;
+  const nav = buildEventGpsNavigationLinks(event);
+  const rawDate = (event.date || '2026-11-21').replace(/-/g, '');
+  const startHm = (event.startTime || '08:30').replace(':', '') + '00';
+  const endHm = (event.endTime || '15:30').replace(':', '') + '00';
+  const ticket = attendee?.eventTicketCode || event.ticketPrefix || 'SIEMBRA-21N';
+
+  const icsLines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//PatagonianC LTDA//Red Cooperativa HempC Eventos//ES',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    'BEGIN:VEVENT',
+    `UID:${event.id}-${ticket}@hempc.com.ar`,
+    `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').split('.')[0]}Z`,
+    `DTSTART:${rawDate}T${startHm}`,
+    `DTEND:${rawDate}T${endHm}`,
+    `SUMMARY:${event.title} (Pase: ${ticket})`,
+    `LOCATION:${event.venueName} - ${nav.address} (${nav.decimalLabel})`,
+    `GEO:${nav.lat};${nav.lng}`,
+    `DESCRIPTION:Pase Oficial QR: ${ticket}\\nTitular: ${attendee?.name || 'Visitante Acreditado'}\\n\\nRUTA DESTACADA DE ACCESO:\\n${nav.routeInstructions}\\n\\nCOORDENADAS GPS: ${nav.decimalLabel} (${nav.dmsLabel})\\nABRIR GPS EN CELULAR: ${nav.googleMapsDirectionsUrl}`,
+    'BEGIN:VALARM',
+    'TRIGGER:-PT24H',
+    'ACTION:DISPLAY',
+    'DESCRIPTION:Recordatorio Jornada de Campo HempC - Preparar DNI y Pase QR',
+    'END:VALARM',
+    'END:VEVENT',
+    'END:VCALENDAR'
+  ];
+
+  const blob = new Blob([icsLines.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `Agenda_GPS_${event.slug || 'Jornada_HempC'}.ics`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
 
 /**
  * Determina con precisión si un registro en public.users corresponde a un
@@ -471,6 +854,8 @@ export function createOrUpdateFieldEventByAdmin(params: {
     ? dateObj.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })
     : eventData.date;
 
+  const navFallback = buildEventGpsNavigationLinks(eventData);
+
   const savedEvent: FieldEvent = {
     id,
     slug,
@@ -484,7 +869,41 @@ export function createOrUpdateFieldEventByAdmin(params: {
     venueName: eventData.venueName.trim(),
     locality: eventData.locality?.trim() || 'VIRCH – Trelew, Chubut',
     organizer: eventData.organizer?.trim() || 'PatagonianC LTDA • HempC Nucleus',
-    locationId: eventData.locationId,
+    locationId: eventData.locationId || '1766444697119',
+    clientId: eventData.clientId,
+    isCustomLocation: Boolean(eventData.isCustomLocation || eventData.locationId === 'OTHER'),
+    address: eventData.address?.trim() || navFallback.address,
+    coordinates:
+      eventData.coordinates &&
+      !isNaN(Number(eventData.coordinates.lat)) &&
+      !isNaN(Number(eventData.coordinates.lng))
+        ? {
+            lat: Number(Number(eventData.coordinates.lat).toFixed(6)),
+            lng: Number(Number(eventData.coordinates.lng).toFixed(6))
+          }
+        : { lat: navFallback.lat, lng: navFallback.lng },
+    routeInstructions: eventData.routeInstructions?.trim() || navFallback.routeInstructions,
+    routeWaypoints:
+      eventData.routeWaypoints && eventData.routeWaypoints.length > 0
+        ? eventData.routeWaypoints
+        : [
+            {
+              lat: Number((navFallback.lat + 0.014).toFixed(6)),
+              lng: Number((navFallback.lng - 0.014).toFixed(6)),
+              label: 'Acceso Ruta Principal'
+            },
+            {
+              lat: Number((navFallback.lat + 0.004).toFixed(6)),
+              lng: Number((navFallback.lng - 0.004).toFixed(6)),
+              label: 'Desvío Señalizado al Predio'
+            },
+            {
+              lat: navFallback.lat,
+              lng: navFallback.lng,
+              label: `Tranquera Principal • ${eventData.venueName.trim()}`
+            }
+          ],
+    gatekeeperPhone: eventData.gatekeeperPhone?.trim() || '+5492804697193',
     maxCapacity: Number(eventData.maxCapacity) > 0 ? Number(eventData.maxCapacity) : 60,
     status: eventData.status || 'inscripcion_abierta',
     weatherWarning:
@@ -891,80 +1310,159 @@ export function downloadEventAccreditationPassPDF(
   doc.setTextColor(100, 116, 139);
   doc.text('Presentar con DNI en Tranquera', 166, 129, { align: 'center' });
 
-  // 3. Instrucciones de Ingreso y Aviso Climático
-  doc.setFillColor(254, 252, 232);
-  doc.setDrawColor(234, 179, 8);
-  doc.setLineWidth(0.4);
-  doc.roundedRect(12, 143, 186, 18, 3, 3, 'FD');
-  doc.setTextColor(146, 64, 14);
+  // 3. SECCIÓN CARTOGRÁFICA: CROQUIS DE UBICACIÓN, RUTA DESTACADA Y NAVEGACIÓN GPS CELULAR
+  const nav = buildEventGpsNavigationLinks(event);
+
+  doc.setFillColor(240, 253, 244);
+  doc.setDrawColor(0, 102, 51);
+  doc.setLineWidth(0.6);
+  doc.roundedRect(12, 142, 186, 62, 3.5, 3.5, 'FD');
+
+  doc.setFillColor(12, 45, 30);
+  doc.rect(12, 142, 186, 8.5, 'F');
+  doc.setTextColor(221, 219, 0);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8.5);
-  doc.text('INSTRUCCIONES DE INGRESO EN PREDIO Y PROTOCOLO DE CAMPO:', 16, 149);
+  doc.text('UBICACIÓN GEORREFERENCIADA, RUTA DESTACADA DE ACCESO Y CONEXIÓN A GPS CELULAR', 16, 147.8);
+
+  // Croquis Cartográfico Vectorial de la Ruta Destacada (Izquierda: x=16..84, y=153..200)
+  doc.setFillColor(15, 38, 28);
+  doc.setDrawColor(16, 185, 129);
+  doc.setLineWidth(0.4);
+  doc.roundedRect(16, 153, 68, 47, 2.5, 2.5, 'FD');
+
+  // Grilla satelital sutil en el croquis
+  doc.setDrawColor(30, 64, 48);
+  doc.setLineWidth(0.2);
+  for (let gx = 26; gx < 80; gx += 12) {
+    doc.line(gx, 153, gx, 200);
+  }
+  for (let gy = 161; gy < 198; gy += 9) {
+    doc.line(16, gy, 84, gy);
+  }
+
+  // Trazado de la Ruta Destacada (Nodo Ruta Principal -> Desvío -> Tranquera)
+  doc.setDrawColor(221, 219, 0);
+  doc.setLineWidth(1.5);
+  doc.line(23, 190, 48, 177);
+  doc.line(48, 177, 71, 164);
+
+  // Nodos del recorrido
+  doc.setFillColor(56, 189, 248);
+  doc.circle(23, 190, 2.2, 'F');
+  doc.setFillColor(245, 158, 11);
+  doc.circle(48, 177, 2.2, 'F');
+  doc.setFillColor(16, 185, 129);
+  doc.circle(71, 164, 3.2, 'F');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(6.2);
+  doc.setTextColor(186, 230, 253);
+  doc.text('1. Acceso Ruta', 19, 196);
+  doc.setTextColor(253, 230, 138);
+  doc.text('2. Desvío Rural', 41, 183);
+  doc.setTextColor(167, 243, 208);
+  doc.text('3. TRANQUERA QR', 52, 158.5);
+
+  doc.setFont('courier', 'bold');
+  doc.setFontSize(6.5);
+  doc.setTextColor(255, 255, 255);
+  doc.text(`GPS: ${nav.decimalLabel}`, 19, 160);
+
+  // Datos Viales, Ruta Destacada y Enlace Directo al GPS del Celular (Derecha: x=88..194, y=154..200)
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.setTextColor(0, 102, 51);
+  doc.text('ESTABLECIMIENTO Y DIRECCIÓN VIAL:', 88, 157);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.setTextColor(15, 23, 42);
+  doc.text(`${event.venueName} — ${nav.address}`.slice(0, 62), 88, 161.5);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.setTextColor(0, 102, 51);
+  doc.text('COORDENADAS OFICIALES PARA GPS:', 88, 167.5);
+  doc.setFont('courier', 'bold');
+  doc.setFontSize(8.2);
+  doc.setTextColor(15, 23, 42);
+  doc.text(`Decimal: ${nav.decimalLabel}  |  GMS: ${nav.dmsLabel}`, 88, 172);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.setTextColor(0, 102, 51);
+  doc.text('RUTA DESTACADA PASO A PASO:', 88, 177.5);
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.text(
-    `1) Presentá esta credencial (impresa o en tu celular) junto con tu DNI en el puesto de ingreso de ${event.venueName}.`,
-    16,
-    154.5
-  );
-  doc.text(
-    `2) ${event.weatherWarning || 'Actividad a cielo abierto sujeta a condiciones meteorológicas (Aviso 24 hs antes).'}`,
-    16,
-    159
-  );
+  doc.setFontSize(7.3);
+  doc.setTextColor(51, 65, 85);
+  const routeLines = doc.splitTextToSize(nav.routeInstructions, 105);
+  doc.text(routeLines.slice(0, 3), 88, 181.5);
+
+  // Botón Clickeable de Navegación GPS en el PDF
+  doc.setFillColor(0, 102, 51);
+  doc.roundedRect(88, 191.5, 104, 9, 2, 2, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.text('TOCAR AQUÍ PARA ABRIR RUTA EN EL GPS DEL CELULAR (GOOGLE MAPS)', 140, 197.2, {
+    align: 'center'
+  });
+  try {
+    doc.link(88, 191.5, 104, 9, { url: nav.googleMapsDirectionsUrl });
+  } catch {}
 
   // 4. Cronograma Oficial Resumido en la misma hoja de la Credencial
   doc.setTextColor(12, 45, 30);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.text('CRONOGRAMA OFICIAL DE LA JORNADA (RESUMEN DE ACTIVIDADES)', 12, 170);
+  doc.setFontSize(9.5);
+  doc.text('CRONOGRAMA OFICIAL DE LA JORNADA Y PROTOCOLO DE CAMPO', 12, 212);
   doc.setDrawColor(0, 102, 51);
   doc.setLineWidth(0.5);
-  doc.line(12, 172, 198, 172);
+  doc.line(12, 214, 198, 214);
 
-  let y = 178;
+  let y = 219;
   const schedule = event.scheduleItems && event.scheduleItems.length > 0 ? event.scheduleItems : EVENT_SCHEDULE_ITEMS;
-  schedule.slice(0, 8).forEach(item => {
-    if (y > 268) return;
+  schedule.slice(0, 6).forEach(item => {
+    if (y > 272) return;
     doc.setFillColor(241, 245, 249);
-    doc.roundedRect(12, y - 4, 186, 10, 1.5, 1.5, 'F');
+    doc.roundedRect(12, y - 3.5, 186, 8.8, 1.5, 1.5, 'F');
     doc.setFont('courier', 'bold');
-    doc.setFontSize(8);
+    doc.setFontSize(7.5);
     doc.setTextColor(0, 102, 51);
-    doc.text(item.time, 15, y + 1.5);
+    doc.text(item.time, 15, y + 1.2);
 
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8.2);
+    doc.setFontSize(7.8);
     doc.setTextColor(15, 23, 42);
-    doc.text(`${item.block} — ${item.subBlock}`.slice(0, 72), 42, y);
+    doc.text(`${item.block} — ${item.subBlock || ''}`.slice(0, 74), 42, y - 0.2);
 
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7.2);
+    doc.setFontSize(6.8);
     doc.setTextColor(71, 85, 105);
-    doc.text(String(item.description || '').slice(0, 95), 42, y + 4.2);
+    doc.text(String(item.description || '').slice(0, 96), 42, y + 3.5);
 
-    y += 12;
+    y += 9.8;
   });
 
   // 5. Pie de Página de Seguridad
   doc.setDrawColor(203, 213, 225);
-  doc.line(12, 278, 198, 278);
+  doc.line(12, 279, 198, 279);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7.5);
+  doc.setFontSize(7.2);
   doc.setTextColor(12, 45, 30);
   doc.text(
     'PatagonianC LTDA Cooperativa de Trabajo · Matrícula INAES 68218 · CUIT: 30-71816113-0 · notificaciones@hempc.com.ar',
     105,
-    283,
+    283.5,
     { align: 'center' }
   );
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7);
+  doc.setFontSize(6.8);
   doc.setTextColor(100, 116, 139);
   doc.text(
     'Esta credencial acredita exclusivamente la asistencia presencial al evento indicado y no otorga acceso al sistema informático interno.',
     105,
-    287.5,
+    288,
     { align: 'center' }
   );
 

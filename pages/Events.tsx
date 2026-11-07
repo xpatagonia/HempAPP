@@ -53,10 +53,16 @@ import {
   downloadEventAttendanceSheetPDF,
   downloadEventAttendanceCertificatePDF,
   downloadEventAccreditationPassPDF,
-  svgElementToPngDataUrl
+  svgElementToPngDataUrl,
+  buildEnabledEstablishmentsOptions,
+  resolveEventVenueFromSelection,
+  parseCoordinateString,
+  buildEventGpsNavigationLinks,
+  downloadEventCalendarICS
 } from '../src/services/eventsManagementService';
 import { downloadUnDiaDeSiembraProgramPDF } from '../src/services/eventProgramPdfService';
 import { sendEventAccreditationApprovedEmail } from '../src/services/emailNotificationService';
+import EventRouteMapPreview from '../components/EventRouteMapPreview';
 
 export default function Events() {
   const navigate = useNavigate();
@@ -67,6 +73,7 @@ export default function Events() {
     updateUser,
     deleteUser,
     allLocations,
+    clients,
     fieldEvents,
     saveFieldEvent,
     deleteFieldEvent
@@ -139,6 +146,13 @@ export default function Events() {
   const [resendingPassId, setResendingPassId] = useState<string | null>(null);
   const [attendeeToDelete, setAttendeeToDelete] = useState<User | null>(null);
   const [isDeletingAttendee, setIsDeletingAttendee] = useState(false);
+
+  // Catálogo sincronizado de Establecimientos y Campos Habilitados en la Red
+  const enabledEstablishments = useMemo(
+    () => buildEnabledEstablishmentsOptions(allLocations || [], clients || []),
+    [allLocations, clients]
+  );
+  const [quickCoordsInput, setQuickCoordsInput] = useState('');
 
   // Separación estricta de registros: Visitantes de Eventos vs Operadores del Sistema
   const { eventAttendees, systemUsers } = useMemo(
@@ -251,13 +265,19 @@ export default function Events() {
 
       await updateUser(updatedUser);
 
+      const nav = buildEventGpsNavigationLinks(evt);
       const emailResult = await sendEventAccreditationApprovedEmail({
         toEmail: updatedUser.email,
         toName: updatedUser.name,
+        eventId: evt.id,
         eventName: evt.title,
         eventDateLabel: evt.dateLabel,
         venueName: evt.venueName,
         locality: evt.locality,
+        address: nav.address,
+        lat: nav.lat,
+        lng: nav.lng,
+        routeInstructions: nav.routeInstructions,
         ticketCode: updatedUser.eventTicketCode || 'SIEMBRA-21N-OFICIAL',
         organizationName: updatedUser.organizationName,
         dniNumber: updatedUser.dniNumber,
@@ -267,8 +287,8 @@ export default function Events() {
 
       showNotice(
         true,
-        'Acreditación Oficial Aprobada (Sin Acceso al Sistema)',
-        `Se aprobó a ${updatedUser.name} (${updatedUser.eventTicketCode}) para "${evt.title}". Pase QR y enlace al Programa PDF despachados a ${updatedUser.email} (${emailResult.deliveredVia}).`
+        'Acreditación Oficial Aprobada + Mapa y GPS Enviados',
+        `Se aprobó a ${updatedUser.name} (${updatedUser.eventTicketCode}) para "${evt.title}". Pase QR, Mapa con Ruta Destacada y enlace GPS Celular despachados a ${updatedUser.email} (${emailResult.deliveredVia}).`
       );
     } catch (err: any) {
       showNotice(
@@ -341,13 +361,19 @@ export default function Events() {
         await updateUser(targetUser);
       }
 
+      const nav = buildEventGpsNavigationLinks(evt);
       const emailResult = await sendEventAccreditationApprovedEmail({
         toEmail: targetUser.email,
         toName: targetUser.name,
+        eventId: evt.id,
         eventName: evt.title,
         eventDateLabel: evt.dateLabel,
         venueName: evt.venueName,
         locality: evt.locality,
+        address: nav.address,
+        lat: nav.lat,
+        lng: nav.lng,
+        routeInstructions: nav.routeInstructions,
         ticketCode: targetUser.eventTicketCode || 'SIEMBRA-21N-OFICIAL',
         organizationName: targetUser.organizationName,
         dniNumber: targetUser.dniNumber,
@@ -357,8 +383,8 @@ export default function Events() {
 
       showNotice(
         true,
-        'Pase QR Re-enviado por Correo Electrónico',
-        `Se re-envió la Credencial Oficial con Pase QR (${targetUser.eventTicketCode || 'SIEMBRA-21N'}) y enlace de descarga PDF a ${targetUser.email} (${emailResult.deliveredVia}).`
+        'Pase QR, Mapa y GPS Re-enviados por Correo',
+        `Se re-envió la Credencial Oficial con Pase QR (${targetUser.eventTicketCode || 'SIEMBRA-21N'}), Mapa de Locación, Ruta Destacada y link al GPS del celular a ${targetUser.email} (${emailResult.deliveredVia}).`
       );
     } catch (err: any) {
       showNotice(
@@ -491,10 +517,15 @@ export default function Events() {
         await sendEventAccreditationApprovedEmail({
           toEmail: record.email,
           toName: record.name,
+          eventId: targetEvt.id,
           eventName: targetEvt.title,
           eventDateLabel: targetEvt.dateLabel,
           venueName: targetEvt.venueName,
           locality: targetEvt.locality,
+          address: targetEvt.address,
+          lat: targetEvt.coordinates?.lat,
+          lng: targetEvt.coordinates?.lng,
+          routeInstructions: targetEvt.routeInstructions,
           ticketCode: record.eventTicketCode || 'SIEMBRA-21N',
           organizationName: record.organizationName,
           dniNumber: record.dniNumber,
@@ -535,6 +566,7 @@ export default function Events() {
   };
 
   const openNewEventModal = () => {
+    const defaultEst = enabledEstablishments[0];
     setEventForm({
       title: '',
       subtitle: 'Visita Técnica Programada • Red Cooperativa HempC',
@@ -542,8 +574,18 @@ export default function Events() {
       date: new Date().toISOString().split('T')[0],
       startTime: '09:00',
       endTime: '13:00',
-      venueName: 'Chacra Experimental PatagonianC LTDA',
-      locality: 'VIRCH – Trelew, Chubut',
+      locationId: defaultEst ? defaultEst.locationId : 'OTHER',
+      clientId: defaultEst?.clientId,
+      isCustomLocation: !defaultEst,
+      venueName: defaultEst ? defaultEst.venueName : 'Chacra Experimental PatagonianC LTDA',
+      locality: defaultEst ? defaultEst.locality : 'VIRCH – Trelew, Chubut',
+      address: defaultEst ? defaultEst.address : 'Ruta Provincial N° 7 — Valle Inferior del Río Chubut',
+      coordinates: defaultEst ? defaultEst.coordinates : { lat: -43.308362, lng: -65.289033 },
+      routeInstructions: defaultEst
+        ? defaultEst.routeInstructions
+        : 'Desde Rotonda RN 3 y RP 7 (Trelew), tomar Ruta Provincial N° 7 hacia el oeste y seguir señalética vial oficial del evento.',
+      routeWaypoints: defaultEst?.routeWaypoints,
+      gatekeeperPhone: '+5492804667788',
       organizer: 'PatagonianC LTDA • Dirección Técnica',
       maxCapacity: 50,
       status: 'inscripcion_abierta',
@@ -552,11 +594,28 @@ export default function Events() {
         'Se reprograma en caso de mal tiempo (Aviso 24 hs antes). Presentar Pase QR y DNI en tranquera.',
       description: ''
     });
+    setQuickCoordsInput(
+      defaultEst
+        ? `${defaultEst.coordinates.lat.toFixed(6)}, ${defaultEst.coordinates.lng.toFixed(6)}`
+        : '-43.308362, -65.289033'
+    );
     setIsEventModalOpen(true);
   };
 
   const openEditEventModal = (evt: FieldEvent) => {
-    setEventForm({ ...evt });
+    const matchedEst = enabledEstablishments.find(e => e.locationId === evt.locationId);
+    const locationIdValue = evt.isCustomLocation
+      ? 'OTHER'
+      : matchedEst
+        ? matchedEst.locationId
+        : evt.locationId || (enabledEstablishments[0]?.locationId ?? 'OTHER');
+    setEventForm({
+      ...evt,
+      locationId: locationIdValue,
+      isCustomLocation: locationIdValue === 'OTHER'
+    });
+    const coords = evt.coordinates || matchedEst?.coordinates || { lat: -43.308362, lng: -65.289033 };
+    setQuickCoordsInput(`${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`);
     setIsEventModalOpen(true);
   };
 
@@ -1448,36 +1507,242 @@ export default function Events() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="font-black uppercase text-[10px] text-slate-500 block mb-1">
-                    Establecimiento / Sede de Campo *
-                  </label>
-                  <input
-                    required
-                    type="text"
-                    list="events-venues-list"
-                    value={eventForm.venueName || ''}
-                    onChange={e => setEventForm(p => ({ ...p, venueName: e.target.value }))}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold text-slate-900 dark:text-white"
-                  />
-                  <datalist id="events-venues-list">
-                    {(allLocations || []).map(loc => (
-                      <option key={loc.id} value={loc.name} />
-                    ))}
-                  </datalist>
-                </div>
+                {/* DESPLEGABLE VINCULADO A TABLA DE ESTABLECIMIENTOS Y CAMPOS HABILITADOS + OPCIÓN OTRO */}
+                <div className="sm:col-span-2 bg-emerald-50/70 dark:bg-emerald-950/30 border-2 border-[#006633]/30 rounded-2xl p-4 space-y-3.5">
+                  <div>
+                    <label className="font-black uppercase text-[10px] text-[#006633] dark:text-emerald-400 block mb-1">
+                      Establecimiento del Evento (Campos Habilitados en la Red o Locación Externa) *
+                    </label>
+                    <select
+                      value={
+                        eventForm.isCustomLocation || eventForm.locationId === 'OTHER'
+                          ? 'OTHER'
+                          : eventForm.locationId || enabledEstablishments[0]?.locationId || 'OTHER'
+                      }
+                      onChange={e => {
+                        const sel = e.target.value;
+                        if (sel === 'OTHER') {
+                          const resolvedOther = resolveEventVenueFromSelection({
+                            selectionId: 'OTHER',
+                            locations: allLocations || [],
+                            clients: clients || [],
+                            customVenueName: '',
+                            customLocality: eventForm.locality || 'Trelew, Chubut',
+                            customAddress: '',
+                            customLat: eventForm.coordinates?.lat || -43.308362,
+                            customLng: eventForm.coordinates?.lng || -65.289033
+                          });
+                          setEventForm(p => ({
+                            ...p,
+                            locationId: 'OTHER',
+                            clientId: undefined,
+                            isCustomLocation: true,
+                            venueName: '',
+                            locality: resolvedOther.locality,
+                            address: '',
+                            coordinates: resolvedOther.coordinates,
+                            routeInstructions: resolvedOther.routeInstructions,
+                            routeWaypoints: resolvedOther.routeWaypoints
+                          }));
+                        } else {
+                          const resolved = resolveEventVenueFromSelection({
+                            selectionId: sel,
+                            locations: allLocations || [],
+                            clients: clients || []
+                          });
+                          setQuickCoordsInput(
+                            `${resolved.coordinates.lat}, ${resolved.coordinates.lng}`
+                          );
+                          setEventForm(p => ({
+                            ...p,
+                            locationId: resolved.locationId,
+                            clientId: resolved.clientId,
+                            isCustomLocation: false,
+                            venueName: resolved.venueName,
+                            locality: resolved.locality,
+                            address: resolved.address,
+                            coordinates: resolved.coordinates,
+                            routeInstructions: resolved.routeInstructions,
+                            routeWaypoints: resolved.routeWaypoints
+                          }));
+                        }
+                      }}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-900 border-2 border-[#006633]/50 font-black text-slate-900 dark:text-white"
+                    >
+                      <optgroup label="Establecimientos y Campos Habilitados en la Red HempC">
+                        {enabledEstablishments.map(opt => (
+                          <option key={opt.locationId} value={opt.locationId}>
+                            {opt.displayLabel} — GPS: {opt.coordinates.lat.toFixed(4)},{' '}
+                            {opt.coordinates.lng.toFixed(4)}
+                          </option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="Locación Externa / Fuera de Red">
+                        <option value="OTHER">
+                          OTRO — Habilitar carga manual de otra locación / predio externo
+                        </option>
+                      </optgroup>
+                    </select>
+                  </div>
 
-                <div>
-                  <label className="font-black uppercase text-[10px] text-slate-500 block mb-1">
-                    Localidad y Provincia *
-                  </label>
-                  <input
-                    required
-                    type="text"
-                    value={eventForm.locality || ''}
-                    onChange={e => setEventForm(p => ({ ...p, locality: e.target.value }))}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold text-slate-900 dark:text-white"
-                  />
+                  {/* Si seleccionó OTRO: Habilita el bloque para ingresar la Locación Personalizada */}
+                  {(eventForm.isCustomLocation || eventForm.locationId === 'OTHER') ? (
+                    <div className="bg-amber-50/80 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800 rounded-xl p-3.5 space-y-3">
+                      <div className="text-[10px] font-mono font-black uppercase text-amber-800 dark:text-amber-300">
+                        📍 LOCACIÓN PERSONALIZADA HABILITADA (OPCIÓN: OTRO)
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="font-black uppercase text-[10px] text-slate-600 dark:text-slate-300 block mb-1">
+                            Nombre del Lugar / Establecimiento del Evento *
+                          </label>
+                          <input
+                            required
+                            type="text"
+                            value={eventForm.venueName || ''}
+                            onChange={e =>
+                              setEventForm(p => ({ ...p, venueName: e.target.value }))
+                            }
+                            placeholder="Ej: Predio Ferial Sociedad Rural / Aula Magna UNPSJB"
+                            className="w-full px-3.5 py-2 rounded-xl bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700 font-bold text-slate-900 dark:text-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="font-black uppercase text-[10px] text-slate-600 dark:text-slate-300 block mb-1">
+                            Localidad y Provincia *
+                          </label>
+                          <input
+                            required
+                            type="text"
+                            value={eventForm.locality || ''}
+                            onChange={e =>
+                              setEventForm(p => ({ ...p, locality: e.target.value }))
+                            }
+                            placeholder="Ej: Gaiman, Chubut"
+                            className="w-full px-3.5 py-2 rounded-xl bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700 font-bold text-slate-900 dark:text-white"
+                          />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="font-black uppercase text-[10px] text-slate-600 dark:text-slate-300 block mb-1">
+                            Dirección Vial / Kilómetro de Ruta *
+                          </label>
+                          <input
+                            required
+                            type="text"
+                            value={eventForm.address || ''}
+                            onChange={e =>
+                              setEventForm(p => ({ ...p, address: e.target.value }))
+                            }
+                            placeholder="Ej: Ruta Provincial 7 Km 18, Bajada Puente Viejo"
+                            className="w-full px-3.5 py-2 rounded-xl bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700 font-bold text-slate-900 dark:text-white"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-white dark:bg-slate-900 p-3 rounded-xl border border-emerald-200 dark:border-emerald-800/70">
+                      <div>
+                        <span className="text-[9px] font-mono uppercase text-slate-400 block">
+                          Establecimiento y Campo Vinculado
+                        </span>
+                        <span className="font-black text-xs text-slate-900 dark:text-white">
+                          {eventForm.venueName}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[9px] font-mono uppercase text-slate-400 block">
+                          Localidad y Dirección Vial
+                        </span>
+                        <span className="font-bold text-xs text-[#006633] dark:text-emerald-400">
+                          {eventForm.address} ({eventForm.locality})
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Coordenadas GPS para el Celular y Ruta Destacada */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="font-black uppercase text-[10px] text-slate-500 block mb-1">
+                        Latitud GPS *
+                      </label>
+                      <input
+                        type="number"
+                        step="0.000001"
+                        value={eventForm.coordinates?.lat ?? -43.308362}
+                        onChange={e => {
+                          const lat = Number(e.target.value);
+                          const lng = eventForm.coordinates?.lng ?? -65.289033;
+                          setQuickCoordsInput(`${lat}, ${lng}`);
+                          setEventForm(p => ({
+                            ...p,
+                            coordinates: { lat, lng }
+                          }));
+                        }}
+                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-mono font-bold text-slate-900 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="font-black uppercase text-[10px] text-slate-500 block mb-1">
+                        Longitud GPS *
+                      </label>
+                      <input
+                        type="number"
+                        step="0.000001"
+                        value={eventForm.coordinates?.lng ?? -65.289033}
+                        onChange={e => {
+                          const lat = eventForm.coordinates?.lat ?? -43.308362;
+                          const lng = Number(e.target.value);
+                          setQuickCoordsInput(`${lat}, ${lng}`);
+                          setEventForm(p => ({
+                            ...p,
+                            coordinates: { lat, lng }
+                          }));
+                        }}
+                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-mono font-bold text-slate-900 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="font-black uppercase text-[10px] text-slate-500 block mb-1">
+                        Pegar Coordenadas Google Maps
+                      </label>
+                      <input
+                        type="text"
+                        value={quickCoordsInput}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setQuickCoordsInput(val);
+                          const parsed = parseCoordinateString(val);
+                          if (parsed) {
+                            setEventForm(p => ({
+                              ...p,
+                              coordinates: parsed
+                            }));
+                          }
+                        }}
+                        placeholder="-43.308362, -65.289033"
+                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-mono text-xs text-[#006633] dark:text-emerald-400"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="font-black uppercase text-[10px] text-slate-500 block mb-1">
+                      Ruta Destacada Paso a Paso (Se envía en el correo de acreditación y en el Pase QR) *
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={eventForm.routeInstructions || ''}
+                      onChange={e =>
+                        setEventForm(p => ({ ...p, routeInstructions: e.target.value }))
+                      }
+                      placeholder="Indicaciones viales desde la ruta principal hasta la tranquera de acreditación..."
+                      className="w-full px-3.5 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+                    />
+                  </div>
+
+                  {/* Vista Previa en Vivo del Mapa con la Ruta Destacada y Link al GPS del Celular */}
+                  <EventRouteMapPreview event={eventForm} compact />
                 </div>
 
                 <div>
@@ -1722,13 +1987,13 @@ export default function Events() {
           MODAL: VISTA DE PASE QR DE ASISTENTE O QR PÚBLICO DE EVENTO
          ===================================================================== */}
       {qrModalTarget && (
-        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-md w-full p-6 text-center space-y-4 shadow-2xl">
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-xl w-full p-6 text-center space-y-4 shadow-2xl my-8 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-mono font-bold uppercase text-[#006633] dark:text-emerald-400">
                 {qrModalTarget.type === 'attendee'
-                  ? 'PASE QR OFICIAL DE ASISTENTE'
-                  : 'QR DE INSCRIPCIÓN PÚBLICA AL EVENTO'}
+                  ? 'PASE QR OFICIAL DE ASISTENTE + MAPA Y GPS'
+                  : 'QR DE INSCRIPCIÓN PÚBLICA AL EVENTO + UBICACIÓN GPS'}
               </span>
               <button
                 type="button"
@@ -1746,12 +2011,12 @@ export default function Events() {
                   qrModalTarget.type === 'attendee' && qrModalTarget.attendee
                     ? `https://red.hempc.com.ar/#/login?pase_qr=${encodeURIComponent(
                         qrModalTarget.attendee.eventTicketCode || 'SIEMBRA-21N'
-                      )}&email=${encodeURIComponent(qrModalTarget.attendee.email)}&name=${encodeURIComponent(qrModalTarget.attendee.name || '')}&dni=${encodeURIComponent(qrModalTarget.attendee.dniNumber || '')}&phone=${encodeURIComponent(qrModalTarget.attendee.phone || '')}&org=${encodeURIComponent(qrModalTarget.attendee.organizationName || '')}&loc=${encodeURIComponent(qrModalTarget.attendee.localityOrProvince || '')}`
+                      )}&email=${encodeURIComponent(qrModalTarget.attendee.email)}&name=${encodeURIComponent(qrModalTarget.attendee.name || '')}&dni=${encodeURIComponent(qrModalTarget.attendee.dniNumber || '')}&phone=${encodeURIComponent(qrModalTarget.attendee.phone || '')}&org=${encodeURIComponent(qrModalTarget.attendee.organizationName || '')}&loc=${encodeURIComponent(qrModalTarget.attendee.localityOrProvince || '')}&evtid=${encodeURIComponent(qrModalTarget.event.id)}`
                     : `https://red.hempc.com.ar/#/login?evento=${encodeURIComponent(
                         qrModalTarget.event.slug
                       )}`
                 }
-                size={180}
+                size={170}
                 level="M"
               />
             </div>
@@ -1797,6 +2062,13 @@ export default function Events() {
               </div>
             )}
 
+            {/* Mapa Interactivo con Ruta Destacada y Link al GPS del Celular */}
+            <EventRouteMapPreview
+              event={qrModalTarget.event}
+              attendee={qrModalTarget.attendee}
+              compact
+            />
+
             <div className="space-y-2 pt-1">
               {qrModalTarget.type === 'attendee' && qrModalTarget.attendee && (
                 <>
@@ -1810,7 +2082,7 @@ export default function Events() {
                     }}
                     className="w-full py-3 rounded-xl bg-[#006633] hover:bg-[#004d26] text-white text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-md cursor-pointer"
                   >
-                    <Download size={15} /> Descargar Credencial / Pase QR Oficial (PDF)
+                    <Download size={15} /> Descargar Credencial / Pase QR + Croquis GPS (PDF)
                   </button>
 
                   <button
@@ -1827,7 +2099,7 @@ export default function Events() {
                     ) : (
                       <Mail size={15} />
                     )}
-                    <span>Re-enviar Pase QR al Correo ({qrModalTarget.attendee.email})</span>
+                    <span>Re-enviar Pase QR + Mapa GPS al Correo ({qrModalTarget.attendee.email})</span>
                   </button>
 
                   <button
