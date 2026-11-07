@@ -16,7 +16,9 @@ import {
 import {
   DEFAULT_FIELD_EVENTS,
   createEventRegistrationRecord,
-  isEventOnlyAttendee
+  isEventOnlyAttendee,
+  downloadEventAccreditationPassPDF,
+  svgElementToPngDataUrl
 } from '../src/services/eventsManagementService';
 import { createPendingPublicRegistration } from '../src/services/producerOnboardingWorkflow';
 
@@ -24,6 +26,7 @@ interface EventAndSelfRegistrationModalProps {
   isOpen: boolean;
   initialMode?: 'event' | 'platform';
   selectedEvent?: FieldEvent;
+  preConfirmedAttendee?: Partial<User> | null;
   onClose: () => void;
   usersList: User[];
   addUser: (u: User) => Promise<boolean>;
@@ -41,6 +44,7 @@ export default function EventAndSelfRegistrationModal({
   isOpen,
   initialMode = 'event',
   selectedEvent,
+  preConfirmedAttendee,
   onClose,
   usersList,
   addUser,
@@ -71,13 +75,36 @@ export default function EventAndSelfRegistrationModal({
 
   useEffect(() => {
     if (isOpen) {
+      if (preConfirmedAttendee && (preConfirmedAttendee.email || preConfirmedAttendee.eventTicketCode)) {
+        setMode('event');
+        setCreatedUser({
+          id: preConfirmedAttendee.id || `evt-att-${Date.now()}`,
+          name: preConfirmedAttendee.name || 'Visitante Registrado',
+          email: preConfirmedAttendee.email || '',
+          role: 'viewer',
+          accessScope: 'event_attendee',
+          phone: preConfirmedAttendee.phone || '',
+          dniNumber: preConfirmedAttendee.dniNumber || '',
+          organizationName: preConfirmedAttendee.organizationName || 'Visitante a Jornada',
+          localityOrProvince: preConfirmedAttendee.localityOrProvince || activeEvent.locality,
+          eventRegistered: true,
+          eventConfirmedByEmail: true,
+          eventTicketCode: preConfirmedAttendee.eventTicketCode || 'SIEMBRA-21N-OFICIAL',
+          requestedProfileType: 'visitante',
+          accountStatus: preConfirmedAttendee.accountStatus || 'pending_approval',
+          isNetworkMember: false
+        });
+        setStep('confirmed');
+        setFormError('');
+        return;
+      }
       setMode(initialMode);
       setRequestedProfile('visitante');
       setStep('form');
       setFormError('');
       setEnteredPin('');
     }
-  }, [initialMode, isOpen]);
+  }, [initialMode, isOpen, preConfirmedAttendee, activeEvent.locality]);
 
   const isEventSelected = mode === 'event';
 
@@ -168,6 +195,8 @@ export default function EventAndSelfRegistrationModal({
         ticketCode: isEventSelected ? finalTicket : `ALTA-NUCLEUS-${String(Date.now()).slice(-4)}`,
         verificationPin: pin,
         profileLabel: profileText,
+        dniNumber: newUserObj.dniNumber,
+        phone: newUserObj.phone,
         organizationName: newUserObj.organizationName,
         locality: newUserObj.localityOrProvince
       });
@@ -227,6 +256,13 @@ export default function EventAndSelfRegistrationModal({
     };
     await updateUser(updated);
     setCreatedUser(updated);
+  };
+
+  const handleDownloadPassCredential = async () => {
+    if (!createdUser) return;
+    const svgEl = document.getElementById('modal-confirmed-qr-svg');
+    const qrDataUrl = await svgElementToPngDataUrl(svgEl, 360);
+    downloadEventAccreditationPassPDF(activeEvent, createdUser, qrDataUrl);
   };
 
   // Orden de perfiles priorizando VISITANTE / INVITADO GENERAL primero
@@ -733,9 +769,16 @@ export default function EventAndSelfRegistrationModal({
               {isEventSelected && createdUser.eventRegistered && (
                 <div className="bg-white p-3 rounded-2xl shadow-md flex-shrink-0">
                   <QRCodeSVG
-                    value={`https://red.hempc.com.ar/#/login?ticket=${encodeURIComponent(
+                    id="modal-confirmed-qr-svg"
+                    value={`https://red.hempc.com.ar/#/login?pase_qr=${encodeURIComponent(
                       createdUser.eventTicketCode || ticketCode
-                    )}&email=${encodeURIComponent(createdUser.email)}`}
+                    )}&email=${encodeURIComponent(createdUser.email)}&name=${encodeURIComponent(
+                      createdUser.name
+                    )}&dni=${encodeURIComponent(createdUser.dniNumber || '')}&phone=${encodeURIComponent(
+                      createdUser.phone || ''
+                    )}&org=${encodeURIComponent(createdUser.organizationName || '')}&loc=${encodeURIComponent(
+                      createdUser.localityOrProvince || ''
+                    )}`}
                     size={104}
                     level="M"
                   />
@@ -747,7 +790,7 @@ export default function EventAndSelfRegistrationModal({
                   <CheckCircle2 size={13} />
                   <span>
                     {isEventSelected && createdUser.eventRegistered
-                      ? 'Email Confirmado • Visitante al Evento Acreditado'
+                      ? 'Email Confirmado • Inscripción Registrada en EVENTOS'
                       : 'Solicitud de Alta de Usuario Recibida'}
                   </span>
                 </div>
@@ -755,10 +798,8 @@ export default function EventAndSelfRegistrationModal({
                   {createdUser.name}
                 </h3>
                 <p className="text-xs text-emerald-200 font-medium">
-                  {isEventSelected
-                    ? 'Visitante al Evento / Invitado General'
-                    : PROFILE_LABELS[createdUser.requestedProfileType || 'visitante']}{' '}
-                  • {createdUser.organizationName}
+                  DNI: <strong>{createdUser.dniNumber || 'S/D'}</strong> • Tel: <strong>{createdUser.phone || 'S/D'}</strong> •{' '}
+                  {createdUser.organizationName} ({createdUser.localityOrProvince || activeEvent.locality})
                 </p>
                 <div className="pt-1 flex flex-wrap items-center justify-center sm:justify-start gap-2">
                   {isEventSelected && createdUser.eventRegistered && (
@@ -772,36 +813,46 @@ export default function EventAndSelfRegistrationModal({
                     </span>
                   ) : (
                     <span className="px-3 py-1 rounded-lg bg-amber-500/20 text-amber-300 text-[10px] font-black uppercase flex items-center gap-1">
-                      <Clock size={12} /> Pendiente de Aprobación Admin (Enlace de Contraseña por Email)
+                      <Clock size={12} /> {isEventSelected ? 'Aguardando Aprobación de Acreditación Admin' : 'Pendiente de Aprobación Admin'}
                     </span>
                   )}
                 </div>
               </div>
             </div>
 
-            {/* Botón Principal de Descarga del Programa Oficial (SOLO PARA EL VISITANTE AL EVENTO) */}
+            {/* Botones Principales de Descarga: Credencial Pase QR + Programa Oficial (SOLO PARA EL VISITANTE AL EVENTO) */}
             {isEventSelected && createdUser.eventRegistered && (
-              <div className="bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/50 dark:to-slate-900 p-5 sm:p-6 rounded-2xl sm:rounded-3xl border-2 border-emerald-500/40 flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div className="space-y-1 text-center sm:text-left">
+              <div className="bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/50 dark:to-slate-900 p-5 sm:p-6 rounded-2xl sm:rounded-3xl border-2 border-emerald-500/40 flex flex-col lg:flex-row items-center justify-between gap-4">
+                <div className="space-y-1 text-center lg:text-left">
                   <span className="text-[10px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-400">
-                    Exclusivo Visitante al Evento • PatagonianC & UATRE (Sujeto a actualización)
+                    Documentación Oficial del Asistente • PatagonianC & UATRE
                   </span>
                   <h4 className="text-sm sm:text-base font-black text-slate-900 dark:text-white uppercase">
-                    JORNADA OFICIAL: “UN DÍA DE SIEMBRA” (PDF)
+                    CREDENCIAL PASE QR Y PROGRAMA OFICIAL “UN DÍA DE SIEMBRA” (PDF)
                   </h4>
                   <p className="text-xs text-slate-600 dark:text-slate-300">
-                    Incluye el Cronograma General de Actividades (08:30 a 15:30 hs), el Esquema de Siembra en 3 Lotes por Propósito y el Protocolo BPA / NUCLEUS.
+                    Descargá tu Credencial con los datos de tu registro y el Programa Oficial de Actividades (08:30 a 15:30 hs).
                   </p>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={handleDownloadProgram}
-                  className="w-full sm:w-auto px-6 py-4 bg-[#006633] hover:bg-[#004d26] text-white rounded-xl font-black text-xs uppercase tracking-wider shadow-xl flex items-center justify-center gap-2.5 whitespace-nowrap transition active:scale-95 cursor-pointer"
-                >
-                  <Download size={18} />
-                  <span>Descargar Programa Oficial (PDF)</span>
-                </button>
+                <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full lg:w-auto">
+                  <button
+                    type="button"
+                    onClick={handleDownloadPassCredential}
+                    className="w-full sm:w-auto px-5 py-3.5 bg-slate-900 hover:bg-slate-800 text-[#DDDB00] border border-slate-700 rounded-xl font-black text-xs uppercase tracking-wider shadow-lg flex items-center justify-center gap-2 whitespace-nowrap transition active:scale-95 cursor-pointer"
+                  >
+                    <Download size={16} />
+                    <span>Descargar Pase QR (PDF)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDownloadProgram}
+                    className="w-full sm:w-auto px-5 py-3.5 bg-[#006633] hover:bg-[#004d26] text-white rounded-xl font-black text-xs uppercase tracking-wider shadow-xl flex items-center justify-center gap-2 whitespace-nowrap transition active:scale-95 cursor-pointer"
+                  >
+                    <Download size={16} />
+                    <span>Descargar Programa Oficial (PDF)</span>
+                  </button>
+                </div>
               </div>
             )}
 

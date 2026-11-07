@@ -705,3 +705,270 @@ export function downloadEventAttendanceCertificatePDF(event: FieldEvent, attende
   const safeName = attendee.name.replace(/[^a-zA-Z0-9_-]/g, '_');
   doc.save(`Certificado_Asistencia_${safeName}.pdf`);
 }
+
+/**
+ * Convierte un elemento <svg> (como QRCodeSVG) a un Data URL PNG de alta resolución para incrustar en PDF.
+ */
+export function svgElementToPngDataUrl(
+  svgElement: Element | null | undefined,
+  size = 360
+): Promise<string | undefined> {
+  if (!svgElement || typeof window === 'undefined') return Promise.resolve(undefined);
+  return new Promise(resolve => {
+    try {
+      const serializer = new XMLSerializer();
+      let svgString = serializer.serializeToString(svgElement);
+      if (!svgString.includes('xmlns="http://www.w3.org/2000/svg"')) {
+        svgString = svgString.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+      }
+      const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(svgBlob);
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = size;
+          canvas.height = size;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, size, size);
+            ctx.drawImage(img, 16, 16, size - 32, size - 32);
+            URL.revokeObjectURL(url);
+            resolve(canvas.toDataURL('image/png'));
+            return;
+          }
+        } catch {}
+        URL.revokeObjectURL(url);
+        resolve(undefined);
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve(undefined);
+      };
+      img.src = url;
+    } catch {
+      resolve(undefined);
+    }
+  });
+}
+
+/**
+ * Genera y descarga la CREDENCIAL / PASE OFICIAL DE ACREDITACIÓN QR (PDF A4)
+ * con todos los datos del registro del asistente, su código QR de acceso en tranquera
+ * y el resumen del programa de la jornada.
+ */
+export function downloadEventAccreditationPassPDF(
+  event: FieldEvent,
+  attendee: Partial<User>,
+  qrPngDataUrl?: string
+): void {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const ticketCode = attendee.eventTicketCode || `${event.ticketPrefix || 'SIEMBRA-21N'}-OFICIAL`;
+  const attendeeName = (attendee.name || 'Visitante Acreditado').toUpperCase();
+  const attendeeDni = attendee.dniNumber || 'Presentar DNI físico en puerta';
+  const attendeeEmail = attendee.email || 'S/D';
+  const attendeePhone = attendee.phone || 'S/D';
+  const attendeeOrg = attendee.organizationName || 'Visitante / Invitado General';
+  const attendeeLoc = attendee.localityOrProvince || event.locality || 'VIRCH – Trelew, Chubut';
+  const approvedDate = attendee.approvedAt || new Date().toISOString().split('T')[0];
+  const approvedBy = attendee.approvedBy || 'Administración Central HempC';
+
+  // 1. Encabezado Institucional de Credencial Oficial
+  doc.setFillColor(12, 45, 30);
+  doc.rect(0, 0, 210, 44, 'F');
+  doc.setFillColor(221, 219, 0);
+  doc.rect(0, 44, 210, 2.5, 'F');
+
+  doc.setTextColor(221, 219, 0);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.text('PATAGONIANC LTDA COOPERATIVA DE TRABAJO • RED COOPERATIVA HEMPC / NUCLEUS', 14, 11);
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(15);
+  doc.text('CREDENCIAL OFICIAL DE ACREDITACIÓN • PASE DE INGRESO QR', 14, 20);
+
+  doc.setFontSize(11);
+  doc.setTextColor(167, 243, 208);
+  doc.text(event.title, 14, 28);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(226, 232, 240);
+  doc.text(`Sede: ${event.venueName} (${event.locality})`, 14, 34.5);
+  doc.text(`Fecha y Horario: ${event.dateLabel}  |  Organizan: ${event.organizer}`, 14, 40);
+
+  // 2. Tarjeta Principal de Credencial con Datos del Registro + QR Escaneable
+  doc.setFillColor(248, 250, 252);
+  doc.setDrawColor(0, 102, 51);
+  doc.setLineWidth(0.8);
+  doc.roundedRect(12, 52, 186, 86, 4, 4, 'FD');
+
+  // Franja de estado de acreditación
+  doc.setFillColor(0, 102, 51);
+  doc.rect(12, 52, 186, 11, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9.5);
+  doc.text('ESTADO: ACREDITACIÓN OFICIAL APROBADA POR ADMINISTRACIÓN (PASE PERSONAL E INTRANSFERIBLE)', 17, 59);
+
+  // Columna Izquierda: Datos Completos del Registro (x = 17..134)
+  doc.setTextColor(100, 116, 139);
+  doc.setFontSize(7.5);
+  doc.text('APELLIDO Y NOMBRE DEL ASISTENTE ACREDITADO:', 17, 71);
+  doc.setTextColor(15, 23, 42);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  doc.text(attendeeName.slice(0, 34), 17, 78);
+
+  // Grilla de datos del titular
+  const drawField = (label: string, val: string, x: number, y: number, maxLen = 30) => {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.2);
+    doc.setTextColor(100, 116, 139);
+    doc.text(label.toUpperCase(), x, y);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text(String(val || '-').slice(0, maxLen), x, y + 5);
+  };
+
+  drawField('DNI / CUIT (Identificación):', attendeeDni, 17, 86, 24);
+  drawField('Teléfono / WhatsApp:', attendeePhone, 78, 86, 24);
+
+  drawField('Correo Electrónico Registrado:', attendeeEmail, 17, 99, 36);
+  drawField('Localidad / Provincia:', attendeeLoc, 92, 99, 22);
+
+  drawField('Institución / Establecimiento / Procedencia:', attendeeOrg, 17, 112, 42);
+  drawField('Aprobado por / Fecha:', `${approvedBy.slice(0, 18)} (${approvedDate})`, 92, 112, 26);
+
+  // Banda inferior con Código Oficial de Pase
+  doc.setFillColor(12, 45, 30);
+  doc.roundedRect(17, 123, 116, 11, 2, 2, 'F');
+  doc.setTextColor(221, 219, 0);
+  doc.setFont('courier', 'bold');
+  doc.setFontSize(11);
+  doc.text(`PASE OFICIAL N°: ${ticketCode}`, 21, 130);
+
+  // Columna Derecha: Recuadro de Código QR Escaneable (x = 140..192, y = 67..132)
+  doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(203, 213, 225);
+  doc.setLineWidth(0.5);
+  doc.roundedRect(140, 66, 52, 68, 3, 3, 'FD');
+
+  if (qrPngDataUrl) {
+    try {
+      doc.addImage(qrPngDataUrl, 'PNG', 144, 69, 44, 44);
+    } catch {
+      // Fallback visual si no se pudo inyectar imagen
+    }
+  } else {
+    // Marco visual de validación QR cuando se genera sin canvas previo
+    doc.setDrawColor(12, 45, 30);
+    doc.setLineWidth(0.7);
+    doc.rect(146, 72, 40, 40);
+    doc.setFont('courier', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(12, 45, 30);
+    doc.text('PASE VERIFICADO', 166, 89, { align: 'center' });
+    doc.setFontSize(9.5);
+    doc.text(ticketCode, 166, 96, { align: 'center' });
+    doc.setFontSize(7);
+    doc.text('CONTROL EN PUERTA', 166, 103, { align: 'center' });
+  }
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.setTextColor(12, 45, 30);
+  doc.text('CONTROL DE ACCESO QR', 166, 119, { align: 'center' });
+  doc.setFont('courier', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(15, 23, 42);
+  doc.text(ticketCode, 166, 124, { align: 'center' });
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(6.5);
+  doc.setTextColor(100, 116, 139);
+  doc.text('Presentar con DNI en Tranquera', 166, 129, { align: 'center' });
+
+  // 3. Instrucciones de Ingreso y Aviso Climático
+  doc.setFillColor(254, 252, 232);
+  doc.setDrawColor(234, 179, 8);
+  doc.setLineWidth(0.4);
+  doc.roundedRect(12, 143, 186, 18, 3, 3, 'FD');
+  doc.setTextColor(146, 64, 14);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.text('INSTRUCCIONES DE INGRESO EN PREDIO Y PROTOCOLO DE CAMPO:', 16, 149);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.text(
+    `1) Presentá esta credencial (impresa o en tu celular) junto con tu DNI en el puesto de ingreso de ${event.venueName}.`,
+    16,
+    154.5
+  );
+  doc.text(
+    `2) ${event.weatherWarning || 'Actividad a cielo abierto sujeta a condiciones meteorológicas (Aviso 24 hs antes).'}`,
+    16,
+    159
+  );
+
+  // 4. Cronograma Oficial Resumido en la misma hoja de la Credencial
+  doc.setTextColor(12, 45, 30);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.text('CRONOGRAMA OFICIAL DE LA JORNADA (RESUMEN DE ACTIVIDADES)', 12, 170);
+  doc.setDrawColor(0, 102, 51);
+  doc.setLineWidth(0.5);
+  doc.line(12, 172, 198, 172);
+
+  let y = 178;
+  const schedule = event.scheduleItems && event.scheduleItems.length > 0 ? event.scheduleItems : EVENT_SCHEDULE_ITEMS;
+  schedule.slice(0, 8).forEach(item => {
+    if (y > 268) return;
+    doc.setFillColor(241, 245, 249);
+    doc.roundedRect(12, y - 4, 186, 10, 1.5, 1.5, 'F');
+    doc.setFont('courier', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(0, 102, 51);
+    doc.text(item.time, 15, y + 1.5);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.2);
+    doc.setTextColor(15, 23, 42);
+    doc.text(`${item.block} — ${item.subBlock}`.slice(0, 72), 42, y);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.2);
+    doc.setTextColor(71, 85, 105);
+    doc.text(String(item.description || '').slice(0, 95), 42, y + 4.2);
+
+    y += 12;
+  });
+
+  // 5. Pie de Página de Seguridad
+  doc.setDrawColor(203, 213, 225);
+  doc.line(12, 278, 198, 278);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.setTextColor(12, 45, 30);
+  doc.text(
+    'PatagonianC LTDA Cooperativa de Trabajo · Matrícula INAES 68218 · CUIT: 30-71816113-0 · notificaciones@hempc.com.ar',
+    105,
+    283,
+    { align: 'center' }
+  );
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(100, 116, 139);
+  doc.text(
+    'Esta credencial acredita exclusivamente la asistencia presencial al evento indicado y no otorga acceso al sistema informático interno.',
+    105,
+    287.5,
+    { align: 'center' }
+  );
+
+  const safeName = String(attendee.name || 'Asistente').replace(/[^a-zA-Z0-9_-]/g, '_');
+  doc.save(`Credencial_Pase_QR_${ticketCode}_${safeName}.pdf`);
+}
+

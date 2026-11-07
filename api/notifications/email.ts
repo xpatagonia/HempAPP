@@ -350,22 +350,41 @@ function buildLaborAssignedHtml(req: EmailNotificationPayload): string {
 
 function buildEventRegistrationHtml(req: EmailNotificationPayload): string {
   const extra = req.extra_data || {};
-  const eventName = extra.event_name || 'JORNADA OFICIAL: “UN DÍA DE SIEMBRA”';
-  const eventDate = extra.event_date || 'Sábado 21 de Noviembre • 08:30 a 15:30 hs';
-  const ticketCode = extra.ticket_code || 'SIEMBRA-21N-0001';
-  const verificationPin = extra.verification_pin || '';
-  const profileLabel = req.role_name || 'Acreditado / Participante';
-  const organization = req.structure_name || 'Participante Independiente';
-  const locality = extra.locality || 'VIRCH – Trelew, Chubut';
-  const programUrl = req.action_url || 'https://red.hempc.com.ar/#/login?evento=un-dia-de-siembra';
+  const eventName = escapeHtml(extra.event_name || 'JORNADA OFICIAL: “UN DÍA DE SIEMBRA”');
+  const eventDate = escapeHtml(extra.event_date || 'Sábado 21 de Noviembre • 08:30 a 15:30 hs');
+  const ticketCode = escapeHtml(extra.ticket_code || 'SIEMBRA-21N-0001');
+  const verificationPin = escapeHtml(extra.verification_pin || '');
+  const dniNumber = escapeHtml(extra.dni_number || 'Registrado');
+  const phone = escapeHtml(extra.phone || 'Registrado');
+  const profileLabel = escapeHtml(req.role_name || 'Visitante a Jornada / Acreditación Presencial');
+  const organization = escapeHtml(req.structure_name || 'Participante Independiente');
+  const locality = escapeHtml(extra.locality || 'VIRCH – Trelew, Chubut');
+  const toName = escapeHtml(req.to_name);
+  const toEmail = escapeHtml(req.to_email);
+
+  const directConfirmUrl = sanitizeActionUrl(
+    req.action_url,
+    `https://red.hempc.com.ar/#/login?confirmar_evento=1&ticket=${encodeURIComponent(
+      extra.ticket_code || 'SIEMBRA-21N-0001'
+    )}&pin=${encodeURIComponent(extra.verification_pin || '')}&email=${encodeURIComponent(
+      req.to_email || ''
+    )}&name=${encodeURIComponent(req.to_name || '')}&dni=${encodeURIComponent(
+      extra.dni_number || ''
+    )}&phone=${encodeURIComponent(extra.phone || '')}&org=${encodeURIComponent(
+      req.structure_name || ''
+    )}&loc=${encodeURIComponent(extra.locality || '')}`
+  );
 
   const pinBlock = verificationPin
     ? `
-      <div style="background: #f0fdf4; border: 2px dashed #059669; border-radius: 16px; padding: 16px; text-align: center; margin: 18px 0;">
-        <span style="font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 1.5px; color: #065f46; display: block; margin-bottom: 4px;">
-          Código de Confirmación para Descarga del Programa Oficial
+      <div style="background: #f0fdf4; border: 2px dashed #059669; border-radius: 16px; padding: 20px; text-align: center; margin: 20px 0;">
+        <span style="font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 1.5px; color: #065f46; display: block; margin-bottom: 6px;">
+          PASO 1: CÓDIGO PIN PARA INGRESAR EN LA PANTALLA DE INSCRIPCIÓN ABIERTA
         </span>
-        <span style="font-family: monospace; font-size: 24px; font-weight: 900; letter-spacing: 4px; color: #047857;">${verificationPin}</span>
+        <span style="font-family: monospace; font-size: 28px; font-weight: 900; letter-spacing: 6px; color: #047857; background: #ffffff; padding: 6px 18px; border-radius: 10px; border: 1px solid #a7f3d0; display: inline-block; margin: 4px 0;">${verificationPin}</span>
+        <p style="margin: 10px 0 0 0; font-size: 12px; color: #065f46; font-weight: 600;">
+          Copiá e ingresá estos 6 dígitos en la ventana donde completaste tu registro para habilitar de inmediato la descarga del <strong>Programa Oficial en PDF</strong>.
+        </p>
       </div>
     `
     : '';
@@ -380,7 +399,7 @@ function buildEventRegistrationHtml(req: EmailNotificationPayload): string {
       .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 20px; border: 1px solid #d1fae5; overflow: hidden; box-shadow: 0 8px 30px rgba(0,0,0,0.06); }
       .header { background: #0c2d1e; padding: 28px 30px; color: #ffffff; border-left: 5px solid #d97706; }
       .content { padding: 28px 30px; color: #334155; line-height: 1.6; }
-      .btn { display: inline-block; background: #006633; color: #ffffff !important; padding: 14px 28px; border-radius: 12px; font-weight: 900; text-decoration: none; font-size: 13px; text-transform: uppercase; letter-spacing: 0.8px; }
+      .btn { display: inline-block; background: #006633; color: #ffffff !important; padding: 13px 24px; border-radius: 12px; font-weight: 900; text-decoration: none; font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; }
       .schedule-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px; padding: 18px; margin: 20px 0; font-size: 12px; }
       .footer { background: #f8fafc; padding: 20px 30px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #94a3b8; text-align: center; }
     </style>
@@ -395,24 +414,26 @@ function buildEventRegistrationHtml(req: EmailNotificationPayload): string {
         <div style="font-size: 12px; color: #e2e8f0; font-weight: 600;">Sede Práctica Patagonia: Chacra Experimental PatagonianC LTDA • Ubicación: VIRCH – Trelew, Chubut</div>
       </div>
       <div class="content">
-        <p style="font-size: 15px; color: #0f172a; margin-top: 0;">Hola <strong>${req.to_name}</strong>,</p>
+        <p style="font-size: 15px; color: #0f172a; margin-top: 0;">Hola <strong>${toName}</strong>,</p>
         <p style="font-size: 13px; color: #475569;">
-          Confirmamos la recepción de tu pre-inscripción a la <strong>${eventName}</strong> (${eventDate}) organizada por <strong>PatagonianC & UATRE</strong>, y tu solicitud de alta en la plataforma <strong>HempC Nucleus</strong>.
+          Recibimos tu solicitud de inscripción para asistir a la <strong>${eventName}</strong> (${eventDate}) organizada por <strong>PatagonianC & UATRE</strong>.
         </p>
+
+        ${pinBlock}
+
+        <div style="background: #0c2d1e; color: #ffffff; border-radius: 16px; padding: 18px 22px; margin: 20px 0;">
+          <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: #6ee7b7; font-weight: 800;">Datos de tu Pre-Acreditación Registrada</div>
+          <div style="font-size: 20px; font-weight: 900; font-family: monospace; letter-spacing: 1.5px; color: #DDDB00; margin: 4px 0;">N° DE TRÁMITE / PASE: ${ticketCode}</div>
+          <div style="font-size: 12px; color: #ecfdf5; margin-top: 6px; line-height: 1.5;">
+            <strong>Titular:</strong> ${toName} • <strong>DNI / CUIT:</strong> ${dniNumber}<br/>
+            <strong>Correo:</strong> ${toEmail} • <strong>Tel:</strong> ${phone}<br/>
+            <strong>Procedencia:</strong> ${organization} (${locality}) • <strong>Categoría:</strong> ${profileLabel}
+          </div>
+        </div>
 
         <div style="background: #fffbeb; border: 1px solid #f59e0b; border-radius: 12px; padding: 12px 16px; margin: 16px 0; font-size: 11px; color: #b45309; font-weight: 700;">
           ⚠ AVISO IMPORTANTE: Por tratarse de una actividad de campo a cielo abierto, LA JORNADA SE REPROGRAMA EN CASO DE MAL TIEMPO (Aviso 24 hs antes). El programa de actividades se encuentra sujeto a actualización.
         </div>
-
-        <div style="background: #0c2d1e; color: #ffffff; border-radius: 16px; padding: 18px 22px; margin: 20px 0;">
-          <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: #6ee7b7; font-weight: 800;">Pase Oficial de Acreditación</div>
-          <div style="font-size: 20px; font-weight: 900; font-family: monospace; letter-spacing: 1.5px; color: #DDDB00; margin: 4px 0;">${ticketCode}</div>
-          <div style="font-size: 12px; color: #ecfdf5; margin-top: 6px;">
-            <strong>Perfil Solicitado:</strong> ${profileLabel} • <strong>Entidad:</strong> ${organization} (${locality})
-          </div>
-        </div>
-
-        ${pinBlock}
 
         <div class="schedule-box">
           <div style="font-size: 11px; font-weight: 900; text-transform: uppercase; color: #0c2d1e; letter-spacing: 1px; margin-bottom: 10px;">
@@ -429,11 +450,14 @@ function buildEventRegistrationHtml(req: EmailNotificationPayload): string {
         </div>
 
         <p style="font-size: 12px; color: #64748b; background: #f1f5f9; border-left: 4px solid #0c2d1e; padding: 10px 14px; border-radius: 8px;">
-          <strong>Aprobación por Administración de Eventos:</strong> Tu inscripción a la jornada quedó registrada en el padrón oficial de <strong>EVENTOS</strong>. Una vez validada por la Administración, recibirás tu confirmación definitiva de acreditación con este Pase QR para el ingreso presencial en tranquera (esta acreditación es exclusiva para asistencia al evento y no requiere cuenta de acceso al sistema interno de datos).
+          <strong>Próximo Paso — Emisión de tu Credencial QR Oficial:</strong> Una vez que la Administración de <strong>EVENTOS</strong> apruebe tu acreditación, recibirás un segundo correo con tu <strong>Credencial / Pase Oficial QR personalizado</strong> listo para descargar en PDF y presentar con tu DNI el día de la jornada.
         </p>
 
-        <div style="text-align: center; margin: 26px 0 12px 0;">
-          <a href="${programUrl}" class="btn">Confirmar Correo y Descargar Programa Oficial PDF</a>
+        <div style="text-align: center; margin: 22px 0 10px 0; padding-top: 12px; border-top: 1px dashed #cbd5e1;">
+          <p style="margin: 0 0 10px 0; font-size: 11px; color: #64748b;">
+            ¿Cerraste la pestaña de inscripción o estás viendo este correo desde otro dispositivo? Usá este enlace directo para ver tu constancia y descargar el Programa Oficial sin volver a llenar el formulario:
+          </p>
+          <a href="${directConfirmUrl}" class="btn">Ver mi Pre-Inscripción y Descargar Programa PDF</a>
         </div>
       </div>
       <div class="footer">
@@ -452,9 +476,29 @@ function buildEventAccreditationApprovedHtml(req: EmailNotificationPayload): str
   const venueName = escapeHtml(extra.venue_name || 'Chacra Experimental PatagonianC LTDA');
   const locality = escapeHtml(extra.locality || 'VIRCH – Trelew, Chubut');
   const ticketCode = escapeHtml(extra.ticket_code || 'SIEMBRA-21N-OFICIAL');
+  const dniNumber = escapeHtml(extra.dni_number || 'Presentar DNI en puerta');
+  const phone = escapeHtml(extra.phone || 'Registrado');
+  const approvedBy = escapeHtml(extra.approved_by || 'Administración Central HempC');
   const toName = escapeHtml(req.to_name);
+  const toEmail = escapeHtml(req.to_email);
   const organization = escapeHtml(req.structure_name || 'Visitante Acreditado');
-  const programUrl = sanitizeActionUrl(req.action_url, 'https://red.hempc.com.ar/#/login?evento=un-dia-de-siembra');
+
+  const passDownloadUrl = sanitizeActionUrl(
+    req.action_url,
+    `https://red.hempc.com.ar/#/login?pase_qr=${encodeURIComponent(
+      extra.ticket_code || 'SIEMBRA-21N-OFICIAL'
+    )}&email=${encodeURIComponent(req.to_email || '')}&name=${encodeURIComponent(
+      req.to_name || ''
+    )}&dni=${encodeURIComponent(extra.dni_number || '')}&phone=${encodeURIComponent(
+      extra.phone || ''
+    )}&org=${encodeURIComponent(req.structure_name || '')}&loc=${encodeURIComponent(
+      extra.locality || ''
+    )}`
+  );
+
+  const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(
+    passDownloadUrl
+  )}`;
 
   return `
   <!DOCTYPE html>
@@ -466,7 +510,7 @@ function buildEventAccreditationApprovedHtml(req: EmailNotificationPayload): str
       .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 20px; border: 1px solid #d1fae5; overflow: hidden; box-shadow: 0 8px 30px rgba(0,0,0,0.06); }
       .header { background: #0c2d1e; padding: 28px 30px; color: #ffffff; border-left: 5px solid #DDDB00; }
       .content { padding: 28px 30px; color: #334155; line-height: 1.6; }
-      .btn { display: inline-block; background: #006633; color: #ffffff !important; padding: 14px 28px; border-radius: 12px; font-weight: 900; text-decoration: none; font-size: 13px; text-transform: uppercase; letter-spacing: 0.8px; }
+      .btn { display: inline-block; background: #006633; color: #ffffff !important; padding: 15px 30px; border-radius: 12px; font-weight: 900; text-decoration: none; font-size: 13px; text-transform: uppercase; letter-spacing: 0.8px; }
       .footer { background: #f8fafc; padding: 20px 30px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #94a3b8; text-align: center; }
     </style>
   </head>
@@ -474,7 +518,7 @@ function buildEventAccreditationApprovedHtml(req: EmailNotificationPayload): str
     <div class="container">
       <div class="header">
         <div style="font-size: 10px; letter-spacing: 1.8px; text-transform: uppercase; color: #DDDB00; font-weight: 900; margin-bottom: 4px;">
-          ACREDITACIÓN OFICIAL APROBADA • ADMINISTRACIÓN DE EVENTOS HEMPC
+          CREDENCIAL OFICIAL DE ACREDITACIÓN APROBADA • EVENTOS HEMPC
         </div>
         <h1 style="margin: 4px 0 6px 0; font-size: 21px; font-weight: 900;">${eventName}</h1>
         <div style="font-size: 12px; color: #e2e8f0; font-weight: 600;">Sede: ${venueName} • ${locality}</div>
@@ -482,23 +526,64 @@ function buildEventAccreditationApprovedHtml(req: EmailNotificationPayload): str
       <div class="content">
         <p style="font-size: 15px; color: #0f172a; margin-top: 0;">Hola <strong>${toName}</strong>,</p>
         <p style="font-size: 13px; color: #475569;">
-          La Administración Central de <strong>HempC</strong> ha aprobado tu acreditación presencial para asistir a <strong>${eventName}</strong> (${eventDate}).
+          La Administración Central de <strong>HempC</strong> aprobó tu acreditación presencial para asistir a <strong>${eventName}</strong> (${eventDate}). A continuación encontrás tu <strong>Credencial Oficial con Código QR y los datos de tu registro</strong>:
         </p>
 
-        <div style="background: #0c2d1e; color: #ffffff; border-radius: 16px; padding: 20px 24px; margin: 20px 0; border: 2px solid #DDDB00;">
-          <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: #6ee7b7; font-weight: 800;">PASE OFICIAL DE INGRESO EN PUERTA (PRESENTAR CON DNI)</div>
-          <div style="font-size: 24px; font-weight: 900; font-family: monospace; letter-spacing: 2px; color: #DDDB00; margin: 6px 0;">${ticketCode}</div>
-          <div style="font-size: 12px; color: #ecfdf5; margin-top: 6px;">
-            <strong>Asistente Acreditado:</strong> ${toName} • <strong>Procedencia:</strong> ${organization}
+        <!-- CREDENCIAL OFICIAL CON DATOS DEL REGISTRO Y QR ESCANEABLE -->
+        <div style="background: #0c2d1e; color: #ffffff; border-radius: 18px; padding: 22px; margin: 22px 0; border: 2px solid #DDDB00;">
+          <div style="border-bottom: 1px solid rgba(255,255,255,0.15); padding-bottom: 10px; margin-bottom: 14px;">
+            <span style="font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: #6ee7b7; font-weight: 800; display: block;">
+              PASE PERSONAL E INTRANSFERIBLE DE INGRESO EN TRANQUERA
+            </span>
+            <div style="font-size: 24px; font-weight: 900; font-family: monospace; letter-spacing: 2px; color: #DDDB00; margin-top: 4px;">
+              ${ticketCode}
+            </div>
+          </div>
+
+          <table style="width: 100%; border-collapse: collapse; color: #ffffff; font-size: 12px;">
+            <tr>
+              <td style="padding: 4px 0; color: #a7f3d0; font-weight: 700; width: 38%;">Apellido y Nombre:</td>
+              <td style="padding: 4px 0; font-weight: 900; font-size: 14px; color: #ffffff;">${toName}</td>
+            </tr>
+            <tr>
+              <td style="padding: 4px 0; color: #a7f3d0; font-weight: 700;">DNI / CUIT:</td>
+              <td style="padding: 4px 0; font-weight: 800; color: #ffffff;">${dniNumber}</td>
+            </tr>
+            <tr>
+              <td style="padding: 4px 0; color: #a7f3d0; font-weight: 700;">Correo Electrónico:</td>
+              <td style="padding: 4px 0; color: #ecfdf5;">${toEmail}</td>
+            </tr>
+            <tr>
+              <td style="padding: 4px 0; color: #a7f3d0; font-weight: 700;">Teléfono / WhatsApp:</td>
+              <td style="padding: 4px 0; color: #ecfdf5;">${phone}</td>
+            </tr>
+            <tr>
+              <td style="padding: 4px 0; color: #a7f3d0; font-weight: 700;">Institución / Procedencia:</td>
+              <td style="padding: 4px 0; color: #ecfdf5;">${organization} (${locality})</td>
+            </tr>
+            <tr>
+              <td style="padding: 4px 0; color: #a7f3d0; font-weight: 700;">Sede y Horario:</td>
+              <td style="padding: 4px 0; color: #DDDB00; font-weight: 700;">${venueName} • ${eventDate}</td>
+            </tr>
+            <tr>
+              <td style="padding: 4px 0; color: #a7f3d0; font-weight: 700;">Autorizado por:</td>
+              <td style="padding: 4px 0; color: #6ee7b7; font-weight: 700;">${approvedBy}</td>
+            </tr>
+          </table>
+
+          <div style="text-align: center; margin-top: 18px; background: #ffffff; padding: 14px; border-radius: 14px; max-width: 210px; margin-left: auto; margin-right: auto;">
+            <img src="${qrImageUrl}" alt="Código QR de Acreditación ${ticketCode}" width="180" height="180" style="display: block; margin: 0 auto;" />
+            <div style="font-family: monospace; font-size: 12px; font-weight: 900; color: #0c2d1e; margin-top: 6px;">${ticketCode}</div>
+            <div style="font-size: 10px; color: #475569; font-weight: 700;">PRESENTAR CON DNI EN PUERTA</div>
           </div>
         </div>
 
         <p style="font-size: 12px; color: #475569; background: #f8fafc; border: 1px solid #e2e8f0; padding: 12px 16px; border-radius: 12px;">
-          <strong>Importante para el día de la Jornada:</strong> Presentá este código de pase junto con tu DNI en el puesto de acreditación de entrada (${venueName}). Podés descargar el Programa Oficial actualizado desde el siguiente enlace:
+          <strong>Descargá tu Credencial Oficial en PDF:</strong> Hacé clic en el siguiente botón para abrir tu credencial personalizada con los datos de tu registro y <strong>descargar automáticamente tu Pase QR Oficial en PDF</strong> junto con el Programa de la Jornada:
         </p>
 
         <div style="text-align: center; margin: 26px 0 12px 0;">
-          <a href="${programUrl}" class="btn">Ver Pase QR y Descargar Programa Oficial PDF</a>
+          <a href="${passDownloadUrl}" class="btn">Descargar Mi Credencial / Pase QR Oficial (PDF)</a>
         </div>
       </div>
       <div class="footer">

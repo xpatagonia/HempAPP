@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { useAppContext } from "../context/AppContext";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { QRCodeSVG } from "qrcode.react";
 import { 
   ArrowRight, AlertCircle, Loader2, ShieldCheck, 
   Leaf, Smartphone, Wifi, WifiOff, Eye, EyeOff, Lock, Mail,
-  Key, CheckCircle2, AlertTriangle, X, Calendar, Sprout, UserCheck, Download
+  Key, CheckCircle2, AlertTriangle, X, Calendar, Sprout, UserCheck, Download, QrCode
 } from "lucide-react";
 import { checkConnection, supabase } from "../supabaseClient";
 import { sendPasswordResetEmail } from "../src/services/emailNotificationService";
@@ -12,13 +13,19 @@ import { PWAInstallButton, AndroidLogo, WindowsLogo } from "../components/PWAIns
 import EventAndSelfRegistrationModal from "../components/EventAndSelfRegistrationModal";
 import { downloadUnDiaDeSiembraProgramPDF } from "../src/services/eventProgramPdfService";
 import {
+  DEFAULT_FIELD_EVENTS,
+  downloadEventAccreditationPassPDF,
+  svgElementToPngDataUrl
+} from "../src/services/eventsManagementService";
+import {
   unpackUserMetaFromJobTitle,
   activateApprovedAccountPassword,
   evaluateUserLoginGate
 } from "../src/services/producerOnboardingWorkflow";
+import { User } from "../types";
 
 export default function Login() {
-  const { currentUser, login, appName, appLogo, usersList, updateUser, addUser } = useAppContext();
+  const { currentUser, login, appName, appLogo, usersList, updateUser, addUser, fieldEvents } = useAppContext();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   
@@ -32,6 +39,11 @@ export default function Login() {
   // Modal de Inscripción al Evento "Un Día de Siembra" (Sáb. 21 Nov) & Alta Autogestiva
   const [showRegistrationModal, setShowRegistrationModal] = useState(false);
   const [registrationModalMode, setRegistrationModalMode] = useState<"event" | "platform">("event");
+  const [preConfirmedAttendee, setPreConfirmedAttendee] = useState<Partial<User> | null>(null);
+
+  // Modal de Credencial / Pase QR Oficial Acreditado (desde el botón "Ver Pase QR" del correo de acreditación)
+  const [accreditedPassUser, setAccreditedPassUser] = useState<Partial<User> | null>(null);
+  const [autoDownloadedTicket, setAutoDownloadedTicket] = useState<string | null>(null);
 
   // Estado del modal de recuperación de contraseña
   const [showForgotModal, setShowForgotModal] = useState(false);
@@ -57,33 +69,129 @@ export default function Login() {
   } | null>(null);
 
   const currentUrl = typeof window !== "undefined" ? window.location.origin : "";
+  const activeEventForPass = (fieldEvents && fieldEvents[0]) || DEFAULT_FIELD_EVENTS[0];
 
   useEffect(() => {
     const rootParams = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
-    const eventoParam = searchParams.get("evento") || rootParams.get("evento");
-    const registroParam = searchParams.get("registro") || rootParams.get("registro");
-    const activarParam = searchParams.get("activar") || rootParams.get("activar");
-    const tokenParam = searchParams.get("token") || rootParams.get("token");
+    const getParam = (key: string) => searchParams.get(key) || rootParams.get(key) || "";
+
+    const activarParam = getParam("activar");
+    const tokenParam = getParam("token");
+    const paseQrParam = getParam("pase_qr");
+    const confirmarEventoParam = getParam("confirmar_evento");
+    const ticketParam = getParam("ticket");
+    const eventoParam = getParam("evento");
+    const registroParam = getParam("registro");
+
+    const emailParam = getParam("email").trim().toLowerCase();
+    const nameParam = getParam("name").trim();
+    const dniParam = getParam("dni").trim();
+    const phoneParam = getParam("phone").trim();
+    const orgParam = getParam("org").trim();
+    const locParam = getParam("loc").trim();
 
     if (activarParam) {
       setActivateEmail(activarParam.trim().toLowerCase());
       if (tokenParam) setActivateToken(tokenParam.trim());
       setActivateStatus(null);
       setShowActivateModal(true);
-    } else if (eventoParam === "un-dia-de-siembra" || eventoParam === "21nov" || eventoParam === "siembra") {
+      return;
+    }
+
+    // Caso 1: Clic en "Descargar Mi Credencial / Pase QR Oficial" desde el correo de Acreditación Aprobada
+    if (paseQrParam || (ticketParam && !confirmarEventoParam)) {
+      const code = (paseQrParam || ticketParam).trim();
+      const matched = (usersList || []).find(
+        u =>
+          (code && String(u.eventTicketCode || "").toUpperCase() === code.toUpperCase()) ||
+          (emailParam && String(u.email || "").toLowerCase() === emailParam)
+      );
+
+      const resolvedAttendee: Partial<User> = {
+        ...(matched || {}),
+        name: matched?.name || nameParam || "Visitante Acreditado",
+        email: matched?.email || emailParam || "",
+        dniNumber: matched?.dniNumber || dniParam || "Registrado en Padrón",
+        phone: matched?.phone || phoneParam || "Registrado",
+        organizationName: matched?.organizationName || orgParam || "Visitante Acreditado",
+        localityOrProvince: matched?.localityOrProvince || locParam || activeEventForPass.locality,
+        eventTicketCode: matched?.eventTicketCode || code,
+        eventRegistered: true,
+        eventAccreditationStatus: "accredited",
+        approvedBy: matched?.approvedBy || "Administración Central HempC",
+        approvedAt: matched?.approvedAt || new Date().toISOString().split("T")[0]
+      };
+
+      setAccreditedPassUser(resolvedAttendee);
+      setShowRegistrationModal(false);
+      return;
+    }
+
+    // Caso 2: Clic en "Ver mi Pre-Inscripción y Descargar Programa PDF" desde el primer correo con PIN
+    if (confirmarEventoParam) {
+      const matched = (usersList || []).find(
+        u =>
+          (ticketParam && String(u.eventTicketCode || "").toUpperCase() === ticketParam.toUpperCase()) ||
+          (emailParam && String(u.email || "").toLowerCase() === emailParam)
+      );
+
+      const resolvedPreConfirmed: Partial<User> = {
+        ...(matched || {}),
+        name: matched?.name || nameParam || "Visitante Registrado",
+        email: matched?.email || emailParam || "",
+        dniNumber: matched?.dniNumber || dniParam || "",
+        phone: matched?.phone || phoneParam || "",
+        organizationName: matched?.organizationName || orgParam || "Visitante / Invitado General",
+        localityOrProvince: matched?.localityOrProvince || locParam || activeEventForPass.locality,
+        eventTicketCode: matched?.eventTicketCode || ticketParam || "SIEMBRA-21N-OFICIAL",
+        eventRegistered: true,
+        eventConfirmedByEmail: true
+      };
+
+      setPreConfirmedAttendee(resolvedPreConfirmed);
+      setRegistrationModalMode("event");
+      setShowRegistrationModal(true);
+      return;
+    }
+
+    if (eventoParam === "un-dia-de-siembra" || eventoParam === "21nov" || eventoParam === "siembra") {
+      setPreConfirmedAttendee(null);
       setRegistrationModalMode("event");
       setShowRegistrationModal(true);
     } else if (registroParam === "alta") {
+      setPreConfirmedAttendee(null);
       setRegistrationModalMode("platform");
       setShowRegistrationModal(true);
     }
-  }, [searchParams]);
+  }, [searchParams, usersList, activeEventForPass.locality]);
+
+  // Descarga automática del Pase QR en PDF cuando el usuario abre el enlace de su Credencial Aprobada
+  useEffect(() => {
+    if (!accreditedPassUser) return;
+    const code = accreditedPassUser.eventTicketCode || "PASE-OFICIAL";
+    if (autoDownloadedTicket === code) return;
+
+    const timer = setTimeout(async () => {
+      const svgEl = document.getElementById("accredited-pass-qr-svg");
+      const qrDataUrl = await svgElementToPngDataUrl(svgEl, 360);
+      downloadEventAccreditationPassPDF(activeEventForPass, accreditedPassUser, qrDataUrl);
+      setAutoDownloadedTicket(code);
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [accreditedPassUser, autoDownloadedTicket, activeEventForPass]);
 
   useEffect(() => {
     const rootParams = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
     const hasDirectModalParam =
       searchParams.get("evento") ||
       rootParams.get("evento") ||
+      searchParams.get("pase_qr") ||
+      rootParams.get("pase_qr") ||
+      searchParams.get("ticket") ||
+      rootParams.get("ticket") ||
+      searchParams.get("confirmar_evento") ||
+      rootParams.get("confirmar_evento") ||
       searchParams.get("registro") ||
       rootParams.get("registro") ||
       searchParams.get("activar") ||
@@ -659,11 +767,147 @@ export default function Login() {
       <EventAndSelfRegistrationModal
         isOpen={showRegistrationModal}
         initialMode={registrationModalMode}
-        onClose={() => setShowRegistrationModal(false)}
+        preConfirmedAttendee={preConfirmedAttendee}
+        onClose={() => {
+          setShowRegistrationModal(false);
+          setPreConfirmedAttendee(null);
+        }}
         usersList={usersList}
         addUser={addUser}
         updateUser={updateUser}
       />
+
+      {/* MODAL DE CREDENCIAL / PASE QR OFICIAL ACREDITADO CON DESCARGA DE PDF */}
+      {accreditedPassUser && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 border-2 border-[#DDDB00] rounded-3xl shadow-2xl max-w-2xl w-full overflow-hidden my-4 animate-in zoom-in-95">
+            <div className="bg-[#0c2d1e] p-5 sm:p-6 text-white relative border-b border-emerald-800">
+              <button
+                type="button"
+                onClick={() => setAccreditedPassUser(null)}
+                className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition cursor-pointer"
+                aria-label="Cerrar"
+              >
+                <X size={18} />
+              </button>
+
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-[#DDDB00] text-[10px] font-black uppercase tracking-widest mb-2">
+                <CheckCircle2 size={13} />
+                <span>Acreditación Oficial Aprobada por Administración</span>
+              </div>
+              <h2 className="text-lg sm:text-2xl font-black uppercase tracking-tight text-white">
+                CREDENCIAL OFICIAL • PASE QR DE INGRESO
+              </h2>
+              <p className="text-xs text-emerald-100/90 mt-1">
+                {activeEventForPass.title} • {activeEventForPass.dateLabel} • {activeEventForPass.venueName}
+              </p>
+            </div>
+
+            <div className="p-5 sm:p-6 space-y-5">
+              <div className="bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-center gap-5">
+                <div className="bg-white p-3.5 rounded-2xl border-2 border-[#006633] shadow-md shrink-0 text-center">
+                  <QRCodeSVG
+                    id="accredited-pass-qr-svg"
+                    value={`https://red.hempc.com.ar/#/login?pase_qr=${encodeURIComponent(
+                      accreditedPassUser.eventTicketCode || "SIEMBRA-21N-OFICIAL"
+                    )}&email=${encodeURIComponent(accreditedPassUser.email || "")}&name=${encodeURIComponent(
+                      accreditedPassUser.name || ""
+                    )}&dni=${encodeURIComponent(accreditedPassUser.dniNumber || "")}&phone=${encodeURIComponent(
+                      accreditedPassUser.phone || ""
+                    )}&org=${encodeURIComponent(accreditedPassUser.organizationName || "")}&loc=${encodeURIComponent(
+                      accreditedPassUser.localityOrProvince || ""
+                    )}`}
+                    size={148}
+                    level="M"
+                  />
+                  <span className="block font-mono text-xs font-black text-[#0c2d1e] mt-2">
+                    {accreditedPassUser.eventTicketCode || "SIEMBRA-21N"}
+                  </span>
+                </div>
+
+                <div className="flex-1 space-y-2.5 text-center sm:text-left w-full">
+                  <div>
+                    <span className="text-[10px] font-mono font-bold uppercase text-slate-400 block">
+                      Titular Acreditado
+                    </span>
+                    <h3 className="text-lg sm:text-xl font-black uppercase text-slate-900 dark:text-white">
+                      {accreditedPassUser.name}
+                    </h3>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800">
+                    <div>
+                      <span className="text-[10px] font-bold uppercase text-slate-400 block">DNI / CUIT</span>
+                      <span className="font-mono font-black text-slate-900 dark:text-white">
+                        {accreditedPassUser.dniNumber || "Presentar DNI en puerta"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold uppercase text-slate-400 block">Teléfono / WhatsApp</span>
+                      <span className="font-mono font-bold text-slate-900 dark:text-white">
+                        {accreditedPassUser.phone || "Registrado"}
+                      </span>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <span className="text-[10px] font-bold uppercase text-slate-400 block">Correo Electrónico</span>
+                      <span className="font-mono text-slate-800 dark:text-slate-200 break-all">
+                        {accreditedPassUser.email || "-"}
+                      </span>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <span className="text-[10px] font-bold uppercase text-slate-400 block">
+                        Institución / Establecimiento / Procedencia
+                      </span>
+                      <span className="font-bold text-slate-900 dark:text-white">
+                        {accreditedPassUser.organizationName || "Visitante Acreditado"} (
+                        {accreditedPassUser.localityOrProvince || activeEventForPass.locality})
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const svgEl = document.getElementById("accredited-pass-qr-svg");
+                    const qrDataUrl = await svgElementToPngDataUrl(svgEl, 360);
+                    downloadEventAccreditationPassPDF(activeEventForPass, accreditedPassUser, qrDataUrl);
+                  }}
+                  className="w-full py-3.5 px-4 bg-[#006633] hover:bg-[#004d26] text-white rounded-xl font-black text-xs uppercase tracking-wider shadow-lg flex items-center justify-center gap-2 transition cursor-pointer"
+                >
+                  <QrCode size={16} />
+                  <span>Descargar Credencial / Pase QR (PDF)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    downloadUnDiaDeSiembraProgramPDF({
+                      name: accreditedPassUser.name || "Visitante Acreditado",
+                      email: accreditedPassUser.email || "",
+                      ticketCode: accreditedPassUser.eventTicketCode || "SIEMBRA-21N",
+                      profileLabel: "Visitante Acreditado a Jornada",
+                      organizationName: accreditedPassUser.organizationName,
+                      locality: accreditedPassUser.localityOrProvince,
+                      phone: accreditedPassUser.phone
+                    })
+                  }
+                  className="w-full py-3.5 px-4 bg-slate-900 hover:bg-slate-800 text-[#DDDB00] border border-slate-700 rounded-xl font-black text-xs uppercase tracking-wider shadow flex items-center justify-center gap-2 transition cursor-pointer"
+                >
+                  <Download size={16} />
+                  <span>Descargar Programa Oficial (PDF)</span>
+                </button>
+              </div>
+
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 text-center">
+                Tu <strong>Credencial Oficial con Pase QR (PDF)</strong> se descargó automáticamente. Presentala junto con tu DNI en el puesto de entrada el día de la jornada.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL DE ACTIVACIÓN DE CUENTA Y DEFINICIÓN DE CONTRASEÑA TRAS APROBACIÓN ADMIN */}
       {showActivateModal && (

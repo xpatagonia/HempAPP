@@ -629,6 +629,8 @@ export interface SendEventRegistrationParams {
   ticketCode: string;
   verificationPin: string;
   profileLabel: string;
+  dniNumber?: string;
+  phone?: string;
   organizationName?: string;
   locality?: string;
   actionUrl?: string;
@@ -642,19 +644,34 @@ export async function sendEventRegistrationConfirmationEmail(
   params: SendEventRegistrationParams
 ): Promise<EmailDispatchResult> {
   const timestamp = new Date().toISOString();
+  const cleanEmail = params.toEmail.trim();
+  const cleanName = params.toName.trim();
+  const directConfirmUrl =
+    params.actionUrl ||
+    `${window.location.origin}/#/login?confirmar_evento=1&ticket=${encodeURIComponent(
+      params.ticketCode
+    )}&pin=${encodeURIComponent(params.verificationPin)}&email=${encodeURIComponent(
+      cleanEmail
+    )}&name=${encodeURIComponent(cleanName)}&dni=${encodeURIComponent(
+      params.dniNumber || ''
+    )}&phone=${encodeURIComponent(params.phone || '')}&org=${encodeURIComponent(
+      params.organizationName || 'Visitante / Invitado General'
+    )}&loc=${encodeURIComponent(params.locality || 'VIRCH – Trelew, Chubut')}`;
 
   const payload = {
-    to_email: params.toEmail.trim(),
-    to_name: params.toName.trim(),
+    to_email: cleanEmail,
+    to_name: cleanName,
     notification_type: 'event_registration',
     role_name: params.profileLabel,
     structure_name: params.organizationName || 'Participante Acreditado',
-    action_url: params.actionUrl || `${window.location.origin}/#/login?evento=un-dia-de-siembra`,
+    action_url: directConfirmUrl,
     extra_data: {
       event_name: 'JORNADA OFICIAL: “UN DÍA DE SIEMBRA”',
       event_date: 'Sábado 21 de Noviembre de 2026',
       ticket_code: params.ticketCode,
       verification_pin: params.verificationPin,
+      dni_number: params.dniNumber || '',
+      phone: params.phone || '',
       locality: params.locality || 'VIRCH – Trelew, Chubut'
     }
   };
@@ -796,26 +813,39 @@ export interface SendEventAccreditationApprovedParams {
   venueName: string;
   locality: string;
   ticketCode: string;
+  dniNumber?: string;
+  phone?: string;
   organizationName?: string;
+  approvedBy?: string;
   actionUrl?: string;
 }
 
 /**
- * Envía el Pase Oficial con Código QR y acceso al Programa Oficial PDF cuando un Administrador
- * aprueba la acreditación del asistente en el módulo EVENTOS, SIN otorgar clave de acceso al sistema.
+ * Envía el Pase Oficial con Código QR y descarga de Credencial PDF (con los datos del registro)
+ * cuando un Administrador aprueba la acreditación del asistente en el módulo EVENTOS,
+ * SIN otorgar clave de acceso al sistema.
  */
 export async function sendEventAccreditationApprovedEmail(
   params: SendEventAccreditationApprovedParams
 ): Promise<EmailDispatchResult> {
   const timestamp = new Date().toISOString();
   const cleanEmail = params.toEmail.trim();
+  const cleanName = params.toName.trim();
   const defaultActionUrl =
     params.actionUrl ||
-    `${window.location.origin}/#/login?evento=un-dia-de-siembra&ticket=${encodeURIComponent(params.ticketCode)}`;
+    `${window.location.origin}/#/login?pase_qr=${encodeURIComponent(
+      params.ticketCode
+    )}&email=${encodeURIComponent(cleanEmail)}&name=${encodeURIComponent(
+      cleanName
+    )}&dni=${encodeURIComponent(params.dniNumber || '')}&phone=${encodeURIComponent(
+      params.phone || ''
+    )}&org=${encodeURIComponent(
+      params.organizationName || 'Visitante Acreditado'
+    )}&loc=${encodeURIComponent(params.locality || 'VIRCH – Trelew, Chubut')}`;
 
   const payload = {
     to_email: cleanEmail,
-    to_name: params.toName.trim(),
+    to_name: cleanName,
     notification_type: 'event_accreditation_approved',
     role_name: 'Asistente Acreditado a Jornada',
     structure_name: params.organizationName || 'Visitante Acreditado',
@@ -825,7 +855,10 @@ export async function sendEventAccreditationApprovedEmail(
       event_date: params.eventDateLabel,
       venue_name: params.venueName,
       locality: params.locality,
-      ticket_code: params.ticketCode
+      ticket_code: params.ticketCode,
+      dni_number: params.dniNumber || '',
+      phone: params.phone || '',
+      approved_by: params.approvedBy || 'Administración Central HempC'
     }
   };
 
@@ -835,7 +868,7 @@ export async function sendEventAccreditationApprovedEmail(
       success: Boolean(data.success !== false),
       message:
         data.message ||
-        `Pase Oficial QR (${params.ticketCode}) y Programa PDF enviados a ${cleanEmail} (Sin acceso al sistema)`,
+        `Credencial Oficial QR (${params.ticketCode}) y Programa PDF enviados a ${cleanEmail} (Sin acceso al sistema)`,
       sentFrom: data.sent_from || 'notificaciones@hempc.com.ar',
       sentTo: data.sent_to || cleanEmail,
       deliveredVia: data.delivered_via || 'vercel_resend',
@@ -860,7 +893,7 @@ export async function sendEventAccreditationApprovedEmail(
   } catch (err: any) {
     return {
       success: true,
-      message: `Pase Oficial QR (${params.ticketCode}) registrado para ${cleanEmail}`,
+      message: `Credencial Oficial QR (${params.ticketCode}) registrada para ${cleanEmail}`,
       sentFrom: 'notificaciones@hempc.com.ar',
       sentTo: cleanEmail,
       deliveredVia: 'simulated_local',
@@ -868,6 +901,7 @@ export async function sendEventAccreditationApprovedEmail(
     };
   }
 }
+
 
 
 

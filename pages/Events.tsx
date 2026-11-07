@@ -43,6 +43,7 @@ import {
   CATEGORY_LABELS,
   STATUS_LABELS,
   partitionUsersByScope,
+  isEventOnlyAttendee,
   resolveAttendeeEventId,
   resolveEventAccreditationStatus,
   createEventRegistrationRecord,
@@ -50,7 +51,9 @@ import {
   rejectEventAttendeeByAdmin,
   checkInEventAttendeeByAdmin,
   downloadEventAttendanceSheetPDF,
-  downloadEventAttendanceCertificatePDF
+  downloadEventAttendanceCertificatePDF,
+  downloadEventAccreditationPassPDF,
+  svgElementToPngDataUrl
 } from '../src/services/eventsManagementService';
 import { downloadUnDiaDeSiembraProgramPDF } from '../src/services/eventProgramPdfService';
 import { sendEventAccreditationApprovedEmail } from '../src/services/emailNotificationService';
@@ -131,6 +134,11 @@ export default function Events() {
     event: FieldEvent;
     attendee?: User;
   } | null>(null);
+
+  // Estado para Re-envío de Pase QR y Modal de Eliminación Definitiva de Base de Datos
+  const [resendingPassId, setResendingPassId] = useState<string | null>(null);
+  const [attendeeToDelete, setAttendeeToDelete] = useState<User | null>(null);
+  const [isDeletingAttendee, setIsDeletingAttendee] = useState(false);
 
   // Separación estricta de registros: Visitantes de Eventos vs Operadores del Sistema
   const { eventAttendees, systemUsers } = useMemo(
@@ -251,7 +259,10 @@ export default function Events() {
         venueName: evt.venueName,
         locality: evt.locality,
         ticketCode: updatedUser.eventTicketCode || 'SIEMBRA-21N-OFICIAL',
-        organizationName: updatedUser.organizationName
+        organizationName: updatedUser.organizationName,
+        dniNumber: updatedUser.dniNumber,
+        phone: updatedUser.phone,
+        approvedBy: currentUser?.name || 'Administración Oficial PatagonianC'
       });
 
       showNotice(
@@ -309,6 +320,106 @@ export default function Events() {
       showNotice(false, 'Error al rechazar', err?.message || 'No se pudo actualizar el estado.');
     } finally {
       setActionLoadingId(null);
+    }
+  };
+
+  // Acción Admin: Re-enviar Pase QR de Acreditación por Correo Electrónico
+  const handleResendAccreditationPass = async (attendee: User) => {
+    setResendingPassId(attendee.id);
+    try {
+      const evtId = resolveAttendeeEventId(attendee, fieldEvents);
+      const evt = fieldEvents.find(e => e.id === evtId) || fieldEvents[0];
+      const currentStatus = resolveEventAccreditationStatus(attendee);
+
+      let targetUser = attendee;
+      if (currentStatus === 'pending_admin' || currentStatus === 'rejected') {
+        targetUser = approveEventAttendeeByAdmin({
+          adminUser: currentUser,
+          attendee,
+          event: evt
+        });
+        await updateUser(targetUser);
+      }
+
+      const emailResult = await sendEventAccreditationApprovedEmail({
+        toEmail: targetUser.email,
+        toName: targetUser.name,
+        eventName: evt.title,
+        eventDateLabel: evt.dateLabel,
+        venueName: evt.venueName,
+        locality: evt.locality,
+        ticketCode: targetUser.eventTicketCode || 'SIEMBRA-21N-OFICIAL',
+        organizationName: targetUser.organizationName,
+        dniNumber: targetUser.dniNumber,
+        phone: targetUser.phone,
+        approvedBy: targetUser.approvedBy || currentUser?.name || 'Administración Oficial PatagonianC'
+      });
+
+      showNotice(
+        true,
+        'Pase QR Re-enviado por Correo Electrónico',
+        `Se re-envió la Credencial Oficial con Pase QR (${targetUser.eventTicketCode || 'SIEMBRA-21N'}) y enlace de descarga PDF a ${targetUser.email} (${emailResult.deliveredVia}).`
+      );
+    } catch (err: any) {
+      showNotice(
+        false,
+        'Error al re-enviar Pase QR',
+        err?.message || 'No se pudo re-enviar el correo con el Pase QR.'
+      );
+    } finally {
+      setResendingPassId(null);
+    }
+  };
+
+  // Acción Admin: Eliminar definitivamente el registro del visitante de la Base de Datos (Supabase public.users)
+  const handleConfirmDeleteAttendee = async () => {
+    if (!attendeeToDelete) return;
+    setIsDeletingAttendee(true);
+    try {
+      const target = attendeeToDelete;
+      const isIsolatedVisitor = isEventOnlyAttendee(target);
+
+      if (isIsolatedVisitor) {
+        const deletedOk = await deleteUser(target.id);
+        if (!deletedOk) {
+          throw new Error('No se pudo eliminar el registro de la base de datos.');
+        }
+        showNotice(
+          true,
+          'Registro Eliminado de la Base de Datos',
+          `El visitante "${target.name}" (${target.email}) fue eliminado definitivamente de la base de datos (Supabase public.users) y del padrón del evento.`
+        );
+      } else {
+        // Si es un operador productivo del sistema que además tenía ticket de evento, solo limpiamos su inscripción al evento para proteger su cuenta operativa
+        const cleanedOperator: User = {
+          ...target,
+          eventRegistered: false,
+          eventConfirmedByEmail: false,
+          eventTicketCode: undefined,
+          eventAccreditationStatus: undefined,
+          eventCheckedInAt: undefined,
+          eventCheckedInBy: undefined
+        };
+        await updateUser(cleanedOperator);
+        showNotice(
+          true,
+          'Inscripción a Jornada Removida',
+          `Se quitó la inscripción al evento de "${target.name}" preservando su cuenta operativa en el sistema.`
+        );
+      }
+
+      if (qrModalTarget?.attendee?.id === target.id) {
+        setQrModalTarget(null);
+      }
+      setAttendeeToDelete(null);
+    } catch (err: any) {
+      showNotice(
+        false,
+        'Error al eliminar registro',
+        err?.message || 'No se pudo completar la eliminación en la base de datos.'
+      );
+    } finally {
+      setIsDeletingAttendee(false);
     }
   };
 
@@ -385,7 +496,10 @@ export default function Events() {
           venueName: targetEvt.venueName,
           locality: targetEvt.locality,
           ticketCode: record.eventTicketCode || 'SIEMBRA-21N',
-          organizationName: record.organizationName
+          organizationName: record.organizationName,
+          dniNumber: record.dniNumber,
+          phone: record.phone,
+          approvedBy: currentUser?.name || 'Administración Oficial PatagonianC'
         });
       }
 
@@ -852,6 +966,23 @@ export default function Events() {
                                 </button>
                               )}
 
+                              {accStatus !== 'pending_admin' && (
+                                <button
+                                  type="button"
+                                  disabled={resendingPassId === att.id || isBusy}
+                                  onClick={() => handleResendAccreditationPass(att)}
+                                  className="px-2.5 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 text-[#006633] dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 font-black text-[10px] uppercase tracking-wider flex items-center gap-1 transition cursor-pointer"
+                                  title="Re-enviar correo con la Credencial y Pase QR de Acreditación al visitante"
+                                >
+                                  {resendingPassId === att.id ? (
+                                    <Loader2 size={12} className="animate-spin" />
+                                  ) : (
+                                    <Mail size={12} />
+                                  )}
+                                  <span>Re-enviar Pase QR</span>
+                                </button>
+                              )}
+
                               {(accStatus === 'accredited' || accStatus === 'pending_admin') && (
                                 <button
                                   type="button"
@@ -864,6 +995,21 @@ export default function Events() {
                                   <span>Check-in</span>
                                 </button>
                               )}
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setQrModalTarget({
+                                    type: 'attendee',
+                                    event: evt,
+                                    attendee: att
+                                  })
+                                }
+                                className="p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 text-[#006633] dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 transition cursor-pointer"
+                                title="Ver Ficha de Acreditación, Descargar o Re-enviar Pase QR"
+                              >
+                                <QrCode size={14} />
+                              </button>
 
                               <button
                                 type="button"
@@ -898,12 +1044,22 @@ export default function Events() {
                                   type="button"
                                   disabled={isBusy}
                                   onClick={() => handleRejectAttendee(att)}
-                                  className="p-1.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 text-rose-600 dark:text-rose-400 transition cursor-pointer"
-                                  title="Rechazar inscripción al evento"
+                                  className="p-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 text-amber-600 dark:text-amber-400 transition cursor-pointer"
+                                  title="Marcar inscripción como rechazada"
                                 >
                                   <XCircle size={14} />
                                 </button>
                               )}
+
+                              <button
+                                type="button"
+                                disabled={isBusy}
+                                onClick={() => setAttendeeToDelete(att)}
+                                className="p-1.5 rounded-lg bg-rose-50 dark:bg-rose-950/50 hover:bg-rose-100 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800/80 transition cursor-pointer"
+                                title="Eliminar registro definitivamente de la base de datos"
+                              >
+                                <Trash2 size={14} />
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -1585,11 +1741,12 @@ export default function Events() {
 
             <div className="bg-white p-4 rounded-2xl border-2 border-[#006633] inline-block mx-auto shadow-md">
               <QRCodeSVG
+                id="events-admin-qr-svg"
                 value={
                   qrModalTarget.type === 'attendee' && qrModalTarget.attendee
-                    ? `https://red.hempc.com.ar/#/login?ticket=${encodeURIComponent(
+                    ? `https://red.hempc.com.ar/#/login?pase_qr=${encodeURIComponent(
                         qrModalTarget.attendee.eventTicketCode || 'SIEMBRA-21N'
-                      )}&email=${encodeURIComponent(qrModalTarget.attendee.email)}`
+                      )}&email=${encodeURIComponent(qrModalTarget.attendee.email)}&name=${encodeURIComponent(qrModalTarget.attendee.name || '')}&dni=${encodeURIComponent(qrModalTarget.attendee.dniNumber || '')}&phone=${encodeURIComponent(qrModalTarget.attendee.phone || '')}&org=${encodeURIComponent(qrModalTarget.attendee.organizationName || '')}&loc=${encodeURIComponent(qrModalTarget.attendee.localityOrProvince || '')}`
                     : `https://red.hempc.com.ar/#/login?evento=${encodeURIComponent(
                         qrModalTarget.event.slug
                       )}`
@@ -1600,17 +1757,33 @@ export default function Events() {
             </div>
 
             {qrModalTarget.type === 'attendee' && qrModalTarget.attendee ? (
-              <div className="space-y-1">
-                <p className="text-base font-black uppercase text-slate-900 dark:text-white">
-                  {qrModalTarget.attendee.name}
-                </p>
-                <p className="font-mono text-sm font-black text-[#006633] dark:text-emerald-400">
-                  {qrModalTarget.attendee.eventTicketCode || 'SIEMBRA-21N'}
-                </p>
-                <p className="text-xs text-slate-500">
-                  DNI: {qrModalTarget.attendee.dniNumber || 'S/D'} ·{' '}
-                  {qrModalTarget.attendee.organizationName}
-                </p>
+              <div className="space-y-3 text-left bg-slate-50 dark:bg-slate-800/70 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700">
+                <div className="text-center border-b border-slate-200 dark:border-slate-700 pb-2">
+                  <p className="text-base font-black uppercase text-slate-900 dark:text-white">
+                    {qrModalTarget.attendee.name}
+                  </p>
+                  <p className="font-mono text-sm font-black text-[#006633] dark:text-emerald-400">
+                    {qrModalTarget.attendee.eventTicketCode || 'SIEMBRA-21N'}
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                  <div>
+                    <span className="block text-[9px] font-mono uppercase text-slate-400">DNI / CUIT</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-200">{qrModalTarget.attendee.dniNumber || 'S/D'}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[9px] font-mono uppercase text-slate-400">Teléfono</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-200">{qrModalTarget.attendee.phone || 'S/D'}</span>
+                  </div>
+                  <div className="col-span-2">
+                    <span className="block text-[9px] font-mono uppercase text-slate-400">Correo Electrónico</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-200">{qrModalTarget.attendee.email}</span>
+                  </div>
+                  <div className="col-span-2">
+                    <span className="block text-[9px] font-mono uppercase text-slate-400">Institución / Procedencia</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-200">{qrModalTarget.attendee.organizationName || 'Participante Acreditado'} ({qrModalTarget.attendee.localityOrProvince || qrModalTarget.event.locality})</span>
+                  </div>
+                </div>
               </div>
             ) : (
               <div className="space-y-1">
@@ -1624,13 +1797,148 @@ export default function Events() {
               </div>
             )}
 
-            <button
-              type="button"
-              onClick={() => setQrModalTarget(null)}
-              className="w-full py-2.5 rounded-xl bg-slate-900 dark:bg-slate-800 text-white text-xs font-black uppercase tracking-wider cursor-pointer"
-            >
-              Cerrar Vista QR
-            </button>
+            <div className="space-y-2 pt-1">
+              {qrModalTarget.type === 'attendee' && qrModalTarget.attendee && (
+                <>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!qrModalTarget.attendee) return;
+                      const svgEl = document.getElementById('events-admin-qr-svg');
+                      const qrPng = await svgElementToPngDataUrl(svgEl, 420);
+                      downloadEventAccreditationPassPDF(qrModalTarget.event, qrModalTarget.attendee, qrPng);
+                    }}
+                    className="w-full py-3 rounded-xl bg-[#006633] hover:bg-[#004d26] text-white text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-md cursor-pointer"
+                  >
+                    <Download size={15} /> Descargar Credencial / Pase QR Oficial (PDF)
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={resendingPassId === qrModalTarget.attendee.id}
+                    onClick={() => {
+                      if (!qrModalTarget.attendee) return;
+                      handleResendAccreditationPass(qrModalTarget.attendee);
+                    }}
+                    className="w-full py-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 text-[#006633] dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    {resendingPassId === qrModalTarget.attendee.id ? (
+                      <Loader2 size={15} className="animate-spin" />
+                    ) : (
+                      <Mail size={15} />
+                    )}
+                    <span>Re-enviar Pase QR al Correo ({qrModalTarget.attendee.email})</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!qrModalTarget.attendee) return;
+                      setAttendeeToDelete(qrModalTarget.attendee);
+                    }}
+                    className="w-full py-2 rounded-xl bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800/70 text-[11px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Trash2 size={14} /> Eliminar Registro de la Base de Datos
+                  </button>
+                </>
+              )}
+              <button
+                type="button"
+                onClick={() => setQrModalTarget(null)}
+                className="w-full py-2.5 rounded-xl bg-slate-900 dark:bg-slate-800 text-white text-xs font-black uppercase tracking-wider cursor-pointer"
+              >
+                Cerrar Vista QR
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================================
+          MODAL: CONFIRMACIÓN PARA ELIMINAR VISITANTE DE LA BASE DE DATOS
+         ===================================================================== */}
+      {attendeeToDelete && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-900/60 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-rose-100 dark:bg-rose-950/70 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+                  <Trash2 size={22} />
+                </div>
+                <div>
+                  <span className="text-[10px] font-mono font-bold uppercase text-rose-600 dark:text-rose-400">
+                    DEPURACIÓN DE BASE DE DATOS • EVENTOS
+                  </span>
+                  <h3 className="text-base font-black uppercase text-slate-900 dark:text-white">
+                    ¿Eliminar Registro de Visitante?
+                  </h3>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAttendeeToDelete(null)}
+                className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="bg-slate-50 dark:bg-slate-800/70 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 space-y-1.5 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-[10px] uppercase text-slate-400">Visitante</span>
+                <span className="font-mono font-black text-[#006633] dark:text-emerald-400">
+                  {attendeeToDelete.eventTicketCode || 'SIN-PASE'}
+                </span>
+              </div>
+              <p className="text-sm font-black uppercase text-slate-900 dark:text-white">
+                {attendeeToDelete.name}
+              </p>
+              <p className="font-mono text-slate-600 dark:text-slate-300">
+                {attendeeToDelete.email}
+              </p>
+              <p className="text-[11px] text-slate-500">
+                DNI/CUIT: <strong>{attendeeToDelete.dniNumber || 'S/D'}</strong> ·{' '}
+                {attendeeToDelete.organizationName || 'Visitante General'}
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-rose-50/80 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 text-[11px] text-rose-800 dark:text-rose-200 leading-relaxed">
+              {isEventOnlyAttendee(attendeeToDelete) ? (
+                <>
+                  Esta acción <strong>eliminará definitivamente el registro de la base de datos (Supabase public.users)</strong> y liberará su vacante en el cupo de la jornada.
+                </>
+              ) : (
+                <>
+                  Este usuario posee un rol operativo en la plataforma. Se eliminará únicamente su inscripción al evento sin afectar su cuenta del sistema.
+                </>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                disabled={isDeletingAttendee}
+                onClick={() => setAttendeeToDelete(null)}
+                className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold uppercase cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingAttendee}
+                onClick={handleConfirmDeleteAttendee}
+                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-md cursor-pointer"
+              >
+                {isDeletingAttendee ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <Trash2 size={14} />
+                )}
+                <span>
+                  {isDeletingAttendee ? 'Eliminando...' : 'Sí, Eliminar de Base de Datos'}
+                </span>
+              </button>
+            </div>
           </div>
         </div>
       )}
