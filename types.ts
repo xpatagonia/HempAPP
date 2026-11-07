@@ -153,20 +153,71 @@ export interface User {
   dniUpdatedAt?: string;
   dniVerified?: boolean;
   // AUTOGESTIÓN DE ALTA Y ACREDITACIÓN EVENTO "UN DÍA DE SIEMBRA" (SÁB 21 NOV)
+  accessScope?: 'system_user' | 'event_attendee';
   accountStatus?: 'active' | 'pending_approval' | 'rejected';
   registrationSource?: 'admin_created' | 'self_service_platform' | 'event_un_dia_de_siembra';
   requestedProfileType?: 'productor' | 'visitante' | 'tecnico_institucion' | 'inversor_cadena';
   eventRegistered?: boolean;
+  eventId?: string;
   eventName?: string;
   eventTicketCode?: string;
   eventConfirmedByEmail?: boolean;
   eventProgramDownloaded?: boolean;
+  eventAccreditationStatus?: 'pending_admin' | 'accredited' | 'checked_in' | 'rejected';
+  eventCheckedInAt?: string;
+  eventCheckedInBy?: string;
+  eventCertificateIssuedAt?: string;
   localityOrProvince?: string;
   estimatedHectares?: number;
   approvedBy?: string;
   approvedAt?: string;
   activationToken?: string;
   passwordPendingSetup?: boolean;
+}
+
+export type FieldEventCategory =
+  | 'jornada_campo'
+  | 'visita_programada'
+  | 'diplomatura_practica'
+  | 'recorrida_institucional';
+
+export type FieldEventStatus =
+  | 'inscripcion_abierta'
+  | 'cupo_completo'
+  | 'reprogramado_clima'
+  | 'en_curso'
+  | 'finalizado';
+
+export interface FieldEventScheduleItem {
+  time: string;
+  block: string;
+  subBlock?: string;
+  audience?: string;
+  description: string;
+}
+
+export interface FieldEvent {
+  id: string;
+  slug: string;
+  title: string;
+  subtitle?: string;
+  category: FieldEventCategory;
+  date: string; // YYYY-MM-DD
+  dateLabel: string;
+  startTime: string;
+  endTime: string;
+  venueName: string;
+  locality: string;
+  organizer: string;
+  locationId?: string;
+  maxCapacity: number;
+  status: FieldEventStatus;
+  weatherWarning?: string;
+  description?: string;
+  ticketPrefix: string;
+  scheduleItems?: FieldEventScheduleItem[];
+  createdBy?: string;
+  createdAt?: string;
 }
 
 export type HempLicenseCategory = 

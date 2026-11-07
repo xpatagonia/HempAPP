@@ -7,7 +7,7 @@ import {
   Save, Loader2, Phone, Briefcase, User as UserIcon, CloudOff, Link as LinkIcon, 
   UserCheck, Building, X, Sparkles, PlusCircle, Star, Search, Filter, FilterX,
   Send, RefreshCw, CheckCircle2, AlertTriangle, ShieldCheck, Users as UsersIcon,
-  Sprout, MapPin, Globe, Truck, Camera, FileText, Download, CreditCard, ZoomIn
+  Sprout, MapPin, Globe, Truck, Camera, FileText, Download, CreditCard, ZoomIn, Calendar
 } from "lucide-react";
 import jsPDF from "jspdf";
 import { 
@@ -16,7 +16,6 @@ import {
   sendRegistrationApprovedEmail,
   EmailDispatchResult 
 } from "../src/services/emailNotificationService";
-import { downloadUnDiaDeSiembraProgramPDF } from "../src/services/eventProgramPdfService";
 import {
   getUserAccessAudit,
   STRUCTURE_ROLES,
@@ -25,6 +24,7 @@ import {
   doesPlotBelongToSupplier
 } from "../src/utils/structurePermissions";
 import { approvePendingRegistrationByAdmin } from "../src/services/producerOnboardingWorkflow";
+import { partitionUsersByScope, resolveEventAccreditationStatus } from "../src/services/eventsManagementService";
 
 const PRESET_AVATARS = [
   "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix&backgroundColor=b6e3f4",
@@ -234,9 +234,15 @@ export default function Users() {
     doc.save(`Legajo_DNI_${safeName}.pdf`);
   };
 
-  // Filtrado de usuarios
+  // Aislamiento estricto: Separar Operadores del Sistema (systemUsers) de Visitantes de Eventos (eventAttendees)
+  const { systemUsers, eventAttendees } = useMemo(
+    () => partitionUsersByScope(usersList),
+    [usersList]
+  );
+
+  // Filtrado exclusivo de Operadores del Sistema (Cero visitantes de eventos mezclados)
   const filteredUsers = useMemo(() => {
-    return usersList.filter(u => {
+    return systemUsers.filter(u => {
       const matchSearch = 
         u.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
         u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -244,18 +250,18 @@ export default function Users() {
       const matchRole = filterRole === "all" || u.role === filterRole;
       return matchSearch && matchRole;
     });
-  }, [usersList, searchTerm, filterRole]);
+  }, [systemUsers, searchTerm, filterRole]);
 
-  // Métricas
-  const totalUsers = usersList.length;
-  const adminCount = usersList.filter(u => u.role === "admin" || u.role === "super_admin").length;
-  const techCount = usersList.filter(u => u.role === "technician").length;
-  const clientCount = usersList.filter(u => u.role === "client").length;
+  // Métricas exclusivas de Operadores Reales del Sistema
+  const totalUsers = systemUsers.length;
+  const adminCount = systemUsers.filter(u => u.role === "admin" || u.role === "super_admin").length;
+  const techCount = systemUsers.filter(u => u.role === "technician").length;
+  const clientCount = systemUsers.filter(u => u.role === "client").length;
 
-  // Matriz de Auditoría de Aislamiento por Establecimiento o Semillero para cada usuario
+  // Matriz de Auditoría de Aislamiento por Establecimiento o Semillero para cada operador del sistema
   const userAuditMap = useMemo(() => {
     const map = new Map<string, ReturnType<typeof getUserAccessAudit>>();
-    usersList.forEach(u => {
+    systemUsers.forEach(u => {
       map.set(
         u.id,
         getUserAccessAudit(
@@ -271,7 +277,7 @@ export default function Users() {
       );
     });
     return map;
-  }, [usersList, allPlots, allLocations, effectiveClients, suppliers, varieties, seedBatches]);
+  }, [systemUsers, allPlots, allLocations, effectiveClients, suppliers, varieties, seedBatches]);
 
   // Generador de contraseñas de alta seguridad
   const handleGeneratePassword = () => {
@@ -639,13 +645,13 @@ export default function Users() {
   };
 
   const pendingApprovals = useMemo(
-    () => usersList.filter(u => u.accountStatus === "pending_approval"),
-    [usersList]
+    () => systemUsers.filter(u => u.accountStatus === "pending_approval"),
+    [systemUsers]
   );
 
-  const eventRegisteredUsers = useMemo(
-    () => usersList.filter(u => Boolean(u.eventRegistered || u.eventTicketCode)),
-    [usersList]
+  const pendingEventAttendeesCount = useMemo(
+    () => eventAttendees.filter(u => resolveEventAccreditationStatus(u) === "pending_admin").length,
+    [eventAttendees]
   );
 
   const inputClass = "w-full border border-gray-300 dark:border-slate-800 bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 p-3 rounded-2xl focus:ring-2 focus:ring-hemp-500 outline-none transition-all text-sm font-medium";
@@ -657,97 +663,102 @@ export default function Users() {
         <div>
           <div className="flex items-center gap-2 mb-1">
             <h1 className="text-2xl font-black text-gray-800 dark:text-white uppercase tracking-tight italic">
-              Equipos & <span className="text-hemp-600">Accesos</span>
+              Admin & <span className="text-hemp-600">Accesos del Sistema</span>
             </h1>
             <span className="bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
-              Alta Centralizada & Autogestiva
+              Operadores Reales Aislados ({totalUsers})
             </span>
           </div>
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            Gestión institucional de personal, técnicos, productores y acreditaciones al evento "Un Día de Siembra".
+            Gobernanza exclusiva de Administradores, Técnicos de Campo, Productores Asociados y Auditores de Semilleros Homologados.
           </p>
         </div>
 
-        <button 
-          onClick={() => { 
-            setEditingId(null); 
-            setFormData({ 
-              name: "", 
-              email: "", 
-              role: "technician", 
-              password: "", 
-              avatar: PRESET_AVATARS[0], 
-              clientId: "", 
-              supplierId: "",
-              supplierActorRole: "director_tecnico_obtentor",
-              isNetworkMember: false 
-            }); 
-            setEntityLinkMode("client");
-            setSendEmailOnSave(true);
-            setIsModalOpen(true); 
-          }} 
-          className="w-full md:w-auto bg-[#006633] text-white px-6 py-3 rounded-[20px] flex items-center justify-center hover:bg-[#004d26] transition shadow-xl font-black text-xs uppercase tracking-widest cursor-pointer"
-        >
-          <Plus size={18} className="mr-2" /> Nuevo Perfil de Acceso
-        </button>
+        <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => navigate("/events")}
+              className="px-4 py-3 rounded-[20px] bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 text-white border border-slate-700 flex items-center justify-center gap-2 font-black text-xs uppercase tracking-wider transition cursor-pointer"
+            >
+              <Calendar size={16} className="text-[#DDDB00]" />
+              <span>Ir a Módulo Eventos ({eventAttendees.length} Visitantes Aislados)</span>
+            </button>
+          )}
+          <button 
+            onClick={() => { 
+              setEditingId(null); 
+              setFormData({ 
+                name: "", 
+                email: "", 
+                role: "technician", 
+                password: "", 
+                avatar: PRESET_AVATARS[0], 
+                clientId: "", 
+                supplierId: "",
+                supplierActorRole: "director_tecnico_obtentor",
+                isNetworkMember: false 
+              }); 
+              setEntityLinkMode("client");
+              setSendEmailOnSave(true);
+              setIsModalOpen(true); 
+            }} 
+            className="flex-1 md:flex-initial bg-[#006633] text-white px-6 py-3 rounded-[20px] flex items-center justify-center hover:bg-[#004d26] transition shadow-xl font-black text-xs uppercase tracking-widest cursor-pointer"
+          >
+            <Plus size={18} className="mr-2" /> Nuevo Operador del Sistema
+          </button>
+        </div>
       </div>
 
-      {/* PANEL DE APROBACIÓN DE ALTAS AUTOGESTIVAS Y EVENTO "UN DÍA DE SIEMBRA" (SÁB. 21 NOVIEMBRE) */}
+      {/* BANNER DE SEGREGACIÓN DE VISITANTES DE EVENTOS Y BANDEJA DE SOLICITUDES DE ALTA DE OPERADORES DEL SISTEMA */}
       {isAdmin && (
-        <div className="mb-8 bg-[#0c2d1e] rounded-2xl sm:rounded-[32px] p-4 sm:p-8 text-white border-l-4 border-amber-500 border border-emerald-800/70 shadow-2xl space-y-5">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-white/10 pb-5">
-            <div className="space-y-1.5">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="px-3 py-1 rounded-full bg-[#DDDB00] text-slate-950 text-[10px] font-black uppercase tracking-widest">
-                  Sábado 21 de Noviembre • 08:30 a 15:30 hs
-                </span>
-                <span className="text-[10px] font-black uppercase tracking-wider text-amber-300">
-                  Diplomatura UNLZ – UATRE • PatagonianC LTDA
-                </span>
+        <div className="mb-6 space-y-4">
+          <div className="bg-slate-900 rounded-2xl p-4 sm:p-5 text-white border border-emerald-800/70 shadow-lg flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="flex items-start gap-3.5">
+              <div className="p-2.5 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 shrink-0 mt-0.5">
+                <ShieldCheck size={20} />
               </div>
-              <h2 className="text-lg sm:text-2xl font-black uppercase tracking-tight text-white">
-                JORNADA OFICIAL: “UN DÍA DE SIEMBRA” & ALTA AUTOGESTIVA
-              </h2>
-              <p className="text-xs text-slate-300 max-w-2xl">
-                Sede Práctica Patagonia: Chacra Experimental PatagonianC LTDA (VIRCH – Trelew, Chubut). Los inscriptos reciben confirmación previa por <strong className="text-[#DDDB00]">notificaciones@hempc.com.ar</strong> (Resend.com) para descargar el Programa Oficial (sujeto a actualización). Desde aquí podés aprobar su alta como <strong>Productor Asociado</strong> o como <strong>Visitante</strong>.
-              </p>
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-black uppercase tracking-wider text-white">
+                    Aislamiento de Seguridad Activo: Visitantes de Jornadas Separados del Padrón Operativo
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-[#DDDB00] text-slate-950 font-mono text-[10px] font-black uppercase">
+                    {eventAttendees.length} Inscriptos en Eventos (Sin Login al Sistema)
+                  </span>
+                </div>
+                <p className="text-xs text-slate-300">
+                  Los asistentes registrados en jornadas de campo y visitas programadas están <strong>100% aislados en la consola EVENTOS</strong> y bloqueados para iniciar sesión o ver datos agronómicos.
+                </p>
+              </div>
             </div>
-
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="px-4 py-2.5 rounded-2xl bg-white/10 border border-white/15 text-center">
-                <span className="text-[10px] uppercase font-black text-amber-300 block">Pendientes de Aprobación</span>
-                <span className="text-xl font-black text-white">{pendingApprovals.length}</span>
-              </div>
-              <div className="px-4 py-2.5 rounded-2xl bg-white/10 border border-white/15 text-center">
-                <span className="text-[10px] uppercase font-black text-emerald-300 block">Acreditados 21/11</span>
-                <span className="text-xl font-black text-[#DDDB00]">{eventRegisteredUsers.length}</span>
-              </div>
-              <button
-                type="button"
-                onClick={() =>
-                  downloadUnDiaDeSiembraProgramPDF({
-                    name: currentUser?.name || "Administración Central HempC",
-                    email: currentUser?.email || "notificaciones@hempc.com.ar",
-                    ticketCode: "SIEMBRA-21N-OFICIAL",
-                    profileLabel: "Dirección & Coordinación General",
-                    organizationName: "PatagonianC LTDA • HempC Nucleus",
-                    locality: "Patagonia Argentina"
-                  })
-                }
-                className="px-5 py-3.5 bg-[#DDDB00] hover:bg-[#e5e326] text-slate-950 rounded-2xl font-black text-xs uppercase tracking-wider shadow-lg flex items-center gap-2 transition cursor-pointer"
-              >
-                <Download size={16} />
-                <span>Descargar Programa Oficial 21/11 (PDF)</span>
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => navigate("/events")}
+              className="px-4 py-2.5 bg-[#DDDB00] hover:bg-[#e8e638] text-slate-950 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shrink-0 transition cursor-pointer shadow"
+            >
+              <Calendar size={15} />
+              <span>
+                Administrar Eventos y Acreditaciones
+                {pendingEventAttendeesCount > 0 ? ` (${pendingEventAttendeesCount} Pendientes)` : ""}
+              </span>
+            </button>
           </div>
 
-          {pendingApprovals.length > 0 ? (
-            <div className="space-y-3">
-              <h3 className="text-xs font-black uppercase tracking-widest text-amber-300 flex items-center gap-2">
-                <AlertCircle size={15} />
-                Solicitudes en Sala de Espera ({pendingApprovals.length}) — Requieren tu Aprobación:
-              </h3>
+          {pendingApprovals.length > 0 && (
+            <div className="bg-[#0c2d1e] rounded-2xl sm:rounded-[28px] p-4 sm:p-6 text-white border-l-4 border-amber-500 border border-emerald-800/70 shadow-xl space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-3">
+                <div>
+                  <h2 className="text-sm sm:text-base font-black uppercase tracking-tight text-white flex items-center gap-2">
+                    <AlertCircle size={17} className="text-amber-400" />
+                    Solicitudes de Alta de Operadores del Sistema ({pendingApprovals.length})
+                  </h2>
+                  <p className="text-xs text-slate-300">
+                    Solicitudes de acceso operativo a la plataforma como <strong>Productor Asociado</strong> o <strong>Integrante Técnico</strong>. Al aprobar, se envía enlace de activación de contraseña por Resend.
+                  </p>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 gap-3">
                 {pendingApprovals.map(u => (
                   <div
@@ -757,23 +768,13 @@ export default function Users() {
                     <div className="space-y-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-black text-sm uppercase text-white">{u.name}</span>
-                        {u.eventTicketCode && (
-                          <span className="px-2.5 py-0.5 rounded-md bg-[#DDDB00]/20 border border-[#DDDB00]/40 text-[#DDDB00] font-mono text-[11px] font-black">
-                            {u.eventTicketCode}
-                          </span>
-                        )}
                         <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-black uppercase">
-                          Solicita: {u.requestedProfileType === "productor" ? "Productor" : u.requestedProfileType || "Visitante"}
+                          Solicita Rol: {u.requestedProfileType === "productor" ? "Productor Asociado" : u.requestedProfileType || "Operador"}
                         </span>
-                        {u.eventConfirmedByEmail && (
-                          <span className="px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 text-[10px] font-bold">
-                            ✓ Email Confirmado
-                          </span>
-                        )}
                       </div>
                       <p className="text-xs text-slate-300">
                         <strong>Email:</strong> {u.email} • <strong>Tel:</strong> {u.phone || "S/D"} •{" "}
-                        <strong>Entidad:</strong> {u.organizationName || "Independiente"} ({u.localityOrProvince || "S/D"})
+                        <strong>Establecimiento:</strong> {u.organizationName || "Independiente"} ({u.localityOrProvince || "S/D"})
                         {u.estimatedHectares ? ` • Superficie estimada: ${u.estimatedHectares} ha` : ""}
                       </p>
                     </div>
@@ -782,21 +783,11 @@ export default function Users() {
                       <button
                         type="button"
                         disabled={actionLoadingId === u.id}
-                        onClick={() => handleApproveSelfRegistration(u, "visitante")}
-                        className="px-4 py-2.5 bg-[#DDDB00] hover:bg-[#e8e638] text-slate-950 rounded-xl font-black text-[11px] uppercase tracking-wider flex items-center gap-1.5 transition cursor-pointer shadow"
-                      >
-                        <UserCheck size={14} />
-                        <span>Aprobar Visitante (Enviar Link Clave)</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        disabled={actionLoadingId === u.id}
                         onClick={() => handleApproveSelfRegistration(u, "productor")}
                         className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl font-black text-[11px] uppercase tracking-wider flex items-center gap-1.5 transition cursor-pointer"
                       >
                         <CheckCircle2 size={14} />
-                        <span>Aprobar Productor (Enviar Link Clave)</span>
+                        <span>Aprobar Productor Asociado (Crear Organización + Enviar Clave)</span>
                       </button>
 
                       <button
@@ -810,18 +801,6 @@ export default function Users() {
                     </div>
                   </div>
                 ))}
-              </div>
-            </div>
-          ) : (
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-300">
-              <div className="flex items-center gap-2.5">
-                <ShieldCheck size={18} className="text-emerald-400 flex-shrink-0" />
-                <span>
-                  No hay solicitudes pendientes de aprobación en este momento. Link directo para compartir en WhatsApp o QR del evento:{' '}
-                  <code className="text-[#DDDB00] font-mono font-bold">
-                    https://red.hempc.com.ar/#/login?evento=un-dia-de-siembra
-                  </code>
-                </span>
               </div>
             </div>
           )}
@@ -994,7 +973,7 @@ export default function Users() {
                   const clientLocs = (allLocations || []).filter(l => l.clientId === client.id);
                   const clientLocIds = new Set(clientLocs.map(l => l.id));
                   const clientPlots = (allPlots || []).filter(p => clientLocIds.has(p.locationId));
-                  const assignedUsers = usersList.filter(u => String(u.clientId) === String(client.id));
+                  const assignedUsers = systemUsers.filter(u => String(u.clientId) === String(client.id));
                   return (
                     <div
                       key={client.id}
@@ -1094,7 +1073,7 @@ export default function Users() {
                   const supPlots = (allPlots || []).filter(p =>
                     doesPlotBelongToSupplier(sup.id, p, varieties || [], seedBatches || [])
                   );
-                  const supUsers = usersList.filter(u => String(u.supplierId) === String(sup.id));
+                  const supUsers = systemUsers.filter(u => String(u.supplierId) === String(sup.id));
                   if (supPlots.length === 0 && supUsers.length === 0) return null;
 
                   return (

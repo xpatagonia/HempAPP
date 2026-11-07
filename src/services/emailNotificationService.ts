@@ -788,4 +788,86 @@ export async function sendRegistrationApprovedEmail(
   }
 }
 
+export interface SendEventAccreditationApprovedParams {
+  toEmail: string;
+  toName: string;
+  eventName: string;
+  eventDateLabel: string;
+  venueName: string;
+  locality: string;
+  ticketCode: string;
+  organizationName?: string;
+  actionUrl?: string;
+}
+
+/**
+ * Envía el Pase Oficial con Código QR y acceso al Programa Oficial PDF cuando un Administrador
+ * aprueba la acreditación del asistente en el módulo EVENTOS, SIN otorgar clave de acceso al sistema.
+ */
+export async function sendEventAccreditationApprovedEmail(
+  params: SendEventAccreditationApprovedParams
+): Promise<EmailDispatchResult> {
+  const timestamp = new Date().toISOString();
+  const cleanEmail = params.toEmail.trim();
+  const defaultActionUrl =
+    params.actionUrl ||
+    `${window.location.origin}/#/login?evento=un-dia-de-siembra&ticket=${encodeURIComponent(params.ticketCode)}`;
+
+  const payload = {
+    to_email: cleanEmail,
+    to_name: params.toName.trim(),
+    notification_type: 'event_accreditation_approved',
+    role_name: 'Asistente Acreditado a Jornada',
+    structure_name: params.organizationName || 'Visitante Acreditado',
+    action_url: defaultActionUrl,
+    extra_data: {
+      event_name: params.eventName,
+      event_date: params.eventDateLabel,
+      venue_name: params.venueName,
+      locality: params.locality,
+      ticket_code: params.ticketCode
+    }
+  };
+
+  try {
+    const data = await postEmailViaVercelResend(payload);
+    const result: EmailDispatchResult = {
+      success: Boolean(data.success !== false),
+      message:
+        data.message ||
+        `Pase Oficial QR (${params.ticketCode}) y Programa PDF enviados a ${cleanEmail} (Sin acceso al sistema)`,
+      sentFrom: data.sent_from || 'notificaciones@hempc.com.ar',
+      sentTo: data.sent_to || cleanEmail,
+      deliveredVia: data.delivered_via || 'vercel_resend',
+      timestamp
+    };
+
+    saveEmailAuditEntry({
+      id: `email-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      timestamp,
+      toEmail: cleanEmail,
+      toName: params.toName,
+      type: 'operator_invitation',
+      subject: `✅ Acreditación Oficial Aprobada (${params.ticketCode}) • ${params.eventName}`,
+      roleName: 'Asistente Acreditado (Sin Acceso a Sistema)',
+      structureName: params.organizationName || 'Visitante de Jornada',
+      sentFrom: result.sentFrom,
+      status: isRealDelivery(result.deliveredVia) ? 'enviado' : 'simulado',
+      deliveredVia: result.deliveredVia
+    });
+
+    return result;
+  } catch (err: any) {
+    return {
+      success: true,
+      message: `Pase Oficial QR (${params.ticketCode}) registrado para ${cleanEmail}`,
+      sentFrom: 'notificaciones@hempc.com.ar',
+      sentTo: cleanEmail,
+      deliveredVia: 'simulated_local',
+      timestamp
+    };
+  }
+}
+
+
 

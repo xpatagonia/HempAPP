@@ -5,7 +5,7 @@ import {
   MapPin, CheckCircle2, Download,
   Loader2, ShieldCheck, AlertCircle, Clock, AlertTriangle, KeyRound
 } from 'lucide-react';
-import { User } from '../types';
+import { User, FieldEvent } from '../types';
 import { sendEventRegistrationConfirmationEmail } from '../src/services/emailNotificationService';
 import {
   downloadUnDiaDeSiembraProgramPDF,
@@ -13,10 +13,17 @@ import {
   EVENT_LOT_SCHEMES,
   EVENT_METADATA
 } from '../src/services/eventProgramPdfService';
+import {
+  DEFAULT_FIELD_EVENTS,
+  createEventRegistrationRecord,
+  isEventOnlyAttendee
+} from '../src/services/eventsManagementService';
+import { createPendingPublicRegistration } from '../src/services/producerOnboardingWorkflow';
 
 interface EventAndSelfRegistrationModalProps {
   isOpen: boolean;
   initialMode?: 'event' | 'platform';
+  selectedEvent?: FieldEvent;
   onClose: () => void;
   usersList: User[];
   addUser: (u: User) => Promise<boolean>;
@@ -33,6 +40,7 @@ const PROFILE_LABELS: Record<NonNullable<User['requestedProfileType']>, string> 
 export default function EventAndSelfRegistrationModal({
   isOpen,
   initialMode = 'event',
+  selectedEvent,
   onClose,
   usersList,
   addUser,
@@ -40,6 +48,7 @@ export default function EventAndSelfRegistrationModal({
 }: EventAndSelfRegistrationModalProps) {
   const [mode, setMode] = useState<'event' | 'platform'>(initialMode);
   const [step, setStep] = useState<'form' | 'confirm_email' | 'confirmed'>('form');
+  const activeEvent = selectedEvent || DEFAULT_FIELD_EVENTS[0];
 
   // Datos del formulario (Priorizando Visitante / Invitado General por defecto y sin pedir contraseña previa)
   const [name, setName] = useState('');
@@ -93,7 +102,7 @@ export default function EventAndSelfRegistrationModal({
 
     const existing = usersList.find(u => u.email?.toLowerCase() === cleanEmail);
     const isAlreadyActiveAccount = Boolean(
-      existing && existing.accountStatus === 'active' && !existing.passwordPendingSetup
+      existing && !isEventOnlyAttendee(existing) && existing.accountStatus === 'active' && !existing.passwordPendingSetup
     );
 
     if (!isEventSelected && isAlreadyActiveAccount) {
@@ -106,68 +115,51 @@ export default function EventAndSelfRegistrationModal({
       const pin = String(Math.floor(100000 + Math.random() * 900000));
       setGeneratedPin(pin);
 
-      const activationToken =
-        existing?.activationToken ||
-        `ACT-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
-
-      const finalTicket = existing?.eventTicketCode || `SIEMBRA-21N-${String(Date.now()).slice(-4)}`;
       const effectiveProfile: NonNullable<User['requestedProfileType']> = isEventSelected ? 'visitante' : requestedProfile;
-      const profileText = isEventSelected ? 'Visitante al Evento / Invitado General' : PROFILE_LABELS[effectiveProfile];
+      const profileText = isEventSelected ? 'Visitante a Jornada / Acreditación Presencial' : PROFILE_LABELS[effectiveProfile];
 
-      const newUserObj: User = {
-        ...(existing || {}),
-        id: existing?.id || `usr-self-${Date.now()}`,
-        name: cleanName,
-        email: cleanEmail,
-        // Si ya tenía cuenta activa y solo se inscribe al evento, conservar su clave y estado activo; si es alta nueva, bloquear clave hasta aprobación Admin
-        password: isAlreadyActiveAccount
-          ? existing!.password
-          : `__PENDING_APPROVAL_LOCKED_${activationToken}__`,
-        passwordPendingSetup: isAlreadyActiveAccount ? false : true,
-        activationToken,
-        phone: phone.trim() || existing?.phone,
-        dniNumber: dniNumber.trim() || existing?.dniNumber || undefined,
-        role: isAlreadyActiveAccount
-          ? existing!.role
-          : effectiveProfile === 'productor'
-          ? 'client'
-          : 'viewer',
-        jobTitle: isAlreadyActiveAccount && existing?.jobTitle
-          ? `${existing.jobTitle.replace(/\s*•\s*Acreditado Un Día de Siembra \(21\/11\)/g, '')}${isEventSelected ? ' • Acreditado Un Día de Siembra (21/11)' : ''}`
-          : `${profileText}${isEventSelected ? ' • Acreditado Un Día de Siembra (21/11)' : ''}`,
-        organizationName:
-          organizationName.trim() ||
-          existing?.organizationName ||
-          (effectiveProfile === 'productor' ? 'Establecimiento en Incorporación' : 'Visitante / Invitado General'),
-        isNetworkMember: isAlreadyActiveAccount ? Boolean(existing?.isNetworkMember) : false,
-        memberType: isAlreadyActiveAccount
-          ? existing?.memberType
-          : effectiveProfile === 'productor'
-          ? 'Socio_Productor'
-          : undefined,
-        accountStatus: isAlreadyActiveAccount ? 'active' : 'pending_approval',
-        registrationSource: isEventSelected ? 'event_un_dia_de_siembra' : 'self_service_platform',
-        requestedProfileType: isAlreadyActiveAccount
-          ? existing?.requestedProfileType || effectiveProfile
-          : effectiveProfile,
-        eventRegistered: isEventSelected ? true : existing?.eventRegistered,
-        eventName: isEventSelected ? 'Jornada Oficial: "Un Día de Siembra" (Sáb. 21 Nov)' : existing?.eventName,
-        eventTicketCode: isEventSelected ? finalTicket : existing?.eventTicketCode,
-        eventConfirmedByEmail: false,
-        eventProgramDownloaded: false,
-        localityOrProvince: locality.trim() || existing?.localityOrProvince || 'VIRCH – Trelew, Chubut',
-        estimatedHectares: !isEventSelected && estimatedHa ? Number(estimatedHa) : existing?.estimatedHectares,
-        invitedAt: existing?.invitedAt || new Date().toISOString().split('T')[0],
-        avatar:
-          existing?.avatar ||
-          `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(cleanName)}&backgroundColor=b6e3f4`
-      };
+      let newUserObj: User;
+      if (isEventSelected) {
+        newUserObj = createEventRegistrationRecord({
+          name: cleanName,
+          email: cleanEmail,
+          phone: phone.trim(),
+          dniNumber: dniNumber.trim(),
+          organizationName: organizationName.trim(),
+          localityOrProvince: locality.trim() || activeEvent.locality,
+          attendeeCategoryLabel: profileText,
+          event: activeEvent,
+          existingUser: existing
+        });
+      } else {
+        const { user } = createPendingPublicRegistration(
+          {
+            name: cleanName,
+            email: cleanEmail,
+            phone: phone.trim(),
+            dniNumber: dniNumber.trim(),
+            organizationName: organizationName.trim(),
+            localityOrProvince: locality.trim(),
+            estimatedHectares: estimatedHa ? Number(estimatedHa) : undefined,
+            requestedProfileType: effectiveProfile,
+            registrationSource: 'self_service_platform',
+            isEventRegistration: false
+          },
+          existing
+        );
+        newUserObj = {
+          ...user,
+          accessScope: effectiveProfile === 'visitante' ? 'event_attendee' : 'system_user'
+        };
+      }
 
       if (existing) {
         await updateUser(newUserObj);
       } else {
         await addUser(newUserObj);
       }
+
+      const finalTicket = newUserObj.eventTicketCode || `SIEMBRA-21N-${String(Date.now()).slice(-4)}`;
 
       // Despachar correo oficial desde notificaciones@hempc.com.ar vía Resend.com
       const emailDispatch = await sendEventRegistrationConfirmationEmail({
@@ -619,11 +611,19 @@ export default function EventAndSelfRegistrationModal({
               )}
             </div>
 
-            {/* Aviso de Seguridad: Enlace de Contraseña tras Aprobación */}
+            {/* Aviso de Seguridad diferenciado: Acreditación de Evento vs Alta en Plataforma */}
             <div className="bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/70 rounded-xl p-3.5 text-[11px] text-slate-700 dark:text-slate-200 flex items-start gap-2.5">
               <KeyRound size={16} className="text-[#006633] dark:text-emerald-400 flex-shrink-0 mt-0.5" />
               <div>
-                <strong className="text-slate-900 dark:text-white">Seguridad de Contraseña tras Aprobación:</strong> No necesitás definir una clave ahora. Una vez que un Administrador apruebe tu alta{isEventSelected ? ' como Visitante' : ''}, la plataforma te enviará desde <strong>notificaciones@hempc.com.ar</strong> el enlace directo para ingresar tu contraseña y confirmar el acceso.
+                {isEventSelected ? (
+                  <>
+                    <strong className="text-slate-900 dark:text-white">Acreditación Exclusiva para la Jornada:</strong> Esta inscripción registra tu asistencia en el módulo oficial de <strong>EVENTOS</strong> para emitir tu Pase QR y habilitar la descarga del Programa Oficial PDF. No requiere contraseña ni otorga acceso al sistema interno de datos productivos.
+                  </>
+                ) : (
+                  <>
+                    <strong className="text-slate-900 dark:text-white">Seguridad de Contraseña tras Aprobación:</strong> No necesitás definir una clave ahora. Una vez que un Administrador apruebe tu alta en la plataforma, recibirás desde <strong>notificaciones@hempc.com.ar</strong> el enlace directo para ingresar tu contraseña y confirmar el acceso.
+                  </>
+                )}
               </div>
             </div>
 
@@ -808,10 +808,22 @@ export default function EventAndSelfRegistrationModal({
             <div className="bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 text-xs text-slate-600 dark:text-slate-300 space-y-1.5">
               <p className="font-black text-slate-900 dark:text-white uppercase text-[11px] flex items-center gap-1.5">
                 <ShieldCheck size={15} className="text-[#006633] dark:text-emerald-400 flex-shrink-0" />
-                <span>¿Cómo recibirás tu acceso y contraseña en NUCLEUS?</span>
+                <span>
+                  {isEventSelected
+                    ? 'Acreditación Registrada en el Padrón Oficial de EVENTOS'
+                    : '¿Cómo recibirás tu acceso y contraseña en NUCLEUS?'}
+                </span>
               </p>
               <p>
-                Los Administradores ya recibieron tu solicitud. Una vez que aprueben tu perfil como <strong>Visitante / Invitado General</strong> o <strong>Productor</strong>, recibirás un correo oficial desde <strong>notificaciones@hempc.com.ar</strong> con el <strong>enlace de activación para ingresar tu contraseña y confirmar tu cuenta</strong>.
+                {isEventSelected ? (
+                  <>
+                    Tu registro quedó incorporado al padrón de <strong>EVENTOS</strong> para control de los Administradores. Al aprobarse tu acreditación recibirás en tu correo tu <strong>Pase Oficial QR confirmado</strong> para presentar con tu DNI el día de la jornada.
+                  </>
+                ) : (
+                  <>
+                    Los Administradores ya recibieron tu solicitud. Una vez que aprueben tu perfil operativo como <strong>Productor</strong> o <strong>Técnico</strong>, recibirás un correo oficial desde <strong>notificaciones@hempc.com.ar</strong> con el <strong>enlace de activación para ingresar tu contraseña y confirmar tu cuenta</strong>.
+                  </>
+                )}
               </p>
             </div>
 

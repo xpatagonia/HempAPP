@@ -9,6 +9,7 @@ interface EmailNotificationPayload {
     | 'password_reset'
     | 'user_welcome'
     | 'event_registration'
+    | 'event_accreditation_approved'
     | 'registration_approved';
   structure_name?: string;
   field_name?: string;
@@ -428,11 +429,76 @@ function buildEventRegistrationHtml(req: EmailNotificationPayload): string {
         </div>
 
         <p style="font-size: 12px; color: #64748b; background: #f1f5f9; border-left: 4px solid #0c2d1e; padding: 10px 14px; border-radius: 8px;">
-          <strong>Seguridad y Aprobación Administrativa:</strong> Tu solicitud quedó registrada en estado <em>Pendiente de Aprobación</em>. Una vez que un Administrador apruebe tu alta como <strong>Visitante</strong> o <strong>Productor</strong>, recibirás un correo oficial con el <strong>enlace directo para ingresar tu contraseña y confirmar el acceso</strong>.
+          <strong>Aprobación por Administración de Eventos:</strong> Tu inscripción a la jornada quedó registrada en el padrón oficial de <strong>EVENTOS</strong>. Una vez validada por la Administración, recibirás tu confirmación definitiva de acreditación con este Pase QR para el ingreso presencial en tranquera (esta acreditación es exclusiva para asistencia al evento y no requiere cuenta de acceso al sistema interno de datos).
         </p>
 
         <div style="text-align: center; margin: 26px 0 12px 0;">
           <a href="${programUrl}" class="btn">Confirmar Correo y Descargar Programa Oficial PDF</a>
+        </div>
+      </div>
+      <div class="footer">
+        <div style="margin-bottom: 6px; font-weight: 800; color: #334155; font-size: 12px;">PatagonianC LTDA Cooperativa de Trabajo · Mat. INAES 68218 · CUIT: 30-71816113-0 · HempC</div>
+        <div style="font-size: 11px; color: #64748b;">Enviado por <strong>notificaciones@hempc.com.ar</strong> (Vercel + Resend HTTPS)</div>
+      </div>
+    </div>
+  </body>
+  </html>`;
+}
+
+function buildEventAccreditationApprovedHtml(req: EmailNotificationPayload): string {
+  const extra = req.extra_data || {};
+  const eventName = escapeHtml(extra.event_name || 'JORNADA OFICIAL: “UN DÍA DE SIEMBRA”');
+  const eventDate = escapeHtml(extra.event_date || 'Sábado 21 de Noviembre • 08:30 a 15:30 hs');
+  const venueName = escapeHtml(extra.venue_name || 'Chacra Experimental PatagonianC LTDA');
+  const locality = escapeHtml(extra.locality || 'VIRCH – Trelew, Chubut');
+  const ticketCode = escapeHtml(extra.ticket_code || 'SIEMBRA-21N-OFICIAL');
+  const toName = escapeHtml(req.to_name);
+  const organization = escapeHtml(req.structure_name || 'Visitante Acreditado');
+  const programUrl = sanitizeActionUrl(req.action_url, 'https://red.hempc.com.ar/#/login?evento=un-dia-de-siembra');
+
+  return `
+  <!DOCTYPE html>
+  <html>
+  <head>
+    <meta charset="utf-8">
+    <style>
+      body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 20px; }
+      .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 20px; border: 1px solid #d1fae5; overflow: hidden; box-shadow: 0 8px 30px rgba(0,0,0,0.06); }
+      .header { background: #0c2d1e; padding: 28px 30px; color: #ffffff; border-left: 5px solid #DDDB00; }
+      .content { padding: 28px 30px; color: #334155; line-height: 1.6; }
+      .btn { display: inline-block; background: #006633; color: #ffffff !important; padding: 14px 28px; border-radius: 12px; font-weight: 900; text-decoration: none; font-size: 13px; text-transform: uppercase; letter-spacing: 0.8px; }
+      .footer { background: #f8fafc; padding: 20px 30px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #94a3b8; text-align: center; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <div style="font-size: 10px; letter-spacing: 1.8px; text-transform: uppercase; color: #DDDB00; font-weight: 900; margin-bottom: 4px;">
+          ACREDITACIÓN OFICIAL APROBADA • ADMINISTRACIÓN DE EVENTOS HEMPC
+        </div>
+        <h1 style="margin: 4px 0 6px 0; font-size: 21px; font-weight: 900;">${eventName}</h1>
+        <div style="font-size: 12px; color: #e2e8f0; font-weight: 600;">Sede: ${venueName} • ${locality}</div>
+      </div>
+      <div class="content">
+        <p style="font-size: 15px; color: #0f172a; margin-top: 0;">Hola <strong>${toName}</strong>,</p>
+        <p style="font-size: 13px; color: #475569;">
+          La Administración Central de <strong>HempC</strong> ha aprobado tu acreditación presencial para asistir a <strong>${eventName}</strong> (${eventDate}).
+        </p>
+
+        <div style="background: #0c2d1e; color: #ffffff; border-radius: 16px; padding: 20px 24px; margin: 20px 0; border: 2px solid #DDDB00;">
+          <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: #6ee7b7; font-weight: 800;">PASE OFICIAL DE INGRESO EN PUERTA (PRESENTAR CON DNI)</div>
+          <div style="font-size: 24px; font-weight: 900; font-family: monospace; letter-spacing: 2px; color: #DDDB00; margin: 6px 0;">${ticketCode}</div>
+          <div style="font-size: 12px; color: #ecfdf5; margin-top: 6px;">
+            <strong>Asistente Acreditado:</strong> ${toName} • <strong>Procedencia:</strong> ${organization}
+          </div>
+        </div>
+
+        <p style="font-size: 12px; color: #475569; background: #f8fafc; border: 1px solid #e2e8f0; padding: 12px 16px; border-radius: 12px;">
+          <strong>Importante para el día de la Jornada:</strong> Presentá este código de pase junto con tu DNI en el puesto de acreditación de entrada (${venueName}). Podés descargar el Programa Oficial actualizado desde el siguiente enlace:
+        </p>
+
+        <div style="text-align: center; margin: 26px 0 12px 0;">
+          <a href="${programUrl}" class="btn">Ver Pase QR y Descargar Programa Oficial PDF</a>
         </div>
       </div>
       <div class="footer">
@@ -543,6 +609,8 @@ export default async function handler(req: any, res: any) {
       subject = '🔐 Restablecimiento de Contraseña • HempC Nucleus';
     } else if (body.notification_type === 'event_registration') {
       subject = 'Confirmación de Inscripción: Jornada Oficial "Un Día de Siembra" (Sáb. 21 Nov) • PatagonianC & UATRE';
+    } else if (body.notification_type === 'event_accreditation_approved') {
+      subject = `✅ Acreditación Oficial Aprobada (${body.extra_data?.ticket_code || 'PASE QR'}) • ${body.extra_data?.event_name || 'Jornada de Campo HempC'}`;
     } else if (body.notification_type === 'registration_approved') {
       subject = `Solicitud de Alta Aprobada (${body.role_name || 'Miembro'}) • Activá tu Contraseña en NUCLEUS`;
     } else if (body.notification_type === 'user_welcome') {
@@ -563,6 +631,8 @@ export default async function handler(req: any, res: any) {
     htmlBody = buildPasswordResetHtml(body);
   } else if (body.notification_type === 'event_registration') {
     htmlBody = buildEventRegistrationHtml(body);
+  } else if (body.notification_type === 'event_accreditation_approved') {
+    htmlBody = buildEventAccreditationApprovedHtml(body);
   } else if (body.notification_type === 'registration_approved') {
     htmlBody = buildRegistrationApprovedHtml(body);
   } else if (body.notification_type === 'user_welcome') {

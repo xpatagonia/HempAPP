@@ -23,6 +23,7 @@ import {
   evaluateUpcomingTasksReminders
 } from '../src/services/pushNotificationService';
 import { wakeUpRenderEngine } from '../src/services/telemetryStreamService';
+import { partitionUsersByScope, resolveEventAccreditationStatus } from '../src/services/eventsManagementService';
 
 const NavItem = ({ to, icon: Icon, label, badge, special, isCollapsed, onClickMobile }: any) => {
   const location = useLocation();
@@ -181,10 +182,16 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
 
   const pendingTasksCount = tasks.filter(t => t.status === 'Pendiente').length;
   const isClient = currentUser.role === 'client';
+  const isAdminUser = currentUser.role === 'admin' || currentUser.role === 'super_admin';
   const isSupplierUser = Boolean(currentUser.supplierId && !currentUser.clientId);
   const currentSupplierName = isSupplierUser
     ? (suppliers || []).find(s => String(s.id) === String(currentUser.supplierId))?.name || currentUser.organizationName || 'Semillero Homologado'
     : null;
+
+  const { systemUsers, eventAttendees } = partitionUsersByScope(usersList || []);
+  const pendingEventsCount = eventAttendees.filter(
+    u => resolveEventAccreditationStatus(u) === 'pending_admin'
+  ).length;
 
   const navGroups = [
     {
@@ -239,7 +246,16 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
         ...(!isSupplierUser ? [{ to: '/finances', icon: DollarSign, label: 'Costos & Finanzas' }] : []),
         { to: '/analytics', icon: BarChart3, label: 'Comparativa Genética' },
         { to: '/integrity', icon: ShieldAlert, label: 'Integridad & Licencias' },
-        ...(!isClient && !isSupplierUser ? [{ to: '/users', icon: UserCheck, label: 'Equipo & Accesos' }] : []),
+        ...(!isClient && !isSupplierUser ? [{ to: '/users', icon: UserCheck, label: 'Admin & Accesos' }] : []),
+        ...(isAdminUser
+          ? [{
+              to: '/events',
+              icon: Calendar,
+              label: 'Eventos & Jornadas',
+              badge: pendingEventsCount > 0 ? pendingEventsCount : null,
+              special: true
+            }]
+          : []),
         ...(currentUser.role === 'super_admin' ? [{ to: '/settings', icon: Settings, label: 'Admin Server' }] : [])
       ]
     }
@@ -444,7 +460,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
                 className="px-2.5 py-1 rounded-lg bg-white/90 text-slate-900 text-[11px] font-mono font-bold border border-slate-950/20 outline-none cursor-pointer"
                 title="Cambiar usuario simulado"
               >
-                {usersList.map(u => (
+                {systemUsers.map(u => (
                   <option key={u.id} value={u.id}>
                     {u.name} ({u.role}) — {u.organizationName || 'Red Central'}
                   </option>

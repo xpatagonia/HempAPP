@@ -16,6 +16,15 @@ import {
     unpackUserMetaFromJobTitle
 } from '../src/services/producerOnboardingWorkflow.js';
 import { evaluateProducerSteps } from '../src/services/producerTutorialService.js';
+import {
+    isEventOnlyAttendee,
+    partitionUsersByScope,
+    createEventRegistrationRecord,
+    approveEventAttendeeByAdmin,
+    checkInEventAttendeeByAdmin,
+    createOrUpdateFieldEventByAdmin,
+    DEFAULT_FIELD_EVENTS
+} from '../src/services/eventsManagementService.js';
 
 console.log("=================================================");
 console.log("🧪 INICIANDO BATERÍA DE PRUEBAS UNITARIAS - HEMP");
@@ -706,6 +715,146 @@ test("10.5 Progreso de los 6 Eslabones del Productor: De 0% (Recién Activado) a
     assert.equal(fullReadiness.phytosanitaryChainReady, true);
 });
 
+// --- GRUPO 11: RE-INGENIERÍA DE USUARIOS, AISLAMIENTO DE VISITANTES Y MÓDULO EXCLUSIVO EVENTOS ---
+console.log("\n1️⃣1️⃣  AISLAMIENTO ESTRICTO DE VISITANTES DE JORNADA (SIN LOGIN) & MÓDULO EXCLUSIVO EVENTOS");
+
+test("11.1 Partición Estricta (Zero-Touch): Separa los 11 Operadores Reales del Sistema de los 6 Visitantes de Jornada en Producción", () => {
+    const mockProductionUsers = [
+        // 3 Administradores
+        { id: '1', name: 'Admin Master', email: 'gaston@patagonianc.com', role: 'super_admin' as const, jobTitle: 'Director General' },
+        { id: '2', name: 'Gastón BAREA M.', email: 'gbarea@hempc.com.ar', role: 'admin' as const, jobTitle: 'Coordinación General' },
+        { id: '3', name: 'Andrea Andrade', email: 'aandrade@hempc.com.ar', role: 'admin' as const, jobTitle: 'Administración' },
+        // 2 Técnicos
+        { id: '4', name: 'Julian PIZARRO', email: 'jpizarro@hempc.com.ar', role: 'technician' as const, jobTitle: 'Director Técnico' },
+        { id: '5', name: 'Matias QUINTANA', email: 'mquintana@hempc.com.ar', role: 'technician' as const, jobTitle: 'Ingeniero Agrónomo' },
+        // 3 Productores
+        { id: '6', name: 'Ricardo La Regina', email: 'rlaregina@socio.ar', role: 'client' as const, clientId: 'c-1', jobTitle: 'Productor Asociado' },
+        { id: '7', name: 'Salvador MERELLE', email: 'smerelle@socio.ar', role: 'client' as const, clientId: 'c-2', jobTitle: 'Productor Asociado' },
+        { id: '8', name: 'Joaquin AREZO', email: 'jarezo@socio.ar', role: 'client' as const, clientId: 'c-3', jobTitle: 'Productor Asociado' },
+        // 3 Auditores de Semilleros Homologados (viewer con supplierId / semillero)
+        { id: '9', name: 'Gabriel Blocki', email: 'gblocki@anandapampa.com', role: 'viewer' as const, supplierId: 'sup-ananda', organizationName: 'Ananda Pampa' },
+        { id: '10', name: 'Remy Hilgengra', email: 'remy@hempit.fr', role: 'viewer' as const, supplierId: 'sup-hempit', organizationName: 'HEMPIT France' },
+        { id: '11', name: 'Jean-Eric Ponthou', email: 'jeponthou@hempit.fr', role: 'viewer' as const, supplierId: 'sup-hempit', organizationName: 'HEMPIT France' },
+        // 6 Visitantes de Jornada en Producción
+        { id: '12', name: 'Walter Ruben Machado', email: 'walmach@gmail.com', role: 'viewer' as const, eventRegistered: true, eventTicketCode: 'SIEMBRA-21N-1001', requestedProfileType: 'visitante' as const },
+        { id: '13', name: 'Joaquín Martinez', email: 'joaquintw5@gmail.com', role: 'viewer' as const, eventRegistered: true, eventTicketCode: 'SIEMBRA-21N-1002', requestedProfileType: 'visitante' as const },
+        { id: '14', name: 'Corina Edith Acosta', email: 'corinaedithacosta@gmail.com', role: 'viewer' as const, eventRegistered: true, eventTicketCode: 'SIEMBRA-21N-1003', requestedProfileType: 'visitante' as const },
+        { id: '15', name: 'Andrade andrea belen', email: 'andrade.andrea.belen@gmail.com', role: 'viewer' as const, eventRegistered: true, eventTicketCode: 'SIEMBRA-21N-1004', requestedProfileType: 'visitante' as const },
+        { id: '16', name: 'Ivana Carina Garcia Tulian', email: 'ivanacary1476@gmail.com', role: 'viewer' as const, eventRegistered: true, eventTicketCode: 'SIEMBRA-21N-1005', requestedProfileType: 'visitante' as const },
+        { id: '17', name: 'Juan', email: 'pedritohug1234@gmail.com', role: 'viewer' as const, accountStatus: 'pending_approval' as const, requestedProfileType: 'visitante' as const, registrationSource: 'self_service_platform' as const }
+    ];
+
+    const { systemUsers, eventAttendees } = partitionUsersByScope(mockProductionUsers);
+    assert.equal(systemUsers.length, 11, 'Los 11 operadores reales del sistema deben permanecer en ADMIN Y ACCESOS');
+    assert.equal(eventAttendees.length, 6, 'Los 6 visitantes de jornada deben quedar 100% aislados en EVENTOS');
+    assert.equal(systemUsers.some(u => u.email === 'walmach@gmail.com'), false);
+    assert.equal(systemUsers.some(u => u.email === 'gblocki@anandapampa.com'), true, 'Los auditores de semilleros homologados son operadores reales del sistema');
+});
+
+test("11.2 Bloqueo Total de Login al Sistema para Visitantes de Eventos (Antes y Después de Acreditación Admin)", () => {
+    const attendee = createEventRegistrationRecord({
+        name: 'Martín Visitante Jornada',
+        email: 'martin.visitante@evento.ar',
+        phone: '+5492804556677',
+        dniNumber: '33444555',
+        organizationName: 'INTA Chubut',
+        localityOrProvince: 'Trelew, Chubut',
+        event: DEFAULT_FIELD_EVENTS[0]
+    });
+
+    assert.equal(isEventOnlyAttendee(attendee), true);
+    assert.equal(attendee.accessScope, 'event_attendee');
+    assert.ok(String(attendee.eventTicketCode).startsWith('SIEMBRA-21N-'));
+
+    // Intento de login antes de aprobar acreditación -> BLOQUEADO POR EVENT_VISITOR_NO_SYSTEM_ACCESS
+    const gateBefore = evaluateUserLoginGate(attendee);
+    assert.equal(gateBefore.canProceedToPasswordCheck, false);
+    assert.equal(gateBefore.requiresPasswordActivationModal, false);
+    assert.equal(gateBefore.blockedReason, 'event_visitor_no_system_access');
+
+    // Aprobación de acreditación al evento por el Administrador
+    const updatedAttendee = approveEventAttendeeByAdmin({
+        adminUser: { id: 'admin-1', name: 'Admin Master', email: 'gaston@patagonianc.com', role: 'super_admin' },
+        attendee,
+        event: DEFAULT_FIELD_EVENTS[0]
+    });
+
+    assert.equal(updatedAttendee.eventAccreditationStatus, 'accredited');
+    assert.equal(updatedAttendee.password, '__EVENT_VISITOR_NO_SYSTEM_LOGIN__');
+
+    // Intento de login DESPUÉS de aprobar su acreditación al evento -> SIGUE 100% BLOQUEADO PARA ENTRAR AL SISTEMA
+    const gateAfter = evaluateUserLoginGate(updatedAttendee);
+    assert.equal(gateAfter.canProceedToPasswordCheck, false);
+    assert.equal(gateAfter.requiresPasswordActivationModal, false);
+    assert.equal(gateAfter.blockedReason, 'event_visitor_no_system_access');
+
+    // Intento de activar contraseña en el sistema -> BLOQUEADO
+    const activationAttempt = activateApprovedAccountPassword({
+        targetUser: updatedAttendee,
+        providedToken: 'CUALQUIER-TOKEN',
+        newPassword: 'Password1234',
+        confirmPassword: 'Password1234'
+    });
+    assert.equal(activationAttempt.success, false);
+    assert.ok(activationAttempt.errorMessage?.includes('Acreditación de Jornada / Evento'));
+});
+
+test("11.3 Gobernanza Exclusiva de Administradores sobre EVENTOS (Creación de Eventos, Acreditación y Check-in en Puerta)", () => {
+    const attendee = createEventRegistrationRecord({
+        name: 'Laura Asistente Campo',
+        email: 'laura@visitante.ar',
+        phone: '+5492804998877',
+        dniNumber: '31222333',
+        localityOrProvince: 'Rawson, Chubut',
+        event: DEFAULT_FIELD_EVENTS[0]
+    });
+
+    // Un productor o técnico NO puede aprobar acreditaciones ni crear eventos
+    assert.throws(() => {
+        approveEventAttendeeByAdmin({
+            adminUser: { id: 'u-prod', name: 'Productor', email: 'prod@socio.ar', role: 'client' },
+            attendee
+        });
+    }, /Solo los Administradores/);
+
+    assert.throws(() => {
+        createOrUpdateFieldEventByAdmin({
+            adminUser: { id: 'u-tech', name: 'Técnico', email: 'tech@socio.ar', role: 'technician' },
+            eventData: {
+                title: 'Visita No Autorizada',
+                date: '2026-12-05',
+                venueName: 'Chacra'
+            },
+            existingEvents: DEFAULT_FIELD_EVENTS
+        });
+    }, /Solo los Administradores/);
+
+    // Un Administrador SÍ puede crear un nuevo evento en el calendario y registrar el Check-in en puerta
+    const { savedEvent } = createOrUpdateFieldEventByAdmin({
+        adminUser: { id: 'admin-1', name: 'Admin Master', email: 'gaston@patagonianc.com', role: 'admin' },
+        eventData: {
+            title: 'Visita Técnica Programada — Lotes Semilleros VIRCH',
+            category: 'visita_programada',
+            date: '2026-12-10',
+            startTime: '09:00',
+            endTime: '13:00',
+            venueName: 'Chacra Experimental PatagonianC LTDA',
+            locality: 'Trelew, Chubut',
+            maxCapacity: 40
+        },
+        existingEvents: DEFAULT_FIELD_EVENTS
+    });
+    assert.equal(savedEvent.category, 'visita_programada');
+    assert.equal(savedEvent.maxCapacity, 40);
+
+    const checkedIn = checkInEventAttendeeByAdmin({
+        adminUser: { id: 'admin-1', name: 'Admin Master', email: 'gaston@patagonianc.com', role: 'admin' },
+        attendee
+    });
+    assert.equal(checkedIn.eventAccreditationStatus, 'checked_in');
+    assert.ok(checkedIn.eventCheckedInAt);
+    assert.equal(checkedIn.eventCheckedInBy, 'Admin Master');
+});
 
 console.log("\n=================================================");
 console.log(`📊 RESUMEN DE PRUEBAS: ${passed} Exitosas, ${failed} Fallidas`);
@@ -716,5 +865,6 @@ if (failed > 0) {
 } else {
     process.exit(0);
 }
+
 
 

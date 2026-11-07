@@ -4,8 +4,9 @@ import {
   User, Location, Plot, TrialRecord, Task, Project, Variety, 
   Client, ClientContractDocument, Supplier, SeedBatch, SeedMovement, Resource, 
   StoragePoint, HydricRecord, FieldLog, OperationalExpense, ExpenseAuditStatus,
-  HempStageId, AgrochemicalApplication, VaultDocument
+  HempStageId, AgrochemicalApplication, VaultDocument, FieldEvent
 } from '../types';
+import { DEFAULT_FIELD_EVENTS, isEventOnlyAttendee } from '../src/services/eventsManagementService';
 import { 
   ADMIN_USER, DEMO_USER, DEMO_USERS_LIST, DEMO_CLIENTS, DEMO_VARIETIES, DEMO_LOCATIONS, DEMO_PLOTS, 
   DEMO_PROJECTS, DEMO_TRIALS, DEMO_HYDRIC, DEMO_TASKS,
@@ -121,6 +122,9 @@ interface AppContextType {
   vaultDocuments: VaultDocument[];
   addVaultDocument: (doc: VaultDocument) => Promise<boolean>;
   deleteVaultDocument: (id: string) => Promise<boolean>;
+  fieldEvents: FieldEvent[];
+  saveFieldEvent: (evt: Partial<FieldEvent> & { title: string; date: string; venueName: string }) => Promise<FieldEvent>;
+  deleteFieldEvent: (id: string) => Promise<boolean>;
   isRefreshing: boolean;
   refreshData: () => Promise<void>;
   activeCampaign: string;
@@ -292,33 +296,37 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
     const unpackUserMetaFromJobTitle = (rawJobTitle?: string | null): { cleanJobTitle: string; parsedMeta: Partial<User> } => {
         const str = String(rawJobTitle || '');
-        const sIdx = str.indexOf(USER_META_MARKER_START);
-        const eIdx = str.indexOf(USER_META_MARKER_END);
-        if (sIdx !== -1 && eIdx !== -1 && eIdx > sIdx) {
-            const cleanJobTitle = str.slice(0, sIdx).trim();
-            const jsonPart = str.slice(sIdx + USER_META_MARKER_START.length, eIdx);
+        const match = str.match(/<!--HEMPC_USER_META:(.*?)(?::END_USER_META)?-->/s);
+        if (match && match[1]) {
+            const cleanJobTitle = str.replace(/\s*<!--HEMPC_USER_META:.*?(?::END_USER_META)?-->/s, '').trim();
             try {
-                const parsed = JSON.parse(jsonPart);
+                const parsed = JSON.parse(match[1]);
                 if (parsed && typeof parsed === 'object') {
                     return { cleanJobTitle, parsedMeta: parsed };
                 }
             } catch {}
             return { cleanJobTitle, parsedMeta: {} };
         }
-        return { cleanJobTitle: str, parsedMeta: {} };
+        return { cleanJobTitle: str.trim(), parsedMeta: {} };
     };
 
     const packUserMetaIntoJobTitle = (u: User): string => {
         const { cleanJobTitle } = unpackUserMetaFromJobTitle(u.jobTitle);
         const meta: Partial<User> = {};
+        if (u.accessScope) meta.accessScope = u.accessScope;
         if (u.accountStatus) meta.accountStatus = u.accountStatus;
         if (u.registrationSource) meta.registrationSource = u.registrationSource;
         if (u.requestedProfileType) meta.requestedProfileType = u.requestedProfileType;
         if (u.eventRegistered !== undefined) meta.eventRegistered = u.eventRegistered;
+        if (u.eventId) meta.eventId = u.eventId;
         if (u.eventName) meta.eventName = u.eventName;
         if (u.eventTicketCode) meta.eventTicketCode = u.eventTicketCode;
         if (u.eventConfirmedByEmail !== undefined) meta.eventConfirmedByEmail = u.eventConfirmedByEmail;
         if (u.eventProgramDownloaded !== undefined) meta.eventProgramDownloaded = u.eventProgramDownloaded;
+        if (u.eventAccreditationStatus) meta.eventAccreditationStatus = u.eventAccreditationStatus;
+        if (u.eventCheckedInAt) meta.eventCheckedInAt = u.eventCheckedInAt;
+        if (u.eventCheckedInBy) meta.eventCheckedInBy = u.eventCheckedInBy;
+        if (u.eventCertificateIssuedAt) meta.eventCertificateIssuedAt = u.eventCertificateIssuedAt;
         if (u.localityOrProvince) meta.localityOrProvince = u.localityOrProvince;
         if (u.estimatedHectares !== undefined) meta.estimatedHectares = u.estimatedHectares;
         if (u.organizationName) meta.organizationName = u.organizationName;
@@ -368,6 +376,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             ...mergedMeta,
             ...u,
             jobTitle: cleanJobTitle || mergedMeta.jobTitle || demoMatch?.jobTitle,
+            accessScope: parsedMeta.accessScope || u.accessScope || mergedMeta.accessScope,
             role: u.role || mergedMeta.role || demoMatch?.role || 'viewer',
             structureRole: u.structureRole || mergedMeta.structureRole || demoMatch?.structureRole,
             supplierId: u.supplierId !== undefined ? u.supplierId : (mergedMeta.supplierId !== undefined ? mergedMeta.supplierId : demoMatch?.supplierId),
@@ -385,10 +394,15 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             registrationSource: parsedMeta.registrationSource || u.registrationSource || mergedMeta.registrationSource,
             requestedProfileType: parsedMeta.requestedProfileType || u.requestedProfileType || mergedMeta.requestedProfileType,
             eventRegistered: parsedMeta.eventRegistered !== undefined ? parsedMeta.eventRegistered : (u.eventRegistered !== undefined ? u.eventRegistered : mergedMeta.eventRegistered),
+            eventId: parsedMeta.eventId || u.eventId || mergedMeta.eventId,
             eventName: parsedMeta.eventName || u.eventName || mergedMeta.eventName,
             eventTicketCode: parsedMeta.eventTicketCode || u.eventTicketCode || mergedMeta.eventTicketCode,
             eventConfirmedByEmail: parsedMeta.eventConfirmedByEmail !== undefined ? parsedMeta.eventConfirmedByEmail : (u.eventConfirmedByEmail !== undefined ? u.eventConfirmedByEmail : mergedMeta.eventConfirmedByEmail),
             eventProgramDownloaded: parsedMeta.eventProgramDownloaded !== undefined ? parsedMeta.eventProgramDownloaded : (u.eventProgramDownloaded !== undefined ? u.eventProgramDownloaded : mergedMeta.eventProgramDownloaded),
+            eventAccreditationStatus: parsedMeta.eventAccreditationStatus || u.eventAccreditationStatus || mergedMeta.eventAccreditationStatus,
+            eventCheckedInAt: parsedMeta.eventCheckedInAt || u.eventCheckedInAt || mergedMeta.eventCheckedInAt,
+            eventCheckedInBy: parsedMeta.eventCheckedInBy || u.eventCheckedInBy || mergedMeta.eventCheckedInBy,
+            eventCertificateIssuedAt: parsedMeta.eventCertificateIssuedAt || u.eventCertificateIssuedAt || mergedMeta.eventCertificateIssuedAt,
             localityOrProvince: parsedMeta.localityOrProvince || u.localityOrProvince || mergedMeta.localityOrProvince,
             estimatedHectares: parsedMeta.estimatedHectares !== undefined ? parsedMeta.estimatedHectares : (u.estimatedHectares !== undefined ? u.estimatedHectares : mergedMeta.estimatedHectares),
             approvedBy: parsedMeta.approvedBy || u.approvedBy || mergedMeta.approvedBy,
@@ -1862,6 +1876,16 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     const [vaultDocuments, setVaultDocuments] = useState<VaultDocument[]>(() =>
         getStoredCollection('ht_vault_documents_v1', [])
     );
+    const [fieldEvents, setFieldEvents] = useState<FieldEvent[]>(() => {
+        const stored = getStoredCollection('ht_field_events_v1', DEFAULT_FIELD_EVENTS);
+        const merged = [...stored];
+        DEFAULT_FIELD_EVENTS.forEach(defEvt => {
+            if (!merged.some(e => e.id === defEvt.id)) {
+                merged.push(defEvt);
+            }
+        });
+        return merged;
+    });
 
     useEffect(() => {
         try {
@@ -2214,15 +2238,17 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 if (!error && data) {
                     const mappedUser = healSingleUser(toCamelCase(data) as User);
                     if (
+                        isEventOnlyAttendee(mappedUser) ||
                         mappedUser.accountStatus === 'pending_approval' ||
                         mappedUser.accountStatus === 'rejected' ||
                         mappedUser.passwordPendingSetup === true ||
-                        String(mappedUser.password || '').startsWith('__PENDING_')
+                        String(mappedUser.password || '').startsWith('__PENDING_') ||
+                        String(mappedUser.password || '').startsWith('__EVENT_VISITOR_')
                     ) {
                         return false;
                     }
                     const isPasswordValid = 
-                        (data.password && !String(data.password).startsWith('__PENDING_') && data.password === trimmedPassword) || 
+                        (data.password && !String(data.password).startsWith('__PENDING_') && !String(data.password).startsWith('__EVENT_VISITOR_') && data.password === trimmedPassword) || 
                         (trimmedPassword === "admin" && (data.role === "admin" || data.role === "super_admin" || tEmail === "admin@hempc.com.ar")) ||
                         (trimmedPassword === "@Admin130126@" && tEmail === "admin@hempc.com.ar");
 
@@ -2245,15 +2271,17 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         if (localUser) {
             const healedLocal = healSingleUser(localUser);
             if (
+                isEventOnlyAttendee(healedLocal) ||
                 healedLocal.accountStatus === 'pending_approval' ||
                 healedLocal.accountStatus === 'rejected' ||
                 healedLocal.passwordPendingSetup === true ||
-                String(healedLocal.password || '').startsWith('__PENDING_')
+                String(healedLocal.password || '').startsWith('__PENDING_') ||
+                String(healedLocal.password || '').startsWith('__EVENT_VISITOR_')
             ) {
                 return false;
             }
             const matchesPassword = 
-                (healedLocal.password && !String(healedLocal.password).startsWith('__PENDING_') && healedLocal.password === trimmedPassword) ||
+                (healedLocal.password && !String(healedLocal.password).startsWith('__PENDING_') && !String(healedLocal.password).startsWith('__EVENT_VISITOR_') && healedLocal.password === trimmedPassword) ||
                 (trimmedPassword === "admin" && (
                     healedLocal.role === "admin" || 
                     healedLocal.role === "super_admin" || 
@@ -4176,6 +4204,29 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 setVaultDocuments(prev => {
                     const next = prev.filter(d => d.id !== id);
                     try { localStorage.setItem('ht_vault_documents_v1', JSON.stringify(next)); } catch {}
+                    return next;
+                });
+                return true;
+            },
+            fieldEvents,
+            saveFieldEvent: async (evtData) => {
+                const { createOrUpdateFieldEventByAdmin } = await import('../src/services/eventsManagementService');
+                const { savedEvent, updatedList } = createOrUpdateFieldEventByAdmin({
+                    adminUser: currentUser,
+                    eventData: evtData,
+                    existingEvents: fieldEvents
+                });
+                setFieldEvents(updatedList);
+                try { localStorage.setItem('ht_field_events_v1', JSON.stringify(updatedList)); } catch {}
+                return savedEvent;
+            },
+            deleteFieldEvent: async (id: string) => {
+                if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'super_admin')) {
+                    throw new Error('Solo los Administradores pueden eliminar eventos.');
+                }
+                setFieldEvents(prev => {
+                    const next = prev.filter(e => e.id !== id);
+                    try { localStorage.setItem('ht_field_events_v1', JSON.stringify(next)); } catch {}
                     return next;
                 });
                 return true;

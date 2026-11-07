@@ -35,6 +35,7 @@ import PhytosanitaryBook from './pages/PhytosanitaryBook';
 import FinancialReports from './pages/FinancialReports';
 import DocumentsVault from './pages/DocumentsVault';
 import ProducerGuide from './pages/ProducerGuide';
+import Events from './pages/Events';
 
 const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
   const { currentUser } = useAppContext();
@@ -89,6 +90,7 @@ export default function App() {
                   <Route path="/plots" element={<Plots />} />
                   <Route path="/plots/:id" element={<PlotDetails />} />
                   <Route path="/users" element={<Users />} />
+                  <Route path="/events" element={<Events />} />
                   <Route path="/settings" element={<Settings />} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>

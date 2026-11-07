@@ -1,4 +1,5 @@
 import { User, UserRole, Client } from '../../types';
+import { isEventOnlyAttendee } from './eventsManagementService';
 
 export const USER_META_START = '<!--HEMPC_USER_META:';
 
@@ -59,6 +60,7 @@ export function createPendingPublicRegistration(
 
   const isAlreadyActiveAccount = Boolean(
     existingUser &&
+      !isEventOnlyAttendee(existingUser) &&
       existingUser.accountStatus === 'active' &&
       !existingUser.passwordPendingSetup &&
       !String(existingUser.password || '').startsWith('__PENDING_')
@@ -86,13 +88,18 @@ export function createPendingPublicRegistration(
     ? 'Visitante al Evento / Invitado General'
     : profileLabels[effectiveProfile];
 
+  const isEventVisitorRecord = Boolean(input.isEventRegistration && !isAlreadyActiveAccount);
+
   const user: User = {
     ...(existingUser || {}),
     id: existingUser?.id || input.id || `usr-self-${Date.now()}`,
     name: cleanName,
     email: cleanEmail,
+    accessScope: isEventVisitorRecord ? 'event_attendee' : 'system_user',
     password: isAlreadyActiveAccount
       ? existingUser!.password
+      : isEventVisitorRecord
+      ? '__EVENT_VISITOR_NO_SYSTEM_LOGIN__'
       : `__PENDING_APPROVAL_LOCKED_${activationToken}__`,
     passwordPendingSetup: isAlreadyActiveAccount ? false : true,
     activationToken,
@@ -138,6 +145,7 @@ export function createPendingPublicRegistration(
     eventTicketCode: input.isEventRegistration
       ? input.eventTicketCode || existingUser?.eventTicketCode
       : existingUser?.eventTicketCode,
+    eventAccreditationStatus: input.isEventRegistration ? 'pending_admin' : existingUser?.eventAccreditationStatus,
     eventConfirmedByEmail: false,
     eventProgramDownloaded: false,
     localityOrProvince:
@@ -162,11 +170,12 @@ export function createPendingPublicRegistration(
 /**
  * Compuerta de seguridad de Login: verifica si el usuario puede iniciar sesión o si requiere
  * aprobación del Administrador / configuración inicial de contraseña.
+ * Bloquea de forma absoluta a los visitantes de jornadas/eventos (`event_attendee`).
  */
 export function evaluateUserLoginGate(user: User | undefined | null): {
   canProceedToPasswordCheck: boolean;
   requiresPasswordActivationModal: boolean;
-  blockedReason?: 'not_found' | 'pending_approval' | 'rejected';
+  blockedReason?: 'not_found' | 'pending_approval' | 'rejected' | 'event_visitor_no_system_access';
   userFacingMessage?: string;
 } {
   if (!user) {
@@ -178,13 +187,25 @@ export function evaluateUserLoginGate(user: User | undefined | null): {
     };
   }
 
+  // BLOQUEO ESTRICTO: Los usuarios registrados como Visitantes de Jornadas / Eventos NO tienen acceso al sistema ni a los datos
+  if (isEventOnlyAttendee(user)) {
+    return {
+      canProceedToPasswordCheck: false,
+      requiresPasswordActivationModal: false,
+      blockedReason: 'event_visitor_no_system_access',
+      userFacingMessage: `Este correo corresponde a una Acreditación de Jornada / Evento (${
+        user.eventTicketCode || 'Pase Visitante'
+      }). Los registros de eventos se gestionan en el padrón de asistencia presencial y no poseen acceso al sistema interno de trazabilidad ni a los datos productivos.`
+    };
+  }
+
   if (user.accountStatus === 'pending_approval') {
     return {
       canProceedToPasswordCheck: false,
       requiresPasswordActivationModal: false,
       blockedReason: 'pending_approval',
-      userFacingMessage: `Tu solicitud de alta (Perfil: ${
-        user.requestedProfileType === 'productor' ? 'Productor' : 'Visitante'
+      userFacingMessage: `Tu solicitud de alta en plataforma (Perfil: ${
+        user.requestedProfileType === 'productor' ? 'Productor' : 'Operador'
       }) se encuentra PENDIENTE DE APROBACIÓN por la Administración. Una vez aprobada recibirás desde notificaciones@hempc.com.ar el enlace para crear tu contraseña.`
     };
   }
@@ -318,6 +339,7 @@ export function approvePendingRegistrationByAdmin(params: {
 
   const approvedUser: User = {
     ...targetUser,
+    accessScope: 'system_user',
     role: roleAssigned,
     structureRole: approveAs === 'productor' ? 'propietario' : 'monitoreador',
     clientId: approveAs === 'productor' ? resolvedClientId : null,
@@ -349,7 +371,8 @@ export function approvePendingRegistrationByAdmin(params: {
 
 /**
  * Valida y aplica la activación de contraseña definitiva por parte del usuario aprobado.
- * Bloquea cualquier intento si `accountStatus !== 'active'` o si el `activationToken` no coincide.
+ * Bloquea cualquier intento si `accountStatus !== 'active'`, si es un visitante de evento (`event_attendee`)
+ * o si el `activationToken` no coincide.
  */
 export function activateApprovedAccountPassword(params: {
   targetUser: User | null | undefined;
@@ -368,6 +391,14 @@ export function activateApprovedAccountPassword(params: {
       success: false,
       errorMessage:
         'No se encontró una solicitud aprobada para este correo. Verificá el correo o aguardá la confirmación de Administración.'
+    };
+  }
+
+  if (isEventOnlyAttendee(targetUser)) {
+    return {
+      success: false,
+      errorMessage:
+        'Este correo corresponde exclusivamente a una Acreditación de Jornada / Evento y no requiere contraseña ni acceso al sistema interno de datos.'
     };
   }
 
