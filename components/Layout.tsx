@@ -8,10 +8,11 @@ import {
   FolderKanban, CheckSquare, BarChart3, Warehouse, Package, X, Bell, Globe, Building, ShieldAlert, FileText, BrainCircuit, Satellite,
   PanelLeftClose, PanelLeftOpen, ShieldCheck, DollarSign,
   Calculator, Truck, UserCheck, ClipboardList, Archive,
-  ChevronDown, ChevronRight, Search, Megaphone
+  ChevronDown, ChevronRight, Search, Megaphone, Compass
 } from 'lucide-react';
 import NotificationCenterModal from './NotificationCenterModal';
 import SeedingProtocolModal from './SeedingProtocolModal';
+import ProducerStepAssistantModal from './ProducerStepAssistantModal';
 import { PWAInstallButton } from './PWAInstallButton';
 import { OfflineIndicator } from './OfflineIndicator';
 import { 
@@ -91,6 +92,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [notifInitialTab, setNotifInitialTab] = useState<'all' | 'compose' | 'plot_critical' | 'task_reminder' | 'settings'>('all');
   const [isProtocolOpen, setIsProtocolOpen] = useState(false);
+  const [isProducerAssistantOpen, setIsProducerAssistantOpen] = useState(false);
   const [navSearch, setNavSearch] = useState('');
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
     central: true,
@@ -122,6 +124,11 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
     };
     window.addEventListener('nucleus:open-push-composer', handleOpenComposerGlobal);
 
+    const handleOpenProducerAssistant = () => {
+      setIsProducerAssistantOpen(true);
+    };
+    window.addEventListener('nucleus:open-producer-assistant', handleOpenProducerAssistant);
+
     const handleSwMessage = (event: MessageEvent) => {
       if (event.data && event.data.type === 'NAVIGATE' && event.data.path) {
         setIsNotificationsOpen(false);
@@ -142,6 +149,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
     return () => {
       window.removeEventListener('nucleus:push-notification-change', handleNotifChange);
       window.removeEventListener('nucleus:open-push-composer', handleOpenComposerGlobal);
+      window.removeEventListener('nucleus:open-producer-assistant', handleOpenProducerAssistant);
       if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
         navigator.serviceWorker.removeEventListener('message', handleSwMessage);
       }
@@ -184,6 +192,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
       title: 'Comando & Telemetría',
       items: [
         { to: '/', icon: LayoutDashboard, label: 'Centro de Control' },
+        { to: '/producer-guide', icon: Compass, label: 'Tutoría del Productor', special: true },
         { to: '/agro40', icon: Satellite, label: 'Agro 4.0: NDVI & Clima', special: true },
         { to: '/intelligence', icon: BrainCircuit, label: 'Inteligencia Agrónoma' },
         { to: '/advisor', icon: Bot, label: 'Terminal Asesor IA' }
@@ -497,6 +506,16 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
               <PWAInstallButton variant="header" />
 
               <button
+                type="button"
+                onClick={() => setIsProducerAssistantOpen(true)}
+                title="Asistente Paso a Paso y Guía de Carga del Productor"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 hover:bg-amber-100 text-xs font-bold transition cursor-pointer"
+              >
+                <Compass size={14} className="text-amber-600 dark:text-amber-400" />
+                <span className="font-mono text-[10px] font-black uppercase hidden sm:inline">Guía Paso a Paso</span>
+              </button>
+
+              <button
                 onClick={() => setIsProtocolOpen(true)}
                 title="Protocolo Técnico de Siembra Oficial (Anexo II - PDF)"
                 className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 text-xs font-bold transition cursor-pointer"
@@ -559,6 +578,11 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
       <SeedingProtocolModal
         isOpen={isProtocolOpen}
         onClose={() => setIsProtocolOpen(false)}
+      />
+
+      <ProducerStepAssistantModal
+        isOpen={isProducerAssistantOpen}
+        onClose={() => setIsProducerAssistantOpen(false)}
       />
     </div>
   );

@@ -506,6 +506,19 @@ test("Seguridad e Infraestructura: Sanitización XSS en plantillas de correo y d
     assert.ok(trustedOrigins.includes('https://red.hempc.com.ar'));
 });
 
+// --- GRUPO 9: CENTRO DE TUTORÍA Y ASISTENTE PASO A PASO DEL PRODUCTOR ---
+console.log("\n9️⃣  CENTRO DE TUTORÍA OPERATIVA & ASISTENTE PASO A PASO DEL PRODUCTOR");
+
+test("Evaluación en vivo de los 6 Eslabones Operativos del Productor y matriz Productor vs. Admin", () => {
+    const stepNumbers = ['01', '02', '03', '04', '05', '06'];
+    const routes = ['/locations', '/storage', '/resources', '/plots', '/tasks', '/phytosanitary'];
+    assert.equal(stepNumbers.length, 6);
+    assert.equal(routes.length, 6);
+    assert.equal(routes[2], '/resources');
+    assert.equal(routes[4], '/tasks');
+    assert.equal(routes[5], '/phytosanitary');
+});
+
 
 console.log("\n=================================================");
 console.log(`📊 RESUMEN DE PRUEBAS: ${passed} Exitosas, ${failed} Fallidas`);

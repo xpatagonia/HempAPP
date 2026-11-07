@@ -34,6 +34,7 @@ import PublicRegistration from './pages/PublicRegistration';
 import PhytosanitaryBook from './pages/PhytosanitaryBook';
 import FinancialReports from './pages/FinancialReports';
 import DocumentsVault from './pages/DocumentsVault';
+import ProducerGuide from './pages/ProducerGuide';
 
 const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
   const { currentUser } = useAppContext();
@@ -61,6 +62,7 @@ export default function App() {
               <Layout>
                 <Routes>
                   <Route path="/" element={<Dashboard />} />
+                  <Route path="/producer-guide" element={<ProducerGuide />} />
                   <Route path="/trials-lite" element={<TrialManager />} />
                   <Route path="/projects" element={<Projects />} />
                   <Route path="/campaigns" element={<Campaigns />} />

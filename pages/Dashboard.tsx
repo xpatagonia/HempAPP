@@ -15,6 +15,7 @@ import { dispatchPushNotification } from '../src/services/pushNotificationServic
 import AlertDashboard from '../components/AlertDashboard';
 import DashboardLicenseIntegritySummary from '../components/DashboardLicenseIntegritySummary';
 import YieldAndInputConsumptionWidget from '../components/YieldAndInputConsumptionWidget';
+import ProducerReadinessBanner from '../components/ProducerReadinessBanner';
 import { DateInputAr } from '../src/components/DateInputAr';
 import { formatDateAr } from '../src/utils/dateFormat';
 
@@ -968,6 +969,9 @@ export default function Dashboard() {
           })}
         </div>
       </div>
+
+      {/* WIDGET DE PROGRESO OPERATIVO Y TUTORÍA PASO A PASO DEL PRODUCTOR */}
+      <ProducerReadinessBanner />
 
       {/* 2. TIRAS DE 4 KPIS PRINCIPALES (CLICABLES & FILTRADOS POR CICLO ACTIVO EN CAMPAÑA) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
