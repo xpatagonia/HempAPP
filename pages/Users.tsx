@@ -24,6 +24,7 @@ import {
   SUPPLIER_ACTOR_ROLES_INFO,
   doesPlotBelongToSupplier
 } from "../src/utils/structurePermissions";
+import { approvePendingRegistrationByAdmin } from "../src/services/producerOnboardingWorkflow";
 
 const PRESET_AVATARS = [
   "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix&backgroundColor=b6e3f4",
@@ -556,55 +557,46 @@ export default function Users() {
     setUserToReset(user);
   };
 
-  // Aprobar alta autogestiva (priorizando Visitante o Productor) y despachar enlace para crear contraseña por notificaciones@hempc.com.ar
+  // Aprobar alta autogestiva (exclusivo Administradores) y vincular/crear Organización (clientId) si se aprueba como Productor
   const handleApproveSelfRegistration = async (
     targetUser: User,
     approveAs: "visitante" | "productor"
   ) => {
+    if (!isAdmin) {
+      alert("Solo un Administrador de la plataforma puede aprobar solicitudes de alta.");
+      return;
+    }
     setActionLoadingId(targetUser.id);
     try {
-      const roleAssigned: UserRole = approveAs === "productor" ? "client" : "viewer";
-      const roleLabel =
-        approveAs === "productor"
-          ? "Productor Asociado (Red Cooperativa)"
-          : "Visitante / Invitado General";
-
-      const activationToken =
-        targetUser.activationToken ||
-        `ACT-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
-
-      const hasValidCustomPassword =
-        Boolean(targetUser.password) &&
-        !String(targetUser.password).startsWith("__PENDING_") &&
-        targetUser.passwordPendingSetup !== true;
-
-      const updated: User = {
-        ...targetUser,
-        role: roleAssigned,
-        isNetworkMember: approveAs === "productor",
-        memberType: approveAs === "productor" ? "Socio_Productor" : undefined,
-        accountStatus: "active",
+      const {
+        approvedUser,
+        newClientToCreate,
+        linkedClient,
         activationToken,
-        passwordPendingSetup: !hasValidCustomPassword,
-        password: hasValidCustomPassword
-          ? targetUser.password
-          : `__PENDING_APPROVAL_LOCKED_${activationToken}__`,
-        approvedBy: currentUser?.name || "Administración Central HempC",
-        approvedAt: new Date().toISOString().split("T")[0]
-      };
+        roleLabel
+      } = approvePendingRegistrationByAdmin({
+        adminUser: currentUser,
+        targetUser,
+        approveAs,
+        existingClients: effectiveClients || []
+      });
 
-      await updateUser(updated);
+      if (newClientToCreate) {
+        await addClient(newClientToCreate);
+      }
+
+      await updateUser(approvedUser);
 
       const activationUrl = `${window.location.origin}/#/login?activar=${encodeURIComponent(
-        updated.email
+        approvedUser.email
       )}&token=${encodeURIComponent(activationToken)}`;
 
       const dispatch = await sendRegistrationApprovedEmail({
-        toEmail: updated.email,
-        toName: updated.name,
+        toEmail: approvedUser.email,
+        toName: approvedUser.name,
         roleLabel,
-        organizationName: updated.organizationName || "Red Cooperativa HempC",
-        ticketCode: updated.eventTicketCode,
+        organizationName: approvedUser.organizationName || "Red Cooperativa HempC",
+        ticketCode: approvedUser.eventTicketCode,
         activationToken,
         actionUrl: activationUrl
       });
@@ -612,8 +604,10 @@ export default function Users() {
       setEmailToast({
         show: true,
         success: dispatch.success,
-        message: `Alta aprobada como ${roleLabel}. Enlace para crear contraseña enviado a ${updated.email}.`,
-        sentTo: updated.email,
+        message: `Alta aprobada como ${roleLabel}${
+          linkedClient ? ` (Organización vinculada: ${linkedClient.name})` : ""
+        }. Enlace para crear contraseña enviado a ${approvedUser.email}.`,
+        sentTo: approvedUser.email,
         via: dispatch.deliveredVia
       });
     } catch (err: any) {

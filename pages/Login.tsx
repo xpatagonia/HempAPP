@@ -11,6 +11,11 @@ import { sendPasswordResetEmail } from "../src/services/emailNotificationService
 import { PWAInstallButton, AndroidLogo, WindowsLogo } from "../components/PWAInstallButton";
 import EventAndSelfRegistrationModal from "../components/EventAndSelfRegistrationModal";
 import { downloadUnDiaDeSiembraProgramPDF } from "../src/services/eventProgramPdfService";
+import {
+  unpackUserMetaFromJobTitle,
+  activateApprovedAccountPassword,
+  evaluateUserLoginGate
+} from "../src/services/producerOnboardingWorkflow";
 
 export default function Login() {
   const { currentUser, login, appName, appLogo, usersList, updateUser, addUser } = useAppContext();
@@ -107,28 +112,19 @@ export default function Login() {
 
     const cleanMail = email.trim().toLowerCase();
     const matchedUser = usersList.find(u => u.email?.toLowerCase() === cleanMail);
-    if (matchedUser?.accountStatus === "pending_approval") {
-      setError(
-        `Tu solicitud de alta (${matchedUser.eventTicketCode ? `Pase ${matchedUser.eventTicketCode} • ` : ""}Perfil: ${
-          matchedUser.requestedProfileType === "productor" ? "Productor" : "Visitante"
-        }) se encuentra PENDIENTE DE APROBACIÓN por la Administración. Una vez aprobada recibirás desde notificaciones@hempc.com.ar el enlace para crear tu contraseña.`
-      );
-      return;
-    }
-    if (matchedUser?.accountStatus === "rejected") {
-      setError("Tu solicitud de acceso no ha sido aprobada por la administración cooperativa.");
-      return;
-    }
-    if (
-      matchedUser &&
-      matchedUser.accountStatus === "active" &&
-      (matchedUser.passwordPendingSetup === true || String(matchedUser.password || "").startsWith("__PENDING_"))
-    ) {
-      setActivateEmail(cleanMail);
-      setActivateToken(matchedUser.activationToken || "");
-      setActivateStatus(null);
-      setShowActivateModal(true);
-      return;
+    if (matchedUser) {
+      const gate = evaluateUserLoginGate(matchedUser);
+      if (gate.requiresPasswordActivationModal) {
+        setActivateEmail(cleanMail);
+        setActivateToken(matchedUser.activationToken || "");
+        setActivateStatus(null);
+        setShowActivateModal(true);
+        return;
+      }
+      if (!gate.canProceedToPasswordCheck && gate.userFacingMessage) {
+        setError(gate.userFacingMessage);
+        return;
+      }
     }
 
     setIsLoading(true);
@@ -155,20 +151,6 @@ export default function Login() {
       setActivateStatus({ type: "error", message: "Ingresá tu correo electrónico aprobado." });
       return;
     }
-    if (newPassword.trim().length < 6) {
-      setActivateStatus({
-        type: "error",
-        message: "La contraseña debe tener al menos 6 caracteres por seguridad."
-      });
-      return;
-    }
-    if (newPassword.trim() !== confirmNewPassword.trim()) {
-      setActivateStatus({
-        type: "error",
-        message: "Las contraseñas ingresadas no coinciden. Verificalas e intentá nuevamente."
-      });
-      return;
-    }
 
     setIsActivating(true);
     try {
@@ -178,19 +160,7 @@ export default function Login() {
       try {
         const { data } = await supabase.from("users").select("*").ilike("email", cleanMail).maybeSingle();
         if (data) {
-          const rawJob = String(data.job_title || "");
-          const markerStart = "<!--HEMPC_USER_META:";
-          const markerEnd = ":END_USER_META-->";
-          const sIdx = rawJob.indexOf(markerStart);
-          const eIdx = rawJob.indexOf(markerEnd);
-          let parsedMeta: Record<string, any> = {};
-          let cleanJobTitle = rawJob;
-          if (sIdx !== -1 && eIdx !== -1 && eIdx > sIdx) {
-            cleanJobTitle = rawJob.slice(0, sIdx).trim();
-            try {
-              parsedMeta = JSON.parse(rawJob.slice(sIdx + markerStart.length, eIdx)) || {};
-            } catch {}
-          }
+          const { cleanJobTitle, parsedMeta } = unpackUserMetaFromJobTitle(data.job_title);
           remoteMatch = {
             ...(localMatch || {}),
             ...parsedMeta,
@@ -200,8 +170,9 @@ export default function Login() {
             role: data.role || parsedMeta.role || localMatch?.role || "viewer",
             password: data.password,
             jobTitle: cleanJobTitle || localMatch?.jobTitle,
+            clientId: parsedMeta.clientId ?? data.client_id ?? localMatch?.clientId,
             organizationName: data.organization_name || parsedMeta.organizationName || localMatch?.organizationName,
-            isNetworkMember: Boolean(data.is_network_member ?? localMatch?.isNetworkMember),
+            isNetworkMember: Boolean(data.is_network_member ?? parsedMeta.isNetworkMember ?? localMatch?.isNetworkMember),
             accountStatus: parsedMeta.accountStatus || localMatch?.accountStatus || "active",
             activationToken: parsedMeta.activationToken || localMatch?.activationToken,
             passwordPendingSetup:
@@ -213,54 +184,23 @@ export default function Login() {
       } catch {}
 
       const targetUser = remoteMatch || localMatch;
+      const activationCheck = activateApprovedAccountPassword({
+        targetUser,
+        providedToken: activateToken,
+        newPassword,
+        confirmPassword: confirmNewPassword
+      });
 
-      if (!targetUser) {
+      if (!activationCheck.success || !activationCheck.activatedUser) {
         setActivateStatus({
           type: "error",
-          message: `No se encontró una solicitud aprobada para "${cleanMail}". Verificá el correo o aguardá la confirmación de Administración.`
+          message: activationCheck.errorMessage || "No se pudo validar la activación."
         });
         setIsActivating(false);
         return;
       }
 
-      if (targetUser.accountStatus === "pending_approval") {
-        setActivateStatus({
-          type: "error",
-          message: "Tu solicitud aún figura Pendiente de Aprobación por los Administradores. Podrás definir tu contraseña apenas sea aprobada."
-        });
-        setIsActivating(false);
-        return;
-      }
-
-      if (targetUser.accountStatus === "rejected") {
-        setActivateStatus({
-          type: "error",
-          message: "Esta solicitud no se encuentra habilitada por la Administración."
-        });
-        setIsActivating(false);
-        return;
-      }
-
-      if (
-        targetUser.activationToken &&
-        activateToken.trim() &&
-        targetUser.activationToken.toUpperCase() !== activateToken.trim().toUpperCase()
-      ) {
-        setActivateStatus({
-          type: "error",
-          message: "El código de activación no coincide con el enviado en el correo de aprobación."
-        });
-        setIsActivating(false);
-        return;
-      }
-
-      const updatedUser = {
-        ...targetUser,
-        password: newPassword.trim(),
-        passwordPendingSetup: false,
-        accountStatus: "active" as const
-      };
-
+      const updatedUser = activationCheck.activatedUser;
       await updateUser(updatedUser);
 
       setActivateStatus({

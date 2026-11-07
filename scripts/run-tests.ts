@@ -8,6 +8,14 @@ import {
     calculateCarbonFootprint
 } from '../src/services/agro40Service.js';
 import { DEMO_PLOTS, DEMO_LOCATIONS } from '../src/data/initialDemoData.js';
+import {
+    createPendingPublicRegistration,
+    evaluateUserLoginGate,
+    approvePendingRegistrationByAdmin,
+    activateApprovedAccountPassword,
+    unpackUserMetaFromJobTitle
+} from '../src/services/producerOnboardingWorkflow.js';
+import { evaluateProducerSteps } from '../src/services/producerTutorialService.js';
 
 console.log("=================================================");
 console.log("🧪 INICIANDO BATERÍA DE PRUEBAS UNITARIAS - HEMP");
@@ -517,6 +525,185 @@ test("Evaluación en vivo de los 6 Eslabones Operativos del Productor y matriz P
     assert.equal(routes[2], '/resources');
     assert.equal(routes[4], '/tasks');
     assert.equal(routes[5], '/phytosanitary');
+});
+
+// --- GRUPO 10: CICLO DE ALTA DEL PRODUCTOR, VALIDACIÓN EXCLUSIVA POR ADMIN Y ACTIVACIÓN (ZERO-TOUCH) ---
+console.log("\n🔟  CICLO DE ALTA DEL PRODUCTOR, APROBACIÓN ADMIN EXCLUSIVA Y ACTIVACIÓN MULTI-DISPOSITIVO (ZERO-TOUCH)");
+
+test("10.1 Solicitud Pública de Productor: Nace en pending_approval con clave bloqueada y SIN crear Client previo", () => {
+    const { user, activationToken } = createPendingPublicRegistration({
+        id: 'usr-test-prod-01',
+        name: 'Carlos Productor Valle',
+        email: 'carlos.valle@productor.ar',
+        phone: '+5492804112233',
+        dniNumber: '28999111',
+        organizationName: 'Chacra El Valle Sur',
+        localityOrProvince: 'Gaiman, Chubut',
+        estimatedHectares: 12,
+        requestedProfileType: 'productor',
+        registrationSource: 'self_service_platform',
+        isEventRegistration: false
+    });
+
+    assert.equal(user.accountStatus, 'pending_approval');
+    assert.equal(user.passwordPendingSetup, true);
+    assert.ok(String(user.password).startsWith('__PENDING_APPROVAL_LOCKED_'));
+    assert.equal(user.clientId, undefined, 'No debe asignarse ni crearse clientId antes de la aprobación del Administrador');
+    assert.equal(user.isNetworkMember, false);
+    assert.ok(activationToken.startsWith('ACT-'));
+});
+
+test("10.2 Compuerta de Seguridad pre-aprobación: Bloquea Login y Activación mientras accountStatus !== 'active'", () => {
+    const { user } = createPendingPublicRegistration({
+        name: 'Carlos Productor Valle',
+        email: 'carlos.valle@productor.ar',
+        requestedProfileType: 'productor',
+        registrationSource: 'self_service_platform'
+    });
+
+    const gate = evaluateUserLoginGate(user);
+    assert.equal(gate.canProceedToPasswordCheck, false);
+    assert.equal(gate.requiresPasswordActivationModal, false);
+    assert.equal(gate.blockedReason, 'pending_approval');
+
+    const prematureActivation = activateApprovedAccountPassword({
+        targetUser: user,
+        providedToken: user.activationToken,
+        newPassword: 'PasswordSegura123',
+        confirmPassword: 'PasswordSegura123'
+    });
+    assert.equal(prematureActivation.success, false);
+    assert.ok(prematureActivation.errorMessage?.includes('Pendiente de Aprobación'));
+});
+
+test("10.3 Aprobación Exclusiva por Administrador: Bloquea roles no-admin y crea/vincula Client (clientId) al aprobar como Productor", () => {
+    const { user: pendingProducer } = createPendingPublicRegistration({
+        id: 'usr-test-prod-02',
+        name: 'Elena Chacra Norte',
+        email: 'elena@chacranorte.ar',
+        organizationName: 'Establecimiento Chacra Norte SRL',
+        estimatedHectares: 15,
+        requestedProfileType: 'productor',
+        registrationSource: 'self_service_platform'
+    });
+
+    // Intento de aprobación por un usuario no administrador -> DEBE FALLAR
+    assert.throws(() => {
+        approvePendingRegistrationByAdmin({
+            adminUser: { id: 'u-client', name: 'Otro Productor', role: 'client' },
+            targetUser: pendingProducer,
+            approveAs: 'productor',
+            existingClients: []
+        });
+    }, /Solo un Administrador/);
+
+    // Aprobación legítima por un Administrador -> CREA Y VINCULA CLIENT AUTOMÁTICAMENTE
+    const approvalResult = approvePendingRegistrationByAdmin({
+        adminUser: { id: 'u-admin-1', name: 'Admin Master', role: 'super_admin' },
+        targetUser: pendingProducer,
+        approveAs: 'productor',
+        existingClients: [],
+        generatedClientId: 'client-chacra-norte-001'
+    });
+
+    assert.ok(approvalResult.newClientToCreate, 'Debe generar la ficha de Organización (Client) para el nuevo productor');
+    assert.equal(approvalResult.newClientToCreate?.id, 'client-chacra-norte-001');
+    assert.equal(approvalResult.newClientToCreate?.name, 'Establecimiento Chacra Norte SRL');
+    assert.equal(approvalResult.approvedUser.accountStatus, 'active');
+    assert.equal(approvalResult.approvedUser.role, 'client');
+    assert.equal(approvalResult.approvedUser.memberType, 'Socio_Productor');
+    assert.equal(approvalResult.approvedUser.clientId, 'client-chacra-norte-001');
+    assert.equal(approvalResult.approvedUser.passwordPendingSetup, true);
+});
+
+test("10.4 Activación Multi-Dispositivo: Desempaqueta HEMPC_USER_META (ambos formatos) y activa clave definitiva con Token", () => {
+    const metaPayload = {
+        accountStatus: 'active',
+        activationToken: 'ACT-TEST99-XYZ',
+        passwordPendingSetup: true,
+        clientId: 'client-chacra-norte-001',
+        requestedProfileType: 'productor'
+    };
+
+    // Formato actual (-->) y formato legacy (:END_USER_META-->)
+    const packedCurrent = `Productor Asociado <!--HEMPC_USER_META:${JSON.stringify(metaPayload)}-->`;
+    const packedLegacy = `Productor Asociado <!--HEMPC_USER_META:${JSON.stringify(metaPayload)}:END_USER_META-->`;
+
+    const unpacked1 = unpackUserMetaFromJobTitle(packedCurrent);
+    const unpacked2 = unpackUserMetaFromJobTitle(packedLegacy);
+
+    assert.equal(unpacked1.cleanJobTitle, 'Productor Asociado');
+    assert.equal(unpacked1.parsedMeta.accountStatus, 'active');
+    assert.equal(unpacked1.parsedMeta.clientId, 'client-chacra-norte-001');
+    assert.equal(unpacked2.parsedMeta.activationToken, 'ACT-TEST99-XYZ');
+
+    const remoteUserFromSupabase = {
+        id: 'usr-test-prod-02',
+        name: 'Elena Chacra Norte',
+        email: 'elena@chacranorte.ar',
+        role: 'client' as const,
+        clientId: unpacked1.parsedMeta.clientId,
+        accountStatus: unpacked1.parsedMeta.accountStatus,
+        activationToken: unpacked1.parsedMeta.activationToken,
+        passwordPendingSetup: unpacked1.parsedMeta.passwordPendingSetup
+    };
+
+    // Token incorrecto -> rechazado
+    const wrongTokenAttempt = activateApprovedAccountPassword({
+        targetUser: remoteUserFromSupabase,
+        providedToken: 'ACT-TOKEN-FALSO',
+        newPassword: 'MiClaveProductor2026',
+        confirmPassword: 'MiClaveProductor2026'
+    });
+    assert.equal(wrongTokenAttempt.success, false);
+
+    // Token correcto -> activado y listo para operar
+    const validActivation = activateApprovedAccountPassword({
+        targetUser: remoteUserFromSupabase,
+        providedToken: 'ACT-TEST99-XYZ',
+        newPassword: 'MiClaveProductor2026',
+        confirmPassword: 'MiClaveProductor2026'
+    });
+    assert.equal(validActivation.success, true);
+    assert.equal(validActivation.activatedUser?.password, 'MiClaveProductor2026');
+    assert.equal(validActivation.activatedUser?.passwordPendingSetup, false);
+    assert.equal(validActivation.activatedUser?.clientId, 'client-chacra-norte-001');
+});
+
+test("10.5 Progreso de los 6 Eslabones del Productor: De 0% (Recién Activado) a 100% (Trazabilidad Completa)", () => {
+    // Estado inicial de un productor recién aprobado y activado
+    const initialReadiness = evaluateProducerSteps({
+        locations: [],
+        storagePoints: [],
+        seedBatches: [],
+        resources: [],
+        plots: [],
+        tasks: [],
+        trialRecords: [],
+        hydricRecords: [],
+        agrochemicalApplications: []
+    });
+    assert.equal(initialReadiness.completedCount, 0);
+    assert.equal(initialReadiness.completionPct, 0);
+    assert.equal(initialReadiness.nextRecommendedStep.number, '01');
+    assert.equal(initialReadiness.nextRecommendedStep.primaryRoute, '/locations');
+
+    // Estado completo cuando el productor carga los 6 eslabones en orden
+    const fullReadiness = evaluateProducerSteps({
+        locations: [{ id: 'loc-1', name: 'Campo Norte', province: 'Chubut', address: 'Ruta 7', coordinates: { lat: -43.25, lng: -65.30 }, clientId: 'client-1' }],
+        storagePoints: [{ id: 'sp-1', name: 'Galpón 1', code: 'G1', locationId: 'loc-1', type: 'Galpón', capacityKg: 5000, currentStockKg: 200, temperatureC: 18, humidityPct: 45, status: 'Operativo', responsibleName: 'Elena' }],
+        seedBatches: [{ id: 'sb-1', batchCode: 'INASE-01', varietyId: 'var-1', supplierId: 'sup-1', initialQuantityKg: 100, remainingQuantityKg: 80, certificationDate: '2025-09-01', germinationPower: 92, purity: 99, status: 'En Stock', storagePointId: 'sp-1' }],
+        resources: [{ id: 'res-1', name: 'Trichoderma WP', type: 'Insumos', unit: 'L', costPerUnit: 20, stock: 50, senasaRegisterNumber: 'SENASA-39481', supplierId: 'sup-1', recommendedDosagePerHa: 2.0 }],
+        plots: [{ id: 'p-1', name: 'Lote 1', locationId: 'loc-1', varietyId: 'var-1', sowingDate: '2025-10-15', surfaceArea: 10, surfaceUnit: 'ha', density: 40, status: 'Activa', polygon: [{ lat: -43.25, lng: -65.30 }, { lat: -43.26, lng: -65.30 }, { lat: -43.26, lng: -65.31 }] }],
+        tasks: [{ id: 't-1', title: 'Aplicación Trichoderma', description: 'Control preventivo', status: 'Ejecutada', priority: 'Alta', assignedToIds: ['u-1'], dueDate: '2025-11-10', plotId: 'p-1', createdBy: 'u-1', syncWithPhytosanitary: true, appliedInputs: [{ resourceId: 'res-1', name: 'Trichoderma WP', quantity: 20, unit: 'L', costPerUnit: 20 }] }],
+        trialRecords: [{ id: 'tr-1', plotId: 'p-1', date: '2025-11-12', time: '09:00', stage: 'Vegetativo', temperature: 22, humidity: 55, plantHeight: 45, plantsPerMeter: 12, lightHours: 14, lunarPhase: 'Creciente', vigor: 5, uniformity: 5, lodging: 1, birdDamage: 1, diseasesScore: 1, pestsScore: 1, harvestPlantCount: 0, seedYield: 0, seedQualityGermination: 92, seedQualityNonConformity: 0, stemWeight: 0, floweringDate: '', harvestDate: '' }],
+        hydricRecords: [],
+        agrochemicalApplications: [{ id: 'ag-1', plotId: 'p-1', plotName: 'Lote 1', date: '2025-11-10', productName: 'Trichoderma WP', activeIngredient: 'Trichoderma', category: 'Bioinsumo / Control Biológico', senasaRegisterNumber: 'SENASA-39481', toxicologicalClass: 'Biológico / Orgánico Certificado', dosagePerHa: 2.0, dosageUnit: 'L/ha', totalAppliedAmount: 20, safetyPeriodDays: 0, applicationMethod: 'Pulverización Terrestre', targetPestOrDisease: 'Fusarium', responsibleAgronomist: 'Ing. Gómez', agronomistLicense: 'MP-8841', status: 'Aplicado', linkedTaskId: 't-1', resourceId: 'res-1' }]
+    });
+
+    assert.equal(fullReadiness.completedCount, 6);
+    assert.equal(fullReadiness.completionPct, 100);
+    assert.equal(fullReadiness.phytosanitaryChainReady, true);
 });
 
 

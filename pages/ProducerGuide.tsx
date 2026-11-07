@@ -166,6 +166,30 @@ export default function ProducerGuide() {
           </div>
         </div>
 
+        {/* Etapa 0: Protocolo de Alta y Validación Exclusiva por Administrador */}
+        <div className="p-4 rounded-xl border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/50 dark:bg-emerald-950/20 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div className="space-y-1">
+            <div className="flex flex-wrap items-center gap-2 text-xs font-mono font-bold text-emerald-800 dark:text-emerald-300">
+              <ShieldCheck size={14} />
+              <span>ETAPA 00 · ALTA Y VALIDACIÓN EXCLUSIVA POR ADMINISTRADOR</span>
+              <span aria-hidden="true">·</span>
+              <span>Estado de Cuenta: {currentUser?.accountStatus === 'pending_approval' ? 'Pendiente' : 'Aprobada y Activa'}</span>
+            </div>
+            <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+              1º El postulante solicita el alta sin contraseña (`pending_approval`, sin crear registros previos en Organizaciones) → 2º Un <strong>Administrador</strong> valida la solicitud en <em>Equipo & Accesos (/users)</em>, aprueba como <strong>Productor</strong> y el sistema crea/vincula automáticamente su <strong>Organización (`clientId`)</strong> → 3º El productor recibe el enlace oficial con `activationToken` para definir su contraseña e iniciar los 6 eslabones.
+            </p>
+          </div>
+          {isAdminUser && (
+            <Link
+              to="/users"
+              className="px-3.5 py-2 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold whitespace-nowrap shrink-0 flex items-center gap-1.5"
+            >
+              <UserCheck size={14} />
+              <span>Ir a Aprobaciones Admin (/users)</span>
+            </Link>
+          )}
+        </div>
+
         {/* Barra de Progreso de los 6 Eslabones en Vivo */}
         <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">

@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
@@ -7,6 +6,8 @@ import {
     Landmark, Sprout, Waves, ShieldCheck
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
+import { createPendingPublicRegistration } from '../src/services/producerOnboardingWorkflow';
+import { sendEventRegistrationConfirmationEmail } from '../src/services/emailNotificationService';
 
 const generateId = () => {
     if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
@@ -17,7 +18,7 @@ const generateId = () => {
 };
 
 export default function PublicRegistration() {
-    const { addClient, addUser, usersList, appName } = useAppContext();
+    const { addUser, updateUser, usersList, appName } = useAppContext();
     const navigate = useNavigate();
     const [isSaving, setIsSaving] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
@@ -46,37 +47,46 @@ export default function PublicRegistration() {
         setErrorMsg('');
         setIsSaving(true);
         try {
-            const clientId = generateId();
             const cleanEmail = formData.email.trim().toLowerCase();
-            const success = await addClient({
-                id: clientId,
-                name: formData.name.trim(),
-                contactName: formData.contactName.trim(),
-                contactPhone: formData.phone.trim(),
-                email: cleanEmail,
-                type: formData.type as any,
-                isNetworkMember: false,
-                membershipLevel: 'En Observación',
-                notes: `REGISTRO PÚBLICO - Intereses: ${formData.interest.join(', ')}`
-            });
             const existingUser = usersList.find(u => u.email.trim().toLowerCase() === cleanEmail);
-            if (!existingUser) {
-                await addUser({
-                    id: generateId(),
+            if (existingUser && existingUser.accountStatus === 'active' && !existingUser.passwordPendingSetup) {
+                setErrorMsg('Este correo electrónico ya posee una cuenta activa en la plataforma. Podés iniciar sesión directamente.');
+                setIsSaving(false);
+                return;
+            }
+
+            const estimatedHa = formData.type.includes('>20') ? 25 : formData.type.includes('5-15') ? 10 : 5;
+            const { user: pendingUser } = createPendingPublicRegistration(
+                {
+                    id: existingUser?.id || generateId(),
                     name: formData.contactName.trim(),
                     email: cleanEmail,
-                    role: 'client',
-                    clientId,
                     phone: formData.phone.trim(),
                     organizationName: formData.name.trim(),
-                    jobTitle: 'Productor Postulante',
-                    isNetworkMember: false,
-                    accountStatus: 'pending_approval',
+                    localityOrProvince: formData.province,
+                    estimatedHectares: estimatedHa,
                     requestedProfileType: 'productor',
-                    passwordPendingSetup: true
-                });
+                    registrationSource: 'self_service_platform',
+                    isEventRegistration: false
+                },
+                existingUser
+            );
+
+            const saved = existingUser ? await updateUser(pendingUser) : await addUser(pendingUser);
+            if (saved) {
+                await sendEventRegistrationConfirmationEmail({
+                    toEmail: cleanEmail,
+                    toName: formData.contactName.trim(),
+                    ticketCode: `ALTA-PROD-${String(Date.now()).slice(-4)}`,
+                    verificationPin: '',
+                    profileLabel: 'Productor Agropecuario / Socio Cooperativo (Pendiente de Aprobación Admin)',
+                    organizationName: formData.name.trim(),
+                    locality: formData.province
+                }).catch(() => {});
+                setIsSuccess(true);
+            } else {
+                setErrorMsg('No se pudo registrar la solicitud. Intentá nuevamente.');
             }
-            if (success) setIsSuccess(true);
         } catch (err) {
             setErrorMsg("No se pudo enviar la solicitud. Por favor, verifique su conexión e intente nuevamente.");
         } finally {
@@ -91,9 +101,9 @@ export default function PublicRegistration() {
                     <div className="w-24 h-24 bg-brand rounded-full flex items-center justify-center mx-auto mb-8 shadow-xl">
                         <CheckCircle2 size={48} className="text-slate-900" />
                     </div>
-                    <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tighter italic mb-4">¡Solicitud Enviada!</h1>
+                    <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tighter italic mb-4">¡Solicitud en Revisión!</h1>
                     <p className="text-slate-500 font-medium leading-relaxed mb-10">
-                        Gracias por querer formar parte de la **Red Cooperativa del Cáñamo Industrial Argentino**. Nuestro equipo técnico auditará tu perfil y se pondrá en contacto pronto.
+                        Tu postulación de Productor quedó registrada en estado <strong>Pendiente de Aprobación</strong>. Una vez que un Administrador valide tu solicitud y habilite tu Organización, recibirás desde <strong>notificaciones@hempc.com.ar</strong> el enlace directo para crear tu contraseña e ingresar.
                     </p>
                     <Link to="/login" className="block w-full py-5 bg-hemp-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest">
                         Volver al Inicio
