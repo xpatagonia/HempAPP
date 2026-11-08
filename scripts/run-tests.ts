@@ -35,6 +35,7 @@ import {
     formatCoordinatesDMS,
     parseCoordinateString,
     buildEventGpsNavigationLinks,
+    renderSyncEventMapSnapshotDataUrl,
     DEFAULT_FIELD_EVENTS
 } from '../src/services/eventsManagementService.js';
 
@@ -1142,6 +1143,88 @@ test("13.3 Blindaje RBAC, Anti-IDOR (?editPlotId) y Sanitización Anti-XSS en Ed
         DEMO_CLIENTS
     );
     assert.equal(adminPerm.allowed, true, "El Super Admin debe tener permiso para editar parcelas");
+});
+
+test("13.4 Creación de Nuevo Evento con Captación de Campo / Locación Georreferenciada y Actualización al Asistente", () => {
+    const adminActor = {
+        id: 'admin-evt-1',
+        name: 'Admin Eventos',
+        email: 'admin@hempc.com.ar',
+        role: 'super_admin' as const
+    };
+
+    // 1. Captar datos desde un campo habilitado de la red y ajustar sector georreferenciado
+    const enabledOpts = buildEnabledEstablishmentsOptions(DEMO_LOCATIONS, DEMO_CLIENTS);
+    assert.ok(enabledOpts.length > 0, "Debe listar los establecimientos y campos habilitados de la red");
+
+    const selectedFieldVenue = resolveEventVenueFromSelection({
+        selectionId: enabledOpts[0].locationId,
+        locations: DEMO_LOCATIONS,
+        clients: DEMO_CLIENTS
+    });
+
+    // Simular que el Admin ajusta en el mapa interactivo una georreferencia específica dentro del predio
+    const customPinCoords = { lat: -43.31245, lng: -65.29412 };
+    const { savedEvent, updatedList } = createOrUpdateFieldEventByAdmin({
+        adminUser: adminActor,
+        eventData: {
+            title: 'Jornada Técnica: Cosecha y Secado en Lote Experimental',
+            date: '2026-12-12',
+            startTime: '09:00',
+            endTime: '14:30',
+            category: 'jornada_campo',
+            status: 'inscripcion_abierta',
+            locationId: selectedFieldVenue.locationId,
+            clientId: selectedFieldVenue.clientId,
+            isCustomLocation: false,
+            venueName: `${selectedFieldVenue.venueName} — Sector Galpón de Secado`,
+            locality: selectedFieldVenue.locality,
+            address: selectedFieldVenue.address,
+            coordinates: customPinCoords,
+            routeInstructions: `Ingresar por ${selectedFieldVenue.address} hasta el Sector Galpón de Secado (GPS: ${customPinCoords.lat}, ${customPinCoords.lng}).`,
+            ticketPrefix: 'COSECHA-12D',
+            maxCapacity: 80
+        },
+        existingEvents: DEFAULT_FIELD_EVENTS
+    });
+
+    assert.equal(savedEvent.title, 'Jornada Técnica: Cosecha y Secado en Lote Experimental');
+    assert.ok(savedEvent.venueName.includes('Sector Galpón de Secado'), "Debe conservar el establecimiento y sector configurado");
+    assert.equal(savedEvent.coordinates?.lat, customPinCoords.lat, "Debe guardar la latitud georreferenciada del evento");
+    assert.equal(savedEvent.coordinates?.lng, customPinCoords.lng, "Debe guardar la longitud georreferenciada del evento");
+    assert.ok(updatedList.some(e => e.id === savedEvent.id), "El nuevo evento debe quedar persistido en el calendario de eventos");
+
+    // 2. Verificar que los links de GPS y la captura de mapa del nuevo evento reflejan las coordenadas actualizadas
+    const navLinks = buildEventGpsNavigationLinks(savedEvent);
+    assert.equal(navLinks.lat, customPinCoords.lat);
+    assert.equal(navLinks.lng, customPinCoords.lng);
+    assert.ok(navLinks.googleMapsDirectionsUrl.includes(`${customPinCoords.lat},${customPinCoords.lng}`));
+    assert.ok(navLinks.wazeNavigateUrl.includes(`${customPinCoords.lat},${customPinCoords.lng}`));
+    assert.ok(navLinks.staticMapImageUrl.includes("World_Street_Map/MapServer/export?bbox="));
+    assert.equal(navLinks.routeSteps.length, 3, "Debe generar los 3 tramos viales paso a paso con la nueva georreferencia");
+    assert.ok(navLinks.routeSteps[2].coordinatesLabel.includes(String(customPinCoords.lat)));
+
+    // 3. Registrar un asistente en el nuevo evento y verificar que queda vinculado al evento creado y su locación
+    const attendeeRecord = createEventRegistrationRecord({
+        name: 'Lucía Fernández',
+        email: 'lucia.fernandez@ejemplo.com.ar',
+        phone: '+5492804556677',
+        dniNumber: '33445566',
+        organizationName: 'Productora Invitada',
+        localityOrProvince: savedEvent.locality,
+        event: savedEvent
+    });
+
+    assert.equal(attendeeRecord.eventId, savedEvent.id, "El asistente debe quedar vinculado al ID del nuevo evento creado");
+    assert.ok(attendeeRecord.eventTicketCode?.startsWith('COSECHA-12D-'), "El código de pase debe usar el prefijo del nuevo evento");
+
+    const approvedAttendee = approveEventAttendeeByAdmin({
+        adminUser: adminActor,
+        attendee: attendeeRecord,
+        event: savedEvent
+    });
+    assert.equal(approvedAttendee.eventAccreditationStatus, 'accredited');
+    assert.equal(approvedAttendee.eventId, savedEvent.id);
 });
 
 console.log("\n=================================================");

@@ -74,6 +74,8 @@ export default function Login() {
   const rootSearch = typeof window !== "undefined" ? window.location.search : "";
   const urlEventId =
     searchParams.get("evtid") || new URLSearchParams(rootSearch).get("evtid") || "";
+  const urlEventoSlug =
+    searchParams.get("evento") || new URLSearchParams(rootSearch).get("evento") || "";
   const urlLatRaw =
     searchParams.get("lat") || new URLSearchParams(rootSearch).get("lat") || "";
   const urlLngRaw =
@@ -81,7 +83,13 @@ export default function Login() {
 
   const baseEventForPass: FieldEvent =
     (fieldEvents || []).find(
-      ev => ev.id === urlEventId || ev.id === accreditedPassUser?.eventId
+      ev =>
+        ev.id === urlEventId ||
+        ev.id === accreditedPassUser?.eventId ||
+        ev.id === preConfirmedAttendee?.eventId ||
+        (urlEventoSlug &&
+          (ev.slug?.toLowerCase() === urlEventoSlug.trim().toLowerCase() ||
+            ev.id?.toLowerCase() === urlEventoSlug.trim().toLowerCase()))
     ) ||
     (fieldEvents && fieldEvents[0]) ||
     DEFAULT_FIELD_EVENTS[0];
@@ -169,6 +177,7 @@ export default function Login() {
 
       const resolvedPreConfirmed: Partial<User> = {
         ...(matched || {}),
+        eventId: matched?.eventId || evtidParam || activeEventForPass.id,
         name: matched?.name || nameParam || "Visitante Registrado",
         email: matched?.email || emailParam || "",
         dniNumber: matched?.dniNumber || dniParam || "",
@@ -186,7 +195,7 @@ export default function Login() {
       return;
     }
 
-    if (eventoParam === "un-dia-de-siembra" || eventoParam === "21nov" || eventoParam === "siembra") {
+    if (eventoParam) {
       setPreConfirmedAttendee(null);
       setRegistrationModalMode("event");
       setShowRegistrationModal(true);
@@ -195,7 +204,7 @@ export default function Login() {
       setRegistrationModalMode("platform");
       setShowRegistrationModal(true);
     }
-  }, [searchParams, usersList, activeEventForPass.locality]);
+  }, [searchParams, usersList, activeEventForPass.id, activeEventForPass.locality]);
 
   // Descarga automática del Pase QR en PDF cuando el usuario abre el enlace de su Credencial Aprobada
   useEffect(() => {
@@ -803,10 +812,12 @@ export default function Login() {
         </div>
       </div>
 
-      {/* MODAL DE INSCRIPCIÓN A "UN DÍA DE SIEMBRA" (21/11) O ALTA AUTOGESTIVA */}
+      {/* MODAL DE INSCRIPCIÓN A EVENTO / JORNADA O ALTA AUTOGESTIVA */}
       <EventAndSelfRegistrationModal
         isOpen={showRegistrationModal}
         initialMode={registrationModalMode}
+        selectedEvent={activeEventForPass}
+        fieldEvents={fieldEvents}
         preConfirmedAttendee={preConfirmedAttendee}
         onClose={() => {
           setShowRegistrationModal(false);

@@ -633,12 +633,20 @@ export interface SendEventRegistrationParams {
   phone?: string;
   organizationName?: string;
   locality?: string;
+  eventId?: string;
+  eventName?: string;
+  eventDateLabel?: string;
+  venueName?: string;
+  address?: string;
+  lat?: number;
+  lng?: number;
+  routeInstructions?: string;
   actionUrl?: string;
 }
 
 /**
- * Despacha correo oficial de confirmación para "Un Día de Siembra" (Sábado 21 de Noviembre)
- * y alta autogestiva vía notificaciones@hempc.com.ar (Resend.com)
+ * Despacha correo oficial de recepción y confirmación para eventos, jornadas y visitas programadas
+ * con locación georreferenciada actualizada y alta autogestiva vía notificaciones@hempc.com.ar (Resend.com)
  */
 export async function sendEventRegistrationConfirmationEmail(
   params: SendEventRegistrationParams
@@ -646,6 +654,16 @@ export async function sendEventRegistrationConfirmationEmail(
   const timestamp = new Date().toISOString();
   const cleanEmail = params.toEmail.trim();
   const cleanName = params.toName.trim();
+  const resolvedEventName = params.eventName || 'JORNADA OFICIAL: “UN DÍA DE SIEMBRA”';
+  const resolvedEventDate = params.eventDateLabel || 'Sábado 21 de Noviembre de 2026';
+  const resolvedVenueName =
+    params.venueName || 'Establecimiento La Regina — Chacra La Regina (PatagonianC)';
+  const resolvedLocality = params.locality || 'VIRCH – Trelew, Chubut';
+  const resolvedAddress =
+    params.address || 'Chacra 23 Parcela 13, Ruta Nacional 3 Km 1462 (Acceso Sur Trelew)';
+  const resolvedLat = typeof params.lat === 'number' && Number.isFinite(params.lat) ? params.lat : -43.308362;
+  const resolvedLng = typeof params.lng === 'number' && Number.isFinite(params.lng) ? params.lng : -65.289033;
+
   const directConfirmUrl =
     params.actionUrl ||
     `${window.location.origin}/#/login?confirmar_evento=1&ticket=${encodeURIComponent(
@@ -656,23 +674,38 @@ export async function sendEventRegistrationConfirmationEmail(
       params.dniNumber || ''
     )}&phone=${encodeURIComponent(params.phone || '')}&org=${encodeURIComponent(
       params.organizationName || 'Visitante / Invitado General'
-    )}&loc=${encodeURIComponent(params.locality || 'VIRCH – Trelew, Chubut')}`;
+    )}&loc=${encodeURIComponent(resolvedLocality)}&evtid=${encodeURIComponent(
+      params.eventId || ''
+    )}&lat=${encodeURIComponent(String(resolvedLat))}&lng=${encodeURIComponent(
+      String(resolvedLng)
+    )}`;
+
+  const emailSubject = `Confirmación de Inscripción: ${resolvedEventName} (${resolvedEventDate}) • ${params.ticketCode}`;
 
   const payload = {
     to_email: cleanEmail,
     to_name: cleanName,
+    subject: emailSubject,
     notification_type: 'event_registration',
     role_name: params.profileLabel,
     structure_name: params.organizationName || 'Participante Acreditado',
     action_url: directConfirmUrl,
     extra_data: {
-      event_name: 'JORNADA OFICIAL: “UN DÍA DE SIEMBRA”',
-      event_date: 'Sábado 21 de Noviembre de 2026',
+      event_id: params.eventId || '',
+      event_name: resolvedEventName,
+      event_date: resolvedEventDate,
+      venue_name: resolvedVenueName,
+      address: resolvedAddress,
+      lat: resolvedLat,
+      lng: resolvedLng,
+      route_instructions:
+        params.routeInstructions ||
+        `Dirigirse por ruta principal de ${resolvedLocality} hacia ${resolvedAddress} (${resolvedVenueName}).`,
       ticket_code: params.ticketCode,
       verification_pin: params.verificationPin,
       dni_number: params.dniNumber || '',
       phone: params.phone || '',
-      locality: params.locality || 'VIRCH – Trelew, Chubut'
+      locality: resolvedLocality
     }
   };
 
@@ -693,7 +726,7 @@ export async function sendEventRegistrationConfirmationEmail(
       toEmail: params.toEmail,
       toName: params.toName,
       type: 'operator_invitation',
-      subject: `Confirmación de Inscripción: JORNADA OFICIAL “UN DÍA DE SIEMBRA” (Sáb. 21 Nov) • ${params.ticketCode}`,
+      subject: emailSubject,
       roleName: params.profileLabel,
       structureName: params.organizationName,
       sentFrom: result.sentFrom,
@@ -719,7 +752,7 @@ export async function sendEventRegistrationConfirmationEmail(
       toEmail: params.toEmail,
       toName: params.toName,
       type: 'operator_invitation',
-      subject: `Confirmación de Inscripción: JORNADA OFICIAL “UN DÍA DE SIEMBRA” (Sáb. 21 Nov) • ${params.ticketCode}`,
+      subject: emailSubject,
       roleName: params.profileLabel,
       structureName: params.organizationName,
       sentFrom: result.sentFrom,

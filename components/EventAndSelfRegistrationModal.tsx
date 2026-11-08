@@ -18,14 +18,17 @@ import {
   createEventRegistrationRecord,
   isEventOnlyAttendee,
   downloadEventAccreditationPassPDF,
+  captureEventRouteMapSnapshotDataUrl,
   svgElementToPngDataUrl
 } from '../src/services/eventsManagementService';
 import { createPendingPublicRegistration } from '../src/services/producerOnboardingWorkflow';
+import EventRouteMapPreview from './EventRouteMapPreview';
 
 interface EventAndSelfRegistrationModalProps {
   isOpen: boolean;
   initialMode?: 'event' | 'platform';
   selectedEvent?: FieldEvent;
+  fieldEvents?: FieldEvent[];
   preConfirmedAttendee?: Partial<User> | null;
   onClose: () => void;
   usersList: User[];
@@ -44,6 +47,7 @@ export default function EventAndSelfRegistrationModal({
   isOpen,
   initialMode = 'event',
   selectedEvent,
+  fieldEvents,
   preConfirmedAttendee,
   onClose,
   usersList,
@@ -52,7 +56,21 @@ export default function EventAndSelfRegistrationModal({
 }: EventAndSelfRegistrationModalProps) {
   const [mode, setMode] = useState<'event' | 'platform'>(initialMode);
   const [step, setStep] = useState<'form' | 'confirm_email' | 'confirmed'>('form');
-  const activeEvent = selectedEvent || DEFAULT_FIELD_EVENTS[0];
+  const availableEvents = useMemo(
+    () => (fieldEvents && fieldEvents.length > 0 ? fieldEvents : DEFAULT_FIELD_EVENTS),
+    [fieldEvents]
+  );
+  const [chosenEventId, setChosenEventId] = useState<string>(
+    selectedEvent?.id || availableEvents[0]?.id || DEFAULT_FIELD_EVENTS[0].id
+  );
+  const activeEvent = useMemo(
+    () =>
+      availableEvents.find(e => e.id === chosenEventId) ||
+      selectedEvent ||
+      availableEvents[0] ||
+      DEFAULT_FIELD_EVENTS[0],
+    [availableEvents, chosenEventId, selectedEvent]
+  );
 
   // Datos del formulario (Priorizando Visitante / Invitado General por defecto y sin pedir contraseña previa)
   const [name, setName] = useState('');
@@ -75,10 +93,16 @@ export default function EventAndSelfRegistrationModal({
 
   useEffect(() => {
     if (isOpen) {
+      if (selectedEvent?.id) {
+        setChosenEventId(selectedEvent.id);
+      } else if (preConfirmedAttendee?.eventId) {
+        setChosenEventId(preConfirmedAttendee.eventId);
+      }
       if (preConfirmedAttendee && (preConfirmedAttendee.email || preConfirmedAttendee.eventTicketCode)) {
         setMode('event');
         setCreatedUser({
           id: preConfirmedAttendee.id || `evt-att-${Date.now()}`,
+          eventId: preConfirmedAttendee.eventId || activeEvent.id,
           name: preConfirmedAttendee.name || 'Visitante Registrado',
           email: preConfirmedAttendee.email || '',
           role: 'viewer',
@@ -89,7 +113,7 @@ export default function EventAndSelfRegistrationModal({
           localityOrProvince: preConfirmedAttendee.localityOrProvince || activeEvent.locality,
           eventRegistered: true,
           eventConfirmedByEmail: true,
-          eventTicketCode: preConfirmedAttendee.eventTicketCode || 'SIEMBRA-21N-OFICIAL',
+          eventTicketCode: preConfirmedAttendee.eventTicketCode || `${activeEvent.ticketPrefix || 'EVENTO'}-OFICIAL`,
           requestedProfileType: 'visitante',
           accountStatus: preConfirmedAttendee.accountStatus || 'pending_approval',
           isNetworkMember: false
@@ -104,7 +128,7 @@ export default function EventAndSelfRegistrationModal({
       setFormError('');
       setEnteredPin('');
     }
-  }, [initialMode, isOpen, preConfirmedAttendee, activeEvent.locality]);
+  }, [initialMode, isOpen, preConfirmedAttendee, selectedEvent?.id, activeEvent.id, activeEvent.locality, activeEvent.ticketPrefix]);
 
   const isEventSelected = mode === 'event';
 
@@ -186,9 +210,11 @@ export default function EventAndSelfRegistrationModal({
         await addUser(newUserObj);
       }
 
-      const finalTicket = newUserObj.eventTicketCode || `SIEMBRA-21N-${String(Date.now()).slice(-4)}`;
+      const finalTicket =
+        newUserObj.eventTicketCode ||
+        `${activeEvent.ticketPrefix || 'SIEMBRA-21N'}-${String(Date.now()).slice(-4)}`;
 
-      // Despachar correo oficial desde notificaciones@hempc.com.ar vía Resend.com
+      // Despachar correo oficial desde notificaciones@hempc.com.ar vía Resend.com con los datos actualizados del evento y georreferencia
       const emailDispatch = await sendEventRegistrationConfirmationEmail({
         toEmail: cleanEmail,
         toName: cleanName,
@@ -198,7 +224,15 @@ export default function EventAndSelfRegistrationModal({
         dniNumber: newUserObj.dniNumber,
         phone: newUserObj.phone,
         organizationName: newUserObj.organizationName,
-        locality: newUserObj.localityOrProvince
+        locality: newUserObj.localityOrProvince || activeEvent.locality,
+        eventId: activeEvent.id,
+        eventName: activeEvent.title,
+        eventDateLabel: activeEvent.dateLabel,
+        venueName: activeEvent.venueName,
+        address: activeEvent.address,
+        lat: activeEvent.coordinates?.lat,
+        lng: activeEvent.coordinates?.lng,
+        routeInstructions: activeEvent.routeInstructions
       });
 
       setEmailResultInfo({
@@ -261,8 +295,11 @@ export default function EventAndSelfRegistrationModal({
   const handleDownloadPassCredential = async () => {
     if (!createdUser) return;
     const svgEl = document.getElementById('modal-confirmed-qr-svg');
-    const qrDataUrl = await svgElementToPngDataUrl(svgEl, 360);
-    downloadEventAccreditationPassPDF(activeEvent, createdUser, qrDataUrl);
+    const [qrDataUrl, mapSnapshotUrl] = await Promise.all([
+      svgElementToPngDataUrl(svgEl, 360),
+      captureEventRouteMapSnapshotDataUrl(activeEvent, 'street')
+    ]);
+    downloadEventAccreditationPassPDF(activeEvent, createdUser, qrDataUrl, mapSnapshotUrl);
   };
 
   // Orden de perfiles priorizando VISITANTE / INVITADO GENERAL primero
@@ -311,36 +348,44 @@ export default function EventAndSelfRegistrationModal({
 
             <div className="pr-8">
               <p className="text-[#DDDB00] text-[9px] sm:text-[10px] font-black uppercase tracking-[0.15em] mb-1">
-                {EVENT_METADATA.diplomatura}
+                {activeEvent.subtitle || EVENT_METADATA.diplomatura}
               </p>
 
               <h2 className="text-lg sm:text-2xl font-black uppercase tracking-tight text-white leading-tight">
-                JORNADA OFICIAL: “UN DÍA DE SIEMBRA”
+                {activeEvent.title || 'JORNADA OFICIAL: “UN DÍA DE SIEMBRA”'}
               </h2>
 
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] sm:text-xs text-emerald-100/90 mt-1 font-medium">
-                <span>{EVENT_METADATA.sede}</span>
+                <span>Sede: {activeEvent.venueName || EVENT_METADATA.sede}</span>
                 <span className="hidden sm:inline">•</span>
-                <span>{EVENT_METADATA.ubicacion}</span>
+                <span>Ubicación: {activeEvent.locality || EVENT_METADATA.ubicacion}</span>
+                {activeEvent.coordinates && (
+                  <>
+                    <span className="hidden sm:inline">•</span>
+                    <span className="font-mono text-[#DDDB00]">
+                      GPS: {activeEvent.coordinates.lat.toFixed(5)}, {activeEvent.coordinates.lng.toFixed(5)}
+                    </span>
+                  </>
+                )}
               </div>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3.5 pt-3 border-t border-white/10 text-[10px]">
               <div className="bg-black/25 px-2.5 py-1.5 rounded-lg border-l-2 border-[#DDDB00]">
                 <span className="text-slate-400 font-bold uppercase block text-[8px]">ORGANIZAN</span>
-                <span className="font-black text-white">{EVENT_METADATA.organizan}</span>
+                <span className="font-black text-white truncate block">{activeEvent.organizer || EVENT_METADATA.organizan}</span>
               </div>
               <div className="bg-black/25 px-2.5 py-1.5 rounded-lg border-l-2 border-[#DDDB00]">
-                <span className="text-slate-400 font-bold uppercase block text-[8px]">HORARIO GENERAL</span>
-                <span className="font-black text-white">{EVENT_METADATA.horarioGeneral}</span>
+                <span className="text-slate-400 font-bold uppercase block text-[8px]">FECHA Y HORARIO</span>
+                <span className="font-black text-white truncate block">{activeEvent.dateLabel || EVENT_METADATA.horarioGeneral}</span>
               </div>
               <div className="bg-black/25 px-2.5 py-1.5 rounded-lg border-l-2 border-[#DDDB00]">
-                <span className="text-slate-400 font-bold uppercase block text-[8px]">ESQUEMA DE CAMPO</span>
-                <span className="font-black text-white">{EVENT_METADATA.esquemaCampo}</span>
+                <span className="text-slate-400 font-bold uppercase block text-[8px]">SEDE / CAMPO</span>
+                <span className="font-black text-white truncate block">{activeEvent.venueName}</span>
               </div>
               <div className="bg-black/25 px-2.5 py-1.5 rounded-lg border-l-2 border-[#DDDB00]">
-                <span className="text-slate-400 font-bold uppercase block text-[8px]">METODOLOGÍA</span>
-                <span className="font-black text-white">{EVENT_METADATA.metodologia}</span>
+                <span className="text-slate-400 font-bold uppercase block text-[8px]">ACCESO VIAL</span>
+                <span className="font-black text-white truncate block">{activeEvent.address || activeEvent.locality}</span>
               </div>
             </div>
           </div>
@@ -466,6 +511,26 @@ export default function EventAndSelfRegistrationModal({
               </>
             )}
 
+            {/* Selector de Evento si hay más de un evento activo en el Calendario */}
+            {isEventSelected && availableEvents.length > 1 && (
+              <div className="bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 rounded-xl p-3 space-y-1.5">
+                <label className="text-[10px] font-black uppercase tracking-widest text-[#006633] dark:text-emerald-400 block">
+                  Seleccionar Evento / Jornada / Visita Programada del Calendario Oficial *
+                </label>
+                <select
+                  value={activeEvent.id}
+                  onChange={e => setChosenEventId(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-900 border-2 border-[#006633]/40 text-xs font-black text-slate-900 dark:text-white outline-none"
+                >
+                  {availableEvents.map(ev => (
+                    <option key={ev.id} value={ev.id}>
+                      {ev.title} — {ev.dateLabel} • Sede: {ev.venueName} ({ev.locality})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             {/* 1. Perfil de Registro: En Evento SOLO aparece Visitante al Evento; en Solicitud de Alta aparecen todos priorizando Visitante */}
             {isEventSelected ? (
               <div className="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border-2 border-[#006633] dark:border-emerald-500 flex items-center justify-between gap-3">
@@ -483,7 +548,7 @@ export default function EventAndSelfRegistrationModal({
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5">
-                      Pase de asistencia a la Jornada Oficial “Un Día de Siembra” y descarga del Programa Oficial PDF.
+                      Pase de asistencia a <strong>{activeEvent.title}</strong> ({activeEvent.venueName}) con envío de Mapa Georreferenciado, Ruta y GPS al celular.
                     </p>
                   </div>
                 </div>
@@ -820,40 +885,45 @@ export default function EventAndSelfRegistrationModal({
               </div>
             </div>
 
-            {/* Botones Principales de Descarga: Credencial Pase QR + Programa Oficial (SOLO PARA EL VISITANTE AL EVENTO) */}
+            {/* Botones Principales de Descarga: Credencial Pase QR + Programa Oficial + Mapa Georreferenciado */}
             {isEventSelected && createdUser.eventRegistered && (
-              <div className="bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/50 dark:to-slate-900 p-5 sm:p-6 rounded-2xl sm:rounded-3xl border-2 border-emerald-500/40 flex flex-col lg:flex-row items-center justify-between gap-4">
-                <div className="space-y-1 text-center lg:text-left">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-400">
-                    Documentación Oficial del Asistente • PatagonianC & UATRE
-                  </span>
-                  <h4 className="text-sm sm:text-base font-black text-slate-900 dark:text-white uppercase">
-                    CREDENCIAL PASE QR Y PROGRAMA OFICIAL “UN DÍA DE SIEMBRA” (PDF)
-                  </h4>
-                  <p className="text-xs text-slate-600 dark:text-slate-300">
-                    Descargá tu Credencial con los datos de tu registro y el Programa Oficial de Actividades (08:30 a 15:30 hs).
-                  </p>
+              <>
+                <div className="bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/50 dark:to-slate-900 p-5 sm:p-6 rounded-2xl sm:rounded-3xl border-2 border-emerald-500/40 flex flex-col lg:flex-row items-center justify-between gap-4">
+                  <div className="space-y-1 text-center lg:text-left">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-400">
+                      Documentación Oficial del Asistente • {activeEvent.venueName}
+                    </span>
+                    <h4 className="text-sm sm:text-base font-black text-slate-900 dark:text-white uppercase">
+                      CREDENCIAL PASE QR, MAPA GEORREFERENCIADO Y PROGRAMA OFICIAL (PDF)
+                    </h4>
+                    <p className="text-xs text-slate-600 dark:text-slate-300">
+                      Descargá tu Credencial con captura del mapa de cómo llegar a <strong>{activeEvent.venueName}</strong> ({activeEvent.locality}) y el Programa de Actividades.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full lg:w-auto">
+                    <button
+                      type="button"
+                      onClick={handleDownloadPassCredential}
+                      className="w-full sm:w-auto px-5 py-3.5 bg-slate-900 hover:bg-slate-800 text-[#DDDB00] border border-slate-700 rounded-xl font-black text-xs uppercase tracking-wider shadow-lg flex items-center justify-center gap-2 whitespace-nowrap transition active:scale-95 cursor-pointer"
+                    >
+                      <Download size={16} />
+                      <span>Descargar Pase QR + Mapa (PDF)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDownloadProgram}
+                      className="w-full sm:w-auto px-5 py-3.5 bg-[#006633] hover:bg-[#004d26] text-white rounded-xl font-black text-xs uppercase tracking-wider shadow-xl flex items-center justify-center gap-2 whitespace-nowrap transition active:scale-95 cursor-pointer"
+                    >
+                      <Download size={16} />
+                      <span>Descargar Programa Oficial (PDF)</span>
+                    </button>
+                  </div>
                 </div>
 
-                <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full lg:w-auto">
-                  <button
-                    type="button"
-                    onClick={handleDownloadPassCredential}
-                    className="w-full sm:w-auto px-5 py-3.5 bg-slate-900 hover:bg-slate-800 text-[#DDDB00] border border-slate-700 rounded-xl font-black text-xs uppercase tracking-wider shadow-lg flex items-center justify-center gap-2 whitespace-nowrap transition active:scale-95 cursor-pointer"
-                  >
-                    <Download size={16} />
-                    <span>Descargar Pase QR (PDF)</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleDownloadProgram}
-                    className="w-full sm:w-auto px-5 py-3.5 bg-[#006633] hover:bg-[#004d26] text-white rounded-xl font-black text-xs uppercase tracking-wider shadow-xl flex items-center justify-center gap-2 whitespace-nowrap transition active:scale-95 cursor-pointer"
-                  >
-                    <Download size={16} />
-                    <span>Descargar Programa Oficial (PDF)</span>
-                  </button>
-                </div>
-              </div>
+                {/* Mapa Georreferenciado, Instructivo de Cómo Llegar y Link Directo al GPS del Celular */}
+                <EventRouteMapPreview event={activeEvent} attendee={createdUser} compact />
+              </>
             )}
 
             <div className="bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 text-xs text-slate-600 dark:text-slate-300 space-y-1.5">

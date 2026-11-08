@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Polyline, CircleMarker, Tooltip } from 'react-leaflet';
+import { MapContainer, TileLayer, Polyline, CircleMarker, Tooltip, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
   MapPin,
@@ -13,7 +13,8 @@ import {
   Camera,
   FileText,
   Download,
-  Loader2
+  Loader2,
+  Crosshair
 } from 'lucide-react';
 import { FieldEvent, User } from '../types';
 import {
@@ -29,12 +30,35 @@ interface EventRouteMapPreviewProps {
   event: Partial<FieldEvent>;
   attendee?: Partial<User>;
   compact?: boolean;
+  editable?: boolean;
+  onCoordinatesChange?: (coords: { lat: number; lng: number }) => void;
+}
+
+function MapClickGeoreferenceHandler({
+  enabled,
+  onPick
+}: {
+  enabled: boolean;
+  onPick?: (coords: { lat: number; lng: number }) => void;
+}) {
+  useMapEvents({
+    click(e) {
+      if (!enabled || !onPick) return;
+      onPick({
+        lat: Number(e.latlng.lat.toFixed(6)),
+        lng: Number(e.latlng.lng.toFixed(6))
+      });
+    }
+  });
+  return null;
 }
 
 export default function EventRouteMapPreview({
   event,
   attendee,
-  compact = false
+  compact = false,
+  editable = false,
+  onCoordinatesChange
 }: EventRouteMapPreviewProps) {
   const [copiedCoords, setCopiedCoords] = useState(false);
   const [mapMode, setMapMode] = useState<'satellite' | 'street'>('street');
@@ -176,10 +200,26 @@ export default function EventRouteMapPreview({
       </div>
 
       {/* Mapa Interactivo con Vista Regional Alejada (Zoom 12) para ver Ciudad + Rutas + Establecimiento */}
+      {editable && onCoordinatesChange && (
+        <div className="px-3 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-[#006633]/40 flex items-center justify-between gap-2 text-[11px] font-bold text-[#006633] dark:text-emerald-300">
+          <div className="flex items-center gap-2">
+            <Crosshair size={14} className="shrink-0 text-[#006633] dark:text-emerald-400" />
+            <span>
+              GEORREFERENCIA INTERACTIVA: Hacé clic en cualquier punto del mapa para fijar la ubicación exacta de la tranquera o sede del evento.
+            </span>
+          </div>
+          <span className="font-mono text-[10px] font-black bg-white dark:bg-slate-900 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800 shrink-0">
+            {nav.lat.toFixed(6)}, {nav.lng.toFixed(6)}
+          </span>
+        </div>
+      )}
+
       <div
         className={`relative w-full ${
-          compact ? 'h-52' : 'h-64'
-        } rounded-xl overflow-hidden border border-slate-300 dark:border-slate-700 bg-slate-100 z-0`}
+          compact ? 'h-56' : 'h-64'
+        } rounded-xl overflow-hidden border border-slate-300 dark:border-slate-700 bg-slate-100 z-0 ${
+          editable ? 'cursor-crosshair ring-2 ring-[#006633]/30' : ''
+        }`}
       >
         <MapContainer
           key={`${mapCenterLat}-${mapCenterLng}-${mapMode}`}
@@ -188,6 +228,10 @@ export default function EventRouteMapPreview({
           scrollWheelZoom={false}
           style={{ height: '100%', width: '100%' }}
         >
+          <MapClickGeoreferenceHandler
+            enabled={Boolean(editable && onCoordinatesChange)}
+            onPick={onCoordinatesChange}
+          />
           {mapMode === 'street' ? (
             <TileLayer
               attribution="&copy; OpenStreetMap / Esri"

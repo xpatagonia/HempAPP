@@ -352,6 +352,24 @@ function buildEventRegistrationHtml(req: EmailNotificationPayload): string {
   const extra = req.extra_data || {};
   const eventName = escapeHtml(extra.event_name || 'JORNADA OFICIAL: “UN DÍA DE SIEMBRA”');
   const eventDate = escapeHtml(extra.event_date || 'Sábado 21 de Noviembre • 08:30 a 15:30 hs');
+  const venueName = escapeHtml(
+    extra.venue_name || 'Establecimiento La Regina — Chacra La Regina (PatagonianC)'
+  );
+  const address = escapeHtml(
+    extra.address || 'Chacra 23 Parcela 13, Ruta Nacional 3 Km 1462 (Acceso Sur Trelew)'
+  );
+  const rawLat = typeof extra.lat === 'number' && Number.isFinite(extra.lat) ? extra.lat : -43.308362;
+  const rawLng = typeof extra.lng === 'number' && Number.isFinite(extra.lng) ? extra.lng : -65.289033;
+  const gpsCoordsLabel = `${rawLat.toFixed(6)}, ${rawLng.toFixed(6)}`;
+  const routeInstructions = escapeHtml(
+    extra.route_instructions ||
+      `Partir desde ${extra.locality || 'Trelew, Chubut'} por ruta principal hacia ${
+        extra.address || 'el acceso señalizado del establecimiento'
+      }.`
+  );
+  const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${rawLat},${rawLng}&travelmode=driving`;
+  const wazeUrl = `https://waze.com/ul?ll=${rawLat},${rawLng}&navigate=yes`;
+
   const ticketCode = escapeHtml(extra.ticket_code || 'SIEMBRA-21N-0001');
   const verificationPin = escapeHtml(extra.verification_pin || '');
   const dniNumber = escapeHtml(extra.dni_number || 'Registrado');
@@ -372,7 +390,9 @@ function buildEventRegistrationHtml(req: EmailNotificationPayload): string {
       extra.dni_number || ''
     )}&phone=${encodeURIComponent(extra.phone || '')}&org=${encodeURIComponent(
       req.structure_name || ''
-    )}&loc=${encodeURIComponent(extra.locality || '')}`
+    )}&loc=${encodeURIComponent(extra.locality || '')}&evtid=${encodeURIComponent(
+      extra.event_id || ''
+    )}&lat=${encodeURIComponent(String(rawLat))}&lng=${encodeURIComponent(String(rawLng))}`
   );
 
   const pinBlock = verificationPin
@@ -408,15 +428,15 @@ function buildEventRegistrationHtml(req: EmailNotificationPayload): string {
     <div class="container">
       <div class="header">
         <div style="font-size: 10px; letter-spacing: 1.8px; text-transform: uppercase; color: #DDDB00; font-weight: 900; margin-bottom: 4px;">
-          DIPLOMATURA UNIVERSITARIA EN CÁÑAMO INDUSTRIAL • UNLZ – UATRE
+          EVENTOS Y JORNADAS DE CAMPO • RED COOPERATIVA HEMPC
         </div>
         <h1 style="margin: 4px 0 6px 0; font-size: 22px; font-weight: 900; letter-spacing: -0.3px;">${eventName}</h1>
-        <div style="font-size: 12px; color: #e2e8f0; font-weight: 600;">Sede Práctica Patagonia: Chacra Experimental PatagonianC LTDA • Ubicación: VIRCH – Trelew, Chubut</div>
+        <div style="font-size: 12px; color: #e2e8f0; font-weight: 600;">Sede Georreferenciada: ${venueName} • Ubicación: ${locality}</div>
       </div>
       <div class="content">
         <p style="font-size: 15px; color: #0f172a; margin-top: 0;">Hola <strong>${toName}</strong>,</p>
         <p style="font-size: 13px; color: #475569;">
-          Recibimos tu solicitud de inscripción para asistir a la <strong>${eventName}</strong> (${eventDate}) organizada por <strong>PatagonianC & UATRE</strong>.
+          Recibimos tu solicitud de inscripción para asistir a <strong>${eventName}</strong> (${eventDate}) en <strong>${venueName}</strong>.
         </p>
 
         ${pinBlock}
@@ -431,26 +451,50 @@ function buildEventRegistrationHtml(req: EmailNotificationPayload): string {
           </div>
         </div>
 
+        <div style="background: #f0fdf4; border: 2px solid #006633; border-radius: 16px; padding: 16px 18px; margin: 18px 0;">
+          <div style="font-size: 11px; font-weight: 900; text-transform: uppercase; color: #006633; letter-spacing: 1px; margin-bottom: 6px;">
+            📍 LOCACIÓN GEORREFERENCIADA DEL EVENTO Y CONEXIÓN AL GPS DEL CELULAR
+          </div>
+          <div style="font-size: 13px; font-weight: 800; color: #0f172a;">
+            ${venueName} (${locality})
+          </div>
+          <div style="font-size: 12px; color: #334155; margin-top: 3px;">
+            <strong>Dirección Vial / Acceso:</strong> ${address}<br/>
+            <strong>Coordenadas Oficiales GPS:</strong> <span style="font-family: monospace; font-weight: 900; color: #006633;">${gpsCoordsLabel}</span>
+          </div>
+          <div style="font-size: 11px; color: #475569; margin-top: 6px; background: #ffffff; padding: 8px 10px; border-radius: 8px; border: 1px solid #bbf7d0;">
+            <strong>Instructivo de Ruta:</strong> ${routeInstructions}
+          </div>
+          <div style="margin-top: 12px;">
+            <a href="${googleMapsUrl}" style="display: inline-block; background: #0284c7; color: #ffffff !important; padding: 9px 14px; border-radius: 10px; font-weight: 900; text-decoration: none; font-size: 11px; text-transform: uppercase; margin-right: 6px;">
+              📍 Abrir en Google Maps GPS
+            </a>
+            <a href="${wazeUrl}" style="display: inline-block; background: #0f172a; color: #DDDB00 !important; padding: 9px 14px; border-radius: 10px; font-weight: 900; text-decoration: none; font-size: 11px; text-transform: uppercase;">
+              🚗 Iniciar Ruta en Waze GPS
+            </a>
+          </div>
+        </div>
+
         <div style="background: #fffbeb; border: 1px solid #f59e0b; border-radius: 12px; padding: 12px 16px; margin: 16px 0; font-size: 11px; color: #b45309; font-weight: 700;">
           ⚠ AVISO IMPORTANTE: Por tratarse de una actividad de campo a cielo abierto, LA JORNADA SE REPROGRAMA EN CASO DE MAL TIEMPO (Aviso 24 hs antes). El programa de actividades se encuentra sujeto a actualización.
         </div>
 
         <div class="schedule-box">
           <div style="font-size: 11px; font-weight: 900; text-transform: uppercase; color: #0c2d1e; letter-spacing: 1px; margin-bottom: 10px;">
-            1. CRONOGRAMA GENERAL DE ACTIVIDADES (08:30 a 15:30 hs — Sujeto a actualización)
+            1. CRONOGRAMA GENERAL DE ACTIVIDADES (Sujeto a actualización)
           </div>
           <p style="margin: 0 0 6px 0;"><strong>08:30 – 09:15:</strong> Acreditación y Recepción (Café de bienvenida, entrega de credenciales y carpeta técnica).</p>
-          <p style="margin: 0 0 6px 0;"><strong>09:15 – 10:00:</strong> Apertura Institucional (Gastón Barea y Carlos Reyes - PatagonianC LTDA, Sebastián Tosolini, Demian Gomez - UATRE Buenos Aires - Chubut y Autoridades Provinciales).</p>
-          <p style="margin: 0 0 6px 0;"><strong>10:00 – 10:45:</strong> Bloque de Campo 1: Propósitos en 3 Lotes (Grano, Cañamiza y Fibra Textil) y Mecanización.</p>
-          <p style="margin: 0 0 6px 0;"><strong>10:45 – 11:45:</strong> Bloque de Campo 2: Protocolo Propio, BPA, Red y NUCLEUS (Siembra en vivo en los 3 lotes).</p>
-          <p style="margin: 0 0 6px 0;"><strong>11:45 – 12:30:</strong> Bloque de Campo 3: Sistema de Riego en el VIRCH (Manejo hídrico por canal principal).</p>
+          <p style="margin: 0 0 6px 0;"><strong>09:15 – 10:00:</strong> Apertura Institucional (PatagonianC LTDA, UATRE y Autoridades).</p>
+          <p style="margin: 0 0 6px 0;"><strong>10:00 – 10:45:</strong> Bloque de Campo 1: Propósitos en Lotes (Grano, Cañamiza y Fibra Textil) y Mecanización.</p>
+          <p style="margin: 0 0 6px 0;"><strong>10:45 – 11:45:</strong> Bloque de Campo 2: Protocolo Propio, BPA, Red y NUCLEUS.</p>
+          <p style="margin: 0 0 6px 0;"><strong>11:45 – 12:30:</strong> Bloque de Campo 3: Sistema de Riego y Manejo Hídrico.</p>
           <p style="margin: 0 0 6px 0;"><strong>12:30 – 14:15:</strong> Break - Charla: Showroom de Materiales y Plantas Vivas (Hempcrete, fibra textil, cañamiza y grano).</p>
           <p style="margin: 0 0 6px 0;"><strong>14:15 – 15:00:</strong> Charla Técnica Central: Protocolo de Siembra - Trazabilidad 360 y monitoreo satelital en NUCLEUS.</p>
-          <p style="margin: 0;"><strong>15:00 – 15:30:</strong> Cierre y Certificados (Entrega de certificados de asistencia práctica junto a UATRE).</p>
+          <p style="margin: 0;"><strong>15:00 – 15:30:</strong> Cierre y Certificados (Entrega de certificados de asistencia práctica).</p>
         </div>
 
         <p style="font-size: 12px; color: #64748b; background: #f1f5f9; border-left: 4px solid #0c2d1e; padding: 10px 14px; border-radius: 8px;">
-          <strong>Próximo Paso — Emisión de tu Credencial QR Oficial:</strong> Una vez que la Administración de <strong>EVENTOS</strong> apruebe tu acreditación, recibirás un segundo correo con tu <strong>Credencial / Pase Oficial QR personalizado</strong> listo para descargar en PDF y presentar con tu DNI el día de la jornada.
+          <strong>Próximo Paso — Emisión de tu Credencial QR Oficial:</strong> Una vez que la Administración de <strong>EVENTOS</strong> apruebe tu acreditación, recibirás un segundo correo con tu <strong>Credencial / Pase Oficial QR personalizado + Captura del Mapa Regional y Ruta Destacada</strong> listo para descargar en PDF y presentar con tu DNI el día de la jornada.
         </p>
 
         <div style="text-align: center; margin: 22px 0 10px 0; padding-top: 12px; border-top: 1px dashed #cbd5e1;">
@@ -811,7 +855,7 @@ export default async function handler(req: any, res: any) {
     if (body.notification_type === 'password_reset') {
       subject = '🔐 Restablecimiento de Contraseña • HempC Nucleus';
     } else if (body.notification_type === 'event_registration') {
-      subject = 'Confirmación de Inscripción: Jornada Oficial "Un Día de Siembra" (Sáb. 21 Nov) • PatagonianC & UATRE';
+      subject = `Confirmación de Inscripción: ${body.extra_data?.event_name || 'Jornada Oficial HempC'} (${body.extra_data?.event_date || 'Fecha Programada'}) • ${body.extra_data?.ticket_code || 'PASE'}`;
     } else if (body.notification_type === 'event_accreditation_approved') {
       subject = `✅ Acreditación Oficial Aprobada (${body.extra_data?.ticket_code || 'PASE QR'}) • ${body.extra_data?.event_name || 'Jornada de Campo HempC'}`;
     } else if (body.notification_type === 'registration_approved') {

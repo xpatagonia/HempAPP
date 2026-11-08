@@ -454,21 +454,81 @@ export default function Events() {
   // Acción Admin: Guardar nuevo Evento / Visita Programada
   const handleSaveEventSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!eventForm.title || !eventForm.date || !eventForm.venueName) return;
+    const cleanTitle = (eventForm.title || '').trim();
+    const cleanDate = (eventForm.date || '').trim();
+    if (!cleanTitle || !cleanDate) {
+      showNotice(
+        false,
+        'Datos incompletos',
+        'Por favor completá el Título del Evento y la Fecha Programada.'
+      );
+      return;
+    }
+
+    const fallbackVenue =
+      (eventForm.venueName || '').trim() ||
+      (eventForm.address || '').trim() ||
+      enabledEstablishments.find(est => est.locationId === eventForm.locationId)?.venueName ||
+      'Predio / Locación Oficial del Evento';
+
+    const resolvedLocality = (eventForm.locality || '').trim() || 'VIRCH – Trelew, Chubut';
+    const resolvedAddress =
+      (eventForm.address || '').trim() ||
+      `Acceso señalizado hacia ${fallbackVenue} (${resolvedLocality})`;
+    const resolvedCoords =
+      eventForm.coordinates &&
+      Number.isFinite(Number(eventForm.coordinates.lat)) &&
+      Number.isFinite(Number(eventForm.coordinates.lng))
+        ? {
+            lat: Number(Number(eventForm.coordinates.lat).toFixed(6)),
+            lng: Number(Number(eventForm.coordinates.lng).toFixed(6))
+          }
+        : { lat: -43.308362, lng: -65.289033 };
+
+    const resolvedRouteInstructions =
+      (eventForm.routeInstructions || '').trim() ||
+      `1) Partir desde ${resolvedLocality} por ruta principal. 2) Tomar desvío señalizado en ${resolvedAddress}. 3) Ingresar por Tranquera de Acreditación de ${fallbackVenue} (GPS: ${resolvedCoords.lat.toFixed(6)}, ${resolvedCoords.lng.toFixed(6)}).`;
+
+    const resolvedWaypoints = [
+      {
+        lat: Number((resolvedCoords.lat + 0.024).toFixed(6)),
+        lng: Number((resolvedCoords.lng - 0.018).toFixed(6)),
+        label: `1. Referencia Urbana / Ruta Principal (${resolvedLocality})`
+      },
+      {
+        lat: Number((resolvedCoords.lat + 0.006).toFixed(6)),
+        lng: Number((resolvedCoords.lng - 0.007).toFixed(6)),
+        label: `2. Desvío Vial Señalizado (${resolvedAddress})`
+      },
+      {
+        lat: resolvedCoords.lat,
+        lng: resolvedCoords.lng,
+        label: `3. Tranquera de Acreditación • ${fallbackVenue}`
+      }
+    ];
+
     setIsSavingEvent(true);
     try {
       const saved = await saveFieldEvent({
         ...eventForm,
-        title: eventForm.title,
-        date: eventForm.date,
-        venueName: eventForm.venueName
+        title: cleanTitle,
+        date: cleanDate,
+        venueName: fallbackVenue,
+        locality: resolvedLocality,
+        address: resolvedAddress,
+        coordinates: resolvedCoords,
+        routeInstructions: resolvedRouteInstructions,
+        routeWaypoints: resolvedWaypoints
       });
       setIsEventModalOpen(false);
       setSelectedEventId(saved.id);
+      setManualAttendeeForm(prev => ({ ...prev, eventId: saved.id }));
+      // Cambiar automáticamente a la vista de Calendario para visualizar el nuevo evento creado con su georreferencia y link de inscripción
+      setActiveTab('calendar');
       showNotice(
         true,
-        'Evento / Visita Programada Guardada',
-        `Se actualizó el calendario oficial con "${saved.title}" (${saved.dateLabel}).`
+        'Nuevo Evento Creado y Georreferenciado en Calendario',
+        `Se guardó "${saved.title}" (${saved.dateLabel}) en ${saved.venueName} [GPS: ${saved.coordinates?.lat.toFixed(5)}, ${saved.coordinates?.lng.toFixed(5)}]. Ya está activo para inscripciones y envío automático de mapa y GPS al asistente.`
       );
     } catch (err: any) {
       showNotice(false, 'Error al guardar evento', err?.message || 'Verifique los datos ingresados.');
@@ -886,8 +946,56 @@ export default function Events() {
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
                   {filteredAttendees.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="p-10 text-center text-slate-400">
-                        No hay registros de visitantes para los criterios seleccionados.
+                      <td colSpan={6} className="p-8 text-center">
+                        <div className="max-w-xl mx-auto space-y-3 bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-2xl p-5">
+                          <div className="text-xs font-black uppercase text-slate-800 dark:text-slate-200">
+                            Aún no hay visitantes registrados en "{activeSelectedEvent?.title || 'este evento'}"
+                          </div>
+                          {activeSelectedEvent && (
+                            <div className="text-[11px] text-slate-600 dark:text-slate-300 space-y-1">
+                              <div>
+                                <strong>Sede Georreferenciada:</strong> {activeSelectedEvent.venueName} ({activeSelectedEvent.locality})
+                              </div>
+                              <div className="font-mono text-[10px] text-[#006633] dark:text-emerald-400">
+                                GPS: {activeSelectedEvent.coordinates?.lat?.toFixed(6) || '-43.308362'},{' '}
+                                {activeSelectedEvent.coordinates?.lng?.toFixed(6) || '-65.289033'} • {activeSelectedEvent.dateLabel}
+                              </div>
+                            </div>
+                          )}
+                          <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (activeSelectedEvent) {
+                                  setManualAttendeeForm(p => ({ ...p, eventId: activeSelectedEvent.id }));
+                                }
+                                setIsManualAttendeeModalOpen(true);
+                              }}
+                              className="px-3.5 py-2 rounded-xl bg-[#006633] hover:bg-[#004d26] text-white text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <UserPlus size={14} />
+                              <span>Acreditar Primer Visitante</span>
+                            </button>
+                            {activeSelectedEvent && (
+                              <button
+                                type="button"
+                                onClick={() => handleCopyEventLink(activeSelectedEvent)}
+                                className="px-3.5 py-2 rounded-xl bg-slate-200/80 dark:bg-slate-800 hover:bg-slate-300 text-slate-800 dark:text-slate-200 text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5 cursor-pointer"
+                              >
+                                <Copy size={13} />
+                                <span>Copiar Link de Inscripción</span>
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setActiveTab('calendar')}
+                              className="px-3.5 py-2 rounded-xl bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-300 text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <CalendarIcon size={13} />
+                              <span>Ver en Calendario de Eventos ({fieldEvents.length})</span>
+                            </button>
+                          </div>
+                        </div>
                       </td>
                     </tr>
                   ) : (
@@ -1139,6 +1247,26 @@ export default function Events() {
          ===================================================================== */}
       {activeTab === 'calendar' && (
         <div className="space-y-4">
+          <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-black uppercase text-slate-900 dark:text-white flex items-center gap-2">
+                <CalendarIcon size={17} className="text-[#006633]" />
+                <span>Calendario Oficial de Eventos, Jornadas y Visitas Georreferenciadas ({fieldEvents.length})</span>
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Cada evento vincula los datos de los campos habilitados o una locación georreferenciada propia para enviar mapa, ruta y GPS al asistente.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={openNewEventModal}
+              className="px-4 py-2.5 rounded-xl bg-[#006633] hover:bg-[#004d26] text-white font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-sm cursor-pointer self-start sm:self-center shrink-0"
+            >
+              <Plus size={15} className="text-[#DDDB00]" />
+              <span>Nuevo Evento con Georreferencia</span>
+            </button>
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             {fieldEvents.map(evt => {
               const evtAttendees = allEventParticipants.filter(
@@ -1152,11 +1280,16 @@ export default function Events() {
                 100,
                 Math.round((evtAttendees.length / Math.max(1, evt.maxCapacity)) * 100)
               );
+              const isSelectedCard = selectedEventId === evt.id;
 
               return (
                 <div
                   key={evt.id}
-                  className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 flex flex-col justify-between gap-4 shadow-xs"
+                  className={`bg-white dark:bg-slate-900 rounded-3xl border p-5 flex flex-col justify-between gap-4 transition-all ${
+                    isSelectedCard
+                      ? 'border-2 border-[#006633] ring-2 ring-[#006633]/20 shadow-md'
+                      : 'border-slate-200 dark:border-slate-800 shadow-xs'
+                  }`}
                 >
                   <div className="space-y-3">
                     <div className="flex items-center justify-between gap-2 text-[11px] font-mono text-slate-500 dark:text-slate-400">
@@ -1185,11 +1318,21 @@ export default function Events() {
                         <CalendarIcon size={14} className="text-[#006633] shrink-0" />
                         <span>{evt.dateLabel}</span>
                       </div>
-                      <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
-                        <MapPin size={14} className="text-amber-500 shrink-0" />
-                        <span className="truncate">
-                          {evt.venueName} ({evt.locality})
-                        </span>
+                      <div className="flex items-start gap-2 text-slate-600 dark:text-slate-300">
+                        <MapPin size={14} className="text-amber-500 shrink-0 mt-0.5" />
+                        <div className="min-w-0">
+                          <div className="font-bold text-slate-800 dark:text-slate-200 truncate">
+                            {evt.venueName} ({evt.locality})
+                          </div>
+                          {evt.address && (
+                            <div className="text-[11px] text-slate-500 truncate">{evt.address}</div>
+                          )}
+                          {evt.coordinates && (
+                            <div className="font-mono text-[10px] font-bold text-[#006633] dark:text-emerald-400 mt-0.5">
+                              GPS: {evt.coordinates.lat.toFixed(6)}, {evt.coordinates.lng.toFixed(6)}
+                            </div>
+                          )}
+                        </div>
                       </div>
                       <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-[11px]">
                         <Users size={14} className="text-sky-500 shrink-0" />
@@ -1231,7 +1374,20 @@ export default function Events() {
                         }}
                         className="flex-1 px-3 py-2 rounded-xl bg-[#006633] hover:bg-[#004d26] text-white text-[11px] font-black uppercase tracking-wider text-center cursor-pointer"
                       >
-                        Ver Registrados ({evtAttendees.length})
+                        Registrados ({evtAttendees.length})
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setManualAttendeeForm(p => ({ ...p, eventId: evt.id }));
+                          setIsManualAttendeeModalOpen(true);
+                        }}
+                        className="px-3 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 text-[#006633] dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-[11px] font-black uppercase flex items-center gap-1 cursor-pointer"
+                        title="Inscribir y acreditar visitante a este evento con envío de Mapa y GPS"
+                      >
+                        <UserPlus size={13} />
+                        <span>Inscribir</span>
                       </button>
 
                       <button
@@ -1257,7 +1413,7 @@ export default function Events() {
                         type="button"
                         onClick={() => setQrModalTarget({ type: 'event', event: evt })}
                         className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 cursor-pointer"
-                        title="Ver QR público de inscripción"
+                        title="Ver QR público de inscripción y Mapa Georreferenciado"
                       >
                         <QrCode size={15} />
                       </button>
@@ -1266,7 +1422,7 @@ export default function Events() {
                         type="button"
                         onClick={() => openEditEventModal(evt)}
                         className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 cursor-pointer"
-                        title="Editar Evento / Visita"
+                        title="Editar Evento / Visita y Georreferencia"
                       >
                         <Edit2 size={15} />
                       </button>
@@ -1587,80 +1743,76 @@ export default function Events() {
                     </select>
                   </div>
 
-                  {/* Si seleccionó OTRO: Habilita el bloque para ingresar la Locación Personalizada */}
-                  {(eventForm.isCustomLocation || eventForm.locationId === 'OTHER') ? (
-                    <div className="bg-amber-50/80 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800 rounded-xl p-3.5 space-y-3">
-                      <div className="text-[10px] font-mono font-black uppercase text-amber-800 dark:text-amber-300">
-                        📍 LOCACIÓN PERSONALIZADA HABILITADA (OPCIÓN: OTRO)
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                          <label className="font-black uppercase text-[10px] text-slate-600 dark:text-slate-300 block mb-1">
-                            Nombre del Lugar / Establecimiento del Evento *
-                          </label>
-                          <input
-                            required
-                            type="text"
-                            value={eventForm.venueName || ''}
-                            onChange={e =>
-                              setEventForm(p => ({ ...p, venueName: e.target.value }))
-                            }
-                            placeholder="Ej: Predio Ferial Sociedad Rural / Aula Magna UNPSJB"
-                            className="w-full px-3.5 py-2 rounded-xl bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700 font-bold text-slate-900 dark:text-white"
-                          />
-                        </div>
-                        <div>
-                          <label className="font-black uppercase text-[10px] text-slate-600 dark:text-slate-300 block mb-1">
-                            Localidad y Provincia *
-                          </label>
-                          <input
-                            required
-                            type="text"
-                            value={eventForm.locality || ''}
-                            onChange={e =>
-                              setEventForm(p => ({ ...p, locality: e.target.value }))
-                            }
-                            placeholder="Ej: Gaiman, Chubut"
-                            className="w-full px-3.5 py-2 rounded-xl bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700 font-bold text-slate-900 dark:text-white"
-                          />
-                        </div>
-                        <div className="sm:col-span-2">
-                          <label className="font-black uppercase text-[10px] text-slate-600 dark:text-slate-300 block mb-1">
-                            Dirección Vial / Kilómetro de Ruta *
-                          </label>
-                          <input
-                            required
-                            type="text"
-                            value={eventForm.address || ''}
-                            onChange={e =>
-                              setEventForm(p => ({ ...p, address: e.target.value }))
-                            }
-                            placeholder="Ej: Ruta Provincial 7 Km 18, Bajada Puente Viejo"
-                            className="w-full px-3.5 py-2 rounded-xl bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700 font-bold text-slate-900 dark:text-white"
-                          />
-                        </div>
-                      </div>
+                  {/* Datos de Locación y Punto de Encuentro Georreferenciado (Captados del Campo o Personalizados en OTRO) */}
+                  <div
+                    className={`rounded-xl p-3.5 space-y-3 border ${
+                      eventForm.isCustomLocation || eventForm.locationId === 'OTHER'
+                        ? 'bg-amber-50/80 dark:bg-amber-950/30 border-amber-300 dark:border-amber-800'
+                        : 'bg-white dark:bg-slate-900 border-emerald-200 dark:border-emerald-800/70'
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span
+                        className={`text-[10px] font-mono font-black uppercase ${
+                          eventForm.isCustomLocation || eventForm.locationId === 'OTHER'
+                            ? 'text-amber-800 dark:text-amber-300'
+                            : 'text-[#006633] dark:text-emerald-400'
+                        }`}
+                      >
+                        {eventForm.isCustomLocation || eventForm.locationId === 'OTHER'
+                          ? '📍 LOCACIÓN EXTERNA / PERSONALIZADA HABILITADA (OPCIÓN: OTRO)'
+                          : '📍 DATOS CAPTADOS DEL CAMPO HABILITADO (PODÉS AJUSTAR SECTOR O PUNTO DE ENCUENTRO)'}
+                      </span>
                     </div>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-white dark:bg-slate-900 p-3 rounded-xl border border-emerald-200 dark:border-emerald-800/70">
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <span className="text-[9px] font-mono uppercase text-slate-400 block">
-                          Establecimiento y Campo Vinculado
-                        </span>
-                        <span className="font-black text-xs text-slate-900 dark:text-white">
-                          {eventForm.venueName}
-                        </span>
+                        <label className="font-black uppercase text-[10px] text-slate-600 dark:text-slate-300 block mb-1">
+                          Nombre del Establecimiento / Sede / Sector del Evento *
+                        </label>
+                        <input
+                          required
+                          type="text"
+                          value={eventForm.venueName || ''}
+                          onChange={e =>
+                            setEventForm(p => ({ ...p, venueName: e.target.value }))
+                          }
+                          placeholder="Ej: Establecimiento La Regina — Sector Lote 2 / Predio Ferial"
+                          className="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-bold text-slate-900 dark:text-white"
+                        />
                       </div>
                       <div>
-                        <span className="text-[9px] font-mono uppercase text-slate-400 block">
-                          Localidad y Dirección Vial
-                        </span>
-                        <span className="font-bold text-xs text-[#006633] dark:text-emerald-400">
-                          {eventForm.address} ({eventForm.locality})
-                        </span>
+                        <label className="font-black uppercase text-[10px] text-slate-600 dark:text-slate-300 block mb-1">
+                          Localidad y Provincia *
+                        </label>
+                        <input
+                          required
+                          type="text"
+                          value={eventForm.locality || ''}
+                          onChange={e =>
+                            setEventForm(p => ({ ...p, locality: e.target.value }))
+                          }
+                          placeholder="Ej: Trelew, Chubut"
+                          className="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-bold text-slate-900 dark:text-white"
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className="font-black uppercase text-[10px] text-slate-600 dark:text-slate-300 block mb-1">
+                          Dirección Vial / Kilómetro de Ruta / Punto de Acceso *
+                        </label>
+                        <input
+                          required
+                          type="text"
+                          value={eventForm.address || ''}
+                          onChange={e =>
+                            setEventForm(p => ({ ...p, address: e.target.value }))
+                          }
+                          placeholder="Ej: Chacra 23 Parcela 13, Ruta Nacional 3 Km 1462 (Tranquera Principal)"
+                          className="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-bold text-slate-900 dark:text-white"
+                        />
                       </div>
                     </div>
-                  )}
+                  </div>
 
                   {/* Coordenadas GPS para el Celular y Ruta Destacada */}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -1730,7 +1882,7 @@ export default function Events() {
 
                   <div>
                     <label className="font-black uppercase text-[10px] text-slate-500 block mb-1">
-                      Ruta Destacada Paso a Paso (Se envía en el correo de acreditación y en el Pase QR) *
+                      Ruta Destacada Paso a Paso (Se envía en el correo de recepción/acreditación y en el Pase QR) *
                     </label>
                     <textarea
                       rows={2}
@@ -1743,8 +1895,41 @@ export default function Events() {
                     />
                   </div>
 
-                  {/* Vista Previa en Vivo del Mapa con la Ruta Destacada y Link al GPS del Celular */}
-                  <EventRouteMapPreview event={eventForm} compact />
+                  {/* Vista Previa en Vivo del Mapa con Georreferencia Interactiva por Clic */}
+                  <EventRouteMapPreview
+                    event={eventForm}
+                    compact
+                    editable
+                    onCoordinatesChange={coords => {
+                      setQuickCoordsInput(`${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`);
+                      setEventForm(p => {
+                        const locName = p.locality || 'Trelew, Chubut';
+                        const addrName = p.address || 'Acceso Vial al Predio';
+                        const venName = p.venueName || 'Sede del Evento';
+                        return {
+                          ...p,
+                          coordinates: coords,
+                          routeWaypoints: [
+                            {
+                              lat: Number((coords.lat + 0.024).toFixed(6)),
+                              lng: Number((coords.lng - 0.018).toFixed(6)),
+                              label: `1. Referencia Urbana / Ruta Principal (${locName})`
+                            },
+                            {
+                              lat: Number((coords.lat + 0.006).toFixed(6)),
+                              lng: Number((coords.lng - 0.007).toFixed(6)),
+                              label: `2. Desvío Vial Señalizado (${addrName})`
+                            },
+                            {
+                              lat: coords.lat,
+                              lng: coords.lng,
+                              label: `3. Tranquera de Acreditación • ${venName}`
+                            }
+                          ]
+                        };
+                      });
+                    }}
+                  />
                 </div>
 
                 <div>
